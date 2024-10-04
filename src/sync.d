@@ -315,7 +315,7 @@ class SyncEngine {
 		// Did the user downgrade all HTTP operations to force HTTP 1.1
 		if (appConfig.getValueBool("force_http_11")) {
 			// User is forcing downgrade to curl to use HTTP 1.1 for all operations
-			addLogEntry("Downgrading all HTTP operations to HTTP/1.1 due to user configuration", ["verbose"]);
+			if (verboseLogging) {addLogEntry("Downgrading all HTTP operations to HTTP/1.1 due to user configuration", ["verbose"]);}
 		} else {
 			// Use curl defaults
 			if (debugLogging) {addLogEntry("Using Curl defaults for HTTP operational protocol version (potentially HTTP/2)", ["debug"]);}
@@ -376,7 +376,7 @@ class SyncEngine {
 		}
 		
 		// API was initialised
-		addLogEntry("Sync Engine Initialised with new Onedrive API instance", ["verbose"]);
+		if (verboseLogging) {addLogEntry("Sync Engine Initialised with new Onedrive API instance", ["verbose"]);}
 		return true;
 	}
 	
@@ -587,7 +587,7 @@ class SyncEngine {
 						// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
 						if (selectiveSync.isDirNameExcluded(remoteItem.name)) {
 							// This directory name is excluded
-							addLogEntry("Skipping path - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
+							if (verboseLogging) {addLogEntry("Skipping path - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);}
 							continue;
 						}
 					}
@@ -625,7 +625,7 @@ class SyncEngine {
 								// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
 								if (selectiveSync.isDirNameExcluded(remoteItem.name)) {
 									// This directory name is excluded
-									addLogEntry("Skipping path - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
+									if (verboseLogging) {addLogEntry("Skipping path - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);}
 									continue;
 								}
 							}
@@ -694,7 +694,7 @@ class SyncEngine {
 						}
 						
 						// Query for OneDrive Business Shared Files
-						addLogEntry("Checking for any applicable OneDrive Business Shared Files which need to be synced locally", ["verbose"]);
+						if (verboseLogging) {addLogEntry("Checking for any applicable OneDrive Business Shared Files which need to be synced locally", ["verbose"]);}
 						queryBusinessSharedObjects();
 						
 						// Download any OneDrive Business Shared Files
@@ -906,7 +906,7 @@ class SyncEngine {
 					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
 				}
 			} else {
-				addLogEntry("Fetching /delta response from the OneDrive API for Drive ID: " ~  driveIdToQuery, ["verbose"]);
+				if (verboseLogging) {addLogEntry("Fetching /delta response from the OneDrive API for Drive ID: " ~  driveIdToQuery, ["verbose"]);}
 			}
 			
 			// Create a new API Instance for querying the actual /delta and initialise it
@@ -958,7 +958,7 @@ class SyncEngine {
 						addProcessingDotEntry();
 					}
 				} else {
-					addLogEntry("Processing API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["verbose"]);
+					if (verboseLogging) {addLogEntry("Processing API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["verbose"]);}
 				}
 				
 				// Update the count of items received
@@ -1059,7 +1059,7 @@ class SyncEngine {
 					completeProcessingDots();
 				}
 			} else {
-				addLogEntry("Finished processing /delta JSON response from the OneDrive API", ["verbose"]);
+				if (verboseLogging) {addLogEntry("Finished processing /delta JSON response from the OneDrive API", ["verbose"]);}
 			}
 			
 			// If this was set, now unset it, as this will have been completed, so that for a true up, we dont do a double full scan
@@ -1178,7 +1178,7 @@ class SyncEngine {
 						addProcessingDotEntry();
 					}
 				} else {
-					addLogEntry("Processing OneDrive JSON item batch [" ~ to!string(batchesProcessed) ~ "/" ~ to!string(batchCount) ~ "] to ensure consistent local state", ["verbose"]);
+					if (verboseLogging) {addLogEntry("Processing OneDrive JSON item batch [" ~ to!string(batchesProcessed) ~ "/" ~ to!string(batchCount) ~ "] to ensure consistent local state", ["verbose"]);}
 				}	
 					
 				// Process the batch
@@ -1604,10 +1604,10 @@ class SyncEngine {
 					// Microsoft OneNote container objects present as neither folder or file but has file size
 					if ((!isItemFile(onedriveJSONItem)) && (!isItemFolder(onedriveJSONItem)) && (hasFileSize(onedriveJSONItem))) {
 						// Log that this was skipped as this was a Microsoft OneNote item and unsupported
-						addLogEntry("The Microsoft OneNote Notebook '" ~ newItemPath ~ "' is not supported by this client", ["verbose"]);
+						if (verboseLogging) {addLogEntry("The Microsoft OneNote Notebook '" ~ newItemPath ~ "' is not supported by this client", ["verbose"]);}
 					} else {
 						// Log that this item was skipped as unsupported 
-						addLogEntry("The OneDrive item '" ~ newItemPath ~ "' is not supported by this client", ["verbose"]);
+						if (verboseLogging) {addLogEntry("The OneDrive item '" ~ newItemPath ~ "' is not supported by this client", ["verbose"]);}
 					}
 					unwanted = true;
 					if (debugLogging) {addLogEntry("Flagging as unwanted: item type is not supported", ["debug"]);}
@@ -1684,7 +1684,7 @@ class SyncEngine {
 						if (debugLogging) {addLogEntry("skip_dir exclude result (directory based): " ~ to!string(unwanted), ["debug"]);}
 						if (unwanted) {
 							// This path should be skipped
-							addLogEntry("Skipping path - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
+							if (verboseLogging) {addLogEntry("Skipping path - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);}
 						}
 					}
 					// Is the item a file?
@@ -1707,7 +1707,7 @@ class SyncEngine {
 						if (debugLogging) {addLogEntry("skip_dir exclude result (file based): " ~ to!string(unwanted), ["debug"]);}
 						if (unwanted) {
 							// this files path should be skipped
-							addLogEntry("Skipping file - file path is excluded by skip_dir config: " ~ newItemPath, ["verbose"]);
+							if (verboseLogging) {addLogEntry("Skipping file - file path is excluded by skip_dir config: " ~ newItemPath, ["verbose"]);}
 						}
 					}
 				}
@@ -1743,11 +1743,13 @@ class SyncEngine {
 						if (debugLogging) {addLogEntry("skip_file item to check: " ~ exclusionTestPath, ["debug"]);}
 						unwanted = selectiveSync.isFileNameExcluded(exclusionTestPath);
 						if (debugLogging) {addLogEntry("Result: " ~ to!string(unwanted), ["debug"]);}
-						if (unwanted) addLogEntry("Skipping file - excluded by skip_dir config: " ~ thisItemName, ["verbose"]);
+						if (unwanted) {
+							if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_dir config: " ~ thisItemName, ["verbose"]);}
+						}
 					} else {
 						// parent id is not in the database
 						unwanted = true;
-						addLogEntry("Skipping file - parent path not present in local database", ["verbose"]);
+						if (verboseLogging) {addLogEntry("Skipping file - parent path not present in local database", ["verbose"]);}
 					}
 				}
 			}
@@ -1777,11 +1779,11 @@ class SyncEngine {
 						} else {
 							// path is unwanted
 							unwanted = true;
-							addLogEntry("Skipping path - excluded by sync_list config: " ~ newItemPath, ["verbose"]);
+							if (verboseLogging) {addLogEntry("Skipping path - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
 							// flagging to skip this item now, but does this exist in the DB thus needs to be removed / deleted?
 							if (existingDBEntry) {
 								// flag to delete
-								addLogEntry("Flagging item for local delete as item exists in database: " ~ newItemPath, ["verbose"]);
+								if (verboseLogging) {addLogEntry("Flagging item for local delete as item exists in database: " ~ newItemPath, ["verbose"]);}
 								idsToDelete ~= [thisItemDriveId, thisItemId];
 							}
 						}
@@ -1793,7 +1795,7 @@ class SyncEngine {
 			if (!unwanted) {
 				if (appConfig.getValueBool("skip_dotfiles")) {
 					if (isDotFile(newItemPath)) {
-						addLogEntry("Skipping item - .file or .folder: " ~ newItemPath, ["verbose"]);
+						if (verboseLogging) {addLogEntry("Skipping item - .file or .folder: " ~ newItemPath, ["verbose"]);}
 						unwanted = true;
 					}
 				}
@@ -1806,7 +1808,7 @@ class SyncEngine {
 					string parentPath = dirName(newItemPath);
 					// Check for the presence of a .nosync in the parent path
 					if (exists(parentPath ~ "/.nosync")) {
-						addLogEntry("Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: " ~ newItemPath, ["verbose"]);
+						if (verboseLogging) {addLogEntry("Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: " ~ newItemPath, ["verbose"]);}
 						unwanted = true;
 					}
 				}
@@ -1817,7 +1819,7 @@ class SyncEngine {
 				if (isItemFile(onedriveJSONItem)) {
 					if (fileSizeLimit != 0) {
 						if (onedriveJSONItem["size"].integer >= fileSizeLimit) {
-							addLogEntry("Skipping file - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
+							if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);}
 							unwanted = true;
 						}
 					}
@@ -1920,17 +1922,17 @@ class SyncEngine {
 		// Are there any items to delete locally? Cleanup space locally first
 		if (!idsToDelete.empty) {
 			// There are elements that potentially need to be deleted locally
-			addLogEntry("Items to potentially delete locally: " ~ to!string(idsToDelete.length), ["verbose"]);
+			if (verboseLogging) {addLogEntry("Items to potentially delete locally: " ~ to!string(idsToDelete.length), ["verbose"]);}
 			
 			if (appConfig.getValueBool("download_only")) {
 				// Download only has been configured
 				if (cleanupLocalFiles) {
 					// Process online deleted items
-					addLogEntry("Processing local deletion activity as --download-only & --cleanup-local-files configured", ["verbose"]);
+					if (verboseLogging) {addLogEntry("Processing local deletion activity as --download-only & --cleanup-local-files configured", ["verbose"]);}
 					processDeleteItems();
 				} else {
 					// Not cleaning up local files
-					addLogEntry("Skipping local deletion activity as --download-only has been used", ["verbose"]);
+					if (verboseLogging) {addLogEntry("Skipping local deletion activity as --download-only has been used", ["verbose"]);}
 					// List files and directories we are not deleting locally
 					listDeletedItems();
 				}
@@ -2055,11 +2057,11 @@ class SyncEngine {
 						
 						if (localModifiedTime == latestItemModifiedTime) {
 							// Log action
-							addLogEntry("Local file modified time matches existing database record - keeping local file", ["verbose"]);
+							if (verboseLogging) {addLogEntry("Local file modified time matches existing database record - keeping local file", ["verbose"]);}
 							if (debugLogging) {addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time matching database data", ["debug"]);}
 						} else {
 							// Log action
-							addLogEntry("Local file modified time is newer based on UTC time conversion - keeping local file as this exists in the local database", ["verbose"]);
+							if (verboseLogging) {addLogEntry("Local file modified time is newer based on UTC time conversion - keeping local file as this exists in the local database", ["verbose"]);}
 							if (debugLogging) {addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time being newer than OneDrive file and present in the sqlite database", ["debug"]);}
 						}
 						// Return as no further action needed
@@ -2067,7 +2069,7 @@ class SyncEngine {
 					} else {
 						// item id is not in the database .. maybe a --resync ?
 						// file exists locally but is not in the sqlite database - maybe a failed download?
-						addLogEntry("Local item does not exist in local database - replacing with file from OneDrive - failed download?", ["verbose"]);
+						if (verboseLogging) {addLogEntry("Local item does not exist in local database - replacing with file from OneDrive - failed download?", ["verbose"]);}
 						
 						// In a --resync scenario or if items.sqlite3 was deleted before startup we have zero way of knowing IF the local file is meant to be the right file
 						// To this pint we have passed the following checks:
@@ -2091,7 +2093,7 @@ class SyncEngine {
 					// Is the remote newer?
 					if (localModifiedTime < itemModifiedTime) {
 						// Remote file is newer than the existing local item
-						addLogEntry("Remote item modified time is newer based on UTC time conversion", ["verbose"]); // correct message, remote item is newer
+						if (verboseLogging) {addLogEntry("Remote item modified time is newer based on UTC time conversion", ["verbose"]);} // correct message, remote item is newer
 						if (debugLogging) {
 							addLogEntry("localModifiedTime (local file):   " ~ to!string(localModifiedTime), ["debug"]);
 							addLogEntry("itemModifiedTime (OneDrive item): " ~ to!string(itemModifiedTime), ["debug"]);
@@ -2155,7 +2157,7 @@ class SyncEngine {
 		// To create a path, 'newItemPath' must not be empty
 		if (!newItemPath.empty) {
 			// Update the logging output to be consistent
-			addLogEntry("Creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);
+			if (verboseLogging) {addLogEntry("Creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
 			if (!dryRun) {
 				try {
 					// Create the new directory
@@ -2215,10 +2217,10 @@ class SyncEngine {
 						string itemSource = "database";
 						if (isItemSynced(changedLocalItem, changedItemPath, itemSource)) {
 							// The destination item is in-sync
-							addLogEntry("Destination is in sync and will be overwritten", ["verbose"]);
+							if (verboseLogging) {addLogEntry("Destination is in sync and will be overwritten", ["verbose"]);}
 						} else {
 							// The destination item is different
-							addLogEntry("The destination is occupied with a different item, renaming the conflicting file...", ["verbose"]);
+							if (verboseLogging) {addLogEntry("The destination is occupied with a different item, renaming the conflicting file...", ["verbose"]);}
 							// Backup this item, passing in if we are performing a --dry-run or not
 							// In case the renamed path is needed
 							string renamedPath;
@@ -2226,7 +2228,7 @@ class SyncEngine {
 						}
 					} else {
 						// The to be overwritten item is not already in the itemdb, so it should saved to avoid data loss
-						addLogEntry("The destination is occupied by an existing un-synced file, renaming the conflicting file...", ["verbose"]);
+						if (verboseLogging) {addLogEntry("The destination is occupied by an existing un-synced file, renaming the conflicting file...", ["verbose"]);}
 						// Backup this item, passing in if we are performing a --dry-run or not
 						// In case the renamed path is needed
 						string renamedPath;
@@ -2603,7 +2605,7 @@ class SyncEngine {
 								if (downloadValueMismatch && (toLower(extension(newItemPath)) == ".heic")) {
 									// Need to display a message to the user that they have experienced data loss
 									addLogEntry("DATA-LOSS: File downloaded has experienced data loss due to a Microsoft OneDrive API bug. DO NOT DELETE THIS FILE ONLINE: " ~ newItemPath, ["info", "notify"]);
-									addLogEntry("           Please read https://github.com/OneDrive/onedrive-api-docs/issues/1723 for more details.", ["verbose"]);
+									if (verboseLogging) {addLogEntry("           Please read https://github.com/OneDrive/onedrive-api-docs/issues/1723 for more details.", ["verbose"]);}
 								}
 								
 								// Add some workaround messaging for SharePoint
@@ -2643,7 +2645,7 @@ class SyncEngine {
 						} else {
 							// Download validation checks were disabled
 							if (debugLogging) {addLogEntry("Downloaded file validation disabled due to --disable-download-validation", ["debug"]);}
-							addLogEntry("WARNING: Skipping download integrity check for: " ~ newItemPath, ["verbose"]);
+							if (verboseLogging) {addLogEntry("WARNING: Skipping download integrity check for: " ~ newItemPath, ["verbose"]);}
 						}	 // end of (!disableDownloadValidation)
 					} else {
 						addLogEntry("ERROR: File failed to download. Increase logging verbosity to determine why.");
@@ -2706,15 +2708,17 @@ class SyncEngine {
 				return true;
 			} else {
 				// The file has a different timestamp ... is the hash the same meaning no file modification?
-				addLogEntry("Local file time discrepancy detected: " ~ path, ["verbose"]);
-				addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["verbose"]);
+				if (verboseLogging) {
+					addLogEntry("Local file time discrepancy detected: " ~ path, ["verbose"]);
+					addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["verbose"]);
+				}
 
 				// The file has a different timestamp ... is the hash the same meaning no file modification?
 				// Test the file hash as the date / time stamp is different
 				// Generating a hash is computationally expensive - we only generate the hash if timestamp was different
 				if (testFileHash(path, item)) {
 					// The hash is the same .. so we need to fix-up the timestamp depending on where it is wrong
-					addLogEntry("Local item has the same hash value as the item online - correcting the applicable file timestamp", ["verbose"]);
+					if (verboseLogging) {addLogEntry("Local item has the same hash value as the item online - correcting the applicable file timestamp", ["verbose"]);}
 					// Correction logic based on the configuration and the comparison of timestamps
 					if (localModifiedTime > itemModifiedTime) {
 						// Local file is newer timestamp wise, but has the same hash .. are we in a --download-only situation?
@@ -2723,13 +2727,13 @@ class SyncEngine {
 							if (appConfig.getValueBool("resync")) {
 								// --resync was used
 								// The source of the out-of-date timestamp was the local item and needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
-								addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --resync", ["verbose"]);
+								if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --resync", ["verbose"]);}
 								// Fix the local file timestamp
 								if (debugLogging) {addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);}
 								setTimes(path, item.mtime, item.mtime);
 							} else {
 								// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
-								addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
+								if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);}
 								// Attempt to update the online date time stamp
 								// We need to use the correct driveId and itemId, especially if we are updating a OneDrive Business Shared File timestamp
 								if (item.type == ItemType.file) {
@@ -2742,14 +2746,14 @@ class SyncEngine {
 							}
 						} else if (!dryRun) {
 							// --download-only is being used ... local file needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
-							addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);
+							if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);}
 							// Fix the local file timestamp
 							if (debugLogging) {addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);}
 							setTimes(path, item.mtime, item.mtime);
 						}
 					} else if (!dryRun) {
 						// The source of the out-of-date timestamp was the local file and this needs to be corrected to avoid always generating a hash test if timestamp is different
-						addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally", ["verbose"]);
+						if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally", ["verbose"]);}
 						// Fix the local file timestamp
 						if (debugLogging) {addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);}
 						setTimes(path, item.mtime, item.mtime);
@@ -2757,7 +2761,7 @@ class SyncEngine {
 					return false;
 				} else {
 					// The hash is different so the content of the file has to be different as to what is stored online
-					addLogEntry("The local file has a different hash when compared to " ~ itemSource ~ " file hash", ["verbose"]);
+					if (verboseLogging) {addLogEntry("The local file has a different hash when compared to " ~ itemSource ~ " file hash", ["verbose"]);}
 					return false;
 				}
 			}
@@ -2839,10 +2843,12 @@ class SyncEngine {
 	// Display the pertinant details of the sync engine
 	void displaySyncEngineDetails() {
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-		addLogEntry("Application Version:  " ~ appConfig.applicationVersion, ["verbose"]);
-		addLogEntry("Account Type:         " ~ appConfig.accountType, ["verbose"]);
-		addLogEntry("Default Drive ID:     " ~ appConfig.defaultDriveId, ["verbose"]);
-		addLogEntry("Default Root ID:      " ~ appConfig.defaultRootId, ["verbose"]);
+		if (verboseLogging) {
+			addLogEntry("Application Version:  " ~ appConfig.applicationVersion, ["verbose"]);
+			addLogEntry("Account Type:         " ~ appConfig.accountType, ["verbose"]);
+			addLogEntry("Default Drive ID:     " ~ appConfig.defaultDriveId, ["verbose"]);
+			addLogEntry("Default Root ID:      " ~ appConfig.defaultRootId, ["verbose"]);
+		}
 
 		// Fetch the details from cachedOnlineDriveData
 		DriveDetailsCache cachedOnlineDriveData;
@@ -2851,13 +2857,13 @@ class SyncEngine {
 		// What do we display here for space remaining
 		if (cachedOnlineDriveData.quotaRemaining > 0) {
 			// Display the actual value
-			addLogEntry("Remaining Free Space: " ~ to!string(byteToGibiByte(cachedOnlineDriveData.quotaRemaining)) ~ " GB (" ~ to!string(cachedOnlineDriveData.quotaRemaining) ~ " bytes)", ["verbose"]);
+			if (verboseLogging) {addLogEntry("Remaining Free Space: " ~ to!string(byteToGibiByte(cachedOnlineDriveData.quotaRemaining)) ~ " GB (" ~ to!string(cachedOnlineDriveData.quotaRemaining) ~ " bytes)", ["verbose"]);}
 		} else {
 			// zero or non-zero value or restricted
 			if (!cachedOnlineDriveData.quotaRestricted){
-				addLogEntry("Remaining Free Space: 0 KB", ["verbose"]);
+				if (verboseLogging) {addLogEntry("Remaining Free Space: 0 KB", ["verbose"]);}
 			} else {
-				addLogEntry("Remaining Free Space: Not Available", ["verbose"]);
+				if (verboseLogging) {addLogEntry("Remaining Free Space: Not Available", ["verbose"]);}
 			}
 		}
 	}
@@ -2995,9 +3001,9 @@ class SyncEngine {
 			// Log the action if the path exists .. it may of already been removed and this is a legacy array item
 			if (exists(path)) {
 				if (item.type == ItemType.file) {
-					addLogEntry("Skipping local deletion for file " ~ path, ["verbose"]);
+					if (verboseLogging) {addLogEntry("Skipping local deletion for file " ~ path, ["verbose"]);}
 				} else {
-					addLogEntry("Skipping local deletion for directory " ~ path, ["verbose"]);
+					if (verboseLogging) {addLogEntry("Skipping local deletion for directory " ~ path, ["verbose"]);}
 				}
 			}
 		}
@@ -3062,7 +3068,7 @@ class SyncEngine {
 				// Handle the 409
 				if (exception.httpStatusCode == 409) {
 					// OneDrive threw a 412 error
-					addLogEntry("OneDrive returned a 'HTTP 409 - ETag does not match current item's value' when attempting file time stamp update - gracefully handling error", ["verbose"]);
+					if (verboseLogging) {addLogEntry("OneDrive returned a 'HTTP 409 - ETag does not match current item's value' when attempting file time stamp update - gracefully handling error", ["verbose"]);}
 					if (debugLogging) {
 						addLogEntry("File Metadata Update Failed - OneDrive eTag / cTag match issue", ["debug"]);
 						addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
@@ -3071,7 +3077,7 @@ class SyncEngine {
 				// Handle the 412
 				if (exception.httpStatusCode == 412) {
 					// OneDrive threw a 412 error
-					addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error", ["verbose"]);
+					if (verboseLogging) {addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error", ["verbose"]);}
 					if (debugLogging) {
 						addLogEntry("File Metadata Update Failed - OneDrive eTag / cTag match issue", ["debug"]);
 						addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
@@ -3117,7 +3123,7 @@ class SyncEngine {
 		// Use the array we populate, rather than selecting all distinct driveId's from the database
 		foreach (driveId; consistencyCheckDriveIdsArray) {
 			// Make the logging more accurate - we cant update driveId as this then breaks the below queries
-			addLogEntry("Processing DB entries for this Drive ID: " ~ driveId, ["verbose"]);
+			if (verboseLogging) {addLogEntry("Processing DB entries for this Drive ID: " ~ driveId, ["verbose"]);}
 			
 			// Initialise the array 
 			Item[] driveItems = [];
@@ -3264,7 +3270,7 @@ class SyncEngine {
 		}
 		
 		// Log what we are doing
-		addLogEntry("Processing: " ~ logOutputPath, ["verbose"]);
+		if (verboseLogging) {addLogEntry("Processing: " ~ logOutputPath, ["verbose"]);}
 		// Add a processing '.'
 		if (!appConfig.suppressLoggingOutput) {
 			if (appConfig.verbosityCount == 0) {
@@ -3315,7 +3321,7 @@ class SyncEngine {
 					
 					if (localModifiedTime != itemModifiedTime) {
 						// The modified dates are different
-						addLogEntry("Local file time discrepancy detected: " ~ localFilePath, ["verbose"]);
+						if (verboseLogging) {addLogEntry("Local file time discrepancy detected: " ~ localFilePath, ["verbose"]);}
 						if (debugLogging) {addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["debug"]);}
 						
 						// Test the file hash
@@ -3324,25 +3330,25 @@ class SyncEngine {
 							if (localModifiedTime >= itemModifiedTime) {
 								// Local file is newer
 								if (!appConfig.getValueBool("download_only")) {
-									addLogEntry("The file content has changed locally and has a newer timestamp, thus needs to be uploaded to OneDrive", ["verbose"]);
+									if (verboseLogging) {addLogEntry("The file content has changed locally and has a newer timestamp, thus needs to be uploaded to OneDrive", ["verbose"]);}
 									// Add to an array of files we need to upload as this file has changed locally in-between doing the /delta check and performing this check
 									databaseItemsWhereContentHasChanged ~= [dbItem.driveId, dbItem.id, localFilePath];
 								} else {
-									addLogEntry("The file content has changed locally and has a newer timestamp. The file will remain different to online file due to --download-only being used", ["verbose"]);
+									if (verboseLogging) {addLogEntry("The file content has changed locally and has a newer timestamp. The file will remain different to online file due to --download-only being used", ["verbose"]);}
 								}
 							} else {
 								// Local file is older - data recovery process? something else?
 								if (!appConfig.getValueBool("download_only")) {
-									addLogEntry("The file content has changed locally and file now has a older timestamp. Uploading this file to OneDrive may potentially cause data-loss online", ["verbose"]);
+									if (verboseLogging) {addLogEntry("The file content has changed locally and file now has a older timestamp. Uploading this file to OneDrive may potentially cause data-loss online", ["verbose"]);}
 									// Add to an array of files we need to upload as this file has changed locally in-between doing the /delta check and performing this check
 									databaseItemsWhereContentHasChanged ~= [dbItem.driveId, dbItem.id, localFilePath];
 								} else {
-									addLogEntry("The file content has changed locally and file now has a older timestamp. The file will remain different to online file due to --download-only being used", ["verbose"]);
+									if (verboseLogging) {addLogEntry("The file content has changed locally and file now has a older timestamp. The file will remain different to online file due to --download-only being used", ["verbose"]);}
 								}
 							}
 						} else {
 							// The file contents have not changed, but the modified timestamp has
-							addLogEntry("The last modified timestamp has changed however the file content has not changed", ["verbose"]);
+							if (verboseLogging) {addLogEntry("The last modified timestamp has changed however the file content has not changed", ["verbose"]);}
 							
 							// Local file is newer .. are we in a --download-only situation?
 							if (!appConfig.getValueBool("download_only")) {
@@ -3353,19 +3359,19 @@ class SyncEngine {
 									if (dbItem.type == ItemType.file) {
 										// Not a remote file
 										// Log what is being done
-										addLogEntry("The local item has the same hash value as the item online - correcting timestamp online", ["verbose"]);
+										if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online - correcting timestamp online", ["verbose"]);}
 										// Correct timestamp
 										uploadLastModifiedTime(dbItem, dbItem.driveId, dbItem.id, localModifiedTime.toUTC(), dbItem.eTag);
 									} else {
 										// Remote file, remote values need to be used, we may not even have permission to change timestamp, update local file
-										addLogEntry("The local item has the same hash value as the item online, however file is a OneDrive Business Shared File - correcting local timestamp", ["verbose"]);
+										if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online, however file is a OneDrive Business Shared File - correcting local timestamp", ["verbose"]);}
 										if (debugLogging) {addLogEntry("Calling setTimes() for this file: " ~ localFilePath, ["debug"]);}
 										setTimes(localFilePath, dbItem.mtime, dbItem.mtime);
 									}
 								}
 							} else {
 								// --download-only being used
-								addLogEntry("The local item has the same hash value as the item online - correcting local timestamp due to --download-only being used to ensure local file matches timestamp online", ["verbose"]);
+								if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online - correcting local timestamp due to --download-only being used to ensure local file matches timestamp online", ["verbose"]);}
 								if (!dryRun) {
 									if (debugLogging) {addLogEntry("Calling setTimes() for this file: " ~ localFilePath, ["debug"]);}
 									setTimes(localFilePath, dbItem.mtime, dbItem.mtime);
@@ -3374,7 +3380,7 @@ class SyncEngine {
 						}
 					} else {
 						// The file has not changed
-						addLogEntry("The file has not changed", ["verbose"]);
+						if (verboseLogging) {addLogEntry("The file has not changed", ["verbose"]);}
 					}
 				} else {
 					//The file is not readable - skipped
@@ -3382,14 +3388,14 @@ class SyncEngine {
 				}
 			} else {
 				// The item was a file but now is a directory
-				addLogEntry("The item was a file but now is a directory", ["verbose"]);
+				if (verboseLogging) {addLogEntry("The item was a file but now is a directory", ["verbose"]);}
 			}
 		} else {
 			// File does not exist locally, but is in our database as a dbItem containing all the data was passed into this function
 			// If we are in a --dry-run situation - this file may never have existed as we never downloaded it
 			if (!dryRun) {
 				// Not --dry-run situation
-				addLogEntry("The file has been deleted locally", ["verbose"]);
+				if (verboseLogging) {addLogEntry("The file has been deleted locally", ["verbose"]);}
 				// Add this to the array to handle post checking all database items
 				databaseItemsToDeleteOnline ~= [DatabaseItemsToDeleteOnline(dbItem, localFilePath)];
 			} else {
@@ -3399,13 +3405,13 @@ class SyncEngine {
 				foreach (i; idsFaked) {
 					if (i[1] == dbItem.id) {
 						if (debugLogging) {addLogEntry("Matched faked file which is 'supposed' to exist but not created due to --dry-run use", ["debug"]);}
-						addLogEntry("The file has not changed", ["verbose"]);
+						if (verboseLogging) {addLogEntry("The file has not changed", ["verbose"]);}
 						idsFakedMatch = true;
 					}
 				}
 				if (!idsFakedMatch) {
 					// dbItem.id did not match a 'faked' download new file creation - so this in-sync object was actually deleted locally, but we are in a --dry-run situation
-					addLogEntry("The file has been deleted locally", ["verbose"]);
+					if (verboseLogging) {addLogEntry("The file has been deleted locally", ["verbose"]);}
 					// Add this to the array to handle post checking all database items
 					databaseItemsToDeleteOnline ~= [DatabaseItemsToDeleteOnline(dbItem, localFilePath)];
 				}
@@ -3424,12 +3430,12 @@ class SyncEngine {
 			// Fix https://github.com/abraunegg/onedrive/issues/1915
 			try {
 				if (!isDir(localFilePath)) {
-					addLogEntry("The item was a directory but now it is a file", ["verbose"]);
+					if (verboseLogging) {addLogEntry("The item was a directory but now it is a file", ["verbose"]);}
 					uploadDeletedItem(dbItem, localFilePath);
 					uploadNewFile(localFilePath);
 				} else {
 					// Directory still exists locally
-					addLogEntry("The directory has not changed", ["verbose"]);
+					if (verboseLogging) {addLogEntry("The directory has not changed", ["verbose"]);}
 					// When we are using --single-directory, we use a the getChildren() call to get all children of a path, meaning all children are already traversed
 					// Thus, if we traverse the path of this directory .. we end up with double processing & log output .. which is not ideal
 					if (!singleDirectoryScope) {
@@ -3453,10 +3459,10 @@ class SyncEngine {
 				// Not --dry-run situation
 				if (!appConfig.getValueBool("monitor")) {
 					// Not in --monitor mode
-					addLogEntry("The directory has been deleted locally", ["verbose"]);
+					if (verboseLogging) {addLogEntry("The directory has been deleted locally", ["verbose"]);}
 				} else {
 					// Appropriate message as we are in --monitor mode
-					addLogEntry("The directory appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'", ["verbose"]);
+					if (verboseLogging) {addLogEntry("The directory appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'", ["verbose"]);}
 					if (debugLogging) {addLogEntry("Most likely cause - 'inotify' event was missing for whatever action was taken locally or action taken when application was stopped", ["debug"]);}
 				}
 				// A moved directory will be uploaded as 'new', delete the old directory and database reference
@@ -3469,13 +3475,13 @@ class SyncEngine {
 				foreach (i; idsFaked) {
 					if (i[1] == dbItem.id) {
 						if (debugLogging) {addLogEntry("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use", ["debug"]);}
-						addLogEntry("The directory has not changed", ["verbose"]);
+						if (verboseLogging) {addLogEntry("The directory has not changed", ["verbose"]);}
 						idsFakedMatch = true;
 					}
 				}
 				if (!idsFakedMatch) {
 					// dbItem.id did not match a 'faked' download new directory creation - so this in-sync object was actually deleted locally, but we are in a --dry-run situation
-					addLogEntry("The directory has been deleted locally", ["verbose"]);
+					if (verboseLogging) {addLogEntry("The directory has been deleted locally", ["verbose"]);}
 					// Add this to the array to handle post checking all database items
 					databaseItemsToDeleteOnline ~= [DatabaseItemsToDeleteOnline(dbItem, localFilePath)];
 				} else {
@@ -3572,7 +3578,7 @@ class SyncEngine {
 			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
 			if (appConfig.getValueBool("check_nosync")) {
 				if (exists(localFilePath ~ "/.nosync")) {
-					addLogEntry("Skipping item - .nosync found & --check-for-nosync enabled: " ~ localFilePath, ["verbose"]);
+					if (verboseLogging) {addLogEntry("Skipping item - .nosync found & --check-for-nosync enabled: " ~ localFilePath, ["verbose"]);}
 					clientSideRuleExcludesPath = true;
 				}
 			}
@@ -3583,7 +3589,7 @@ class SyncEngine {
 			// Do we need to check skip dot files if configured
 			if (appConfig.getValueBool("skip_dotfiles")) {
 				if (isDotFile(localFilePath)) {
-					addLogEntry("Skipping item - .file or .folder: " ~ localFilePath, ["verbose"]);
+					if (verboseLogging) {addLogEntry("Skipping item - .file or .folder: " ~ localFilePath, ["verbose"]);}
 					clientSideRuleExcludesPath = true;
 				}
 			}
@@ -3595,7 +3601,7 @@ class SyncEngine {
 			if (isSymlink(localFilePath)) {
 				// if config says so we skip all symlinked items
 				if (appConfig.getValueBool("skip_symlinks")) {
-					addLogEntry("Skipping item - skip symbolic links configured: " ~ localFilePath, ["verbose"]);
+					if (verboseLogging) {addLogEntry("Skipping item - skip symbolic links configured: " ~ localFilePath, ["verbose"]);}
 					clientSideRuleExcludesPath = true;
 				}
 				// skip unexisting symbolic links
@@ -3640,7 +3646,7 @@ class SyncEngine {
 						// The path that needs to be checked needs to include the '/'
 						// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
 						if (selectiveSync.isDirNameExcluded(localFilePath.strip('.'))) {
-							addLogEntry("Skipping path - excluded by skip_dir config: " ~ localFilePath, ["verbose"]);
+							if (verboseLogging) {addLogEntry("Skipping path - excluded by skip_dir config: " ~ localFilePath, ["verbose"]);}
 							clientSideRuleExcludesPath = true;
 						}
 					}
@@ -3653,7 +3659,7 @@ class SyncEngine {
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
 					if (selectiveSync.isFileNameExcluded(localFilePath.strip('.'))) {
-						addLogEntry("Skipping file - excluded by skip_dir config: " ~ localFilePath, ["verbose"]);
+						if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_dir config: " ~ localFilePath, ["verbose"]);}
 						clientSideRuleExcludesPath = true;
 					}
 				}
@@ -3675,17 +3681,17 @@ class SyncEngine {
 								// is this path a file or directory?
 								if (isFile(localFilePath)) {
 									// file	
-									addLogEntry("Skipping file - excluded by sync_list config: " ~ localFilePath, ["verbose"]);
+									if (verboseLogging) {addLogEntry("Skipping file - excluded by sync_list config: " ~ localFilePath, ["verbose"]);}
 								} else {
 									// directory
-									addLogEntry("Skipping path - excluded by sync_list config: " ~ localFilePath, ["verbose"]);
+									if (verboseLogging) {addLogEntry("Skipping path - excluded by sync_list config: " ~ localFilePath, ["verbose"]);}
 								}
 								
 								// flag as excluded
 								clientSideRuleExcludesPath = true;
 							} else {
 								// skipped for some other reason
-								addLogEntry("Skipping path - excluded by user config: " ~ localFilePath, ["verbose"]);
+								if (verboseLogging) {addLogEntry("Skipping path - excluded by user config: " ~ localFilePath, ["verbose"]);}
 								clientSideRuleExcludesPath = true;
 							}
 						}
@@ -3701,7 +3707,7 @@ class SyncEngine {
 					// Get the file size
 					ulong thisFileSize = getSize(localFilePath);
 					if (thisFileSize >= fileSizeLimit) {
-						addLogEntry("Skipping file - excluded by skip_size config: " ~ localFilePath ~ " (" ~ to!string(thisFileSize/2^^20) ~ " MB)", ["verbose"]);
+						if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_size config: " ~ localFilePath ~ " (" ~ to!string(thisFileSize/2^^20) ~ " MB)", ["verbose"]);}
 					}
 				}
 			}
@@ -3809,7 +3815,7 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("skip_dir exclude result (directory based): " ~ to!string(clientSideRuleExcludesPath), ["debug"]);}
 					if (clientSideRuleExcludesPath) {
 						// This path should be skipped
-						addLogEntry("Skipping path - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
+						if (verboseLogging) {addLogEntry("Skipping path - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);}
 					}
 				}
 			}
@@ -3867,7 +3873,7 @@ class SyncEngine {
 				
 				if (clientSideRuleExcludesPath) {
 					// This path should be skipped
-					addLogEntry("Skipping file - excluded by skip_dir config: " ~ exclusionTestPath, ["verbose"]);
+					if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_dir config: " ~ exclusionTestPath, ["verbose"]);}
 				}
 			}
 		}
@@ -3946,8 +3952,10 @@ class SyncEngine {
 				// Check for HTML entities (e.g., '%20' for space) in newItemPath
 				if (containsURLEncodedItems(newItemPath)) {
 					addLogEntry("CAUTION:    The JSON element transmitted by the Microsoft OneDrive API includes HTML URL encoded items, which may complicate pattern matching and potentially lead to synchronisation problems for this item.");
-					addLogEntry("WORKAROUND: An alternative solution could be to change the name of this item through the online platform: " ~ newItemPath, ["verbose"]);
-					addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details", ["verbose"]);
+					if (verboseLogging) {
+						addLogEntry("WORKAROUND: An alternative solution could be to change the name of this item through the online platform: " ~ newItemPath, ["verbose"]);
+						addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details", ["verbose"]);
+					}
 				}
 				
 				// If this is a Shared Folder, we need to 'trim' the resulting path to that of the 'folder' that is actually shared with us so that this can be appropriatly checked against 'sync_list' entries
@@ -3987,7 +3995,7 @@ class SyncEngine {
 						if (!syncListSkippedParentIds.canFind(thisItemId)) {
 							if (isItemFolder(onedriveJSONItem)) {
 								// Detail we are skipping this JSON data from online
-								addLogEntry("Skipping path - excluded by sync_list config: " ~ newItemPath, ["verbose"]);
+								if (verboseLogging) {addLogEntry("Skipping path - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
 								// Add this folder id to the elements we have already detailed we are skipping, so we do no output this again
 								syncListSkippedParentIds ~= thisItemId;
 							}
@@ -3995,19 +4003,19 @@ class SyncEngine {
 						
 						// If this is a 'add shortcut to onedrive' link, we need to actually scan this path, so add this we need to pass this JSON
 						if (isItemRemote(onedriveJSONItem)) {
-							addLogEntry("Skipping shared folder shortcut - excluded by sync_list config: " ~ newItemPath, ["verbose"]);
+							if (verboseLogging) {addLogEntry("Skipping shared folder shortcut - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
 						}
 					}
 				} else {
 					// Is this a file or directory?
 					if (isItemFile(onedriveJSONItem)) {
 						// File included due to 'sync_list' match
-						addLogEntry("Including file - included by sync_list config: " ~ newItemPath, ["verbose"]);
+						if (verboseLogging) {addLogEntry("Including file - included by sync_list config: " ~ newItemPath, ["verbose"]);}
 						
 						// Is the parent item in the database?
 						if (!parentInDatabase) {
 							// Parental database structure needs to be created
-							addLogEntry("Parental Path structure needs to be created to support included file: " ~ dirName(newItemPath), ["verbose"]);
+							if (verboseLogging) {addLogEntry("Parental Path structure needs to be created to support included file: " ~ dirName(newItemPath), ["verbose"]);}
 							// Recursivly, stepping backward from 'thisItemParentId', query online, save entry to DB
 							createLocalPathStructure(onedriveJSONItem);
 							
@@ -4019,7 +4027,7 @@ class SyncEngine {
 						}
 					} else {
 						// Directory included due to 'sync_list' match
-						addLogEntry("Including path - included by sync_list config: " ~ newItemPath, ["verbose"]);
+						if (verboseLogging) {addLogEntry("Including path - included by sync_list config: " ~ newItemPath, ["verbose"]);}
 					}
 				}
 			}
@@ -4030,7 +4038,7 @@ class SyncEngine {
 			if (isItemFile(onedriveJSONItem)) {
 				if (fileSizeLimit != 0) {
 					if (onedriveJSONItem["size"].integer >= fileSizeLimit) {
-						addLogEntry("Skipping file - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
+						if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);}
 						clientSideRuleExcludesPath = true;
 					}
 				}
@@ -4620,7 +4628,7 @@ class SyncEngine {
 					if (appConfig.accountType == "personal") {
 						addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
 					} else { // Assuming 'business' or 'sharedLibrary'
-						addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator." , ["verbose"]);
+						if (verboseLogging) {addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator." , ["verbose"]);}
 					}
 				}
 			} else {
@@ -4629,15 +4637,15 @@ class SyncEngine {
 				
 				// what sort of account type is this?
 				if (appConfig.accountType == "personal") {
-					addLogEntry("ERROR: OneDrive quota information is missing. Your OneDrive account potentially has zero space available. Please free up some space online.", ["verbose"]);
+					if (verboseLogging) {addLogEntry("ERROR: OneDrive quota information is missing. Your OneDrive account potentially has zero space available. Please free up some space online.", ["verbose"]);}
 				} else {
 					// quota details not available
-					addLogEntry("WARNING: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
+					if (verboseLogging) {addLogEntry("WARNING: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);}
 				}
 			}
 		} else {
 			// When valid quota details are not fetched
-			addLogEntry("Failed to fetch or query quota details for OneDrive Drive ID: " ~ driveId, ["verbose"]);
+			if (verboseLogging) {addLogEntry("Failed to fetch or query quota details for OneDrive Drive ID: " ~ driveId, ["verbose"]);}
 			quotaRestricted = true; // Considering restricted due to failure to interpret
 		}
 
@@ -4773,25 +4781,29 @@ class SyncEngine {
 			}
 			
 			// How much data is there to upload
-			if (totalDataToUpload < 1024) {
-				// Display as Bytes to upload
-				addLogEntry("Total New Data to Upload:        " ~ to!string(totalDataToUpload) ~ " Bytes", ["verbose"]);
-			} else {
-				if ((totalDataToUpload > 1024) && (totalDataToUpload < 1048576)) {
-					// Display as KB to upload
-					addLogEntry("Total New Data to Upload:        " ~ to!string((totalDataToUpload / 1024)) ~ " KB", ["verbose"]);
+			if (verboseLogging) {
+				if (totalDataToUpload < 1024) {
+					// Display as Bytes to upload
+					addLogEntry("Total New Data to Upload:        " ~ to!string(totalDataToUpload) ~ " Bytes", ["verbose"]);
 				} else {
-					// Display as MB to upload
-					addLogEntry("Total New Data to Upload:        " ~ to!string((totalDataToUpload / 1024 / 1024)) ~ " MB", ["verbose"]);
+					if ((totalDataToUpload > 1024) && (totalDataToUpload < 1048576)) {
+						// Display as KB to upload
+						addLogEntry("Total New Data to Upload:        " ~ to!string((totalDataToUpload / 1024)) ~ " KB", ["verbose"]);
+					} else {
+						// Display as MB to upload
+						addLogEntry("Total New Data to Upload:        " ~ to!string((totalDataToUpload / 1024 / 1024)) ~ " MB", ["verbose"]);
+					}
 				}
 			}
 			
 			// How much space is available 
 			// The file, could be uploaded to a shared folder, which, we are not tracking how much free space is available there ... 
 			// Iterate through all the drives we have cached thus far, that we know about
-			foreach (driveId, driveDetails; onlineDriveDetails) {
-				// Log how much space is available for each driveId
-				if (debugLogging) {addLogEntry("Current Available Space Online (" ~ driveId ~ "): " ~ to!string((driveDetails.quotaRemaining / 1024 / 1024)) ~ " MB", ["debug"]);}
+			if (debugLogging) {
+				foreach (driveId, driveDetails; onlineDriveDetails) {
+					// Log how much space is available for each driveId
+					addLogEntry("Current Available Space Online (" ~ driveId ~ "): " ~ to!string((driveDetails.quotaRemaining / 1024 / 1024)) ~ " MB", ["debug"]);
+				}
 			}
 			
 			// Perform the upload
@@ -5086,14 +5098,14 @@ class SyncEngine {
 				if (!fileFoundInDB) {
 					// This is a new file as it is not in the database
 					// Log that the file has been added locally
-					addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
+					if (verboseLogging) {addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);}
 					scanLocalFilesystemPathForNewDataToUpload(localFilePath);
 				} else {
 					// This is a potentially modified file, needs to be handled as such. Is the item truly modified?
 					if (!testFileHash(localFilePath, databaseItem)) {
 						// The local file failed the hash comparison test - there is a data difference
 						// Log that the file has changed locally
-						addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);
+						if (verboseLogging) {addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);}
 						// Add the modified item to the array to upload
 						uploadChangedLocalFileToOneDrive([databaseItem.driveId, databaseItem.id, localFilePath]);
 					}
@@ -5126,7 +5138,7 @@ class SyncEngine {
 	//   for the path flow and create the folder that way
 	void createDirectoryOnline(string thisNewPathToCreate) {
 		// Log what we are doing
-		addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate, ["verbose"]);
+		if (verboseLogging) {addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate, ["verbose"]);}
 		
 		// Function variables
 		Item parentItem;
@@ -5319,7 +5331,7 @@ class SyncEngine {
 			if (exception.httpStatusCode == 404) {
 				// This is a good error - it means that the directory to create 100% does not exist online
 				// The directory was not found on the drive id we queried
-				addLogEntry("The requested directory to create was not found on OneDrive - creating remote directory: " ~ thisNewPathToCreate, ["verbose"]);
+				if (verboseLogging) {addLogEntry("The requested directory to create was not found on OneDrive - creating remote directory: " ~ thisNewPathToCreate, ["verbose"]);}
 				
 				// Build up the online create directory request
 				JSONValue createDirectoryOnlineAPIResponse;
@@ -5365,7 +5377,7 @@ class SyncEngine {
 						if (exception.httpStatusCode == 409) {
 							// OneDrive API returned a 404 (above) to say the directory did not exist
 							// but when we attempted to create it, OneDrive responded that it now already exists
-							addLogEntry("OneDrive reported that " ~ thisNewPathToCreate ~ " already exists .. OneDrive API race condition", ["verbose"]);
+							if (verboseLogging) {addLogEntry("OneDrive reported that " ~ thisNewPathToCreate ~ " already exists .. OneDrive API race condition", ["verbose"]);}
 							// Shutdown this API instance, as we will create API instances as required, when required
 							createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
 							// Free object and memory
@@ -5464,7 +5476,7 @@ class SyncEngine {
 				}
 				
 				// Path found online
-				addLogEntry("The requested directory to create was found on OneDrive - skipping creating the directory: " ~ thisNewPathToCreate, ["verbose"]);
+				if (verboseLogging) {addLogEntry("The requested directory to create was found on OneDrive - skipping creating the directory: " ~ thisNewPathToCreate, ["verbose"]);}
 				
 				// Is the response a valid JSON object - validation checking done in saveItem
 				saveItem(onlinePathData);
@@ -5674,15 +5686,15 @@ class SyncEngine {
 							if (parentItem.driveId != appConfig.defaultDriveId) {
 								// Different message depending on account type
 								if (appConfig.accountType == "personal") {
-									addLogEntry("WARNING: Shared Folder OneDrive quota information is being restricted or providing a zero value. Space available online cannot be guaranteed.", ["verbose"]);
+									if (verboseLogging) {addLogEntry("WARNING: Shared Folder OneDrive quota information is being restricted or providing a zero value. Space available online cannot be guaranteed.", ["verbose"]);}
 								} else {
-									addLogEntry("WARNING: Shared Folder OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
+									if (verboseLogging) {addLogEntry("WARNING: Shared Folder OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);}
 								}
 							} else {
 								if (appConfig.accountType == "personal") {
-									addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Space available online cannot be guaranteed.", ["verbose"]);
+									if (verboseLogging) {addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Space available online cannot be guaranteed.", ["verbose"]);}
 								} else {
-									addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
+									if (verboseLogging) {addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);}
 								}
 							}
 							// Space available online is being restricted - so we have no way to really know if there is space available online
@@ -5740,7 +5752,7 @@ class SyncEngine {
 								
 								// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
 								// and that it matches the POSIX filename of the local item we are trying to upload as a new file
-								addLogEntry("The file we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);
+								if (verboseLogging) {addLogEntry("The file we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);}
 								
 								// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
 								if (debugLogging) {addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);}
@@ -6014,7 +6026,7 @@ class SyncEngine {
 						}
 					} else {
 						// No Upload URL or nextExpectedRanges or localPath .. not a valid JSON we can use
-						addLogEntry("Session data is missing required elements to perform a session upload.", ["verbose"]);
+						if (verboseLogging) {addLogEntry("Session data is missing required elements to perform a session upload.", ["verbose"]);}
 						addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 					}
 				} else {
@@ -6126,7 +6138,7 @@ class SyncEngine {
 			}
 		} else {
 			// no valid session was created
-			addLogEntry("Creation of OneDrive API Upload Session failed.", ["verbose"]);
+			if (verboseLogging) {addLogEntry("Creation of OneDrive API Upload Session failed.", ["verbose"]);}
 			// return upload() will return a JSONValue response, create an empty JSONValue response to return
 			uploadSession = null;
 		}
@@ -6194,7 +6206,7 @@ class SyncEngine {
 			if (fragSize < 0) {
 				// Session upload will fail
 				// not a JSON object - fragment upload failed
-				addLogEntry("File upload session failed - invalid calculation of fragment size", ["verbose"]);
+				if (verboseLogging) {addLogEntry("File upload session failed - invalid calculation of fragment size", ["verbose"]);}
 				if (exists(threadUploadSessionFilePath)) {
 					remove(threadUploadSessionFilePath);
 				}
@@ -6233,11 +6245,11 @@ class SyncEngine {
 				//   504 - Gateway Timeout
 					
 				// Insert a new line as well, so that the below error is inserted on the console in the right location
-				addLogEntry("Fragment upload failed - received an exception response from OneDrive API", ["verbose"]);
+				if (verboseLogging) {addLogEntry("Fragment upload failed - received an exception response from OneDrive API", ["verbose"]);}
 				// display what the error is
 				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 				// retry fragment upload in case error is transient
-				addLogEntry("Retrying fragment upload", ["verbose"]);
+				if (verboseLogging) {addLogEntry("Retrying fragment upload", ["verbose"]);}
 				
 				try {
 					uploadResponse = activeOneDriveApiInstance.uploadFragment(
@@ -6249,7 +6261,7 @@ class SyncEngine {
 					);
 				} catch (OneDriveException e) {
 					// OneDrive threw another error on retry
-					addLogEntry("Retry to upload fragment failed", ["verbose"]);
+					if (verboseLogging) {addLogEntry("Retry to upload fragment failed", ["verbose"]);}
 					// display what the error is
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					// set uploadResponse to null as the fragment upload was in error twice
@@ -6279,7 +6291,7 @@ class SyncEngine {
 				saveSessionFile(threadUploadSessionFilePath, uploadSessionData);
 			} else {
 				// not a JSON object - fragment upload failed
-				addLogEntry("File upload session failed - invalid response from OneDrive API", ["verbose"]);
+				if (verboseLogging) {addLogEntry("File upload session failed - invalid response from OneDrive API", ["verbose"]);}
 				
 				// cleanup session data
 				if (exists(threadUploadSessionFilePath)) {
@@ -6316,10 +6328,10 @@ class SyncEngine {
 		if (noRemoteDelete) {
 			if ((itemToDelete.type == ItemType.dir)) {
 				// Do not process remote directory delete
-				addLogEntry("Skipping remote directory delete as --upload-only & --no-remote-delete configured", ["verbose"]);
+				if (verboseLogging) {addLogEntry("Skipping remote directory delete as --upload-only & --no-remote-delete configured", ["verbose"]);}
 			} else {
 				// Do not process remote file delete
-				addLogEntry("Skipping remote file delete as --upload-only & --no-remote-delete configured", ["verbose"]);
+				if (verboseLogging) {addLogEntry("Skipping remote file delete as --upload-only & --no-remote-delete configured", ["verbose"]);}
 			}
 		} else {
 			
@@ -6418,7 +6430,7 @@ class SyncEngine {
 					} catch (OneDriveException e) {
 						if (e.httpStatusCode == 404) {
 							// item.id, item.eTag could not be found on the specified driveId
-							addLogEntry("OneDrive reported: The resource could not be found to be deleted.", ["verbose"]);
+							if (verboseLogging) {addLogEntry("OneDrive reported: The resource could not be found to be deleted.", ["verbose"]);}
 						}
 						
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -6816,7 +6828,7 @@ class SyncEngine {
 					addProcessingLogHeaderEntry("Generating a /delta response from the OneDrive API from this Item ID: " ~ searchItem.id, appConfig.verbosityCount);
 				}
 			} else {
-				addLogEntry("Generating a /delta response from the OneDrive API from this Item ID: " ~ searchItem.id, ["verbose"]);
+				if (verboseLogging) {addLogEntry("Generating a /delta response from the OneDrive API from this Item ID: " ~ searchItem.id, ["verbose"]);}
 			}
 		
 			// Process this initial JSON response
@@ -6836,13 +6848,13 @@ class SyncEngine {
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
 					// Add driveData JSON data to array
-					addLogEntry("Adding OneDrive root details for processing", ["verbose"]);
+					if (verboseLogging) {addLogEntry("Adding OneDrive root details for processing", ["verbose"]);}
 					childrenData ~= rootData;
 				}
 			}
 			
 			// Add driveData JSON data to array
-			addLogEntry("Adding OneDrive folder details for processing", ["verbose"]);
+			if (verboseLogging) {addLogEntry("Adding OneDrive folder details for processing", ["verbose"]);}
 			childrenData ~= driveData;
 		} else {
 			// driveData is an invalid JSON object
@@ -6888,10 +6900,10 @@ class SyncEngine {
 			// Process top level children
 			if (!remotePathObject) {
 				// Main account root folder
-				addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive 'root' Folder", ["verbose"]);
+				if (verboseLogging) {addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive 'root' Folder", ["verbose"]);}
 			} else {
 				// Shared Folder
-				addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive Shared Folder", ["verbose"]);
+				if (verboseLogging) {addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive Shared Folder", ["verbose"]);}
 			}
 			
 			foreach (child; topLevelChildren["value"].array) {
@@ -7009,7 +7021,7 @@ class SyncEngine {
 					//   /Level 1/Level 2/Level 3/Child Shared Folder/some folder/another folder
 					// But 'Child Shared Folder' is what is shared, thus '/Level 1/Level 2/Level 3/' is a potential information leak if logged.
 					// Plus, the application output now shows accurately what is being shared - so that is a good thing.
-					addLogEntry("Adding " ~ to!string(count(thisLevelChildren["value"].array)) ~ " OneDrive items for processing from " ~ pathForLogging, ["verbose"]);
+					if (verboseLogging) {addLogEntry("Adding " ~ to!string(count(thisLevelChildren["value"].array)) ~ " OneDrive items for processing from " ~ pathForLogging, ["verbose"]);}
 				}
 				foreach (child; thisLevelChildren["value"].array) {
 					// Check for any Client Side Filtering here ... we should skip querying the OneDrive API for 'folders' that we are going to just process and skip anyway.
@@ -7334,7 +7346,7 @@ class SyncEngine {
 								// 409 - API Race Condition
 								if (e.httpStatusCode == 409) {
 									// When we attempted to create it, OneDrive responded that it now already exists
-									addLogEntry("OneDrive reported that " ~ thisFolderName ~ " already exists .. OneDrive API race condition", ["verbose"]);
+									if (verboseLogging) {addLogEntry("OneDrive reported that " ~ thisFolderName ~ " already exists .. OneDrive API race condition", ["verbose"]);}
 								} else {
 									// some other error from OneDrive was returned - display what it is
 									addLogEntry("OneDrive generated an error when creating this path: " ~ thisFolderName);
@@ -7404,7 +7416,7 @@ class SyncEngine {
 		try {
 			if (noRemoteDelete) {
 				// do not process remote delete
-				addLogEntry("Skipping remote delete as --upload-only & --no-remote-delete configured", ["verbose"]);
+				if (verboseLogging) {addLogEntry("Skipping remote delete as --upload-only & --no-remote-delete configured", ["verbose"]);}
 			} else {
 				uploadDeletedItem(dbItem, path);
 			}
@@ -7577,7 +7589,7 @@ class SyncEngine {
 				if (!exists(newPath)) {
 					// is this --monitor use?
 					if (appConfig.getValueBool("monitor")) {
-						addLogEntry("uploadMoveItem target has disappeared: " ~ newPath, ["verbose"]);
+						if (verboseLogging) {addLogEntry("uploadMoveItem target has disappeared: " ~ newPath, ["verbose"]);}
 						return;
 					}
 				}
@@ -7624,7 +7636,7 @@ class SyncEngine {
 							// OneDrive threw a 412 error, most likely: ETag does not match current item's value
 							// Retry without eTag
 							if (debugLogging) {addLogEntry("File Move Failed - OneDrive eTag / cTag match issue", ["debug"]);}
-							addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error", ["verbose"]);
+							if (verboseLogging) {addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error", ["verbose"]);}
 							eTag = null;
 							// Retry to move the file but without the eTag, via the for() loop
 						} else if (e.httpStatusCode == 409) {
@@ -7690,20 +7702,22 @@ class SyncEngine {
 					
 					// What integrity failed - size?
 					if (localFileSize != uploadFileSize) {
-						addLogEntry("WARNING: Online file integrity failure - Size Mismatch", ["verbose"]);
+						if (verboseLogging) {addLogEntry("WARNING: Online file integrity failure - Size Mismatch", ["verbose"]);}
 					}
 					
 					// What integrity failed - hash?
 					if (localFileHash != uploadFileHash) {
-						addLogEntry("WARNING: Online file integrity failure - Hash Mismatch", ["verbose"]);
+						if (verboseLogging) {addLogEntry("WARNING: Online file integrity failure - Hash Mismatch", ["verbose"]);}
 					}
 					
 					// What account type is this?
 					if (appConfig.accountType != "personal") {
 						// Not a personal account, thus the integrity failure is most likely due to SharePoint
-						addLogEntry("CAUTION: When you upload files to Microsoft OneDrive that uses SharePoint as its backend, Microsoft OneDrive will alter your files post upload.", ["verbose"]);
-						addLogEntry("CAUTION: This will lead to technical differences between the version stored online and your local original file, potentially causing issues with the accuracy or consistency of your data.", ["verbose"]);
-						addLogEntry("CAUTION: Please read https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.", ["verbose"]);
+						if (verboseLogging) {
+							addLogEntry("CAUTION: When you upload files to Microsoft OneDrive that uses SharePoint as its backend, Microsoft OneDrive will alter your files post upload.", ["verbose"]);
+							addLogEntry("CAUTION: This will lead to technical differences between the version stored online and your local original file, potentially causing issues with the accuracy or consistency of your data.", ["verbose"]);
+							addLogEntry("CAUTION: Please read https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.", ["verbose"]);
+						}
 					}
 					// How can this be disabled?
 					addLogEntry("To disable the integrity checking of uploaded files use --disable-upload-validation");
@@ -7898,9 +7912,11 @@ class SyncEngine {
 						addLogEntry("ERROR: SharePoint Site details not provided for: " ~ siteNameAvailable);
 						addLogEntry("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
 						addLogEntry("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName' or 'id'");
-						addLogEntry(" - Is 'displayName' available = " ~ to!string(displayNameAvailable), ["verbose"]);
-						addLogEntry(" - Is 'id' available          = " ~ to!string(idAvailable), ["verbose"]);
-						addLogEntry("ERROR: To debug this further, please increase verbosity (--verbose or --verbose --verbose) to provide further insight as to what details are actually being returned.");
+						if (verboseLogging) {
+							addLogEntry(" - Is 'displayName' available = " ~ to!string(displayNameAvailable), ["verbose"]);
+							addLogEntry(" - Is 'id' available          = " ~ to!string(idAvailable), ["verbose"]);
+						}
+						addLogEntry("ERROR: To debug this further, please increase application output verbosity to provide further insight as to what details are actually being returned.");
 					}
 				}
 				
@@ -8440,7 +8456,7 @@ class SyncEngine {
 			if (!validateUploadSessionFileData(sessionFilePath)) {
 				// Remove upload_session file as it is invalid
 				// upload_session file file contains an error - cant resume this session
-				addLogEntry("Restore file upload session failed - cleaning up resumable session data file: " ~ sessionFilePath, ["verbose"]);
+				if (verboseLogging) {addLogEntry("Restore file upload session failed - cleaning up resumable session data file: " ~ sessionFilePath, ["verbose"]);}
 				
 				// cleanup session path
 				if (exists(sessionFilePath)) {
@@ -8488,7 +8504,7 @@ class SyncEngine {
 			
 			// Does the file exist?
 			if (!exists(sessionLocalFilePath)) {
-				addLogEntry("The local file to upload does not exist locally anymore", ["verbose"]);
+				if (verboseLogging) {addLogEntry("The local file to upload does not exist locally anymore", ["verbose"]);}
 				return false;
 			}
 			
@@ -8522,7 +8538,7 @@ class SyncEngine {
 			
 			// valid timestamp
 			if (expiration < Clock.currTime()) {
-				addLogEntry("The upload session has expired for: " ~ sessionFilePath, ["verbose"]);
+				if (verboseLogging) {addLogEntry("The upload session has expired for: " ~ sessionFilePath, ["verbose"]);}
 				return false;
 			}
 		} else {
@@ -8569,7 +8585,7 @@ class SyncEngine {
 					sessionFileData["nextExpectedRanges"] = response["nextExpectedRanges"];
 					
 					if (sessionFileData["nextExpectedRanges"].array.length == 0) {
-						addLogEntry("The upload session was already completed", ["verbose"]);
+						if (verboseLogging) {addLogEntry("The upload session was already completed", ["verbose"]);}
 						return false;
 					}
 				} else {
@@ -8578,7 +8594,7 @@ class SyncEngine {
 				}
 			} else {
 				// not a JSON object
-				addLogEntry("Restore file upload session failed - invalid response from Microsoft OneDrive", ["verbose"]);
+				if (verboseLogging) {addLogEntry("Restore file upload session failed - invalid response from Microsoft OneDrive", ["verbose"]);}
 				return false;
 			}
 		} else {
@@ -8810,7 +8826,7 @@ class SyncEngine {
 				}
 			} else {
 				// zero space available is being reported, maybe being restricted?
-				addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
+				if (verboseLogging) {addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);}
 				quotaRemaining = 0;
 				quotaRestricted = true;
 			}
@@ -9004,11 +9020,13 @@ class SyncEngine {
 					}
 					
 					// More detail if --verbose is being used
-					addLogEntry("Item Id:         " ~ searchResult["remoteItem"]["id"].str, ["verbose"]);
-					addLogEntry("Parent Drive Id: " ~ searchResult["remoteItem"]["parentReference"]["driveId"].str, ["verbose"]);
-					if ("id" in searchResult["remoteItem"]["parentReference"]) {
-						addLogEntry("Parent Item Id:  " ~ searchResult["remoteItem"]["parentReference"]["id"].str, ["verbose"]);
-					}	
+					if (verboseLogging) {
+						addLogEntry("Item Id:         " ~ searchResult["remoteItem"]["id"].str, ["verbose"]);
+						addLogEntry("Parent Drive Id: " ~ searchResult["remoteItem"]["parentReference"]["driveId"].str, ["verbose"]);
+						if ("id" in searchResult["remoteItem"]["parentReference"]) {
+							addLogEntry("Parent Item Id:  " ~ searchResult["remoteItem"]["parentReference"]["id"].str, ["verbose"]);
+						}
+					}
 				}
 				
 				// Close out the loop

@@ -515,7 +515,7 @@ class ApplicationConfig {
 					// Is there a system configuration file?
 					if (!exists(systemConfigFilePath)) {
 						// 'system' configuration file does not exist
-						addLogEntry("No user or system config file found, using application defaults", ["verbose"]);
+						if (verboseLogging) {addLogEntry("No user or system config file found, using application defaults", ["verbose"]);}
 						applicableConfigFilePath = userConfigFilePath;
 						configurationInitialised = true;
 					} else {
@@ -560,11 +560,13 @@ class ApplicationConfig {
 			
 			// Advise the user path that we will use for the application state data
 			if (canFind(applicableConfigFilePath, configDirName)) {
-				addLogEntry("Using 'user' configuration path for application config and state data: " ~ configDirName, ["verbose"]);
+				if (verboseLogging) {addLogEntry("Using 'user' configuration path for application config and state data: " ~ configDirName, ["verbose"]);}
 			} else {				
 				if (canFind(applicableConfigFilePath, systemConfigDirName)) {
-					addLogEntry("Using 'system' configuration path for application config data: " ~ systemConfigDirName, ["verbose"]);
-					addLogEntry("Using 'user' configuration path for application state data:    " ~ configDirName, ["verbose"]);
+					if (verboseLogging) {
+						addLogEntry("Using 'system' configuration path for application config data: " ~ systemConfigDirName, ["verbose"]);
+						addLogEntry("Using 'user' configuration path for application state data:    " ~ configDirName, ["verbose"]);
+					}
 				}
 			}
 		}

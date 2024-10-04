@@ -217,7 +217,7 @@ int main(string[] cliArgs) {
 		string calculatedLogDirPath = appConfig.calculateLogDirectory();
 		string calculatedLogFilePath;
 		// Initialise using the configured logging directory
-		addLogEntry("Using the following path to store the runtime application log: " ~ calculatedLogDirPath, ["verbose"]);
+		if (verboseLogging) {addLogEntry("Using the following path to store the runtime application log: " ~ calculatedLogDirPath, ["verbose"]);}
 		// Calculate the logfile name
 		if (calculatedLogDirPath != appConfig.defaultHomePath) {
 			// Log file is not going to the home directory
@@ -438,17 +438,17 @@ int main(string[] cliArgs) {
 	// This needs to be a separate 'if' statement, as, if this was an 'if-else' from above, if we were originally offline and using --monitor, we would never get to this point
 	if (online) {
 		// Check Application Version
-		addLogEntry("Checking Application Version ...", ["verbose"]);
+		if (verboseLogging) {addLogEntry("Checking Application Version ...", ["verbose"]);}
 		checkApplicationVersion();
 		
 		// Initialise the OneDrive API
-		addLogEntry("Attempting to initialise the OneDrive API ...", ["verbose"]);
+		if (verboseLogging) {addLogEntry("Attempting to initialise the OneDrive API ...", ["verbose"]);}
 		OneDriveApi oneDriveApiInstance = new OneDriveApi(appConfig);
 		appConfig.apiWasInitialised = oneDriveApiInstance.initialise();
 		
 		// Did the API initialise successfully?
 		if (appConfig.apiWasInitialised) {
-			addLogEntry("The OneDrive API was initialised successfully", ["verbose"]);
+			if (verboseLogging) {addLogEntry("The OneDrive API was initialised successfully", ["verbose"]);}
 			
 			// Flag that we were able to initialise the API in the application config
 			oneDriveApiInstance.debugOutputConfiguredAPIItems();
@@ -457,7 +457,7 @@ int main(string[] cliArgs) {
 			oneDriveApiInstance = null;
 			
 			// Need to configure the itemDB and syncEngineInstance for 'sync' and 'non-sync' operations
-			addLogEntry("Opening the item database ...", ["verbose"]);
+			if (verboseLogging) {addLogEntry("Opening the item database ...", ["verbose"]);}
 			
 			// Configure the Item Database
 			itemDB = new ItemDatabase(runtimeDatabaseFile);
@@ -642,7 +642,7 @@ int main(string[] cliArgs) {
 	}
 	
 	// Configure the sync directory based on the runtimeSyncDirectory configured directory
-	addLogEntry("All application operations will be performed in the configured local 'sync_dir' directory: " ~ runtimeSyncDirectory, ["verbose"]);
+	if (verboseLogging) {addLogEntry("All application operations will be performed in the configured local 'sync_dir' directory: " ~ runtimeSyncDirectory, ["verbose"]);}
 	// Try and set the 'sync_dir', attempt to create if it does not exist
 	try {
 		if (!exists(runtimeSyncDirectory)) {
@@ -746,7 +746,7 @@ int main(string[] cliArgs) {
 			remotePath = singleDirectoryPath;
 			
 			// Display that we are syncing from a specific path due to --single-directory
-			addLogEntry("Syncing changes from this selected path: " ~ singleDirectoryPath, ["verbose"]);
+			if (verboseLogging) {addLogEntry("Syncing changes from this selected path: " ~ singleDirectoryPath, ["verbose"]);}
 		}
 		
 		// Handle SIGINT and SIGTERM
@@ -808,8 +808,10 @@ int main(string[] cliArgs) {
 			
 			// If we are in a --download-only method of operation, the output of these is not required
 			if (!appConfig.getValueBool("download_only")) {
-				addLogEntry("Maximum allowed open files:                  " ~ maxOpenFiles, ["verbose"]);
-				addLogEntry("Maximum allowed inotify user watches:        " ~ maxInotifyWatches, ["verbose"]);
+				if (verboseLogging) {
+					addLogEntry("Maximum allowed open files:                  " ~ maxOpenFiles, ["verbose"]);
+					addLogEntry("Maximum allowed inotify user watches:        " ~ maxInotifyWatches, ["verbose"]);
+				}
 			}
 			
 			// Configure the monitor class
@@ -819,13 +821,13 @@ int main(string[] cliArgs) {
 			filesystemMonitor.onDirCreated = delegate(string path) {
 				// Handle .folder creation if skip_dotfiles is enabled
 				if ((appConfig.getValueBool("skip_dotfiles")) && (isDotFile(path))) {
-					addLogEntry("[M] Skipping watching local path - .folder found & --skip-dot-files enabled: " ~ path, ["verbose"]);
+					if (verboseLogging) {addLogEntry("[M] Skipping watching local path - .folder found & --skip-dot-files enabled: " ~ path, ["verbose"]);}
 				} else {
-					addLogEntry("[M] Local directory created: " ~ path, ["verbose"]);
+					if (verboseLogging) {addLogEntry("[M] Local directory created: " ~ path, ["verbose"]);}
 					try {
 						syncEngineInstance.scanLocalFilesystemPathForNewData(path);
 					} catch (CurlException e) {
-						addLogEntry("Offline, cannot create remote dir: " ~ path, ["verbose"]);
+						if (verboseLogging) {addLogEntry("Offline, cannot create remote dir: " ~ path, ["verbose"]);}
 					} catch (Exception e) {
 						addLogEntry("Cannot create remote directory: " ~ e.msg, ["info", "notify"]);
 					}
@@ -837,20 +839,20 @@ int main(string[] cliArgs) {
 				// Handle a potentially locally changed file
 				// Logging for this event moved to handleLocalFileTrigger() due to threading and false triggers from scanLocalFilesystemPathForNewData() above
 				syncEngineInstance.handleLocalFileTrigger(changedLocalFilesToUploadToOneDrive);
-				addLogEntry("[M] Total number of local file(s) added or changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length), ["verbose"]);
+				if (verboseLogging) {addLogEntry("[M] Total number of local file(s) added or changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length), ["verbose"]);}
 			};
 
 			// Delegated function for when inotify detects a delete event
 			filesystemMonitor.onDelete = delegate(string path) {
-				addLogEntry("[M] Local item deleted: " ~ path, ["verbose"]);
+				if (verboseLogging) {addLogEntry("[M] Local item deleted: " ~ path, ["verbose"]);}
 				try {
 					addLogEntry("The operating system sent a deletion notification. Trying to delete the item as requested");
 					syncEngineInstance.deleteByPath(path);
 				} catch (CurlException e) {
-					addLogEntry("Offline, cannot delete item: " ~ path, ["verbose"]);
+					if (verboseLogging) {addLogEntry("Offline, cannot delete item: " ~ path, ["verbose"]);}
 				} catch (SyncException e) {
 					if (e.msg == "The item to delete is not in the local database") {
-						addLogEntry("Item cannot be deleted from Microsoft OneDrive because it was not found in the local database", ["verbose"]);
+						if (verboseLogging) {addLogEntry("Item cannot be deleted from Microsoft OneDrive because it was not found in the local database", ["verbose"]);}
 					} else {
 						addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
 					}
@@ -861,7 +863,7 @@ int main(string[] cliArgs) {
 			
 			// Delegated function for when inotify detects a move event
 			filesystemMonitor.onMove = delegate(string from, string to) {
-				addLogEntry("[M] Local item moved: " ~ from ~ " -> " ~ to, ["verbose"]);
+				if (verboseLogging) {addLogEntry("[M] Local item moved: " ~ from ~ " -> " ~ to, ["verbose"]);}
 				try {
 					// Handle .folder -> folder if skip_dotfiles is enabled
 					if ((appConfig.getValueBool("skip_dotfiles")) && (isDotFile(from))) {
@@ -871,7 +873,7 @@ int main(string[] cliArgs) {
 						syncEngineInstance.uploadMoveItem(from, to);
 					}
 				} catch (CurlException e) {
-					addLogEntry("Offline, cannot move item !", ["verbose"]);
+					if (verboseLogging) {addLogEntry("Offline, cannot move item !", ["verbose"]);}
 				} catch (Exception e) {
 					addLogEntry("Cannot move item: " ~ e.msg, ["info", "notify"]);
 				}

@@ -75,7 +75,7 @@ void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
 	newPath ~= ext;
 
     // Log that we are perform the backup by renaming the file
-	addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath) , ["verbose"]);
+	if (verboseLogging) {addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath) , ["verbose"]);}
 
     if (!dryRun) {
 		// Not a --dry-run scenario - do the file rename
@@ -647,7 +647,7 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 	}
 	
 	// Where in the code was this error generated
-	addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);
+	if (verboseLogging) {addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);}
 	
 	// Extra Debug if we are using --verbose --verbose
 	if (debugLogging) {

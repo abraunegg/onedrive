@@ -66,7 +66,7 @@ class MonitorBackgroundWorker {
 				addLogEntry("EXAMPLE: sudo sysctl fs.inotify.max_user_watches=" ~ to!string((maxInotifyWatches * 2)));
 			}
 			if (errno() == 13) {
-				addLogEntry("WARNING: inotify_add_watch failed - permission denied: " ~ pathname, ["verbose"]);
+				if (verboseLogging) {addLogEntry("WARNING: inotify_add_watch failed - permission denied: " ~ pathname, ["verbose"]);}
 			}
 			// Flag any other errors
 			addLogEntry("ERROR: inotify_add_watch failed: " ~ pathname);
@@ -79,7 +79,7 @@ class MonitorBackgroundWorker {
 		// Do we log that we are monitoring this directory?
 		if (isDir(pathname)) {
 			// Log that this is directory is being monitored
-			addLogEntry("Monitoring directory: " ~ pathname, ["verbose"]);
+			if (verboseLogging) {addLogEntry("Monitoring directory: " ~ pathname, ["verbose"]);}
 		}
 		return wd;
 	}
@@ -339,7 +339,7 @@ final class Monitor {
 	private void addRecursive(string dirname) {
 		// skip non existing/disappeared items
 		if (!exists(dirname)) {
-			addLogEntry("Not adding non-existing/disappeared directory: " ~ dirname, ["verbose"]);
+			if (verboseLogging) {addLogEntry("Not adding non-existing/disappeared directory: " ~ dirname, ["verbose"]);}
 			return;
 		}
 
@@ -385,7 +385,7 @@ final class Monitor {
 		// Do we need to check for .nosync? Only if check_nosync is true
 		if (check_nosync) {
 			if (exists(buildNormalizedPath(dirname) ~ "/.nosync")) {
-				addLogEntry("Skipping watching path - .nosync found & --check-for-nosync enabled: " ~ buildNormalizedPath(dirname), ["verbose"]);
+				if (verboseLogging) {addLogEntry("Skipping watching path - .nosync found & --check-for-nosync enabled: " ~ buildNormalizedPath(dirname), ["verbose"]);}
 				return;
 			}
 		}
@@ -455,7 +455,7 @@ final class Monitor {
 		assert(wd in wdToDirName);
 		int ret = worker.removeInotifyWatch(wd);
 		if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
-		addLogEntry("Monitored directory removed: " ~ to!string(wdToDirName[wd]), ["verbose"]);
+		if (verboseLogging) {addLogEntry("Monitored directory removed: " ~ to!string(wdToDirName[wd]), ["verbose"]);}
 		wdToDirName.remove(wd);
 	}
 
@@ -467,7 +467,7 @@ final class Monitor {
 				int ret = worker.removeInotifyWatch(wd);
 				if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
 				wdToDirName.remove(wd);
-				addLogEntry("Monitored directory removed: " ~ dirname, ["verbose"]);
+				if (verboseLogging) {addLogEntry("Monitored directory removed: " ~ dirname, ["verbose"]);}
 			}
 		}
 	}

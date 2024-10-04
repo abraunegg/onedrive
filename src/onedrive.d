@@ -848,7 +848,7 @@ class OneDriveApi {
 					string effectiveScopes = response["scope"].str();
 					// Display the effective authentication scopes
 					addLogEntry();
-					addLogEntry("Effective API Authentication Scopes: " ~ effectiveScopes, ["verbose"]);
+					if (verboseLogging) {addLogEntry("Effective API Authentication Scopes: " ~ effectiveScopes, ["verbose"]);}
 					
 					// if we have any write scopes, we need to tell the user to update an remove online prior authentication and exit application
 					if (canFind(effectiveScopes, "Write")) {
@@ -1273,14 +1273,16 @@ class OneDriveApi {
 					}
 					if (canFind(errorMessage, "Timeout was reached on handle")) {
 						// Common cause is libcurl trying IPv6 DNS resolution when there are only IPv4 DNS servers available
-						addLogEntry("A libcurl timeout has been triggered - data transfer too slow, no DNS resolution response, no server response", ["verbose"]);
-						// There are 3 common causes for this issue:
-						// 1. Usually poor DNS resolution where libcurl flip/flops to use IPv6 and is unable to resolve
-						// 2. A device between the user and Microsoft OneDrive is unable to correctly handle HTTP/2 communication
-						// 3. No Internet access from this system at this point in time
-						addLogEntry(" - IPv6 DNS resolution issues may be causing timeouts. Consider setting 'ip_protocol_version' to IPv4 to potentially avoid this", ["verbose"]);
-						addLogEntry(" - HTTP/2 compatibility issues might also be interfering with your system. Use 'force_http_11' to switch to HTTP/1.1 to potentially avoid this", ["verbose"]);
-						addLogEntry(" - If these options do not resolve this timeout issue, please use --debug-https to diagnose this issue further.", ["verbose"]);
+						if (verboseLogging) {
+							addLogEntry("A libcurl timeout has been triggered - data transfer too slow, no DNS resolution response, no server response", ["verbose"]);
+							// There are 3 common causes for this issue:
+							// 1. Usually poor DNS resolution where libcurl flip/flops to use IPv6 and is unable to resolve
+							// 2. A device between the user and Microsoft OneDrive is unable to correctly handle HTTP/2 communication
+							// 3. No Internet access from this system at this point in time
+							addLogEntry(" - IPv6 DNS resolution issues may be causing timeouts. Consider setting 'ip_protocol_version' to IPv4 to potentially avoid this", ["verbose"]);
+							addLogEntry(" - HTTP/2 compatibility issues might also be interfering with your system. Use 'force_http_11' to switch to HTTP/1.1 to potentially avoid this", ["verbose"]);
+							addLogEntry(" - If these options do not resolve this timeout issue, please use --debug-https to diagnose this issue further.", ["verbose"]);
+						}
 					}
 				} else {
 					// Some other 'libcurl' error was returned
@@ -1450,17 +1452,21 @@ class OneDriveApi {
 					}
 				}
 				
-				// When are we re-trying the API call?
+				// set the current time for this thread
 				currentTime = Clock.currTime();
 				currentTime.fracSecs = Duration.zero;
-				auto timeString = currentTime.toString();
-				addLogEntry("Retry attempt:           " ~ to!string(retryAttempts) ~ " - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId), ["verbose"]);
-				addLogEntry(" This attempt timestamp: " ~ timeString, ["verbose"]);
-				// Detail when the next attempt will be tried
-				// Factor in the delay for curl to generate the exception - otherwise the next timestamp appears to be 'out' even though technically correct
-				auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval) + dur!"seconds"(timestampAlign);
-				addLogEntry(" Next retry in approx:   " ~ to!string((thisBackOffInterval + timestampAlign)) ~ " seconds");
-				addLogEntry(" Next retry approx:      " ~ to!string(nextRetry), ["verbose"]);
+				
+				// If verbose logging, detail when we are re-trying the call
+				if (verboseLogging) {
+					auto timeString = currentTime.toString();
+					addLogEntry("Retry attempt:           " ~ to!string(retryAttempts) ~ " - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId), ["verbose"]);
+					addLogEntry(" This attempt timestamp: " ~ timeString, ["verbose"]);
+					// Detail when the next attempt will be tried
+					// Factor in the delay for curl to generate the exception - otherwise the next timestamp appears to be 'out' even though technically correct
+					auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval) + dur!"seconds"(timestampAlign);
+					addLogEntry(" Next retry in approx:   " ~ to!string((thisBackOffInterval + timestampAlign)) ~ " seconds");
+					addLogEntry(" Next retry approx:      " ~ to!string(nextRetry), ["verbose"]);
+				}
 				
 				// Thread sleep
 				Thread.sleep(dur!"seconds"(thisBackOffInterval));
