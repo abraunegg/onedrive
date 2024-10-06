@@ -11,6 +11,7 @@ import std.algorithm.searching;
 import core.stdc.stdlib;
 import std.json;
 import std.conv;
+import core.sync.mutex;
 
 // What other modules that we have created do we need to import?
 import sqlite;
@@ -43,9 +44,6 @@ struct Item {
 	ItemType remoteType;
 	string   syncStatus;
 	string   size;
-}
-
-class Lock {
 }
 
 // Construct an Item DB struct from a JSON driveItem
@@ -236,9 +234,12 @@ final class ItemDatabase {
 	string selectItemByParentIdStmt;
 	string deleteItemByIdStmt;
 	bool databaseInitialised = false;
-	shared(Lock) lock = new Lock();
-
+	private Mutex databaseLock;
+	
 	this(string filename) {
+		// Initialise the mutex
+		databaseLock = new Mutex();
+		
 		db = Database(filename);
 		int dbVersion;
 		try {
@@ -435,7 +436,7 @@ final class ItemDatabase {
 	}
 	
 	void insert(const ref Item item) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			auto p = db.prepare(insertItemStmt);
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
 			try {
@@ -448,7 +449,7 @@ final class ItemDatabase {
 	}
 
 	void update(const ref Item item) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			auto p = db.prepare(updateItemStmt);
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
 			try {
@@ -461,17 +462,19 @@ final class ItemDatabase {
 	}
 
 	void dump_open_statements() {
-		db.dump_open_statements();
+		synchronized(databaseLock) {
+			db.dump_open_statements();
+		}
 	}
 
 	int db_checkpoint() {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			return db.db_checkpoint();
 		}
 	}
 
 	void upsert(const ref Item item) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			Statement selectStmt = db.prepare("SELECT COUNT(*) FROM item WHERE driveId = ? AND id = ?");
 			Statement executionStmt = Statement.init;  // Initialise executionStmt to avoid uninitialised variable usage
 			
@@ -502,7 +505,7 @@ final class ItemDatabase {
 	}
 
 	Item[] selectChildren(const(char)[] driveId, const(char)[] id) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			Item[] items;
 			auto p = db.prepare(selectItemByParentIdStmt);
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
@@ -527,7 +530,7 @@ final class ItemDatabase {
 	}
 
 	bool selectById(const(char)[] driveId, const(char)[] id, out Item item) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			auto p = db.prepare(selectItemByIdStmt);
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
 			
@@ -549,7 +552,7 @@ final class ItemDatabase {
 	}
 
 	bool selectByRemoteId(const(char)[] remoteDriveId, const(char)[] remoteId, out Item item) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			auto p = db.prepare(selectItemByRemoteIdStmt);
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
 			try {
@@ -571,7 +574,7 @@ final class ItemDatabase {
 
 	// returns true if an item id is in the database
 	bool idInLocalDatabase(const(string) driveId, const(string) id) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			auto p = db.prepare(selectItemByIdStmt);
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
 			try {
@@ -590,7 +593,7 @@ final class ItemDatabase {
 	// returns the item with the given path
 	// the path is relative to the sync directory ex: "./Music/file_name.mp3"
 	bool selectByPath(const(char)[] path, string rootDriveId, out Item item) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			Item currItem = { driveId: rootDriveId };
 			
 			// Issue https://github.com/abraunegg/onedrive/issues/578
@@ -631,7 +634,7 @@ final class ItemDatabase {
 
 	// same as selectByPath() but it does not traverse remote folders, returns the remote element if that is what is required
 	bool selectByPathIncludingRemoteItems(const(char)[] path, string rootDriveId, out Item item) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			Item currItem = { driveId: rootDriveId };
 
 			// Issue https://github.com/abraunegg/onedrive/issues/578
@@ -665,7 +668,7 @@ final class ItemDatabase {
 	}
 
 	void deleteById(const(char)[] driveId, const(char)[] id) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			auto p = db.prepare(deleteItemByIdStmt);
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
 			try {
@@ -725,7 +728,6 @@ final class ItemDatabase {
 		assert(isValidUTCDateTime(result.front[7].dup), "The DB record mtime entry is not a valid ISO timestamp entry. Please attempt a --resync to fix the local database.");
 		
 		Item item = {
-		
 			// column 0: driveId
 			// column 1: id
 			// column 2: name
@@ -764,6 +766,7 @@ final class ItemDatabase {
 			syncStatus: result.front[16].dup,
 			size: result.front[17].dup
 		};
+		
 		// Configure item.type
 		switch (result.front[4]) {
 			case "file":    item.type = ItemType.file;    break;
@@ -788,7 +791,7 @@ final class ItemDatabase {
 	// the path is relative to the sync directory ex: "Music/Turbo Killer.mp3"
 	// the trailing slash is not added even if the item is a directory
 	string computePath(const(char)[] driveId, const(char)[] id) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			assert(driveId && id);
 			string path;
 			Item item;
@@ -860,7 +863,7 @@ final class ItemDatabase {
 	}
 
 	Item[] selectRemoteItems() {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			Item[] items;
 			auto stmt = db.prepare("SELECT * FROM item WHERE remoteDriveId IS NOT NULL");
 			scope (exit) stmt.finalise(); // Ensure that the prepared statement is finalised after execution.
@@ -880,7 +883,7 @@ final class ItemDatabase {
 	}
 
 	string getDeltaLink(const(char)[] driveId, const(char)[] id) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			// Log what we received
 			addLogEntry("DeltaLink Query (driveId): " ~ to!string(driveId), ["debug"]);
 			addLogEntry("DeltaLink Query (id):      " ~ to!string(id), ["debug"]);
@@ -905,7 +908,7 @@ final class ItemDatabase {
 	}
 	
 	void setDeltaLink(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			assert(driveId && id);
 			assert(deltaLink);
 			
@@ -934,7 +937,7 @@ final class ItemDatabase {
 	// to be flagged as not-in-sync, thus, we can use that flag to determine what was previously
 	// in-sync, but now deleted on OneDrive
 	void downgradeSyncStatusFlag(const(char)[] driveId, const(char)[] id) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			assert(driveId);
 
 			auto stmt = db.prepare("UPDATE item SET syncStatus = 'N' WHERE driveId = ?1 AND id = ?2");
@@ -961,7 +964,7 @@ final class ItemDatabase {
 	//
 	// Select items that have a out-of-sync flag set
 	Item[] selectOutOfSyncItems(const(char)[] driveId) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			assert(driveId);
 			Item[] items;
 			auto stmt = db.prepare("SELECT * FROM item WHERE syncStatus = 'N' AND driveId = ?1");
@@ -985,7 +988,7 @@ final class ItemDatabase {
 	// OneDrive Business Folders are stored in the database potentially without a root | parentRoot link
 	// Select items associated with the provided driveId
 	Item[] selectByDriveId(const(char)[] driveId) {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			assert(driveId);
 			Item[] items;
 			auto stmt = db.prepare("SELECT * FROM item WHERE driveId = ?1 AND parentId IS NULL");
@@ -1008,7 +1011,7 @@ final class ItemDatabase {
 
 	// Perform a vacuum on the database, commit WAL / SHM to file
 	void performVacuum() {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			// Log what we are attempting to do
 			addLogEntry("Attempting to perform a database vacuum to optimise database");
 			
@@ -1049,7 +1052,7 @@ final class ItemDatabase {
 	
 	// Perform a checkpoint by writing the data into to the database from the WAL file
 	void performCheckpoint() {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			// Log what we are attempting to do
 			addLogEntry("Attempting to perform a database checkpoint to merge temporary data", ["debug"]);
 			
@@ -1086,7 +1089,7 @@ final class ItemDatabase {
 	
 	// Select distinct driveId items from database
 	string[] selectDistinctDriveIds() {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			string[] driveIdArray;
 			auto stmt = db.prepare("SELECT DISTINCT driveId FROM item;");
 			scope(exit) stmt.finalise(); // Ensure that the prepared statement is finalised after execution.
@@ -1108,7 +1111,7 @@ final class ItemDatabase {
 	
 	// Function to get the total number of rows in a table
 	int getTotalRowCount() {
-		synchronized(lock) {
+		synchronized(databaseLock) {
 			int rowCount = 0;
 			auto stmt = db.prepare("SELECT COUNT(*) FROM item;");
 			scope(exit) stmt.finalise(); // Ensure that the prepared statement is finalised after execution.
