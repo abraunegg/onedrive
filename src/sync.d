@@ -8453,6 +8453,9 @@ class SyncEngine {
 	void processForInterruptedSessionUploads() {
 		// For each upload_session file that has been found, process the data to ensure it is still valid
 		foreach (sessionFilePath; interruptedUploadsSessionFiles) {
+			// What session data are we trying to restore
+			if (verboseLogging) {addLogEntry("Attempting to restore file upload session using this session data file: " ~ sessionFilePath, ["verbose"]);}
+			// Does this pass validation?
 			if (!validateUploadSessionFileData(sessionFilePath)) {
 				// Remove upload_session file as it is invalid
 				// upload_session file file contains an error - cant resume this session
@@ -8491,7 +8494,14 @@ class SyncEngine {
 
 		// Try and read the text from the session file as a JSON array
 		try {
-			sessionFileData = readText(sessionFilePath).parseJSON();
+			if (getSize(sessionFilePath) > 0) {
+				// There is data to read in
+				sessionFileData = readText(sessionFilePath).parseJSON();
+			} else {
+				// No data to read in - invalid file
+				if (debugLogging) {addLogEntry("SESSION-RESUME: Invalid JSON file: " ~ sessionFilePath, ["debug"]);}
+				return false;
+			}
 		} catch (JSONException e) {
 			if (debugLogging) {addLogEntry("SESSION-RESUME: Invalid JSON data in: " ~ sessionFilePath, ["debug"]);}
 			return false;
