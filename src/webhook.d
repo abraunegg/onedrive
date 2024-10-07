@@ -248,7 +248,7 @@ class OneDriveWebhook {
 	
 	private void logSubscriptionError(OneDriveException e) {
 		// Log a message to the GUI only
-		addLogEntry("ERROR: An issue has occured with webhook subscriptions: " ~ e.error["error"]["message"].str, ["notify"]);
+		addLogEntry("ERROR: An issue has occurred with webhook subscriptions: " ~ e.error["error"]["message"].str, ["notify"]);
 		// Use the standard OneDrive API logging method
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 	}

@@ -627,7 +627,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Fixed how the application handles 429 response codes from OneDrive (critical update)
 *   Fixed building on Alpine Linux under Docker
 *   Fixed how the 'username' is determined from the running process for logfile naming
-*   Fixed file handling when a failed download has occured due to exiting via CTRL-C
+*   Fixed file handling when a failed download has occurred due to exiting via CTRL-C
 *   Fixed an unhandled exception when OneDrive throws an error response on initialising
 *   Fixed the handling of moving files into a skipped .folder when skip_dotfiles = true
 *   Fixed the regex parsing of response URI to avoid potentially generating a bad request to OneDrive, leading to a 'AADSTS9002313: Invalid request. Request is malformed or invalid.' response.
