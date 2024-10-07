@@ -21,7 +21,11 @@ version(Notifications) {
 	import dnotify;
 }
 
-// Shared module object
+// Shared Application Logging Level Variables
+__gshared bool verboseLogging = false;
+__gshared bool debugLogging = false;
+
+// Private Shared Module Objects
 private __gshared LogBuffer logBuffer;
 // Timer for logging
 private __gshared MonoTime lastInsertedTime;
@@ -310,7 +314,7 @@ void validateDBUSServerAvailability() {
 				logBuffer.sendGUINotification = false;
 			} else {
 				addLogEntry("D-Bus message bus daemon is available; GUI notifications are now enabled");
-				addLogEntry("D-Bus message bus daemon server details: " ~ to!string(dnotify.get_server_info()), ["debug"]);
+				if (debugLogging) {addLogEntry("D-Bus message bus daemon server details: " ~ to!string(dnotify.get_server_info()), ["debug"]);}
 				logBuffer.sendGUINotification = true;
 			}
 		} else {

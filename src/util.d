@@ -75,7 +75,7 @@ void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
 	newPath ~= ext;
 
     // Log that we are perform the backup by renaming the file
-	addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath) , ["verbose"]);
+	if (verboseLogging) {addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath) , ["verbose"]);}
 
     if (!dryRun) {
 		// Not a --dry-run scenario - do the file rename
@@ -99,7 +99,7 @@ void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
             addLogEntry("Renaming of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
         }
     } else {
-        addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);
+        if (debugLogging) {addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);}
     }
 }
 
@@ -107,11 +107,11 @@ void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
 void safeRename(const(char)[] oldPath, const(char)[] newPath, bool dryRun) {
 	// Perform the rename
 	if (!dryRun) {
-		addLogEntry("Calling rename(oldPath, newPath)", ["debug"]);
+		if (debugLogging) {addLogEntry("Calling rename(oldPath, newPath)", ["debug"]);}
 		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
 		rename(oldPath, newPath);
 	} else {
-		addLogEntry("DRY-RUN: Skipping local file rename", ["debug"]);
+		if (debugLogging) {addLogEntry("DRY-RUN: Skipping local file rename", ["debug"]);}
 	}
 }
 
@@ -275,8 +275,10 @@ bool retryInternetConnectivtyTest(ApplicationConfig appConfig) {
             backoffInterval = min(backoffInterval * 2, maxBackoffInterval); // exponential increase
         }
 
-        addLogEntry("  Retry Attempt:      " ~ to!string(retryAttempts + 1), ["debug"]);
-        addLogEntry("  Retry In (seconds): " ~ to!string(backoffInterval), ["debug"]);
+        if (debugLogging) {
+			addLogEntry("  Retry Attempt:      " ~ to!string(retryAttempts + 1), ["debug"]);
+			addLogEntry("  Retry In (seconds): " ~ to!string(backoffInterval), ["debug"]);
+		}
 
         Thread.sleep(dur!"seconds"(backoffInterval));
         isOnline = testInternetReachability(appConfig); // assuming this function is defined elsewhere
@@ -607,7 +609,7 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 		if (errorReason.startsWith("<!DOCTYPE")) {
 			// a HTML Error Reason was given
 			addLogEntry("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view this error");
-			addLogEntry(errorReason, ["debug"]);
+			if (debugLogging) {addLogEntry(errorReason, ["debug"]);}
 			
 		} else {
 			// a non HTML Error Reason was given
@@ -645,11 +647,13 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 	}
 	
 	// Where in the code was this error generated
-	addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);
+	if (verboseLogging) {addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);}
 	
 	// Extra Debug if we are using --verbose --verbose
-	addLogEntry("Raw Error Data: " ~ message, ["debug"]);
-	addLogEntry("JSON Message: " ~ to!string(errorMessage), ["debug"]);
+	if (debugLogging) {
+		addLogEntry("Raw Error Data: " ~ message, ["debug"]);
+		addLogEntry("JSON Message: " ~ to!string(errorMessage), ["debug"]);
+	}
 	
 	// Close out logging with an empty line, so that in console output, and logging output this becomes clear
 	addLogEntry();
@@ -787,9 +791,9 @@ JSONValue getLatestReleaseDetails() {
 	try {	
 		githubLatest = fetchOnlineURLContent("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
     } catch (CurlException e) {
-        addLogEntry("CurlException: Unable to query GitHub for latest release - " ~ e.msg, ["debug"]);
+        if (debugLogging) {addLogEntry("CurlException: Unable to query GitHub for latest release - " ~ e.msg, ["debug"]);}
     } catch (JSONException e) {
-        addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);
+        if (debugLogging) {addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);}
     }
 	
 	// githubLatest has to be a valid JSON object
@@ -801,7 +805,7 @@ JSONValue getLatestReleaseDetails() {
 			latestTag = strip(githubLatest["tag_name"].str, "v");
 		} else {
 			// set to latestTag zeros
-			addLogEntry("'tag_name' unavailable in JSON response. Setting GitHub 'tag_name' release version to 0.0.0", ["debug"]);
+			if (debugLogging) {addLogEntry("'tag_name' unavailable in JSON response. Setting GitHub 'tag_name' release version to 0.0.0", ["debug"]);}
 			latestTag = "0.0.0";
 		}
 		// use the returned published_at date
@@ -810,14 +814,14 @@ JSONValue getLatestReleaseDetails() {
 			publishedDate = githubLatest["published_at"].str;
 		} else {
 			// set to v2.0.0 release date
-			addLogEntry("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
+			if (debugLogging) {addLogEntry("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);}
 			publishedDate = "2018-07-18T18:00:00Z";
 		}
 	} else {
 		// JSONValue is not an object
-		addLogEntry("Invalid JSON Object response from GitHub. Setting GitHub 'tag_name' release version to 0.0.0", ["debug"]);
+		if (debugLogging) {addLogEntry("Invalid JSON Object response from GitHub. Setting GitHub 'tag_name' release version to 0.0.0", ["debug"]);}
 		latestTag = "0.0.0";
-		addLogEntry("Invalid JSON Object. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
+		if (debugLogging) {addLogEntry("Invalid JSON Object. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);}
 		publishedDate = "2018-07-18T18:00:00Z";
 	}
 		
@@ -842,10 +846,10 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 	try {
 		githubDetails = fetchOnlineURLContent("https://api.github.com/repos/abraunegg/onedrive/releases");
 	} catch (CurlException e) {
-        addLogEntry("CurlException: Unable to query GitHub for release details - " ~ e.msg, ["debug"]);
+        if (debugLogging) {addLogEntry("CurlException: Unable to query GitHub for release details - " ~ e.msg, ["debug"]);}
         return parseJSON(`{"Error": "CurlException", "message": "` ~ e.msg ~ `"}`);
     } catch (JSONException e) {
-        addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);
+        if (debugLogging) {addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);}
         return parseJSON(`{"Error": "JSONException", "message": "` ~ e.msg ~ `"}`);
     }
 	
@@ -854,9 +858,11 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 		foreach (searchResult; githubDetails.array) {
 			// searchResult["tag_name"].str;
 			if (searchResult["tag_name"].str == versionTag) {
-				addLogEntry("MATCHED version", ["debug"]);
-				addLogEntry("tag_name: " ~ searchResult["tag_name"].str, ["debug"]);
-				addLogEntry("published_at: " ~ searchResult["published_at"].str, ["debug"]);
+				if (debugLogging) {
+					addLogEntry("MATCHED version", ["debug"]);
+					addLogEntry("tag_name: " ~ searchResult["tag_name"].str, ["debug"]);
+					addLogEntry("published_at: " ~ searchResult["published_at"].str, ["debug"]);
+				}
 				publishedDate = searchResult["published_at"].str;
 			}
 		}
@@ -864,12 +870,12 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 		if (publishedDate.empty) {
 			// empty .. no version match ?
 			// set to v2.0.0 release date
-			addLogEntry("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
+			if (debugLogging) {addLogEntry("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);}
 			publishedDate = "2018-07-18T18:00:00Z";
 		}
 	} else {
 		// JSONValue is not an Array
-		addLogEntry("Invalid JSON Array. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
+		if (debugLogging) {addLogEntry("Invalid JSON Array. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);}
 		publishedDate = "2018-07-18T18:00:00Z";
 	}
 		
@@ -904,11 +910,13 @@ void checkApplicationVersion() {
 	string applicationVersion = currentVersionArray[0];
 	
 	// debug output
-	addLogEntry("applicationVersion:       " ~ applicationVersion, ["debug"]);
-	addLogEntry("latestVersion:            " ~ latestVersion, ["debug"]);
-	addLogEntry("publishedDate:            " ~ to!string(publishedDate), ["debug"]);
-	addLogEntry("currentTime:              " ~ to!string(currentTime), ["debug"]);
-	addLogEntry("releaseGracePeriod:       " ~ to!string(releaseGracePeriod), ["debug"]);
+	if (debugLogging) {
+		addLogEntry("applicationVersion:       " ~ applicationVersion, ["debug"]);
+		addLogEntry("latestVersion:            " ~ latestVersion, ["debug"]);
+		addLogEntry("publishedDate:            " ~ to!string(publishedDate), ["debug"]);
+		addLogEntry("currentTime:              " ~ to!string(currentTime), ["debug"]);
+		addLogEntry("releaseGracePeriod:       " ~ to!string(releaseGracePeriod), ["debug"]);
+	}
 	
 	// display details if not current
 	// is application version is older than available on GitHub
@@ -922,12 +930,12 @@ void checkApplicationVersion() {
 			JSONValue thisVersionDetails = getCurrentVersionDetails(applicationVersion);
 			SysTime thisVersionPublishedDate = SysTime.fromISOExtString(thisVersionDetails["publishedDate"].str).toUTC();
 			thisVersionPublishedDate.fracSecs = Duration.zero;
-			addLogEntry("thisVersionPublishedDate: " ~ to!string(thisVersionPublishedDate), ["debug"]);
+			if (debugLogging) {addLogEntry("thisVersionPublishedDate: " ~ to!string(thisVersionPublishedDate), ["debug"]);}
 			
 			// the running version grace period is its release date + 1 month
 			SysTime thisVersionReleaseGracePeriod = thisVersionPublishedDate;
 			thisVersionReleaseGracePeriod = thisVersionReleaseGracePeriod.add!"months"(1);
-			addLogEntry("thisVersionReleaseGracePeriod: " ~ to!string(thisVersionReleaseGracePeriod), ["debug"]);
+			if (debugLogging) {addLogEntry("thisVersionReleaseGracePeriod: " ~ to!string(thisVersionReleaseGracePeriod), ["debug"]);}
 			
 			// Is this running version obsolete ?
 			if (!displayObsolete) {
@@ -1197,17 +1205,19 @@ string getUserName() {
     string userName = to!string(fromStringz(pw.pw_name));
 
     // Log User identifiers from process
-    addLogEntry("Process ID: " ~ to!string(pw), ["debug"]);
-    addLogEntry("User UID:   " ~ to!string(pw.pw_uid), ["debug"]);
-    addLogEntry("User GID:   " ~ to!string(pw.pw_gid), ["debug"]);
+	if (debugLogging) {
+		addLogEntry("Process ID: " ~ to!string(pw), ["debug"]);
+		addLogEntry("User UID:   " ~ to!string(pw.pw_uid), ["debug"]);
+		addLogEntry("User GID:   " ~ to!string(pw.pw_gid), ["debug"]);
+	}
 
     // Check if username is valid
     if (!userName.empty) {
-        addLogEntry("User Name:  " ~ userName, ["debug"]);
+        if (debugLogging) {addLogEntry("User Name:  " ~ userName, ["debug"]);}
         return userName;
     } else {
         // Log and return unknown user
-        addLogEntry("User Name:  unknown", ["debug"]);
+        if (debugLogging) {addLogEntry("User Name:  unknown", ["debug"]);}
         return "unknown";
     }
 }
@@ -1229,21 +1239,25 @@ int calc_eta(size_t counter, size_t iterations, ulong start_time) {
     double avg_time_per_iteration = cast(double) duration / counter;
 
     // Debug output for the ETA calculation
-    addLogEntry("counter: " ~ to!string(counter), ["debug"]);
-	addLogEntry("iterations: " ~ to!string(iterations), ["debug"]);
-	addLogEntry("segments_remaining: " ~ to!string(segments_remaining), ["debug"]);
-	addLogEntry("ratio: " ~ format("%.2f", ratio), ["debug"]);
-	addLogEntry("start_time:   " ~ to!string(start_time), ["debug"]);
-	addLogEntry("current_time: " ~ to!string(current_time), ["debug"]);
-	addLogEntry("duration: " ~ to!string(duration), ["debug"]);
-	addLogEntry("avg_time_per_iteration: " ~ format("%.2f", avg_time_per_iteration), ["debug"]);
+	if (debugLogging) {
+		addLogEntry("counter: " ~ to!string(counter), ["debug"]);
+		addLogEntry("iterations: " ~ to!string(iterations), ["debug"]);
+		addLogEntry("segments_remaining: " ~ to!string(segments_remaining), ["debug"]);
+		addLogEntry("ratio: " ~ format("%.2f", ratio), ["debug"]);
+		addLogEntry("start_time:   " ~ to!string(start_time), ["debug"]);
+		addLogEntry("current_time: " ~ to!string(current_time), ["debug"]);
+		addLogEntry("duration: " ~ to!string(duration), ["debug"]);
+		addLogEntry("avg_time_per_iteration: " ~ format("%.2f", avg_time_per_iteration), ["debug"]);
+	}
 	
 	// Return the ETA or duration
     if (counter != iterations) {
         auto eta_sec = avg_time_per_iteration * segments_remaining;
 		// ETA Debug
-		addLogEntry("eta_sec: " ~ to!string(eta_sec), ["debug"]);
-		addLogEntry("estimated_total_time: " ~ to!string(avg_time_per_iteration * iterations), ["debug"]);
+		if (debugLogging) {
+			addLogEntry("eta_sec: " ~ to!string(eta_sec), ["debug"]);
+			addLogEntry("estimated_total_time: " ~ to!string(avg_time_per_iteration * iterations), ["debug"]);
+		}
 		// Return ETA
         return eta_sec > 0 ? cast(int) ceil(eta_sec) : 0;
     } else {
