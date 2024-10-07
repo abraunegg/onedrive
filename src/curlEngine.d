@@ -509,7 +509,7 @@ CurlEngine getCurlInstance() {
 			// Is this engine stopped?
 			if (curlEngine.http.isStopped) {
 				// return a new curl engine as a stopped one cannot be used
-				if (debugLogging) {addLogEntry("CurlEngine was in a stoppped state (not usable) - constructing a new CurlEngine instance", ["debug"]);}
+				if (debugLogging) {addLogEntry("CurlEngine was in a stopped state (not usable) - constructing a new CurlEngine instance", ["debug"]);}
 				return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
 			} else {
 				// return an existing curl engine
