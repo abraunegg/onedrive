@@ -5241,11 +5241,19 @@ class SyncEngine {
 			if (parentItem.type == ItemType.remote) {
 				// This folder is a potential shared object
 				if (debugLogging) {addLogEntry("ParentItem is a remote item object", ["debug"]);}
-				// Need to create the DB Tie for this shared object to ensure this exists in the database
-				createDatabaseTieRecordForOnlineSharedFolder(parentItem);
-				// Update the queryItem values
-				queryItem.driveId = parentItem.remoteDriveId;
-				queryItem.id = parentItem.remoteId;
+				
+				// Is this a Personal Account Type or has 'sync_business_shared_items' been enabled?
+				if ((appConfig.accountType == "personal") || (appConfig.getValueBool("sync_business_shared_items"))) {
+					// Need to create the DB Tie for this shared object to ensure this exists in the database
+					createDatabaseTieRecordForOnlineSharedFolder(parentItem);
+					// Update the queryItem values
+					queryItem.driveId = parentItem.remoteDriveId;
+					queryItem.id = parentItem.remoteId;
+				} else {
+					// This is a shared folder location, but we are not a 'personal' account, and 'sync_business_shared_items' has not been enabled
+					addLogEntry("ERROR: Unable to create directory online as 'sync_business_shared_items' is not enabled");
+					return;
+				}
 			} else {
 				// Use parent item for the query item
 				if (debugLogging) {addLogEntry("Standard Query, use parentItem", ["debug"]);}
@@ -8932,8 +8940,53 @@ class SyncEngine {
 			Item[] rootDriveItems;
 			Item dbRecord;
 			rootDriveItems = itemDB.selectByDriveId(parentItem.remoteDriveId);
-			dbRecord = rootDriveItems[0];
-			tieDBItem.parentId = dbRecord.id;
+			
+			// Fix Issue #2883
+			if (rootDriveItems.length > 0) {
+				// Use the first record returned
+				dbRecord = rootDriveItems[0];
+				tieDBItem.parentId = dbRecord.id;
+			} else {
+				// Business Account ... but itemDB.selectByDriveId returned no entries ... need to query for this item online to get the correct details given they are not in the database
+				if (debugLogging) {addLogEntry("itemDB.selectByDriveId(parentItem.remoteDriveId) returned zero database entries for this remoteDriveId: " ~ to!string(parentItem.remoteDriveId), ["debug"]);}
+			
+				// Create a new API Instance for this query and initialise it
+				OneDriveApi getPathDetailsApiInstance;
+				JSONValue latestOnlineDetails;
+				getPathDetailsApiInstance = new OneDriveApi(appConfig);
+				getPathDetailsApiInstance.initialise();
+			
+				try {
+					// Get the latest online details
+					latestOnlineDetails = getPathDetailsApiInstance.getPathDetailsById(parentItem.remoteDriveId, parentItem.remoteId);
+					if (debugLogging) {addLogEntry("Parent JSON details from Online Query: " ~ to!string(latestOnlineDetails), ["debug"]);}
+					
+					// Convert JSON to a database compatible item
+					Item tempOnlineRecord = makeItem(latestOnlineDetails);
+					
+					// Configure tieDBItem.parentId to use tempOnlineRecord.id
+					tieDBItem.parentId = tempOnlineRecord.id;
+			
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+					getPathDetailsApiInstance.releaseCurlEngine();
+					getPathDetailsApiInstance = null;
+					// Perform Garbage Collection
+					GC.collect();
+			
+				} catch (OneDriveException e) {
+					// Display error message
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+					getPathDetailsApiInstance.releaseCurlEngine();
+					getPathDetailsApiInstance = null;
+					// Perform Garbage Collection
+					GC.collect();
+					return;
+				}
+			}
+			
+			// Free the array memory
 			rootDriveItems = [];
 		}
 		
