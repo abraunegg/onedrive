@@ -773,9 +773,18 @@ class SyncEngine {
 			// Is this item a potential Shared Folder?
 			// Is this JSON a remote object
 			if (isItemRemote(onlinePathData)) {
-				// The path we are seeking is remote to our account drive id
-				searchItem.driveId = onlinePathData["remoteItem"]["parentReference"]["driveId"].str;
-				searchItem.id = onlinePathData["remoteItem"]["id"].str;
+				// Is this a Personal Account Type or has 'sync_business_shared_items' been enabled?
+				if ((appConfig.accountType == "personal") || (appConfig.getValueBool("sync_business_shared_items"))) {
+					// The path we are seeking is remote to our account drive id
+					searchItem.driveId = onlinePathData["remoteItem"]["parentReference"]["driveId"].str;
+					searchItem.id = onlinePathData["remoteItem"]["id"].str;
+				} else {
+					// This is a shared folder location, but we are not a 'personal' account, and 'sync_business_shared_items' has not been enabled
+					addLogEntry();
+					addLogEntry("ERROR: The requested --single-directory path to sync is a Shared Folder online and 'sync_business_shared_items' is not enabled");
+					addLogEntry();
+					forceExit();
+				}
 			} 
 			
 			// Set these items so that these can be used as required
@@ -783,7 +792,7 @@ class SyncEngine {
 			singleDirectoryScopeItemId = searchItem.id;
 		} else {
 			addLogEntry();
-			addLogEntry("The requested --single-directory path to sync has generated an error. Please correct this error and try again.");
+			addLogEntry("ERROR: The requested --single-directory path to sync has generated an error. Please correct this error and try again.");
 			addLogEntry();
 			forceExit();
 		}
