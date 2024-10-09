@@ -104,10 +104,11 @@ class ClientSideFiltering {
 			if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
 			
 			// Is the rule a legacy 'include all root files lazy rule?' 
-			if (strip(line) == "/*") {
+			if ((strip(line) == "/*") || (strip(line) == "/")) {
 				// yes ...
+				string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(strip(line)) ~ "' detected. Please use 'sync_root_files = \"true\"' or --sync-root-files option to sync files in the root path.";
 				addLogEntry();
-				addLogEntry("ERROR: Invalid sync_list rule '/*' detected. Please use 'sync_root_files = \"true\"' or --sync-root-files option to sync files in the root path.", ["info", "notify"]);
+				addLogEntry(errorMessage, ["info", "notify"]);
 				addLogEntry();
 			} else {
 				syncListRules ~= buildNormalizedPath(line);
@@ -661,6 +662,11 @@ class ClientSideFiltering {
 		if (debugLogging) {
 			addLogEntry("Rule Segments: " ~ to!string(ruleSegments), ["debug"]);
 			addLogEntry("Input Segments: " ~ to!string(inputSegments), ["debug"]);
+		}
+		
+		// Check that both segments are not empty
+		if (ruleSegments.length == 0 || inputSegments.length == 0) {
+			return false; // Return false if either segment array is empty
 		}
 
 		// Compare the first segments only
