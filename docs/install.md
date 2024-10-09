@@ -228,11 +228,13 @@ as far as possible automatically, but can be overridden by passing
 > [!IMPORTANT]
 > For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space. To verify your system's swap space availability, you can use the `swapon` command. Ensuring these requirements are met is vital for the application's compilation process.
 
+> [!NOTE]
+> The 'configure' step will detect the correct version of LDC to be used when compiling the client under ARMHF and ARM64 cpu architectures.
+
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=/usr/bin/ldmd2
-make clean; make
+./configure; make clean; make;
 sudo make install
 ```
 
