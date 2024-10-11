@@ -1112,7 +1112,7 @@ bool entrypointExists(string basePath = "/") {
         return exists(entrypointPath);
     } catch (Exception e) {
         // Handle any exceptions (e.g., permission issues, invalid path)
-        writeln("An error occurred: ", e.msg);
+        addLogEntry("An error occurred: " ~ e.msg);
         return false;
     }
 }
