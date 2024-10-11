@@ -1195,6 +1195,12 @@ class ApplicationConfig {
 							foreach (line; newConfigFileEntries) {
 								applicableConfigFilePathFileHandleWrite.writeln(line);
 							}
+							
+							// Is this a running as a container
+							if (entrypointExists) {
+								// write this to the config file so that when config optins are checked again, this matches on next run
+								applicableConfigFilePathFileHandleWrite.writeln(newConfigOptionSyncDirLine);
+							}
 
 							// Flush and close the file handle to ensure all data is written
 							if (applicableConfigFilePathFileHandleWrite.isOpen()) {
@@ -1756,12 +1762,12 @@ class ApplicationConfig {
 				// config file was set and CLI input changed this
 				// Is this potentially running as a Docker container?
 				if (entrypointExists) {
-						// entrypoint.sh exists
-						if (debugLogging) {addLogEntry("sync_dir: CLI override of config file option, however entrypoint.sh exists, thus most likely first run of Docker container", ["debug"]);}
-					} else {
-						// Not a Docker container, raise issue
-						logAndSetDifference("sync_dir: CLI override of config file option, --resync needed", 3);
-					}
+					// entrypoint.sh exists
+					if (debugLogging) {addLogEntry("sync_dir: CLI override of config file option, however entrypoint.sh exists, thus most likely running as a container", ["debug"]);}
+				} else {
+					// Not a Docker container, raise that --resync needed due to configuration change
+					logAndSetDifference("sync_dir: CLI override of config file option, --resync needed", 3);
+				}
 			}
 			
 			if (configFileSkipFile != "" && configFileSkipFile != getValueString("skip_file")) logAndSetDifference("skip_file: CLI override of config file option, --resync needed", 4);
