@@ -126,6 +126,18 @@ However, if your system employs curl >= 7.62.0, curl will, by default, prioritis
 
 If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http-11` flag or setting the configuration option `force_http_11 = "true"`. This will compel the application to exclusively use HTTP/1.1. Otherwise, all client operations will align with the curl default settings for your distribution.
 
+#### Known curl versions with compatibility issues for this client
+| curl Version            |
+|-------------------------|
+| 7.74.0                  |
+| 7.88.1                  |
+| 7.68.0                  |
+| 7.81.0                  |
+| 8.10.0                  |
+
+> [!IMPORTANT]
+> If your distribution provides one of these curl versions you must upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl. Refer to [curl releases](https://curl.se/docs/releases.html) for curl version information.
+
 > [!IMPORTANT]
 > There are significant HTTP/2 bugs in all curl versions < 8.8.x that can lead to HTTP/2 errors such as `Error in the HTTP2 framing layer on handle` or `Stream error in the HTTP/2 framing layer on handle`
 >
@@ -141,6 +153,7 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 > The only options to resolve this are the following:
 > 1. Implement and/or ensure that IPv6 DNS resolution is possible on your system; allow IPv6 network connectivity between your system and Microsoft OneDrive
 > 2. Configure the client to only use IPv4 DNS resolution via setting the configuration option `ip_protocol_version = "1"`
+
 
 ## First Steps
 ### Authorise the Application with Your Microsoft OneDrive Account
