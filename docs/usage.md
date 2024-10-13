@@ -129,10 +129,10 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 #### Known curl versions with compatibility issues for this client
 | curl Version            |
 |-------------------------|
-| 7.74.0                  |
-| 7.88.1                  |
 | 7.68.0                  |
+| 7.74.0                  |
 | 7.81.0                  |
+| 7.88.1                  |
 | 8.10.0                  |
 
 > [!IMPORTANT]
