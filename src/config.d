@@ -1190,10 +1190,16 @@ class ApplicationConfig {
 						if (!getValueBool("dry_run")) {
 							// Open the file with write access using 'w' mode to overwrite existing content
 							File applicableConfigFilePathFileHandleWrite = File(applicableConfigFilePath, "w");
-							
+
 							// Write each line from the 'newConfigFileEntries' array to the file
 							foreach (line; newConfigFileEntries) {
 								applicableConfigFilePathFileHandleWrite.writeln(line);
+							}
+							
+							// Is this a running as a container
+							if (entrypointExists) {
+								// write this to the config file so that when config optins are checked again, this matches on next run
+								applicableConfigFilePathFileHandleWrite.writeln(newConfigOptionSyncDirLine);
 							}
 
 							// Flush and close the file handle to ensure all data is written
@@ -1201,7 +1207,7 @@ class ApplicationConfig {
 							applicableConfigFilePathFileHandleWrite.flush();
 								applicableConfigFilePathFileHandleWrite.close();
 							}
-							
+
 							// free memory from file open
 							object.destroy(applicableConfigFilePathFileHandleWrite);
 						}
@@ -1742,10 +1748,28 @@ class ApplicationConfig {
 				addLogEntry("WARNING: no backup config file was found, unable to validate if any changes made");
 			}
 		}
+		
+		// config file set options can be changed via CLI input, specifically these will impact sync and a --resync will be needed:
+		//  --syncdir ARG
+		//  --skip-file ARG
+		//  --skip-dir ARG
+		//  --skip-dot-files
+		//  --skip-symlinks
 
 		// Check CLI options
 		if (exists(applicableConfigFilePath)) {
-			if (configFileSyncDir != "" && configFileSyncDir != getValueString("sync_dir")) logAndSetDifference("sync_dir: CLI override of config file option, --resync needed", 3);
+			if (configFileSyncDir != "" && configFileSyncDir != getValueString("sync_dir")) {
+				// config file was set and CLI input changed this
+				// Is this potentially running as a Docker container?
+				if (entrypointExists) {
+					// entrypoint.sh exists
+					if (debugLogging) {addLogEntry("sync_dir: CLI override of config file option, however entrypoint.sh exists, thus most likely running as a container", ["debug"]);}
+				} else {
+					// Not a Docker container, raise that --resync needed due to configuration change
+					logAndSetDifference("sync_dir: CLI override of config file option, --resync needed", 3);
+				}
+			}
+			
 			if (configFileSkipFile != "" && configFileSkipFile != getValueString("skip_file")) logAndSetDifference("skip_file: CLI override of config file option, --resync needed", 4);
 			if (configFileSkipDir != "" && configFileSkipDir != getValueString("skip_dir")) logAndSetDifference("skip_dir: CLI override of config file option, --resync needed", 5);
 			if (!configFileSkipDotfiles && getValueBool("skip_dotfiles")) logAndSetDifference("skip_dotfiles: CLI override of config file option, --resync needed", 6);
