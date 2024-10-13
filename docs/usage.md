@@ -129,14 +129,19 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 #### Known curl versions with compatibility issues for this client
 | curl Version            |
 |-------------------------|
-| 7.74.0                  |
-| 7.88.1                  |
 | 7.68.0                  |
+| 7.74.0                  |
 | 7.81.0                  |
+| 7.88.1                  |
 | 8.10.0                  |
 
 > [!IMPORTANT]
 > If your distribution provides one of these curl versions you must upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl. Refer to [curl releases](https://curl.se/docs/releases.html) for curl version information.
+> If you are unable to upgrade your version of curl, you must add the following to your config file:
+> ```text
+> force_http_11 = "true"
+> ip_protocol_version = "1"
+> ```
 
 > [!IMPORTANT]
 > There are significant HTTP/2 bugs in all curl versions < 8.8.x that can lead to HTTP/2 errors such as `Error in the HTTP2 framing layer on handle` or `Stream error in the HTTP/2 framing layer on handle`
