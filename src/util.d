@@ -34,6 +34,7 @@ import core.sys.posix.pwd;
 import core.sys.posix.unistd;
 import core.stdc.string;
 import core.sys.posix.signal;
+import etc.c.curl;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -1359,4 +1360,11 @@ string compilerDetails() {
 	else enum compiler = "Unknown compiler";
 	string compilerString = compiler ~ " " ~ to!string(__VERSION__);
 	return compilerString;
+}
+
+// Return the curl version details
+string getCurlVersion() {
+	// Get curl version
+	auto versionInfo = curl_version();
+	return to!string(versionInfo);
 }
