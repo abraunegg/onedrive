@@ -8548,7 +8548,6 @@ class SyncEngine {
 		
 		// Check the session data for expirationDateTime
 		if ("expirationDateTime" in sessionFileData) {
-			addLogEntry("expirationDateTime: " ~ sessionFileData["expirationDateTime"].str);
 			SysTime expiration;
 			string expirationTimestamp;
 			expirationTimestamp = strip(sessionFileData["expirationDateTime"].str);
