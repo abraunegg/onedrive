@@ -191,7 +191,7 @@ class CurlEngine {
         http = HTTP();   // Directly initializes HTTP using its default constructor
         response = null; // Initialize as null
 		internalThreadId = generateAlphanumericString(); // Give this CurlEngine instance a unique ID
-		addLogEntry("Created new CurlEngine instance id: " ~ to!string(internalThreadId));
+		if (debugLogging) {addLogEntry("Created new CurlEngine instance id: " ~ to!string(internalThreadId), ["debug"]);}
     }
 
 	// The destructor should only clean up resources owned directly by this CurlEngine instance
