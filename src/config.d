@@ -1335,7 +1335,7 @@ class ApplicationConfig {
 		// Display application version
 		addLogEntry("Application version                          = " ~ applicationVersion);
 		addLogEntry("Compiled with                                = " ~ compilerDetails());
-		addLogEntry("Curl Version                                 = " ~ getCurlVersion());
+		addLogEntry("Curl version                                 = " ~ getCurlVersionString());
 		
 		// Display all of the pertinent configuration options
 		addLogEntry("User Application Config path                 = " ~ configDirName);

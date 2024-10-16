@@ -215,16 +215,15 @@ class CurlEngine {
 		
 	// We are releasing a curl instance back to the pool
 	void releaseEngine() {
+		// Set timestamp of release
+		releaseTimestamp = Clock.currTime(UTC());
 		// Log that we are releasing this engine back to the pool
 		if (debugLogging) {
 			addLogEntry("CurlEngine releaseEngine() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
 			addLogEntry("CurlEngine curlEnginePool size before release: " ~ to!string(curlEnginePool.length), ["debug"]);
+			string engineReleaseMessage = format("Release Timestamp for CurlEngine %s: %s", to!string(internalThreadId), to!string(releaseTimestamp));
+			addLogEntry(engineReleaseMessage, ["debug"]);
 		}
-		
-		// Set timestamp of release
-		releaseTimestamp = Clock.currTime(UTC());
-		string engineReleaseMessage = format("Release Timestamp for CurlEngine %s: %s", to!string(internalThreadId), to!string(releaseTimestamp));
-		addLogEntry(engineReleaseMessage);
 		
 		// cleanup this curl instance before putting it back in the pool
 		cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
@@ -474,8 +473,6 @@ class CurlEngine {
 		// Log that we are attempting to shutdown this curl instance
 		if (debugLogging) {addLogEntry("CurlEngine shutdownCurlHTTPInstance() called on instance id: " ~ to!string(internalThreadId), ["debug"]);}
 		
-		addLogEntry("CurlEngine shutdownCurlHTTPInstance() called on instance id: " ~ to!string(internalThreadId));
-		
 		// Is this curl instance is stopped?
 		if (!http.isStopped) {
 			if (debugLogging) {
@@ -524,9 +521,10 @@ CurlEngine getCurlInstance() {
 			} else {
 				// When was this engine last used?
 				auto elapsedTime = Clock.currTime(UTC()) - curlEngine.releaseTimestamp;
-				
-				string engineIdleMessage = format("CurlEngine %s time since last used: %s", to!string(curlEngine.internalThreadId), to!string(elapsedTime));
-				addLogEntry(engineIdleMessage);
+				if (debugLogging) {
+					string engineIdleMessage = format("CurlEngine %s time since last use: %s", to!string(curlEngine.internalThreadId), to!string(elapsedTime));
+					addLogEntry(engineIdleMessage, ["debug"]);
+				}
 				
 				// If greater than 120 seconds, the treat this as a stale engine, preventing:
 				// 	* Too old connection (xxx seconds idle), disconnect it
@@ -535,10 +533,10 @@ CurlEngine getCurlInstance() {
 				
 				if (elapsedTime > dur!"seconds"(120)) {
 					// Too long idle engine, clean it up and create a new one
-					addLogEntry("CurlEngine idle for > 120 seconds .... destroying and returning a new curl engine instance");
+					if (debugLogging) {addLogEntry("CurlEngine idle for > 120 seconds .... destroying and returning a new curl engine instance", ["debug"]);}
 					curlEngine.cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
 					curlEngine.shutdownCurlHTTPInstance();  // Assume proper cleanup of any resources used by HTTP
-					addLogEntry("Returning NEW curlEngine instance");
+					if (debugLogging) {addLogEntry("Returning NEW curlEngine instance", ["debug"]);}
 					return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
 				} else {
 					// return an existing curl engine
@@ -547,10 +545,6 @@ CurlEngine getCurlInstance() {
 						addLogEntry("Using CurlEngine instance ID: " ~ curlEngine.internalThreadId, ["debug"]);
 					}
 				
-					// Temp Output
-					addLogEntry("CurlEngine was in a valid state - returning existing CurlEngine instance");
-					addLogEntry("Using CurlEngine instance ID: " ~ curlEngine.internalThreadId);
-					
 					// return the existing engine
 					return curlEngine;
 				}
