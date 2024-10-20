@@ -1390,11 +1390,13 @@ string getCurlVersionNumeric() {
 bool isBadCurlVersion(string curlVersion) {
     // List of known curl versions with HTTP/2 issues
     string[] supportedVersions = [
-        "7.68.0",
-        "7.74.0",
-        "7.81.0",
-        "7.88.1",
-        "8.10.0"
+		"7.68.0", // Ubuntu 20.x
+		"7.74.0", // Debian 11
+		"7.81.0", // Ubuntu 22.x
+		"7.88.1", // Debian 12
+		"8.2.1",  // Ubuntu 23.10
+		"8.5.0",  // Ubuntu 24.x
+		"8.10.0"  // Various - HTTP/2 bug which was fixed in 8.10.1
     ];
     
     // Check if the current version matches one of the supported versions
