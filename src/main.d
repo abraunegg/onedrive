@@ -188,6 +188,18 @@ int main(string[] cliArgs) {
 	// Update the current runtime application configuration (default or 'config' fileread-in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
 	
+	// Is the version of curl or libcurl a known bad curl version for HTTP/2 support
+	if (isBadCurlVersion(getCurlVersionNumeric())) {
+		// add warning message
+		string curlWarningMessage = format("WARNING: Your curl/libcurl version (%s) has known HTTP/2 bugs that impact this application.", getCurlVersionNumeric());
+		addLogEntry();
+		addLogEntry(curlWarningMessage);
+		addLogEntry("         Please report this to your distribution and request that they provide a newer version for your platform or upgrade this yourself.");
+		addLogEntry("         Downgrading all application operations to use HTTP/1.1 to ensure maximum operational stability.");
+		addLogEntry();
+		appConfig.setValueBool("force_http_11" , true);
+	}
+	
 	// If --disable-notifications has not been used, check if everything exists to enable notifications
 	if (!appConfig.getValueBool("disable_notifications")) {
 		// If notifications was compiled in, we need to ensure that these variables are actually available before we enable GUI Notifications

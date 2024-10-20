@@ -1385,3 +1385,18 @@ string getCurlVersionNumeric() {
     // Return the version in the format "major.minor.patch"
     return major.to!string ~ "." ~ minor.to!string ~ "." ~ patch.to!string;
 }
+
+// Test the curl version against known curl versions with HTTP/2 issues
+bool isBadCurlVersion(string curlVersion) {
+    // List of known curl versions with HTTP/2 issues
+    string[] supportedVersions = [
+        "7.68.0",
+        "7.74.0",
+        "7.81.0",
+        "7.88.1",
+        "8.10.0"
+    ];
+    
+    // Check if the current version matches one of the supported versions
+    return canFind(supportedVersions, curlVersion);
+}
