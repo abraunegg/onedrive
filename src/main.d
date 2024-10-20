@@ -188,16 +188,23 @@ int main(string[] cliArgs) {
 	// Update the current runtime application configuration (default or 'config' fileread-in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
 	
-	// Is the version of curl or libcurl a known bad curl version for HTTP/2 support
-	if (isBadCurlVersion(getCurlVersionNumeric())) {
-		// add warning message
-		string curlWarningMessage = format("WARNING: Your curl/libcurl version (%s) has known HTTP/2 bugs that impact this application.", getCurlVersionNumeric());
-		addLogEntry();
-		addLogEntry(curlWarningMessage);
-		addLogEntry("         Please report this to your distribution and request that they provide a newer version for your platform or upgrade this yourself.");
-		addLogEntry("         Downgrading all application operations to use HTTP/1.1 to ensure maximum operational stability.");
-		addLogEntry();
-		appConfig.setValueBool("force_http_11" , true);
+	// If 'force_http_11' = false, we need to check the curl version being used
+	if (!appConfig.getValueBool("force_http_11")) {
+		// get the curl version
+		string curlVersion = getCurlVersionNumeric();
+	
+		// Is the version of curl or libcurl being used by the platform a known bad curl version for HTTP/2 support
+		if (isBadCurlVersion(curlVersion)) {
+			// add warning message
+			string curlWarningMessage = format("WARNING: Your curl/libcurl version (%s) has known HTTP/2 bugs that impact the use of this application.", curlVersion);
+			addLogEntry();
+			addLogEntry(curlWarningMessage);
+			addLogEntry("         Please report this to your distribution and request that they provide a newer version for your platform or upgrade this yourself.");
+			addLogEntry("         Downgrading all application operations to use HTTP/1.1 to ensure maximum operational stability.");
+			addLogEntry("         Please read https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#compatibility-with-curl for more information.");
+			addLogEntry();
+			appConfig.setValueBool("force_http_11" , true);
+		}
 	}
 	
 	// If --disable-notifications has not been used, check if everything exists to enable notifications
