@@ -34,6 +34,7 @@ import core.sys.posix.pwd;
 import core.sys.posix.unistd;
 import core.stdc.string;
 import core.sys.posix.signal;
+import etc.c.curl;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -1359,4 +1360,43 @@ string compilerDetails() {
 	else enum compiler = "Unknown compiler";
 	string compilerString = compiler ~ " " ~ to!string(__VERSION__);
 	return compilerString;
+}
+
+// Return the curl version details
+string getCurlVersionString() {
+	// Get curl version
+	auto versionInfo = curl_version();
+	return to!string(versionInfo);
+}
+
+// Function to return the decoded curl version as a string
+string getCurlVersionNumeric() {
+    // Get curl version info using curl_version_info
+    auto curlVersionDetails = curl_version_info(CURLVERSION_NOW);
+
+    // Extract the major, minor, and patch numbers from version_num
+    uint versionNum = curlVersionDetails.version_num;
+    
+    // The version number is in the format 0xXXYYZZ
+    uint major = (versionNum >> 16) & 0xFF; // Extract XX (major version)
+    uint minor = (versionNum >> 8) & 0xFF;  // Extract YY (minor version)
+    uint patch = versionNum & 0xFF;         // Extract ZZ (patch version)
+
+    // Return the version in the format "major.minor.patch"
+    return major.to!string ~ "." ~ minor.to!string ~ "." ~ patch.to!string;
+}
+
+// Test the curl version against known curl versions with HTTP/2 issues
+bool isBadCurlVersion(string curlVersion) {
+    // List of known curl versions with HTTP/2 issues
+    string[] supportedVersions = [
+        "7.68.0",
+        "7.74.0",
+        "7.81.0",
+        "7.88.1",
+        "8.10.0"
+    ];
+    
+    // Check if the current version matches one of the supported versions
+    return canFind(supportedVersions, curlVersion);
 }

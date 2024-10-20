@@ -29,6 +29,7 @@ Before reading this document, please ensure you are running application version 
   - [ip_protocol_version](#ip_protocol_version)
   - [local_first](#local_first)
   - [log_dir](#log_dir)
+  - [max_curl_idle](#max_curl_idle)
   - [monitor_fullscan_frequency](#monitor_fullscan_frequency)
   - [monitor_interval](#monitor_interval)
   - [monitor_log_frequency](#monitor_log_frequency)
@@ -381,6 +382,20 @@ _**Default Value:**_ *None*
 _**Config Example:**_ `log_dir = "~/logs/"`
 
 _**CLI Option Use:**_ `--log-dir "~/logs/"`
+
+### max_curl_idle
+_**Description:**_ This configuration option controls the number of seconds that elapse after a cURL engine was last used before it is considered stale and destroyed. Evidence suggests that some upstream network devices ignore the cURL keep-alive setting and forcibly close the active TCP connection when idle.
+
+_**Value Type:**_ Integer
+
+_**Default Value:**_ 120
+
+_**Config Example:**_ `monitor_fullscan_frequency = "120"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+> [!IMPORTANT]
+> It is strongly recommended not to modify this setting without conducting thorough network testing. Changing this option may lead to unexpected behaviour or connectivity issues, especially if upstream network devices handle idle connections in non-standard ways.
 
 ### monitor_fullscan_frequency
 _**Description:**_ This configuration option controls the number of 'monitor_interval' iterations between when a full scan of your data is performed to ensure data integrity and consistency.

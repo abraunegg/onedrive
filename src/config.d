@@ -272,6 +272,8 @@ class ApplicationConfig {
 		longValues["data_timeout"] = defaultDataTimeout;
 		// What IP protocol version should be used when communicating with OneDrive
 		longValues["ip_protocol_version"] = defaultIpProtocol; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
+		// What is the default age that a curl engine should be left idle for, before being being destroyed
+		longValues["max_curl_idle"] = 120;
 		
 		// Number of concurrent threads
 		longValues["threads"] = defaultConcurrentThreads; // Default is 8, user can increase to max of 16 or decrease
@@ -1335,6 +1337,7 @@ class ApplicationConfig {
 		// Display application version
 		addLogEntry("Application version                          = " ~ applicationVersion);
 		addLogEntry("Compiled with                                = " ~ compilerDetails());
+		addLogEntry("Curl version                                 = " ~ getCurlVersionString());
 		
 		// Display all of the pertinent configuration options
 		addLogEntry("User Application Config path                 = " ~ configDirName);
@@ -1418,6 +1421,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'data_timeout'                 = " ~ to!string(getValueLong("data_timeout")));
 		addLogEntry("Config option 'ip_protocol_version'          = " ~ to!string(getValueLong("ip_protocol_version")));
 		addLogEntry("Config option 'threads'                      = " ~ to!string(getValueLong("threads")));
+		addLogEntry("Config option 'max_curl_idle'                = " ~ to!string(getValueLong("max_curl_idle")));
 		
 		// GUI notifications
 		version(Notifications) {

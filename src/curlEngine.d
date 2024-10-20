@@ -7,6 +7,7 @@ import etc.c.curl;
 import std.datetime;
 import std.conv;
 import std.file;
+import std.format;
 import std.json;
 import std.stdio;
 import std.range;
@@ -184,11 +185,14 @@ class CurlEngine {
 	bool keepAlive;
 	ulong dnsTimeout;
 	string internalThreadId;
+	SysTime releaseTimestamp;
+	ulong maxIdleTime;
 	
     this() {
         http = HTTP();   // Directly initializes HTTP using its default constructor
         response = null; // Initialize as null
 		internalThreadId = generateAlphanumericString(); // Give this CurlEngine instance a unique ID
+		if (debugLogging) {addLogEntry("Created new CurlEngine instance id: " ~ to!string(internalThreadId), ["debug"]);}
     }
 
 	// The destructor should only clean up resources owned directly by this CurlEngine instance
@@ -212,10 +216,14 @@ class CurlEngine {
 		
 	// We are releasing a curl instance back to the pool
 	void releaseEngine() {
+		// Set timestamp of release
+		releaseTimestamp = Clock.currTime(UTC());
 		// Log that we are releasing this engine back to the pool
 		if (debugLogging) {
 			addLogEntry("CurlEngine releaseEngine() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
 			addLogEntry("CurlEngine curlEnginePool size before release: " ~ to!string(curlEnginePool.length), ["debug"]);
+			string engineReleaseMessage = format("Release Timestamp for CurlEngine %s: %s", to!string(internalThreadId), to!string(releaseTimestamp));
+			addLogEntry(engineReleaseMessage, ["debug"]);
 		}
 		
 		// cleanup this curl instance before putting it back in the pool
@@ -231,13 +239,14 @@ class CurlEngine {
     }
 	
 	// Initialise this curl instance
-	void initialise(ulong dnsTimeout, ulong connectTimeout, ulong dataTimeout, ulong operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, ulong userRateLimit, ulong protocolVersion, bool keepAlive=true) {
+	void initialise(ulong dnsTimeout, ulong connectTimeout, ulong dataTimeout, ulong operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, ulong userRateLimit, ulong protocolVersion, ulong maxIdleTime, bool keepAlive=true) {
 		//   Setting this to false ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
 		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
 		this.keepAlive = keepAlive;
 		this.dnsTimeout = dnsTimeout;
 
 		// Curl Timeout Handling
+		this.maxIdleTime = maxIdleTime;
 		
 		// libcurl dns_cache_timeout timeout
 		// https://curl.se/libcurl/c/CURLOPT_DNS_CACHE_TIMEOUT.html
@@ -512,12 +521,39 @@ CurlEngine getCurlInstance() {
 				if (debugLogging) {addLogEntry("CurlEngine was in a stopped state (not usable) - constructing a new CurlEngine instance", ["debug"]);}
 				return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
 			} else {
-				// return an existing curl engine
+				// When was this engine last used?
+				auto elapsedTime = Clock.currTime(UTC()) - curlEngine.releaseTimestamp;
 				if (debugLogging) {
-					addLogEntry("CurlEngine was in a valid state - returning existing CurlEngine instance", ["debug"]);
-					addLogEntry("CurlEngine instance ID: " ~ curlEngine.internalThreadId, ["debug"]);
+					string engineIdleMessage = format("CurlEngine %s time since last use: %s", to!string(curlEngine.internalThreadId), to!string(elapsedTime));
+					addLogEntry(engineIdleMessage, ["debug"]);
 				}
-				return curlEngine;
+				
+				// If greater than 120 seconds (default), the treat this as a stale engine, preventing:
+				// 	* Too old connection (xxx seconds idle), disconnect it
+				// 	* Connection 0 seems to be dead!
+				// 	* Closing connection 0
+				
+				if (elapsedTime > dur!"seconds"(curlEngine.maxIdleTime)) {
+					// Too long idle engine, clean it up and create a new one
+					if (debugLogging) {
+						string curlTooOldMessage = format("CurlEngine idle for > %d seconds .... destroying and returning a new curl engine instance", curlEngine.maxIdleTime);
+						addLogEntry(curlTooOldMessage, ["debug"]);
+					}
+					
+					curlEngine.cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
+					curlEngine.shutdownCurlHTTPInstance();  // Assume proper cleanup of any resources used by HTTP
+					if (debugLogging) {addLogEntry("Returning NEW curlEngine instance", ["debug"]);}
+					return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
+				} else {
+					// return an existing curl engine
+					if (debugLogging) {
+						addLogEntry("CurlEngine was in a valid state - returning existing CurlEngine instance", ["debug"]);
+						addLogEntry("Using CurlEngine instance ID: " ~ curlEngine.internalThreadId, ["debug"]);
+					}
+				
+					// return the existing engine
+					return curlEngine;
+				}
 			}
 		}
 	}
@@ -546,7 +582,7 @@ void releaseAllCurlInstances() {
 				// Perform Garbage Collection on this destroyed curl engine
 				GC.collect();
 				// Log release
-				if (debugLogging) {addLogEntry("CurlEngine released", ["debug"]);}
+				if (debugLogging) {addLogEntry("CurlEngine destroyed", ["debug"]);}
 			}
 		
 			// Clear the array after all instances have been handled

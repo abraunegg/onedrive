@@ -153,8 +153,11 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 > [!IMPORTANT]
 > It has been evidenced that curl has an internal DNS resolution bug that at random times will skip using IPv4 for DNS resolution and only uses IPv6 DNS resolution when the host system is configured to use IPv4 and IPv6 addressing.
 > 
-> As a result of this curl resolution bug, if your system does not have an IPv6 DNS resolver, and/or does not have a valid IPv6 network path to Microsoft OneDrive, you may encounter this error: `A libcurl timeout has been triggered - data transfer too slow, no DNS resolution response, no server response`
+> As a result of this curl resolution bug, if your system does not have an IPv6 DNS resolver, and/or does not have a valid IPv6 network path to Microsoft OneDrive, you may encounter these errors: 
 > 
+> * `A libcurl timeout has been triggered - data transfer too slow, no DNS resolution response, no server response`
+> * `Could not connect to server on handle ABC12DEF3456`
+>
 > The only options to resolve this are the following:
 > 1. Implement and/or ensure that IPv6 DNS resolution is possible on your system; allow IPv6 network connectivity between your system and Microsoft OneDrive
 > 2. Configure the client to only use IPv4 DNS resolution via setting the configuration option `ip_protocol_version = "1"`
