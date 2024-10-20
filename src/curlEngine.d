@@ -186,6 +186,7 @@ class CurlEngine {
 	ulong dnsTimeout;
 	string internalThreadId;
 	SysTime releaseTimestamp;
+	ulong maxIdleTime;
 	
     this() {
         http = HTTP();   // Directly initializes HTTP using its default constructor
@@ -238,13 +239,14 @@ class CurlEngine {
     }
 	
 	// Initialise this curl instance
-	void initialise(ulong dnsTimeout, ulong connectTimeout, ulong dataTimeout, ulong operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, ulong userRateLimit, ulong protocolVersion, bool keepAlive=true) {
+	void initialise(ulong dnsTimeout, ulong connectTimeout, ulong dataTimeout, ulong operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, ulong userRateLimit, ulong protocolVersion, bool keepAlive=true, ulong maxIdleTime) {
 		//   Setting this to false ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
 		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
 		this.keepAlive = keepAlive;
 		this.dnsTimeout = dnsTimeout;
 
 		// Curl Timeout Handling
+		this.maxIdleTime = maxIdleTime;
 		
 		// libcurl dns_cache_timeout timeout
 		// https://curl.se/libcurl/c/CURLOPT_DNS_CACHE_TIMEOUT.html
@@ -526,14 +528,18 @@ CurlEngine getCurlInstance() {
 					addLogEntry(engineIdleMessage, ["debug"]);
 				}
 				
-				// If greater than 120 seconds, the treat this as a stale engine, preventing:
+				// If greater than 120 seconds (default), the treat this as a stale engine, preventing:
 				// 	* Too old connection (xxx seconds idle), disconnect it
 				// 	* Connection 0 seems to be dead!
 				// 	* Closing connection 0
 				
-				if (elapsedTime > dur!"seconds"(120)) {
+				if (elapsedTime > dur!"seconds"(curlEngine.maxIdleTime)) {
 					// Too long idle engine, clean it up and create a new one
-					if (debugLogging) {addLogEntry("CurlEngine idle for > 120 seconds .... destroying and returning a new curl engine instance", ["debug"]);}
+					if (debugLogging) {
+						string curlTooOldMessage = format("CurlEngine idle for > %d seconds .... destroying and returning a new curl engine instance", curlEngine.maxIdleTime);
+						addLogEntry(curlTooOldMessage, ["debug"]);
+					}
+					
 					curlEngine.cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
 					curlEngine.shutdownCurlHTTPInstance();  // Assume proper cleanup of any resources used by HTTP
 					if (debugLogging) {addLogEntry("Returning NEW curlEngine instance", ["debug"]);}

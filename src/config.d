@@ -272,6 +272,8 @@ class ApplicationConfig {
 		longValues["data_timeout"] = defaultDataTimeout;
 		// What IP protocol version should be used when communicating with OneDrive
 		longValues["ip_protocol_version"] = defaultIpProtocol; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
+		// What is the default age that a curl engine should be left idle for, before being being destroyed
+		longValues["max_curl_idle"] = 120;
 		
 		// Number of concurrent threads
 		longValues["threads"] = defaultConcurrentThreads; // Default is 8, user can increase to max of 16 or decrease
