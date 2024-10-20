@@ -1421,6 +1421,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'data_timeout'                 = " ~ to!string(getValueLong("data_timeout")));
 		addLogEntry("Config option 'ip_protocol_version'          = " ~ to!string(getValueLong("ip_protocol_version")));
 		addLogEntry("Config option 'threads'                      = " ~ to!string(getValueLong("threads")));
+		addLogEntry("Config option 'max_curl_idle'                = " ~ to!string(getValueLong("max_curl_idle")));
 		
 		// GUI notifications
 		version(Notifications) {

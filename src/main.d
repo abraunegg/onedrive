@@ -211,8 +211,11 @@ int main(string[] cliArgs) {
 	if (!appConfig.getValueBool("disable_notifications")) {
 		// If notifications was compiled in, we need to ensure that these variables are actually available before we enable GUI Notifications
 		flagEnvironmentVariablesAvailable(appConfig.validateGUINotificationEnvironmentVariables());
-		// Attempt to enable GUI Notifications
-		validateDBUSServerAvailability();
+		// If we are not using --display-config attempt to enable GUI notifications
+		if (!appConfig.getValueBool("display_config")) {
+			// Attempt to enable GUI Notifications
+			validateDBUSServerAvailability();
+		}
 	}
 	
 	// In a debug scenario, to assist with understanding the run-time configuration, ensure this flag is set
