@@ -133,6 +133,8 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 | 7.74.0                  |
 | 7.81.0                  |
 | 7.88.1                  |
+| 8.2.1                   |
+| 8.5.0                   |
 | 8.10.0                  |
 
 > [!IMPORTANT]
