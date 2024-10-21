@@ -3735,8 +3735,8 @@ class SyncEngine {
 		// - check_nosync (MISSING)
 		// - skip_dotfiles (MISSING)
 		// - skip_symlinks (MISSING)
-		// - skip_file
 		// - skip_dir 
+		// - skip_file
 		// - sync_list
 		// - skip_size
 		// Return a true|false response
@@ -3774,14 +3774,35 @@ class SyncEngine {
 						}
 						if (debugLogging) {addLogEntry("skip_dir path to check (simple):  " ~ simplePathToCheck, ["debug"]);}
 						
-						// complex path
+						addLogEntry("skip_dir path to check (simple):  " ~ simplePathToCheck);
+						
+						// complex path calculation
 						if (parentInDatabase) {
-							// build up complexPathToCheck
-							//complexPathToCheck = buildNormalizedPath(newItemPath);
+							// build up complexPathToCheck based on database data
 							complexPathToCheck = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
+							
+							addLogEntry("skip_dir path to check (computed): " ~ complexPathToCheck);
+							
 						} else {
-							if (debugLogging) {addLogEntry("Parent details not in database - unable to compute complex path to check", ["debug"]);}
+							if (debugLogging) {addLogEntry("Parent details not in database - unable to compute complex path to check using database data", ["debug"]);}
+							addLogEntry("Parent details not in database - unable to compute complex path to check using database data");
+							// use onedriveJSONItem["parentReference"]["path"].str
+							string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
+							
+							// Check for ':' and split if present
+							auto splitIndex = selfBuiltPath.indexOf(":");
+							if (splitIndex != -1) {
+								// Keep only the part after ':'
+								selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
+							}
+							
+							// set complexPathToCheck to selfBuiltPath and be compatible with computeItemPath() output
+							complexPathToCheck = "." ~ selfBuiltPath;
 						}
+						
+						addLogEntry("skip_dir path to check (complex): " ~ complexPathToCheck);
+						
+						// were we able to compute a complexPathToCheck ?
 						if (!complexPathToCheck.empty) {
 							if (debugLogging) {addLogEntry("skip_dir path to check (complex): " ~ complexPathToCheck, ["debug"]);}
 						}
@@ -3820,6 +3841,7 @@ class SyncEngine {
 							matchDisplay = complexPathToCheck;
 						}
 					}
+					
 					// End Result
 					if (debugLogging) {addLogEntry("skip_dir exclude result (directory based): " ~ to!string(clientSideRuleExcludesPath), ["debug"]);}
 					if (clientSideRuleExcludesPath) {
