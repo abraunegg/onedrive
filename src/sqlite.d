@@ -7,12 +7,21 @@ import etc.c.sqlite3;
 import std.string: fromStringz, toStringz;
 import core.stdc.stdlib;
 import std.conv;
+import std.format;
 
 // What other modules that we have created do we need to import?
 import log;
 import util;
 
 extern (C) immutable(char)* sqlite3_errstr(int); // missing from the std library
+
+// Callback function to check if table exists
+extern (C) int tableExistsCallback(void* unused, int argc, char** argv, char** colNames) {
+    if (argc > 0) {
+        return 1; // Indicates that the table exists
+    }
+    return 0; // Indicates that the table does not exist
+}
 
 static this() {
 	if (sqlite3_libversion_number() < 3006019) {
@@ -140,6 +149,21 @@ struct Database {
 				// Throw sqlite error
 				throw new SqliteException(rc, errorMessage);
 			}
+		}
+	}
+	
+	// Check if the table exists before dropping it
+	void dropTableIfExists(const(char)[] tableName) {
+		string checkTableQuery = "SELECT name FROM sqlite_master WHERE type='table' AND name='" ~ to!string(tableName) ~ "';";
+		int tableExists = 0;
+		int rc = sqlite3_exec(pDb, toStringz(checkTableQuery), &tableExistsCallback, &tableExists, null);
+		
+		// If the table exists, drop it
+		if (tableExists == 1) {
+			exec("DROP TABLE " ~ tableName);
+		} else {
+			// Optionally log that the table does not exist
+			addLogEntry(format("WARNING: Table '%s' does not exist, skipping table drop.", to!string(tableName)));
 		}
 	}
 	
