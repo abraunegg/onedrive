@@ -3774,18 +3774,13 @@ class SyncEngine {
 						}
 						if (debugLogging) {addLogEntry("skip_dir path to check (simple):  " ~ simplePathToCheck, ["debug"]);}
 						
-						addLogEntry("skip_dir path to check (simple):  " ~ simplePathToCheck);
-						
 						// complex path calculation
 						if (parentInDatabase) {
 							// build up complexPathToCheck based on database data
 							complexPathToCheck = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-							
-							addLogEntry("skip_dir path to check (computed): " ~ complexPathToCheck);
-							
+							if (debugLogging) {addLogEntry("skip_dir path to check (computed): " ~ complexPathToCheck, ["debug"]);}
 						} else {
 							if (debugLogging) {addLogEntry("Parent details not in database - unable to compute complex path to check using database data", ["debug"]);}
-							addLogEntry("Parent details not in database - unable to compute complex path to check using database data");
 							// use onedriveJSONItem["parentReference"]["path"].str
 							string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
 							
@@ -3800,10 +3795,13 @@ class SyncEngine {
 							complexPathToCheck = "." ~ selfBuiltPath;
 						}
 						
-						addLogEntry("skip_dir path to check (complex): " ~ complexPathToCheck);
-						
 						// were we able to compute a complexPathToCheck ?
 						if (!complexPathToCheck.empty) {
+							// complexPathToCheck must at least start with './' to ensure logging output consistency but also for pattern matching consistency
+							if (!startsWith(complexPathToCheck, "./")) {
+								complexPathToCheck = "./" ~ complexPathToCheck;
+							}
+							// log the complex path to check
 							if (debugLogging) {addLogEntry("skip_dir path to check (complex): " ~ complexPathToCheck, ["debug"]);}
 						}
 					} else {
@@ -3847,6 +3845,43 @@ class SyncEngine {
 					if (clientSideRuleExcludesPath) {
 						// This path should be skipped
 						if (verboseLogging) {addLogEntry("Skipping path - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);}
+					}
+				}
+			}
+			
+			// Is the item a file?
+			// We need to check to see if this files path is excluded as well
+			if (isItemFile(onedriveJSONItem)) {
+			
+				// Only check path if config is != ""
+				if (!appConfig.getValueString("skip_dir").empty) {
+					// variable to check the file path against skip_dir
+					string pathToCheck;
+					
+					if (hasParentReference(onedriveJSONItem)) {
+						// use onedriveJSONItem["parentReference"]["path"].str
+						string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str;
+						
+						// Check for ':' and split if present
+						auto splitIndex = selfBuiltPath.indexOf(":");
+						if (splitIndex != -1) {
+							// Keep only the part after ':'
+							selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
+						}
+					
+						// update file path to check against 'skip_dir'
+						pathToCheck = selfBuiltPath;
+						string logItemPath = "." ~ pathToCheck ~ "/" ~ onedriveJSONItem["name"].str;
+						
+						// perform the skip_dir check for file path
+						clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(pathToCheck);
+						
+						// result
+						if (debugLogging) {addLogEntry("skip_dir exclude result (file based): " ~ to!string(clientSideRuleExcludesPath), ["debug"]);}
+						if (clientSideRuleExcludesPath) {
+							// this files path should be skipped
+							if (verboseLogging) {addLogEntry("Skipping file - file path is excluded by skip_dir config: " ~ logItemPath, ["verbose"]);}
+						}
 					}
 				}
 			}

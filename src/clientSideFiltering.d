@@ -161,21 +161,15 @@ class ClientSideFiltering {
 		if (debugLogging) {addLogEntry("skip_dir evaluation for: " ~ name, ["debug"]);}
 		
 		// Ensure the path being passed in is cleaned up to remove the leading '.'
-		if (startsWith(name, "./")){
+		if (startsWith(name, "./")) {
 			// strip '.' leading character
 			name = name[1..$];
 			if (debugLogging) {addLogEntry("skip_dir evaluation for (updated): " ~ name, ["debug"]);}	
 		}
 		
-		// TEMP LOGGIN
-		addLogEntry("skip_dir evaluation for: " ~ name);
-		
 		// Try full path match first
 		if (!name.matchFirst(directoryMask).empty) {
 			if (debugLogging) {addLogEntry("skip_dir evaluation: '!name.matchFirst(directoryMask).empty' returned true = matched", ["debug"]);}
-			
-			addLogEntry("skip_dir evaluation: '!name.matchFirst(directoryMask).empty' returned true = matched");
-			
 			return true;
 		} else {
 			// Do we check the base name as well?
@@ -191,9 +185,6 @@ class ClientSideFiltering {
 						checkPath = "/" ~ directory ~ checkPath;
 						if(!checkPath.strip('/').matchFirst(directoryMask).empty) {
 							if (debugLogging) {addLogEntry("skip_dir evaluation: '!checkPath.matchFirst(directoryMask).empty' returned true = matched", ["debug"]);}
-							
-							addLogEntry("skip_dir evaluation: '!checkPath.matchFirst(directoryMask).empty' returned true = matched");
-							
 							return true;
 						}
 					}
