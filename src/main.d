@@ -188,6 +188,17 @@ int main(string[] cliArgs) {
 	// Update the current runtime application configuration (default or 'config' fileread-in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
 	
+	// If --disable-notifications has not been used, check if everything exists to enable notifications
+	if (!appConfig.getValueBool("disable_notifications")) {
+		// If notifications was compiled in, we need to ensure that these variables are actually available before we enable GUI Notifications
+		flagEnvironmentVariablesAvailable(appConfig.validateGUINotificationEnvironmentVariables());
+		// If we are not using --display-config attempt to enable GUI notifications
+		if (!appConfig.getValueBool("display_config")) {
+			// Attempt to enable GUI Notifications
+			validateDBUSServerAvailability();
+		}
+	}
+	
 	// If 'force_http_11' = false, we need to check the curl version being used
 	if (!appConfig.getValueBool("force_http_11")) {
 		// get the curl version
@@ -198,7 +209,7 @@ int main(string[] cliArgs) {
 			// add warning message
 			string curlWarningMessage = format("WARNING: Your curl/libcurl version (%s) has known HTTP/2 bugs that impact the use of this application.", curlVersion);
 			addLogEntry();
-			addLogEntry(curlWarningMessage);
+			addLogEntry(curlWarningMessage, ["info", "notify"]);
 			addLogEntry("         Please report this to your distribution and request that they provide a newer curl version for your platform or upgrade this yourself.");
 			addLogEntry("         Downgrading all application operations to use HTTP/1.1 to ensure maximum operational stability.");
 			addLogEntry("         Please read https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#compatibility-with-curl for more information.");
@@ -214,20 +225,9 @@ int main(string[] cliArgs) {
 			// add warning message
 			string curlWarningMessage = format("WARNING: Your curl/libcurl version (%s) has known operational bugs that impact the use of this application.", curlVersion);
 			addLogEntry();
-			addLogEntry(curlWarningMessage);
+			addLogEntry(curlWarningMessage, ["info", "notify"]);
 			addLogEntry("         Please report this to your distribution and request that they provide a newer curl version for your platform or upgrade this yourself.");
 			addLogEntry();
-		}
-	}
-	
-	// If --disable-notifications has not been used, check if everything exists to enable notifications
-	if (!appConfig.getValueBool("disable_notifications")) {
-		// If notifications was compiled in, we need to ensure that these variables are actually available before we enable GUI Notifications
-		flagEnvironmentVariablesAvailable(appConfig.validateGUINotificationEnvironmentVariables());
-		// If we are not using --display-config attempt to enable GUI notifications
-		if (!appConfig.getValueBool("display_config")) {
-			// Attempt to enable GUI Notifications
-			validateDBUSServerAvailability();
 		}
 	}
 	
