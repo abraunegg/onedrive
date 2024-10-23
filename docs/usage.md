@@ -139,14 +139,28 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 
 > [!IMPORTANT]
 > If your distribution provides one of these curl versions you must upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl. Refer to [curl releases](https://curl.se/docs/releases.html) for curl version information.
+>
+> If you are using one of the above curl versions, the following application message will be generated:
+> ```text
+> WARNING: Your curl/libcurl version (curl.version.number) has known HTTP/2 bugs that impact the use of this application.
+>          Please report this to your distribution and request that they provide a newer curl version for your platform or upgrade this yourself.
+>          Downgrading all application operations to use HTTP/1.1 to ensure maximum operational stability.
+>          Please read https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#compatibility-with-curl for more information.
+> ```
 > If you are unable to upgrade your version of curl, you must add the following to your config file:
 > ```text
 > force_http_11 = "true"
 > ip_protocol_version = "1"
 > ```
+> When these two options are applied to your application configuration, the following application message will generated:
+> ```text
+> WARNING: Your curl/libcurl version (curl.version.number) has known operational bugs that impact the use of this application.
+>          Please report this to your distribution and request that they provide a newer curl version for your platform or upgrade this yourself.
+> ```
+> In both cases, the WARNING line will be sent to the GUI for notification purposes if notifications have been enabled. To avoid this message and/or the GUI notification your only path of remediation is to upgrade your curl version on your platform.
 
 > [!IMPORTANT]
-> There are significant HTTP/2 bugs in all curl versions < 8.8.x that can lead to HTTP/2 errors such as `Error in the HTTP2 framing layer on handle` or `Stream error in the HTTP/2 framing layer on handle`
+> There are significant HTTP/2 bugs in all curl versions < 8.6.x that can lead to HTTP/2 errors such as `Error in the HTTP2 framing layer on handle` or `Stream error in the HTTP/2 framing layer on handle`
 >
 > The only options to resolve this are the following:
 > 1. Upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl. Refer to [curl releases](https://curl.se/docs/releases.html) for curl version information.
