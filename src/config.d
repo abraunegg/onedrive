@@ -178,7 +178,7 @@ class ApplicationConfig {
 		
 	// Store items that come in from the 'config' file, otherwise these need to be set the the defaults
 	private string configFileSyncDir = defaultSyncDir;
-	private string configFileSkipFile = defaultSkipFile;
+	private string configFileSkipFile = ""; // Default for now, if post reading in any user configuration, if still empty, default will be used
 	private string configFileSkipDir = ""; // Default here is no directories are skipped
 	private string configFileDriveId = ""; // Default here is that no drive id is specified
 	private bool configFileSkipDotfiles = false;
@@ -571,6 +571,11 @@ class ApplicationConfig {
 					}
 				}
 			}
+		}
+		
+		// If the 'user' did not specify any 'skip_file' configuration in any loaded configuration file, load the defaults for 'skip_file'
+		if (configFileSkipFile.empty) {
+			configFileSkipFile = defaultSkipFile;
 		}
 		
 		// return if the configuration was initialised
