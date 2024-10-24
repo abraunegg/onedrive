@@ -290,7 +290,7 @@ final class ItemDatabase {
 			createTable();
 		} else if (db.getVersion() != itemDatabaseVersion) {
 			addLogEntry("The item database is incompatible, re-creating database table structures");
-			db.exec("DROP TABLE item");
+			db.dropTableIfExists("item");  // Check and drop table if it exists
 			createTable();
 		}
 		
@@ -358,7 +358,7 @@ final class ItemDatabase {
 		// flag that the database is accessible and we have control
 		databaseInitialised = true;
 	}
-
+	
 	~this() {
 		closeDatabaseFile();
 	}
