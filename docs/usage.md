@@ -152,7 +152,7 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 > force_http_11 = "true"
 > ip_protocol_version = "1"
 > ```
-> When these two options are applied to your application configuration, the following application message will generated:
+> When these two options are applied to your application configuration, the following application message will be generated:
 > ```text
 > WARNING: Your curl/libcurl version (curl.version.number) has known operational bugs that impact the use of this application.
 >          Please report this to your distribution and request that they provide a newer curl version for your platform or upgrade this yourself.
