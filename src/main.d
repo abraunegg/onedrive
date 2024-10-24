@@ -784,7 +784,7 @@ int main(string[] cliArgs) {
 			if (verboseLogging) {addLogEntry("Syncing changes from this selected path: " ~ singleDirectoryPath, ["verbose"]);}
 		}
 		
-		// Handle SIGINT and SIGTERM
+		// Handle SIGINT, SIGTERM and SIGSEGV signals
 		setupSignalHandler();
 		
 		// Are we doing a --sync operation? This includes doing any --single-directory operations
@@ -1445,7 +1445,7 @@ void checkForNoMountScenario() {
 	}
 }
 
-// Setup a signal handler for catching CTRL-C and others during application execution
+// Setup a signal handler for catching SIGINT, SIGTERM and SIGSEGV (CTRL-C and others) during application execution
 void setupSignalHandler() {
 	sigaction_t action;
 	action.sa_handler = &exitViaSignalHandler; // Direct function pointer assignment
