@@ -12,6 +12,7 @@ import std.json;
 import std.stdio;
 import std.range;
 import core.memory;
+import core.sys.posix.signal;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -19,6 +20,11 @@ import util;
 
 // Shared pool of CurlEngine instances accessible across all threads
 __gshared CurlEngine[] curlEnginePool; // __gshared is used to declare a variable that is shared across all threads
+
+extern (C) void sigpipeHandler(int signum) {
+	// Custom handler to ignore SIGPIPE signals
+	addLogEntry("ERROR: Handling a cURL SIGPIPE signal despite CURLOPT_NOSIGNAL being set (cURL Operational Bug) ...");
+}
 
 class CurlResponse {
 	HTTP.Method method;
@@ -238,11 +244,25 @@ class CurlEngine {
 		GC.minimize();
     }
 	
+	// Setup a specific SIGPIPE Signal handler due to curl bugs that ignore CurlOption.nosignal
+	void setupSIGPIPESignalHandler() {
+		// Setup the signal handler
+		sigaction_t curlAction;
+		curlAction.sa_handler = &sigpipeHandler; // Direct function pointer assignment
+		sigaction(SIGPIPE, &curlAction, null); // Broken Pipe signal from curl
+	}
+	
 	// Initialise this curl instance
 	void initialise(ulong dnsTimeout, ulong connectTimeout, ulong dataTimeout, ulong operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, ulong userRateLimit, ulong protocolVersion, ulong maxIdleTime, bool keepAlive=true) {
-		//   Setting this to false ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
-		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
+		// There are many broken curl versions being used, mainly provided by Ubuntu
+		// Ignore SIGPIPE to prevent the application from exiting without reason with an exit code of 141 when bad curl version generate this signal despite being told not to (CurlOption.nosignal) below
+		setupSIGPIPESignalHandler();
+		
+		// Setting 'keepAlive' to false ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
+		// multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
 		this.keepAlive = keepAlive;
+		
+		// Curl DNS Timeout Handling
 		this.dnsTimeout = dnsTimeout;
 
 		// Curl Timeout Handling
