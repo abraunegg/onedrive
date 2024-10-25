@@ -31,8 +31,8 @@ RUN apt-get clean \
  && apt-get update \
  && apt-get upgrade -y \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gosu libsqlite3-0 ca-certificates libphobos2-ldc-shared100 \
- # Install|update curl from backports
- && apt-get install -t bookworm-backports -y curl \
+ # Install|update curl and libcurl4 from backports
+ && apt-get install -t bookworm-backports -y curl libcurl4 \
  && rm -rf /var/lib/apt/lists/* \
  # Fix bug with ssl on armhf: https://serverfault.com/a/1045189
  && /usr/bin/c_rehash \
