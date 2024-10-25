@@ -23,7 +23,7 @@ __gshared CurlEngine[] curlEnginePool; // __gshared is used to declare a variabl
 
 extern (C) void sigpipeHandler(int signum) {
 	// Custom handler to ignore SIGPIPE signals
-	addLogEntry("ERROR: Handling a cURL SIGPIPE signal despite CURLOPT_NOSIGNAL being set (cURL Operational Bug) .. ");
+	addLogEntry("ERROR: Handling a cURL SIGPIPE signal despite CURLOPT_NOSIGNAL being set (cURL Operational Bug) ...");
 }
 
 class CurlResponse {
