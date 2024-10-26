@@ -16,11 +16,11 @@ import util;
 extern (C) immutable(char)* sqlite3_errstr(int); // missing from the std library
 
 // Callback function to check if table exists
-extern (C) int tableExistsCallback(void* unused, int argc, char** argv, char** colNames) {
-    if (argc > 0) {
-        return 1; // Indicates that the table exists
-    }
-    return 0; // Indicates that the table does not exist
+extern (C) int tableExistsCallback(void* data, int argc, char** argv, char** colNames) {
+    // Set `tableExists` to 1 if at least one row is returned
+    int* tableExists = cast(int*) data;
+    *tableExists = 1;
+    return 0; // Continue processing
 }
 
 static this() {
@@ -156,17 +156,26 @@ struct Database {
 	void dropTableIfExists(const(char)[] tableName) {
 		string checkTableQuery = "SELECT name FROM sqlite_master WHERE type='table' AND name='" ~ to!string(tableName) ~ "';";
 		int tableExists = 0;
-		int rc = sqlite3_exec(pDb, toStringz(checkTableQuery), &tableExistsCallback, &tableExists, null);
 		
-		// If the table exists, drop it
-		if (tableExists == 1) {
-			exec("DROP TABLE " ~ tableName);
+		// Execute query with callback to check if table exists
+		int rc = sqlite3_exec(pDb, toStringz(checkTableQuery), &tableExistsCallback, &tableExists, null);
+
+		// Only proceed if the query executed successfully
+		if (rc == SQLITE_OK) {
+			// If the table exists, drop it
+			if (tableExists == 1) {
+				exec("DROP TABLE " ~ tableName);
+			} else {
+				// Optionally log that the table does not exist
+				addLogEntry(format("WARNING: Table '%s' does not exist, skipping table drop.", to!string(tableName)));
+			}
 		} else {
-			// Optionally log that the table does not exist
-			addLogEntry(format("WARNING: Table '%s' does not exist, skipping table drop.", to!string(tableName)));
+			// Log or handle the error if `sqlite3_exec` fails
+			addLogEntry(format("ERROR: Failed to execute table existence check for '%s'.", to!string(tableName)));
 		}
 	}
 	
+	// Get DB Version
 	int getVersion() {
 		int userVersion;
 		extern (C) int callback(void* user_version, int count, char** column_text, char** column_name) {
@@ -181,11 +190,12 @@ struct Database {
 		return userVersion;
 	}
 	
+	// Get the threadsafe value
 	int getThreadsafeValue() {
-		// Get the threadsafe value
 		return sqlite3_threadsafe();
 	}
 
+	// Get sqlite error message
 	string getErrorMessage() {
 		return ifromStringz(sqlite3_errmsg(pDb));
 	}
