@@ -1332,16 +1332,40 @@ class SyncEngine {
 					}
 				}
 			}
-		
+			
+			// Do we discard this JSON item?
+			bool discardDeltaJSONItem = false;
+			
+			// Microsoft OneNote container objects present as neither folder or file but has file size
+			if ((!isItemFile(onedriveJSONItem)) && (!isItemFolder(onedriveJSONItem)) && (hasFileSize(onedriveJSONItem))) {
+				// Log that this was skipped as this was a Microsoft OneNote item and unsupported
+				// GENERATE A BETTER PATH HERE FOR LOGGING PURPOSES
+				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+				discardDeltaJSONItem = true;
+			}
+			
+			// Microsoft OneDrive OneNote objects will report as files but have 'application/msonenote' and 'application/octet-stream' as mime types
+			// Is there a 'file' JSON element?
+			if ("file" in onedriveJSONItem) {
+				if (isMicrosoftOneNoteMimeType1(onedriveJSONItem)) {
+					// Log that this was skipped as this was a Microsoft OneNote item and unsupported
+					// GENERATE A BETTER PATH HERE FOR LOGGING PURPOSES
+					if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook File '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+					discardDeltaJSONItem = true;
+				}
+			}
+			
 			// If we are not self-generating a /delta response, check this initial /delta JSON bundle item against the basic checks 
 			// of applicability against 'skip_file', 'skip_dir' and 'sync_list'
 			// We only do this if we did not generate a /delta response, as generateDeltaResponse() performs the checkJSONAgainstClientSideFiltering()
 			// against elements as it is building the /delta compatible response
 			// If we blindly just 'check again' all JSON responses then there is potentially double JSON processing going on if we used generateDeltaResponse()
-			bool discardDeltaJSONItem = false;
 			if (!generateSimulatedDeltaResponse) {
-				// Check applicability against 'skip_file', 'skip_dir' and 'sync_list'
-				discardDeltaJSONItem = checkJSONAgainstClientSideFiltering(onedriveJSONItem);
+				// Did we already exclude?
+				if (!discardDeltaJSONItem) {
+					// Check applicability against 'skip_file', 'skip_dir' and 'sync_list'
+					discardDeltaJSONItem = checkJSONAgainstClientSideFiltering(onedriveJSONItem);
+				}
 			}
 			
 			// Add this JSON item for further processing if this is not being discarded
@@ -8760,9 +8784,17 @@ class SyncEngine {
 		if (colonIndex != -1) {
 			if (debugLogging) {addLogEntry("Updating " ~ pathToCheck ~ " to remove prefix up to ':'", ["debug"]);}
 			pathToCheck = pathToCheck[colonIndex + 1 .. $];
-			if (debugLogging) {addLogEntry("Updated path for 'skip_dir' check: " ~ pathToCheck, ["debug"]);}
+			if (debugLogging) {addLogEntry("Updated path: " ~ pathToCheck, ["debug"]);}
 		}
 		return pathToCheck;
+	}
+	
+	// Generate path from JSON data
+	string generatePathFromJSONData(JSONValue onedriveJSONItem) {
+		string itemName = onedriveJSONItem["name"].str;
+		string parentPath = onedriveJSONItem["parentReference"]["path"].str;
+		string combinedPath = buildNormalizedPath(buildPath(parentPath, itemName));
+		return processPathToRemoveRootReference(combinedPath);
 	}
 	
 	// Function to find a given DriveId in the onlineDriveDetails associative array that maps driveId to DriveDetailsCache
