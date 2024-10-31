@@ -1339,17 +1339,15 @@ class SyncEngine {
 			// Microsoft OneNote container objects present as neither folder or file but has file size
 			if ((!isItemFile(onedriveJSONItem)) && (!isItemFolder(onedriveJSONItem)) && (hasFileSize(onedriveJSONItem))) {
 				// Log that this was skipped as this was a Microsoft OneNote item and unsupported
-				// GENERATE A BETTER PATH HERE FOR LOGGING PURPOSES
 				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
 				discardDeltaJSONItem = true;
 			}
 			
-			// Microsoft OneDrive OneNote objects will report as files but have 'application/msonenote' and 'application/octet-stream' as mime types
+			// Microsoft OneDrive OneNote file objects will report as files but have 'application/msonenote' as their mime type
 			// Is there a 'file' JSON element?
 			if ("file" in onedriveJSONItem) {
 				if (isMicrosoftOneNoteMimeType1(onedriveJSONItem)) {
 					// Log that this was skipped as this was a Microsoft OneNote item and unsupported
-					// GENERATE A BETTER PATH HERE FOR LOGGING PURPOSES
 					if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook File '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
 					discardDeltaJSONItem = true;
 				}
