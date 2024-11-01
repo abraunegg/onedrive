@@ -107,6 +107,11 @@ jobs:
         extra_dictionary_limit: 20
         extra_dictionaries:
           cspell:software-terms/dict/softwareTerms.txt
+          cspell:php/dict/php.txt
+          cspell:node/dict/node.txt
+          cspell:python/src/python/python-lib.txt
+          cspell:python/src/common/extra.txt
+          cspell:shell/dict/shell-all-words.txt
 
   comment-push:
     name: Report (Push)
