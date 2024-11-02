@@ -6,4 +6,4 @@
 \.md$
 \.d$
 \.puml$
-\onedrive\.1\.in$
+^onedrive\\.1\\.in$
