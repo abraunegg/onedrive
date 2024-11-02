@@ -67,8 +67,8 @@ Processing OneDrive JSON item batch [1/1] to ensure consistent local state
 Creating local directory: ./my_shared_folder/asdf
 Creating local directory: ./my_shared_folder/original_data
 Number of items to download from OneDrive: 3
-Downloading file: my_shared_folder/asdf/asdfasdfhashdkfasdf.txt ... done
-Downloading file: my_shared_folder/asdf/asdfasdf.txt ... done
+Downloading file: my_shared_folder/my_folder/file_one.txt ... done
+Downloading file: my_shared_folder/my_folder/file_two.txt ... done
 Downloading file: my_shared_folder/original_data/file1.data ... done
 Performing a database consistency and integrity check on locally stored data
 ...
