@@ -1,0 +1,9 @@
+# Only process the following files
+# *.md 
+# *.in 
+# *.d
+# *.puml
+\.md$
+\.in$
+\.d$
+\.puml$
