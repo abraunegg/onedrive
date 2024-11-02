@@ -4,4 +4,6 @@ abraunegg
 adamdruppe
 ARMHF
 armhf
-TFD_TIMER_ABSTIME
+ABSTIME
+TFD
+TIMER
