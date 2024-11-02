@@ -6,3 +6,7 @@
 
 # Microsoft URL's
 \b(?:https?://|)(?:(?:download\.visualstudio|docs|msdn2?|research)\.microsoft|blogs\.msdn)\.com/[-_a-zA-Z0-9()=./%]*
+
+# man troff content
+# https://www.gnu.org/software/groff/manual/groff.html
+\\f[BCIPR]
