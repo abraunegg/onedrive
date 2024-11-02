@@ -97,6 +97,12 @@ jobs:
         suppress_push_for_open_pull_request: ${{ github.actor != 'dependabot[bot]' && 1 }}
         checkout: true
         check_file_names: 0
+        only: |
+          *.md
+          *.in
+          contrib/*
+          src/*
+          docs/*
         spell_check_this: check-spelling/spell-check-this@prerelease
         post_comment: 0
         use_magic_file: 1
@@ -132,6 +138,11 @@ jobs:
           cspell:swift/src/swift.txt
           cspell:css/dict/css.txt
           cspell:cpp/src/lang-jargon.txt
+          cspell:docker/src/docker-words.txt
+          cspell:csharp/csharp.txt
+          cspell:clojure/src/clojure.txt
+          cspell:public-licenses/src/generated/public-licenses.txt
+          cspell:lisp/lisp.txt
 
   comment-push:
     name: Report (Push)
