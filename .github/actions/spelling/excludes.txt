@@ -1,0 +1,4 @@
+# Ignore the action's configuration data
+^\.github/action/spelling/
+# Ignore all GitHub workflow files
+^\.github/workflows/
