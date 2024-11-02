@@ -10,3 +10,6 @@
 # man troff content
 # https://www.gnu.org/software/groff/manual/groff.html
 \\f[BCIPR]
+
+# Ignore variables in UPPERCASE separated by an underscore '_'
+\b[A-Z]+(?:_[A-Z]+)*\b
