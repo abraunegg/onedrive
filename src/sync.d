@@ -4046,7 +4046,7 @@ class SyncEngine {
 					}
 				}
 				
-				// If this is a Shared Folder, we need to 'trim' the resulting path to that of the 'folder' that is actually shared with us so that this can be appropriatly checked against 'sync_list' entries
+				// If this is a Shared Folder, we need to 'trim' the resulting path to that of the 'folder' that is actually shared with us so that this can be appropriately checked against 'sync_list' entries
 				if (sharedFolderDeltaGeneration) {
 					// Find the index of 'currentSharedFolderName' in 'newItemPath'
 					int pos = cast(int) newItemPath.indexOf(currentSharedFolderName);
