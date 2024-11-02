@@ -1,2 +1,6 @@
 AADSTS
+aarch
 abraunegg
+adamdruppe
+ARMHF
+armhf

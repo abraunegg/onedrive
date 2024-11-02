@@ -314,7 +314,7 @@ onedrive -s -v
 ### Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive
 Client Side Filtering in the context of the OneDrive Client for Linux refers to user-configured rules that determine what files and directories the client should upload or download from Microsoft OneDrive. These rules are crucial for optimising synchronisation, especially when dealing with large numbers of files or specific file types. The OneDrive Client for Linux offers several configuration options to facilitate this:
 
-* **check_nosync:** This option allows you you create a `.nosync` file in local directories, to skip that directory from being included in sync operations.
+* **check_nosync:** This option allows you to create a `.nosync` file in local directories, to skip that directory from being included in sync operations.
 * **skip_dir:** This option allows the user to specify directories that should not be synchronised with OneDrive. It's particularly useful for omitting large or irrelevant directories from the sync process.
 * **skip_dotfiles:** Dotfiles, usually configuration files or scripts, can be excluded from the sync. This is useful for users who prefer to keep these files local.
 * **skip_file:** Specific files can be excluded from synchronisation using this option. It provides flexibility in selecting which files are essential for cloud storage.

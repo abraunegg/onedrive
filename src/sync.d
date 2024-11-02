@@ -3467,7 +3467,7 @@ class SyncEngine {
 				} else {
 					// Directory still exists locally
 					if (verboseLogging) {addLogEntry("The directory has not changed", ["verbose"]);}
-					// When we are using --single-directory, we use a the getChildren() call to get all children of a path, meaning all children are already traversed
+					// When we are using --single-directory, we use the getChildren() call to get all children of a path, meaning all children are already traversed
 					// Thus, if we traverse the path of this directory .. we end up with double processing & log output .. which is not ideal
 					if (!singleDirectoryScope) {
 						// loop through the children

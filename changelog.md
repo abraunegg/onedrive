@@ -1078,7 +1078,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Resolve Microsoft Naming Convention not being followed correctly
 *   Resolve Error when trying to upload a file with weird non printable characters present
 *   Resolve Crash if file is locked by online editing (status code 423)
-*   Resolve Resolve compilation issue with dmd-2.081.0
+*   Resolve compilation issue with dmd-2.081.0
 *   Resolve skip_file configuration doesn't handle spaces or specified directory paths
 ### Added
 *   Implement Feature: Add a flag to detect when the sync-folder is missing
