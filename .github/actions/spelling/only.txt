@@ -1,9 +1,9 @@
 # Only process the following files
 # *.md 
-# *.in 
+# onedrive.1.in
 # *.d
 # *.puml
 \.md$
-\.in$
 \.d$
 \.puml$
+\onedrive.1.in$
