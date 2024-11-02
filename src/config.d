@@ -176,7 +176,7 @@ class ApplicationConfig {
 	private string previousConfigHash = "";
 	private string previousSyncListHash = "";
 		
-	// Store items that come in from the 'config' file, otherwise these need to be set the the defaults
+	// Store items that come in from the 'config' file, otherwise these need to be set the defaults
 	private string configFileSyncDir = defaultSyncDir;
 	private string configFileSkipFile = ""; // Default for now, if post reading in any user configuration, if still empty, default will be used
 	private string configFileSkipDir = ""; // Default here is no directories are skipped
@@ -272,7 +272,7 @@ class ApplicationConfig {
 		longValues["data_timeout"] = defaultDataTimeout;
 		// What IP protocol version should be used when communicating with OneDrive
 		longValues["ip_protocol_version"] = defaultIpProtocol; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
-		// What is the default age that a curl engine should be left idle for, before being being destroyed
+		// What is the default age that a curl engine should be left idle for, before being destroyed
 		longValues["max_curl_idle"] = 120;
 		
 		// Number of concurrent threads
@@ -381,7 +381,7 @@ class ApplicationConfig {
 		//  - This is especially beneficial when debugging or performing memory tests with Valgrind
 		longValues["monitor_max_loop"] = 0;
 		// display_sync_options = true | false
-		// - It may be desirable to see what options are being passed in to performSync() without enabling the full verbose debug logging
+		// - It may be desirable to see what options are being passed into performSync() without enabling the full verbose debug logging
 		boolValues["display_sync_options"] = false;
 		// force_children_scan = true | false
 		// - Force client to use /children rather than /delta to query changes on OneDrive
@@ -2043,7 +2043,7 @@ class ApplicationConfig {
 		
 		// --sync and --display-sync-status cannot be used together
 		if ((getValueBool("synchronize")) && (getValueBool("display_sync_status"))) {
-			addLogEntry("ERROR: --sync and and --display-sync-status cannot be used together");
+			addLogEntry("ERROR: --sync and --display-sync-status cannot be used together");
 			operationalConflictDetected = true;
 		}
 		
@@ -2055,7 +2055,7 @@ class ApplicationConfig {
 		
 		// --sync and --display-quota cannot be used together
 		if ((getValueBool("synchronize")) && (getValueBool("display_quota"))) {
-			addLogEntry("ERROR: --sync and and --display-quota cannot be used together");
+			addLogEntry("ERROR: --sync and --display-quota cannot be used together");
 			operationalConflictDetected = true;
 		}
 				

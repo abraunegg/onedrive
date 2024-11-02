@@ -1082,7 +1082,7 @@ class SyncEngine {
 			// Perform Garbage Collection
 			GC.collect();
 		} else {
-			// Why are are generating a /delta response
+			// Why are we generating a /delta response
 			if (debugLogging) {
 				addLogEntry("Why are we generating a /delta response:", ["debug"]);
 				addLogEntry(" singleDirectoryScope:    " ~ to!string(singleDirectoryScope), ["debug"]);
@@ -3216,7 +3216,7 @@ class SyncEngine {
 				// Log DB items to process
 				if (debugLogging) {addLogEntry("Database items to process for this driveId: " ~ to!string(driveItems.count), ["debug"]);}
 				
-				// Process each database database item associated with the driveId
+				// Process each database item associated with the driveId
 				foreach(dbItem; driveItems) {
 					// Does it still exist on disk in the location the DB thinks it is
 					checkDatabaseItemForConsistency(dbItem);
@@ -3229,7 +3229,7 @@ class SyncEngine {
 				driveItems = itemDB.selectByDriveId(driveId);
 				if (debugLogging) {addLogEntry("Database items to process for this driveId: " ~ to!string(driveItems.count), ["debug"]);}
 				
-				// Process each database database item associated with the driveId
+				// Process each database item associated with the driveId
 				foreach(dbItem; driveItems) {
 					// Does it still exist on disk in the location the DB thinks it is
 					checkDatabaseItemForConsistency(dbItem);
@@ -3975,7 +3975,7 @@ class SyncEngine {
 				// What is the path of the new item
 				string newItemPath;
 				
-				// Is the parent in the database? If not, we cannot compute the the full path based on the database entries
+				// Is the parent in the database? If not, we cannot compute the full path based on the database entries
 				// In a --resync scenario - the database is empty
 				if (parentInDatabase) {
 					// Calculate this items path based on database entries
@@ -5393,7 +5393,7 @@ class SyncEngine {
 							if (childAsLower == thisFolderNameAsLower) {	
 								// This is a POSIX 'case in-sensitive match' ..... in folder name only
 								// - Local item name has a 'case-insensitive match' to an existing item on OneDrive
-								// The 'parentId' of this JSON object must match the the parentId of where the folder was created
+								// The 'parentId' of this JSON object must match the parentId of where the folder was created
 								// - why .. we might have the same folder name, but somewhere totally different
 								
 								if (queryItem.id == thisChildItem.parentId) {
@@ -5703,7 +5703,7 @@ class SyncEngine {
 			}
 		}
 		
-		// If the parent path was found in the DB, to ensure we are uploading the the right location 'parentItem.driveId' must not be empty
+		// If the parent path was found in the DB, to ensure we are uploading the right location 'parentItem.driveId' must not be empty
 		if ((parentPathFoundInDB) && (parentItem.driveId.empty)) {
 			// switch to using defaultDriveId
 			if (debugLogging) {addLogEntry("parentItem.driveId is empty - using defaultDriveId for upload API calls", ["debug"]);}
@@ -8554,7 +8554,7 @@ class SyncEngine {
 			// Does this pass validation?
 			if (!validateUploadSessionFileData(sessionFilePath)) {
 				// Remove upload_session file as it is invalid
-				// upload_session file file contains an error - cant resume this session
+				// upload_session file contains an error - cant resume this session
 				if (verboseLogging) {addLogEntry("Restore file upload session failed - cleaning up resumable session data file: " ~ sessionFilePath, ["verbose"]);}
 				
 				// cleanup session path
