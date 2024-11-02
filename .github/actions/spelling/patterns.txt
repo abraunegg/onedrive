@@ -1,4 +1,8 @@
 # uuid:
 \b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b
+
 # sha256:<sha string>
 \bsha256:[0-9a-fA-F]{64}\b
+
+# Microsoft URL's
+\b(?:https?://|)(?:(?:download\.visualstudio|docs|msdn2?|research)\.microsoft|blogs\.msdn)\.com/[-_a-zA-Z0-9()=./%]*
