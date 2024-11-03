@@ -31,7 +31,7 @@ A special thankyou to @phlibi for assistance with diagnosing and troubleshooting
 *   Fix Regression: Fix regression that real-time synchronization is not occurring when using --monitor and sync_list
 *   Fix Regression: Fix regression that --remove-source-files doesn’t work
 *   Fix Bug: Application crash when run synchronize due to negative free space online
-*   Fix Bug: Application crash when performing a URL dedocde
+*   Fix Bug: Application crash when performing a URL decode
 *   Fix Bug: Application crash when using sync_list and Personal Shared Folders the root folder fails to present the item id
 *   Fix Bug: Application crash when attempting to read timestamp from database as invalid data was written
 

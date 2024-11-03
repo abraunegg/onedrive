@@ -1584,9 +1584,9 @@ void shutdownDatabase() {
     if (itemDB !is null && itemDB.isDatabaseInitialised()) {
 		if (debugLogging) {addLogEntry("Shutting down Database instance", ["debug"]);}
 		if (performDatabaseVacuum) {
-			// Logging to attempt this is dentoed from performVacuum() - so no need to confirm here
+			// Logging to attempt this is denoted from performVacuum() - so no need to confirm here
 			itemDB.performVacuum();
-			// If this completes, it is dentoed from performVacuum() - so no need to confirm here
+			// If this completes, it is denoted from performVacuum() - so no need to confirm here
 		}
 		itemDB.closeDatabaseFile(); // Close the DB File Handle
 		object.destroy(itemDB);

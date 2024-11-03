@@ -2168,7 +2168,7 @@ class SyncEngine {
 				handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				break;
 			case ItemType.remote:
-				// Add to the directory and relevant detils for processing later
+				// Add to the directory and relevant details for processing later
 				if (newDatabaseItem.remoteType == ItemType.dir) {
 					handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				} else {
