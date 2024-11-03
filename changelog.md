@@ -335,7 +335,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Updated minimum compiler versions to dmd-2.087.0 and ldc-1.17.0
 
 ### Updated
-*   Updated Dockerfile-alpine to use Apline 3.14
+*   Updated Dockerfile-alpine to use Alpine 3.14
 *   Updated documentation (various)
 
 ## 2.4.14 - 2021-11-24

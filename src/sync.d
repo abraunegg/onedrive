@@ -2307,7 +2307,7 @@ class SyncEngine {
 					fileJSONItemsToDownload ~= onedriveJSONItem;
 				} else {
 					// If the timestamp is different, or we are running a client operational mode that does not support /delta queries - we have to update the DB with the details from OneDrive
-					// Unfortunately because of the consequence of Nataional Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
+					// Unfortunately because of the consequence of National Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
 					// This means that the constant disk writing to the database fix implemented with https://github.com/abraunegg/onedrive/pull/2004 cannot be utilised when using these operational modes
 					// as all records are touched / updated when performing the OneDrive sync operations. The impacted operational modes are:
 					// - National Cloud Deployments do not support /delta as a query
@@ -2341,7 +2341,7 @@ class SyncEngine {
 			// The existingDatabaseItem.eTag == changedOneDriveItem.eTag .. nothing has changed eTag wise
 			
 			// If the timestamp is different, or we are running a client operational mode that does not support /delta queries - we have to update the DB with the details from OneDrive
-			// Unfortunately because of the consequence of Nataional Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
+			// Unfortunately because of the consequence of National Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
 			// This means that the constant disk writing to the database fix implemented with https://github.com/abraunegg/onedrive/pull/2004 cannot be utilised when using these operational modes
 			// as all records are touched / updated when performing the OneDrive sync operations. The impacted operational modes are:
 			// - National Cloud Deployments do not support /delta as a query
