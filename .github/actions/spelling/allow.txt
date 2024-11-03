@@ -1,6 +1,74 @@
-AADSTS
+# Australian/British Spelling rather than US English
+# -ise vs. -ize
+analyse
+apologise
+organise
+recognise
+realise
+# -our vs. -or
+colour
+honour
+flavour
+neighbour
+labour
+favour
+behaviour
+# -re vs. -er
+centre
+metre
+theatre
+calibre
+fibre
+litre
+sombre
+# -ce vs. -se
+defence
+offence
+licence
+practice
+pretence
+# Double "L" in British/Australian vs. Single "L" in US
+traveller
+labelled
+jewellery
+cancelled
+quarrelled
+counsellor
+enrolment
+skilful
+woollen
+fulfilment
+# Single "L" in British/Australian vs. Double "L" in US
+enrol
+instil
+fulfil
+distil
+# -ogue vs. -og
+catalogue
+dialogue
+monologue
+analogue
+epilogue
+# Miscellaneous Differences
+cheque
+plough
+manoeuvre
+ageing
+cosy
+grey
+pyjamas
+tyre
+gaol
+aluminium
+practise
+kerb
+draught
+sulphur
+enrolment
+#
+# Other allow entries
+#
 aarch
 abraunegg
 adamdruppe
-ARMHF
 armhf
