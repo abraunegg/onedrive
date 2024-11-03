@@ -455,7 +455,7 @@ class SyncEngine {
 		addLogEntry("defaultOneDriveDriveDetails: " ~ to!string(defaultOneDriveDriveDetails));
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
-		if ((defaultOneDriveDriveDetails.type() == JSONType.object) && (!hasId(defaultOneDriveDriveDetails))) {
+		if ((defaultOneDriveDriveDetails.type() == JSONType.object) && (hasId(defaultOneDriveDriveDetails))) {
 			if (debugLogging) {addLogEntry("OneDrive Account Default Drive Details:      " ~ to!string(defaultOneDriveDriveDetails), ["debug"]);}
 			appConfig.accountType = defaultOneDriveDriveDetails["driveType"].str;
 			appConfig.defaultDriveId = defaultOneDriveDriveDetails["id"].str;
@@ -501,7 +501,7 @@ class SyncEngine {
 					// Handle the invalid JSON response by throwing an exception error
 					throw new AccountDetailsException();
 				} else {
-					addLogEntry("NO SYNC TASK SIMULATING THAT WE DID NOT THOW A AccountDetailsException");
+					addLogEntry("NO SYNC TASK DO NOT THOW A AccountDetailsException");
 				}
 			}
 		}
@@ -553,7 +553,7 @@ class SyncEngine {
 		addLogEntry("defaultOneDriveRootDetails: " ~ to!string(defaultOneDriveRootDetails));
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
-		if ((defaultOneDriveRootDetails.type() == JSONType.object) && (!hasId(defaultOneDriveRootDetails))) {
+		if ((defaultOneDriveRootDetails.type() == JSONType.object) && (hasId(defaultOneDriveRootDetails))) {
 			if (debugLogging) {addLogEntry("OneDrive Account Default Root Details:       " ~ to!string(defaultOneDriveRootDetails), ["debug"]);}
 			appConfig.defaultRootId = defaultOneDriveRootDetails["id"].str;
 			if (debugLogging) {addLogEntry("appConfig.defaultRootId      = " ~ appConfig.defaultRootId, ["debug"]);}
@@ -566,7 +566,7 @@ class SyncEngine {
 				// Handle the invalid JSON response by throwing an exception error
 				throw new AccountDetailsException();
 			} else {
-				addLogEntry("NO SYNC TASK SIMULATING THAT WE DID NOT THOW A AccountDetailsException");
+				addLogEntry("NO SYNC TASK DO NOT THOW A AccountDetailsException");
 			}
 		}
 		
