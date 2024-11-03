@@ -94,3 +94,12 @@ drwxrwxr
 dryrun
 DTime
 Dynu
+eis
+ele
+endinaness
+enduml
+envp
+epfd
+estr
+eventfd
+evt

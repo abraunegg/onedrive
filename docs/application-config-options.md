@@ -724,7 +724,7 @@ _**Description:**_ This configuration option controls how much local disk space 
 
 _**Value Type:**_ Integer
 
-_**Default Value:**_ 50 MB (expressesed as Bytes when using `--display-config`)
+_**Default Value:**_ 50 MB (expressed as Bytes when using `--display-config`)
 
 _**Config Example:**_ `space_reservation = "100"`
 
