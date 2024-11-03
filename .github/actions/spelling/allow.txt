@@ -31,4 +31,17 @@ autoclean
 autoprocess
 autoupdate
 avmkfdiitirnrenzljwc
+baus
+bcdefghi
+bindir
+bir
+blargh
+bools
+bpozdena
+brp
+btw
+bugzilla
+buildfiles
+buildroot
+bytecompile
 certbot
