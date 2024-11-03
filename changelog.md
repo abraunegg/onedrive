@@ -226,7 +226,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 ## 2.4.20 - 2022-07-20
 ### Fixed
 *   Fix 'foreign key constraint failed' when using OneDrive Business Shared Folders due to change to using /delta query
-*   Fix various little spelling fixes (check with lintian during Debian packaging)
+*   Fix various little spelling errors (checked with lintian during Debian packaging)
 *   Fix handling of a custom configuration directory when using --confdir
 *   Fix to ensure that any active http instance is shutdown before any application exit
 *   Fix to enforce that --confdir must be a directory
