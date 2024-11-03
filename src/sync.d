@@ -751,7 +751,7 @@ class SyncEngine {
 		addLogEntry("The OneDrive Client was asked to search for this directory online and create it if it's not located: " ~ normalisedSingleDirectoryPath);
 		
 		// Query the OneDrive API for the specified path online
-		// In a --single-directory scenario, we need to travervse the entire path that we are wanting to sync
+		// In a --single-directory scenario, we need to traverse the entire path that we are wanting to sync
 		// and then check the path element does it exist online, if it does, is it a POSIX match, or if it does not, create the path
 		// Once we have searched online, we have the right drive id and item id so that we can downgrade the sync status, then build up 
 		// any object items from that location
@@ -6502,7 +6502,7 @@ class SyncEngine {
 						actualItemToDelete = remoteShortcutLinkItem;
 						// Delete the shortcut reference in the local database
 						itemDB.deleteById(remoteShortcutLinkItem.driveId, remoteShortcutLinkItem.id);
-						if (debugLogging) {addLogEntry("Deleted OneDrive Business Shared Folder 'Shorcut Link'", ["debug"]);}
+						if (debugLogging) {addLogEntry("Deleted OneDrive Business Shared Folder 'Shortcut Link'", ["debug"]);}
 					} else {
 						// No data was returned, use the original data
 						actualItemToDelete = itemToDelete;

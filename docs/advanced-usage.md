@@ -213,20 +213,20 @@ docker volume create onedrive_conf_sharepoint_site50
 #### Create the required unique local path used for the Docker data volume
 Create the required unique local path used for the Docker data volume
 ```text
-mkdir -p /use/full/local/path/no/tilda/SharePointSite1
-mkdir -p /use/full/local/path/no/tilda/SharePointSite2
-mkdir -p /use/full/local/path/no/tilda/SharePointSite3
+mkdir -p /use/full/local/path/no/tilde/SharePointSite1
+mkdir -p /use/full/local/path/no/tilde/SharePointSite2
+mkdir -p /use/full/local/path/no/tilde/SharePointSite3
 ...
-mkdir -p /use/full/local/path/no/tilda/SharePointSite50
+mkdir -p /use/full/local/path/no/tilde/SharePointSite50
 ```
 
 #### Start the Docker container with the required configuration (example)
 ```text
-docker run -it --name onedrive -v onedrive_conf_sharepoint_site1:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite1:/onedrive/data" driveone/onedrive:latest
-docker run -it --name onedrive -v onedrive_conf_sharepoint_site2:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite2:/onedrive/data" driveone/onedrive:latest
-docker run -it --name onedrive -v onedrive_conf_sharepoint_site3:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite3:/onedrive/data" driveone/onedrive:latest
+docker run -it --name onedrive -v onedrive_conf_sharepoint_site1:/onedrive/conf -v "/use/full/local/path/no/tilde/SharePointSite1:/onedrive/data" driveone/onedrive:latest
+docker run -it --name onedrive -v onedrive_conf_sharepoint_site2:/onedrive/conf -v "/use/full/local/path/no/tilde/SharePointSite2:/onedrive/data" driveone/onedrive:latest
+docker run -it --name onedrive -v onedrive_conf_sharepoint_site3:/onedrive/conf -v "/use/full/local/path/no/tilde/SharePointSite3:/onedrive/data" driveone/onedrive:latest
 ...
-docker run -it --name onedrive -v onedrive_conf_sharepoint_site50:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite50:/onedrive/data" driveone/onedrive:latest
+docker run -it --name onedrive -v onedrive_conf_sharepoint_site50:/onedrive/conf -v "/use/full/local/path/no/tilde/SharePointSite50:/onedrive/data" driveone/onedrive:latest
 ```
 
 > [!TIP]

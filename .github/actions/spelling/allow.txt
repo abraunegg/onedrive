@@ -291,8 +291,8 @@ raspios
 rbtree
 rdo
 readdata
-readret
 readln
+readret
 reauth
 Recvd
 recvfd
@@ -344,6 +344,7 @@ stdc
 stringof
 Stringz
 subobject
+subobjects
 svdir
 swapfile
 swapon
@@ -355,3 +356,13 @@ sysconf
 sysconfdir
 systemdsystemunitdir
 systemduserunitdir
+tbh
+tdcockers
+templ
+Thh
+thnk
+tidx
+timerfd
+tlsv
+Tting
+typecons
