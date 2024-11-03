@@ -2196,7 +2196,7 @@ class SyncEngine {
 					mkdirRecurse(newItemPath);
 					// Configure the applicable permissions for the folder
 					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);}
-					newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+					newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
 					// Update the time of the folder to match the last modified time as is provided by OneDrive
 					// If there are any files then downloaded into this folder, the last modified time will get 
 					// updated by the local Operating System with the latest timestamp - as this is normal operation
@@ -2871,7 +2871,7 @@ class SyncEngine {
 		forceExit();
 	}
 	
-	// Display the pertinant details of the sync engine
+	// Display the pertinent details of the sync engine
 	void displaySyncEngineDetails() {
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
 		if (verboseLogging) {

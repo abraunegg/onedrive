@@ -441,7 +441,7 @@ class ApplicationConfig {
 			// create the directory
 			mkdirRecurse(configDirName);
 			// Configure the applicable permissions for the folder
-			configDirName.setAttributes(returnRequiredDirectoryPermisions());
+			configDirName.setAttributes(returnRequiredDirectoryPermissions());
 		} else {
 			// The config path exists
 			// The path that exists must be a directory, not a file
@@ -650,7 +650,7 @@ class ApplicationConfig {
 	}
 	
 	// Configure the directory octal permission value
-	void configureRequiredDirectoryPermisions() {
+	void configureRequiredDirectoryPermissions() {
 		// return the directory permission mode required
 		// - return octal!defaultDirectoryPermissionMode; ... cant be used .. which is odd
 		// Error: variable defaultDirectoryPermissionMode cannot be read at compile time
@@ -668,7 +668,7 @@ class ApplicationConfig {
 	}
 
 	// Configure the file octal permission value
-	void configureRequiredFilePermisions() {
+	void configureRequiredFilePermissions() {
 		// return the file permission mode required
 		// - return octal!defaultFilePermissionMode; ... cant be used .. which is odd
 		// Error: variable defaultFilePermissionMode cannot be read at compile time
@@ -686,20 +686,20 @@ class ApplicationConfig {
 	}
 
 	// Read the configuredDirectoryPermissionMode and return
-	int returnRequiredDirectoryPermisions() {
+	int returnRequiredDirectoryPermissions() {
 		if (configuredDirectoryPermissionMode == 0) {
 			// the configured value is zero, this means that directories would get
 			// values of d---------
-			configureRequiredDirectoryPermisions();
+			configureRequiredDirectoryPermissions();
 		}
 		return configuredDirectoryPermissionMode;
 	}
 
 	// Read the configuredFilePermissionMode and return
-	int returnRequiredFilePermisions() {
+	int returnRequiredFilePermissions() {
 		if (configuredFilePermissionMode == 0) {
 			// the configured value is zero
-			configureRequiredFilePermisions();
+			configureRequiredFilePermissions();
 		}
 		return configuredFilePermissionMode;
 	}
@@ -1952,9 +1952,9 @@ class ApplicationConfig {
 		} else {
 			// Debug log output what permissions are being set to
 			if (debugLogging) {addLogEntry("Configuring default new folder permissions as: " ~ to!string(getValueLong("sync_dir_permissions")), ["debug"]);}
-			configureRequiredDirectoryPermisions();
+			configureRequiredDirectoryPermissions();
 			if (debugLogging) {addLogEntry("Configuring default new file permissions as: " ~ to!string(getValueLong("sync_file_permissions")), ["debug"]);}
-			configureRequiredFilePermisions();
+			configureRequiredFilePermissions();
 		}
 		
 		// --upload-only and --download-only cannot be used together

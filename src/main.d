@@ -697,7 +697,7 @@ int main(string[] cliArgs) {
 					mkdirRecurse(runtimeSyncDirectory);
 					// Configure the applicable permissions for the folder
 					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ runtimeSyncDirectory, ["debug"]);}
-					runtimeSyncDirectory.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+					runtimeSyncDirectory.setAttributes(appConfig.returnRequiredDirectoryPermissions());
 				} catch (std.file.FileException e) {
 					// Creating the sync directory failed
 					addLogEntry("ERROR: Unable to create the configured local 'sync_dir' directory: " ~ e.msg, ["info", "notify"]);
@@ -773,7 +773,7 @@ int main(string[] cliArgs) {
 				mkdirRecurse(singleDirectoryPath);
 				// Configure the applicable permissions for the folder
 				if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ singleDirectoryPath, ["debug"]);}
-				singleDirectoryPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+				singleDirectoryPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
 			}
 			
 			// Update the paths that we use to perform the sync actions
