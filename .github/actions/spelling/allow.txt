@@ -5,6 +5,7 @@ AADSTS
 aarch
 abraunegg
 accrights
+accrightslen
 adamdruppe
 addrepo
 adr
@@ -43,9 +44,9 @@ bugzilla
 buildfiles
 buildroot
 bytecompile
-
 cancelfd
 CApath
+cattr
 ccc
 certbot
 checkinterval
@@ -64,4 +65,5 @@ constness
 controllen
 crt
 ctl
-cyb3rko
+ctls
+cyb
