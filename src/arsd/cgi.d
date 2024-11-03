@@ -8712,8 +8712,7 @@ ssize_t write_fd(int fd, void *ptr, size_t nbytes, int sendfd) {
 	iovec[1] iov;
 
 	version(OSX) {
-		//msg.msg_accrights = cast(cattr_t) &sendfd;
-		//msg.msg_accrightslen = int.sizeof;
+		// removed
 	} else version(Android) {
 	} else {
 		union ControlUnion {

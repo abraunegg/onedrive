@@ -245,7 +245,7 @@ int main(string[] cliArgs) {
 	
 	// Configure application logging to a log file only if this has been enabled
 	// This is the earliest point that this can be done, as the client configuration has been read in, and any CLI arguments have been processed.
-	// Either of those ('confif' file, CPU arguments) could be enabling logging, thus this is the earliest point at which this can be validated and enabled.
+	// Either of those ('config' file, CLI arguments) could be enabling logging, thus this is the earliest point at which this can be validated and enabled.
 	// The buffered logging also ensures that all 'output' to this point is also captured and written out to the log file
 	if (appConfig.getValueBool("enable_logging")) {
 		// Calculate the application logging directory

@@ -1173,7 +1173,7 @@ void displayMemoryUsagePostGC() {
     // Update previous RSS with the new value
     previousRSS = rss;
     
-    // Closout
+    // Closeout
 	addLogEntry();
 }
 

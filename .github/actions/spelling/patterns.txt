@@ -8,7 +8,10 @@
 \bsha256:[0-9a-fA-F]{64}\b
 
 # sha256 string without any prefix
-\b[0-9a-fA-F]{64}\b
+(?<!\S)[0-9a-fA-F]{64}(?!\S)
+
+# 32 character string as generated from /dev/urandom
+(?<!\S)[a-zA-Z0-9]{32}(?!\S)
 
 # Microsoft URL's
 \b(?:https?://|)(?:(?:download\.visualstudio|docs|msdn2?|research)\.microsoft|blogs\.msdn)\.com/[-_a-zA-Z0-9()=./%]*
