@@ -264,7 +264,7 @@ bool testInternetReachability(ApplicationConfig appConfig) {
 }
 
 // Retry Internet access test to Microsoft OneDrive
-bool retryInternetConnectivtyTest(ApplicationConfig appConfig) {
+bool retryInternetConnectivityTest(ApplicationConfig appConfig) {
     int retryAttempts = 0;
     int backoffInterval = 1; // initial backoff interval in seconds
     int maxBackoffInterval = 3600; // maximum backoff interval in seconds

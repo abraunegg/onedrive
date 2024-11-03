@@ -464,7 +464,7 @@ int main(string[] cliArgs) {
 			addLogEntry();
 			addLogEntry("Unable to reach the Microsoft OneDrive API service at this point in time, re-trying network tests based on applicable intervals");
 			addLogEntry();
-			if (!retryInternetConnectivtyTest(appConfig)) {
+			if (!retryInternetConnectivityTest(appConfig)) {
 				return EXIT_FAILURE;
 			}
 		}
@@ -939,7 +939,7 @@ int main(string[] cliArgs) {
 			immutable string loopStartOutputMessage = "################################################## NEW LOOP ##################################################";
 			immutable string loopStopOutputMessage = "################################################ LOOP COMPLETE ###############################################";
 			
-			// Changables
+			// Changeable variables
 			ulong monitorLoopFullCount = 0;
 			ulong fullScanFrequencyLoopCount = 0;
 			ulong monitorLogOutputLoopCount = 0;

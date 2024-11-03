@@ -9,3 +9,9 @@ armhf
 accrights
 accrightslen
 addrepo
+ARMv
+arsd
+arsdnet
+ASCIIHTML
+ASpurious
+certbot
