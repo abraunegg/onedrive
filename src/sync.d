@@ -108,7 +108,7 @@ class SyncEngine {
 	string[] pathFakeDeletedArray;
 	// Array of database Parent Item ID, Item ID & Local Path where the content has changed and needs to be uploaded
 	string[3][] databaseItemsWhereContentHasChanged;
-	// Array of local file paths that need to be uploaded as new itemts to OneDrive
+	// Array of local file paths that need to be uploaded as new items to OneDrive
 	string[] newLocalFilesToUploadToOneDrive;
 	// Array of local file paths that failed to be uploaded to OneDrive
 	string[] fileUploadFailures;
@@ -8239,7 +8239,7 @@ class SyncEngine {
 				if (hasHashes(onedriveJSONItem)) {
 					// At a minimum we require 'quickXorHash' to exist
 					if (hasQuickXorHash(onedriveJSONItem)) {
-						// JSON itme has a hash we can use
+						// JSON item has a hash we can use
 						thisItemHash = onedriveJSONItem["file"]["hashes"]["quickXorHash"].str;
 					}
 					

@@ -104,7 +104,7 @@ The configuration above will:
 *  Once tested, reload your 'nginx' configuration to activate the webhook reverse proxy configuration.
 
 ### Step 4: Initial Firewall/Router Configuration
-*  Configure your firewall or router to forward all incomming HTTP and HTTPS traffic to the internal address of your system where 'nginx' is running. This is required for to allow the Let's Encrypt `certbot` tool to create a valid HTTPS certificate for your system.
+*  Configure your firewall or router to forward all incoming HTTP and HTTPS traffic to the internal address of your system where 'nginx' is running. This is required for to allow the Let's Encrypt `certbot` tool to create a valid HTTPS certificate for your system.
 
 ![initial_firewall_config](./images/initial_firewall_config.png)
 

@@ -190,7 +190,7 @@ void main() {
 
 	Simulating_requests:
 
-	If you are using one of the [GenericMain] or [DispatcherMain] mixins, or main with your own call to [RequestServer.trySimulatedRequest], you can simulate requests from your command-ine shell. Call the program like this:
+	If you are using one of the [GenericMain] or [DispatcherMain] mixins, or main with your own call to [RequestServer.trySimulatedRequest], you can simulate requests from your command line shell. Call the program like this:
 
 	$(CONSOLE
 	./yourprogram GET / name=adr
