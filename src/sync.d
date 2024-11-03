@@ -347,6 +347,7 @@ class SyncEngine {
 		// - do we have the 'drive_id' via config file ?
 		// Are we not doing a --sync or a --monitor operation? Both of these will be false if they are not set
 		if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
+			addLogEntry("NO SYNC OR MONITOR TASK");
 			noSyncTask = true;
 		}
 		
@@ -419,11 +420,18 @@ class SyncEngine {
 		
 		// Function variables
 		JSONValue defaultOneDriveDriveDetails;
+		bool noSyncTask = false;
 		
 		// Create a new instance of the OneDrive API
 		OneDriveApi getDefaultDriveApiInstance;
 		getDefaultDriveApiInstance = new OneDriveApi(appConfig);
 		getDefaultDriveApiInstance.initialise();
+		
+		// Are we not doing a --sync or a --monitor operation? Both of these will be false if they are not set
+		if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
+			addLogEntry("FLAGGING AS NO SYNC OR MONITOR TASK FOR getDefaultDriveDetails");
+			noSyncTask = true;
+		}
 		
 		// Get Default Drive Details for this Account
 		try {
@@ -444,8 +452,10 @@ class SyncEngine {
 			}
 		}
 		
+		addLogEntry("defaultOneDriveDriveDetails: " ~ to!string(defaultOneDriveDriveDetails));
+		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
-		if ((defaultOneDriveDriveDetails.type() == JSONType.object) && (hasId(defaultOneDriveDriveDetails))) {
+		if ((defaultOneDriveDriveDetails.type() == JSONType.object) && (!hasId(defaultOneDriveDriveDetails))) {
 			if (debugLogging) {addLogEntry("OneDrive Account Default Drive Details:      " ~ to!string(defaultOneDriveDriveDetails), ["debug"]);}
 			appConfig.accountType = defaultOneDriveDriveDetails["driveType"].str;
 			appConfig.defaultDriveId = defaultOneDriveDriveDetails["id"].str;
@@ -486,8 +496,13 @@ class SyncEngine {
 				appConfig.accountType = "documentLibrary";
 				appConfig.defaultDriveId = appConfig.getValueString("drive_id");
 			} else {
-				// Handle the invalid JSON response by throwing an exception error
-				throw new AccountDetailsException();
+				// was this a no-sync task?
+				if (!noSyncTask) {
+					// Handle the invalid JSON response by throwing an exception error
+					throw new AccountDetailsException();
+				} else {
+					addLogEntry("NO SYNC TASK SIMULATING THAT WE DID NOT THOW A AccountDetailsException");
+				}
 			}
 		}
 		
@@ -503,11 +518,18 @@ class SyncEngine {
 		
 		// Function variables
 		JSONValue defaultOneDriveRootDetails;
+		bool noSyncTask = false;
 		
 		// Create a new instance of the OneDrive API
 		OneDriveApi getDefaultRootApiInstance;
 		getDefaultRootApiInstance = new OneDriveApi(appConfig);
 		getDefaultRootApiInstance.initialise();
+		
+		// Are we not doing a --sync or a --monitor operation? Both of these will be false if they are not set
+		if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
+			addLogEntry("FLAGGING AS NO SYNC OR MONITOR TASK FOR getDefaultRootDetails");
+			noSyncTask = true;
+		}
 		
 		// Get Default Root Details for this Account
 		try {
@@ -528,8 +550,10 @@ class SyncEngine {
 			}
 		}
 		
+		addLogEntry("defaultOneDriveRootDetails: " ~ to!string(defaultOneDriveRootDetails));
+		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
-		if ((defaultOneDriveRootDetails.type() == JSONType.object) && (hasId(defaultOneDriveRootDetails))) {
+		if ((defaultOneDriveRootDetails.type() == JSONType.object) && (!hasId(defaultOneDriveRootDetails))) {
 			if (debugLogging) {addLogEntry("OneDrive Account Default Root Details:       " ~ to!string(defaultOneDriveRootDetails), ["debug"]);}
 			appConfig.defaultRootId = defaultOneDriveRootDetails["id"].str;
 			if (debugLogging) {addLogEntry("appConfig.defaultRootId      = " ~ appConfig.defaultRootId, ["debug"]);}
@@ -537,8 +561,13 @@ class SyncEngine {
 			// Save the item to the database, so the account root drive is is always going to be present in the DB
 			saveItem(defaultOneDriveRootDetails);
 		} else {
-			// Handle the invalid JSON response
-			throw new AccountDetailsException();
+			// was this a no-sync task?
+			if (!noSyncTask) {
+				// Handle the invalid JSON response by throwing an exception error
+				throw new AccountDetailsException();
+			} else {
+				addLogEntry("NO SYNC TASK SIMULATING THAT WE DID NOT THOW A AccountDetailsException");
+			}
 		}
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
