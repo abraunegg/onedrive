@@ -934,7 +934,7 @@ int main(string[] cliArgs) {
 			immutable auto checkOnlineInterval = dur!"seconds"(appConfig.getValueLong("monitor_interval"));
 			immutable auto githubCheckInterval = dur!"seconds"(86400);
 			immutable ulong fullScanFrequency = appConfig.getValueLong("monitor_fullscan_frequency");
-			immutable ulong logOutputSupressionInterval = appConfig.getValueLong("monitor_log_frequency");
+			immutable ulong logOutputSuppressionInterval = appConfig.getValueLong("monitor_log_frequency");
 			immutable bool webhookEnabled = appConfig.getValueBool("webhook_enabled");
 			immutable string loopStartOutputMessage = "################################################## NEW LOOP ##################################################";
 			immutable string loopStopOutputMessage = "################################################ LOOP COMPLETE ###############################################";
@@ -1012,7 +1012,7 @@ int main(string[] cliArgs) {
 					// 'monitor_log_frequency' controls how often, in a non-verbose application output mode, how often 
 					// the full output of what is occurring is done. This is done to lessen the 'verbosity' of non-verbose 
 					// logging, but only when running in --monitor
-					if (monitorLogOutputLoopCount > logOutputSupressionInterval) {
+					if (monitorLogOutputLoopCount > logOutputSuppressionInterval) {
 						// unsurpress the logging output
 						monitorLogOutputLoopCount = 1;
 						if (debugLogging) {addLogEntry("Unsuppressing initial sync log output", ["debug"]);}

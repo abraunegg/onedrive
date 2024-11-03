@@ -1193,7 +1193,7 @@ class Cgi {
 		get = keepLastOf(getArray);
 
 
-		// NOTE: on shitpache, you need to specifically forward this
+		// NOTE: on apache, you need to specifically forward this
 		authorization = getenv("HTTP_AUTHORIZATION");
 		// this is a hack because Apache is a shitload of fuck and
 		// refuses to send the real header to us. Compatible

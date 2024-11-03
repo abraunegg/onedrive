@@ -250,7 +250,7 @@ After unchecking the option and clicking "OK", the Windows OneDrive client shoul
 | ![Uncheck-Personal](./images/personal-files-on-demand.png) | ![Uncheck-Business](./images/business-files-on-demand.png) |
 
 ## Configuring the client for use when 'sync_dir' is a mounted directory
-In some environments, your setup might be that your configured 'sync_dir' is pointing to another mounted file system - a NFS|CIFS location, an external drive (USB stuc, eSATA etc). As such, you configure your 'sync_dir' as follows:
+In some environments, your setup might be that your configured 'sync_dir' is pointing to another mounted file system - a NFS|CIFS location, an external drive (USB stick, eSATA etc). As such, you configure your 'sync_dir' as follows:
 ```text
 sync_dir = "/path/to/mountpoint/OneDrive" 
 ```

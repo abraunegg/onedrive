@@ -6,7 +6,7 @@ Before reading this document, please ensure you are running application version 
 
 - [Important Notes](#important-notes)
   - [Memory Usage](#memory-usage)
-  - [Upgrading from the 'skilion' Client](#upgrading-from-the-sklion-client)
+  - [Upgrading from the 'skilion' Client](#upgrading-from-the-skilion-client)
   - [Guidelines for Local File and Folder Naming in the Synchronisation Directory](#guidelines-for-local-file-and-folder-naming-in-the-synchronisation-directory)
   - [Compatibility with curl](#compatibility-with-curl)
 - [First Steps](#first-steps)

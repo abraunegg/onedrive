@@ -257,7 +257,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 
 ## 2.4.18 - 2022-06-02
 ### Fixed
-*   Fixed various database related access issues steming from running multiple instances of the application at the same time using the same configuration data
+*   Fixed various database related access issues stemming from running multiple instances of the application at the same time using the same configuration data
 *   Fixed --display-config being impacted by --resync flag
 *   Fixed installation permissions for onedrive man-pages file
 *   Fixed that in some situations that users try --upload-only and --download-only together which is not possible

@@ -6461,7 +6461,7 @@ class SyncEngine {
 						addLogEntry("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve your data on Microsoft OneDrive");
 						addLogEntry("ERROR: The total number of items being deleted is: " ~ to!string(itemsToDelete));
 						addLogEntry("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
-						addLogEntry("ERROR: Optionally, perform a --resync to reset your local syncronisation state");
+						addLogEntry("ERROR: Optionally, perform a --resync to reset your local synchronisation state");
 						// Must exit here to preserve data on online , allow logging to be done
 						forceExit();
 					}

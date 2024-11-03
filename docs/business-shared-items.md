@@ -87,7 +87,7 @@ There are two methods to support the syncing OneDrive Business Shared Files with
 2. Use `--sync-shared-files` option to sync all files shared with you to your local disk. If you use this method, you can utilise any 'client side filtering' rules that you have created to filter out files you do not want locally. This option will create a new folder locally, with sub-folders named after the person who shared the data with you.
 
 ### Syncing OneDrive Business Shared Files using Option 1
-1. As per the above method for adding folders, select the shared file, then select to 'Add shorcut' to the file
+1. As per the above method for adding folders, select the shared file, then select to 'Add shortcut' to the file
 
 ![add_shared_file_shortcut](./images/add_shared_file_shortcut.png)
 
@@ -132,7 +132,7 @@ Any shared file link you add can utilise any 'client side filtering' rules that 
 ### Syncing OneDrive Business Shared Files using Option 2
 
 > [!IMPORTANT]
-> When using option 2, all files that have been shared with you will be downloaded by default. To reduce this, first use `--list-shared-items` to list all shared items with your account, then use 'client side filtering' rules such as 'sync_list' configuration to selectivly sync all the files to your local system.
+> When using option 2, all files that have been shared with you will be downloaded by default. To reduce this, first use `--list-shared-items` to list all shared items with your account, then use 'client side filtering' rules such as 'sync_list' configuration to selectively sync all the files to your local system.
 
 1. Review all items that have been shared with you by using `onedrive --list-shared-items`. This should display output similar to the following:
 ```
