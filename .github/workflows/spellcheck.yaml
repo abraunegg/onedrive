@@ -107,37 +107,8 @@ jobs:
         extra_dictionary_limit: 40
         extra_dictionaries:
           cspell:en_AU/src/hunspell-en_AU-large/en_AU-large.dic
-          cspell:software-terms/dict/softwareTerms.txt
-          cspell:php/dict/php.txt
-          cspell:node/dict/node.txt
-          cspell:python/src/python/python-lib.txt
-          cspell:python/src/common/extra.txt
-          cspell:shell/dict/shell-all-words.txt
-          cspell:filetypes/filetypes.txt
-          cspell:k8s/dict/k8s.txt
-          cspell:fullstack/dict/fullstack.txt
-          cspell:golang/dict/go.txt
-          cspell:aws/aws.txt
-          cspell:java/src/java-terms.txt
-          cspell:java/src/java.txt
-          cspell:html/dict/html.txt
-          cspell:typescript/dict/typescript.txt
-          cspell:cpp/src/stdlib-c.txt
-          cspell:dotnet/dict/dotnet.txt
-          cspell:cpp/src/compiler-msvc.txt
-          cspell:cpp/src/stdlib-cpp.txt
-          cspell:cpp/src/ecosystem.txt
-          cspell:r/src/r.txt
-          cspell:cpp/src/compiler-gcc.txt
-          cspell:rust/dict/rust.txt
-          cspell:swift/src/swift.txt
-          cspell:css/dict/css.txt
-          cspell:cpp/src/lang-jargon.txt
-          cspell:docker/src/docker-words.txt
-          cspell:csharp/csharp.txt
-          cspell:clojure/src/clojure.txt
-          cspell:public-licenses/src/generated/public-licenses.txt
-          cspell:lisp/lisp.txt
+          cspell:en_GB/src/hunspell/en_GB.dic
+          
 
   comment-push:
     name: Report (Push)
