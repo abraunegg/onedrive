@@ -247,3 +247,12 @@ nto
 nuntil
 nupload
 nvia
+objectsx
+odata
+ofonedrive
+onbinarymessage
+onedrive
+onmicrosoft
+ontextmessage
+opensuse
+overallocated

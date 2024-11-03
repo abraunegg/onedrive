@@ -1205,7 +1205,7 @@ class ApplicationConfig {
 							
 							// Is this a running as a container
 							if (entrypointExists) {
-								// write this to the config file so that when config optins are checked again, this matches on next run
+								// write this to the config file so that when config options are checked again, this matches on next run
 								applicableConfigFilePathFileHandleWrite.writeln(newConfigOptionSyncDirLine);
 							}
 

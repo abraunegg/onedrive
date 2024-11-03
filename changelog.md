@@ -270,7 +270,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 
 ### Updated
 *   Updated all Docker build files to current distributions, using updated distribution LDC version
-*   Updated logging output to logfiles when an actual sync process is occuring
+*   Updated logging output to logfiles when an actual sync process is occurring
 *   Updated output of --display-config to be more relevant
 *   Updated manpage to align with application configuration
 *   Updated documentation and Docker files based on minimum compiler versions to dmd-2.088.0 and ldc-1.18.0

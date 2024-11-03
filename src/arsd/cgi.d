@@ -10856,7 +10856,7 @@ class CollectionOf(Obj) : RestObject!(CollectionOf) {
 	remove
 
 	You will want to be able to customize the HTTP, HTML, and JSON returns but generally shouldn't have to - the defaults
-	should usually work. The returned JSON will include a field "href" on all returned objects along with "id". Or omething like that.
+	should usually work. The returned JSON will include a field "href" on all returned objects along with "id". Or something like that.
 
 	Usage of this function will add a dependency on [arsd.dom] and [arsd.jsvar].
 

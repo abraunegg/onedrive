@@ -345,14 +345,14 @@ Dockerfiles require Docker version at least 17.05.
 
 ### How to build and run a custom Podman image based on Debian
 ``` bash
-podman build . -t local-ondrive-debian -f contrib/docker/Dockerfile-debian
-podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" --userns=keep-id local-ondrive-debian:latest
+podman build . -t local-onedrive-debian -f contrib/docker/Dockerfile-debian
+podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" --userns=keep-id local-onedrive-debian:latest
 ```
 
 ### How to build and run a custom Podman image based on Alpine Linux
 ``` bash
-podman build . -t local-ondrive-alpine -f contrib/docker/Dockerfile-alpine
-podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" --userns=keep-id local-ondrive-alpine:latest
+podman build . -t local-onedrive-alpine -f contrib/docker/Dockerfile-alpine
+podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" --userns=keep-id local-onedrive-alpine:latest
 ```
 
 ### How to build and run a custom Podman image for ARMHF (Raspberry Pi)
