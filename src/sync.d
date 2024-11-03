@@ -994,12 +994,12 @@ class SyncEngine {
 					// This is an API capability gap:
 					//
 					// ..
-					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODEyNzg7JTIzOyUyMzA7JTIz
+					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>
 					// Processing API Response Bundle: 115 - Quantity of 'changes|items' in this bundle to process: 204
 					// ..
-					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODM2Nzg7JTIzOyUyMzA7JTIz
+					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>
 					// Processing API Response Bundle: 127 - Quantity of 'changes|items' in this bundle to process: 204
-					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODM4Nzg7JTIzOyUyMzA7JTIz
+					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>
 					// Processing API Response Bundle: 128 - Quantity of 'changes|items' in this bundle to process: 176
 					// @odata.deltaLink: https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>
 					// Finished processing /delta JSON response from the OneDrive API

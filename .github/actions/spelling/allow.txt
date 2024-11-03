@@ -151,6 +151,7 @@ initval
 intercambio
 iocp
 ioop
+ioops
 iov
 iovec
 iovlen
@@ -158,3 +159,7 @@ ipresolve
 isv
 itemdb
 itimerspec
+journalctl
+jsvar
+kdbx
+keepass
