@@ -11,7 +11,7 @@
 \b(?:https?://|)(?:(?:download\.visualstudio|docs|msdn2?|research)\.microsoft|blogs\.msdn)\.com/[-_a-zA-Z0-9()=./%]*
 
 # Microsoft OneDrive Business Account DriveID identifiers
-\b[bB]![A-Za-z0-9_-]{43}\b
+\b[bB]![A-Za-z0-9_-]{64}\b
 
 # man troff content
 # https://www.gnu.org/software/groff/manual/groff.html
