@@ -106,6 +106,7 @@ jobs:
         use_sarif: ${{ (!github.event.pull_request || (github.event.pull_request.head.repo.full_name == github.repository)) && 1 }}
         extra_dictionary_limit: 40
         extra_dictionaries:
+          cspell:en_AU/src/hunspell-en_AU-large/en_AU-large.dic
           cspell:software-terms/dict/softwareTerms.txt
           cspell:php/dict/php.txt
           cspell:node/dict/node.txt
