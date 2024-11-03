@@ -1112,7 +1112,7 @@ Shared By:       test user (testuser@domain.tld)
 ```
 
 ### CLI Option: --logout
-_**Description:**_ This CLI option removes this clients authentictaion status with Microsoft OneDrive. Any further application use will require the application to be re-authenticated with Microsoft OneDrive.
+_**Description:**_ This CLI option removes this clients authentication status with Microsoft OneDrive. Any further application use will require the application to be re-authenticated with Microsoft OneDrive.
 
 _**Usage Example:**_ `onedrive --logout`
 

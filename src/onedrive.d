@@ -1221,7 +1221,7 @@ class OneDriveApi {
 						}
 					}
 					
-					// If retryAtempts is greater than 1, it means we were re-trying the request
+					// If retryAttempts is greater than 1, it means we were re-trying the request
 					if (retryAttempts > 1) {
 						// No error from http.perform() on re-try
 						if (!transientError) {
