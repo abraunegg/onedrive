@@ -1613,7 +1613,7 @@ void shutdownApplicationLogging() {
 			thread_joinAll();
 			if (debugLogging) {addLogEntry("Application is exiting", ["debug"]);}
 			addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
-			// Destroy the shared logging buffer which flushes any remaing logs
+			// Destroy the shared logging buffer which flushes any remaining logs
 			if (debugLogging) {addLogEntry("Shutting down Application Logging instance", ["debug"]);}
 			// Allow any logging complete before we exit
 			Thread.sleep(dur!("msecs")(500));

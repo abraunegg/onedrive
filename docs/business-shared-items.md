@@ -6,7 +6,7 @@
 > [!CAUTION]
 > This feature has been 100% re-written from v2.5.0 onwards and is not backwards compatible with v2.4.x client versions. If enabling this feature, you must upgrade to v2.5.0 or above on all systems that are running this client.
 > 
-> An additional pre-requesite before using this capability in v2.5.0 and above is for you to revert any v2.4.x Shared Business Folder configuration you may be currently using, including, but not limited to:
+> An additional pre-requisite before using this capability in v2.5.0 and above is for you to revert any v2.4.x Shared Business Folder configuration you may be currently using, including, but not limited to:
 > * Removing `sync_business_shared_folders = "true|false"` from your 'config' file
 > * Removing the 'business_shared_folders' file 
 > * Removing any local data | shared folder data from your configured 'sync_dir' to ensure that there are no conflicts or issues.

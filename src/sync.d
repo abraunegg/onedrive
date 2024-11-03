@@ -4104,7 +4104,7 @@ class SyncEngine {
 						if (!parentInDatabase) {
 							// Parental database structure needs to be created
 							if (verboseLogging) {addLogEntry("Parental Path structure needs to be created to support included file: " ~ dirName(newItemPath), ["verbose"]);}
-							// Recursivly, stepping backward from 'thisItemParentId', query online, save entry to DB
+							// Recursively, stepping backward from 'thisItemParentId', query online, save entry to DB
 							createLocalPathStructure(onedriveJSONItem);
 							
 							// If this is --dry-run
@@ -4149,7 +4149,7 @@ class SyncEngine {
 		string thisItemDriveId;
 		string thisItemParentId;
 		
-		// Log what we recieved to analyse
+		// Log what we received to analyse
 		if (debugLogging) {addLogEntry("createLocalPathStructure input onedriveJSONItem: " ~ to!string(onedriveJSONItem), ["debug"]);}
 		
 		// Configure these variables based on the JSON input
@@ -5013,7 +5013,7 @@ class SyncEngine {
 					}
 				}
 				
-				// Check this path against the Microsoft Naming Conventions & Restristions
+				// Check this path against the Microsoft Naming Conventions & Restrictions
 				// - Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
 				// - Check path for bad whitespace items
 				// - Check path for HTML ASCII Codes
@@ -7634,7 +7634,7 @@ class SyncEngine {
 			unwanted = checkPathAgainstClientSideFiltering(newPath);
 		}
 		
-		// Check this path against the Microsoft Naming Conventions & Restristions
+		// Check this path against the Microsoft Naming Conventions & Restrictions
 		// - Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
 		// - Check path for bad whitespace items
 		// - Check path for HTML ASCII Codes
@@ -8569,7 +8569,7 @@ class SyncEngine {
 		// At this point we should have an array of JSON items to resume uploading
 		if (count(jsonItemsToResumeUpload) > 0) {
 			// there are valid items to resume upload
-			// Lets deal with all the JSON items that need to be reumed for upload in a batch process
+			// Lets deal with all the JSON items that need to be resumed for upload in a batch process
 			size_t batchSize = to!int(appConfig.getValueLong("threads"));
 			ulong batchCount = (jsonItemsToResumeUpload.length + batchSize - 1) / batchSize;
 			ulong batchesProcessed = 0;
@@ -9515,7 +9515,7 @@ class SyncEngine {
 				
 				// We do not check this path against the Client Side Filtering Rules as this is 100% an online move only
 				
-				// Check this path against the Microsoft Naming Conventions & Restristions
+				// Check this path against the Microsoft Naming Conventions & Restrictions
 				// - Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
 				// - Check path for bad whitespace items
 				// - Check path for HTML ASCII Codes

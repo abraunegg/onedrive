@@ -519,7 +519,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 ## 2.4.4 - 2020-08-11
 ### Fixed
 *   Fix 'skip_dir' & 'skip_file' pattern matching to ensure correct matching is performed
-*   Fix 'skip_dir' & 'skip_file' so that each directive is only used against directories or files as requried in --monitor
+*   Fix 'skip_dir' & 'skip_file' so that each directive is only used against directories or files as required in --monitor
 *   Fix client hand when attempting to sync a Unix pipe file
 *   Fix --single-directory & 'sync_list' performance 
 *   Fix erroneous 'return' statements which could prematurely end processing all changes returned from OneDrive
@@ -619,7 +619,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Update known-issues.md regarding 'SSL_ERROR_SYSCALL, errno 104'
 *   Update progress bar to be more accurate when downloading large files
 *   Updated #658 and #865 handling of when to trigger a directory walk when changes occur on OneDrive
-*   Updated handling of when a full scan is requried due to utilising sync_list
+*   Updated handling of when a full scan is required due to utilising sync_list
 *   Updated handling of when OneDrive service throws a 429 or 504 response to retry original request after a delay
 
 ## 2.4.0 - 2020-03-22
@@ -633,7 +633,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Fixed the regex parsing of response URI to avoid potentially generating a bad request to OneDrive, leading to a 'AADSTS9002313: Invalid request. Request is malformed or invalid.' response.
 
 ### Added
-*   Added a Dockerfile for building on Rasberry Pi / ARM platforms
+*   Added a Dockerfile for building on Raspberry Pi / ARM platforms
 *   Implement Feature: warning on big deletes to safeguard data on OneDrive
 *   Implement Feature: delete local files after sync
 *   Implement Feature: perform skip_dir explicit match only
