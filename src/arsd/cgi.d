@@ -5389,7 +5389,6 @@ class BufferedInputRange {
 	/// You do not need to call this if you always want to wait for more data when you
 	/// consume some.
 	ubyte[] consume(size_t bytes) {
-		//import std.stdio; writeln("consuime ", bytes, "/", view.length);
 		view = view[bytes > $ ? $ : bytes .. $];
 		if(view.length == 0) {
 			view = underlyingBuffer[0 .. 0]; // go ahead and reuse the beginning

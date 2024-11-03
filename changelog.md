@@ -462,7 +462,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Fix application crash in --monitor mode due to 'Failed to stat file' when setgid is used on a directory and data cannot be read
 
 ### Added
-*   Added advanced-usage.md to document advaced client usage such as multi account configurations and Windows dual-boot
+*   Added advanced-usage.md to document advanced client usage such as multi account configurations and Windows dual-boot
 
 ### Updated
 *   Updated --verbose logging output for config options when set

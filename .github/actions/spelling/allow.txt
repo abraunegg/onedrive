@@ -6,3 +6,6 @@ aarch
 abraunegg
 adamdruppe
 armhf
+accrights
+accrightslen
+addrepo
