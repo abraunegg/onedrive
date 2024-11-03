@@ -185,7 +185,7 @@ int main(string[] cliArgs) {
 		return EXIT_FAILURE;
 	}
 	
-	// Update the current runtime application configuration (default or 'config' fileread-in options) from any passed in command line arguments
+	// Update the current runtime application configuration (default or 'config' file read in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
 	
 	// If --disable-notifications has not been used, check if everything exists to enable notifications

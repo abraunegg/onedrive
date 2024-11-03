@@ -14,7 +14,7 @@
 \b[a-zA-Z0-9]{32}\b
 
 # 16 character string as generated from /dev/urandom
-\b[a-zA-Z0-9]{32}\b
+\b[a-zA-Z0-9]{16}\b
 
 # Microsoft URL's
 \b(?:https?://|)(?:(?:download\.visualstudio|docs|msdn2?|research)\.microsoft|blogs\.msdn)\.com/[-_a-zA-Z0-9()=./%]*
