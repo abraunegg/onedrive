@@ -11,5 +11,8 @@
 # https://www.gnu.org/software/groff/manual/groff.html
 \\f[BCIPR]
 
-# Ignore variables in UPPERCASE separated by an underscore '_'
+# All UPPERCASE letters only (no underscores)
+\b[A-Z]+\b
+
+# Ignore UPPERCASE letters separated by an underscore '_'
 \b[A-Z]+(?:_[A-Z]+)*\b
