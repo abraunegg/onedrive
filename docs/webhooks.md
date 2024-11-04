@@ -104,7 +104,7 @@ The configuration above will:
 *  Once tested, reload your 'nginx' configuration to activate the webhook reverse proxy configuration.
 
 ### Step 4: Initial Firewall/Router Configuration
-*  Configure your firewall or router to forward all incomming HTTP and HTTPS traffic to the internal address of your system where 'nginx' is running. This is required for to allow the Let's Encrypt `certbot` tool to create a valid HTTPS certificate for your system.
+*  Configure your firewall or router to forward all incoming HTTP and HTTPS traffic to the internal address of your system where 'nginx' is running. This is required for to allow the Let's Encrypt `certbot` tool to create a valid HTTPS certificate for your system.
 
 ![initial_firewall_config](./images/initial_firewall_config.png)
 
@@ -305,7 +305,7 @@ Starting a sync with Microsoft OneDrive
 .....
 ```
 
-*  Review the 'nginx' logs to validate that applicable communication is occuring:
+*  Review the 'nginx' logs to validate that applicable communication is occurring:
 ```
 70.37.95.11 - - [28/Aug/2024:18:26:07 +1000] "POST /webhooks/onedrive?validationToken=Validation%3a+Testing+client+application+reachability+for+subscription+Request-Id%3a+25460109-0e8b-4521-8090-dd691b407ed8 HTTP/1.1" 200 128 "-" "-" "-"
 137.135.11.116 - - [28/Aug/2024:18:32:02 +1000] "POST /webhooks/onedrive?validationToken=Validation%3a+Testing+client+application+reachability+for+subscription+Request-Id%3a+65e43e3c-cbab-4e74-87ec-0e8fafdef6d3 HTTP/1.1" 200 128 "-" "-" "-"

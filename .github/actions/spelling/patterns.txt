@@ -1,0 +1,36 @@
+# https/http/file urls
+(?:\b(?:https?|ftp|file)://)[-A-Za-z0-9+&@#/*%?=~_|!:,.;]+[-A-Za-z0-9+&@#/*%=~_|]
+
+# uuid:
+\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b
+
+# sha256:<sha string>
+\bsha256:[0-9a-fA-F]{64}\b
+
+# sha256 string without any prefix
+\b[0-9a-fA-F]{64}\b
+
+# 32 character string as generated from /dev/urandom
+\b[a-zA-Z0-9]{32}\b
+
+# 16 character string as generated from /dev/urandom
+\b[a-zA-Z0-9]{16}\b
+
+# Microsoft URL's
+\b(?:https?://|)(?:(?:download\.visualstudio|docs|msdn2?|research)\.microsoft|blogs\.msdn)\.com/[-_a-zA-Z0-9()=./%]*
+
+# Microsoft OneDrive Business Account DriveID identifiers
+\b[bB]![A-Za-z0-9_-]{64}\b
+
+# UTF-16 Hex Values
+\b0x(?:D[89A-F][0-9A-F]{2}|E[0-9A-F]{3}|F[0-9A-F]{3})\b
+
+# man troff content
+# https://www.gnu.org/software/groff/manual/groff.html
+\\f[BCIPR]
+
+# All UPPERCASE letters only (no underscores)
+\b[A-Z]+\b
+
+# Ignore UPPERCASE letters separated by an underscore '_'
+\b[A-Z]+(?:_[A-Z]+)*\b

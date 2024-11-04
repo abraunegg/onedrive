@@ -6,7 +6,7 @@ body:
 - type: markdown
   attributes:
     value: |
-      **Note:** Before submitting a bug report, please ensure you are running the latest 'onedrive' client as built from 'master' and compile by using the latest available DMD or LDC compiler. Refer to the the [install](https://github.com/abraunegg/onedrive/blob/master/docs/install.md) document on how to build the client for your system.
+      **Note:** Before submitting a bug report, please ensure you are running the latest 'onedrive' client as built from 'master' and compile by using the latest available DMD or LDC compiler. Refer to the [install](https://github.com/abraunegg/onedrive/blob/master/docs/install.md) document on how to build the client for your system.
       
 - type: textarea
   id: bugDescription

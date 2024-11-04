@@ -108,7 +108,7 @@ class SyncEngine {
 	string[] pathFakeDeletedArray;
 	// Array of database Parent Item ID, Item ID & Local Path where the content has changed and needs to be uploaded
 	string[3][] databaseItemsWhereContentHasChanged;
-	// Array of local file paths that need to be uploaded as new itemts to OneDrive
+	// Array of local file paths that need to be uploaded as new items to OneDrive
 	string[] newLocalFilesToUploadToOneDrive;
 	// Array of local file paths that failed to be uploaded to OneDrive
 	string[] fileUploadFailures;
@@ -751,7 +751,7 @@ class SyncEngine {
 		addLogEntry("The OneDrive Client was asked to search for this directory online and create it if it's not located: " ~ normalisedSingleDirectoryPath);
 		
 		// Query the OneDrive API for the specified path online
-		// In a --single-directory scenario, we need to travervse the entire path that we are wanting to sync
+		// In a --single-directory scenario, we need to traverse the entire path that we are wanting to sync
 		// and then check the path element does it exist online, if it does, is it a POSIX match, or if it does not, create the path
 		// Once we have searched online, we have the right drive id and item id so that we can downgrade the sync status, then build up 
 		// any object items from that location
@@ -994,12 +994,12 @@ class SyncEngine {
 					// This is an API capability gap:
 					//
 					// ..
-					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODEyNzg7JTIzOyUyMzA7JTIz
+					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>
 					// Processing API Response Bundle: 115 - Quantity of 'changes|items' in this bundle to process: 204
 					// ..
-					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODM2Nzg7JTIzOyUyMzA7JTIz
+					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>
 					// Processing API Response Bundle: 127 - Quantity of 'changes|items' in this bundle to process: 204
-					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODM4Nzg7JTIzOyUyMzA7JTIz
+					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>
 					// Processing API Response Bundle: 128 - Quantity of 'changes|items' in this bundle to process: 176
 					// @odata.deltaLink: https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>
 					// Finished processing /delta JSON response from the OneDrive API
@@ -1082,7 +1082,7 @@ class SyncEngine {
 			// Perform Garbage Collection
 			GC.collect();
 		} else {
-			// Why are are generating a /delta response
+			// Why are we generating a /delta response
 			if (debugLogging) {
 				addLogEntry("Why are we generating a /delta response:", ["debug"]);
 				addLogEntry(" singleDirectoryScope:    " ~ to!string(singleDirectoryScope), ["debug"]);
@@ -2168,7 +2168,7 @@ class SyncEngine {
 				handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				break;
 			case ItemType.remote:
-				// Add to the directory and relevant detils for processing later
+				// Add to the directory and relevant details for processing later
 				if (newDatabaseItem.remoteType == ItemType.dir) {
 					handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				} else {
@@ -2196,7 +2196,7 @@ class SyncEngine {
 					mkdirRecurse(newItemPath);
 					// Configure the applicable permissions for the folder
 					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);}
-					newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+					newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
 					// Update the time of the folder to match the last modified time as is provided by OneDrive
 					// If there are any files then downloaded into this folder, the last modified time will get 
 					// updated by the local Operating System with the latest timestamp - as this is normal operation
@@ -2307,7 +2307,7 @@ class SyncEngine {
 					fileJSONItemsToDownload ~= onedriveJSONItem;
 				} else {
 					// If the timestamp is different, or we are running a client operational mode that does not support /delta queries - we have to update the DB with the details from OneDrive
-					// Unfortunately because of the consequence of Nataional Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
+					// Unfortunately because of the consequence of National Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
 					// This means that the constant disk writing to the database fix implemented with https://github.com/abraunegg/onedrive/pull/2004 cannot be utilised when using these operational modes
 					// as all records are touched / updated when performing the OneDrive sync operations. The impacted operational modes are:
 					// - National Cloud Deployments do not support /delta as a query
@@ -2341,7 +2341,7 @@ class SyncEngine {
 			// The existingDatabaseItem.eTag == changedOneDriveItem.eTag .. nothing has changed eTag wise
 			
 			// If the timestamp is different, or we are running a client operational mode that does not support /delta queries - we have to update the DB with the details from OneDrive
-			// Unfortunately because of the consequence of Nataional Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
+			// Unfortunately because of the consequence of National Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
 			// This means that the constant disk writing to the database fix implemented with https://github.com/abraunegg/onedrive/pull/2004 cannot be utilised when using these operational modes
 			// as all records are touched / updated when performing the OneDrive sync operations. The impacted operational modes are:
 			// - National Cloud Deployments do not support /delta as a query
@@ -2871,7 +2871,7 @@ class SyncEngine {
 		forceExit();
 	}
 	
-	// Display the pertinant details of the sync engine
+	// Display the pertinent details of the sync engine
 	void displaySyncEngineDetails() {
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
 		if (verboseLogging) {
@@ -3216,7 +3216,7 @@ class SyncEngine {
 				// Log DB items to process
 				if (debugLogging) {addLogEntry("Database items to process for this driveId: " ~ to!string(driveItems.count), ["debug"]);}
 				
-				// Process each database database item associated with the driveId
+				// Process each database item associated with the driveId
 				foreach(dbItem; driveItems) {
 					// Does it still exist on disk in the location the DB thinks it is
 					checkDatabaseItemForConsistency(dbItem);
@@ -3229,7 +3229,7 @@ class SyncEngine {
 				driveItems = itemDB.selectByDriveId(driveId);
 				if (debugLogging) {addLogEntry("Database items to process for this driveId: " ~ to!string(driveItems.count), ["debug"]);}
 				
-				// Process each database database item associated with the driveId
+				// Process each database item associated with the driveId
 				foreach(dbItem; driveItems) {
 					// Does it still exist on disk in the location the DB thinks it is
 					checkDatabaseItemForConsistency(dbItem);
@@ -3467,7 +3467,7 @@ class SyncEngine {
 				} else {
 					// Directory still exists locally
 					if (verboseLogging) {addLogEntry("The directory has not changed", ["verbose"]);}
-					// When we are using --single-directory, we use a the getChildren() call to get all children of a path, meaning all children are already traversed
+					// When we are using --single-directory, we use the getChildren() call to get all children of a path, meaning all children are already traversed
 					// Thus, if we traverse the path of this directory .. we end up with double processing & log output .. which is not ideal
 					if (!singleDirectoryScope) {
 						// loop through the children
@@ -3975,7 +3975,7 @@ class SyncEngine {
 				// What is the path of the new item
 				string newItemPath;
 				
-				// Is the parent in the database? If not, we cannot compute the the full path based on the database entries
+				// Is the parent in the database? If not, we cannot compute the full path based on the database entries
 				// In a --resync scenario - the database is empty
 				if (parentInDatabase) {
 					// Calculate this items path based on database entries
@@ -4046,7 +4046,7 @@ class SyncEngine {
 					}
 				}
 				
-				// If this is a Shared Folder, we need to 'trim' the resulting path to that of the 'folder' that is actually shared with us so that this can be appropriatly checked against 'sync_list' entries
+				// If this is a Shared Folder, we need to 'trim' the resulting path to that of the 'folder' that is actually shared with us so that this can be appropriately checked against 'sync_list' entries
 				if (sharedFolderDeltaGeneration) {
 					// Find the index of 'currentSharedFolderName' in 'newItemPath'
 					int pos = cast(int) newItemPath.indexOf(currentSharedFolderName);
@@ -4104,7 +4104,7 @@ class SyncEngine {
 						if (!parentInDatabase) {
 							// Parental database structure needs to be created
 							if (verboseLogging) {addLogEntry("Parental Path structure needs to be created to support included file: " ~ dirName(newItemPath), ["verbose"]);}
-							// Recursivly, stepping backward from 'thisItemParentId', query online, save entry to DB
+							// Recursively, stepping backward from 'thisItemParentId', query online, save entry to DB
 							createLocalPathStructure(onedriveJSONItem);
 							
 							// If this is --dry-run
@@ -4149,7 +4149,7 @@ class SyncEngine {
 		string thisItemDriveId;
 		string thisItemParentId;
 		
-		// Log what we recieved to analyse
+		// Log what we received to analyse
 		if (debugLogging) {addLogEntry("createLocalPathStructure input onedriveJSONItem: " ~ to!string(onedriveJSONItem), ["debug"]);}
 		
 		// Configure these variables based on the JSON input
@@ -5013,7 +5013,7 @@ class SyncEngine {
 					}
 				}
 				
-				// Check this path against the Microsoft Naming Conventions & Restristions
+				// Check this path against the Microsoft Naming Conventions & Restrictions
 				// - Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
 				// - Check path for bad whitespace items
 				// - Check path for HTML ASCII Codes
@@ -5393,7 +5393,7 @@ class SyncEngine {
 							if (childAsLower == thisFolderNameAsLower) {	
 								// This is a POSIX 'case in-sensitive match' ..... in folder name only
 								// - Local item name has a 'case-insensitive match' to an existing item on OneDrive
-								// The 'parentId' of this JSON object must match the the parentId of where the folder was created
+								// The 'parentId' of this JSON object must match the parentId of where the folder was created
 								// - why .. we might have the same folder name, but somewhere totally different
 								
 								if (queryItem.id == thisChildItem.parentId) {
@@ -5703,7 +5703,7 @@ class SyncEngine {
 			}
 		}
 		
-		// If the parent path was found in the DB, to ensure we are uploading the the right location 'parentItem.driveId' must not be empty
+		// If the parent path was found in the DB, to ensure we are uploading the right location 'parentItem.driveId' must not be empty
 		if ((parentPathFoundInDB) && (parentItem.driveId.empty)) {
 			// switch to using defaultDriveId
 			if (debugLogging) {addLogEntry("parentItem.driveId is empty - using defaultDriveId for upload API calls", ["debug"]);}
@@ -6461,7 +6461,7 @@ class SyncEngine {
 						addLogEntry("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve your data on Microsoft OneDrive");
 						addLogEntry("ERROR: The total number of items being deleted is: " ~ to!string(itemsToDelete));
 						addLogEntry("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
-						addLogEntry("ERROR: Optionally, perform a --resync to reset your local syncronisation state");
+						addLogEntry("ERROR: Optionally, perform a --resync to reset your local synchronisation state");
 						// Must exit here to preserve data on online , allow logging to be done
 						forceExit();
 					}
@@ -6502,7 +6502,7 @@ class SyncEngine {
 						actualItemToDelete = remoteShortcutLinkItem;
 						// Delete the shortcut reference in the local database
 						itemDB.deleteById(remoteShortcutLinkItem.driveId, remoteShortcutLinkItem.id);
-						if (debugLogging) {addLogEntry("Deleted OneDrive Business Shared Folder 'Shorcut Link'", ["debug"]);}
+						if (debugLogging) {addLogEntry("Deleted OneDrive Business Shared Folder 'Shortcut Link'", ["debug"]);}
 					} else {
 						// No data was returned, use the original data
 						actualItemToDelete = itemToDelete;
@@ -7634,7 +7634,7 @@ class SyncEngine {
 			unwanted = checkPathAgainstClientSideFiltering(newPath);
 		}
 		
-		// Check this path against the Microsoft Naming Conventions & Restristions
+		// Check this path against the Microsoft Naming Conventions & Restrictions
 		// - Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
 		// - Check path for bad whitespace items
 		// - Check path for HTML ASCII Codes
@@ -7666,7 +7666,7 @@ class SyncEngine {
 			
 			if (!itemDB.selectByPath(dirName(newPath), appConfig.defaultDriveId, parentItem)) {
 				// the parent item is not in the database
-				throw new SyncException("Can't move an item to an unsynced directory");
+				throw new SyncException("Can't move an item to an unsynchronised directory");
 			}
 		
 			if (oldItem.driveId != parentItem.driveId) {
@@ -8239,7 +8239,7 @@ class SyncEngine {
 				if (hasHashes(onedriveJSONItem)) {
 					// At a minimum we require 'quickXorHash' to exist
 					if (hasQuickXorHash(onedriveJSONItem)) {
-						// JSON itme has a hash we can use
+						// JSON item has a hash we can use
 						thisItemHash = onedriveJSONItem["file"]["hashes"]["quickXorHash"].str;
 					}
 					
@@ -8554,7 +8554,7 @@ class SyncEngine {
 			// Does this pass validation?
 			if (!validateUploadSessionFileData(sessionFilePath)) {
 				// Remove upload_session file as it is invalid
-				// upload_session file file contains an error - cant resume this session
+				// upload_session file contains an error - cant resume this session
 				if (verboseLogging) {addLogEntry("Restore file upload session failed - cleaning up resumable session data file: " ~ sessionFilePath, ["verbose"]);}
 				
 				// cleanup session path
@@ -8569,7 +8569,7 @@ class SyncEngine {
 		// At this point we should have an array of JSON items to resume uploading
 		if (count(jsonItemsToResumeUpload) > 0) {
 			// there are valid items to resume upload
-			// Lets deal with all the JSON items that need to be reumed for upload in a batch process
+			// Lets deal with all the JSON items that need to be resumed for upload in a batch process
 			size_t batchSize = to!int(appConfig.getValueLong("threads"));
 			ulong batchCount = (jsonItemsToResumeUpload.length + batchSize - 1) / batchSize;
 			ulong batchesProcessed = 0;
@@ -9515,7 +9515,7 @@ class SyncEngine {
 				
 				// We do not check this path against the Client Side Filtering Rules as this is 100% an online move only
 				
-				// Check this path against the Microsoft Naming Conventions & Restristions
+				// Check this path against the Microsoft Naming Conventions & Restrictions
 				// - Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
 				// - Check path for bad whitespace items
 				// - Check path for HTML ASCII Codes

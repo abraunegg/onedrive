@@ -213,20 +213,20 @@ docker volume create onedrive_conf_sharepoint_site50
 #### Create the required unique local path used for the Docker data volume
 Create the required unique local path used for the Docker data volume
 ```text
-mkdir -p /use/full/local/path/no/tilda/SharePointSite1
-mkdir -p /use/full/local/path/no/tilda/SharePointSite2
-mkdir -p /use/full/local/path/no/tilda/SharePointSite3
+mkdir -p /use/full/local/path/no/tilde/SharePointSite1
+mkdir -p /use/full/local/path/no/tilde/SharePointSite2
+mkdir -p /use/full/local/path/no/tilde/SharePointSite3
 ...
-mkdir -p /use/full/local/path/no/tilda/SharePointSite50
+mkdir -p /use/full/local/path/no/tilde/SharePointSite50
 ```
 
 #### Start the Docker container with the required configuration (example)
 ```text
-docker run -it --name onedrive -v onedrive_conf_sharepoint_site1:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite1:/onedrive/data" driveone/onedrive:latest
-docker run -it --name onedrive -v onedrive_conf_sharepoint_site2:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite2:/onedrive/data" driveone/onedrive:latest
-docker run -it --name onedrive -v onedrive_conf_sharepoint_site3:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite3:/onedrive/data" driveone/onedrive:latest
+docker run -it --name onedrive -v onedrive_conf_sharepoint_site1:/onedrive/conf -v "/use/full/local/path/no/tilde/SharePointSite1:/onedrive/data" driveone/onedrive:latest
+docker run -it --name onedrive -v onedrive_conf_sharepoint_site2:/onedrive/conf -v "/use/full/local/path/no/tilde/SharePointSite2:/onedrive/data" driveone/onedrive:latest
+docker run -it --name onedrive -v onedrive_conf_sharepoint_site3:/onedrive/conf -v "/use/full/local/path/no/tilde/SharePointSite3:/onedrive/data" driveone/onedrive:latest
 ...
-docker run -it --name onedrive -v onedrive_conf_sharepoint_site50:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite50:/onedrive/data" driveone/onedrive:latest
+docker run -it --name onedrive -v onedrive_conf_sharepoint_site50:/onedrive/conf -v "/use/full/local/path/no/tilde/SharePointSite50:/onedrive/data" driveone/onedrive:latest
 ```
 
 > [!TIP]
@@ -250,7 +250,7 @@ After unchecking the option and clicking "OK", the Windows OneDrive client shoul
 | ![Uncheck-Personal](./images/personal-files-on-demand.png) | ![Uncheck-Business](./images/business-files-on-demand.png) |
 
 ## Configuring the client for use when 'sync_dir' is a mounted directory
-In some environments, your setup might be that your configured 'sync_dir' is pointing to another mounted file system - a NFS|CIFS location, an external drive (USB stuc, eSATA etc). As such, you configure your 'sync_dir' as follows:
+In some environments, your setup might be that your configured 'sync_dir' is pointing to another mounted file system - a NFS|CIFS location, an external drive (USB stick, eSATA etc). As such, you configure your 'sync_dir' as follows:
 ```text
 sync_dir = "/path/to/mountpoint/OneDrive" 
 ```

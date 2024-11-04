@@ -778,7 +778,7 @@ class OneDriveApi {
 				mkdirRecurse(newPath);
 				// Configure the applicable permissions for the folder
 				if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newPath, ["debug"]);}
-				newPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+				newPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
 			} catch (FileException exception) {
 				// display the error message
 				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
@@ -792,7 +792,7 @@ class OneDriveApi {
 		if (exists(saveToPath)) {
 			// File was downloaded successfully - configure the applicable permissions for the file
 			if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
-			saveToPath.setAttributes(appConfig.returnRequiredFilePermisions());
+			saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
 		}
 	}
 	
@@ -901,7 +901,7 @@ class OneDriveApi {
 						if (debugLogging) {addLogEntry("Updating refreshToken on disk", ["debug"]);}
 						std.file.write(appConfig.refreshTokenFilePath, refreshToken);
 						if (debugLogging) {addLogEntry("Setting file permissions for: " ~ appConfig.refreshTokenFilePath, ["debug"]);}
-						appConfig.refreshTokenFilePath.setAttributes(appConfig.returnRequiredFilePermisions());
+						appConfig.refreshTokenFilePath.setAttributes(appConfig.returnRequiredFilePermissions());
 					} catch (FileException exception) {
 						// display the error message
 						displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
@@ -1221,7 +1221,7 @@ class OneDriveApi {
 						}
 					}
 					
-					// If retryAtempts is greater than 1, it means we were re-trying the request
+					// If retryAttempts is greater than 1, it means we were re-trying the request
 					if (retryAttempts > 1) {
 						// No error from http.perform() on re-try
 						if (!transientError) {
