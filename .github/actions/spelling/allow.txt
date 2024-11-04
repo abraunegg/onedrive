@@ -47,6 +47,7 @@ bytecompile
 cancelfd
 CApath
 cattr
+cbf
 ccc
 certbot
 checkinterval
@@ -367,6 +368,7 @@ tlsv
 Tting
 typecons
 uda
+udas
 ulnow
 uload
 ultotal
