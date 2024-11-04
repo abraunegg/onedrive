@@ -7666,7 +7666,7 @@ class SyncEngine {
 			
 			if (!itemDB.selectByPath(dirName(newPath), appConfig.defaultDriveId, parentItem)) {
 				// the parent item is not in the database
-				throw new SyncException("Can't move an item to an unsynced directory");
+				throw new SyncException("Can't move an item to an unsynchronised directory");
 			}
 		
 			if (oldItem.driveId != parentItem.driveId) {

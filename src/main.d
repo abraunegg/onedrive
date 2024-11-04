@@ -1013,15 +1013,15 @@ int main(string[] cliArgs) {
 					// the full output of what is occurring is done. This is done to lessen the 'verbosity' of non-verbose 
 					// logging, but only when running in --monitor
 					if (monitorLogOutputLoopCount > logOutputSuppressionInterval) {
-						// unsurpress the logging output
+						// re-enable the logging output as required
 						monitorLogOutputLoopCount = 1;
-						if (debugLogging) {addLogEntry("Unsuppressing initial sync log output", ["debug"]);}
+						if (debugLogging) {addLogEntry("Allowing initial sync log output", ["debug"]);}
 						appConfig.suppressLoggingOutput = false;
 					} else {
 						// do we suppress the logging output to absolute minimal
 						if (monitorLoopFullCount == 1) {
 							// application startup with --monitor
-							if (debugLogging) {addLogEntry("Unsuppressing initial sync log output", ["debug"]);}
+							if (debugLogging) {addLogEntry("Allowing initial sync log output", ["debug"]);}
 							appConfig.suppressLoggingOutput = false;
 						} else {
 							// only suppress if we are not doing --verbose or higher
@@ -1029,7 +1029,7 @@ int main(string[] cliArgs) {
 								if (debugLogging) {addLogEntry("Suppressing --monitor log output", ["debug"]);}
 								appConfig.suppressLoggingOutput = true;
 							} else {
-								if (debugLogging) {addLogEntry("Unsuppressing log output", ["debug"]);}
+								if (debugLogging) {addLogEntry("Allowing log output", ["debug"]);}
 								appConfig.suppressLoggingOutput = false;
 							}
 						}
