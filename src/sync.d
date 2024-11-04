@@ -347,7 +347,7 @@ class SyncEngine {
 		// - do we have the 'drive_id' via config file ?
 		// Are we not doing a --sync or a --monitor operation? Both of these will be false if they are not set
 		if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
-			addLogEntry("NO SYNC OR MONITOR TASK");
+			// set flag
 			noSyncTask = true;
 		}
 		
@@ -429,7 +429,7 @@ class SyncEngine {
 		
 		// Are we not doing a --sync or a --monitor operation? Both of these will be false if they are not set
 		if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
-			addLogEntry("FLAGGING AS NO SYNC OR MONITOR TASK FOR getDefaultDriveDetails");
+			// set flag
 			noSyncTask = true;
 		}
 		
@@ -451,8 +451,6 @@ class SyncEngine {
 				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 			}
 		}
-		
-		addLogEntry("defaultOneDriveDriveDetails: " ~ to!string(defaultOneDriveDriveDetails));
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
 		if ((defaultOneDriveDriveDetails.type() == JSONType.object) && (hasId(defaultOneDriveDriveDetails))) {
@@ -500,8 +498,6 @@ class SyncEngine {
 				if (!noSyncTask) {
 					// Handle the invalid JSON response by throwing an exception error
 					throw new AccountDetailsException();
-				} else {
-					addLogEntry("NO SYNC TASK DO NOT THOW A AccountDetailsException");
 				}
 			}
 		}
@@ -527,7 +523,7 @@ class SyncEngine {
 		
 		// Are we not doing a --sync or a --monitor operation? Both of these will be false if they are not set
 		if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
-			addLogEntry("FLAGGING AS NO SYNC OR MONITOR TASK FOR getDefaultRootDetails");
+			// set flag
 			noSyncTask = true;
 		}
 		
@@ -550,8 +546,6 @@ class SyncEngine {
 			}
 		}
 		
-		addLogEntry("defaultOneDriveRootDetails: " ~ to!string(defaultOneDriveRootDetails));
-		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
 		if ((defaultOneDriveRootDetails.type() == JSONType.object) && (hasId(defaultOneDriveRootDetails))) {
 			if (debugLogging) {addLogEntry("OneDrive Account Default Root Details:       " ~ to!string(defaultOneDriveRootDetails), ["debug"]);}
@@ -565,8 +559,6 @@ class SyncEngine {
 			if (!noSyncTask) {
 				// Handle the invalid JSON response by throwing an exception error
 				throw new AccountDetailsException();
-			} else {
-				addLogEntry("NO SYNC TASK DO NOT THOW A AccountDetailsException");
 			}
 		}
 		
