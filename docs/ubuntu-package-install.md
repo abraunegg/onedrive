@@ -34,7 +34,7 @@ sudo add-apt-repository --remove ppa:yann1ck/onedrive
 
 #### Step 1b: Remove errant systemd service file installed by PPA or distribution package
 
-Additionally, the distributon packages have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated:
+Additionally, the distribution packages have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated:
 ```
 Created symlink /etc/systemd/user/default.target.wants/onedrive.service → /usr/lib/systemd/user/onedrive.service.
 ```

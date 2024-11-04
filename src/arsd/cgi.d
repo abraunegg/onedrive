@@ -190,7 +190,7 @@ void main() {
 
 	Simulating_requests:
 
-	If you are using one of the [GenericMain] or [DispatcherMain] mixins, or main with your own call to [RequestServer.trySimulatedRequest], you can simulate requests from your command-ine shell. Call the program like this:
+	If you are using one of the [GenericMain] or [DispatcherMain] mixins, or main with your own call to [RequestServer.trySimulatedRequest], you can simulate requests from your command line shell. Call the program like this:
 
 	$(CONSOLE
 	./yourprogram GET / name=adr
@@ -1193,7 +1193,7 @@ class Cgi {
 		get = keepLastOf(getArray);
 
 
-		// NOTE: on shitpache, you need to specifically forward this
+		// NOTE: on apache, you need to specifically forward this
 		authorization = getenv("HTTP_AUTHORIZATION");
 		// this is a hack because Apache is a shitload of fuck and
 		// refuses to send the real header to us. Compatible
@@ -5389,7 +5389,6 @@ class BufferedInputRange {
 	/// You do not need to call this if you always want to wait for more data when you
 	/// consume some.
 	ubyte[] consume(size_t bytes) {
-		//import std.stdio; writeln("consuime ", bytes, "/", view.length);
 		view = view[bytes > $ ? $ : bytes .. $];
 		if(view.length == 0) {
 			view = underlyingBuffer[0 .. 0]; // go ahead and reuse the beginning
@@ -8713,8 +8712,7 @@ ssize_t write_fd(int fd, void *ptr, size_t nbytes, int sendfd) {
 	iovec[1] iov;
 
 	version(OSX) {
-		//msg.msg_accrights = cast(cattr_t) &sendfd;
-		//msg.msg_accrightslen = int.sizeof;
+		// removed
 	} else version(Android) {
 	} else {
 		union ControlUnion {
@@ -10858,7 +10856,7 @@ class CollectionOf(Obj) : RestObject!(CollectionOf) {
 	remove
 
 	You will want to be able to customize the HTTP, HTML, and JSON returns but generally shouldn't have to - the defaults
-	should usually work. The returned JSON will include a field "href" on all returned objects along with "id". Or omething like that.
+	should usually work. The returned JSON will include a field "href" on all returned objects along with "id". Or something like that.
 
 	Usage of this function will add a dependency on [arsd.dom] and [arsd.jsvar].
 

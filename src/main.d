@@ -185,7 +185,7 @@ int main(string[] cliArgs) {
 		return EXIT_FAILURE;
 	}
 	
-	// Update the current runtime application configuration (default or 'config' fileread-in options) from any passed in command line arguments
+	// Update the current runtime application configuration (default or 'config' file read in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
 	
 	// If --disable-notifications has not been used, check if everything exists to enable notifications
@@ -245,7 +245,7 @@ int main(string[] cliArgs) {
 	
 	// Configure application logging to a log file only if this has been enabled
 	// This is the earliest point that this can be done, as the client configuration has been read in, and any CLI arguments have been processed.
-	// Either of those ('confif' file, CPU arguments) could be enabling logging, thus this is the earliest point at which this can be validated and enabled.
+	// Either of those ('config' file, CLI arguments) could be enabling logging, thus this is the earliest point at which this can be validated and enabled.
 	// The buffered logging also ensures that all 'output' to this point is also captured and written out to the log file
 	if (appConfig.getValueBool("enable_logging")) {
 		// Calculate the application logging directory
@@ -464,7 +464,7 @@ int main(string[] cliArgs) {
 			addLogEntry();
 			addLogEntry("Unable to reach the Microsoft OneDrive API service at this point in time, re-trying network tests based on applicable intervals");
 			addLogEntry();
-			if (!retryInternetConnectivtyTest(appConfig)) {
+			if (!retryInternetConnectivityTest(appConfig)) {
 				return EXIT_FAILURE;
 			}
 		}
@@ -697,7 +697,7 @@ int main(string[] cliArgs) {
 					mkdirRecurse(runtimeSyncDirectory);
 					// Configure the applicable permissions for the folder
 					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ runtimeSyncDirectory, ["debug"]);}
-					runtimeSyncDirectory.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+					runtimeSyncDirectory.setAttributes(appConfig.returnRequiredDirectoryPermissions());
 				} catch (std.file.FileException e) {
 					// Creating the sync directory failed
 					addLogEntry("ERROR: Unable to create the configured local 'sync_dir' directory: " ~ e.msg, ["info", "notify"]);
@@ -773,7 +773,7 @@ int main(string[] cliArgs) {
 				mkdirRecurse(singleDirectoryPath);
 				// Configure the applicable permissions for the folder
 				if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ singleDirectoryPath, ["debug"]);}
-				singleDirectoryPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+				singleDirectoryPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
 			}
 			
 			// Update the paths that we use to perform the sync actions
@@ -934,12 +934,12 @@ int main(string[] cliArgs) {
 			immutable auto checkOnlineInterval = dur!"seconds"(appConfig.getValueLong("monitor_interval"));
 			immutable auto githubCheckInterval = dur!"seconds"(86400);
 			immutable ulong fullScanFrequency = appConfig.getValueLong("monitor_fullscan_frequency");
-			immutable ulong logOutputSupressionInterval = appConfig.getValueLong("monitor_log_frequency");
+			immutable ulong logOutputSuppressionInterval = appConfig.getValueLong("monitor_log_frequency");
 			immutable bool webhookEnabled = appConfig.getValueBool("webhook_enabled");
 			immutable string loopStartOutputMessage = "################################################## NEW LOOP ##################################################";
 			immutable string loopStopOutputMessage = "################################################ LOOP COMPLETE ###############################################";
 			
-			// Changables
+			// Changeable variables
 			ulong monitorLoopFullCount = 0;
 			ulong fullScanFrequencyLoopCount = 0;
 			ulong monitorLogOutputLoopCount = 0;
@@ -1012,16 +1012,16 @@ int main(string[] cliArgs) {
 					// 'monitor_log_frequency' controls how often, in a non-verbose application output mode, how often 
 					// the full output of what is occurring is done. This is done to lessen the 'verbosity' of non-verbose 
 					// logging, but only when running in --monitor
-					if (monitorLogOutputLoopCount > logOutputSupressionInterval) {
-						// unsurpress the logging output
+					if (monitorLogOutputLoopCount > logOutputSuppressionInterval) {
+						// re-enable the logging output as required
 						monitorLogOutputLoopCount = 1;
-						if (debugLogging) {addLogEntry("Unsuppressing initial sync log output", ["debug"]);}
+						if (debugLogging) {addLogEntry("Allowing initial sync log output", ["debug"]);}
 						appConfig.suppressLoggingOutput = false;
 					} else {
 						// do we suppress the logging output to absolute minimal
 						if (monitorLoopFullCount == 1) {
 							// application startup with --monitor
-							if (debugLogging) {addLogEntry("Unsuppressing initial sync log output", ["debug"]);}
+							if (debugLogging) {addLogEntry("Allowing initial sync log output", ["debug"]);}
 							appConfig.suppressLoggingOutput = false;
 						} else {
 							// only suppress if we are not doing --verbose or higher
@@ -1029,7 +1029,7 @@ int main(string[] cliArgs) {
 								if (debugLogging) {addLogEntry("Suppressing --monitor log output", ["debug"]);}
 								appConfig.suppressLoggingOutput = true;
 							} else {
-								if (debugLogging) {addLogEntry("Unsuppressing log output", ["debug"]);}
+								if (debugLogging) {addLogEntry("Allowing log output", ["debug"]);}
 								appConfig.suppressLoggingOutput = false;
 							}
 						}
@@ -1621,7 +1621,7 @@ void shutdownApplicationLogging() {
 			thread_joinAll();
 			if (debugLogging) {addLogEntry("Application is exiting", ["debug"]);}
 			addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
-			// Destroy the shared logging buffer which flushes any remaing logs
+			// Destroy the shared logging buffer which flushes any remaining logs
 			if (debugLogging) {addLogEntry("Shutting down Application Logging instance", ["debug"]);}
 			// Allow any logging complete before we exit
 			Thread.sleep(dur!("msecs")(500));

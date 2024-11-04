@@ -31,7 +31,7 @@ A special thankyou to @phlibi for assistance with diagnosing and troubleshooting
 *   Fix Regression: Fix regression that real-time synchronization is not occurring when using --monitor and sync_list
 *   Fix Regression: Fix regression that --remove-source-files doesn’t work
 *   Fix Bug: Application crash when run synchronize due to negative free space online
-*   Fix Bug: Application crash when performing a URL dedocde
+*   Fix Bug: Application crash when performing a URL decode
 *   Fix Bug: Application crash when using sync_list and Personal Shared Folders the root folder fails to present the item id
 *   Fix Bug: Application crash when attempting to read timestamp from database as invalid data was written
 
@@ -226,7 +226,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 ## 2.4.20 - 2022-07-20
 ### Fixed
 *   Fix 'foreign key constraint failed' when using OneDrive Business Shared Folders due to change to using /delta query
-*   Fix various little spelling fixes (check with lintian during Debian packaging)
+*   Fix various little spelling errors (checked with lintian during Debian packaging)
 *   Fix handling of a custom configuration directory when using --confdir
 *   Fix to ensure that any active http instance is shutdown before any application exit
 *   Fix to enforce that --confdir must be a directory
@@ -257,7 +257,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 
 ## 2.4.18 - 2022-06-02
 ### Fixed
-*   Fixed various database related access issues steming from running multiple instances of the application at the same time using the same configuration data
+*   Fixed various database related access issues stemming from running multiple instances of the application at the same time using the same configuration data
 *   Fixed --display-config being impacted by --resync flag
 *   Fixed installation permissions for onedrive man-pages file
 *   Fixed that in some situations that users try --upload-only and --download-only together which is not possible
@@ -270,7 +270,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 
 ### Updated
 *   Updated all Docker build files to current distributions, using updated distribution LDC version
-*   Updated logging output to logfiles when an actual sync process is occuring
+*   Updated logging output to logfiles when an actual sync process is occurring
 *   Updated output of --display-config to be more relevant
 *   Updated manpage to align with application configuration
 *   Updated documentation and Docker files based on minimum compiler versions to dmd-2.088.0 and ldc-1.18.0
@@ -335,7 +335,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Updated minimum compiler versions to dmd-2.087.0 and ldc-1.17.0
 
 ### Updated
-*   Updated Dockerfile-alpine to use Apline 3.14
+*   Updated Dockerfile-alpine to use Alpine 3.14
 *   Updated documentation (various)
 
 ## 2.4.14 - 2021-11-24
@@ -462,7 +462,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Fix application crash in --monitor mode due to 'Failed to stat file' when setgid is used on a directory and data cannot be read
 
 ### Added
-*   Added advanced-usage.md to document advaced client usage such as multi account configurations and Windows dual-boot
+*   Added advanced-usage.md to document advanced client usage such as multi account configurations and Windows dual-boot
 
 ### Updated
 *   Updated --verbose logging output for config options when set
@@ -519,7 +519,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 ## 2.4.4 - 2020-08-11
 ### Fixed
 *   Fix 'skip_dir' & 'skip_file' pattern matching to ensure correct matching is performed
-*   Fix 'skip_dir' & 'skip_file' so that each directive is only used against directories or files as requried in --monitor
+*   Fix 'skip_dir' & 'skip_file' so that each directive is only used against directories or files as required in --monitor
 *   Fix client hand when attempting to sync a Unix pipe file
 *   Fix --single-directory & 'sync_list' performance 
 *   Fix erroneous 'return' statements which could prematurely end processing all changes returned from OneDrive
@@ -619,7 +619,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Update known-issues.md regarding 'SSL_ERROR_SYSCALL, errno 104'
 *   Update progress bar to be more accurate when downloading large files
 *   Updated #658 and #865 handling of when to trigger a directory walk when changes occur on OneDrive
-*   Updated handling of when a full scan is requried due to utilising sync_list
+*   Updated handling of when a full scan is required due to utilising sync_list
 *   Updated handling of when OneDrive service throws a 429 or 504 response to retry original request after a delay
 
 ## 2.4.0 - 2020-03-22
@@ -633,7 +633,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Fixed the regex parsing of response URI to avoid potentially generating a bad request to OneDrive, leading to a 'AADSTS9002313: Invalid request. Request is malformed or invalid.' response.
 
 ### Added
-*   Added a Dockerfile for building on Rasberry Pi / ARM platforms
+*   Added a Dockerfile for building on Raspberry Pi / ARM platforms
 *   Implement Feature: warning on big deletes to safeguard data on OneDrive
 *   Implement Feature: delete local files after sync
 *   Implement Feature: perform skip_dir explicit match only
@@ -1078,7 +1078,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Resolve Microsoft Naming Convention not being followed correctly
 *   Resolve Error when trying to upload a file with weird non printable characters present
 *   Resolve Crash if file is locked by online editing (status code 423)
-*   Resolve Resolve compilation issue with dmd-2.081.0
+*   Resolve compilation issue with dmd-2.081.0
 *   Resolve skip_file configuration doesn't handle spaces or specified directory paths
 ### Added
 *   Implement Feature: Add a flag to detect when the sync-folder is missing

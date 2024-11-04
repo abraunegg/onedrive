@@ -367,14 +367,14 @@ There are alternate, smaller images available by using `Dockerfile-debian` or `D
 
 ### How to build and run a custom Docker image based on Debian
 ``` bash
-docker build . -t local-ondrive-debian -f contrib/docker/Dockerfile-debian
-docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-ondrive-debian:latest
+docker build . -t local-onedrive-debian -f contrib/docker/Dockerfile-debian
+docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-onedrive-debian:latest
 ```
 
 ### How to build and run a custom Docker image based on Alpine Linux
 ``` bash
-docker build . -t local-ondrive-alpine -f contrib/docker/Dockerfile-alpine
-docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-ondrive-alpine:latest
+docker build . -t local-onedrive-alpine -f contrib/docker/Dockerfile-alpine
+docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-onedrive-alpine:latest
 ```
 
 ### How to build and run a custom Docker image for ARMHF (Raspberry Pi)

@@ -176,7 +176,7 @@ class ApplicationConfig {
 	private string previousConfigHash = "";
 	private string previousSyncListHash = "";
 		
-	// Store items that come in from the 'config' file, otherwise these need to be set the the defaults
+	// Store items that come in from the 'config' file, otherwise these need to be set the defaults
 	private string configFileSyncDir = defaultSyncDir;
 	private string configFileSkipFile = ""; // Default for now, if post reading in any user configuration, if still empty, default will be used
 	private string configFileSkipDir = ""; // Default here is no directories are skipped
@@ -272,7 +272,7 @@ class ApplicationConfig {
 		longValues["data_timeout"] = defaultDataTimeout;
 		// What IP protocol version should be used when communicating with OneDrive
 		longValues["ip_protocol_version"] = defaultIpProtocol; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
-		// What is the default age that a curl engine should be left idle for, before being being destroyed
+		// What is the default age that a curl engine should be left idle for, before being destroyed
 		longValues["max_curl_idle"] = 120;
 		
 		// Number of concurrent threads
@@ -381,7 +381,7 @@ class ApplicationConfig {
 		//  - This is especially beneficial when debugging or performing memory tests with Valgrind
 		longValues["monitor_max_loop"] = 0;
 		// display_sync_options = true | false
-		// - It may be desirable to see what options are being passed in to performSync() without enabling the full verbose debug logging
+		// - It may be desirable to see what options are being passed into performSync() without enabling the full verbose debug logging
 		boolValues["display_sync_options"] = false;
 		// force_children_scan = true | false
 		// - Force client to use /children rather than /delta to query changes on OneDrive
@@ -441,7 +441,7 @@ class ApplicationConfig {
 			// create the directory
 			mkdirRecurse(configDirName);
 			// Configure the applicable permissions for the folder
-			configDirName.setAttributes(returnRequiredDirectoryPermisions());
+			configDirName.setAttributes(returnRequiredDirectoryPermissions());
 		} else {
 			// The config path exists
 			// The path that exists must be a directory, not a file
@@ -650,7 +650,7 @@ class ApplicationConfig {
 	}
 	
 	// Configure the directory octal permission value
-	void configureRequiredDirectoryPermisions() {
+	void configureRequiredDirectoryPermissions() {
 		// return the directory permission mode required
 		// - return octal!defaultDirectoryPermissionMode; ... cant be used .. which is odd
 		// Error: variable defaultDirectoryPermissionMode cannot be read at compile time
@@ -668,7 +668,7 @@ class ApplicationConfig {
 	}
 
 	// Configure the file octal permission value
-	void configureRequiredFilePermisions() {
+	void configureRequiredFilePermissions() {
 		// return the file permission mode required
 		// - return octal!defaultFilePermissionMode; ... cant be used .. which is odd
 		// Error: variable defaultFilePermissionMode cannot be read at compile time
@@ -686,20 +686,20 @@ class ApplicationConfig {
 	}
 
 	// Read the configuredDirectoryPermissionMode and return
-	int returnRequiredDirectoryPermisions() {
+	int returnRequiredDirectoryPermissions() {
 		if (configuredDirectoryPermissionMode == 0) {
 			// the configured value is zero, this means that directories would get
 			// values of d---------
-			configureRequiredDirectoryPermisions();
+			configureRequiredDirectoryPermissions();
 		}
 		return configuredDirectoryPermissionMode;
 	}
 
 	// Read the configuredFilePermissionMode and return
-	int returnRequiredFilePermisions() {
+	int returnRequiredFilePermissions() {
 		if (configuredFilePermissionMode == 0) {
 			// the configured value is zero
-			configureRequiredFilePermisions();
+			configureRequiredFilePermissions();
 		}
 		return configuredFilePermissionMode;
 	}
@@ -1205,7 +1205,7 @@ class ApplicationConfig {
 							
 							// Is this a running as a container
 							if (entrypointExists) {
-								// write this to the config file so that when config optins are checked again, this matches on next run
+								// write this to the config file so that when config options are checked again, this matches on next run
 								applicableConfigFilePathFileHandleWrite.writeln(newConfigOptionSyncDirLine);
 							}
 
@@ -1952,9 +1952,9 @@ class ApplicationConfig {
 		} else {
 			// Debug log output what permissions are being set to
 			if (debugLogging) {addLogEntry("Configuring default new folder permissions as: " ~ to!string(getValueLong("sync_dir_permissions")), ["debug"]);}
-			configureRequiredDirectoryPermisions();
+			configureRequiredDirectoryPermissions();
 			if (debugLogging) {addLogEntry("Configuring default new file permissions as: " ~ to!string(getValueLong("sync_file_permissions")), ["debug"]);}
-			configureRequiredFilePermisions();
+			configureRequiredFilePermissions();
 		}
 		
 		// --upload-only and --download-only cannot be used together
@@ -2043,7 +2043,7 @@ class ApplicationConfig {
 		
 		// --sync and --display-sync-status cannot be used together
 		if ((getValueBool("synchronize")) && (getValueBool("display_sync_status"))) {
-			addLogEntry("ERROR: --sync and and --display-sync-status cannot be used together");
+			addLogEntry("ERROR: --sync and --display-sync-status cannot be used together");
 			operationalConflictDetected = true;
 		}
 		
@@ -2055,7 +2055,7 @@ class ApplicationConfig {
 		
 		// --sync and --display-quota cannot be used together
 		if ((getValueBool("synchronize")) && (getValueBool("display_quota"))) {
-			addLogEntry("ERROR: --sync and and --display-quota cannot be used together");
+			addLogEntry("ERROR: --sync and --display-quota cannot be used together");
 			operationalConflictDetected = true;
 		}
 				

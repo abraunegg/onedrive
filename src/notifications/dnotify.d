@@ -312,7 +312,7 @@ version(TestMain) {
     
     void main() {
         writeln(get_app_name());
-        set_app_name("bla");
+        set_app_name("blargh");
         writeln(get_app_name());
         writeln(get_server_caps());
         writeln(get_server_info());

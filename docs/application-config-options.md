@@ -98,7 +98,7 @@ Before reading this document, please ensure you are running application version 
 ## Configuration File Options
 
 ### application_id
-_**Description:**_ This is the config option for application id that used used to identify itself to Microsoft OneDrive. In some circumstances, it may be desirable to use your own application id. To do this, you must register a new application with Microsoft Azure via	https://portal.azure.com/, then use your new application id with this config option.
+_**Description:**_ This is the config option for application id that used to identify itself to Microsoft OneDrive. In some circumstances, it may be desirable to use your own application id. To do this, you must register a new application with Microsoft Azure via	https://portal.azure.com/, then use your new application id with this config option.
 
 _**Value Type:**_ String
 
@@ -337,7 +337,7 @@ _**CLI Option Use:**_ `--enable-logging`
 > Additional configuration is potentially required to configure the default log directory. Refer to the [Enabling the Client Activity Log](./usage.md#enabling-the-client-activity-log) section in usage.md for details
 
 ### force_http_11
-_**Description:**_ This setting controls the application HTTP protocol version. By default, the application will use libcurl defaults for which HTTP prodocol version will be used to interact with Microsoft OneDrive. Use this setting to downgrade libcurl to only use HTTP/1.1.
+_**Description:**_ This setting controls the application HTTP protocol version. By default, the application will use libcurl defaults for which HTTP protocol version will be used to interact with Microsoft OneDrive. Use this setting to downgrade libcurl to only use HTTP/1.1.
 
 _**Value Type:**_ Boolean
 
@@ -724,7 +724,7 @@ _**Description:**_ This configuration option controls how much local disk space 
 
 _**Value Type:**_ Integer
 
-_**Default Value:**_ 50 MB (expressesed as Bytes when using `--display-config`)
+_**Default Value:**_ 50 MB (expressed as Bytes when using `--display-config`)
 
 _**Config Example:**_ `space_reservation = "100"`
 
@@ -1112,7 +1112,7 @@ Shared By:       test user (testuser@domain.tld)
 ```
 
 ### CLI Option: --logout
-_**Description:**_ This CLI option removes this clients authentictaion status with Microsoft OneDrive. Any further application use will require the application to be re-authenticated with Microsoft OneDrive.
+_**Description:**_ This CLI option removes this clients authentication status with Microsoft OneDrive. Any further application use will require the application to be re-authenticated with Microsoft OneDrive.
 
 _**Usage Example:**_ `onedrive --logout`
 
