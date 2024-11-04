@@ -53,7 +53,7 @@ When using this coding style, even when the code of the `if`, `else`, `for`, or 
 	}
 ```
 
-## Naming Conventsions
+## Naming Conventions
 
 ### Variables and Functions
 Please use `camelCase` for variable and function names.

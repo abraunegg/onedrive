@@ -224,7 +224,7 @@ class ClientSideFiltering {
 	private bool isPathExcluded(string path) {
 		// function variables
 		bool exclude = false;
-		bool exludeExactMatch = false; // will get updated to true, if there is a pattern match to sync_list entry
+		bool excludeExactMatch = false; // will get updated to true, if there is a pattern match to sync_list entry
 		bool excludeParentMatched = false; // will get updated to true, if there is a pattern match to sync_list entry
 		bool finalResult = true; // will get updated to false, if pattern match to sync_list entry
 		bool anywhereRuleMatched = false; // will get updated if the 'anywhere' rule matches
@@ -247,7 +247,7 @@ class ClientSideFiltering {
 		if (debugLogging) {
 			addLogEntry("******************* SYNC LIST RULES EVALUATION START *******************", ["debug"]);
 			addLogEntry("Evaluation against 'sync_list' rules for this input path: " ~ path, ["debug"]);
-			addLogEntry("[S]exludeExactMatch       = " ~ to!string(exludeExactMatch), ["debug"]);
+			addLogEntry("[S]excludeExactMatch       = " ~ to!string(excludeExactMatch), ["debug"]);
 			addLogEntry("[S]excludeParentMatched   = " ~ to!string(excludeParentMatched), ["debug"]);
 			addLogEntry("[S]excludeAnywhereMatched = " ~ to!string(excludeAnywhereMatched), ["debug"]);
 			addLogEntry("[S]excludeWildcardMatched = " ~ to!string(excludeWildcardMatched), ["debug"]);
@@ -259,16 +259,16 @@ class ClientSideFiltering {
 			// There are several matches we need to think of here
 			// Exclusions:
 			//		!foldername/*  					 			= As there is no preceding '/' (after the !) .. this is a rule that should exclude 'foldername' and all its children ANYWHERE
-			//		!*.extention   					 			= As there is no preceding '/' (after the !) .. this is a rule that should exclude any item that has the specified extention ANYWHERE
+			//		!*.extension   					 			= As there is no preceding '/' (after the !) .. this is a rule that should exclude any item that has the specified extension ANYWHERE
 			//		!/path/to/foldername/*  		 			= As there IS a preceding '/' (after the !) .. this is a rule that should exclude this specific path and all its children
-			//		!/path/to/foldername/*.extention 			= As there IS a preceding '/' (after the !) .. this is a rule that should exclude any item that has the specified extention in this path ONLY
+			//		!/path/to/foldername/*.extension 			= As there IS a preceding '/' (after the !) .. this is a rule that should exclude any item that has the specified extension in this path ONLY
 			//		!/path/to/foldername/*/specific_target/*	= As there IS a preceding '/' (after the !) .. this excludes 'specific_target' in any subfolder of '/path/to/foldername/'
 			//
 			// Inclusions:
 			//		foldername/*  					 			= As there is no preceding '/' .. this is a rule that should INCLUDE 'foldername' and all its children ANYWHERE
-			//		*.extention   					 			= As there is no preceding '/' .. this is a rule that should INCLUDE any item that has the specified extention ANYWHERE
+			//		*.extension   					 			= As there is no preceding '/' .. this is a rule that should INCLUDE any item that has the specified extension ANYWHERE
 			//		/path/to/foldername/*  		 				= As there IS a preceding '/' .. this is a rule that should INCLUDE this specific path and all its children
-			//		/path/to/foldername/*.extention 			= As there IS a preceding '/' .. this is a rule that should INCLUDE any item that has the specified extention in this path ONLY
+			//		/path/to/foldername/*.extension 			= As there IS a preceding '/' .. this is a rule that should INCLUDE any item that has the specified extension in this path ONLY
 			//		/path/to/foldername/*/specific_target/*		= As there IS a preceding '/' .. this INCLUDES 'specific_target' in any subfolder of '/path/to/foldername/'
 
 			if (debugLogging) {addLogEntry("------------------------------ NEW RULE --------------------------------", ["debug"]);}
@@ -332,8 +332,8 @@ class ClientSideFiltering {
 					} else {
 						// Exclude rule
 						if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: exclusion direct match - path to be excluded", ["debug"]);}
-						// flag exludeExactMatch so that a 'wildcard match' will not override this exclude
-						exludeExactMatch = true;
+						// flag excludeExactMatch so that a 'wildcard match' will not override this exclude
+						excludeExactMatch = true;
 						exclude = true;
 						// final result
 						finalResult = true;
@@ -398,10 +398,10 @@ class ClientSideFiltering {
 			// Is the 'sync_list' rule an 'anywhere' rule?
 			//	EXCLUSION
 			//		!foldername/*
-			//		!*.extention 
+			//		!*.extension 
 			//  INCLUSION
 			//		foldername/*
-			//		*.extention 
+			//		*.extension 
 			if (to!string(syncListRuleEntry[0]) != "/") {
 				// reset anywhereRuleMatched
 				anywhereRuleMatched = false; 
@@ -526,14 +526,14 @@ class ClientSideFiltering {
 			addLogEntry("------------------------------------------------------------------------", ["debug"]);
 		
 			// Interim results after checking each 'sync_list' rule against the input path
-			addLogEntry("[F]exludeExactMatch       = " ~ to!string(exludeExactMatch), ["debug"]);
+			addLogEntry("[F]excludeExactMatch       = " ~ to!string(excludeExactMatch), ["debug"]);
 			addLogEntry("[F]excludeParentMatched   = " ~ to!string(excludeParentMatched), ["debug"]);
 			addLogEntry("[F]excludeAnywhereMatched = " ~ to!string(excludeAnywhereMatched), ["debug"]);
 			addLogEntry("[F]excludeWildcardMatched = " ~ to!string(excludeWildcardMatched), ["debug"]);
 		}
 		
 		// If any of these exclude match items is true, then finalResult has to be flagged as true
-		if ((exclude) || (exludeExactMatch) || (excludeParentMatched) || (excludeAnywhereMatched) || (excludeWildcardMatched)) {
+		if ((exclude) || (excludeExactMatch) || (excludeParentMatched) || (excludeAnywhereMatched) || (excludeWildcardMatched)) {
 			finalResult = true;
 		}
 		
