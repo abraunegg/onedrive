@@ -911,9 +911,7 @@ class SyncEngine {
 			// When using 'sync_list' we need to do this
 			sharedFolderDeltaGeneration = true;
 			currentSharedFolderName = sharedFolderName;
-			
 			generateSimulatedDeltaResponse = true;
-			
 		}
 		
 		// Reset latestDeltaLink & deltaLinkCache
@@ -1240,6 +1238,9 @@ class SyncEngine {
 				
 				// To finish off the JSON processing items, this is needed to reflect this in the log
 				if (debugLogging) {addLogEntry("------------------------------------------------------------------", ["debug"]);}
+				
+				// For this set of items, perform a DB PASSIVE checkpoint
+				itemDB.performCheckpoint("PASSIVE");
 			}
 			
 			if (appConfig.verbosityCount == 0) {
@@ -2414,6 +2415,9 @@ class SyncEngine {
 			// send an array containing 'appConfig.getValueLong("threads")' JSON items to download
 			downloadOneDriveItemsInParallel(chunk);
 		}
+		
+		// For this set of items, perform a DB PASSIVE checkpoint
+		itemDB.performCheckpoint("PASSIVE");
 	}
 	
 	// Download items in parallel
@@ -4278,8 +4282,10 @@ class SyncEngine {
 		// For each batch of files to upload, upload the changed data to OneDrive
 		foreach (chunk; databaseItemsWhereContentHasChanged.chunks(batchSize)) {
 			processChangedLocalItemsToUploadInParallel(chunk);
-			chunk = null;
 		}
+		
+		// For this set of items, perform a DB PASSIVE checkpoint
+		itemDB.performCheckpoint("PASSIVE");
 	}
 
 	// Process all the changed local items in parallel
@@ -5687,6 +5693,9 @@ class SyncEngine {
 		foreach (chunk; newLocalFilesToUploadToOneDrive.chunks(batchSize)) {
 			uploadNewLocalFileItemsInParallel(chunk);
 		}
+		
+		// For this set of items, perform a DB PASSIVE checkpoint
+		itemDB.performCheckpoint("PASSIVE");
 	}
 	
 	// Upload the file batches in parallel
@@ -8623,6 +8632,9 @@ class SyncEngine {
 				// send an array containing 'appConfig.getValueLong("threads")' JSON items to resume upload
 				resumeSessionUploadsInParallel(chunk);
 			}
+			
+			// For this set of items, perform a DB PASSIVE checkpoint
+			itemDB.performCheckpoint("PASSIVE");
 		}
 	}
 	
