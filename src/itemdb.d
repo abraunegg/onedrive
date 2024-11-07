@@ -328,7 +328,7 @@ final class ItemDatabase {
 			// The synchronous setting determines how carefully SQLite writes data to disk, balancing between performance and data safety.
 			// https://sqlite.org/pragma.html#pragma_synchronous
 			// PRAGMA synchronous = 0 | OFF | 1 | NORMAL | 2 | FULL | 3 | EXTRA;
-			db.exec("PRAGMA synchronous=FULL;");
+			db.exec("PRAGMA synchronous=NORMAL;");
 		} catch (SqliteException exception) {
 			detailSQLErrorMessage(exception);
 		} 
@@ -1052,8 +1052,8 @@ final class ItemDatabase {
 		}
 	}
 	
-	// Perform a checkpoint by writing the data into to the database from the WAL file
-	void performCheckpoint() {
+	// Perform a checkpoint (either TRUNCATE or PASSIVE) by writing the data into to the database from the WAL file
+	void performCheckpoint(string checkpointType) {
 		synchronized(databaseLock) {
 			// Log what we are attempting to do
 			if (debugLogging) {addLogEntry("Attempting to perform a database checkpoint to merge temporary data", ["debug"]);}
@@ -1078,7 +1078,8 @@ final class ItemDatabase {
 				}
 				
 				// Ensure there are no pending operations by performing a checkpoint
-				db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+				string databaseCommand = format("PRAGMA wal_checkpoint(%s);" , checkpointType);
+				db.exec(databaseCommand);
 				if (debugLogging) {addLogEntry("Database checkpoint is complete", ["debug"]);}
 				
 			} catch (SqliteException exception) {

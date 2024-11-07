@@ -1070,7 +1070,7 @@ int main(string[] cliArgs) {
 						
 						// Write WAL and SHM data to file for this loop and release memory used by in-memory processing
 						if (debugLogging) {addLogEntry("Merge contents of WAL and SHM files into main database file", ["debug"]);}
-						itemDB.performCheckpoint();
+						itemDB.performCheckpoint("TRUNCATE");
 					} else {
 						// Not online
 						addLogEntry("Microsoft OneDrive service is not reachable at this time. Will re-try on next sync attempt.");
@@ -1583,12 +1583,20 @@ void shutdownSyncEngine() {
 void shutdownDatabase() {
     if (itemDB !is null && itemDB.isDatabaseInitialised()) {
 		if (debugLogging) {addLogEntry("Shutting down Database instance", ["debug"]);}
+		
+		// Write WAL and SHM data to file
+		if (debugLogging) {addLogEntry("Merge contents of WAL and SHM files into main database file before shutting down database", ["debug"]);}
+		itemDB.performCheckpoint("TRUNCATE");
+		
+		// Do we perform a database vacuum?
 		if (performDatabaseVacuum) {
 			// Logging to attempt this is denoted from performVacuum() - so no need to confirm here
 			itemDB.performVacuum();
 			// If this completes, it is denoted from performVacuum() - so no need to confirm here
 		}
-		itemDB.closeDatabaseFile(); // Close the DB File Handle
+		
+		 // Close the DB File Handle
+		itemDB.closeDatabaseFile();
 		object.destroy(itemDB);
 		cleanupDatabaseFiles(runtimeDatabaseFile);
 		itemDB = null;
