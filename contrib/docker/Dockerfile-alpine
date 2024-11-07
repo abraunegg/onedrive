@@ -1,14 +1,12 @@
 # -*-Dockerfile-*-
 
 ARG ALPINE_VERSION=3.20
-
 ARG GO_VERSION=1.22
 ARG GOSU_VERSION=1.17
 
 FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS builder-gosu
 ARG GOSU_VERSION
 RUN go install -ldflags "-s -w" github.com/tianon/gosu@${GOSU_VERSION}
-
 
 FROM alpine:${ALPINE_VERSION} AS builder-onedrive
 
@@ -21,7 +19,7 @@ RUN set -xv && \
     make clean && make && \
     make install
 
-FROM docker.io/alpine:${ALPINE_VERSION}
+FROM alpine:${ALPINE_VERSION}
 
 RUN apk add --upgrade apk-tools && \
     apk upgrade --available
