@@ -10,24 +10,22 @@ RUN go install -ldflags "-s -w" github.com/tianon/gosu@${GOSU_VERSION}
 
 FROM alpine:${ALPINE_VERSION} AS builder-onedrive
 
-RUN apk add --update --no-cache alpine-sdk gnupg xz curl-dev sqlite-dev binutils-gold autoconf automake ldc
-
-COPY . /usr/src/onedrive
-WORKDIR /usr/src/onedrive
-
-RUN autoreconf -fiv \
- && ./configure --enable-debug\
- && make clean \
- && make \
- && make install
+RUN apk add --update --no-cache libstdc++ dmd curl-dev sqlite-dev make gcc libc-dev gpg-agent gpg bash curl xz git
+WORKDIR /opt
+RUN set -xv && \
+    git clone https://github.com/abraunegg/onedrive.git && \
+    cd onedrive && \
+    ./configure --enable-debug && \
+    make clean && make && \
+    make install
 
 FROM alpine:${ALPINE_VERSION}
 
-RUN apk add --upgrade apk-tools \
- && apk upgrade --available
+RUN apk add --upgrade apk-tools && \
+    apk upgrade --available
 
-RUN apk add --update --no-cache bash libcurl libgcc shadow sqlite-libs ldc-runtime  \
- && mkdir -p /onedrive/conf /onedrive/data
+RUN apk add --update --no-cache llvm-libunwind sqlite-libs libcurl bash shadow && \
+    mkdir -p /onedrive/conf /onedrive/data
 
 COPY --from=builder-gosu /go/bin/gosu /usr/local/bin/
 COPY --from=builder-onedrive /usr/local/bin/onedrive /usr/local/bin/
