@@ -2,6 +2,14 @@
 
 ARG ALPINE_VERSION=3.20
 
+ARG GO_VERSION=1.22
+ARG GOSU_VERSION=1.17
+
+FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS builder-gosu
+ARG GOSU_VERSION
+RUN go install -ldflags "-s -w" github.com/tianon/gosu@${GOSU_VERSION}
+
+
 FROM alpine:${ALPINE_VERSION} AS builder-onedrive
 
 RUN apk add --update --no-cache libstdc++ dmd curl-dev sqlite-dev make gcc libc-dev gpg-agent gpg bash curl xz git
@@ -21,9 +29,10 @@ RUN apk add --upgrade apk-tools && \
 RUN apk add --update --no-cache llvm-libunwind sqlite-libs libcurl bash shadow && \
     mkdir -p /onedrive/conf /onedrive/data
 
+COPY --from=builder-gosu /go/bin/gosu /usr/local/bin/
 COPY --from=builder-onedrive /usr/local/bin/onedrive /usr/local/bin/
 
-COPY ./entrypoint.sh /
+COPY contrib/docker/entrypoint.sh /
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
