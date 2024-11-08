@@ -579,8 +579,14 @@ class OneDriveApi {
 	//   After you have finished receiving all the changes, you may apply them to your local state. To check for changes in the future, call delta again with the @odata.deltaLink from the previous successful response.
 	JSONValue getChangesByItemId(string driveId, string id, string deltaLink) {
 		string[string] requestHeaders;
+		
+		// Issue #2957 Testing
+		if (appConfig.accountType == "personal") {
+			addIncludeFeatureRequestHeader(&requestHeaders);
+		}
+		
 		// If Business Account add Prefer: Include-Feature=AddToOneDrive
-		if ((appConfig.accountType != "personal") && ( appConfig.getValueBool("sync_business_shared_items"))) {
+		if ((appConfig.accountType != "personal") && (appConfig.getValueBool("sync_business_shared_items"))) {
 			addIncludeFeatureRequestHeader(&requestHeaders);
 		}
 		
@@ -599,8 +605,14 @@ class OneDriveApi {
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_list_children
 	JSONValue listChildren(string driveId, string id, string nextLink) {
 		string[string] requestHeaders;
+		
+		// Issue #2957 Testing
+		if (appConfig.accountType == "personal") {
+			addIncludeFeatureRequestHeader(&requestHeaders);
+		}
+		
 		// If Business Account add addIncludeFeatureRequestHeader() which should add Prefer: Include-Feature=AddToOneDrive
-		if ((appConfig.accountType != "personal") && ( appConfig.getValueBool("sync_business_shared_items"))) {
+		if ((appConfig.accountType != "personal") && (appConfig.getValueBool("sync_business_shared_items"))) {
 			addIncludeFeatureRequestHeader(&requestHeaders);
 		}
 		
@@ -803,7 +815,16 @@ class OneDriveApi {
 	
 	// Private OneDrive API Functions
 	private void addIncludeFeatureRequestHeader(string[string]* headers) {
-		if (debugLogging) {addLogEntry("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled", ["debug"]);}
+		// What is the account type so we detail the right debug message
+		if (appConfig.accountType == "personal") {
+			// Personal Account
+			if (debugLogging) {addLogEntry("Adding 'Include-Feature=AddToOneDrive' API request header to ensure we get any Shared Folder when added using 'Add shortcut to My files'", ["debug"]);}
+		} else {
+			// Business Account
+			if (debugLogging) {addLogEntry("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled", ["debug"]);}
+		}
+		
+		// Add to header array
 		(*headers)["Prefer"] = "Include-Feature=AddToOneDrive";
 	}
 
