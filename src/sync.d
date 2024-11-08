@@ -2601,7 +2601,12 @@ class SyncEngine {
 									// set the correct time on the downloaded file
 									if (!dryRun) {
 										if (debugLogging) {addLogEntry("Calling setTimes() for this file: " ~ newItemPath, ["debug"]);}
-										setTimes(newItemPath, itemModifiedTime, itemModifiedTime);
+										try {
+											setTimes(newItemPath, itemModifiedTime, itemModifiedTime);
+										} catch (FileException e) {
+											// display the error message
+											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+										}
 									}
 								} catch (FileException e) {
 									// display the error message
@@ -2765,7 +2770,12 @@ class SyncEngine {
 								if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --resync", ["verbose"]);}
 								// Fix the local file timestamp
 								if (debugLogging) {addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);}
-								setTimes(path, item.mtime, item.mtime);
+								try {
+									setTimes(path, item.mtime, item.mtime);
+								} catch (FileException e) {
+									// display the error message
+									displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+								}
 							} else {
 								// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
 								if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);}
@@ -2784,14 +2794,24 @@ class SyncEngine {
 							if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);}
 							// Fix the local file timestamp
 							if (debugLogging) {addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);}
-							setTimes(path, item.mtime, item.mtime);
+							try {
+								setTimes(path, item.mtime, item.mtime);
+							} catch (FileException e) {
+								// display the error message
+								displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+							}
 						}
 					} else if (!dryRun) {
 						// The source of the out-of-date timestamp was the local file and this needs to be corrected to avoid always generating a hash test if timestamp is different
 						if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally", ["verbose"]);}
 						// Fix the local file timestamp
 						if (debugLogging) {addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);}
-						setTimes(path, item.mtime, item.mtime);
+						try {
+							setTimes(path, item.mtime, item.mtime);
+						} catch (FileException e) {
+							// display the error message
+							displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+						}
 					}
 					return false;
 				} else {
@@ -3401,7 +3421,12 @@ class SyncEngine {
 										// Remote file, remote values need to be used, we may not even have permission to change timestamp, update local file
 										if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online, however file is a OneDrive Business Shared File - correcting local timestamp", ["verbose"]);}
 										if (debugLogging) {addLogEntry("Calling setTimes() for this file: " ~ localFilePath, ["debug"]);}
-										setTimes(localFilePath, dbItem.mtime, dbItem.mtime);
+										try {
+											setTimes(localFilePath, dbItem.mtime, dbItem.mtime);
+										} catch (FileException e) {
+											// display the error message
+											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+										}
 									}
 								}
 							} else {
@@ -3409,7 +3434,12 @@ class SyncEngine {
 								if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online - correcting local timestamp due to --download-only being used to ensure local file matches timestamp online", ["verbose"]);}
 								if (!dryRun) {
 									if (debugLogging) {addLogEntry("Calling setTimes() for this file: " ~ localFilePath, ["debug"]);}
-									setTimes(localFilePath, dbItem.mtime, dbItem.mtime);
+									try {
+										setTimes(localFilePath, dbItem.mtime, dbItem.mtime);
+									} catch (FileException e) {
+										// display the error message
+										displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+									}
 								}
 							}
 						}
