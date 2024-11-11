@@ -1422,7 +1422,8 @@ void checkOpenSSLVersion() {
     auto versionString = getOpenSSLVersion();
     if (versionString.startsWith("Error")) {
         addLogEntry(versionString);
-        exit(1);
+        // Must force exit here, allow logging to be done
+		forceExit();
     }
 
     // Define regex to extract version parts
@@ -1431,7 +1432,8 @@ void checkOpenSSLVersion() {
     auto matches = versionString.match(versionRegex);
     if (matches.empty) {
         addLogEntry("Unable to parse OpenSSL version.");
-        exit(1);
+        // Must force exit here, allow logging to be done
+		forceExit();
     }
 
     // Extract major, minor, patch, and optional letter parts
@@ -1444,7 +1446,8 @@ void checkOpenSSLVersion() {
     if (major < 1 || (major == 1 && minor < 1) || (major == 1 && minor == 1 && patch < 1) ||
        (major == 1 && minor == 1 && patch == 1 && (letter.empty || letter[0] < 'a'))) {
         addLogEntry("ERROR: Platform OpenSSL version is less than 1.1.1a. Exiting.");
-        exit(1);
+        // Must force exit here, allow logging to be done
+		forceExit();
     } else if (major == 1 && minor == 1 && patch == 1 && !letter.empty && letter[0] >= 'a' && letter[0] <= 'w') {
         addLogEntry(format("WARNING: Platform OpenSSL version %d.%d.%d%s may cause stability issues.", major, minor, patch, letter));
     } else if (major >= 3) {
