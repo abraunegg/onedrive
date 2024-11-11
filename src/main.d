@@ -231,6 +231,11 @@ int main(string[] cliArgs) {
 		}
 	}
 	
+	// OpenSSL Version Check
+	// Example - on CentOS 7.9 (OpenSSL 1.0.2k-fips  26 Jan 2017), access with Microsoft OneDrive causes a segfault in sha1_block_data_order_avx from /lib64/libcrypto.so.10
+	// See Discussion #2950 for gdb output
+	checkOpenSSLVersion();
+	
 	// In a debug scenario, to assist with understanding the run-time configuration, ensure this flag is set
 	if (debugLogging) {
 		appConfig.setValueBool("display_running_config", true);

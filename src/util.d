@@ -35,6 +35,7 @@ import core.sys.posix.unistd;
 import core.stdc.string;
 import core.sys.posix.signal;
 import etc.c.curl;
+import std.process;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -1401,4 +1402,52 @@ bool isBadCurlVersion(string curlVersion) {
     
     // Check if the current version matches one of the supported versions
     return canFind(supportedVersions, curlVersion);
+}
+
+string getOpenSSLVersion() {
+    try {
+        // Execute 'openssl version' and capture the output
+        auto result = executeShell("openssl version");
+        
+        // Strip any extraneous whitespace from the output
+        return result.output.strip();
+    } catch (Exception e) {
+        // Handle any exceptions, possibly returning an error message
+        return "Error fetching OpenSSL version: " ~ e.msg;
+    }
+}
+
+void checkOpenSSLVersion() {
+    // Get OpenSSL version string
+    auto versionString = getOpenSSLVersion();
+    if (versionString.startsWith("Error")) {
+        addLogEntry(versionString);
+        exit(1);
+    }
+
+    // Define regex to extract version parts
+    auto versionRegex = regex(r"OpenSSL\s(\d+)\.(\d+)\.(\d+)([a-z]?)");
+
+    auto matches = versionString.match(versionRegex);
+    if (matches.empty) {
+        addLogEntry("Unable to parse OpenSSL version.");
+        exit(1);
+    }
+
+    // Extract major, minor, patch, and optional letter parts
+    uint major = matches.captures[1].to!uint;
+    uint minor = matches.captures[2].to!uint;
+    uint patch = matches.captures[3].to!uint;
+    string letter = matches.captures[4]; // Empty if version is 3.x.x or higher
+
+    // Compare versions
+    if (major < 1 || (major == 1 && minor < 1) || (major == 1 && minor == 1 && patch < 1) ||
+       (major == 1 && minor == 1 && patch == 1 && (letter.empty || letter[0] < 'a'))) {
+        addLogEntry("ERROR: Platform OpenSSL version is less than 1.1.1a. Exiting.");
+        exit(1);
+    } else if (major == 1 && minor == 1 && patch == 1 && !letter.empty && letter[0] >= 'a' && letter[0] <= 'w') {
+        addLogEntry(format("WARNING: Platform OpenSSL version %d.%d.%d%s may cause stability issues.", major, minor, patch, letter));
+    } else if (major >= 3) {
+        // Do nothing for version >= 3.0.0
+    }
 }
