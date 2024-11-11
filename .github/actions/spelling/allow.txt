@@ -407,3 +407,5 @@ yourfile
 yourprogram
 Zorin
 zypper
+avx
+libcrypto

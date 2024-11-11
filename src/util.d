@@ -734,7 +734,7 @@ void displayPosixErrorMessage(string message) {
 // Display the Error Message
 void displayGeneralErrorMessage(Exception e, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 	addLogEntry(); // used rather than writeln
-	addLogEntry("ERROR: Encounter " ~ e.classinfo.name ~ ":");
+	addLogEntry("ERROR: Encountered a " ~ e.classinfo.name ~ ":");
 	addLogEntry("  Error Message:    " ~ e.msg);
 	addLogEntry("  Calling Function: " ~ callingFunction);
 	addLogEntry("  Line number:      " ~ to!string(lineno));
@@ -1445,9 +1445,7 @@ void checkOpenSSLVersion() {
     // Compare versions
     if (major < 1 || (major == 1 && minor < 1) || (major == 1 && minor == 1 && patch < 1) ||
        (major == 1 && minor == 1 && patch == 1 && (letter.empty || letter[0] < 'a'))) {
-        addLogEntry("ERROR: Platform OpenSSL version is less than 1.1.1a. Exiting.");
-        // Must force exit here, allow logging to be done
-		forceExit();
+        addLogEntry(format("WARNING: Platform OpenSSL version %d.%d.%d%s is less than 1.1.1a and major operational issues are to be expected.", major, minor, patch, letter));
     } else if (major == 1 && minor == 1 && patch == 1 && !letter.empty && letter[0] >= 'a' && letter[0] <= 'w') {
         addLogEntry(format("WARNING: Platform OpenSSL version %d.%d.%d%s may cause stability issues.", major, minor, patch, letter));
     } else if (major >= 3) {
