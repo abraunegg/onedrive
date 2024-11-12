@@ -199,12 +199,14 @@ int main(string[] cliArgs) {
 		}
 	}
 	
+	// Common warning
+	string distributionWarning = "         Please report this to your distribution and request that they provide a newer cURL version for your platform or upgrade this yourself.";
+	
 	// If 'force_http_11' = false, we need to check the curl version being used
 	if (!appConfig.getValueBool("force_http_11")) {
 		// get the curl version
 		string curlVersion = getCurlVersionNumeric();
-		string distributionWarning = "         Please report this to your distribution and request that they provide a newer cURL version for your platform or upgrade this yourself.";
-	
+		
 		// Is the version of curl or libcurl being used by the platform a known bad curl version for HTTP/2 support
 		if (isBadCurlVersion(curlVersion)) {
 			// add warning message
