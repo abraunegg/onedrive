@@ -973,7 +973,7 @@ bool hasId(JSONValue item) {
 }
 
 bool hasMimeType(const ref JSONValue item) {
-	return ("mimeType" in item) != null;
+	return ("mimeType" in item["file"]) != null;
 }
 
 bool hasQuota(JSONValue item) {

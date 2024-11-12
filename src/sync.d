@@ -1346,7 +1346,7 @@ class SyncEngine {
 			
 			// Microsoft OneDrive OneNote file objects will report as files but have 'application/msonenote' as their mime type
 			// Is there a 'file' JSON element and it has a 'mimeType' element and the mimeType is 'application/msonenote'
-			if (isItemFile(onedriveJSONItem) && hasMimeType(onedriveJSONItem["file"]) && isMicrosoftOneNoteMimeType1(onedriveJSONItem)) {
+			if (isItemFile(onedriveJSONItem) && hasMimeType(onedriveJSONItem) && isMicrosoftOneNoteMimeType1(onedriveJSONItem)) {
 				// Log that this was skipped as this was a Microsoft OneNote item and unsupported
 				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook File '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
 				discardDeltaJSONItem = true;
