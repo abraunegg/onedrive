@@ -1447,12 +1447,12 @@ void checkOpenSSLVersion() {
 	if (major < 1 || (major == 1 && minor < 1) || (major == 1 && minor == 1 && patch < 1) ||
 		(major == 1 && minor == 1 && patch == 1 && (letter.empty || letter[0] < 'a'))) {
 			addLogEntry();
-			addLogEntry(format("WARNING: Platform OpenSSL version %d.%d.%d%s is less than 1.1.1a. Major operational issues are to be expected.", major, minor, patch, letter), ["info", "notify"]);
+			addLogEntry(format("WARNING: Platform OpenSSL version %d.%d.%d%s is less than 1.1.1a. Major operational issues are to be expected when using this client.", major, minor, patch, letter), ["info", "notify"]);
 			addLogEntry(distributionWarning);
 			addLogEntry();
 	} else if (major == 1 && minor == 1 && patch == 1 && !letter.empty && letter[0] >= 'a' && letter[0] <= 'w') {
 		addLogEntry();
-		addLogEntry(format("WARNING: Platform OpenSSL version %d.%d.%d%s may cause stability issues.", major, minor, patch, letter), ["info", "notify"]);
+		addLogEntry(format("WARNING: Platform OpenSSL version %d.%d.%d%s may cause stability issues when using this client.", major, minor, patch, letter), ["info", "notify"]);
 		addLogEntry(distributionWarning);
 		addLogEntry();
 	} else if (major >= 3) {

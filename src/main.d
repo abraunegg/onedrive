@@ -203,14 +203,15 @@ int main(string[] cliArgs) {
 	if (!appConfig.getValueBool("force_http_11")) {
 		// get the curl version
 		string curlVersion = getCurlVersionNumeric();
+		string distributionWarning = "         Please report this to your distribution and request that they provide a newer cURL version for your platform or upgrade this yourself.";
 	
 		// Is the version of curl or libcurl being used by the platform a known bad curl version for HTTP/2 support
 		if (isBadCurlVersion(curlVersion)) {
 			// add warning message
-			string curlWarningMessage = format("WARNING: Your curl/libcurl version (%s) has known HTTP/2 bugs that impact the use of this application.", curlVersion);
+			string curlWarningMessage = format("WARNING: Your cURL/libcurl version (%s) has known HTTP/2 bugs that impact the use of this application.", curlVersion);
 			addLogEntry();
 			addLogEntry(curlWarningMessage, ["info", "notify"]);
-			addLogEntry("         Please report this to your distribution and request that they provide a newer curl version for your platform or upgrade this yourself.");
+			addLogEntry(distributionWarning);
 			addLogEntry("         Downgrading all application operations to use HTTP/1.1 to ensure maximum operational stability.");
 			addLogEntry("         Please read https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#compatibility-with-curl for more information.");
 			addLogEntry();
@@ -223,10 +224,10 @@ int main(string[] cliArgs) {
 		// Is the version of curl or libcurl being used by the platform a known bad curl version
 		if (isBadCurlVersion(curlVersion)) {
 			// add warning message
-			string curlWarningMessage = format("WARNING: Your curl/libcurl version (%s) has known operational bugs that impact the use of this application.", curlVersion);
+			string curlWarningMessage = format("WARNING: Your cURL/libcurl version (%s) has known operational bugs that impact the use of this application.", curlVersion);
 			addLogEntry();
 			addLogEntry(curlWarningMessage, ["info", "notify"]);
-			addLogEntry("         Please report this to your distribution and request that they provide a newer curl version for your platform or upgrade this yourself.");
+			addLogEntry(distributionWarning);
 			addLogEntry();
 		}
 	}
