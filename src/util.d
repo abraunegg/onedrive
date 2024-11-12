@@ -1441,7 +1441,7 @@ void checkOpenSSLVersion() {
 	uint minor = matches.captures[2].to!uint;
 	uint patch = matches.captures[3].to!uint;
 	string letter = matches.captures[4]; // Empty if version is 3.x.x or higher
-	string distributionWarning = "         Please report this to your distribution and request that they provide a newer curl version for your platform or upgrade this yourself.";
+	string distributionWarning = "         Please report this to your distribution and request that they provide a newer OpenSSL version for your platform or upgrade this yourself.";
 
 	// Compare versions
 	if (major < 1 || (major == 1 && minor < 1) || (major == 1 && minor == 1 && patch < 1) ||
