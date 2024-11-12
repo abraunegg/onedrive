@@ -35,6 +35,7 @@ import core.sys.posix.unistd;
 import core.stdc.string;
 import core.sys.posix.signal;
 import etc.c.curl;
+import std.process;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -733,7 +734,7 @@ void displayPosixErrorMessage(string message) {
 // Display the Error Message
 void displayGeneralErrorMessage(Exception e, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 	addLogEntry(); // used rather than writeln
-	addLogEntry("ERROR: Encounter " ~ e.classinfo.name ~ ":");
+	addLogEntry("ERROR: Encountered a " ~ e.classinfo.name ~ ":");
 	addLogEntry("  Error Message:    " ~ e.msg);
 	addLogEntry("  Calling Function: " ~ callingFunction);
 	addLogEntry("  Line number:      " ~ to!string(lineno));
@@ -1401,4 +1402,60 @@ bool isBadCurlVersion(string curlVersion) {
     
     // Check if the current version matches one of the supported versions
     return canFind(supportedVersions, curlVersion);
+}
+
+string getOpenSSLVersion() {
+	try {
+	// Execute 'openssl version' and capture the output
+	auto result = executeShell("openssl version");
+
+	// Strip any extraneous whitespace from the output
+	return result.output.strip();
+	} catch (Exception e) {
+		// Handle any exceptions, possibly returning an error message
+		return "Error fetching OpenSSL version: " ~ e.msg;
+	}
+}
+
+void checkOpenSSLVersion() {
+	// Get OpenSSL version string
+	auto versionString = getOpenSSLVersion();
+	if (versionString.startsWith("Error")) {
+		addLogEntry(versionString);
+		// Must force exit here, allow logging to be done
+		forceExit();
+	}
+
+	// Define regex to extract version parts
+	auto versionRegex = regex(r"OpenSSL\s(\d+)\.(\d+)\.(\d+)([a-z]?)");
+
+	auto matches = versionString.match(versionRegex);
+	if (matches.empty) {
+		addLogEntry("Unable to parse OpenSSL version.");
+		// Must force exit here, allow logging to be done
+		forceExit();
+	}
+
+	// Extract major, minor, patch, and optional letter parts
+	uint major = matches.captures[1].to!uint;
+	uint minor = matches.captures[2].to!uint;
+	uint patch = matches.captures[3].to!uint;
+	string letter = matches.captures[4]; // Empty if version is 3.x.x or higher
+	string distributionWarning = "         Please report this to your distribution, requesting an update to a newer OpenSSL version, or consider upgrading it yourself for optimal stability.";
+
+	// Compare versions
+	if (major < 1 || (major == 1 && minor < 1) || (major == 1 && minor == 1 && patch < 1) ||
+		(major == 1 && minor == 1 && patch == 1 && (letter.empty || letter[0] < 'a'))) {
+			addLogEntry();
+			addLogEntry(format("WARNING: Your OpenSSL version (%d.%d.%d%s) is below the minimum required version of 1.1.1a. Significant operational issues are likely when using this client.", major, minor, patch, letter), ["info", "notify"]);
+			addLogEntry(distributionWarning);
+			addLogEntry();
+	} else if (major == 1 && minor == 1 && patch == 1 && !letter.empty && letter[0] >= 'a' && letter[0] <= 'w') {
+		addLogEntry();
+		addLogEntry(format("WARNING: Your OpenSSL version (%d.%d.%d%s) may cause stability issues with this client.", major, minor, patch, letter), ["info", "notify"]);
+		addLogEntry(distributionWarning);
+		addLogEntry();
+	} else if (major >= 3) {
+		// Do nothing for version >= 3.0.0
+	}
 }

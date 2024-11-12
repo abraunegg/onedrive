@@ -199,19 +199,22 @@ int main(string[] cliArgs) {
 		}
 	}
 	
+	// Common warning
+	string distributionWarning = "         Please report this to your distribution, requesting an update to a newer cURL version, or consider upgrading it yourself for optimal stability.";
+	
 	// If 'force_http_11' = false, we need to check the curl version being used
 	if (!appConfig.getValueBool("force_http_11")) {
 		// get the curl version
 		string curlVersion = getCurlVersionNumeric();
-	
+		
 		// Is the version of curl or libcurl being used by the platform a known bad curl version for HTTP/2 support
 		if (isBadCurlVersion(curlVersion)) {
 			// add warning message
-			string curlWarningMessage = format("WARNING: Your curl/libcurl version (%s) has known HTTP/2 bugs that impact the use of this application.", curlVersion);
+			string curlWarningMessage = format("WARNING: Your cURL/libcurl version (%s) has known HTTP/2 bugs that impact the use of this client.", curlVersion);
 			addLogEntry();
 			addLogEntry(curlWarningMessage, ["info", "notify"]);
-			addLogEntry("         Please report this to your distribution and request that they provide a newer curl version for your platform or upgrade this yourself.");
-			addLogEntry("         Downgrading all application operations to use HTTP/1.1 to ensure maximum operational stability.");
+			addLogEntry(distributionWarning);
+			addLogEntry("         Downgrading all client operations to use HTTP/1.1 to ensure maximum operational stability.");
 			addLogEntry("         Please read https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#compatibility-with-curl for more information.");
 			addLogEntry();
 			appConfig.setValueBool("force_http_11" , true);
@@ -223,13 +226,18 @@ int main(string[] cliArgs) {
 		// Is the version of curl or libcurl being used by the platform a known bad curl version
 		if (isBadCurlVersion(curlVersion)) {
 			// add warning message
-			string curlWarningMessage = format("WARNING: Your curl/libcurl version (%s) has known operational bugs that impact the use of this application.", curlVersion);
+			string curlWarningMessage = format("WARNING: Your cURL/libcurl version (%s) has known operational bugs that impact the use of this client.", curlVersion);
 			addLogEntry();
 			addLogEntry(curlWarningMessage, ["info", "notify"]);
-			addLogEntry("         Please report this to your distribution and request that they provide a newer curl version for your platform or upgrade this yourself.");
+			addLogEntry(distributionWarning);
 			addLogEntry();
 		}
 	}
+	
+	// OpenSSL Version Check
+	// Example - on CentOS 7.9 (OpenSSL 1.0.2k-fips  26 Jan 2017), access with Microsoft OneDrive causes a segfault in sha1_block_data_order_avx from /lib64/libcrypto.so.10
+	// See Discussion #2950 for gdb output
+	checkOpenSSLVersion();
 	
 	// In a debug scenario, to assist with understanding the run-time configuration, ensure this flag is set
 	if (debugLogging) {
