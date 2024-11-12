@@ -1441,18 +1441,18 @@ void checkOpenSSLVersion() {
 	uint minor = matches.captures[2].to!uint;
 	uint patch = matches.captures[3].to!uint;
 	string letter = matches.captures[4]; // Empty if version is 3.x.x or higher
-	string distributionWarning = "         Please report this to your distribution and request that they provide a newer OpenSSL version for your platform or upgrade this yourself.";
+	string distributionWarning = "         Please report this to your distribution, requesting an update to a newer OpenSSL version, or consider upgrading it yourself for optimal stability.";
 
 	// Compare versions
 	if (major < 1 || (major == 1 && minor < 1) || (major == 1 && minor == 1 && patch < 1) ||
 		(major == 1 && minor == 1 && patch == 1 && (letter.empty || letter[0] < 'a'))) {
 			addLogEntry();
-			addLogEntry(format("WARNING: Your OpenSSL version (%d.%d.%d%s) is less than 1.1.1a. Major operational issues are to be expected when using this client.", major, minor, patch, letter), ["info", "notify"]);
+			addLogEntry(format("WARNING: Your OpenSSL version (%d.%d.%d%s) is below the minimum required version of 1.1.1a. Significant operational issues are likely when using this client.", major, minor, patch, letter), ["info", "notify"]);
 			addLogEntry(distributionWarning);
 			addLogEntry();
 	} else if (major == 1 && minor == 1 && patch == 1 && !letter.empty && letter[0] >= 'a' && letter[0] <= 'w') {
 		addLogEntry();
-		addLogEntry(format("WARNING: Your OpenSSL version (%d.%d.%d%s) may cause stability issues when using this client.", major, minor, patch, letter), ["info", "notify"]);
+		addLogEntry(format("WARNING: Your OpenSSL version (%d.%d.%d%s) may cause stability issues with this client.", major, minor, patch, letter), ["info", "notify"]);
 		addLogEntry(distributionWarning);
 		addLogEntry();
 	} else if (major >= 3) {
