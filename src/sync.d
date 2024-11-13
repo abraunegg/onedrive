@@ -1424,10 +1424,10 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("Flagging to delete item locally: " ~ to!string(onedriveJSONItem), ["debug"]);}
 					idsToDelete ~= [thisItemDriveId, thisItemId];
 				} else {
-					// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
+					// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
 					// In case the renamed path is needed
 					string renamedPath;
-					safeBackup(localPathToDelete, dryRun, renamedPath);
+					safeBackup(localPathToDelete, dryRun, bypassDataPreservation, renamedPath);
 				}
 			} else {
 				// Flag to ignore
@@ -2108,16 +2108,10 @@ class SyncEngine {
 						// 3. The local modified time > remote modified time
 						// 4. The id of the item from OneDrive is not in the database
 						
-						// Has the user configured to IGNORE local data protection rules?
-						if (bypassDataPreservation) {
-							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
-							addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
-						} else {
-							// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
-							// In case the renamed path is needed
-							string renamedPath;
-							safeBackup(newItemPath, dryRun, renamedPath);
-						}
+						// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
+						// In case the renamed path is needed
+						string renamedPath;
+						safeBackup(newItemPath, dryRun, bypassDataPreservation, renamedPath);
 					}
 				} else {
 					// Is the remote newer?
@@ -2129,16 +2123,10 @@ class SyncEngine {
 							addLogEntry("itemModifiedTime (OneDrive item): " ~ to!string(itemModifiedTime), ["debug"]);
 						}
 						
-						// Has the user configured to IGNORE local data protection rules?
-						if (bypassDataPreservation) {
-							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
-							addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
-						} else {
-							// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
-							// In case the renamed path is needed
-							string renamedPath;
-							safeBackup(newItemPath, dryRun, renamedPath);							
-						}
+						// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
+						// In case the renamed path is needed
+						string renamedPath;
+						safeBackup(newItemPath, dryRun, bypassDataPreservation, renamedPath);
 					}
 					
 					// Are the timestamps equal?
@@ -2251,18 +2239,18 @@ class SyncEngine {
 						} else {
 							// The destination item is different
 							if (verboseLogging) {addLogEntry("The destination is occupied with a different item, renaming the conflicting file...", ["verbose"]);}
-							// Backup this item, passing in if we are performing a --dry-run or not
+							// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
 							// In case the renamed path is needed
 							string renamedPath;
-							safeBackup(changedItemPath, dryRun, renamedPath);
+							safeBackup(changedItemPath, dryRun, bypassDataPreservation, renamedPath);
 						}
 					} else {
 						// The to be overwritten item is not already in the itemdb, so it should saved to avoid data loss
 						if (verboseLogging) {addLogEntry("The destination is occupied by an existing un-synced file, renaming the conflicting file...", ["verbose"]);}
-						// Backup this item, passing in if we are performing a --dry-run or not
+						// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
 						// In case the renamed path is needed
 						string renamedPath;
-						safeBackup(changedItemPath, dryRun, renamedPath);
+						safeBackup(changedItemPath, dryRun, bypassDataPreservation, renamedPath);
 					}
 				}
 				
@@ -2457,11 +2445,10 @@ class SyncEngine {
 				if (!testFileHash(newItemPath, databaseItem)) {
 					// local file is different to what we know to be true
 					addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
-					
-					// Perform the local safeBackup of the existing local file, passing in if we are performing a --dry-run or not
+					// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
 					// In case the renamed path is needed
 					string renamedPath;
-					safeBackup(newItemPath, dryRun, renamedPath);
+					safeBackup(newItemPath, dryRun, bypassDataPreservation, renamedPath);
 				}
 			}
 			
@@ -4553,8 +4540,8 @@ class SyncEngine {
 					// Online is newer, rename local, then upload the renamed file
 					// We need to know the renamed path so we can upload it
 					string renamedPath;
-					// Rename the local path
-					safeBackup(localFilePath, dryRun, renamedPath);
+					// Rename the local path - we WANT this to occur regardless of bypassDataPreservation setting
+					safeBackup(localFilePath, dryRun, false, renamedPath);
 					// Upload renamed local file as a new file
 					uploadNewFile(renamedPath);
 					
@@ -5926,8 +5913,8 @@ class SyncEngine {
 										// Online is newer, rename local, then upload the renamed file
 										// We need to know the renamed path so we can upload it
 										string renamedPath;
-										// Rename the local path
-										safeBackup(fileToUpload, dryRun, renamedPath);
+										// Rename the local path - we WANT this to occur regardless of bypassDataPreservation setting
+										safeBackup(fileToUpload, dryRun, false, renamedPath);
 										// Upload renamed local file as a new file
 										uploadNewFile(renamedPath);
 										// Process the database entry removal for the original file. In a --dry-run scenario, this is being done against a DB copy.
@@ -9452,8 +9439,8 @@ class SyncEngine {
 								// File exists locally, it is not in sync, there is no record in the DB of this file
 								// In case the renamed path is needed
 								string renamedPath;
-								// Rename the local file
-								safeBackup(newItemPath, dryRun, renamedPath);
+								// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
+								safeBackup(newItemPath, dryRun, bypassDataPreservation, renamedPath);
 								// Submit this shared file to be processed further for downloading
 								applyPotentiallyNewLocalItem(downloadSharedFileDbItem, fileToDownload, newItemPath);
 							}
