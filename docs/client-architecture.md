@@ -103,7 +103,7 @@ Due to this factor, when using `--resync` the online source is always going to b
 
 > [!IMPORTANT]
 > In v2.5.3 and above, when a local file is renamed, this will be in the following format pattern to allow easier identification:
->    *<filename>-<hostname>-safeBackup-<number>.file_extention*
+>    *<filename>-<hostname>-safeBackup-<number>.file_extension*
 > 
 > For example:
 > ```
@@ -113,7 +113,7 @@ Due to this factor, when using `--resync` the online source is always going to b
 > ```
 >
 > In client versions v2.5.2 and below, the renamed file have the following naming convention:
->    *<filename>-<hostname>-<number>.file_extention*
+>    *<filename>-<hostname>-<number>.file_extension*
 > 
 > resulting in backup filenames of the following format:
 > ```
