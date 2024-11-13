@@ -1424,10 +1424,16 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("Flagging to delete item locally: " ~ to!string(onedriveJSONItem), ["debug"]);}
 					idsToDelete ~= [thisItemDriveId, thisItemId];
 				} else {
-					// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
-					// In case the renamed path is needed
-					string renamedPath;
-					safeBackup(localPathToDelete, dryRun, renamedPath);
+					// Has the user configured to IGNORE local data protection rules?
+					if (bypassDataPreservation) {
+						// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
+						addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ localPathToDelete, ["info", "notify"]);
+					} else {
+						// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
+						// In case the renamed path is needed
+						string renamedPath;
+						safeBackup(localPathToDelete, dryRun, renamedPath);
+					}
 				}
 			} else {
 				// Flag to ignore
@@ -2249,20 +2255,32 @@ class SyncEngine {
 							// The destination item is in-sync
 							if (verboseLogging) {addLogEntry("Destination is in sync and will be overwritten", ["verbose"]);}
 						} else {
-							// The destination item is different
-							if (verboseLogging) {addLogEntry("The destination is occupied with a different item, renaming the conflicting file...", ["verbose"]);}
+							// Has the user configured to IGNORE local data protection rules?
+							if (bypassDataPreservation) {
+								// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
+								addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ changedItemPath, ["info", "notify"]);
+							} else {
+								// The destination item is different
+								if (verboseLogging) {addLogEntry("The destination is occupied with a different item, renaming the conflicting file...", ["verbose"]);}
+								// Backup this item, passing in if we are performing a --dry-run or not
+								// In case the renamed path is needed
+								string renamedPath;
+								safeBackup(changedItemPath, dryRun, renamedPath);
+							}
+						}
+					} else {
+						// Has the user configured to IGNORE local data protection rules?
+						if (bypassDataPreservation) {
+							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
+							addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ changedItemPath, ["info", "notify"]);
+						} else {
+							// The to be overwritten item is not already in the itemdb, so it should saved to avoid data loss
+							if (verboseLogging) {addLogEntry("The destination is occupied by an existing un-synced file, renaming the conflicting file...", ["verbose"]);}
 							// Backup this item, passing in if we are performing a --dry-run or not
 							// In case the renamed path is needed
 							string renamedPath;
 							safeBackup(changedItemPath, dryRun, renamedPath);
 						}
-					} else {
-						// The to be overwritten item is not already in the itemdb, so it should saved to avoid data loss
-						if (verboseLogging) {addLogEntry("The destination is occupied by an existing un-synced file, renaming the conflicting file...", ["verbose"]);}
-						// Backup this item, passing in if we are performing a --dry-run or not
-						// In case the renamed path is needed
-						string renamedPath;
-						safeBackup(changedItemPath, dryRun, renamedPath);
 					}
 				}
 				
@@ -2455,13 +2473,18 @@ class SyncEngine {
 				
 				// Does the DB (what we think is in sync) hash match the existing local file hash?
 				if (!testFileHash(newItemPath, databaseItem)) {
-					// local file is different to what we know to be true
-					addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
-					
-					// Perform the local safeBackup of the existing local file, passing in if we are performing a --dry-run or not
-					// In case the renamed path is needed
-					string renamedPath;
-					safeBackup(newItemPath, dryRun, renamedPath);
+					// Has the user configured to IGNORE local data protection rules?
+					if (bypassDataPreservation) {
+						// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
+						addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
+					} else {
+						// local file is different to what we know to be true
+						addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
+						// Perform the local safeBackup of the existing local file, passing in if we are performing a --dry-run or not
+						// In case the renamed path is needed
+						string renamedPath;
+						safeBackup(newItemPath, dryRun, renamedPath);
+					}
 				}
 			}
 			
@@ -9449,11 +9472,18 @@ class SyncEngine {
 								// Attempt to apply this changed item
 								applyPotentiallyChangedItem(existingDatabaseItem, existingItemPath, downloadSharedFileDbItem, newItemPath, fileToDownload);
 							} else {
-								// File exists locally, it is not in sync, there is no record in the DB of this file
-								// In case the renamed path is needed
-								string renamedPath;
-								// Rename the local file
-								safeBackup(newItemPath, dryRun, renamedPath);
+								// Has the user configured to IGNORE local data protection rules?
+								if (bypassDataPreservation) {
+									// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
+									addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
+								} else {
+									// File exists locally, it is not in sync, there is no record in the DB of this file
+									// In case the renamed path is needed
+									string renamedPath;
+									// Rename the local file
+									safeBackup(newItemPath, dryRun, renamedPath);
+								}
+								
 								// Submit this shared file to be processed further for downloading
 								applyPotentiallyNewLocalItem(downloadSharedFileDbItem, fileToDownload, newItemPath);
 							}
