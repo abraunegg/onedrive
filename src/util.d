@@ -56,30 +56,31 @@ shared static this() {
 
 // Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario
 void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
-    auto ext = extension(path);
-    auto newPath = path.chomp(ext) ~ "-" ~ deviceName;
-    int n = 2;
-	
+	auto ext = extension(path);
+	auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ "-safeBackup-";
+	int n = 1;
+
 	// Limit to 1000 iterations .. 1000 file backups
-    while (exists(newPath ~ ext) && n < 1000) { 
-        newPath = newPath.chomp("-" ~ (n - 1).to!string) ~ "-" ~ n.to!string;
-        n++;
-    }
-	
+	while (exists(newPath ~ format("%04d", n) ~ ext) && n < 1000) {
+		n++;
+	}
+
 	// Check if unique file name was found
-	if (exists(newPath ~ ext)) {
+	if (exists(newPath ~ format("%04d", n) ~ ext)) {
 		// On the 1000th backup of this file, this should be triggered
 		addLogEntry("Failed to backup " ~ to!string(path) ~ ": Unique file name could not be found after 1000 attempts", ["error"]);
 		return; // Exit function as a unique file name could not be found
 	}
-	
-    // Configure the new name
-	newPath ~= ext;
 
-    // Log that we are perform the backup by renaming the file
-	if (verboseLogging) {addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath) , ["verbose"]);}
+	// Configure the new name with zero-padded counter
+	newPath ~= format("%04d", n) ~ ext;
 
-    if (!dryRun) {
+	// Log that we are performing the backup by renaming the file
+	if (verboseLogging) {
+		addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["verbose"]);
+	}
+
+	if (!dryRun) {
 		// Not a --dry-run scenario - do the file rename
 		//
 		// There are 2 options to rename a file
@@ -96,13 +97,15 @@ void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
 		try {
 			rename(path, newPath);
 			renamedPath = to!string(newPath);
-        } catch (Exception e) {
-            // Handle exceptions, e.g., log error
-            addLogEntry("Renaming of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
-        }
-    } else {
-        if (debugLogging) {addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);}
-    }
+		} catch (Exception e) {
+			// Handle exceptions, e.g., log error
+			addLogEntry("Renaming of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
+		}
+	} else {
+		if (debugLogging) {
+			addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);
+		}
+	}
 }
 
 // Rename the given item, and only performs the function if not in a --dry-run scenario
