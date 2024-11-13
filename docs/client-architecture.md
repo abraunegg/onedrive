@@ -102,7 +102,7 @@ When using `--resync` this conflict resolution can differ slightly, as, when usi
 Due to this factor, when using `--resync` the online source is always going to be considered accurate and the source-of-truth, regardless of the local file state, local file timestamp or local file hash. When a difference in local file hash is detected, the file will be renamed to prevent local data loss.
 
 > [!IMPORTANT]
-> In v2.5.3 and above, when a local file is renamed, this will be in the following format pattern to allow easier identification:
+> In v2.5.3 and above, when a local file is renamed due to conflict handling, this will be in the following format pattern to allow easier identification:
 >
 >    **filename-hostname-safeBackup-number.file_extension**
 > 
@@ -125,6 +125,13 @@ Due to this factor, when using `--resync` the online source is always going to b
 > -rw-------.  1 alex alex 53419 Nov 14 05:22 file5-onedrive-client-dev.data
 > ```
 >
+
+> [!CAUTION]
+> The creation of backup files when there is a conflict to avoid local data loss can be disabled.
+> 
+> To do this, utilise the configuration option **bypass_data_preservation**
+> 
+> If this is enabled, you will experience data loss on your local data as the local file will be over-written with data from OneDrive online. Use with care and caution.
 
 ### Default Operational Modes - Conflict Handling
 
