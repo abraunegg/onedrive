@@ -55,55 +55,63 @@ shared static this() {
 }
 
 // Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario
-void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
-	auto ext = extension(path);
-	auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ "-safeBackup-";
-	int n = 1;
-
-	// Limit to 1000 iterations .. 1000 file backups
-	while (exists(newPath ~ format("%04d", n) ~ ext) && n < 1000) {
-		n++;
-	}
-
-	// Check if unique file name was found
-	if (exists(newPath ~ format("%04d", n) ~ ext)) {
-		// On the 1000th backup of this file, this should be triggered
-		addLogEntry("Failed to backup " ~ to!string(path) ~ ": Unique file name could not be found after 1000 attempts", ["error"]);
-		return; // Exit function as a unique file name could not be found
-	}
-
-	// Configure the new name with zero-padded counter
-	newPath ~= format("%04d", n) ~ ext;
-
-	// Log that we are performing the backup by renaming the file
-	if (verboseLogging) {
-		addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["verbose"]);
-	}
-
-	if (!dryRun) {
-		// Not a --dry-run scenario - do the file rename
-		//
-		// There are 2 options to rename a file
-		// rename() - https://dlang.org/library/std/file/rename.html
-		// std.file.copy() - https://dlang.org/library/std/file/copy.html
-		//
-		// rename:
-		//   It is not possible to rename a file across different mount points or drives. On POSIX, the operation is atomic. That means, if to already exists there will be no time period during the operation where to is missing.
-		//
-		// std.file.copy
-		//   Copy file from to file to. File timestamps are preserved. File attributes are preserved, if preserve equals Yes.preserveAttributes
-		//
-		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
-		try {
-			rename(path, newPath);
-			renamedPath = to!string(newPath);
-		} catch (Exception e) {
-			// Handle exceptions, e.g., log error
-			addLogEntry("Renaming of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
-		}
+void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, out string renamedPath) {
+	// Do we actually perform a safe backup?
+	// Has the user configured to IGNORE local data protection rules?
+	if (bypassDataPreservation) {
+		// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
+		addLogEntry("WARNING: Local Data Protection has been disabled - not renaming local file. You may experience data loss on this file: " ~ to!string(path), ["info", "notify"]);
 	} else {
-		if (debugLogging) {
-			addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);
+		// configure variables
+		auto ext = extension(path);
+		auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ "-safeBackup-";
+		int n = 1;
+	
+		// Limit to 1000 iterations .. 1000 file backups
+		while (exists(newPath ~ format("%04d", n) ~ ext) && n < 1000) {
+			n++;
+		}
+
+		// Check if unique file name was found
+		if (exists(newPath ~ format("%04d", n) ~ ext)) {
+			// On the 1000th backup of this file, this should be triggered
+			addLogEntry("Failed to backup " ~ to!string(path) ~ ": Unique file name could not be found after 1000 attempts", ["error"]);
+			return; // Exit function as a unique file name could not be found
+		}
+
+		// Configure the new name with zero-padded counter
+		newPath ~= format("%04d", n) ~ ext;
+
+		// Log that we are performing the backup by renaming the file
+		if (verboseLogging) {
+			addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["verbose"]);
+		}
+
+		if (!dryRun) {
+			// Not a --dry-run scenario - do the file rename
+			//
+			// There are 2 options to rename a file
+			// rename() - https://dlang.org/library/std/file/rename.html
+			// std.file.copy() - https://dlang.org/library/std/file/copy.html
+			//
+			// rename:
+			//   It is not possible to rename a file across different mount points or drives. On POSIX, the operation is atomic. That means, if to already exists there will be no time period during the operation where to is missing.
+			//
+			// std.file.copy
+			//   Copy file from to file to. File timestamps are preserved. File attributes are preserved, if preserve equals Yes.preserveAttributes
+			//
+			// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
+			try {
+				rename(path, newPath);
+				renamedPath = to!string(newPath);
+			} catch (Exception e) {
+				// Handle exceptions, e.g., log error
+				addLogEntry("Renaming of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
+			}
+		} else {
+			if (debugLogging) {
+				addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);
+			}
 		}
 	}
 }
