@@ -97,9 +97,32 @@ This exclusion process can be illustrated by the following activity diagram. A '
 
 When using the default operational modes (`--sync` or `--monitor`) the client application is conforming to how the Microsoft Windows OneDrive client operates in terms of resolving conflicts for files.
 
-Additionally, when using `--resync` this conflict resolution can differ slightly, as, when using `--resync` you are *deleting* the known application state, thus, the application has zero reference as to what was previously in sync with the local file system.
+When using `--resync` this conflict resolution can differ slightly, as, when using `--resync` you are *deleting* the known application state, thus, the application has zero reference as to what was previously in sync with the local file system.
 
-Due to this factor, when using `--resync` the online source is always going to be considered accurate and the source-of-truth, regardless of the local file state, file timestamp or file hash.
+Due to this factor, when using `--resync` the online source is always going to be considered accurate and the source-of-truth, regardless of the local file state, local file timestamp or local file hash. When a difference in local file hash is detected, the file will be renamed to prevent local data loss.
+
+> [!IMPORTANT]
+> In v2.5.3 and above, when a local file is renamed, this will be in the following format pattern to allow easier identification:
+>    *<filename>-<hostname>-safeBackup-<number>.file_extention*
+> 
+> For example:
+> ```
+> -rw-------.  1 alex alex 53402 Sep 21 08:25 file5.data
+> -rw-------.  1 alex alex 53423 Nov 13 18:18 file5-onedrive-client-dev-safeBackup-0001.data
+> -rw-------.  1 alex alex 53422 Nov 13 18:19 file5-onedrive-client-dev-safeBackup-0002.data
+> ```
+>
+> In client versions v2.5.2 and below, the renamed file have the following naming convention:
+>    *<filename>-<hostname>-<number>.file_extention*
+> 
+> resulting in backup filenames of the following format:
+> ```
+> -rw-------.  1 alex alex 53402 Sep 21 08:25 file5.data
+> -rw-------.  1 alex alex 53432 Nov 14 05:22 file5-onedrive-client-dev-2.data
+> -rw-------.  1 alex alex 53435 Nov 14 05:24 file5-onedrive-client-dev-3.data
+> -rw-------.  1 alex alex 53419 Nov 14 05:22 file5-onedrive-client-dev.data
+> ```
+>
 
 ### Default Operational Modes - Conflict Handling
 
