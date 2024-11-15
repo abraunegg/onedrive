@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Fix that skip_file in config does not override defaults
 *   Handle DB upgrades from v2.4.x without causing application crash
 *   Fix a database statement execution error occurred: NOT NULL constraint failed: item.type due to Microsoft OneNote items
-*   Fix Operation not permitted FileException Error when attemtping to use setTimes() function
+*   Fix Operation not permitted FileException Error when attempting to use setTimes() function
 *   Fix that files with no mime type cause sync to crash
 *   Fix that bypass_data_preservation operates as intended
 
