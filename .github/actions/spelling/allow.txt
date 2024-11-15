@@ -31,6 +31,7 @@ autoclean
 autoprocess
 autoupdate
 avmkfdiitirnrenzljwc
+avx
 baus
 bcdefghi
 bindir
@@ -175,6 +176,7 @@ lgdk
 lgio
 lglib
 lgobject
+libcrypto
 libdir
 libexec
 libexecdir

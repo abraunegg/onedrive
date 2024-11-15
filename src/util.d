@@ -35,6 +35,7 @@ import core.sys.posix.unistd;
 import core.stdc.string;
 import core.sys.posix.signal;
 import etc.c.curl;
+import std.process;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -54,54 +55,65 @@ shared static this() {
 }
 
 // Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario
-void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
-    auto ext = extension(path);
-    auto newPath = path.chomp(ext) ~ "-" ~ deviceName;
-    int n = 2;
+void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, out string renamedPath) {
+	// Do we actually perform a safe backup?
+	// Has the user configured to IGNORE local data protection rules?
+	if (bypassDataPreservation) {
+		// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
+		addLogEntry("WARNING: Local Data Protection has been disabled - not renaming local file. You may experience data loss on this file: " ~ to!string(path), ["info", "notify"]);
+	} else {
+		// configure variables
+		auto ext = extension(path);
+		auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ "-safeBackup-";
+		int n = 1;
 	
-	// Limit to 1000 iterations .. 1000 file backups
-    while (exists(newPath ~ ext) && n < 1000) { 
-        newPath = newPath.chomp("-" ~ (n - 1).to!string) ~ "-" ~ n.to!string;
-        n++;
-    }
-	
-	// Check if unique file name was found
-	if (exists(newPath ~ ext)) {
-		// On the 1000th backup of this file, this should be triggered
-		addLogEntry("Failed to backup " ~ to!string(path) ~ ": Unique file name could not be found after 1000 attempts", ["error"]);
-		return; // Exit function as a unique file name could not be found
+		// Limit to 1000 iterations .. 1000 file backups
+		while (exists(newPath ~ format("%04d", n) ~ ext) && n < 1000) {
+			n++;
+		}
+
+		// Check if unique file name was found
+		if (exists(newPath ~ format("%04d", n) ~ ext)) {
+			// On the 1000th backup of this file, this should be triggered
+			addLogEntry("Failed to backup " ~ to!string(path) ~ ": Unique file name could not be found after 1000 attempts", ["error"]);
+			return; // Exit function as a unique file name could not be found
+		}
+
+		// Configure the new name with zero-padded counter
+		newPath ~= format("%04d", n) ~ ext;
+
+		// Log that we are performing the backup by renaming the file
+		if (verboseLogging) {
+			addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["verbose"]);
+		}
+
+		if (!dryRun) {
+			// Not a --dry-run scenario - do the file rename
+			//
+			// There are 2 options to rename a file
+			// rename() - https://dlang.org/library/std/file/rename.html
+			// std.file.copy() - https://dlang.org/library/std/file/copy.html
+			//
+			// rename:
+			//   It is not possible to rename a file across different mount points or drives. On POSIX, the operation is atomic. That means, if to already exists there will be no time period during the operation where to is missing.
+			//
+			// std.file.copy
+			//   Copy file from to file to. File timestamps are preserved. File attributes are preserved, if preserve equals Yes.preserveAttributes
+			//
+			// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
+			try {
+				rename(path, newPath);
+				renamedPath = to!string(newPath);
+			} catch (Exception e) {
+				// Handle exceptions, e.g., log error
+				addLogEntry("Renaming of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
+			}
+		} else {
+			if (debugLogging) {
+				addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);
+			}
+		}
 	}
-	
-    // Configure the new name
-	newPath ~= ext;
-
-    // Log that we are perform the backup by renaming the file
-	if (verboseLogging) {addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath) , ["verbose"]);}
-
-    if (!dryRun) {
-		// Not a --dry-run scenario - do the file rename
-		//
-		// There are 2 options to rename a file
-		// rename() - https://dlang.org/library/std/file/rename.html
-		// std.file.copy() - https://dlang.org/library/std/file/copy.html
-		//
-		// rename:
-		//   It is not possible to rename a file across different mount points or drives. On POSIX, the operation is atomic. That means, if to already exists there will be no time period during the operation where to is missing.
-		//
-		// std.file.copy
-		//   Copy file from to file to. File timestamps are preserved. File attributes are preserved, if preserve equals Yes.preserveAttributes
-		//
-		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
-		try {
-			rename(path, newPath);
-			renamedPath = to!string(newPath);
-        } catch (Exception e) {
-            // Handle exceptions, e.g., log error
-            addLogEntry("Renaming of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
-        }
-    } else {
-        if (debugLogging) {addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);}
-    }
 }
 
 // Rename the given item, and only performs the function if not in a --dry-run scenario
@@ -733,7 +745,7 @@ void displayPosixErrorMessage(string message) {
 // Display the Error Message
 void displayGeneralErrorMessage(Exception e, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 	addLogEntry(); // used rather than writeln
-	addLogEntry("ERROR: Encounter " ~ e.classinfo.name ~ ":");
+	addLogEntry("ERROR: Encountered a " ~ e.classinfo.name ~ ":");
 	addLogEntry("  Error Message:    " ~ e.msg);
 	addLogEntry("  Calling Function: " ~ callingFunction);
 	addLogEntry("  Line number:      " ~ to!string(lineno));
@@ -969,6 +981,10 @@ void checkApplicationVersion() {
 
 bool hasId(JSONValue item) {
 	return ("id" in item) != null;
+}
+
+bool hasMimeType(const ref JSONValue item) {
+	return ("mimeType" in item["file"]) != null;
 }
 
 bool hasQuota(JSONValue item) {
@@ -1401,4 +1417,60 @@ bool isBadCurlVersion(string curlVersion) {
     
     // Check if the current version matches one of the supported versions
     return canFind(supportedVersions, curlVersion);
+}
+
+string getOpenSSLVersion() {
+	try {
+	// Execute 'openssl version' and capture the output
+	auto result = executeShell("openssl version");
+
+	// Strip any extraneous whitespace from the output
+	return result.output.strip();
+	} catch (Exception e) {
+		// Handle any exceptions, possibly returning an error message
+		return "Error fetching OpenSSL version: " ~ e.msg;
+	}
+}
+
+void checkOpenSSLVersion() {
+	// Get OpenSSL version string
+	auto versionString = getOpenSSLVersion();
+	if (versionString.startsWith("Error")) {
+		addLogEntry(versionString);
+		// Must force exit here, allow logging to be done
+		forceExit();
+	}
+
+	// Define regex to extract version parts
+	auto versionRegex = regex(r"OpenSSL\s(\d+)\.(\d+)\.(\d+)([a-z]?)");
+
+	auto matches = versionString.match(versionRegex);
+	if (matches.empty) {
+		addLogEntry("Unable to parse OpenSSL version.");
+		// Must force exit here, allow logging to be done
+		forceExit();
+	}
+
+	// Extract major, minor, patch, and optional letter parts
+	uint major = matches.captures[1].to!uint;
+	uint minor = matches.captures[2].to!uint;
+	uint patch = matches.captures[3].to!uint;
+	string letter = matches.captures[4]; // Empty if version is 3.x.x or higher
+	string distributionWarning = "         Please report this to your distribution, requesting an update to a newer OpenSSL version, or consider upgrading it yourself for optimal stability.";
+
+	// Compare versions
+	if (major < 1 || (major == 1 && minor < 1) || (major == 1 && minor == 1 && patch < 1) ||
+		(major == 1 && minor == 1 && patch == 1 && (letter.empty || letter[0] < 'a'))) {
+			addLogEntry();
+			addLogEntry(format("WARNING: Your OpenSSL version (%d.%d.%d%s) is below the minimum required version of 1.1.1a. Significant operational issues are likely when using this client.", major, minor, patch, letter), ["info", "notify"]);
+			addLogEntry(distributionWarning);
+			addLogEntry();
+	} else if (major == 1 && minor == 1 && patch == 1 && !letter.empty && letter[0] >= 'a' && letter[0] <= 'w') {
+		addLogEntry();
+		addLogEntry(format("WARNING: Your OpenSSL version (%d.%d.%d%s) may cause stability issues with this client.", major, minor, patch, letter), ["info", "notify"]);
+		addLogEntry(distributionWarning);
+		addLogEntry();
+	} else if (major >= 3) {
+		// Do nothing for version >= 3.0.0
+	}
 }
