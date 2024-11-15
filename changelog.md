@@ -2,6 +2,44 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.3 - 2024-11-16
+
+### Added
+*   Implement Docker ENV variable for --cleanup-local-files
+*   Setup a specific SIGPIPE Signal handler for curl/openssl generated signals
+*   Add Check Spelling GitHub Action
+*   Add passive database checkpoints to optimise database operations
+*   Ensure application notifies user of curl versions that contain HTTP/2 bugs that impact the operation of this client
+*   Add OpenSSL version warning
+
+### Changed
+*   Specifically use a 'mutex' to perform the lock on database actions
+*   Update safeBackup to use a new filename format for easier identification: filename-hostname-safeBackup-number.file_extension
+*   Allow no-sync operations to complete online account checks
+
+### Fixed
+*   Improve performance with reduced execution time and lower CPU/system resource usage
+*   Fix that a 'sync_list' entry of '/' will cause a index [0] is out of bounds
+*   Fix that when creating a new folder online the application generates an exception if it is in a Shared Online Folder
+*   Fix application crash when session upload files contain zero data or are corrupt
+*   Fix regression for Docker 'sync_dir' use
+*   Fix that curl generates a SIGPIPE that causes application to exit due to upstream device killing idle TCP connection
+*   Fix that skip_dir is not flagging directories correctly causing deletion if parental path structure needs to be created for sync_list handling
+*   Fix application crash caused by unable to drop table
+*   Fix that skip_file in config does not override defaults
+*   Handle DB upgrades from v2.4.x without causing application crash
+*   Fix a database statement execution error occurred: NOT NULL constraint failed: item.type due to Microsoft OneNote items
+*   Fix Operation not permitted FileException Error when attemtping to use setTimes() function
+*   Fix that files with no mime type cause sync to crash
+*   Fix that bypass_data_preservation operates as intended
+
+### Updated
+*   Fixed spelling errors across all documentation and code
+*   Update Dockerfile-debian to fix that libcurl4 does not get applied despite being pulled in. Explicitly install it from Debian 12 Backports
+*   Add Ubuntu 24.10 OpenSuSE Build Service details
+*   Update Dockerfile-alpine - revert to Alpine 3.19 as application fails to run on Alpine 3.20
+*   Updated documentation
+
 ## 2.5.2 - 2024-09-29
 
 ### Added
@@ -14,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Updated
 *   Updated documentation
 
-## 2.5.1 - 2024-09-27
+## 2.5.1 - 2024-09-27 (DO NOT USE. CONTAINS A MAJOR TIMESTAMP ISSUE BUG)
 
 ### Special Thankyou
 A special thankyou to @phlibi for assistance with diagnosing and troubleshooting the database timestamp issue
