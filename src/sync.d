@@ -327,6 +327,9 @@ class SyncEngine {
 		// Control whether the worker threads are daemon threads. A daemon thread is automatically terminated when all non-daemon threads have terminated.
 		processPool.isDaemon(true); // daemon thread
 		
+		// Flag for 'no-sync' task
+		bool noSyncTask = false;
+		
 		// Create a new instance of the OneDrive API
 		OneDriveApi oneDriveApiInstance;
 		oneDriveApiInstance = new OneDriveApi(appConfig);
@@ -337,16 +340,30 @@ class SyncEngine {
 			oneDriveApiInstance = null;
 		}
 		
+		// Issue #2941
+		// If the account being used _only_ has access to specific resources, getDefaultDriveDetails() will generate problems and cause
+		// the application to exit, which, is technically the right thing to do (no access to account details) ... but if:
+		// - are we doing a no-sync task ?
+		// - do we have the 'drive_id' via config file ?
+		// Are we not doing a --sync or a --monitor operation? Both of these will be false if they are not set
+		if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
+			// set flag
+			noSyncTask = true;
+		}
+		
 		// Can the API be initialised successfully?
 		if (oneDriveApiInstance.initialise()) {
 			// Get the relevant default drive details
 			try {
 				getDefaultDriveDetails();
 			} catch (AccountDetailsException exception) {
-				// details could not be queried
-				addLogEntry(exception.msg);
-				// Must force exit here, allow logging to be done
-				forceExit();
+				// was this a no-sync task?
+				if (!noSyncTask) {
+					// details could not be queried
+					addLogEntry(exception.msg);
+					// Must force exit here, allow logging to be done
+					forceExit();
+				}
 			}
 			
 			// Get the relevant default root details
@@ -359,11 +376,11 @@ class SyncEngine {
 				forceExit();
 			}
 			
-			// Display details
+			// Display relevant account details
 			try {
 				displaySyncEngineDetails();
 			} catch (AccountDetailsException exception) {
-				// Details could not be queried
+				// details could not be queried
 				addLogEntry(exception.msg);
 				// Must force exit here, allow logging to be done
 				forceExit();
@@ -403,11 +420,18 @@ class SyncEngine {
 		
 		// Function variables
 		JSONValue defaultOneDriveDriveDetails;
+		bool noSyncTask = false;
 		
 		// Create a new instance of the OneDrive API
 		OneDriveApi getDefaultDriveApiInstance;
 		getDefaultDriveApiInstance = new OneDriveApi(appConfig);
 		getDefaultDriveApiInstance.initialise();
+		
+		// Are we not doing a --sync or a --monitor operation? Both of these will be false if they are not set
+		if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
+			// set flag
+			noSyncTask = true;
+		}
 		
 		// Get Default Drive Details for this Account
 		try {
@@ -463,8 +487,19 @@ class SyncEngine {
 				addLogEntry("cachedOnlineDriveData.quotaRestricted = " ~ to!string(cachedOnlineDriveData.quotaRestricted), ["debug"]);
 			}
 		} else {
-			// Handle the invalid JSON response
-			throw new AccountDetailsException();
+			// Did the configuration file contain a 'drive_id' entry
+			// If this exists, this will be a 'documentLibrary'
+			if (appConfig.getValueString("drive_id").length) {
+				// Force set these as for whatever reason we could to query these via the getDefaultDriveDetails API call
+				appConfig.accountType = "documentLibrary";
+				appConfig.defaultDriveId = appConfig.getValueString("drive_id");
+			} else {
+				// was this a no-sync task?
+				if (!noSyncTask) {
+					// Handle the invalid JSON response by throwing an exception error
+					throw new AccountDetailsException();
+				}
+			}
 		}
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -479,11 +514,18 @@ class SyncEngine {
 		
 		// Function variables
 		JSONValue defaultOneDriveRootDetails;
+		bool noSyncTask = false;
 		
 		// Create a new instance of the OneDrive API
 		OneDriveApi getDefaultRootApiInstance;
 		getDefaultRootApiInstance = new OneDriveApi(appConfig);
 		getDefaultRootApiInstance.initialise();
+		
+		// Are we not doing a --sync or a --monitor operation? Both of these will be false if they are not set
+		if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
+			// set flag
+			noSyncTask = true;
+		}
 		
 		// Get Default Root Details for this Account
 		try {
@@ -513,8 +555,11 @@ class SyncEngine {
 			// Save the item to the database, so the account root drive is is always going to be present in the DB
 			saveItem(defaultOneDriveRootDetails);
 		} else {
-			// Handle the invalid JSON response
-			throw new AccountDetailsException();
+			// was this a no-sync task?
+			if (!noSyncTask) {
+				// Handle the invalid JSON response by throwing an exception error
+				throw new AccountDetailsException();
+			}
 		}
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
