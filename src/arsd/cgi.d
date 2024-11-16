@@ -575,6 +575,8 @@ version(Posix) {
 			// GDC doesn't support static foreach so I had to cheat on it :(
 		} else version(FreeBSD) {
 			// I never implemented the fancy stuff there either
+		} else version(OpenBSD) {
+			// Fix issue #2977 - adopt same approach as FreeBSD above
 		} else {
 			version=with_breaking_cgi_features;
 			version=with_sendfd;
