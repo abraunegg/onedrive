@@ -1446,31 +1446,29 @@ void checkOpenSSLVersion() {
 
 	auto matches = versionString.match(versionRegex);
 	if (matches.empty) {
-		addLogEntry("Unable to parse OpenSSL version.");
-		// Must force exit here, allow logging to be done
-		forceExit();
-	}
+		if (debugLogging) {addLogEntry("Unable to parse OpenSSL version: " ~ versionString, ["debug"]);}
+	} else {
+		// Extract major, minor, patch, and optional letter parts
+		uint major = matches.captures[1].to!uint;
+		uint minor = matches.captures[2].to!uint;
+		uint patch = matches.captures[3].to!uint;
+		string letter = matches.captures[4]; // Empty if version is 3.x.x or higher
+		string distributionWarning = "         Please report this to your distribution, requesting an update to a newer OpenSSL version, or consider upgrading it yourself for optimal stability.";
 
-	// Extract major, minor, patch, and optional letter parts
-	uint major = matches.captures[1].to!uint;
-	uint minor = matches.captures[2].to!uint;
-	uint patch = matches.captures[3].to!uint;
-	string letter = matches.captures[4]; // Empty if version is 3.x.x or higher
-	string distributionWarning = "         Please report this to your distribution, requesting an update to a newer OpenSSL version, or consider upgrading it yourself for optimal stability.";
-
-	// Compare versions
-	if (major < 1 || (major == 1 && minor < 1) || (major == 1 && minor == 1 && patch < 1) ||
-		(major == 1 && minor == 1 && patch == 1 && (letter.empty || letter[0] < 'a'))) {
+		// Compare versions
+		if (major < 1 || (major == 1 && minor < 1) || (major == 1 && minor == 1 && patch < 1) ||
+			(major == 1 && minor == 1 && patch == 1 && (letter.empty || letter[0] < 'a'))) {
+				addLogEntry();
+				addLogEntry(format("WARNING: Your OpenSSL version (%d.%d.%d%s) is below the minimum required version of 1.1.1a. Significant operational issues are likely when using this client.", major, minor, patch, letter), ["info", "notify"]);
+				addLogEntry(distributionWarning);
+				addLogEntry();
+		} else if (major == 1 && minor == 1 && patch == 1 && !letter.empty && letter[0] >= 'a' && letter[0] <= 'w') {
 			addLogEntry();
-			addLogEntry(format("WARNING: Your OpenSSL version (%d.%d.%d%s) is below the minimum required version of 1.1.1a. Significant operational issues are likely when using this client.", major, minor, patch, letter), ["info", "notify"]);
+			addLogEntry(format("WARNING: Your OpenSSL version (%d.%d.%d%s) may cause stability issues with this client.", major, minor, patch, letter), ["info", "notify"]);
 			addLogEntry(distributionWarning);
 			addLogEntry();
-	} else if (major == 1 && minor == 1 && patch == 1 && !letter.empty && letter[0] >= 'a' && letter[0] <= 'w') {
-		addLogEntry();
-		addLogEntry(format("WARNING: Your OpenSSL version (%d.%d.%d%s) may cause stability issues with this client.", major, minor, patch, letter), ["info", "notify"]);
-		addLogEntry(distributionWarning);
-		addLogEntry();
-	} else if (major >= 3) {
-		// Do nothing for version >= 3.0.0
+		} else if (major >= 3) {
+			// Do nothing for version >= 3.0.0
+		}
 	}
 }
