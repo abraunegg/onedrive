@@ -126,6 +126,23 @@ However, if your system employs curl >= 7.62.0, curl will, by default, prioritis
 
 If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http-11` flag or setting the configuration option `force_http_11 = "true"`. This will compel the application to exclusively use HTTP/1.1. Otherwise, all client operations will align with the curl default settings for your distribution.
 
+#### Known curl bugs that impact the use of this client
+| curl bug | fixed in curl version |
+|----------|-----------------------|
+| HTTP/2 issue: Improved handling of end-of-stream (EOS) and blocked states to prevent unexpected behavior.| 8.11.0 |
+| HTTP/2 issue: Stopped offering ALPN `http/1.1` for `http2-prior-knowledge` to ensure proper protocol negotiation. | 8.10.0 |
+| SIGPIPE issue: Addressed a SIGPIPE leak that occurred in certain cases starting with version 8.9.1 | 8.10.0 |
+| SIGPIPE issue: Resolved a problem where SIGPIPE signals were not properly handled, leading to unexpected behavior. | 8.9.1 |
+| HTTP/2 issue: Improved handling of HTTP/2 connections to prevent unexpected stream resets and enhance stability. | 8.9.0 |
+| HTTP/2 issue: Addressed a bug where HTTP/2 connections could hang under specific conditions, improving reliability. | 8.8.0 |
+| HTTP/2 issue: Corrected an issue where HTTP/2 streams were not properly closed, leading to potential memory leaks. | 8.5.0 |
+| HTTP/2 issue: Resolved a problem with HTTP/2 frame handling that could cause data corruption during transfers. | 8.2.1 |
+| HTTP/2 issue: Fixed a bug where HTTP/2 connections were prematurely closed, resulting in incomplete data transfers. | 7.88.1 |
+| HTTP/2 issue: Improved handling of HTTP/2 priority frames to ensure proper stream prioritisation. | 7.81.0 |
+| HTTP/2 issue: Addressed a race condition in HTTP/2 multiplexing that could lead to unexpected behavior. | 7.74.0 |
+| HTTP/2 issue: Resolved an issue where HTTP/2 connections were not properly reused, leading to unnecessary new connections. | 7.68.0 |
+| HTTP/2 support: Introduced HTTP/2 support, enabling multiplexed transfers over a single connection | 7.47.0 |
+
 #### Known curl versions with compatibility issues for this client
 | curl Version            |
 |-------------------------|
