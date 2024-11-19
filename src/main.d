@@ -228,7 +228,7 @@ int main(string[] cliArgs) {
 			// add warning message
 			string curlWarningMessage = format("WARNING: Your cURL/libcurl version (%s) has known operational bugs that impact the use of this client.", curlVersion);
 			addLogEntry();
-			addLogEntry(curlWarningMessage, ["info", "notify"]);
+			addLogEntry(curlWarningMessage); // curl HTTP/1.1 downgrade in place meaning user too stepts to remediate, standard logging
 			addLogEntry(distributionWarning);
 			addLogEntry();
 		}
