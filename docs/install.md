@@ -170,6 +170,36 @@ For notifications the following is also necessary:
 sudo zypper install libnotify-devel
 ```
 
+### Dependencies: OpenBSD
+Generally you will want to install the same dependencies as the [FreeBSD port](https://www.freshports.org/net/onedrive/)
+> [!CAUTION]
+> Not all FreeBSD port paths and names are exactly the same but they are close enough that you should be able to find the equivalent in the OpenBSD port tree
+
+1. Install either DMD or LDC compiler via ports. Have not tested using LDC but contrary to other OS instructions, DMD does not need to be "activated" on OpenBSD. After installing from ports, it will just work.
+2. Install `git` from ports
+3. Install dependencies listed for FreeBSD. Some are installed in the baseline system, others are packages, and still others are ports.
+4. Install `libinotify` from ports.
+
+The base installation of OpenBSD uses `ksh` instead of `bash` so when running the `configure` scripts from the repo, be sure to run them something like this:
+```text
+$bash configure
+```
+After configuring the `Makefile` with the `configure` script, you will need to modify it manually.
+1. On line 110, remove the section `-L-ldl`. This library is Linux only and OpenBSD already has the necessary equivilant as part of the base system libraries.
+2. On line 27 (`notify_LIBS` var), add `-L/usr/local/lib/inotify -linotify` to the line.
+
+At this point, you should be able to:
+> [!CAUTION]
+> Using DMD, you may run into an "our of memory" type error during compile. This is due to the extra security layers of OpenBSD and their "login class database" parameters. Check out `man login.conf` for more details but generally you will be looking for a `datasize-cur` and `datasize-max` setting under whichever login class your build user belongs to; most likely `default:`, so start there.
+
+```text
+$gmake clean; gmake;
+```
+As instructed in the installation documentation (swaping `make` for `gmake` as is necessary for OpenBSD). However, you will not be able to run `onedrive` yet as there is a minor `ld.so` quirk you need to fix:
+1. The `libinotify` port installs into a subdirectory of `/usr/local/lib` so it is not picked up by the default `ld.so` "hints" or search paths.
+2. Use `ldconfig` to modify the shared library search path. There are a number of ways to do this so check out `man ldconfig` for your prefered way to do it.
+3. `ldconfig -m /usr/local/lib/inotify` is one simple way for example
+
 ## Compilation & Installation
 ### High Level Steps
 1.  Install the platform dependencies for your Linux OS
