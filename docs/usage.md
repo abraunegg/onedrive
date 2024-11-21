@@ -195,6 +195,9 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 > 1. Implement and/or ensure that IPv6 DNS resolution is possible on your system; allow IPv6 network connectivity between your system and Microsoft OneDrive
 > 2. Configure the client to only use IPv4 DNS resolution via setting the configuration option `ip_protocol_version = "1"`
 
+> [!IMPORTANT]
+> If you are using Debian 12 or Linux Mint Debian Edition (LMDE) 6, you can install curl version 8.10.1 from the respective backports repositories to address the bugs present in the default curl version.
+
 
 ## First Steps
 ### Authorise the Application with Your Microsoft OneDrive Account
