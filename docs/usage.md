@@ -127,32 +127,32 @@ However, if your system employs curl >= 7.62.0, curl will, by default, prioritis
 If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http-11` flag or setting the configuration option `force_http_11 = "true"`. This will compel the application to exclusively use HTTP/1.1. Otherwise, all client operations will align with the curl default settings for your distribution.
 
 #### Known curl bugs that impact the use of this client
-| curl bug | fixed in curl version |
-|----------|-----------------------|
-| HTTP/2 issue: Improved handling of end-of-stream (EOS) and blocked states to prevent unexpected behavior.| 8.11.0 |
-| HTTP/2 issue: Stopped offering ALPN `http/1.1` for `http2-prior-knowledge` to ensure proper protocol negotiation. | 8.10.0 |
-| SIGPIPE issue: Addressed a SIGPIPE leak that occurred in certain cases starting with version 8.9.1 | 8.10.0 |
-| SIGPIPE issue: Resolved a problem where SIGPIPE signals were not properly handled, leading to unexpected behavior. | 8.9.1 |
-| HTTP/2 issue: Improved handling of HTTP/2 connections to prevent unexpected stream resets and enhance stability. | 8.9.0 |
-| HTTP/2 issue: Addressed a bug where HTTP/2 connections could hang under specific conditions, improving reliability. | 8.8.0 |
-| HTTP/2 issue: Corrected an issue where HTTP/2 streams were not properly closed, leading to potential memory leaks. | 8.5.0 |
-| HTTP/2 issue: Resolved a problem with HTTP/2 frame handling that could cause data corruption during transfers. | 8.2.1 |
-| HTTP/2 issue: Fixed a bug where HTTP/2 connections were prematurely closed, resulting in incomplete data transfers. | 7.88.1 |
-| HTTP/2 issue: Improved handling of HTTP/2 priority frames to ensure proper stream prioritisation. | 7.81.0 |
-| HTTP/2 issue: Addressed a race condition in HTTP/2 multiplexing that could lead to unexpected behavior. | 7.74.0 |
-| HTTP/2 issue: Resolved an issue where HTTP/2 connections were not properly reused, leading to unnecessary new connections. | 7.68.0 |
-| HTTP/2 support: Introduced HTTP/2 support, enabling multiplexed transfers over a single connection | 7.47.0 |
+| id | curl bug | fixed in curl version |
+|----|----------|-----------------------|
+| 1  | HTTP/2 support: Introduced HTTP/2 support, enabling multiplexed transfers over a single connection | 7.47.0 |
+| 2  | HTTP/2 issue: Resolved an issue where HTTP/2 connections were not properly reused, leading to unnecessary new connections. | 7.68.0 |
+| 3  | HTTP/2 issue: Addressed a race condition in HTTP/2 multiplexing that could lead to unexpected behavior. | 7.74.0 |
+| 4  | HTTP/2 issue: Improved handling of HTTP/2 priority frames to ensure proper stream prioritisation. | 7.81.0 |
+| 5  | HTTP/2 issue: Fixed a bug where HTTP/2 connections were prematurely closed, resulting in incomplete data transfers. | 7.88.1 |
+| 6  | HTTP/2 issue: Resolved a problem with HTTP/2 frame handling that could cause data corruption during transfers. | 8.2.1 |
+| 7  | HTTP/2 issue: Corrected an issue where HTTP/2 streams were not properly closed, leading to potential memory leaks. | 8.5.0 |
+| 8  | HTTP/2 issue: Addressed a bug where HTTP/2 connections could hang under specific conditions, improving reliability. | 8.8.0 |
+| 9  | HTTP/2 issue: Improved handling of HTTP/2 connections to prevent unexpected stream resets and enhance stability. | 8.9.0 |
+| 10 | SIGPIPE issue: Resolved a problem where SIGPIPE signals were not properly handled, leading to unexpected behavior. | 8.9.1 |
+| 11 | SIGPIPE issue: Addressed a SIGPIPE leak that occurred in certain cases starting with version 8.9.1 | 8.10.0 |
+| 12 | HTTP/2 issue: Stopped offering ALPN `http/1.1` for `http2-prior-knowledge` to ensure proper protocol negotiation. | 8.10.0 |
+| 13 | HTTP/2 issue: Improved handling of end-of-stream (EOS) and blocked states to prevent unexpected behavior.| 8.11.0 |
 
 #### Known curl versions with compatibility issues for this client
-| curl Version            |
-|-------------------------|
-| 7.68.0                  |
-| 7.74.0                  |
-| 7.81.0                  |
-| 7.88.1                  |
-| 8.2.1                   |
-| 8.5.0                   |
-| 8.10.0                  |
+| curl Version | distribution | curl bugs |
+|--------------|--------------|-----------|
+| 7.68.0       | Ubuntu 20.04 LTS (Focal Fossa) | 2,3,4,5,6,7,8,9,10,11,12,13 |
+| 7.74.0       | Debian 11 (Bullseye) | 4,5,6,7,8,9,10,11,12,13 |
+| 7.81.0       | Ubuntu 22.04 LTS (Jammy Jellyfish) | 5,6,7,8,9,10,11,12,13 |
+| 7.88.1       | Debian 12 (Bookworm) | 6,7,8,9,10,11,12,13 |
+| 8.2.1        | Alpine Linux 3.14 | 7,8,9,10,11,12,13 |
+| 8.5.0        | Alpine Linux 3.15, Ubuntu 24.04 LTS (Noble Numbat) | 8,9,10,11,12,13 |
+| 8.10.0       | Alpine Linux 3.17 | 13 |
 
 > [!IMPORTANT]
 > If your distribution provides one of these curl versions you must upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl. Refer to [curl releases](https://curl.se/docs/releases.html) for curl version information.
@@ -194,6 +194,9 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 > The only options to resolve this are the following:
 > 1. Implement and/or ensure that IPv6 DNS resolution is possible on your system; allow IPv6 network connectivity between your system and Microsoft OneDrive
 > 2. Configure the client to only use IPv4 DNS resolution via setting the configuration option `ip_protocol_version = "1"`
+
+> [!IMPORTANT]
+> If you are using Debian 12 or Linux Mint Debian Edition (LMDE) 6, you can install curl version 8.10.1 from the respective backports repositories to address the bugs present in the default curl version.
 
 
 ## First Steps
