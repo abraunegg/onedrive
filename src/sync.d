@@ -1402,8 +1402,6 @@ class SyncEngine {
 				// - Is not a folder
 				// - Has a 'size' element
 				
-				addLogEntry("onedriveJSONItem: " ~ to!string(onedriveJSONItem));
-				
 				// Online Shared Folder Shortcuts match the same criteria - we need to ensure this is not a Online Shared Folder Shortcuts
 				if (!isItemRemote(onedriveJSONItem)) {
 					// Not a pointer to a remote item, thus high confidence this is not a shared folder link
