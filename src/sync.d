@@ -226,7 +226,20 @@ class SyncEngine {
 		}
 		
 		// Is there a sync_list file present?
-		if (exists(appConfig.syncListFilePath)) this.syncListConfigured = true;
+		if (exists(appConfig.syncListFilePath)) {
+			// yes there is a file present, but did we load any entries?
+			if (!selectiveSync.validSyncListRules) {
+				// function returned 'false' (array contains valid entries)
+				// flag there are rules to process when we are performing Client Side Filtering
+				if (debugLogging) {addLogEntry("Configuring syncListConfigured flag to TRUE as valid entries were loaded from 'sync_list' file", ["debug"]);}
+				this.syncListConfigured = true;
+			} else {
+				// function returned 'true' meaning there are are zero sync_list rules loaded despite the 'sync_list' file being present
+				// ensure this flag is false so we do not do any extra processing
+				if (debugLogging) {addLogEntry("Configuring syncListConfigured flag to FALSE as no valid entries were loaded from 'sync_list' file", ["debug"]);}
+				this.syncListConfigured = false;
+			}
+		}
 		
 		// Configure the uploadOnly flag to capture if --upload-only was used
 		if (appConfig.getValueBool("upload_only")) {
