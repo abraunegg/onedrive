@@ -1395,19 +1395,37 @@ class SyncEngine {
 			// Do we discard this JSON item?
 			bool discardDeltaJSONItem = false;
 			
-			// Microsoft OneNote container objects present as neither folder or file but has file size
+			// Microsoft OneNote container objects present neither folder or file but has file size
 			if ((!isItemFile(onedriveJSONItem)) && (!isItemFolder(onedriveJSONItem)) && (hasFileSize(onedriveJSONItem))) {
-				// Log that this was skipped as this was a Microsoft OneNote item and unsupported
-				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
-				discardDeltaJSONItem = true;
+				// This JSON:
+				// - Is not a file 
+				// - Is not a folder
+				// - Has a 'size' element
+				
+				addLogEntry("onedriveJSONItem: " ~ to!string(onedriveJSONItem));
+				
+				// Online Shared Folder Shortcuts match the same criteria - we need to ensure this is not a Online Shared Folder Shortcuts
+				if (!isItemRemote(onedriveJSONItem)) {
+					// Not a pointer to a remote item, thus high confidence this is not a shared folder link
+					// Log that this was skipped as this was a Microsoft OneNote item and unsupported
+					if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+					discardDeltaJSONItem = true;
+				}
 			}
 			
-			// Microsoft OneDrive OneNote file objects will report as files but have 'application/msonenote' as their mime type
-			// Is there a 'file' JSON element and it has a 'mimeType' element and the mimeType is 'application/msonenote'
-			if (isItemFile(onedriveJSONItem) && hasMimeType(onedriveJSONItem) && isMicrosoftOneNoteMimeType1(onedriveJSONItem)) {
-				// Log that this was skipped as this was a Microsoft OneNote item and unsupported
-				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook File '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
-				discardDeltaJSONItem = true;
+			// Microsoft OneDrive OneNote file objects will report as files but have 'application/msonenote' or 'application/octet-stream' as their mime type and will not have any hash entry
+			// Is there a 'file' JSON element and it has a 'mimeType' element?
+			if (isItemFile(onedriveJSONItem) && hasMimeType(onedriveJSONItem)) {
+				// and the mimeType is 'application/msonenote' or 'application/octet-stream'
+				if (isMicrosoftOneNoteMimeType1(onedriveJSONItem) || isMicrosoftOneNoteMimeType2(onedriveJSONItem)) {
+					// and must not have any hash
+					if (hasZeroHashes(onedriveJSONItem)) {
+						// extreme confidence these are Microsoft OneNote file references which cannot be supported
+						// Log that this was skipped as this was a Microsoft OneNote item and unsupported
+						if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook File '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+						discardDeltaJSONItem = true;
+					}
+				}
 			}
 			
 			// If we are not self-generating a /delta response, check this initial /delta JSON bundle item against the basic checks 
@@ -1428,6 +1446,9 @@ class SyncEngine {
 				// Add onedriveJSONItem to jsonItemsToProcess
 				if (debugLogging) {addLogEntry("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing", ["debug"]);}
 				jsonItemsToProcess ~= onedriveJSONItem;
+			} else {
+				// detail we are discarding the json
+				if (debugLogging) {addLogEntry("Discarding this Raw JSON OneDrive Item as this has been determined to be unwanted", ["debug"]);}
 			}
 		}
 		
