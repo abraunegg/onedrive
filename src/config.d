@@ -1437,8 +1437,8 @@ class ApplicationConfig {
 			addLogEntry("Compile time option --enable-notifications   = false");
 		}
 		
-		// Is sync_list configured ?
-		if (exists(syncListFilePath)){
+		// Is sync_list configured and contains entries?
+		if (exists(syncListFilePath) && getSize(syncListFilePath) > 0) {
 			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
 			addLogEntry("Selective sync 'sync_list' configured        = true");
 			addLogEntry("sync_list config option 'sync_root_files'    = " ~ to!string(getValueBool("sync_root_files")));
@@ -1446,13 +1446,24 @@ class ApplicationConfig {
 			// Output the sync_list contents
 			auto syncListFile = File(syncListFilePath, "r");
 			auto range = syncListFile.byLine();
-			foreach (line; range)
-			{
+			addLogEntry("------------------------------'sync_list'------------------------------");
+			foreach (line; range) {
 				addLogEntry(to!string(line));
 			}
+			addLogEntry("-----------------------------------------------------------------------");
+			
+			// Close reading the 'sync_list' file
+			syncListFile.close();
 		} else {
+			// file does not exist or file size is not greater than 0
 			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
-			addLogEntry("Selective sync 'sync_list' configured        = false");
+			if (exists(syncListFilePath) && getSize(syncListFilePath) == 0) {
+				// 'sync_list' file exists, no entries
+				addLogEntry("Selective sync 'sync_list' configured        = file exists but contains zero data");
+			} else {
+				// no 'sync_list' file
+				addLogEntry("Selective sync 'sync_list' configured        = false");
+			}
 		}
 		
 		// Is sync_business_shared_items enabled and configured ?
