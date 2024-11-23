@@ -255,6 +255,7 @@ odata
 ofonedrive
 onbinarymessage
 onedrive
+onetoc
 onmicrosoft
 ontextmessage
 opensuse
