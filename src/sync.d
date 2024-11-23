@@ -414,7 +414,7 @@ class SyncEngine {
 			// This can only be set if not using:
 			// - US Government L4
 			// - US Government L5 (DOD)
-			// - China operated by 21Vianet
+			// - Azure and Office365 operated by VNET in China
 			// 
 			// Additionally, this is not supported by OneDrive Personal accounts:
 			//
