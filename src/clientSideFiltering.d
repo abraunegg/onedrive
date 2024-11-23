@@ -100,13 +100,13 @@ class ClientSideFiltering {
 		auto file = File(filepath, "r");
 		auto range = file.byLine();
 		foreach (line; range) {
-			// Skip comments in file
-			if (line[0] == ';' || line[0] == '#') continue;
-			
 			// Skip any line that is empty or just contains whitespace
 			if (line.strip.length == 0) continue;
 			
-			// Is the rule a legacy 'include all root files lazy rule?' 
+			// Skip comments in file
+			if (line[0] == ';' || line[0] == '#') continue;
+			
+			// Is the rule a legacy 'include all root files lazy rule?'
 			if ((strip(line) == "/*") || (strip(line) == "/")) {
 				// yes ...
 				string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(strip(line)) ~ "' detected. Please use 'sync_root_files = \"true\"' or --sync-root-files option to sync files in the root path.";
