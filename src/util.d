@@ -1069,6 +1069,17 @@ bool hasHashes(const ref JSONValue item) {
 	return ("hashes" in item["file"]) != null;
 }
 
+bool hasZeroHashes(const ref JSONValue item) {
+    // Check if "hashes" exists under "file" and is empty
+    if ("hashes" in item["file"]) {
+        auto hashes = item["file"]["hashes"];
+        if (hashes.type == JSONType.object && hashes.object.keys.length == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool hasQuickXorHash(const ref JSONValue item) {
 	return ("quickXorHash" in item["file"]["hashes"]) != null;
 }
