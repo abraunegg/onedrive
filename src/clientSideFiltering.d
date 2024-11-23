@@ -101,7 +101,10 @@ class ClientSideFiltering {
 		auto range = file.byLine();
 		foreach (line; range) {
 			// Skip comments in file
-			if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
+			if (line[0] == ';' || line[0] == '#') continue;
+			
+			// Skip any line that is empty or just contains whitespace
+			if (line.strip.length == 0) continue;
 			
 			// Is the rule a legacy 'include all root files lazy rule?' 
 			if ((strip(line) == "/*") || (strip(line) == "/")) {
@@ -116,6 +119,12 @@ class ClientSideFiltering {
 		}
 		// Close reading the 'sync_list' file
 		file.close();
+	}
+	
+	// return true or false based on if we have loaded any valid sync_list rules
+	bool validSyncListRules() {
+		// If empty, will return true
+		return syncListRules.empty;
 	}
 	
 	// Configure the regex that will be used for 'skip_file'
@@ -237,7 +246,8 @@ class ClientSideFiltering {
 				
 		// always allow the root
 		if (path == ".") return false;
-		// if there are no allowed syncListRules always return false
+		
+		// if there are no allowed syncListRules always return false, meaning path is not excluded
 		if (syncListRules.empty) return false;
 		
 		// To ensure we are checking the 'right' path, build the path
@@ -247,7 +257,7 @@ class ClientSideFiltering {
 		if (debugLogging) {
 			addLogEntry("******************* SYNC LIST RULES EVALUATION START *******************", ["debug"]);
 			addLogEntry("Evaluation against 'sync_list' rules for this input path: " ~ path, ["debug"]);
-			addLogEntry("[S]excludeExactMatch       = " ~ to!string(excludeExactMatch), ["debug"]);
+			addLogEntry("[S]excludeExactMatch      = " ~ to!string(excludeExactMatch), ["debug"]);
 			addLogEntry("[S]excludeParentMatched   = " ~ to!string(excludeParentMatched), ["debug"]);
 			addLogEntry("[S]excludeAnywhereMatched = " ~ to!string(excludeAnywhereMatched), ["debug"]);
 			addLogEntry("[S]excludeWildcardMatched = " ~ to!string(excludeWildcardMatched), ["debug"]);
@@ -526,7 +536,7 @@ class ClientSideFiltering {
 			addLogEntry("------------------------------------------------------------------------", ["debug"]);
 		
 			// Interim results after checking each 'sync_list' rule against the input path
-			addLogEntry("[F]excludeExactMatch       = " ~ to!string(excludeExactMatch), ["debug"]);
+			addLogEntry("[F]excludeExactMatch      = " ~ to!string(excludeExactMatch), ["debug"]);
 			addLogEntry("[F]excludeParentMatched   = " ~ to!string(excludeParentMatched), ["debug"]);
 			addLogEntry("[F]excludeAnywhereMatched = " ~ to!string(excludeAnywhereMatched), ["debug"]);
 			addLogEntry("[F]excludeWildcardMatched = " ~ to!string(excludeWildcardMatched), ["debug"]);
