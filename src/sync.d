@@ -1415,9 +1415,18 @@ class SyncEngine {
 			// Is there a 'file' JSON element and it has a 'mimeType' element?
 			if (isItemFile(onedriveJSONItem) && hasMimeType(onedriveJSONItem)) {
 				// and the mimeType is 'application/msonenote' or 'application/octet-stream'
+				
+				// However there is API inconsistency here between Personal and Business Accounts
+				// Personal OneNote .onetoc2 and .one items all report mimeType as 'application/msonenote'
+				// Business OneNote .onetoc2 and .one items however are different:
+				//  .onetoc2 = 'application/octet-stream' mimeType
+				//  .one = 'application/msonenote' mimeType
+				
 				if (isMicrosoftOneNoteMimeType1(onedriveJSONItem) || isMicrosoftOneNoteMimeType2(onedriveJSONItem)) {
 					// and must not have any hash
-					if (hasZeroHashes(onedriveJSONItem)) {
+					// Personal Accounts hashes are 100% missing
+					// Business Accounts hashes exist, but JSON array is empty	
+					if ((!hasHashes(onedriveJSONItem)) || (hasZeroHashes(onedriveJSONItem))) {
 						// extreme confidence these are Microsoft OneNote file references which cannot be supported
 						// Log that this was skipped as this was a Microsoft OneNote item and unsupported
 						if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook File '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
