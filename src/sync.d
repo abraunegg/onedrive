@@ -65,7 +65,7 @@ class SyncException: Exception {
 struct DriveDetailsCache {
 	// - driveId is the drive for the operations were items need to be stored
 	// - quotaRestricted details a bool value as to if that drive is restricting our ability to understand if there is space available. Some 'Business' and 'SharePoint' restrict, and most (if not all) shared folders it cant be determined if there is free space
-	// - quotaAvailable is a ulong value that stores the value of what the current free space is available online
+	// - quotaAvailable is a long value that stores the value of what the current free space is available online
 	string driveId;
 	bool quotaRestricted;
 	bool quotaAvailable;
@@ -174,15 +174,15 @@ class SyncEngine {
 	//  https://support.microsoft.com/en-us/office/invalid-file-names-and-file-types-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us
 	//	July 2020, maximum file size for all accounts is 100GB
 	//  January 2021, maximum file size for all accounts is 250GB
-	ulong maxUploadFileSize = 268435456000; // 250GB
+	long maxUploadFileSize = 268435456000; // 250GB
 	// Threshold after which files will be uploaded using an upload session
-	ulong sessionThresholdFileSize = 4 * 2^^20; // 4 MiB
+	long sessionThresholdFileSize = 4 * 2^^20; // 4 MiB
 	// File size limit for file operations that the user has configured
-	ulong fileSizeLimit;
+	long fileSizeLimit;
 	// Total data to upload
-	ulong totalDataToUpload;
+	long totalDataToUpload;
 	// How many items have been processed for the active operation
-	ulong processedCount;
+	long processedCount;
 	// Are we creating a simulated /delta response? This is critically important in terms of how we 'update' the database
 	bool generateSimulatedDeltaResponse = false;
 	// Store the latest DeltaLink
@@ -222,7 +222,7 @@ class SyncEngine {
 		// Configure file size limit
 		if (appConfig.getValueLong("skip_size") != 0) {
 			fileSizeLimit = appConfig.getValueLong("skip_size") * 2^^20;
-			fileSizeLimit = (fileSizeLimit == 0) ? ulong.max : fileSizeLimit;
+			fileSizeLimit = (fileSizeLimit == 0) ? long.max : fileSizeLimit;
 		}
 		
 		// Is there a sync_list file present?
@@ -391,7 +391,10 @@ class SyncEngine {
 			
 			// Display relevant account details
 			try {
-				displaySyncEngineDetails();
+				// we only do this if we are doing --verbose logging
+				if (verboseLogging) {
+					displaySyncEngineDetails();
+				}
 			} catch (AccountDetailsException exception) {
 				// details could not be queried
 				addLogEntry(exception.msg);
@@ -479,13 +482,13 @@ class SyncEngine {
 				// - quotaRestricted;
 				// - quotaAvailable;
 				// - quotaRemaining;
+				//
+				// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero value
+				// When addOrUpdateOneDriveOnlineDetails() is called, messaging is provided if these are zero, negative or missing (thus quota is being restricted)
 				addOrUpdateOneDriveOnlineDetails(appConfig.defaultDriveId);
 			}
 			
-			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero value
-			// When addOrUpdateOneDriveOnlineDetails() is called, messaging is provided if these are zero, negative or missing (thus quota is being restricted)
-			
-			// Fetch the details from cachedOnlineDriveData
+			// Fetch the details from cachedOnlineDriveData for appConfig.defaultDriveId
 			cachedOnlineDriveData = getDriveDetails(appConfig.defaultDriveId);
 			// - cachedOnlineDriveData.quotaRestricted;
 			// - cachedOnlineDriveData.quotaAvailable;
@@ -498,6 +501,46 @@ class SyncEngine {
 				addLogEntry("cachedOnlineDriveData.quotaRemaining  = " ~ to!string(cachedOnlineDriveData.quotaRemaining), ["debug"]);
 				addLogEntry("cachedOnlineDriveData.quotaAvailable  = " ~ to!string(cachedOnlineDriveData.quotaAvailable), ["debug"]);
 				addLogEntry("cachedOnlineDriveData.quotaRestricted = " ~ to!string(cachedOnlineDriveData.quotaRestricted), ["debug"]);
+			}
+			
+			// Regardless of this being all set - based on the JSON respone, check for 'quota' being present, to check 
+			// for the following valid states: normal | nearing | critical | exceeded
+			//
+			// Based on this, then generate an applicable application message to advise the user of their quota status
+			if ((hasQuota(defaultOneDriveDriveDetails)) && (hasQuotaState(defaultOneDriveDriveDetails))) {
+				// get the current state
+				string quotaState = defaultOneDriveDriveDetails["quota"]["state"].str;
+				
+				// quotaState = normal - no message
+				string nearingMessage = "WARNING: Your Microsoft OneDrive storage is nearing capacity, with less than 10% of your available space remaining.";
+				string criticalMessage = "WARNING: Your Microsoft OneDrive storage is critically low, with less than 1% of your available space remaining.";
+				string exceededMessage = "CRITICAL: Your Microsoft OneDrive storage limit has been exceeded. You can no longer upload new content to Microsoft OneDrive.";
+				string actionRequired = "         Delete unneeded files or upgrade your storage plan now, as further uploads will not be possible once storage is exceeded";
+				
+				// switch to display the right message
+				switch(quotaState) {
+					case "nearing":
+						addLogEntry();
+						addLogEntry(nearingMessage, ["info", "notify"]);
+						addLogEntry(actionRequired);
+						addLogEntry();
+						break;
+					case "critical":
+						addLogEntry();
+						addLogEntry(criticalMessage, ["info", "notify"]);
+						addLogEntry(actionRequired);
+						addLogEntry();
+						break;
+					case "exceeded":
+						addLogEntry();
+						addLogEntry("******************************************************************************************************************************");
+						addLogEntry(exceededMessage, ["info", "notify"]);
+						addLogEntry("******************************************************************************************************************************");
+						addLogEntry();
+						break;
+					default:
+						// nothing
+				}
 			}
 		} else {
 			// Did the configuration file contain a 'drive_id' entry
@@ -863,8 +906,8 @@ class SyncEngine {
 		string currentDeltaLink = null;
 		string databaseDeltaLink;
 		JSONValue deltaChanges;
-		ulong responseBundleCount;
-		ulong jsonItemsReceived = 0;
+		long responseBundleCount;
+		long jsonItemsReceived = 0;
 		
 		// Reset jsonItemsToProcess & processedCount
 		jsonItemsToProcess = [];
@@ -1014,7 +1057,7 @@ class SyncEngine {
 					}
 				}
 				
-				ulong nrChanges = count(deltaChanges["value"].array);
+				long nrChanges = count(deltaChanges["value"].array);
 				int changeCount = 0;
 				
 				if (appConfig.verbosityCount == 0) {
@@ -1173,7 +1216,7 @@ class SyncEngine {
 			deltaChanges = generateDeltaResponse(pathToQuery);
 			
 			// How many changes were returned?
-			ulong nrChanges = count(deltaChanges["value"].array);
+			long nrChanges = count(deltaChanges["value"].array);
 			int changeCount = 0;
 			if (debugLogging) {addLogEntry("API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["debug"]);}
 			// Update the count of items received
@@ -1224,8 +1267,8 @@ class SyncEngine {
 		if (jsonItemsToProcess.length > 0) {
 			// Lets deal with the JSON items in a batch process
 			size_t batchSize = 500;
-			ulong batchCount = (jsonItemsToProcess.length + batchSize - 1) / batchSize;
-			ulong batchesProcessed = 0;
+			long batchCount = (jsonItemsToProcess.length + batchSize - 1) / batchSize;
+			long batchesProcessed = 0;
 			
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (!appConfig.suppressLoggingOutput) {
@@ -1290,7 +1333,7 @@ class SyncEngine {
 	}
 	
 	// Process the /delta API JSON response items
-	void processDeltaJSONItem(JSONValue onedriveJSONItem, ulong nrChanges, int changeCount, ulong responseBundleCount, bool singleDirectoryScope) {
+	void processDeltaJSONItem(JSONValue onedriveJSONItem, long nrChanges, int changeCount, long responseBundleCount, bool singleDirectoryScope) {
 		
 		// Variables for this JSON item
 		string thisItemId;
@@ -1524,14 +1567,14 @@ class SyncEngine {
 	}
 	
 	// Process each of the elements contained in jsonItemsToProcess[]
-	void processJSONItemsInBatch(JSONValue[] array, ulong batchGroup, ulong batchCount) {
+	void processJSONItemsInBatch(JSONValue[] array, long batchGroup, long batchCount) {
 	
-		ulong batchElementCount = array.length;
+		long batchElementCount = array.length;
 		MonoTime jsonProcessingStartTime;
 
 		foreach (i, onedriveJSONItem; array.enumerate) {
 			// Use the JSON elements rather can computing a DB struct via makeItem()
-			ulong elementCount = i +1;
+			long elementCount = i +1;
 			jsonProcessingStartTime = MonoTime.currTime();
 			
 			// To show this is the processing for this particular item, start off with this breaker line
@@ -2435,8 +2478,8 @@ class SyncEngine {
 	void downloadOneDriveItems() {
 		// Lets deal with all the JSON items that need to be downloaded in a batch process
 		size_t batchSize = to!int(appConfig.getValueLong("threads"));
-		ulong batchCount = (fileJSONItemsToDownload.length + batchSize - 1) / batchSize;
-		ulong batchesProcessed = 0;
+		long batchCount = (fileJSONItemsToDownload.length + batchSize - 1) / batchSize;
+		long batchesProcessed = 0;
 		
 		foreach (chunk; fileJSONItemsToDownload.chunks(batchSize)) {
 			// send an array containing 'appConfig.getValueLong("threads")' JSON items to download
@@ -2462,7 +2505,7 @@ class SyncEngine {
 		bool downloadFailed = false;
 		string OneDriveFileXORHash;
 		string OneDriveFileSHA256Hash;
-		ulong jsonFileSize = 0;
+		long jsonFileSize = 0;
 		Item databaseItem;
 		bool fileFoundInDB = false;
 		
@@ -2540,10 +2583,10 @@ class SyncEngine {
 			
 			// Is there enough free space locally to download the file
 			// - We can use '.' here as we change the current working directory to the configured 'sync_dir'
-			ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
+			long localActualFreeSpace = to!long(getAvailableDiskSpace("."));
 			// So that we are not responsible in making the disk 100% full if we can download the file, compare the current available space against the reservation set and file size
 			// The reservation value is user configurable in the config file, 50MB by default
-			ulong freeSpaceReservation = appConfig.getValueLong("space_reservation");
+			long freeSpaceReservation = appConfig.getValueLong("space_reservation");
 			// debug output
 			if (debugLogging) {
 				addLogEntry("Local Disk Space Actual: " ~ to!string(localActualFreeSpace), ["debug"]);
@@ -2621,7 +2664,7 @@ class SyncEngine {
 							// Does the file hash OneDrive reports match what we have locally?
 							string onlineFileHash;
 							string downloadedFileHash;
-							ulong downloadFileSize = getSize(newItemPath);
+							long downloadFileSize = getSize(newItemPath);
 							
 							if (!OneDriveFileXORHash.empty) {
 								onlineFileHash = OneDriveFileXORHash;
@@ -2969,27 +3012,25 @@ class SyncEngine {
 	// Display the pertinent details of the sync engine
 	void displaySyncEngineDetails() {
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-		if (verboseLogging) {
-			addLogEntry("Application Version:  " ~ appConfig.applicationVersion, ["verbose"]);
-			addLogEntry("Account Type:         " ~ appConfig.accountType, ["verbose"]);
-			addLogEntry("Default Drive ID:     " ~ appConfig.defaultDriveId, ["verbose"]);
-			addLogEntry("Default Root ID:      " ~ appConfig.defaultRootId, ["verbose"]);
-		}
-
+		addLogEntry("Application Version:  " ~ appConfig.applicationVersion, ["verbose"]);
+		addLogEntry("Account Type:         " ~ appConfig.accountType, ["verbose"]);
+		addLogEntry("Default Drive ID:     " ~ appConfig.defaultDriveId, ["verbose"]);
+		addLogEntry("Default Root ID:      " ~ appConfig.defaultRootId, ["verbose"]);
+	
 		// Fetch the details from cachedOnlineDriveData
 		DriveDetailsCache cachedOnlineDriveData;
 		cachedOnlineDriveData = getDriveDetails(appConfig.defaultDriveId);
-		
+	
 		// What do we display here for space remaining
 		if (cachedOnlineDriveData.quotaRemaining > 0) {
 			// Display the actual value
-			if (verboseLogging) {addLogEntry("Remaining Free Space: " ~ to!string(byteToGibiByte(cachedOnlineDriveData.quotaRemaining)) ~ " GB (" ~ to!string(cachedOnlineDriveData.quotaRemaining) ~ " bytes)", ["verbose"]);}
+			addLogEntry("Remaining Free Space: " ~ to!string(byteToGibiByte(cachedOnlineDriveData.quotaRemaining)) ~ " GB (" ~ to!string(cachedOnlineDriveData.quotaRemaining) ~ " bytes)", ["verbose"]);
 		} else {
 			// zero or non-zero value or restricted
 			if (!cachedOnlineDriveData.quotaRestricted){
-				if (verboseLogging) {addLogEntry("Remaining Free Space: 0 KB", ["verbose"]);}
+				addLogEntry("Remaining Free Space: 0 KB", ["verbose"]);
 			} else {
-				if (verboseLogging) {addLogEntry("Remaining Free Space: Not Available", ["verbose"]);}
+				addLogEntry("Remaining Free Space: Not Available", ["verbose"]);
 			}
 		}
 	}
@@ -3841,7 +3882,7 @@ class SyncEngine {
 			if (isFile(localFilePath)) {
 				if (fileSizeLimit != 0) {
 					// Get the file size
-					ulong thisFileSize = getSize(localFilePath);
+					long thisFileSize = getSize(localFilePath);
 					if (thisFileSize >= fileSizeLimit) {
 						if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_size config: " ~ localFilePath ~ " (" ~ to!string(thisFileSize/2^^20) ~ " MB)", ["verbose"]);}
 					}
@@ -4334,8 +4375,8 @@ class SyncEngine {
 		
 		// Each element in this array 'databaseItemsWhereContentHasChanged' is an Database Item ID that has been modified locally
 		size_t batchSize = to!int(appConfig.getValueLong("threads"));
-		ulong batchCount = (databaseItemsWhereContentHasChanged.length + batchSize - 1) / batchSize;
-		ulong batchesProcessed = 0;
+		long batchCount = (databaseItemsWhereContentHasChanged.length + batchSize - 1) / batchSize;
+		long batchesProcessed = 0;
 		
 		// For each batch of files to upload, upload the changed data to OneDrive
 		foreach (chunk; databaseItemsWhereContentHasChanged.chunks(batchSize)) {
@@ -4368,7 +4409,7 @@ class SyncEngine {
 		if (debugLogging) {addLogEntry("uploadChangedLocalFileToOneDrive: " ~ localFilePath, ["debug"]);}
 		
 		// How much space is remaining on OneDrive
-		ulong remainingFreeSpace;
+		long remainingFreeSpace;
 		// Did the upload fail?
 		bool uploadFailed = false;
 		// Did we skip due to exceeding maximum allowed size?
@@ -4409,25 +4450,24 @@ class SyncEngine {
 		remainingFreeSpace = cachedOnlineDriveData.quotaRemaining;
 		
 		// Get the file size from the actual file
-		ulong thisFileSizeLocal = getSize(localFilePath);
+		long thisFileSizeLocal = getSize(localFilePath);
 		// Get the file size from the DB data
-		ulong thisFileSizeFromDB;
+		long thisFileSizeFromDB;
 		if (!dbItem.size.empty) {
-			thisFileSizeFromDB = to!ulong(dbItem.size);
+			thisFileSizeFromDB = to!long(dbItem.size);
 		} else {
 			thisFileSizeFromDB = 0;
 		}
 		
 		// 'remainingFreeSpace' online includes the current file online
 		// We need to remove the online file (add back the existing file size) then take away the new local file size to get a new approximate value
-		ulong calculatedSpaceOnlinePostUpload = (remainingFreeSpace + thisFileSizeFromDB) - thisFileSizeLocal;
+		long calculatedSpaceOnlinePostUpload = (remainingFreeSpace + thisFileSizeFromDB) - thisFileSizeLocal;
 		
 		// Based on what we know, for this thread - can we safely upload this modified local file?
 		if (debugLogging) {
 			addLogEntry("This Thread Estimated Free Space Online:              " ~ to!string(remainingFreeSpace), ["debug"]);
 			addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 		}
-		JSONValue uploadResponse;
 		
 		// Is there quota available for the given drive where we are uploading to?
 		// 	If 'personal' accounts, if driveId == defaultDriveId, then we will have quota data - cachedOnlineDriveData.quotaRemaining will be updated so it can be reused
@@ -4449,6 +4489,7 @@ class SyncEngine {
 		}
 			
 		// Do we have space available or is space available being restricted (so we make the blind assumption that there is space available)
+		JSONValue uploadResponse;
 		if (spaceAvailableOnline) {
 			// Does this file exceed the maximum file size to upload to OneDrive?
 			if (thisFileSizeLocal <= maxUploadFileSize) {
@@ -4533,8 +4574,9 @@ class SyncEngine {
 		}
 	}
 	
+	
 	// Perform the upload of a locally modified file to OneDrive
-	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, ulong thisFileSizeLocal) {
+	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal) {
 			
 		// Function variables
 		JSONValue uploadResponse;
@@ -5025,8 +5067,8 @@ class SyncEngine {
 			}
 		}
 
-		ulong maxPathLength;
-		ulong pathWalkLength;
+		long maxPathLength;
+		long pathWalkLength;
 		
 		// Add this logging break to assist with what was checked for each path
 		if (path != ".") {
@@ -5472,7 +5514,7 @@ class SyncEngine {
 				if (debugLogging) {addLogEntry("onlinePathData: " ~to!string(onlinePathData), ["debug"]);}
 				
 				// Process the response from searching the drive
-				ulong responseCount = count(onlinePathData["value"].array);
+				long responseCount = count(onlinePathData["value"].array);
 				if (responseCount > 0) {
 					// Search 'name' matches were found .. need to match these against queryItem.id
 					bool foundDirectoryOnline = false;
@@ -5745,8 +5787,8 @@ class SyncEngine {
 	void uploadNewLocalFileItems() {
 		// Lets deal with the new local items in a batch process
 		size_t batchSize = to!int(appConfig.getValueLong("threads"));
-		ulong batchCount = (newLocalFilesToUploadToOneDrive.length + batchSize - 1) / batchSize;
-		ulong batchesProcessed = 0;
+		long batchCount = (newLocalFilesToUploadToOneDrive.length + batchSize - 1) / batchSize;
+		long batchesProcessed = 0;
 		
 		foreach (chunk; newLocalFilesToUploadToOneDrive.chunks(batchSize)) {
 			uploadNewLocalFileItemsInParallel(chunk);
@@ -5773,7 +5815,7 @@ class SyncEngine {
 		
 		// These are the details of the item we need to upload
 		// How much space is remaining on OneDrive
-		ulong remainingFreeSpaceOnline;
+		long remainingFreeSpaceOnline;
 		// Did the upload fail?
 		bool uploadFailed = false;
 		// Did we skip due to exceeding maximum allowed size?
@@ -5783,12 +5825,12 @@ class SyncEngine {
 		// Is the parent path in the item database?
 		bool parentPathFoundInDB = false;
 		// Get this file size
-		ulong thisFileSize;
+		long thisFileSize;
 		// Is there space available online
 		bool spaceAvailableOnline = false;
 		
 		DriveDetailsCache cachedOnlineDriveData;
-		ulong calculatedSpaceOnlinePostUpload;
+		long calculatedSpaceOnlinePostUpload;
 		
 		OneDriveApi checkFileOneDriveApiInstance;
 		
@@ -6082,9 +6124,9 @@ class SyncEngine {
 			fileUploadFailures ~= fileToUpload;
 		}
 	}
-	
+		
 	// Perform the actual upload to OneDrive
-	bool performNewFileUpload(Item parentItem, string fileToUpload, ulong thisFileSize) {
+	bool performNewFileUpload(Item parentItem, string fileToUpload, long thisFileSize) {
 			
 		// Assume that by default the upload fails
 		bool uploadFailed = true;
@@ -6366,19 +6408,19 @@ class SyncEngine {
 	}
 	
 	// Perform the upload of file via the Upload Session that was created
-	JSONValue performSessionFileUpload(OneDriveApi activeOneDriveApiInstance, ulong thisFileSize, JSONValue uploadSessionData, string threadUploadSessionFilePath) {
+	JSONValue performSessionFileUpload(OneDriveApi activeOneDriveApiInstance, long thisFileSize, JSONValue uploadSessionData, string threadUploadSessionFilePath) {
 			
 		// Response for upload
 		JSONValue uploadResponse;
 	
 		// Session JSON needs to contain valid elements
 		// Get the offset details
-		ulong fragmentSize = 10 * 2^^20; // 10 MiB
+		long fragmentSize = 10 * 2^^20; // 10 MiB
 		size_t fragmentCount = 0;
-		ulong fragSize = 0;
-		ulong offset = uploadSessionData["nextExpectedRanges"][0].str.splitter('-').front.to!ulong;
+		long fragSize = 0;
+		long offset = uploadSessionData["nextExpectedRanges"][0].str.splitter('-').front.to!long;
 		size_t expected_total_fragments = cast(size_t) ceil(double(thisFileSize) / double(fragmentSize));
-		ulong start_unix_time = Clock.currTime.toUnixTime();
+		long start_unix_time = Clock.currTime.toUnixTime();
 		int h, m, s;
 		string etaString;
 		string uploadLogEntry = "Uploading: " ~ uploadSessionData["localPath"].str ~ " ... ";
@@ -6512,7 +6554,7 @@ class SyncEngine {
 		}
 		
 		// upload complete
-		ulong end_unix_time = Clock.currTime.toUnixTime();
+		long end_unix_time = Clock.currTime.toUnixTime();
 		auto upload_duration = cast(int)(end_unix_time - start_unix_time);
 		dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
 		etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
@@ -6550,7 +6592,7 @@ class SyncEngine {
 				bool flagAsBigDelete = false;
 				
 				Item[] children;
-				ulong itemsToDelete;
+				long itemsToDelete;
 			
 				if ((itemToDelete.type == ItemType.dir)) {
 					// Query the database - how many objects will this remove?
@@ -7874,7 +7916,7 @@ class SyncEngine {
 	}
 	
 	// Perform integrity validation of the file that was uploaded
-	bool performUploadIntegrityValidationChecks(JSONValue uploadResponse, string localFilePath, ulong localFileSize) {
+	bool performUploadIntegrityValidationChecks(JSONValue uploadResponse, string localFilePath, long localFileSize) {
 	
 		bool integrityValid = false;
 	
@@ -7882,7 +7924,7 @@ class SyncEngine {
 			// Integrity validation has not been disabled (this is the default so we are always integrity checking our uploads)
 			if (uploadResponse.type() == JSONType.object) {
 				// Provided JSON is a valid JSON
-				ulong uploadFileSize;
+				long uploadFileSize;
 				string uploadFileHash;
 				string localFileHash;
 				// Regardless if valid JSON is responded with, 'size' and 'quickXorHash' must be present
@@ -8206,7 +8248,7 @@ class SyncEngine {
 		// Process that JSON data for relevancy
 		
 		// Function variables
-		ulong downloadSize = 0;
+		long downloadSize = 0;
 		string deltaLink = null;
 		string driveIdToQuery = appConfig.defaultDriveId;
 		string itemIdToQuery = appConfig.defaultRootId;
@@ -8620,7 +8662,7 @@ class SyncEngine {
 	bool checkForInterruptedSessionUploads() {
 	
 		bool interruptedUploads = false;
-		ulong interruptedUploadsCount;
+		long interruptedUploadsCount;
 		
 		// Scan the filesystem for the files we are interested in, build up interruptedUploadsSessionFiles array
 		foreach (sessionFile; dirEntries(appConfig.configDirName, "session_upload.*", SpanMode.shallow)) {
@@ -8683,8 +8725,8 @@ class SyncEngine {
 			// there are valid items to resume upload
 			// Lets deal with all the JSON items that need to be resumed for upload in a batch process
 			size_t batchSize = to!int(appConfig.getValueLong("threads"));
-			ulong batchCount = (jsonItemsToResumeUpload.length + batchSize - 1) / batchSize;
-			ulong batchesProcessed = 0;
+			long batchCount = (jsonItemsToResumeUpload.length + batchSize - 1) / batchSize;
+			long batchesProcessed = 0;
 			
 			foreach (chunk; jsonItemsToResumeUpload.chunks(batchSize)) {
 				// send an array containing 'appConfig.getValueLong("threads")' JSON items to resume upload
@@ -8844,7 +8886,7 @@ class SyncEngine {
 			
 			// Pull out data from this JSON element
 			string threadUploadSessionFilePath = jsonItemToResume["sessionFilePath"].str;
-			ulong thisFileSizeLocal = getSize(jsonItemToResume["localPath"].str);
+			long thisFileSizeLocal = getSize(jsonItemToResume["localPath"].str);
 			
 			// Try to resume the session upload using the provided data
 			try {
@@ -9032,7 +9074,7 @@ class SyncEngine {
 	}
 	
 	// Update 'onlineDriveDetails' with the latest data about this drive
-	void updateDriveDetailsCache(string driveId, bool quotaRestricted, bool quotaAvailable, ulong localFileSize) {
+	void updateDriveDetailsCache(string driveId, bool quotaRestricted, bool quotaAvailable, long localFileSize) {
 	
 		// As each thread is running differently, what is the current 'quotaRemaining' for 'driveId' ?
 		long quotaRemaining;
