@@ -1458,7 +1458,7 @@ void checkOpenSSLVersion() {
 	auto matches = versionString.match(versionRegex);
 	if (matches.empty) {
 		if (!versionString.empty) {
-			if (verboseLogging) {addLogEntry("Unable to provided parse OpenSSL version: " ~ versionString, ["verbose"]);}
+			if (debugLogging) {addLogEntry("Unable to provided parse OpenSSL version: " ~ versionString, ["debug"]);}
 		}
 	} else {
 		// Extract major, minor, patch, and optional letter parts

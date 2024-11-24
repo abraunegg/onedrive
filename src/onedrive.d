@@ -30,9 +30,6 @@ import log;
 import util;
 import curlEngine;
 
-// Shared variables between classes
-shared bool debugHTTPResponseOutput = false;
-
 // Define the 'OneDriveException' class
 class OneDriveException: Exception {
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/errors
@@ -87,7 +84,6 @@ class OneDriveApi {
 	string authScope = "";
 	const(char)[] refreshToken = "";
 	bool dryRun = false;
-	bool debugResponse = false;
 	bool keepAlive = false;
 
 	this(ApplicationConfig appConfig) {
@@ -148,11 +144,6 @@ class OneDriveApi {
 
 		// Did the user specify --dry-run
 		dryRun = appConfig.getValueBool("dry_run");
-		
-		// Did the user specify --debug-https
-		debugResponse = appConfig.getValueBool("debug_https");
-		// Flag this so if webhooks are being used, it can also be consumed
-		debugHTTPResponseOutput = appConfig.getValueBool("debug_https");
 		
 		// Set clientId to use the configured 'application_id'
 		clientId = appConfig.getValueString("application_id");
@@ -1187,8 +1178,8 @@ class OneDriveApi {
 				if (response.hasResponse) {
 					// Process the response
 					result = response.json();
-					// Print response if 'debugResponse' is flagged
-					if (debugResponse){
+					// Print response if 'debugHTTPSResponse' is flagged
+					if (debugHTTPSResponse){
 						if (debugLogging) {addLogEntry("Microsoft Graph API Response: " ~ response.dumpResponse(), ["debug"]);}
 					}
 					
