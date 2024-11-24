@@ -80,7 +80,7 @@ class CurlResponse {
 		hasResponse = true;
 		this.responseHeaders = http.responseHeaders();
 		this.statusLine = http.statusLine;
-		if (debugLogging) {
+		if ((debugLogging) && (debugHTTPSResponse)) {
 			addLogEntry("HTTP Response Headers: " ~ to!string(this.responseHeaders), ["debug"]);
 			addLogEntry("HTTP Status Line: " ~ to!string(this.statusLine), ["debug"]);
 		}

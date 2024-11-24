@@ -199,6 +199,9 @@ int main(string[] cliArgs) {
 		}
 	}
 	
+	// If --debug-https has been used, set the applicable flag
+	debugHTTPSResponse = appConfig.getValueBool("debug_https");
+	
 	// Common warning
 	string distributionWarning = "         Please report this to your distribution, requesting an update to a newer cURL version, or consider upgrading it yourself for optimal stability.";
 	
