@@ -170,7 +170,7 @@ class SyncEngine {
 	// Is bypass_data_preservation set via config file
 	// Local data loss MAY occur in this scenario
 	bool bypassDataPreservation = false;
-	// Has the user configured to permanently delete files online rather than send to online recycle bind
+	// Has the user configured to permanently delete files online rather than send to online recycle bin
 	bool permanentDelete = false;
 	// Maximum file size upload
 	//  https://support.microsoft.com/en-us/office/invalid-file-names-and-file-types-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us
