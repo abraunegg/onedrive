@@ -86,7 +86,7 @@ class OneDriveWebhook {
 	}
 
 	private static void handle(shared OneDriveWebhook _this, Cgi cgi) {
-		if (debugHTTPResponseOutput) {
+		if (debugHTTPSResponse) {
 			addLogEntry("Webhook request: " ~ to!string(cgi.requestMethod) ~ " " ~ to!string(cgi.requestUri));
 			if (!cgi.postBody.empty) {
 				addLogEntry("Webhook post body: " ~ to!string(cgi.postBody));

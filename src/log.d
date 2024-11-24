@@ -24,6 +24,7 @@ version(Notifications) {
 // Shared Application Logging Level Variables
 __gshared bool verboseLogging = false;
 __gshared bool debugLogging = false;
+__gshared bool debugHTTPSResponse = false;
 
 // Private Shared Module Objects
 private __gshared LogBuffer logBuffer;
