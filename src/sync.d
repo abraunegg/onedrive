@@ -4240,7 +4240,9 @@ class SyncEngine {
 						
 						// If this is a 'add shortcut to onedrive' link, we need to actually scan this path, so add this we need to pass this JSON
 						if (isItemRemote(onedriveJSONItem)) {
-							if (verboseLogging) {addLogEntry("Skipping shared folder shortcut - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
+							if (verboseLogging) {addLogEntry("Including shared folder shortcut for further analysis: " ~ newItemPath, ["verbose"]);}
+							// reset this flag
+							clientSideRuleExcludesPath = false;
 						}
 					}
 				} else {
