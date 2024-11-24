@@ -503,7 +503,7 @@ class SyncEngine {
 				addLogEntry("cachedOnlineDriveData.quotaRestricted = " ~ to!string(cachedOnlineDriveData.quotaRestricted), ["debug"]);
 			}
 			
-			// Regardless of this being all set - based on the JSON respone, check for 'quota' being present, to check 
+			// Regardless of this being all set - based on the JSON response, check for 'quota' being present, to check 
 			// for the following valid states: normal | nearing | critical | exceeded
 			//
 			// Based on this, then generate an applicable application message to advise the user of their quota status
