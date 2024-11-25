@@ -531,7 +531,7 @@ _**Config Example:**_ `permanent_delete = "true"`
 > WARNING: The application is configured to permanently delete files online; however, this action is not supported by Microsoft OneDrive Personal Accounts.
 > ```
 > 
-> When running against a supported account the following message will be generated:
+> When using this config option against a supported account the following message will be generated:
 > ```
 > WARNING: Application has been configured to permanently remove files online rather than send to the recycle bin. Permanently deleted items can't be restored.
 > WARNING: Online data loss MAY occur in this scenario.
