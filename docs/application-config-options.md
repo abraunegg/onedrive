@@ -515,7 +515,7 @@ _**Default Value:**_ False
 
 _**Config Example:**_ `permanent_delete = "true"`
 
-> [!NOTE]
+> [!IMPORTANT]
 > The Microsoft OneDrive API for this capability is also very narrow:
 > | Account Type | Config Option is Supported |
 > |--------------|------------------|
