@@ -36,6 +36,7 @@ Before reading this document, please ensure you are running application version 
   - [no_remote_delete](#no_remote_delete)
   - [notify_file_actions](#notify_file_actions)
   - [operation_timeout](#operation_timeout)
+  - [permanent_delete](#permanent_delete)
   - [rate_limit](#rate_limit)
   - [read_only_auth_scope](#read_only_auth_scope)
   - [remove_source_files](#remove_source_files)
@@ -504,6 +505,38 @@ _**Value Type:**_ Integer
 _**Default Value:**_ 3600
 
 _**Config Example:**_ `operation_timeout = "3600"`
+
+### permanent_delete
+_**Description:**_ Permanently delete an item online when it is removed locally. When using this method, they're permanently removed and aren't sent to the Microsoft OneDrive Recycle Bin. Therefore, permanently deleted drive items can't be restored afterward. Online data loss MAY occur in this scenario.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `permanent_delete = "true"`
+
+> [!NOTE]
+> The Microsoft OneDrive API for this capability is also very narrow:
+> | Account Type | Config Option is Supported |
+> |--------------|------------------|
+> | Personal     | ❌ |
+> | Business     | ✔ |
+> | SharePoint   | ✔ |
+> | Microsoft Cloud Germany | ✔ |
+> | Microsoft Cloud for US Government | ❌ |
+> | Azure and Office365 operated by VNET in China | ❌ |
+> 
+> When using this config option against an unsupported Personal Accounts the following message will be generated:
+> ```
+> WARNING: The application is configured to permanently delete files online; however, this action is not supported by Microsoft OneDrive Personal Accounts.
+> ```
+> 
+> When running against a supported account the following message will be generated:
+> ```
+> WARNING: Application has been configured to permanently remove files online rather than send to the recycle bin. Permanently deleted items can't be restored.
+> WARNING: Online data loss MAY occur in this scenario.
+> ```
+>
 
 ### rate_limit
 _**Description:**_ This configuration option controls the bandwidth used by the application, per thread, when interacting with Microsoft OneDrive.
