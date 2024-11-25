@@ -991,6 +991,10 @@ bool hasQuota(JSONValue item) {
 	return ("quota" in item) != null;
 }
 
+bool hasQuotaState(JSONValue item) {
+	return ("state" in item["quota"]) != null;
+}
+
 bool isItemDeleted(JSONValue item) {
 	return ("deleted" in item) != null;
 }
