@@ -84,6 +84,8 @@ int main(string[] cliArgs) {
 	bool monitorFailures = false;
 	// Help requested
 	bool helpRequested = false;
+	// Was a no-sync type operation requested
+	bool noSyncTaskOperationRequested = false;
 	
 	// DEVELOPER OPTIONS OUTPUT VARIABLES
 	bool displayMemoryUsage = false;
@@ -188,6 +190,12 @@ int main(string[] cliArgs) {
 	// Update the current runtime application configuration (default or 'config' file read in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
 	
+	// If --debug-https has been used, set the applicable flag
+	debugHTTPSResponse = appConfig.getValueBool("debug_https"); // set __gshared bool debugHTTPSResponse in log.d now that we have read-in any CLI arguments
+	
+	// Are we performing some sort of 'no-sync' task?
+	noSyncTaskOperationRequested = appConfig.hasNoSyncOperationBeenRequested();
+	
 	// If --disable-notifications has not been used, check if everything exists to enable notifications
 	if (!appConfig.getValueBool("disable_notifications")) {
 		// If notifications was compiled in, we need to ensure that these variables are actually available before we enable GUI Notifications
@@ -199,12 +207,9 @@ int main(string[] cliArgs) {
 		}
 	}
 	
-	// If --debug-https has been used, set the applicable flag
-	debugHTTPSResponse = appConfig.getValueBool("debug_https");
-	
-	// Common warning
+	// cURL Version Compatibility Test
+	// - Common warning for cURL version issue
 	string distributionWarning = "         Please report this to your distribution, requesting an update to a newer cURL version, or consider upgrading it yourself for optimal stability.";
-	
 	// If 'force_http_11' = false, we need to check the curl version being used
 	if (!appConfig.getValueBool("force_http_11")) {
 		// get the curl version
@@ -237,9 +242,9 @@ int main(string[] cliArgs) {
 		}
 	}
 	
-	// OpenSSL Version Check
-	// Example - on CentOS 7.9 (OpenSSL 1.0.2k-fips  26 Jan 2017), access with Microsoft OneDrive causes a segfault in sha1_block_data_order_avx from /lib64/libcrypto.so.10
-	// See Discussion #2950 for gdb output
+	// OpenSSL Version Compatibility Test
+	// - Example - on CentOS 7.9 (OpenSSL 1.0.2k-fips  26 Jan 2017), access with Microsoft OneDrive causes a segfault in sha1_block_data_order_avx from /lib64/libcrypto.so.10
+	// - See Discussion #2950 for relevant gdb output
 	checkOpenSSLVersion();
 	
 	// In a debug scenario, to assist with understanding the run-time configuration, ensure this flag is set
@@ -326,8 +331,8 @@ int main(string[] cliArgs) {
 	// Check for --dry-run operation or a 'no-sync' operation where the 'dry-run' DB copy should be used
 	// If this has been requested, we need to ensure that all actions are performed against the dry-run database copy, and, 
 	// no actual action takes place - such as deleting files if deleted online, moving files if moved online or local, downloading new & changed files, uploading new & changed files
-	if (dryRun || (appConfig.hasNoSyncOperationBeenRequested())) {
-		
+	if (dryRun || (noSyncTaskOperationRequested)) {
+		// If --dry-run
 		if (dryRun) {
 			// This is a --dry-run operation
 			addLogEntry("DRY-RUN Configured. Output below shows what 'would' have occurred.");
