@@ -4509,8 +4509,9 @@ class SyncEngine {
 		
 		// Based on what we know, for this thread - can we safely upload this modified local file?
 		if (debugLogging) {
-			addLogEntry("This Thread Estimated Free Space Online:              " ~ to!string(remainingFreeSpace), ["debug"]);
-			addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+			string estimatedMessage = format("This Thread Estimated Free Space Online (%s): ", targetDriveId);
+			addLogEntry(estimatedMessage ~ to!string(remainingFreeSpace), ["debug"]);
+			addLogEntry("This Thread Calculated Free Space Online Post Upload:    " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 		}
 		
 		// Is there quota available for the given drive where we are uploading to?
@@ -5950,7 +5951,8 @@ class SyncEngine {
 						
 						// Based on what we know, for this thread - can we safely upload this modified local file?
 						if (debugLogging) {
-							addLogEntry("This Thread Estimated Free Space Online:              " ~ to!string(remainingFreeSpaceOnline), ["debug"]);
+							string estimatedMessage = format("This Thread Estimated Free Space Online (%s): ", parentItem.driveId);
+							addLogEntry(estimatedMessage ~ to!string(remainingFreeSpaceOnline), ["debug"]);
 							addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 						}
 			
