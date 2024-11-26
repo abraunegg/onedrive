@@ -630,6 +630,16 @@ class OneDriveApi {
 		performDelete(url);
 	}
 	
+	// https://learn.microsoft.com/en-us/graph/api/driveitem-permanentdelete?view=graph-rest-1.0
+	void permanentDeleteById(const(char)[] driveId, const(char)[] id, const(char)[] eTag = null) {
+		// string[string] requestHeaders;
+		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/permanentDelete";
+		//TODO: investigate why this always fail with 412 (Precondition Failed)
+		// if (eTag) requestHeaders["If-Match"] = eTag;
+		// as per documentation, a permanentDelete needs to be a HTTP POST
+		performPermanentDelete(url);
+	}
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_post_children
 	JSONValue createById(string parentDriveId, string parentId, JSONValue item) {
 		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ "/children";
@@ -958,6 +968,14 @@ class OneDriveApi {
 		bool validateJSONResponse = false;
 		oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.del, url, false, response, requestHeaders);
+			return curlEngine.execute();
+		}, validateJSONResponse, callingFunction, lineno);
+	}
+	
+	private void performPermanentDelete(const(char)[] url, string[string] requestHeaders=null, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+		bool validateJSONResponse = false;
+		oneDriveErrorHandlerWrapper((CurlResponse response) {
+			connect(HTTP.Method.post, url, false, response, requestHeaders);
 			return curlEngine.execute();
 		}, validateJSONResponse, callingFunction, lineno);
 	}

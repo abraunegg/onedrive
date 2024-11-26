@@ -170,6 +170,8 @@ class SyncEngine {
 	// Is bypass_data_preservation set via config file
 	// Local data loss MAY occur in this scenario
 	bool bypassDataPreservation = false;
+	// Has the user configured to permanently delete files online rather than send to online recycle bin
+	bool permanentDelete = false;
 	// Maximum file size upload
 	//  https://support.microsoft.com/en-us/office/invalid-file-names-and-file-types-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us
 	//	July 2020, maximum file size for all accounts is 100GB
@@ -307,8 +309,10 @@ class SyncEngine {
 		// Are we forcing the client to bypass any data preservation techniques to NOT rename any local files if there is a conflict?
 		// The enabling of this function could lead to data loss
 		if (appConfig.getValueBool("bypass_data_preservation")) {
+			addLogEntry();
 			addLogEntry("WARNING: Application has been configured to bypass local data preservation in the event of file conflict.");
 			addLogEntry("WARNING: Local data loss MAY occur in this scenario.");
+			addLogEntry();
 			this.bypassDataPreservation = true;
 		}
 		
@@ -406,6 +410,46 @@ class SyncEngine {
 			addLogEntry("OneDrive API could not be initialised with previously used details");
 			// Must force exit here, allow logging to be done
 			forceExit();
+		}
+		
+		// Has the client been configured to permanently delete files online rather than send these to the online recycle bin?
+		if (appConfig.getValueBool("permanent_delete")) {
+			// This can only be set if not using:
+			// - US Government L4
+			// - US Government L5 (DOD)
+			// - Azure and Office365 operated by VNET in China
+			// 
+			// Additionally, this is not supported by OneDrive Personal accounts:
+			//
+			//   This is a doc bug. In fact, OneDrive personal accounts do not support the permanentDelete API, it only applies to OneDrive for Business and SharePoint document libraries.
+			//
+			// Reference: https://learn.microsoft.com/en-us/answers/questions/1501170/onedrive-permanently-delete-a-file
+			string azureConfigValue = appConfig.getValueString("azure_ad_endpoint");
+			
+			// Now that we know the 'accountType' we can configure this correctly
+			if ((appConfig.accountType != "personal") && (azureConfigValue.empty || azureConfigValue == "DE")) {
+				// Only supported for Global Service and DE based on https://learn.microsoft.com/en-us/graph/api/driveitem-permanentdelete?view=graph-rest-1.0
+				addLogEntry();
+				addLogEntry("WARNING: Application has been configured to permanently remove files online rather than send to the recycle bin. Permanently deleted items can't be restored.");
+				addLogEntry("WARNING: Online data loss MAY occur in this scenario.");
+				addLogEntry();
+				this.permanentDelete = true;
+			} else {
+				// what error message do we present
+				if (appConfig.accountType == "personal") {
+					// personal account type - API not supported
+					addLogEntry();
+					addLogEntry("WARNING: The application is configured to permanently delete files online; however, this action is not supported by Microsoft OneDrive Personal Accounts.");
+					addLogEntry();
+				} else {
+					// Not a personal account
+					addLogEntry();
+					addLogEntry("WARNING: The application is configured to permanently delete files online; however, this action is not supported by the National Cloud Deployment in use.");
+					addLogEntry();
+				}
+				// ensure this is false regardless
+				this.permanentDelete = false;
+			}
 		}
 		
 		// API was initialised
@@ -6670,8 +6714,13 @@ class SyncEngine {
 						uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
 						uploadDeletedItemOneDriveApiInstance.initialise();
 					
-						// Perform the delete via the default OneDrive API instance
-						uploadDeletedItemOneDriveApiInstance.deleteById(actualItemToDelete.driveId, actualItemToDelete.id);
+						if (!permanentDelete) {
+							// Perform the delete via the default OneDrive API instance
+							uploadDeletedItemOneDriveApiInstance.deleteById(actualItemToDelete.driveId, actualItemToDelete.id);
+						} else {
+							// Perform the permanent delete via the default OneDrive API instance
+							uploadDeletedItemOneDriveApiInstance.permanentDeleteById(actualItemToDelete.driveId, actualItemToDelete.id);
+						}
 						
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						uploadDeletedItemOneDriveApiInstance.releaseCurlEngine();
@@ -6738,16 +6787,27 @@ class SyncEngine {
 			// Log the action
 			if (debugLogging) {addLogEntry("Attempting to delete this child item id: " ~ child.id ~ " from drive: " ~ child.driveId, ["debug"]);}
 			
-			// perform the delete via the default OneDrive API instance
-			performReverseDeletionOneDriveApiInstance.deleteById(child.driveId, child.id, child.eTag);
+			if (!permanentDelete) {
+				// Perform the delete via the default OneDrive API instance
+				performReverseDeletionOneDriveApiInstance.deleteById(child.driveId, child.id, child.eTag);
+			} else {
+				// Perform the permanent delete via the default OneDrive API instance
+				performReverseDeletionOneDriveApiInstance.permanentDeleteById(child.driveId, child.id, child.eTag);
+			}
+			
 			// delete the child reference in the local database
 			itemDB.deleteById(child.driveId, child.id);
 		}
 		// Log the action
 		if (debugLogging) {addLogEntry("Attempting to delete this parent item id: " ~ itemToDelete.id ~ " from drive: " ~ itemToDelete.driveId, ["debug"]);}
 		
-		// Perform the delete via the default OneDrive API instance
-		performReverseDeletionOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id, itemToDelete.eTag);
+		if (!permanentDelete) {
+			// Perform the delete via the default OneDrive API instance
+			performReverseDeletionOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id, itemToDelete.eTag);
+		} else {
+			// Perform the permanent delete via the default OneDrive API instance
+			performReverseDeletionOneDriveApiInstance.permanentDeleteById(itemToDelete.driveId, itemToDelete.id, itemToDelete.eTag);
+		}
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		performReverseDeletionOneDriveApiInstance.releaseCurlEngine();
@@ -7736,8 +7796,13 @@ class SyncEngine {
 			
 			// Try the online deletion
 			try {
-				// Perform the delete via the default OneDrive API instance
-				deleteByPathNoSyncAPIInstance.deleteById(deletionItem.driveId, deletionItem.id);
+				if (!permanentDelete) {
+					// Perform the delete via the default OneDrive API instance
+					deleteByPathNoSyncAPIInstance.deleteById(deletionItem.driveId, deletionItem.id);
+				} else {
+					// Perform the permanent delete via the default OneDrive API instance
+					deleteByPathNoSyncAPIInstance.permanentDeleteById(deletionItem.driveId, deletionItem.id);
+				}
 				// If we get here without error, directory was deleted
 				addLogEntry("The requested directory to delete online has been deleted");
 			} catch (OneDriveException exception) {
