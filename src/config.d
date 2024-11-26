@@ -2355,10 +2355,9 @@ class ApplicationConfig {
 	
 	// Has a 'no-sync' task been requested?
 	bool hasNoSyncOperationBeenRequested() {
-	
-		bool noSyncOperation = false;
-	
 		// Are we performing some sort of 'no-sync' task?
+		// - Are we performing a logout?
+		// - Are we performing a reauth?
 		// - Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
 		// - Are we displaying the sync status?
 		// - Are we getting the URL for a file online?
@@ -2369,8 +2368,21 @@ class ApplicationConfig {
 		// - Are we just deleting a directory online, without any sync being performed?
 		// - Are we renaming or moving a directory?
 		// - Are we displaying the quota information?
+		bool noSyncOperation = false;
 		
 		// Return a true|false if any of these have been set, so that we use the 'dry-run' DB copy, to execute these tasks, in case the client is currently operational
+		
+		// --logout
+		if (getValueBool("logout")) {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// --reauth
+		if (getValueBool("reauth")) {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
 		
 		// --get-sharepoint-drive-id - Get the SharePoint Library drive_id
 		if (getValueString("sharepoint_library_name") != "") {
