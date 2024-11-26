@@ -332,6 +332,8 @@ class ApplicationConfig {
 		boolValues["read_only_auth_scope"] = false;
 		// - Flag to cleanup local files when using --download-only
 		boolValues["cleanup_local_files"] = false;
+		// - Perform a permanentDelete on deletion activities
+		boolValues["permanent_delete"] = false;
 		
 		// Webhook Feature Options
 		boolValues["webhook_enabled"] = false;
@@ -1411,6 +1413,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'sync_dir_permissions'         = " ~ to!string(getValueLong("sync_dir_permissions")));
 		addLogEntry("Config option 'sync_file_permissions'        = " ~ to!string(getValueLong("sync_file_permissions")));
 		addLogEntry("Config option 'space_reservation'            = " ~ to!string(getValueLong("space_reservation")));
+		addLogEntry("Config option 'permanent_delete'             = " ~ to!string(getValueBool("permanent_delete")));
 		
 		// curl operations
 		addLogEntry("Config option 'application_id'               = " ~ getValueString("application_id"));
