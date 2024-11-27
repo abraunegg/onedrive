@@ -492,15 +492,28 @@ bool containsASCIIControlCodes(string path) {
 
 // Is the string a valid UTF-8 string?
 bool isValidUTF8(string input) {
-	try {
-		auto it = input.byUTF!(char);
-		foreach (_; it) {
-			// Just iterate to check for valid UTF-8
+    try {
+        // Validate the entire string for UTF-8 correctness
+        validate(input); // Throws UTFException if invalid UTF-8 is found
+
+        // Empty string should be considered invalid
+		if (input.empty) {
+			addLogEntry("UTF-8 validation failed: Input contains no characters.");
+			return false;
 		}
-	return true;
-	} catch (UTFException) {
-		return false;
-	}
+		
+		// Additional edge-case handling because the input format is known and controlled:
+        // Ensure input length is within the expected range for a UTC datetime
+        if (input.length < 20 || input.length > 30) {
+            addLogEntry("UTF-8 validation failed: Input '" ~ input ~ "' is not within the expected length range for UTC datetime strings (20-30 characters).");
+            return false;
+        }
+
+        return true;
+    } catch (UTFException) {
+        addLogEntry("UTF-8 validation failed: Input '" ~ input ~ "' contains invalid UTF-8 characters.");
+        return false;
+    }
 }
 
 // Is the path a valid UTF-16 encoded path?
@@ -545,7 +558,7 @@ bool isValidUTCDateTime(string dateTimeString) {
     // Regular expression for validating the string against UTC datetime format
 	// Allows for an optional fractional second part (e.g., .123 or .123456789)
 	auto pattern = regex(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$");
-	
+		
 	// Validate for UTF-8 first
 	if (!isValidUTF8(dateTimeString)) {
 		addLogEntry("BAD TIMESTAMP (UTF-8 FAIL): " ~ dateTimeString);
