@@ -2830,7 +2830,7 @@ class SyncEngine {
 									// Was this item previously in-sync with the local system?
 									// We previously searched for the file in the DB, we need to use that record
 									if (fileFoundInDB) {
-										// Purge DB record so that the deleted local file does not cause an online delete
+										// Purge DB record so that the deleted local file does not cause an online deletion
 										// In a --dry-run scenario, this is being done against a DB copy
 										addLogEntry("Removing DB record due to failed integrity checks");
 										itemDB.deleteById(databaseItem.driveId, databaseItem.id);
@@ -2847,6 +2847,16 @@ class SyncEngine {
 						}	 // end of (!disableDownloadValidation)
 					} else {
 						addLogEntry("ERROR: File failed to download. Increase logging verbosity to determine why.");
+						// Was this item previously in-sync with the local system?
+						// We previously searched for the file in the DB, we need to use that record
+						if (fileFoundInDB) {
+							// Purge DB record so that the deleted local file does not cause an online deletion
+							// In a --dry-run scenario, this is being done against a DB copy
+							addLogEntry("Removing existing DB record due to failed file download.");
+							itemDB.deleteById(databaseItem.driveId, databaseItem.id);
+						}
+						
+						// Flag that the download failed
 						downloadFailed = true;
 					}
 				}
