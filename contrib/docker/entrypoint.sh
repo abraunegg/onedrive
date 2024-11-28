@@ -34,8 +34,19 @@ else
 fi
 
 # Default parameters
-ARGS=(--monitor --confdir /onedrive/conf --syncdir /onedrive/data)
+ARGS=(--confdir /onedrive/conf --syncdir /onedrive/data)
 echo "# Base Args: ${ARGS}"
+
+# Tell client to use Standalone Mode, based on an environment variable. Otherwise Monitor Mode is used.
+if [ "${ONEDRIVE_SYNC_ONCE:=0}" == "1" ]; then
+	echo "# We run in Standalone Mode"
+	echo "# Adding --sync"
+	ARGS=(--sync ${ARGS[@]})
+else
+	echo "# We run in Monitor Mode"
+	echo "# Adding --monitor"
+	ARGS=(--monitor ${ARGS[@]})
+fi
 
 # Make Verbose output optional, based on an environment variable
 if [ "${ONEDRIVE_VERBOSE:=0}" == "1" ]; then
