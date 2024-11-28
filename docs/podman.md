@@ -304,6 +304,7 @@ podman run -it --name onedrive_work --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
 | <B>ONEDRIVE_DISABLE_UPLOAD_VALIDATION</B> | Controls "--disable-upload-validation" option. Default is 0 | 1 |
 | <B>ONEDRIVE_SYNC_SHARED_FILES</B> | Controls "--sync-shared-files" option. Default is 0 | 1 |
 | <B>ONEDRIVE_RUNAS_ROOT</B> | Controls if the Docker container should be run as the 'root' user instead of 'onedrive' user. Default is 0 | 1 |
+| <B>ONEDRIVE_SYNC_ONCE</B> | Controls if the Docker container should be run in Standalone Mode. It will use Monitor Mode otherwise. Default is 0 | 1 |
 
 ### Environment Variables Usage Examples
 **Verbose Output:**
