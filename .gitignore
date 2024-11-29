@@ -9,3 +9,12 @@ config.status
 autom4te.cache/
 contrib/pacman/PKGBUILD
 contrib/spec/onedrive.spec
+
+# Ignore everything in the .github folder
+.github/*
+
+# Allow actions/spelling in .github
+!.github/actions/spelling/
+
+# Ensure spellcheck.yaml in .github is not ignored
+!.github/actions/spelling/spellcheck.yaml
