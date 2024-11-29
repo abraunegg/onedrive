@@ -109,6 +109,7 @@ fasynchronous
 fcf
 fcgid
 fcgienv
+FFFD
 FCGX
 fcontext
 fedoraproject
