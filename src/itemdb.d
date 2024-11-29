@@ -328,7 +328,7 @@ final class ItemDatabase {
 			// The synchronous setting determines how carefully SQLite writes data to disk, balancing between performance and data safety.
 			// https://sqlite.org/pragma.html#pragma_synchronous
 			// PRAGMA synchronous = 0 | OFF | 1 | NORMAL | 2 | FULL | 3 | EXTRA;
-			db.exec("PRAGMA synchronous=NORMAL;");
+			db.exec("PRAGMA synchronous=FULL;"); // Leave this as FULL, this is the sqlite default, ensure this is set to FULL
 		} catch (SqliteException exception) {
 			detailSQLErrorMessage(exception);
 		} 
@@ -725,7 +725,20 @@ final class ItemDatabase {
 	private Item buildItem(Statement.Result result) {
 		assert(!result.empty, "The result must not be empty");
 		assert(result.front.length == 18, "The result must have 18 columns");
-		assert(isValidUTCDateTime(result.front[7].dup), "The DB record mtime entry is not a valid ISO timestamp entry. Please attempt a --resync to fix the local database.");
+		
+		// Check the DB record timestamp entry. Rather than assert(), use forceExit() and exit in a more graceful manner
+		// - empty values
+		// - 2024-11-23T01:16:14\x80Z
+		// - ��Ϣc (#3014)
+		// - ����� (#2876)
+		// - non timestamp formatted strings such as 'CurlEngine curlEngin' (#2813)
+		if (!isValidUTCDateTime(result.front[7].dup)) {
+			addLogEntry();
+			addLogEntry("FATAL: The DB record mtime entry is not a valid ISO timestamp entry. Please attempt a --resync to fix the local database.");
+			addLogEntry();
+			// Must force exit here, allow logging to be done
+			forceExit();
+		}
 		
 		Item item = {
 			// column 0: driveId

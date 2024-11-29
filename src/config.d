@@ -332,6 +332,8 @@ class ApplicationConfig {
 		boolValues["read_only_auth_scope"] = false;
 		// - Flag to cleanup local files when using --download-only
 		boolValues["cleanup_local_files"] = false;
+		// - Perform a permanentDelete on deletion activities
+		boolValues["permanent_delete"] = false;
 		
 		// Webhook Feature Options
 		boolValues["webhook_enabled"] = false;
@@ -1411,6 +1413,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'sync_dir_permissions'         = " ~ to!string(getValueLong("sync_dir_permissions")));
 		addLogEntry("Config option 'sync_file_permissions'        = " ~ to!string(getValueLong("sync_file_permissions")));
 		addLogEntry("Config option 'space_reservation'            = " ~ to!string(getValueLong("space_reservation")));
+		addLogEntry("Config option 'permanent_delete'             = " ~ to!string(getValueBool("permanent_delete")));
 		
 		// curl operations
 		addLogEntry("Config option 'application_id'               = " ~ getValueString("application_id"));
@@ -1437,8 +1440,8 @@ class ApplicationConfig {
 			addLogEntry("Compile time option --enable-notifications   = false");
 		}
 		
-		// Is sync_list configured ?
-		if (exists(syncListFilePath)){
+		// Is sync_list configured and contains entries?
+		if (exists(syncListFilePath) && getSize(syncListFilePath) > 0) {
 			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
 			addLogEntry("Selective sync 'sync_list' configured        = true");
 			addLogEntry("sync_list config option 'sync_root_files'    = " ~ to!string(getValueBool("sync_root_files")));
@@ -1446,13 +1449,24 @@ class ApplicationConfig {
 			// Output the sync_list contents
 			auto syncListFile = File(syncListFilePath, "r");
 			auto range = syncListFile.byLine();
-			foreach (line; range)
-			{
+			addLogEntry("------------------------------'sync_list'------------------------------");
+			foreach (line; range) {
 				addLogEntry(to!string(line));
 			}
+			addLogEntry("-----------------------------------------------------------------------");
+			
+			// Close reading the 'sync_list' file
+			syncListFile.close();
 		} else {
+			// file does not exist or file size is not greater than 0
 			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
-			addLogEntry("Selective sync 'sync_list' configured        = false");
+			if (exists(syncListFilePath) && getSize(syncListFilePath) == 0) {
+				// 'sync_list' file exists, no entries
+				addLogEntry("Selective sync 'sync_list' configured        = file exists but contains zero data");
+			} else {
+				// no 'sync_list' file
+				addLogEntry("Selective sync 'sync_list' configured        = false");
+			}
 		}
 		
 		// Is sync_business_shared_items enabled and configured ?
@@ -2341,10 +2355,9 @@ class ApplicationConfig {
 	
 	// Has a 'no-sync' task been requested?
 	bool hasNoSyncOperationBeenRequested() {
-	
-		bool noSyncOperation = false;
-	
 		// Are we performing some sort of 'no-sync' task?
+		// - Are we performing a logout?
+		// - Are we performing a reauth?
 		// - Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
 		// - Are we displaying the sync status?
 		// - Are we getting the URL for a file online?
@@ -2355,8 +2368,21 @@ class ApplicationConfig {
 		// - Are we just deleting a directory online, without any sync being performed?
 		// - Are we renaming or moving a directory?
 		// - Are we displaying the quota information?
+		bool noSyncOperation = false;
 		
 		// Return a true|false if any of these have been set, so that we use the 'dry-run' DB copy, to execute these tasks, in case the client is currently operational
+		
+		// --logout
+		if (getValueBool("logout")) {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// --reauth
+		if (getValueBool("reauth")) {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
 		
 		// --get-sharepoint-drive-id - Get the SharePoint Library drive_id
 		if (getValueString("sharepoint_library_name") != "") {

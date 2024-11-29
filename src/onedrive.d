@@ -30,9 +30,6 @@ import log;
 import util;
 import curlEngine;
 
-// Shared variables between classes
-shared bool debugHTTPResponseOutput = false;
-
 // Define the 'OneDriveException' class
 class OneDriveException: Exception {
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/errors
@@ -87,7 +84,6 @@ class OneDriveApi {
 	string authScope = "";
 	const(char)[] refreshToken = "";
 	bool dryRun = false;
-	bool debugResponse = false;
 	bool keepAlive = false;
 
 	this(ApplicationConfig appConfig) {
@@ -148,11 +144,6 @@ class OneDriveApi {
 
 		// Did the user specify --dry-run
 		dryRun = appConfig.getValueBool("dry_run");
-		
-		// Did the user specify --debug-https
-		debugResponse = appConfig.getValueBool("debug_https");
-		// Flag this so if webhooks are being used, it can also be consumed
-		debugHTTPResponseOutput = appConfig.getValueBool("debug_https");
 		
 		// Set clientId to use the configured 'application_id'
 		clientId = appConfig.getValueString("application_id");
@@ -639,6 +630,16 @@ class OneDriveApi {
 		performDelete(url);
 	}
 	
+	// https://learn.microsoft.com/en-us/graph/api/driveitem-permanentdelete?view=graph-rest-1.0
+	void permanentDeleteById(const(char)[] driveId, const(char)[] id, const(char)[] eTag = null) {
+		// string[string] requestHeaders;
+		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/permanentDelete";
+		//TODO: investigate why this always fail with 412 (Precondition Failed)
+		// if (eTag) requestHeaders["If-Match"] = eTag;
+		// as per documentation, a permanentDelete needs to be a HTTP POST
+		performPermanentDelete(url);
+	}
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_post_children
 	JSONValue createById(string parentDriveId, string parentId, JSONValue item) {
 		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ "/children";
@@ -971,6 +972,14 @@ class OneDriveApi {
 		}, validateJSONResponse, callingFunction, lineno);
 	}
 	
+	private void performPermanentDelete(const(char)[] url, string[string] requestHeaders=null, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+		bool validateJSONResponse = false;
+		oneDriveErrorHandlerWrapper((CurlResponse response) {
+			connect(HTTP.Method.post, url, false, response, requestHeaders);
+			return curlEngine.execute();
+		}, validateJSONResponse, callingFunction, lineno);
+	}
+	
 	private void downloadFile(const(char)[] url, string filename, long fileSize, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
@@ -1187,8 +1196,8 @@ class OneDriveApi {
 				if (response.hasResponse) {
 					// Process the response
 					result = response.json();
-					// Print response if 'debugResponse' is flagged
-					if (debugResponse){
+					// Print response if 'debugHTTPSResponse' is flagged
+					if (debugHTTPSResponse){
 						if (debugLogging) {addLogEntry("Microsoft Graph API Response: " ~ response.dumpResponse(), ["debug"]);}
 					}
 					

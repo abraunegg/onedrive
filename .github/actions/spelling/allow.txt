@@ -109,6 +109,7 @@ fasynchronous
 fcf
 fcgid
 fcgienv
+FFFD
 FCGX
 fcontext
 fedoraproject
@@ -255,6 +256,7 @@ odata
 ofonedrive
 onbinarymessage
 onedrive
+onetoc
 onmicrosoft
 ontextmessage
 opensuse

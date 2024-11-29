@@ -84,6 +84,10 @@ int main(string[] cliArgs) {
 	bool monitorFailures = false;
 	// Help requested
 	bool helpRequested = false;
+	// Did the user specify --sync or --monitor
+	bool syncOrMonitorMissing = false;
+	// Was a no-sync type operation requested
+	bool noSyncTaskOperationRequested = false;
 	
 	// DEVELOPER OPTIONS OUTPUT VARIABLES
 	bool displayMemoryUsage = false;
@@ -188,6 +192,29 @@ int main(string[] cliArgs) {
 	// Update the current runtime application configuration (default or 'config' file read in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
 	
+	// If --debug-https has been used, set the applicable flag
+	debugHTTPSResponse = appConfig.getValueBool("debug_https"); // set __gshared bool debugHTTPSResponse in log.d now that we have read-in any CLI arguments
+	
+	// Are we doing a --sync or a --monitor operation? Both of these will be false if they are not set
+	if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
+		syncOrMonitorMissing = true; // --sync or --monitor is missing 
+	}
+	
+	// Are we performing some sort of 'no-sync' operation task?
+	noSyncTaskOperationRequested = appConfig.hasNoSyncOperationBeenRequested(); // returns true if we are
+	
+	// If 'syncOrMonitorMissing' is true and 'noSyncTaskOperationRequested' is false (meaning we are not doing some 'no-sync' operation like '--display-sync-status' or '--get-sharepoint-drive-id'
+	// - fail fast here to avoid setting up all the other components, database, initialising the API as this is all pointless if we just fail out later
+	if (syncOrMonitorMissing && !noSyncTaskOperationRequested) {
+		// Before failing fast, has the client been authenticated and does the 'refresh_token' contain data
+		if (exists(appConfig.refreshTokenFilePath) && getSize(appConfig.refreshTokenFilePath) > 0) {
+			// fail fast - print error message that --sync or --monitor are missing
+			printMissingOperationalSwitchesError();
+			// Use exit scopes to shutdown API
+			return EXIT_FAILURE;
+		}
+	}
+	
 	// If --disable-notifications has not been used, check if everything exists to enable notifications
 	if (!appConfig.getValueBool("disable_notifications")) {
 		// If notifications was compiled in, we need to ensure that these variables are actually available before we enable GUI Notifications
@@ -199,9 +226,9 @@ int main(string[] cliArgs) {
 		}
 	}
 	
-	// Common warning
+	// cURL Version Compatibility Test
+	// - Common warning for cURL version issue
 	string distributionWarning = "         Please report this to your distribution, requesting an update to a newer cURL version, or consider upgrading it yourself for optimal stability.";
-	
 	// If 'force_http_11' = false, we need to check the curl version being used
 	if (!appConfig.getValueBool("force_http_11")) {
 		// get the curl version
@@ -228,15 +255,15 @@ int main(string[] cliArgs) {
 			// add warning message
 			string curlWarningMessage = format("WARNING: Your cURL/libcurl version (%s) has known operational bugs that impact the use of this client.", curlVersion);
 			addLogEntry();
-			addLogEntry(curlWarningMessage); // curl HTTP/1.1 downgrade in place meaning user too steps to remediate, standard logging
+			addLogEntry(curlWarningMessage); // curl HTTP/1.1 downgrade in place meaning user took steps to remediate, perform standard logging with no GUI notification
 			addLogEntry(distributionWarning);
 			addLogEntry();
 		}
 	}
 	
-	// OpenSSL Version Check
-	// Example - on CentOS 7.9 (OpenSSL 1.0.2k-fips  26 Jan 2017), access with Microsoft OneDrive causes a segfault in sha1_block_data_order_avx from /lib64/libcrypto.so.10
-	// See Discussion #2950 for gdb output
+	// OpenSSL Version Compatibility Test
+	// - Example - on CentOS 7.9 (OpenSSL 1.0.2k-fips  26 Jan 2017), access with Microsoft OneDrive causes a segfault in sha1_block_data_order_avx from /lib64/libcrypto.so.10
+	// - See Discussion #2950 for relevant gdb output
 	checkOpenSSLVersion();
 	
 	// In a debug scenario, to assist with understanding the run-time configuration, ensure this flag is set
@@ -323,8 +350,8 @@ int main(string[] cliArgs) {
 	// Check for --dry-run operation or a 'no-sync' operation where the 'dry-run' DB copy should be used
 	// If this has been requested, we need to ensure that all actions are performed against the dry-run database copy, and, 
 	// no actual action takes place - such as deleting files if deleted online, moving files if moved online or local, downloading new & changed files, uploading new & changed files
-	if (dryRun || (appConfig.hasNoSyncOperationBeenRequested())) {
-		
+	if (dryRun || (noSyncTaskOperationRequested)) {
+		// If --dry-run
 		if (dryRun) {
 			// This is a --dry-run operation
 			addLogEntry("DRY-RUN Configured. Output below shows what 'would' have occurred.");
@@ -516,8 +543,8 @@ int main(string[] cliArgs) {
 			syncEngineInstance = new SyncEngine(appConfig, itemDB, selectiveSync);
 			appConfig.syncEngineWasInitialised = syncEngineInstance.initialise();
 			
-			// Are we not doing a --sync or a --monitor operation? Both of these will be false if they are not set
-			if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
+			// Are we not doing a --sync or a --monitor operation?
+			if (syncOrMonitorMissing) { // this is 'true' if --sync or a --monitor were not used
 			
 				// Do not perform a vacuum on exit, pointless
 				performDatabaseVacuum = false;
@@ -667,12 +694,8 @@ int main(string[] cliArgs) {
 						return EXIT_FAILURE;
 					}
 				} else {
-					// No authorisation activity
-					addLogEntry();
-					addLogEntry("Your command line input is missing either the '--sync' or '--monitor' switches. Please include one (but not both) of these switches in your command line, or refer to 'onedrive --help' for additional guidance.");
-					addLogEntry();
-					addLogEntry("It is important to note that you must include one of these two arguments in your command line for the application to perform a synchronisation with Microsoft OneDrive");
-					addLogEntry();
+					// No authorisation activity - print error message
+					printMissingOperationalSwitchesError();
 					// Use exit scopes to shutdown API
 					return EXIT_FAILURE;
 				}
@@ -1209,6 +1232,17 @@ int main(string[] cliArgs) {
 	}
 }
 
+// Print error message when --sync or --monitor has not been used and no valid 'no-sync' operation was requested
+void printMissingOperationalSwitchesError() {
+	// notify the user that --sync or --monitor were missing
+	addLogEntry();
+	addLogEntry("Your command line input is missing either the '--sync' or '--monitor' switches. Please include one (but not both) of these switches in your command line, or refer to 'onedrive --help' for additional guidance.");
+	addLogEntry();
+	addLogEntry("It is important to note that you must include one of these two arguments in your command line for the application to perform a synchronisation with Microsoft OneDrive");
+	addLogEntry();
+}
+
+// Function used for webhook callbacks to perform specific activities
 void oneDriveWebhookCallback() {
 	// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
 	if (!appConfig.getValueBool("download_only")) {
@@ -1224,6 +1258,7 @@ void oneDriveWebhookCallback() {
 	}
 }
 
+// Perform only an upload of data when using --upload-only
 void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = null) {
 	// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 	syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
@@ -1240,8 +1275,8 @@ void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = 
 	}
 }
 
+// Perform the normal application sync process
 void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = null) {
-
 	// If we are performing log suppression, output this message so the user knows what is happening
 	if (appConfig.suppressLoggingOutput) {
 		addLogEntry("Syncing changes from Microsoft OneDrive ...");
@@ -1321,6 +1356,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 	}
 }
 
+// PRocess any inotify events
 void processInotifyEvents(bool updateFlag) {
 	// Attempt to process or cancel inotify events
 	// filesystemMonitor.update will throw this, thus needs to be caught
@@ -1336,8 +1372,8 @@ void processInotifyEvents(bool updateFlag) {
 	}
 }
 
+// Display the sync outcome
 void displaySyncOutcome() {
-
 	// Detail any download or upload transfer failures
 	syncEngineInstance.displaySyncFailures();
 	
@@ -1362,7 +1398,9 @@ void displaySyncOutcome() {
 	}
 }
 
+// Perform database file removal
 void processResyncDatabaseRemoval(string databaseFilePathToRemove) {
+	// Log what we are doing
 	if (debugLogging) {addLogEntry("Testing if we have exclusive access to local database file", ["debug"]);}
 	
 	// Are we the only running instance? Test that we can open the database file path
@@ -1389,6 +1427,7 @@ void processResyncDatabaseRemoval(string databaseFilePathToRemove) {
 	}
 }
 
+// Clean up the local database files
 void cleanupDatabaseFiles(string activeDatabaseFileName) {
 	// Temp variables
 	string databaseShmFile = activeDatabaseFileName ~ "-shm";
@@ -1439,6 +1478,7 @@ void cleanupDatabaseFiles(string activeDatabaseFileName) {
 	}
 }
 
+// Perform a check to see if this is a mount point, and if the 'mount' has gone
 void checkForNoMountScenario() {
 	// If this is a 'mounted' folder, the 'mount point' should have this file to help the application stop any action to preserve data because the drive to mount is not currently mounted
 	if (appConfig.getValueBool("check_nomount")) {
