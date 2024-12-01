@@ -467,9 +467,11 @@ class OneDriveApi {
 			} else {
 				// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
 				addLogEntry();
-				addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Note that authorisation cannot be completed with the '--dry-run' option.");
+				addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
 				addLogEntry();
-				addLogEntry("To exclusively authorise the application without performing any additional actions, use this command: onedrive");
+				addLogEntry("To authorise the application please use your original command without '--dry-run'.");
+				addLogEntry();
+				addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
 				addLogEntry();
 				forceExit();
 			}
