@@ -4735,7 +4735,7 @@ class SyncEngine {
 					currentETag = dbItem.eTag;
 				}
 				
-				// Make a resuable item from this online JSON data
+				// Make a reusable item from this online JSON data
 				currentOnlineItemData = makeItem(currentOnlineJSONData);
 				
 			} else {
