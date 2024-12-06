@@ -14,6 +14,7 @@ Before reading this document, please ensure you are running application version 
   - [classify_as_big_delete](#classify_as_big_delete)
   - [cleanup_local_files](#cleanup_local_files)
   - [connect_timeout](#connect_timeout)
+  - [create_new_file_version](#create_new_file_version)
   - [data_timeout](#data_timeout)
   - [debug_https](#debug_https)
   - [disable_download_validation](#disable_download_validation)
@@ -203,6 +204,23 @@ _**Value Type:**_ Integer
 _**Default Value:**_ 10
 
 _**Config Example:**_ `connect_timeout = "15"`
+
+### create_new_file_version
+_**Description:**_ This setting controls how the application handles the Microsoft SharePoint *feature* which modifies all PDF, MS Office & HTML files post upload, effectively breaking the integrity of your data online. By default, when the application determines that this *feature* has modified your file post upload, the now online modified file will be downloaded. When this option is enabled, rather than downloading the file, a new online file version is created which negates the download of the modified file.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `create_new_file_version = "false"` or `create_new_file_version = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+> [!IMPORTANT]
+> If you enable 'disable_upload_validation' via `disable_upload_validation = "true"` there is zero facility to determine if a file was modified post upload. As such, the application will default to the state that the upload integrity check has failed. When `create_new_file_version = "false"` your uploaded file will be downloaded *regardless* of the online modification state.
+
+> [!WARNING]
+> When this option is set to 'true', new file versions will be created online which will count towards your Microsoft OneDrive Quota.
 
 ### data_timeout
 _**Description:**_ This setting controls the timeout duration, in seconds, for when data is not received on an active connection to Microsoft OneDrive over HTTPS when using the curl library, before that connection is timeout out.
@@ -515,6 +533,8 @@ _**Default Value:**_ False
 
 _**Config Example:**_ `permanent_delete = "true"`
 
+_**CLI Option Use:**_ *None - this is a config file option only*
+
 > [!IMPORTANT]
 > The Microsoft OneDrive API for this capability is also very narrow:
 > | Account Type | Config Option is Supported |
@@ -772,7 +792,7 @@ _**Default Value:**_ False
 
 _**Config Example:**_ `sync_business_shared_items = "false"` or `sync_business_shared_items = "true"`
 
-_**CLI Option Use:**_ *none* - this is a config file option only
+_**CLI Option Use:**_ *None - this is a config file option only*
 
 > [!NOTE]
 > This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
