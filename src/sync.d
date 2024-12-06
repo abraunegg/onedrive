@@ -4663,12 +4663,17 @@ class SyncEngine {
 						// We need to make sure that the local file on disk has this timestamp from this JSON, otherwise on the next application run:
 						//   The last modified timestamp has changed however the file content has not changed
 						//   The local item has the same hash value as the item online - correcting timestamp online
-						// This then creates another version online which we do not want to do
-						Item onlineItem;
-						onlineItem = makeItem(uploadResponse);
-						
-						// correct the local file timestamp to avoid creating a new version online
-						setTimes(localFilePath, onlineItem.mtime, onlineItem.mtime);
+						// This then creates another version online which we do not want to do .. unless configured to do so
+						if (!appConfig.getValueBool("create_new_file_version")) {
+							// create an applicable item
+							Item onlineItem;
+							onlineItem = makeItem(uploadResponse);
+							// correct the local file timestamp to avoid creating a new version online
+							setTimes(localFilePath, onlineItem.mtime, onlineItem.mtime);
+						} else {
+							// Create a new online version of the file by updating the metadata, which negates the need to download the file
+							uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);	
+						}
 					}
 				}
 			}
@@ -6453,6 +6458,7 @@ class SyncEngine {
 							//   2. Create a new online version of the file, which then contributes to the users 'quota'
 							if (!uploadIntegrityPassed) {
 								// upload integrity check failed
+								// We do not want to create a new online file version .. unless configured to do so
 								if (!appConfig.getValueBool("create_new_file_version")) {
 									// are we in an --upload-only scenario
 									if(!uploadOnly){
