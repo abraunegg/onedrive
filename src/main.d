@@ -203,15 +203,19 @@ int main(string[] cliArgs) {
 	// Are we performing some sort of 'no-sync' operation task?
 	noSyncTaskOperationRequested = appConfig.hasNoSyncOperationBeenRequested(); // returns true if we are
 	
-	// If 'syncOrMonitorMissing' is true and 'noSyncTaskOperationRequested' is false (meaning we are not doing some 'no-sync' operation like '--display-sync-status' or '--get-sharepoint-drive-id'
+	// If 'syncOrMonitorMissing' is true and 'noSyncTaskOperationRequested' is false (meaning we are not doing some 'no-sync' operation like '--display-sync-status', '--get-sharepoint-drive-id' or '--display-config'
 	// - fail fast here to avoid setting up all the other components, database, initialising the API as this is all pointless if we just fail out later
-	if (syncOrMonitorMissing && !noSyncTaskOperationRequested) {
-		// Before failing fast, has the client been authenticated and does the 'refresh_token' contain data
-		if (exists(appConfig.refreshTokenFilePath) && getSize(appConfig.refreshTokenFilePath) > 0) {
-			// fail fast - print error message that --sync or --monitor are missing
-			printMissingOperationalSwitchesError();
-			// Use exit scopes to shutdown API
-			return EXIT_FAILURE;
+	
+	// If we are not using --display-config, perform this check
+	if (!appConfig.getValueBool("display_config")) {
+		if (syncOrMonitorMissing && !noSyncTaskOperationRequested) {
+			// Before failing fast, has the client been authenticated and does the 'refresh_token' contain data
+			if (exists(appConfig.refreshTokenFilePath) && getSize(appConfig.refreshTokenFilePath) > 0) {
+				// fail fast - print error message that --sync or --monitor are missing
+				printMissingOperationalSwitchesError();
+				// Use exit scopes to shutdown API
+				return EXIT_FAILURE;
+			}
 		}
 	}
 	
