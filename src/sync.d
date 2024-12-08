@@ -4053,18 +4053,24 @@ class SyncEngine {
 						// simple first
 						if (debugLogging) {addLogEntry("Performing a simple check first", ["debug"]);}
 						clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(simplePathToCheck);
-						matchDisplay = simplePathToCheck;
 						if (!clientSideRuleExcludesPath) {
 							if (debugLogging) {addLogEntry("Simple match was false, attempting complex match", ["debug"]);}
 							// simple didnt match, perform a complex check
-							clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(complexPathToCheck);
-							matchDisplay = complexPathToCheck;
+							clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(complexPathToCheck);	
 						}
 					}
 					
 					// End Result
 					if (debugLogging) {addLogEntry("skip_dir exclude result (directory based): " ~ to!string(clientSideRuleExcludesPath), ["debug"]);}
 					if (clientSideRuleExcludesPath) {
+						// what path should be displayed if we are excluding
+						if (!complexPathToCheck.empty) {
+							// try and always use the complex path as it is more complete for application output
+							matchDisplay = complexPathToCheck;
+						} else {
+							matchDisplay = simplePathToCheck;
+						}
+					
 						// This path should be skipped
 						if (verboseLogging) {addLogEntry("Skipping path - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);}
 					}
