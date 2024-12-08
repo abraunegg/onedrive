@@ -54,6 +54,45 @@ curl -fsS https://dlang.org/install.sh | bash -s ldc
 ```
 
 ## Distribution Package Dependencies
+
+### Dependencies: Arch Linux & Manjaro Linux
+```text
+sudo pacman -S git make pkg-config curl sqlite ldc
+```
+For notifications the following is also necessary:
+```text
+sudo pacman -S libnotify
+```
+
+### Dependencies: CentOS 6.x / RHEL 6.x
+CentOS 6.x and RHEL 6.x reached End of Life status on November 30th 2020 and is no longer supported.
+
+### Dependencies: CentOS 7.x / RHEL 7.x
+CentOS 7.x and RHEL 7.x reached End of Life status on June 30th 2024 and is no longer supported.
+
+### Dependencies: Fedora > Version 18 / CentOS 8.x / CentOS 9.x / RHEL 8.x / RHEL 9.x
+```text
+sudo dnf groupinstall 'Development Tools'
+sudo dnf install libcurl-devel sqlite-devel
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+For notifications the following is also necessary:
+```text
+sudo dnf install libnotify-devel
+```
+
+### Dependencies: Gentoo
+```text
+sudo emerge app-portage/layman
+sudo layman -a dlang
+```
+Add ebuild from contrib/gentoo to a local overlay to use.
+
+For notifications the following is also necessary:
+```text
+sudo emerge x11-libs/libnotify
+```
+
 ### Dependencies: Ubuntu 16.x
 Ubuntu Linux 16.x LTS reached the end of its five-year LTS window on April 30th 2021 and is no longer supported.
 
@@ -63,7 +102,7 @@ Ubuntu Linux 18.x LTS reached the end of its five-year LTS window on May 31th 20
 ### Dependencies: Debian 9
 Debian 9 reached the end of its five-year support window on June 30th 2022 and is no longer supported.
 
-### Dependencies: Ubuntu 20.x -> Ubuntu 24.x / Debian 10 -> Debian 12 - x86_64
+### Dependencies: Debian 10 -> Debian 12 / Ubuntu 20.x -> Ubuntu 24.x - x86_64
 These dependencies are also applicable for all Ubuntu based distributions such as:
 *   Lubuntu
 *   Linux Mint
@@ -79,33 +118,7 @@ For notifications the following is also necessary:
 sudo apt install libnotify-dev
 ```
 
-### Dependencies: CentOS 6.x / RHEL 6.x
-CentOS 6.x and RHEL 6.x reached End of Life status on November 30th 2020 and is no longer supported.
-
-### Dependencies: CentOS 7.x / RHEL 7.x
-CentOS 7.x and RHEL 7.x reached End of Life status on June 30th 2024 and is no longer supported.
-
-### Dependencies: Fedora > Version 18 / CentOS 8.x / CentOS 9.x/ RHEL 8.x / RHEL 9.x
-```text
-sudo dnf groupinstall 'Development Tools'
-sudo dnf install libcurl-devel sqlite-devel
-curl -fsS https://dlang.org/install.sh | bash -s dmd
-```
-For notifications the following is also necessary:
-```text
-sudo dnf install libnotify-devel
-```
-
-### Dependencies: Arch Linux & Manjaro Linux
-```text
-sudo pacman -S make pkg-config curl sqlite ldc
-```
-For notifications the following is also necessary:
-```text
-sudo pacman -S libnotify
-```
-
-### Dependencies: Raspbian (ARMHF) and Ubuntu 22.x / Debian 11 / Debian 12 / Raspbian (ARM64)
+### Dependencies: Debian 11 and Raspbian (ARMHF) / Debian 12 / Raspbian / Ubuntu 22.x (ARM64)
 > [!CAUTION]
 > The minimum LDC compiler version required to compile this application is 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
@@ -124,18 +137,6 @@ sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc
 For notifications the following is also necessary:
 ```text
 sudo apt install libnotify-dev
-```
-
-### Dependencies: Gentoo
-```text
-sudo emerge app-portage/layman
-sudo layman -a dlang
-```
-Add ebuild from contrib/gentoo to a local overlay to use.
-
-For notifications the following is also necessary:
-```text
-sudo emerge x11-libs/libnotify
 ```
 
 ### Dependencies: OpenSuSE Leap 15.0
