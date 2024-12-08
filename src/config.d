@@ -334,6 +334,11 @@ class ApplicationConfig {
 		boolValues["cleanup_local_files"] = false;
 		// - Perform a permanentDelete on deletion activities
 		boolValues["permanent_delete"] = false;
+		// - Controls how the application handles the Microsoft SharePoint 'feature' of modifying all PDF, MS Office & HTML files with added XML content post upload
+		//   There are 2 ways to solve this:
+		//   1. Download the modified file immediately after upload as per v2.4.x (default)
+		//   2. Create a new online version of the file, which then contributes to the users 'quota'
+		boolValues["create_new_file_version"] = false;
 		
 		// Webhook Feature Options
 		boolValues["webhook_enabled"] = false;

@@ -2544,7 +2544,7 @@ class SyncEngine {
 	}
 	
 	// Perform the actual download of an object from OneDrive
-	void downloadFileItem(JSONValue onedriveJSONItem) {
+	void downloadFileItem(JSONValue onedriveJSONItem, bool ignoreDataPreservationCheck = false) {
 				
 		bool downloadFailed = false;
 		string OneDriveFileXORHash;
@@ -2603,25 +2603,29 @@ class SyncEngine {
 		
 			// Does the file already exist in the path locally?
 			if (exists(newItemPath)) {
-				// file exists locally already
-				foreach (driveId; onlineDriveDetails.keys) {
-					if (itemDB.selectByPath(newItemPath, driveId, databaseItem)) {
-						fileFoundInDB = true;
-						break;
+				// To accommodate forcing the download of a file, post upload to Microsoft OneDrive, we need to ignore the checking of hashes and making a safe backup
+				if (!ignoreDataPreservationCheck) {
+			
+					// file exists locally already
+					foreach (driveId; onlineDriveDetails.keys) {
+						if (itemDB.selectByPath(newItemPath, driveId, databaseItem)) {
+							fileFoundInDB = true;
+							break;
+						}
 					}
-				}
-				
-				// Log the DB details
-				if (debugLogging) {addLogEntry("File to download exists locally and this is the DB record: " ~ to!string(databaseItem), ["debug"]);}
-				
-				// Does the DB (what we think is in sync) hash match the existing local file hash?
-				if (!testFileHash(newItemPath, databaseItem)) {
-					// local file is different to what we know to be true
-					addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
-					// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
-					// In case the renamed path is needed
-					string renamedPath;
-					safeBackup(newItemPath, dryRun, bypassDataPreservation, renamedPath);
+					
+					// Log the DB details
+					if (debugLogging) {addLogEntry("File to download exists locally and this is the DB record: " ~ to!string(databaseItem), ["debug"]);}
+					
+					// Does the DB (what we think is in sync) hash match the existing local file hash?
+					if (!testFileHash(newItemPath, databaseItem)) {
+						// local file is different to what we know to be true
+						addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
+						// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
+						// In case the renamed path is needed
+						string renamedPath;
+						safeBackup(newItemPath, dryRun, bypassDataPreservation, renamedPath);
+					}
 				}
 			}
 			
@@ -4614,8 +4618,9 @@ class SyncEngine {
 			
 			// Check the integrity of the uploaded modified file if not in a --dry-run scenario
 			if (!dryRun) {
-				// Perform the integrity of the uploaded modified file
-				performUploadIntegrityValidationChecks(uploadResponse, localFilePath, thisFileSizeLocal);
+				bool uploadIntegrityPassed;
+				// Check the integrity of the uploaded modified file, if the local file still exists
+				uploadIntegrityPassed = performUploadIntegrityValidationChecks(uploadResponse, localFilePath, thisFileSizeLocal);
 				
 				// Update the date / time of the file online to match the local item
 				// Get the local file last modified time
@@ -4624,7 +4629,53 @@ class SyncEngine {
 				// Get the latest eTag, and use that
 				string etagFromUploadResponse = uploadResponse["eTag"].str;
 				// Attempt to update the online date time stamp based on our local data
-				uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);
+				if (appConfig.accountType == "personal") {
+					// Business | SharePoint we used a session to upload the data, thus, local timestamps are given when the session is created
+					uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);
+				} else {
+					// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+					// This means that the file which was uploaded, is potentially no longer the file we have locally
+					// There are 2 ways to solve this:
+					//   1. Download the modified file immediately after upload as per v2.4.x (default)
+					//   2. Create a new online version of the file, which then contributes to the users 'quota'
+					if (!uploadIntegrityPassed) {
+						// upload integrity check failed
+						if (!appConfig.getValueBool("create_new_file_version")) {
+							// are we in an --upload-only scenario
+							if(!uploadOnly){
+								// Download the now online modified file
+								addLogEntry("WARNING: Microsoft OneDrive modified your uploaded file via its SharePoint 'enrichment' feature. To keep your local and online versions consistent, the altered file will now be downloaded.");
+								addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
+								// Download the file directly using the prior upload JSON response
+								downloadFileItem(uploadResponse, true);
+							} else {
+								// --upload-only being used
+								// we are not downloading a file, warn that file differences will exist
+								addLogEntry("WARNING: The file uploaded to Microsoft OneDrive has been modified through its SharePoint 'enrichment' process and no longer matches your local version.");
+								addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
+							}
+						} else {
+							// Create a new online version of the file by updating the metadata, which negates the need to download the file
+							uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);
+						}
+					} else {
+						// Upload of the modified file passed integrity checks
+						// We need to make sure that the local file on disk has this timestamp from this JSON, otherwise on the next application run:
+						//   The last modified timestamp has changed however the file content has not changed
+						//   The local item has the same hash value as the item online - correcting timestamp online
+						// This then creates another version online which we do not want to do .. unless configured to do so
+						if (!appConfig.getValueBool("create_new_file_version")) {
+							// create an applicable item
+							Item onlineItem;
+							onlineItem = makeItem(uploadResponse);
+							// correct the local file timestamp to avoid creating a new version online
+							setTimes(localFilePath, onlineItem.mtime, onlineItem.mtime);
+						} else {
+							// Create a new online version of the file by updating the metadata, which negates the need to download the file
+							uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);	
+						}
+					}
+				}
 			}
 		}
 	}
@@ -4640,7 +4691,8 @@ class SyncEngine {
 		uploadFileOneDriveApiInstance.initialise();
 		
 		// Configure JSONValue variables we use for a session upload
-		JSONValue currentOnlineData;
+		JSONValue currentOnlineJSONData;
+		Item currentOnlineItemData;
 		JSONValue uploadSessionData;
 		string currentETag;
 		
@@ -4669,7 +4721,7 @@ class SyncEngine {
 			
 			// Try and get the absolute latest object details from online, so we get the latest eTag to try and avoid a 412 eTag error
 			try {
-				currentOnlineData = uploadFileOneDriveApiInstance.getPathDetailsById(targetDriveId, targetItemId);
+				currentOnlineJSONData = uploadFileOneDriveApiInstance.getPathDetailsById(targetDriveId, targetItemId);
 			} catch (OneDriveException exception) {
 				// Display what the error is
 				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
@@ -4677,16 +4729,20 @@ class SyncEngine {
 			}
 			
 			// Was a valid JSON response provided?
-			if (currentOnlineData.type() == JSONType.object) {
+			if (currentOnlineJSONData.type() == JSONType.object) {
 				// Does the response contain an eTag?
-				if (hasETag(currentOnlineData)) {
+				if (hasETag(currentOnlineJSONData)) {
 					// Use the value returned from online as this will attempt to avoid a 412 response if we are creating a session upload
-					currentETag = currentOnlineData["eTag"].str;
+					currentETag = currentOnlineJSONData["eTag"].str;
 				} else {
 					// Use the database value - greater potential for a 412 error to occur if we are creating a session upload
 					if (debugLogging) {addLogEntry("Online data for file returned zero eTag - using database eTag value", ["debug"]);}
 					currentETag = dbItem.eTag;
 				}
+				
+				// Make a reusable item from this online JSON data
+				currentOnlineItemData = makeItem(currentOnlineJSONData);
+				
 			} else {
 				// no valid JSON response - greater potential for a 412 error to occur if we are creating a session upload
 				if (debugLogging) {addLogEntry("Online data returned was invalid - using database eTag value", ["debug"]);}
@@ -4699,10 +4755,10 @@ class SyncEngine {
 			}
 		
 			// If the filesize is greater than zero , and we have valid 'latest' online data is the online file matching what we think is in the database?
-			if ((thisFileSizeLocal > 0) && (currentOnlineData.type() == JSONType.object)) {
+			if ((thisFileSizeLocal > 0) && (currentOnlineJSONData.type() == JSONType.object)) {
 				// Issue #2626 | Case 2-1 
 				// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially constituting online data loss
-				Item onlineFile = makeItem(currentOnlineData);
+				Item onlineFile = makeItem(currentOnlineJSONData);
 				
 				// Which file is technically newer? The local file or the remote file?
 				SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
@@ -4716,7 +4772,7 @@ class SyncEngine {
 				if (localModifiedTime < onlineModifiedTime) {
 					// Online File is actually newer than the locally modified file
 					if (debugLogging) {
-						addLogEntry("currentOnlineData: " ~ to!string(currentOnlineData), ["debug"]);
+						addLogEntry("currentOnlineJSONData: " ~ to!string(currentOnlineJSONData), ["debug"]);
 						addLogEntry("onlineFile:    " ~ to!string(onlineFile), ["debug"]);
 						addLogEntry("database item: " ~ to!string(dbItem), ["debug"]);
 					}
@@ -4775,11 +4831,12 @@ class SyncEngine {
 				// The best way to do this is generate a 10 digit alphanumeric string, and use this as the file extension
 				string threadUploadSessionFilePath = appConfig.uploadSessionFilePath ~ "." ~ generateAlphanumericString();
 				
-				// Create the upload session
+				// Create the upload session using the latest online data 'currentOnlineData' etag
 				try {
-					uploadSessionData = createSessionFileUpload(uploadFileOneDriveApiInstance, localFilePath, targetDriveId, targetParentId, baseName(localFilePath), currentETag, threadUploadSessionFilePath);
+					// create the session
+					uploadSessionData = createSessionForFileUpload(uploadFileOneDriveApiInstance, localFilePath, targetDriveId, targetParentId, baseName(localFilePath), currentOnlineItemData.eTag, threadUploadSessionFilePath);
 				} catch (OneDriveException exception) {
-					
+					// an exception was generated
 					string thisFunctionName = getFunctionName!({});
 					
 					// HTTP request returned status code 403
@@ -4788,6 +4845,7 @@ class SyncEngine {
 						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
 						return uploadResponse;
 					} 
+					
 					// HTTP request returned status code 423
 					// Resolve https://github.com/abraunegg/onedrive/issues/36
 					if (exception.httpStatusCode == 423) {
@@ -4801,7 +4859,6 @@ class SyncEngine {
 						// Display what the error is
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
-					
 				} catch (FileException e) {
 					addLogEntry("DEBUG TO REMOVE: Modified file upload FileException Handling (Create the Upload Session)");
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
@@ -4812,6 +4869,13 @@ class SyncEngine {
 					// This is a valid JSON object
 					// Perform the upload using the session that has been created
 					try {
+						// so that we have this data available if we need to re-create the session
+						// - targetDriveId, targetParentId, baseName(localFilePath), currentOnlineItemData.eTag, threadUploadSessionFilePath
+						uploadSessionData["targetDriveId"] = targetDriveId;
+						uploadSessionData["targetParentId"] = targetParentId;
+						uploadSessionData["currentETag"] = currentOnlineItemData.eTag;
+						
+						// attempt the session upload using the session data provided
 						uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSizeLocal, uploadSessionData, threadUploadSessionFilePath);
 					} catch (OneDriveException exception) {
 						// Function name
@@ -6269,7 +6333,7 @@ class SyncEngine {
 				// Attempt to upload the > 4MB file using an upload session for all account types
 				try {
 					// Create the Upload Session
-					uploadSessionData = createSessionFileUpload(uploadFileOneDriveApiInstance, fileToUpload, parentItem.driveId, parentItem.id, baseName(fileToUpload), null, threadUploadSessionFilePath);
+					uploadSessionData = createSessionForFileUpload(uploadFileOneDriveApiInstance, fileToUpload, parentItem.driveId, parentItem.id, baseName(fileToUpload), null, threadUploadSessionFilePath);
 				} catch (OneDriveException exception) {
 					// An error was responded with - what was it
 					
@@ -6372,8 +6436,9 @@ class SyncEngine {
 				if (exists(fileToUpload)) {
 					// Are we in a --dry-run scenario
 					if (!dryRun) {
+						bool uploadIntegrityPassed;
 						// Check the integrity of the uploaded file, if the local file still exists
-						performUploadIntegrityValidationChecks(uploadResponse, fileToUpload, thisFileSize);
+						uploadIntegrityPassed = performUploadIntegrityValidationChecks(uploadResponse, fileToUpload, thisFileSize);
 						
 						// Update the file modified time on OneDrive and save item details to database
 						// Update the item's metadata on OneDrive
@@ -6382,7 +6447,38 @@ class SyncEngine {
 						string newFileId = uploadResponse["id"].str;
 						string newFileETag = uploadResponse["eTag"].str;
 						// Attempt to update the online date time stamp based on our local data
-						uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
+						if (appConfig.accountType == "personal") {
+							// Business | SharePoint we used a session to upload the data, thus, local timestamps are given when the session is created
+							uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
+						} else {
+							// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+							// This means that the file which was uploaded, is potentially no longer the file we have locally
+							// There are 2 ways to solve this:
+							//   1. Download the modified file immediately after upload as per v2.4.x (default)
+							//   2. Create a new online version of the file, which then contributes to the users 'quota'
+							if (!uploadIntegrityPassed) {
+								// upload integrity check failed
+								// We do not want to create a new online file version .. unless configured to do so
+								if (!appConfig.getValueBool("create_new_file_version")) {
+									// are we in an --upload-only scenario
+									if(!uploadOnly){
+										// Download the now online modified file
+										addLogEntry("WARNING: Microsoft OneDrive modified your uploaded file via its SharePoint 'enrichment' feature. To keep your local and online versions consistent, the altered file will now be downloaded.");
+										addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
+										// Download the file directly using the prior upload JSON response
+										downloadFileItem(uploadResponse, true);
+									} else {
+										// --upload-only being used
+										// we are not downloading a file, warn that file differences will exist
+										addLogEntry("WARNING: The file uploaded to Microsoft OneDrive has been modified through its SharePoint 'enrichment' process and no longer matches your local version.");
+										addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
+									}
+								} else {
+									// Create a new online version of the file by updating the metadata, which negates the need to download the file
+									uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
+								}
+							}
+						}
 					}
 					
 					// Are we in an --upload-only & --remove-source-files scenario?
@@ -6412,7 +6508,7 @@ class SyncEngine {
 	}
 	
 	// Create the OneDrive Upload Session
-	JSONValue createSessionFileUpload(OneDriveApi activeOneDriveApiInstance, string fileToUpload, string parentDriveId, string parentId, string filename, string eTag, string threadUploadSessionFilePath) {
+	JSONValue createSessionForFileUpload(OneDriveApi activeOneDriveApiInstance, string fileToUpload, string parentDriveId, string parentId, string filename, string eTag, string threadUploadSessionFilePath) {
 		
 		// Upload file via a OneDrive API session
 		JSONValue uploadSession;
@@ -6480,6 +6576,9 @@ class SyncEngine {
 		int h, m, s;
 		string etaString;
 		string uploadLogEntry = "Uploading: " ~ uploadSessionData["localPath"].str ~ " ... ";
+		
+		// If we get a 404, create a new upload session and store it here
+		JSONValue newUploadSession;
 
 		// Start the session upload using the active API instance for this thread
 		while (true) {
@@ -6537,6 +6636,11 @@ class SyncEngine {
 				}
 				
 				// There was an error uploadResponse from OneDrive when uploading the file fragment
+				if (exception.httpStatusCode == 404) {
+					// The upload session was not found .. ?? we just created it .. maybe the backend is still creating it ?
+					if (debugLogging) {addLogEntry("The upload session was not found .... re-create session");}
+					newUploadSession = createSessionForFileUpload(activeOneDriveApiInstance, uploadSessionData["localPath"].str, uploadSessionData["targetDriveId"].str, uploadSessionData["targetParentId"].str, baseName(uploadSessionData["localPath"].str), null, threadUploadSessionFilePath);
+				}
 				
 				// Issue https://github.com/abraunegg/onedrive/issues/2747
 				// if a 416 uploadResponse is generated, continue
@@ -6552,15 +6656,35 @@ class SyncEngine {
 					
 				// Insert a new line as well, so that the below error is inserted on the console in the right location
 				if (verboseLogging) {addLogEntry("Fragment upload failed - received an exception response from OneDrive API", ["verbose"]);}
+				
 				// display what the error is
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				if (exception.httpStatusCode != 404) {
+					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				}
+				
 				// retry fragment upload in case error is transient
 				if (verboseLogging) {addLogEntry("Retrying fragment upload", ["verbose"]);}
 				
 				try {
+					// retry
+					string effectiveRetryUploadURL;
+					string effectiveLocalPath;
+					
+					// If we re-created the session, use the new data on re-try
+					if ("uploadUrl" in newUploadSession) {
+						// get this from 'newUploadSession'
+						effectiveRetryUploadURL = newUploadSession["uploadUrl"].str;
+						effectiveLocalPath = newUploadSession["localPath"].str;
+					} else {
+						// get this from the original input
+						effectiveRetryUploadURL = uploadSessionData["uploadUrl"].str;
+						effectiveLocalPath = uploadSessionData["localPath"].str;
+					}
+					
+					// retry the fragment upload
 					uploadResponse = activeOneDriveApiInstance.uploadFragment(
-						uploadSessionData["uploadUrl"].str,
-						uploadSessionData["localPath"].str,
+						effectiveRetryUploadURL,
+						effectiveLocalPath,
 						offset,
 						fragSize,
 						thisFileSize
@@ -8019,7 +8143,9 @@ class SyncEngine {
 				if ((localFileSize == uploadFileSize) && (localFileHash == uploadFileHash)) {
 					// Uploaded file integrity intact
 					if (debugLogging) {addLogEntry("Uploaded local file matches reported online size and hash values", ["debug"]);}
+					// set to true and return
 					integrityValid = true;
+					return integrityValid;
 				} else {
 					// Upload integrity failure .. what failed?
 					// There are 2 scenarios where this happens:
@@ -8043,7 +8169,7 @@ class SyncEngine {
 						if (verboseLogging) {
 							addLogEntry("CAUTION: When you upload files to Microsoft OneDrive that uses SharePoint as its backend, Microsoft OneDrive will alter your files post upload.", ["verbose"]);
 							addLogEntry("CAUTION: This will lead to technical differences between the version stored online and your local original file, potentially causing issues with the accuracy or consistency of your data.", ["verbose"]);
-							addLogEntry("CAUTION: Please read https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.", ["verbose"]);
+							addLogEntry("CAUTION: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.", ["verbose"]);
 						}
 					}
 					// How can this be disabled?

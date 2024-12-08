@@ -663,14 +663,15 @@ class OneDriveApi {
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createuploadsession
 	//JSONValue createUploadSession(string parentDriveId, string parentId, string filename, string eTag = null, JSONValue item = null) {
 	JSONValue createUploadSession(string parentDriveId, string parentId, string filename, const(char)[] eTag = null, JSONValue item = null) {
-		// string[string] requestHeaders;
+		string[string] requestHeaders;
 		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/createUploadSession";
 		// eTag If-Match header addition commented out for the moment
 		// At some point, post the creation of this upload session the eTag is being 'updated' by OneDrive, thus when uploadFragment() is used
 		// this generates a 412 Precondition Failed and then a 416 Requested Range Not Satisfiable
 		// This needs to be investigated further as to why this occurs
-		// if (eTag) requestHeaders["If-Match"] = eTag;
-		return post(url, item.toString());
+		
+		if (eTag) requestHeaders["If-Match"] = to!string(eTag);
+		return post(url, item.toString(), requestHeaders);
 	}
 	
 	// https://dev.onedrive.com/items/upload_large_files.htm
@@ -823,7 +824,7 @@ class OneDriveApi {
 		JSONValue response;
 
 		try {
-			response = post(tokenUrl, postData, true, "application/x-www-form-urlencoded");
+			response = post(tokenUrl, postData, null, true, "application/x-www-form-urlencoded");
 		} catch (OneDriveException exception) {
 			// an error was generated
 			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
@@ -1141,10 +1142,10 @@ class OneDriveApi {
 		}, validateJSONResponse, callingFunction, lineno);
 	}
 
-	private JSONValue post(const(char)[] url, const(char)[] postData, bool skipToken = false, const(char)[] contentType = "application/json", string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+	private JSONValue post(const(char)[] url, const(char)[] postData, string[string] requestHeaders=null, bool skipToken = false, const(char)[] contentType = "application/json", string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
-			connect(HTTP.Method.post, url, skipToken, response);
+			connect(HTTP.Method.post, url, skipToken, response, requestHeaders);
 			curlEngine.setContent(contentType, postData);
 			return curlEngine.execute();
 		}, validateJSONResponse, callingFunction, lineno);
