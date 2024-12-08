@@ -223,7 +223,9 @@ services:
             - ${ONEDRIVE_DATA_DIR}:/onedrive/data
 ```
 
-Note that you still have to perform step 3: First Run. 
+> [!IMPORTANT]
+> Before you run the container using your compose file you must first authenticate the client following [step 6](https://github.com/abraunegg/onedrive/blob/master/docs/docker.md#6-first-run-of-docker-container-under-docker-and-performing-authorisation) above.
+> Failure to perform this step before running your container using your compose file will see your container detail that an invalid response uri was entered.
 
 ### Editing the running configuration and using a 'config' file
 The 'onedrive' client should run in default configuration, however you can change this default configuration by placing a custom config file in the `onedrive_conf` docker volume. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  
