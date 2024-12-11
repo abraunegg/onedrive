@@ -3967,7 +3967,7 @@ class SyncEngine {
 		// - skip_size
 		// Return a true|false response
 		
-		// Use the JSON elements rather can computing a DB struct via makeItem()
+		// Use the JSON elements rather than computing a DB struct via makeItem()
 		string thisItemId = onedriveJSONItem["id"].str;
 		string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 		string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
@@ -4315,9 +4315,11 @@ class SyncEngine {
 						// Is the parent item in the database?
 						if (!parentInDatabase) {
 							// Parental database structure needs to be created
-							if (verboseLogging) {addLogEntry("Parental Path structure needs to be created to support included file: " ~ dirName(newItemPath), ["verbose"]);}
-							// Recursively, stepping backward from 'thisItemParentId', query online, save entry to DB
-							createLocalPathStructure(onedriveJSONItem);
+							string newParentalPath = dirName(newItemPath);
+							// Log that this parental structure needs to be created
+							if (verboseLogging) {addLogEntry("Parental Path structure needs to be created to support included file: " ~ newParentalPath, ["verbose"]);}
+							// Recursively, stepping backward from 'thisItemParentId', query online, save entry to DB and create the local path structure
+							createLocalPathStructure(onedriveJSONItem, newParentalPath);
 							
 							// If this is --dry-run
 							if (dryRun) {
@@ -4349,8 +4351,8 @@ class SyncEngine {
 		return clientSideRuleExcludesPath;
 	}
 	
-	// When using 'sync_list' if a file is to be included, ensure that the path that the file resides in, is available locally and in the database
-	void createLocalPathStructure(JSONValue onedriveJSONItem) {
+	// When using 'sync_list' if a file is to be included, ensure that the path that the file resides in, is available locally and in the database, and the path exists locally
+	void createLocalPathStructure(JSONValue onedriveJSONItem, string newLocalParentalPath) {
 	
 		// Function variables
 		bool parentInDatabase;
@@ -4362,7 +4364,10 @@ class SyncEngine {
 		string thisItemParentId;
 		
 		// Log what we received to analyse
-		if (debugLogging) {addLogEntry("createLocalPathStructure input onedriveJSONItem: " ~ to!string(onedriveJSONItem), ["debug"]);}
+		if (debugLogging) {
+			addLogEntry("createLocalPathStructure input onedriveJSONItem: " ~ to!string(onedriveJSONItem), ["debug"]);
+			addLogEntry("createLocalPathStructure input newLocalParentalPath: " ~ newLocalParentalPath, ["debug"]);
+		}
 		
 		// Configure these variables based on the JSON input
 		thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
@@ -4380,7 +4385,8 @@ class SyncEngine {
 			
 			// Is the parent in the database?
 			if (!parentInDatabase) {
-				// Get data from online for this driveId and itemId
+				// Get data from online for this driveId and JSON item parent .. so we have the parent details
+				if (debugLogging) {addLogEntry("createLocalPathStructure parent is not in database, fetching parental details from online", ["debug"]);}
 				try {
 					onlinePathData = onlinePathOneDriveApiInstance.getPathDetailsById(thisItemDriveId, thisItemParentId);
 				} catch (OneDriveException exception) {
@@ -4392,6 +4398,7 @@ class SyncEngine {
 				// Does this JSON match the root name of a shared folder we may be trying to match?
 				if (sharedFolderDeltaGeneration) {
 					if (currentSharedFolderName == onlinePathData["name"].str) {
+						if (debugLogging) {addLogEntry("createLocalPathStructure parent matches a shared folder, creating database root tie record", ["debug"]);}
 						createDatabaseRootTieRecordForOnlineSharedFolder(onlinePathData);
 					}
 				} 
@@ -4413,7 +4420,7 @@ class SyncEngine {
 				// Is this item's grandparent data in the database?
 				if (!itemDB.idInLocalDatabase(grandparentItemDriveId, grandparentItemParentId)) {
 					// grandparent needs to be added
-					createLocalPathStructure(onlinePathData);
+					createLocalPathStructure(onlinePathData, dirName(newLocalParentalPath));
 				}
 				
 				// If this is --dry-run
@@ -4422,9 +4429,20 @@ class SyncEngine {
 					idsFaked ~= [onlinePathData["parentReference"]["driveId"].str, onlinePathData["parentReference"]["id"].str];
 				}
 				
-				// Save JSON to database
-				saveItem(onlinePathData);
-			}	
+				// Does the parental path exist locally?
+				if (!exists(newLocalParentalPath)) {
+					// the required path does not exist locally - logging is done in handleLocalDirectoryCreation
+					// create a db item record for the online data
+					Item newDatabaseItem = makeItem(onlinePathData);
+					// create the path locally, save the data to the database post path creation
+					handleLocalDirectoryCreation(newDatabaseItem, newLocalParentalPath, onlinePathData);
+				} else {
+					// parent path exists locally, save the data to the database
+					saveItem(onlinePathData);
+				}
+			} else {
+				if (debugLogging) {addLogEntry("createLocalPathStructure parent is in the database", ["debug"]);}
+			}
 		}
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
