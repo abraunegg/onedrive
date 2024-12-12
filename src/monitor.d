@@ -611,6 +611,7 @@ final class Monitor {
 						if (debugLogging) {addLogEntry("event IN_CREATE: " ~ path, ["debug"]);}
 						if (event.mask & IN_ISDIR) {
 							// fix from #2586
+							auto cookieToPath1 = cookieToPath.dup();
 							foreach (cookie, path1; cookieToPath1) {
 								if (path1 == path) {
 									cookieToPath.remove(cookie);
@@ -630,7 +631,7 @@ final class Monitor {
 						if (debugLogging) {addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);}
 						// fix from #2586
 						auto cookieToPath1 = cookieToPath.dup();
-							foreach (cookie, path1; cookieToPath1) {
+						foreach (cookie, path1; cookieToPath1) {
 							if (path1 == path) {
 								cookieToPath.remove(cookie);
 							}
