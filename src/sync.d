@@ -1691,6 +1691,7 @@ class SyncEngine {
 						// Personal Account Handling
 						if (debugLogging) {addLogEntry("Handling a Personal Shared Item JSON object", ["debug"]);}
 						
+						// Does the JSON have a shared element structure
 						if (hasSharedElement(onedriveJSONItem)) {
 							// Has the Shared JSON structure
 							if (debugLogging) {addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);}
@@ -1699,11 +1700,13 @@ class SyncEngine {
 						}
 						
 						// Ensure that this item has no parent
-						if (debugLogging) {addLogEntry("Setting remoteItem.parentId to be null", ["debug"]);}
+						if (debugLogging) {addLogEntry("Setting remoteItem.parentId of Personal Shared Item JSON object to be null", ["debug"]);}
 						remoteItem.parentId = null;
 						// Add this record to the local database
-						if (debugLogging) {addLogEntry("Update/Insert local database with remoteItem details with remoteItem.parentId as null: " ~ to!string(remoteItem), ["debug"]);}
+						if (debugLogging) {addLogEntry("Update/Insert local database with Personal Shared Item JSON object with remoteItem.parentId as null: " ~ to!string(remoteItem), ["debug"]);}
 						itemDB.upsert(remoteItem);
+						// Due to OneDrive API inconsistency, again with European Data Centres, as we have handled this JSON - flag as unwanted as processing is complete for this JSON item
+						unwanted = true;
 					} else {
 						// Business or SharePoint Account Handling
 						if (debugLogging) {addLogEntry("Handling a Business or SharePoint Shared Item JSON object", ["debug"]);}
@@ -2041,7 +2044,7 @@ class SyncEngine {
 			// We know if this JSON item is unwanted or not
 			if (unwanted) {
 				// This JSON item is NOT wanted - it is excluded
-				if (debugLogging) {addLogEntry("Skipping OneDrive change as this is determined to be unwanted", ["debug"]);}
+				if (debugLogging) {addLogEntry("Skipping OneDrive change as this is determined to be unwanted either through Client Side Filtering Rules or prior processing to this point", ["debug"]);}
 				
 				// Add to the skippedItems array, but only if it is a directory ... pointless adding 'files' here, as it is the 'id' we check as the parent path which can only be a directory
 				if (!isItemFile(onedriveJSONItem)) {
