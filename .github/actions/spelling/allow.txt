@@ -206,6 +206,7 @@ ltmain
 Lyncredible
 makepkg
 mangleof
+maxfiles
 mayne
 mbr
 memtest
