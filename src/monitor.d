@@ -610,6 +610,13 @@ final class Monitor {
 					} else if (event.mask & IN_CREATE) {
 						if (debugLogging) {addLogEntry("event IN_CREATE: " ~ path, ["debug"]);}
 						if (event.mask & IN_ISDIR) {
+							// fix from #2586
+							auto cookieToPath1 = cookieToPath.dup();
+							foreach (cookie, path1; cookieToPath1) {
+								if (path1 == path) {
+									cookieToPath.remove(cookie);
+								}
+							}
 							addRecursive(path);
 							if (useCallbacks) actionHolder.append(ActionType.createDir, path);
 						}
@@ -622,6 +629,13 @@ final class Monitor {
 						}
 					} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
 						if (debugLogging) {addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);}
+						// fix from #2586
+						auto cookieToPath1 = cookieToPath.dup();
+						foreach (cookie, path1; cookieToPath1) {
+							if (path1 == path) {
+								cookieToPath.remove(cookie);
+							}
+						}
 						if (useCallbacks) actionHolder.append(ActionType.changed, path);
 					} else {
 						addLogEntry("inotify event unhandled: " ~ path);

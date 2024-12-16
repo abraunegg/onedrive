@@ -914,7 +914,9 @@ int main(string[] cliArgs) {
 			filesystemMonitor.onDelete = delegate(string path) {
 				if (verboseLogging) {addLogEntry("[M] Local item deleted: " ~ path, ["verbose"]);}
 				try {
-					addLogEntry("The operating system sent a deletion notification. Trying to delete the item as requested");
+					// The path has been deleted .. we cannot use isDir or isFile to advise what was deleted. This is the best we can Do
+					addLogEntry("The operating system sent a deletion notification. Trying to delete this item as requested: " ~ path);
+					// perform the delete action
 					syncEngineInstance.deleteByPath(path);
 				} catch (CurlException e) {
 					if (verboseLogging) {addLogEntry("Offline, cannot delete item: " ~ path, ["verbose"]);}
