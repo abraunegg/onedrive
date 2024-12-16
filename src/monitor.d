@@ -57,13 +57,19 @@ class MonitorBackgroundWorker {
 		int wd = inotify_add_watch(fd, toStringz(pathname), mask);
 		if (wd < 0) {
 			if (errno() == ENOSPC) {
-				// Get the current value
-				ulong maxInotifyWatches = to!int(strip(readText("/proc/sys/fs/inotify/max_user_watches")));
-				addLogEntry("The user limit on the total number of inotify watches has been reached.");
-				addLogEntry("Your current limit of inotify watches is: " ~ to!string(maxInotifyWatches));
-				addLogEntry("It is recommended that you change the max number of inotify watches to at least double your existing value.");
-				addLogEntry("To change the current max number of watches to " ~ to!string((maxInotifyWatches * 2)) ~ " run:");
-				addLogEntry("EXAMPLE: sudo sysctl fs.inotify.max_user_watches=" ~ to!string((maxInotifyWatches * 2)));
+				version (Linux) {
+					// Read max inotify watches from procfs on Linux
+					ulong maxInotifyWatches = to!int(strip(readText("/proc/sys/fs/inotify/max_user_watches")));
+					addLogEntry("The user limit on the total number of inotify watches has been reached.");
+					addLogEntry("Your current limit of inotify watches is: " ~ to!string(maxInotifyWatches));
+					addLogEntry("It is recommended that you change the max number of inotify watches to at least double your existing value.");
+					addLogEntry("To change the current max number of watches to " ~ to!string((maxInotifyWatches * 2)) ~ " run:");
+					addLogEntry("EXAMPLE: sudo sysctl fs.inotify.max_user_watches=" ~ to!string((maxInotifyWatches * 2)));
+				} else {
+					// some other platform
+					addLogEntry("The user limit on the total number of inotify watches has been reached.");
+					addLogEntry("Please seek support from your distribution on how to increase the max number of inotify watches to at least double your existing value.");
+				}
 			}
 			if (errno() == 13) {
 				if (verboseLogging) {addLogEntry("WARNING: inotify_add_watch failed - permission denied: " ~ pathname, ["verbose"]);}
