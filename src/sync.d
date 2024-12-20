@@ -5827,19 +5827,22 @@ class SyncEngine {
 		// If we get to this point - onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, thisNewPathToCreate) generated a 'valid' response ....
 		// This means that the folder potentially exists online .. which is odd .. as it should not have existed
 		if (onlinePathData.type() == JSONType.object) {
-			// A valid object was responded with
+			// A valid object was responded with .. what was that data?
+			if (debugLogging) {
+				addLogEntry("The folder requested to create online, was found in the path online with the following data", ["debug"]);
+				addLogEntry("onlinePathData: " ~ to!string(onlinePathData), ["debug"]);
+			}
+			
 			if (onlinePathData["name"].str == baseName(thisNewPathToCreate)) {
 				// OneDrive 'name' matches local path name
 				if (appConfig.accountType == "business") {
 					// We are a business account, this existing online folder, could be a Shared Online Folder could be a 'Add shortcut to My files' item
-					if (debugLogging) {addLogEntry("onlinePathData: " ~ to!string(onlinePathData), ["debug"]);}
-					
 					// Is this a remote folder
 					if (isItemRemote(onlinePathData)) {
 						// The folder is a remote item ... we do not want to create this ...
-						if (debugLogging) {addLogEntry("Existing Remote Online Folder is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);}
+						if (debugLogging) {addLogEntry("The existing Remote Online Folder and 'onlinePathData' indicate this is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);}
 						
-						// Is Shared Business Folder Syncing enabled ?
+						// Is Shared Business Folder Syncing actually enabled ?
 						if (!appConfig.getValueBool("sync_business_shared_items")) {
 							// Shared Business Folder Syncing is NOT enabled
 							if (debugLogging) {addLogEntry("We need to skip this path: " ~ thisNewPathToCreate, ["debug"]);}
@@ -5852,18 +5855,38 @@ class SyncEngine {
 							createDirectoryOnlineOneDriveApiInstance = null;
 							// Perform Garbage Collection
 							GC.collect();
-							
 							return;
 						} else {
+							// Shared Business Folder Syncing IS enabled 
 							// As the 'onlinePathData' is potentially missing the actual correct parent folder id in the 'remoteItem' JSON response, we have to perform a further query to get the correct answer
 							// Failure to do this, means the 'root' DB Tie Record has a different parent reference id to that what this folder's parent reference id actually is
 							JSONValue sharedFolderParentPathData;
 							string remoteDriveId = onlinePathData["remoteItem"]["parentReference"]["driveId"].str;
 							string remoteItemId = onlinePathData["remoteItem"]["id"].str;
-							sharedFolderParentPathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsById(remoteDriveId, remoteItemId);
 							
-							// A 'root' DB Tie Record needed for this folder using the correct parent data
-							createDatabaseRootTieRecordForOnlineSharedFolder(sharedFolderParentPathData);
+							// Attempt this API query, catch any error (Issue #3040)
+							try {
+								// Perform the API call
+								sharedFolderParentPathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsById(remoteDriveId, remoteItemId);
+								// A 'root' DB Tie Record needed for this 'Add shortcut to My files' item using the correct parent data returned by the above call
+								createDatabaseRootTieRecordForOnlineSharedFolder(sharedFolderParentPathData);
+							} catch (OneDriveException exception) {
+								// If we get a 404 .. the shared item does not exist online ... perhaps a broken 'Add shortcut to My files' link?
+								if (exception.httpStatusCode == 404) {
+									// The file has been checked, client side filtering checked, does not exist online - we need to upload it
+									if (debugLogging) {addLogEntry("sharedFolderParentPathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsById(remoteDriveId, remoteItemId); generated a 404 - shared folder path does not exist online", ["debug"]);}
+									string errorMessage = format("The OneDrive Shared Business Folder link target '%s' cannot be found online using the provided online data. This is potentially a broken shared folder link or you no longer have access to it.", onlinePathData["name"].str);
+									// detail what this 404 error means
+									addLogEntry(errorMessage);
+								} else {
+									// some other error
+									string thisFunctionName = getFunctionName!({});
+									// Default operation if not 408,429,503,504 errors
+									// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
+									// Display what the error is
+									displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+								}
+							}
 						}
 					}
 				}
