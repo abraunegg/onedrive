@@ -1304,7 +1304,7 @@ class SyncEngine {
 			addLogEntry("Number of JSON Objects already processed (root and deleted items): " ~ to!string((jsonItemsReceived - jsonItemsToProcess.length)), ["debug"]);
 			// We should have now at least processed all the JSON items as returned by the /delta call
 			// Additionally, we should have a new array, that now contains all the JSON items we need to process that are non 'root' or deleted items
-			addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
+			addLogEntry("Number of JSON items submitted for further processing is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
 		}
 		
 		// Are there items to process?
@@ -1316,7 +1316,7 @@ class SyncEngine {
 			
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (!appConfig.suppressLoggingOutput) {
-				addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive", appConfig.verbosityCount);
+				addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable JSON items received from Microsoft OneDrive", appConfig.verbosityCount);
 			}
 			
 			// For each batch, process the JSON items that need to be now processed.
@@ -1388,6 +1388,7 @@ class SyncEngine {
 		bool itemHasParentReferencePath = false;
 		bool itemIdMatchesDefaultRootId = false;
 		bool itemNameExplicitMatchRoot = false;
+		bool itemIsRemoteItem = false;
 		string objectParentDriveId;
 		MonoTime jsonProcessingStartTime;
 		
@@ -1406,7 +1407,7 @@ class SyncEngine {
 		itemIsDeletedOnline = isItemDeleted(onedriveJSONItem);
 		if (!itemIsDeletedOnline) {
 			// This is not a deleted item
-			if (debugLogging) {addLogEntry("This item is not a OneDrive deletion change", ["debug"]);}
+			if (debugLogging) {addLogEntry("This item is not a OneDrive online deletion change", ["debug"]);}
 			
 			// Only calculate this once
 			itemIsRoot = isItemRoot(onedriveJSONItem);
@@ -1414,6 +1415,7 @@ class SyncEngine {
 			itemIdMatchesDefaultRootId = (thisItemId == appConfig.defaultRootId);
 			itemNameExplicitMatchRoot = (onedriveJSONItem["name"].str == "root");
 			objectParentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+			itemIsRemoteItem  = isItemRemote(onedriveJSONItem);
 			
 			// Test is this is the OneDrive Users Root?
 			// Debug output of change evaluation items
@@ -1424,6 +1426,7 @@ class SyncEngine {
 				addLogEntry("isItemRoot(onedriveJSONItem)                         = " ~ to!string(itemIsRoot), ["debug"]);
 				addLogEntry("onedriveJSONItem['name'].str == 'root'               = " ~ to!string(itemNameExplicitMatchRoot), ["debug"]);
 				addLogEntry("itemHasParentReferenceId                             = " ~ to!string(itemHasParentReferenceId), ["debug"]);
+				addLogEntry("itemIsRemoteItem                                     = " ~ to!string(itemIsRemoteItem), ["debug"]);
 			}
 			
 			if ( (itemIdMatchesDefaultRootId || singleDirectoryScope) && itemIsRoot && itemNameExplicitMatchRoot) {
@@ -1489,8 +1492,8 @@ class SyncEngine {
 				// - Is not a folder
 				// - Has a 'size' element
 				
-				// Online Shared Folder Shortcuts match the same criteria - we need to ensure this is not a Online Shared Folder Shortcuts
-				if (!isItemRemote(onedriveJSONItem)) {
+				// Online Shared Folder Shortcuts can match the same criteria - we need to ensure this is not a Online Shared Folder Shortcuts
+				if (!itemIsRemoteItem) {
 					// Not a pointer to a remote item, thus high confidence this is not a shared folder link
 					// Log that this was skipped as this was a Microsoft OneNote item and unsupported
 					if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
@@ -1538,7 +1541,12 @@ class SyncEngine {
 			// Add this JSON item for further processing if this is not being discarded
 			if (!discardDeltaJSONItem) {
 				// Add onedriveJSONItem to jsonItemsToProcess
-				if (debugLogging) {addLogEntry("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing", ["debug"]);}
+				if (debugLogging) {
+					addLogEntry("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing", ["debug"]);
+					if (itemIsRemoteItem) {
+						addLogEntry("- This JSON record represents a online remote folder, thus needs special handling when being processed further", ["debug"]);
+					}
+				}
 				jsonItemsToProcess ~= onedriveJSONItem;
 			} else {
 				// detail we are discarding the json
@@ -1696,7 +1704,13 @@ class SyncEngine {
 							// Has the Shared JSON structure
 							if (debugLogging) {addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);}
 							// Create a 'root' DB Tie Record for this JSON object
-							createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
+							
+							// THIS MAY NEED TO BE KEPT THE SAME 
+							//createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
+							
+							// NEW CODE FOR CREATING SHARED FOLDER DB ENTRIES .. CAN THIS BE USED FOR PERSONAL ???
+							createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
+							
 						}
 						
 						// Ensure that this item has no parent
@@ -1713,7 +1727,14 @@ class SyncEngine {
 						
 						if (appConfig.accountType == "business") {
 							// Create a 'root' DB Tie Record for this JSON object
-							createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
+							
+							addLogEntry("HITTING THIS - BUSINESS SHARED FOLDER");
+							
+							// THIS MAY NEED TO BE KEPT THE SAME 
+							//createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
+							
+							// NEW CODE FOR CREATING SHARED FOLDER DB ENTRIES .. 
+							createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
 							
 							// Ensure that this item has no parent
 							if (debugLogging) {addLogEntry("Setting remoteItem.parentId to be null", ["debug"]);}
@@ -1795,11 +1816,11 @@ class SyncEngine {
 			// Check the item type - if it not an item type that we support, we cant process the JSON item
 			if (!unwanted) {
 				if (isItemFile(onedriveJSONItem)) {
-					if (debugLogging) {addLogEntry("The item we are syncing is a file", ["debug"]);}
+					if (debugLogging) {addLogEntry("The JSON item we are processing is a file", ["debug"]);}
 				} else if (isItemFolder(onedriveJSONItem)) {
-					if (debugLogging) {addLogEntry("The item we are syncing is a folder", ["debug"]);}
+					if (debugLogging) {addLogEntry("The JSON item we are processing is a folder", ["debug"]);}
 				} else if (isItemRemote(onedriveJSONItem)) {
-					if (debugLogging) {addLogEntry("The item we are syncing is a remote item", ["debug"]);}
+					if (debugLogging) {addLogEntry("The JSON item we are processing is a remote item", ["debug"]);}
 				} else {
 					// Why was this unwanted?
 					if (newItemPath.empty) {
@@ -2044,7 +2065,7 @@ class SyncEngine {
 			// We know if this JSON item is unwanted or not
 			if (unwanted) {
 				// This JSON item is NOT wanted - it is excluded
-				if (debugLogging) {addLogEntry("Skipping OneDrive change as this is determined to be unwanted either through Client Side Filtering Rules or prior processing to this point", ["debug"]);}
+				if (debugLogging) {addLogEntry("Skipping OneDrive JSON item as this is determined to be unwanted either through Client Side Filtering Rules or prior processing to this point", ["debug"]);}
 				
 				// Add to the skippedItems array, but only if it is a directory ... pointless adding 'files' here, as it is the 'id' we check as the parent path which can only be a directory
 				if (!isItemFile(onedriveJSONItem)) {
@@ -2052,13 +2073,18 @@ class SyncEngine {
 				}
 			} else {
 				// This JSON item is wanted - we need to process this JSON item further
+				if (debugLogging) {
+					addLogEntry("OneDrive JSON item passed all applicable Client Side Filtering Rules and has been determined this is a wanted item", ["debug"]);
+					addLogEntry("Creating newDatabaseItem object using the provided JSON data", ["debug"]);
+				}
+				
 				// Take the JSON item and create a consumable object for eventual database insertion
 				Item newDatabaseItem = makeItem(onedriveJSONItem);
 				
 				if (existingDBEntry) {
 					// The details of this JSON item are already in the DB
 					// Is the item in the DB the same as the JSON data provided - or is the JSON data advising this is an updated file?
-					if (debugLogging) {addLogEntry("OneDrive change is an update to an existing local item", ["debug"]);}
+					if (debugLogging) {addLogEntry("OneDrive JSON item is an update to an existing local item", ["debug"]);}
 					
 					// Compute the existing item path
 					// NOTE:
@@ -2104,7 +2130,7 @@ class SyncEngine {
 					// Action this JSON item as a new item as we have no DB record of it
 					// The actual item may actually exist locally already, meaning that just the database is out-of-date or missing the data due to --resync
 					// But we also cannot compute the newItemPath as the parental objects may not exist as well
-					if (debugLogging) {addLogEntry("OneDrive change is potentially a new local item", ["debug"]);}
+					if (debugLogging) {addLogEntry("OneDrive JSON item is potentially a new local item", ["debug"]);}
 					
 					// Attempt to apply this potentially new item
 					applyPotentiallyNewLocalItem(newDatabaseItem, onedriveJSONItem, newItemPath);
@@ -2231,6 +2257,17 @@ class SyncEngine {
 					addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
 				}
 				itemDB.upsert(newDatabaseItem);
+				
+				// With the 'newDatabaseItem' saved to the database, regardless of --dry-run situation - was that new database item a 'remote' item?
+				// If this is this a 'Shared Folder' item - ensure we have created / updated any relevant Database Tie Records
+				// This should be applicable for all account types
+				if (newDatabaseItem.type == ItemType.remote) {
+					// yes this is a remote item type
+					if (debugLogging) {addLogEntry("The 'newDatabaseItem' (applyPotentiallyNewLocalItem) is a remote item type - we need to create all of the associated database tie records for this database entry" , ["debug"]);}
+					createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
+				}
+				
+				// all done processing this potential new local item
 				return;
 			} else {
 				// Item details from OneDrive and local item details in database are NOT in-sync
@@ -2339,6 +2376,7 @@ class SyncEngine {
 					fileJSONItemsToDownload ~= onedriveJSONItem;
 				}
 				break;
+			case ItemType.root:
 			case ItemType.unknown:
 			case ItemType.none:
 				// Unknown type - we dont action or sync these items
@@ -2355,7 +2393,7 @@ class SyncEngine {
 			if (!dryRun) {
 				try {
 					// Create the new directory
-					if (debugLogging) {addLogEntry("Requested path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);}
+					if (debugLogging) {addLogEntry("Requested local path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);}
 					mkdirRecurse(newItemPath);
 					// Configure the applicable permissions for the folder
 					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);}
@@ -2367,8 +2405,8 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("Setting directory lastModifiedDateTime for: " ~ newItemPath ~ " to " ~ to!string(newDatabaseItem.mtime), ["debug"]);}
 					if (debugLogging) {addLogEntry("Calling setTimes() for this directory: " ~ newItemPath, ["debug"]);}
 					setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
-					// Save the item to the database
-					saveItem(onedriveJSONItem);
+					// Save the newDatabaseItem to the database
+					saveDatabaseItem(newDatabaseItem);
 				} catch (FileException e) {
 					// display the error message
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
@@ -2376,10 +2414,105 @@ class SyncEngine {
 			} else {
 				// we dont create the directory, but we need to track that we 'faked it'
 				idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
-				// Save the item to the dry-run database
-				saveItem(onedriveJSONItem);
+				// Save the newDatabaseItem to the database
+				saveDatabaseItem(newDatabaseItem);
+			}
+			
+			// With the 'newDatabaseItem' saved to the database, regardless of --dry-run situation - was that new database item a 'remote' item?
+			// Is this folder that has been created locally a 'Shared Folder' online?
+			// This should be applicable for all account types
+			if (newDatabaseItem.type == ItemType.remote) {
+				// yes this is a remote item type
+				if (debugLogging) {addLogEntry("The 'newDatabaseItem' (handleLocalDirectoryCreation) is a remote item type - we need to create all of the associated database tie records for this database entry" , ["debug"]);}
+				createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
 			}
 		}
+	}
+	
+	// Create 'root' DB Tie Record and 'Shared Folder' DB Record in a consistent manner
+	void createRequiredSharedFolderDatabaseRecords(JSONValue onedriveJSONItem) {
+		// Detail what we are doing
+		if (debugLogging) {addLogEntry("We have been requested to create 'root' and 'Shared Folder' DB Tie Records in a consistent manner" , ["debug"]);}
+		
+		JSONValue onlineParentData;
+		string parentDriveId;
+		string parentObjectId;
+		OneDriveApi onlineParentOneDriveApiInstance;
+		onlineParentOneDriveApiInstance = new OneDriveApi(appConfig);
+		onlineParentOneDriveApiInstance.initialise();
+		
+		// What account type is this? This needs to be configured correctly so this can be queried correctly
+		if (appConfig.accountType == "personal") {
+		
+			// NEED SOMEETHING HERE MAYBE FOR PERSONAL ACCOUNTS
+			
+			addLogEntry("PERSONAL ACCOUNT SOURCE JSON: " ~ to!string(onedriveJSONItem));
+			
+			
+		} else {
+			// OneDrive Business|Sharepoint JSON has this structure that we need to use
+			parentDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
+			parentObjectId = onedriveJSONItem["remoteItem"]["id"].str;
+		}
+		
+		// Try and fetch this shared folder parent's details
+		try {
+			onlineParentData = onlineParentOneDriveApiInstance.getPathDetailsById(parentDriveId, parentObjectId);
+		} catch (OneDriveException exception) {
+			// Catch all errors
+			// Display what the error is
+			// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+			displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+			// If we get an error, we cannot do much else
+			return;
+		}
+		
+		// Create a 'root' DB Tie Record for a Shared Folder from the parent folder JSON data
+		// - This maps the Shared Folder 'driveId' with the parent folder where the shared folder exists, so we can call the parent folder to query for changes to this Shared Folder
+		createDatabaseRootTieRecordForOnlineSharedFolder(onlineParentData);
+		
+		if (debugLogging) {addLogEntry("Creating the Shared Folder DB Tie Record that binds the 'root' record to the 'folder'" , ["debug"]);}
+		
+		// Using the onlineParentData JSON data make a DB record for this parent item so that it exists in the database
+		Item sharedFolderDatabaseTie;
+				
+		// Make an item from the online JSON data
+		sharedFolderDatabaseTie = makeItem(onlineParentData);
+		// Ensure we use our online name, as we may have renamed the folder in our location
+		sharedFolderDatabaseTie.name = onedriveJSONItem["name"].str; // use this as the name .. this is the name of the folder online in our OneDrive account
+		
+		// Is sharedFolderDatabaseTie.driveId empty?
+		if (sharedFolderDatabaseTie.driveId.empty) {
+			// This cannot be empty - set to the correct reference for the Shared Folder DB Tie record
+			if (debugLogging) {addLogEntry("The Shared Folder DB Tie record entry for 'driveId' is empty ... correcting it" , ["debug"]);}
+			sharedFolderDatabaseTie.driveId = onlineParentData["parentReference"]["driveId"].str;
+		}
+		
+		// Is sharedFolderDatabaseTie.parentId.empty?
+		if (sharedFolderDatabaseTie.parentId.empty) {
+			// This cannot be empty - set to the correct reference for the Shared Folder DB Tie record
+			if (debugLogging) {addLogEntry("The Shared Folder DB Tie record entry for 'parentId' is empty ... correcting it" , ["debug"]);}
+			sharedFolderDatabaseTie.parentId = onlineParentData["id"].str;
+		}
+		
+		// If a user has added the 'whole' SharePoint Document Library, then the DB Shared Folder Tie Record and 'root' record are the 'same'
+		if ((isItemRoot(onlineParentData)) && (onlineParentData["parentReference"]["driveType"].str == "documentLibrary")) {
+			// Yes this is a DocumentLibrary 'root' object
+			if (debugLogging) {
+				addLogEntry("Updating DB Item object with correct values as this is a 'root' object as it is a SharePoint Library Root Object" , ["debug"]);
+				addLogEntry(" sharedFolderDatabaseTie.parentId = null", ["debug"]);
+				addLogEntry(" sharedFolderDatabaseTie.type = ItemType.root", ["debug"]);
+			}
+			sharedFolderDatabaseTie.parentId = null;
+			sharedFolderDatabaseTie.type = ItemType.root;
+		}
+		
+		// Log action
+		addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder from the online parental data: " ~ sharedFolderDatabaseTie.name, ["debug"]);
+		addLogEntry("Shared Folder DB Tie Record data: " ~ to!string(sharedFolderDatabaseTie), ["debug"]);
+		
+		// Save item
+		itemDB.upsert(sharedFolderDatabaseTie);
 	}
 	
 	// If the JSON item IS in the database, this will be an update to an existing in-sync item
@@ -3512,7 +3645,7 @@ class SyncEngine {
 			// Logging output result is handled by checkFileDatabaseItemForConsistency
 			checkFileDatabaseItemForConsistency(dbItem, localFilePath);
 			break;
-		case ItemType.dir:
+		case ItemType.dir, ItemType.root:
 			// Logging output result is handled by checkDirectoryDatabaseItemForConsistency
 			checkDirectoryDatabaseItemForConsistency(dbItem, localFilePath);
 			break;
@@ -4192,9 +4325,18 @@ class SyncEngine {
 				// In a --resync scenario - the database is empty
 				if (parentInDatabase) {
 					// Calculate this items path based on database entries
+					//addLogEntry("parent in DB");
 					newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
+					//addLogEntry("newItemPath (computeItemPath) = " ~ to!string(newItemPath));
 				} else {
-					// parent not in the database
+					// parent is not in the database .. we need to compute it .. why ????
+					if (appConfig.getValueBool("resync")) {
+						//addLogEntry("Parent NOT in DB .. we need to manually comute this path due to --resync being used");
+					} else {
+						//addLogEntry("Parent NOT in DB .. we need to manually comute this path .......");
+					}
+					
+					// gather the applicable path details
 					if (("path" in onedriveJSONItem["parentReference"]) != null) {
 						// If there is a parent reference path, try and use it
 						string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
@@ -4211,16 +4353,29 @@ class SyncEngine {
 						// Issue #2731
 						// Is this potentially a shared folder?
 						if (onedriveJSONItem["parentReference"]["driveId"].str != appConfig.defaultDriveId) {
-							// Download item specifics
-							string downloadDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
-							string parentFolderId = baseName(splitPaths[0]);
+							// Yes this JSON is from a Shared Folder
+							//addLogEntry("THIS WAS TRIGGERED");
 							
+							//addLogEntry("shared folder json = " ~ to!string(onedriveJSONItem));
+							
+							// Download item specifics
+							string remoteDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+							//string remoteId = baseName(splitPaths[0]);
+						
 							// Query the database for the parent folder details
 							Item remoteItem;
-							itemDB.selectByRemoteId(downloadDriveId, parentFolderId, remoteItem);
+							itemDB.selectByRemoteDriveId(remoteDriveId, remoteItem);
+							
+							//addLogEntry("DB query remoteDriveId = " ~ remoteDriveId);
+							//addLogEntry("DB query remoteId = " ~ remoteId);
+						
+							//addLogEntry("returned result (itemDB.selectByRemoteId): " ~ to!string(remoteItem));
 							
 							// Update the path that will be used to check 'sync_list' with
 							selfBuiltPath = remoteItem.name ~ selfBuiltPath;
+							
+							//addLogEntry("selfBuiltPath after shared folder update = " ~ to!string(selfBuiltPath));
+							
 						}
 						
 						// Issue #2740
@@ -4244,11 +4399,23 @@ class SyncEngine {
 							// use as-is
 							newItemPath = selfBuiltPath;
 						}
+						
+						// The final format of newItemPath when self building needs to be the same as newItemPath when computed using computeItemPath
+						
+						//addLogEntry("newItemPath built by selfBuiltPath = " ~ to!string(selfBuiltPath));
+						
 					} else {
 						// no parent reference path available in provided JSON
 						newItemPath = thisItemName;
 					}
 				}
+				
+				// The 'newItemPath' needs to be updated to ensure it is in the right format
+				//addLogEntry("newItemPath before modification = " ~ newItemPath);
+				newItemPath = ensureStartsWithDotSlash(newItemPath);
+				//addLogEntry("newItemPath after modification = " ~ newItemPath);
+				// At this point 'newItemPath' should be in the same format
+				// ./path/path/ etc
 				
 				// Check for HTML entities (e.g., '%20' for space) in newItemPath
 				if (containsURLEncodedItems(newItemPath)) {
@@ -4258,6 +4425,11 @@ class SyncEngine {
 						addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details", ["verbose"]);
 					}
 				}
+				
+				
+				// THIS SECTION OF CODE DOES NOT MAKE MUCH SENSE ANYMORE ........
+				
+				/**
 				
 				// If this is a Shared Folder, we need to 'trim' the resulting path to that of the 'folder' that is actually shared with us so that this can be appropriately checked against 'sync_list' entries
 				if (sharedFolderDeltaGeneration) {
@@ -4272,10 +4444,20 @@ class SyncEngine {
 					}
 				}
 				
+				**/
+				
+				
+				// THIS SECTION OF CODE DOES NOT MAKE MUCH SENSE ANYMORE ........
+				
+				/**
+				
+				
 				// Update newItemPath, remove leading '/' if present
 				if(newItemPath[0] == '/') {
 					newItemPath = newItemPath[1..$];
 				}
+				
+				**/
 				
 				// What path are we checking against sync_list?
 				if (debugLogging) {addLogEntry("Path to check against 'sync_list' entries: " ~ newItemPath, ["debug"]);}
@@ -4354,6 +4536,22 @@ class SyncEngine {
 		return clientSideRuleExcludesPath;
 	}
 	
+	// Ensure the path passed in, is in the correct format to use when evaluating 'sync_list' rules
+	string ensureStartsWithDotSlash(string inputPath) {
+		// Check if the path starts with './'
+		if (inputPath.startsWith("./")) {
+			return inputPath; // No modification needed
+		}
+
+		// Check if the path starts with '/' or does not start with '.' at all
+		if (inputPath.startsWith("/")) {
+			return "." ~ inputPath; // Prepend '.' to ensure it starts with './'
+		}
+
+		// If the path starts with any other character or is missing './', add './'
+		return "./" ~ inputPath;
+	}
+	
 	// When using 'sync_list' if a file is to be included, ensure that the path that the file resides in, is available locally and in the database, and the path exists locally
 	void createLocalPathStructure(JSONValue onedriveJSONItem, string newLocalParentalPath) {
 	
@@ -4396,13 +4594,14 @@ class SyncEngine {
 					// Display what the error is
 					// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
 					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-				} 
+				}
 				
 				// Does this JSON match the root name of a shared folder we may be trying to match?
 				if (sharedFolderDeltaGeneration) {
 					if (currentSharedFolderName == onlinePathData["name"].str) {
-						if (debugLogging) {addLogEntry("createLocalPathStructure parent matches a shared folder, creating database root tie record", ["debug"]);}
-						createDatabaseRootTieRecordForOnlineSharedFolder(onlinePathData);
+						if (debugLogging) {addLogEntry("createLocalPathStructure parent matches the current shared folder name, creating applicable shared folder database records", ["debug"]);}
+						// Create the required database entries in a consistent manner
+						createRequiredSharedFolderDatabaseRecords(onlinePathData);
 					}
 				} 
 				
@@ -5807,7 +6006,6 @@ class SyncEngine {
 				// Perform Garbage Collection
 				GC.collect();
 				return;
-				
 			} else {
 				// Default operation if not 408,429,503,504 errors
 				// - 408,429,503,504 errors are handled as a retry within createDirectoryOnlineOneDriveApiInstance
@@ -5820,7 +6018,7 @@ class SyncEngine {
 				} else {
 					// We cant create this directory online
 					if (debugLogging) {addLogEntry("This folder cannot be created online: " ~ buildNormalizedPath(absolutePath(thisNewPathToCreate)), ["debug"]);}
-				}	
+				}
 			}
 		}
 		
@@ -5830,13 +6028,16 @@ class SyncEngine {
 			// A valid object was responded with
 			if (onlinePathData["name"].str == baseName(thisNewPathToCreate)) {
 				// OneDrive 'name' matches local path name
+				if (debugLogging) {
+					addLogEntry("The path to query/search for online was found online", ["debug"]);
+					addLogEntry(" onlinePathData: " ~ to!string(onlinePathData), ["debug"]);
+				}
+				
 				if (appConfig.accountType == "business") {
-					// We are a business account, this existing online folder, could be a Shared Online Folder could be a 'Add shortcut to My files' item
-					if (debugLogging) {addLogEntry("onlinePathData: " ~ to!string(onlinePathData), ["debug"]);}
-					
+					// We are a business account, this existing online folder, it could be a Shared Online Folder could be a 'Add shortcut to My files' item
 					// Is this a remote folder
 					if (isItemRemote(onlinePathData)) {
-						// The folder is a remote item ... we do not want to create this ...
+						// The folder is a remote item ... 
 						if (debugLogging) {addLogEntry("Existing Remote Online Folder is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);}
 						
 						// Is Shared Business Folder Syncing enabled ?
@@ -5852,25 +6053,17 @@ class SyncEngine {
 							createDirectoryOnlineOneDriveApiInstance = null;
 							// Perform Garbage Collection
 							GC.collect();
-							
 							return;
 						} else {
-							// As the 'onlinePathData' is potentially missing the actual correct parent folder id in the 'remoteItem' JSON response, we have to perform a further query to get the correct answer
-							// Failure to do this, means the 'root' DB Tie Record has a different parent reference id to that what this folder's parent reference id actually is
-							JSONValue sharedFolderParentPathData;
-							string remoteDriveId = onlinePathData["remoteItem"]["parentReference"]["driveId"].str;
-							string remoteItemId = onlinePathData["remoteItem"]["id"].str;
-							sharedFolderParentPathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsById(remoteDriveId, remoteItemId);
-							
-							// A 'root' DB Tie Record needed for this folder using the correct parent data
-							createDatabaseRootTieRecordForOnlineSharedFolder(sharedFolderParentPathData);
+							// It is a 'remote' JSON item denoting a potential shared folder
+							// Create the required database entries in a consistent manner
+							createRequiredSharedFolderDatabaseRecords(onlinePathData);
 						}
 					}
 				}
 				
 				// Path found online
-				if (verboseLogging) {addLogEntry("The requested directory to create was found on OneDrive - skipping creating the directory: " ~ thisNewPathToCreate, ["verbose"]);}
-				
+				if (verboseLogging) {addLogEntry("The requested directory to create was found on OneDrive - skipping creating the directory online: " ~ thisNewPathToCreate, ["verbose"]);}
 				// Is the response a valid JSON object - validation checking done in saveItem
 				saveItem(onlinePathData);
 				
@@ -7066,12 +7259,21 @@ class SyncEngine {
 					
 					// Is this JSON item a 'root' item?
 					if ((isItemRoot(jsonItem)) && (item.name == "root")) {
-						if (debugLogging) {addLogEntry("Updating DB Item object with correct values as this is a 'root' object", ["debug"]);}
+						if (debugLogging) {
+							addLogEntry("Updating DB Item object with correct values as this is a 'root' object", ["debug"]);
+							addLogEntry(" item.parentId = null", ["debug"]);
+							addLogEntry(" item.type = ItemType.root", ["debug"]);
+						}
 						item.parentId = null; 	// ensures that this database entry has no parent
+						item.type = ItemType.root;
 						// Check for parentReference
 						if (hasParentReference(jsonItem)) {
 							// Set the correct item.driveId
-							if (debugLogging) {addLogEntry("ROOT JSON Item HAS parentReference .... setting item.driveId = jsonItem['parentReference']['driveId'].str", ["debug"]);}
+							if (debugLogging) {
+								addLogEntry("The 'root' JSON Item HAS a parentReference .... setting item.driveId = jsonItem['parentReference']['driveId'].str from the provided JSON record", ["debug"]);
+								string logMessage = format(" item.driveId = '%s'", jsonItem["parentReference"]["driveId"].str);
+								addLogEntry(logMessage, ["debug"]);
+							}
 							item.driveId = jsonItem["parentReference"]["driveId"].str;
 						}
 						
@@ -7084,6 +7286,7 @@ class SyncEngine {
 					}
 					
 					// Add to the local database
+					if (debugLogging) {addLogEntry("Saving this DB item record: " ~ to!string(item), ["debug"]);}
 					itemDB.upsert(item);
 					
 					// If we have a remote drive ID, add this to our list of known drive id's
@@ -7092,6 +7295,7 @@ class SyncEngine {
 						DriveDetailsCache cachedOnlineDriveData;
 						if (!canFindDriveId(item.remoteDriveId, cachedOnlineDriveData)) {
 							// Add this driveId to the drive cache
+							if (debugLogging) {addLogEntry("Database item is a remote drive object, need to fetch online details for this drive: " ~ to!string(item.remoteDriveId), ["debug"]);}
 							addOrUpdateOneDriveOnlineDetails(item.remoteDriveId);
 						}
 					}
@@ -7105,6 +7309,24 @@ class SyncEngine {
 			// log error
 			addLogEntry("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object that can be processed.");
 			addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
+		}
+	}
+	
+	// Save an already created database object into the database
+	void saveDatabaseItem(Item newDatabaseItem) {
+		// Add the database record
+		if (debugLogging) {addLogEntry("Creating a new database record for a new local path that has been created: " ~ to!string(newDatabaseItem), ["debug"]);}
+		itemDB.upsert(newDatabaseItem);
+		
+		// If we have a remote drive ID, add this to our list of known drive id's
+		if (!newDatabaseItem.remoteDriveId.empty) {
+			// Keep the DriveDetailsCache array with unique entries only
+			DriveDetailsCache cachedOnlineDriveData;
+			if (!canFindDriveId(newDatabaseItem.remoteDriveId, cachedOnlineDriveData)) {
+				// Add this driveId to the drive cache
+				if (debugLogging) {addLogEntry("New database record is a remote drive object, need to fetch online details for this drive: " ~ to!string(newDatabaseItem.remoteDriveId), ["debug"]);}
+				addOrUpdateOneDriveOnlineDetails(newDatabaseItem.remoteDriveId);
+			}
 		}
 	}
 	
@@ -9352,7 +9574,7 @@ class SyncEngine {
 			addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder: " ~ onedriveJSONItem["name"].str, ["debug"]);
 			addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem), ["debug"]);
 		}
-		
+
 		// New DB Tie Item to detail the 'root' of the Shared Folder
 		Item tieDBItem;
 		string lastModifiedTimestamp;
@@ -9381,7 +9603,7 @@ class SyncEngine {
 		}
 		
 		// set the item type
-		tieDBItem.type = ItemType.dir;
+		tieDBItem.type = ItemType.root;
 		
 		// get the lastModifiedDateTime
 		lastModifiedTimestamp = strip(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
@@ -9400,19 +9622,25 @@ class SyncEngine {
 		tieDBItem.parentId = null;
 		
 		// Add this DB Tie parent record to the local database
-		if (debugLogging) {addLogEntry("Creating|Updating into local database a 'root' DB Tie record: " ~ to!string(tieDBItem), ["debug"]);}
+		if (debugLogging) {addLogEntry("Creating|Updating into local database a 'root' DB Tie record for a OneDrive Shared Folder online: " ~ to!string(tieDBItem), ["debug"]);}
 		itemDB.upsert(tieDBItem);
 	}
 	
 	// Create a DB Tie Record for a Shared Folder 
 	void createDatabaseTieRecordForOnlineSharedFolder(Item parentItem) {
+	
+	
+		addLogEntry("CALLED createDatabaseTieRecordForOnlineSharedFolder .... LOOK INTO IT");
+	
+	
 		// Creating|Updating a DB Tie
 		if (debugLogging) {
-			addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder: " ~ parentItem.name, ["debug"]);
+			//addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder: " ~ parentItem.name, ["debug"]);
+			addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder from the provided parental data: " ~ parentItem.name, ["debug"]);
 			addLogEntry("Parent Item Record: " ~ to!string(parentItem), ["debug"]);
 		}
 		
-		// New DB Tie Item to bind the 'remote' path to our parent path
+		// New DB Tie Item to bind the 'remote' path to our parent path in the database
 		Item tieDBItem;
 		tieDBItem.name = parentItem.name;
 		tieDBItem.driveId = parentItem.remoteDriveId;

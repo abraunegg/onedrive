@@ -23,6 +23,7 @@ enum ItemType {
 	file,
 	dir,
 	remote,
+	root,
 	unknown
 }
 
@@ -127,21 +128,21 @@ Item makeDatabaseItem(JSONValue driveItem) {
 	bool typeSet = false;
 	if (isItemFile(driveItem)) {
 		// 'file' object exists in the JSON
-		if (debugLogging) {addLogEntry("Flagging object as a file", ["debug"]);}
+		if (debugLogging) {addLogEntry("Flagging database item.type as a file", ["debug"]);}
 		typeSet = true;
 		item.type = ItemType.file;
 	}
 	
 	if (isItemFolder(driveItem)) {
 		// 'folder' object exists in the JSON
-		if (debugLogging) {addLogEntry("Flagging object as a directory", ["debug"]);}
+		if (debugLogging) {addLogEntry("Flagging database item.type as a directory", ["debug"]);}
 		typeSet = true;
 		item.type = ItemType.dir;
 	}
 	
 	if (isItemRemote(driveItem)) {
 		// 'remote' object exists in the JSON
-		if (debugLogging) {addLogEntry("Flagging object as a remote", ["debug"]);}
+		if (debugLogging) {addLogEntry("Flagging database item.type as a remote", ["debug"]);}
 		typeSet = true;
 		item.type = ItemType.remote;
 	}
@@ -231,6 +232,7 @@ final class ItemDatabase {
 	string updateItemStmt;
 	string selectItemByIdStmt;
 	string selectItemByRemoteIdStmt;
+	string selectItemByRemoteDriveIdStmt;
 	string selectItemByParentIdStmt;
 	string deleteItemByIdStmt;
 	bool databaseInitialised = false;
@@ -309,7 +311,7 @@ final class ItemDatabase {
 			db.exec("PRAGMA recursive_triggers = TRUE;");
 			// Set the journal mode for databases associated with the current connection
 			// https://www.sqlite.org/pragma.html#pragma_journal_mode
-			db.exec("PRAGMA journal_mode = WAL;");
+			//db.exec("PRAGMA journal_mode = WAL;");
 			// Automatic indexing is enabled by default as of version 3.7.17
 			// https://www.sqlite.org/pragma.html#pragma_automatic_index 
 			// PRAGMA automatic_index = boolean;
@@ -351,6 +353,11 @@ final class ItemDatabase {
 			SELECT *
 			FROM item
 			WHERE remoteDriveId = ?1 AND remoteId = ?2
+		";
+		selectItemByRemoteDriveIdStmt = "
+			SELECT *
+			FROM item
+			WHERE remoteDriveId = ?1
 		";
 		selectItemByParentIdStmt = "SELECT * FROM item WHERE driveId = ? AND parentId = ?";
 		deleteItemByIdStmt = "DELETE FROM item WHERE driveId = ? AND id = ?";
@@ -571,6 +578,27 @@ final class ItemDatabase {
 			return false;
 		}
 	}
+	
+	// This should return the 'remote' DB entry for a given remote drive id
+	bool selectByRemoteDriveId(const(char)[] remoteDriveId, out Item item) {
+		synchronized(databaseLock) {
+			auto p = db.prepare(selectItemByRemoteDriveIdStmt);
+			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
+			try {
+				p.bind(1, remoteDriveId);
+				auto r = p.exec();
+				if (!r.empty) {
+					item = buildItem(r);
+					return true;
+				}
+			} catch (SqliteException exception) {
+				// Handle the error appropriately
+				detailSQLErrorMessage(exception);
+			}
+
+			return false;
+		}
+	}
 
 	// returns true if an item id is in the database
 	bool idInLocalDatabase(const(string) driveId, const(string) id) {
@@ -694,6 +722,7 @@ final class ItemDatabase {
 				case file:    typeStr = "file";    break;
 				case dir:     typeStr = "dir";     break;
 				case remote:  typeStr = "remote";  break;
+				case root:    typeStr = "root";    break;
 				case unknown: typeStr = "unknown"; break;
 				case none:    typeStr = null; break;
 			}
@@ -713,6 +742,7 @@ final class ItemDatabase {
 				case file:    remoteTypeStr = "file";    break;
 				case dir:     remoteTypeStr = "dir";     break;
 				case remote:  remoteTypeStr = "remote";  break;
+				case root:    remoteTypeStr = "root";    break;
 				case unknown: remoteTypeStr = "unknown"; break;
 				case none:    remoteTypeStr = null; break;
 			}
@@ -785,6 +815,7 @@ final class ItemDatabase {
 			case "file":    item.type = ItemType.file;    break;
 			case "dir":     item.type = ItemType.dir;     break;
 			case "remote":  item.type = ItemType.remote;  break;
+			case "root":    item.type = ItemType.root;    break;
 			default: assert(0, "Invalid item type");
 		}
 		
