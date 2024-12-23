@@ -2485,7 +2485,7 @@ class SyncEngine {
 		}
 		
 		
-		// Personal Account Shared Folder Handling
+		// Ensure 'parentId' is not empty, except for Personal Accounts 
 		if (appConfig.accountType != "personal") {
 			// Is sharedFolderDatabaseTie.parentId.empty?
 			if (sharedFolderDatabaseTie.parentId.empty) {
@@ -2506,6 +2506,16 @@ class SyncEngine {
 				addLogEntry(" sharedFolderDatabaseTie.type = ItemType.root", ["debug"]);
 			}
 			sharedFolderDatabaseTie.parentId = null;
+			sharedFolderDatabaseTie.type = ItemType.root;
+		}
+		
+		// Personal Account Shared Folder Handling 
+		if (appConfig.accountType == "personal") {
+			// Yes this is a personal account
+			if (debugLogging) {
+				addLogEntry("Updating Shared Folder DB Tie record entry with correct values as this is a 'root' object as it is a Personal Shared Folder Root Object" , ["debug"]);
+				addLogEntry(" sharedFolderDatabaseTie.type = ItemType.root", ["debug"]);
+			}
 			sharedFolderDatabaseTie.type = ItemType.root;
 		}
 		
@@ -9636,6 +9646,7 @@ class SyncEngine {
 		if (appConfig.accountType == "personal") {
 			// Set tieDBItem.parentId to null
 			tieDBItem.parentId = null;
+			tieDBItem.type = ItemType.root;
 		} else {
 			// The tieDBItem.parentId needs to be the correct driveId id reference
 			// Query the DB 
