@@ -1165,6 +1165,18 @@ class SyncEngine {
 				// We have a valid deltaChanges JSON array. This means we have at least 200+ JSON items to process.
 				// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
 				auto jsonArrayToProcess = deltaChanges["value"].array;
+				
+				// To allow for better debugging, what are all the JSON elements in the array the API responded with in this set?
+				if (count(jsonArrayToProcess) > 0) {
+					if (debugLogging) {
+						string debugLogHeader = format("------------------------------- jsonArrayToProcess - response bundle %s -----------------------------------", to!string(responseBundleCount));
+						addLogEntry(debugLogHeader, ["debug"]);
+						addLogEntry(to!string(jsonArrayToProcess), ["debug"]);
+						addLogEntry("-----------------------------------------------------------------------------------------------------------", ["debug"]);
+					}
+				}
+				
+				// Process the change set
 				foreach (onedriveJSONItem; jsonArrayToProcess) {
 					// increment change count for this item
 					changeCount++;
@@ -1703,16 +1715,8 @@ class SyncEngine {
 						if (hasSharedElement(onedriveJSONItem)) {
 							// Has the Shared JSON structure
 							if (debugLogging) {addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);}
-							// Create a 'root' DB Tie Record for this JSON object
-							
-							addLogEntry("HITTING THIS - PERSONAL SHARED FOLDER");
-							
-							// THIS MAY NEED TO BE KEPT THE SAME 
-							//createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
-							
-							// NEW CODE FOR CREATING SHARED FOLDER DB ENTRIES .. CAN THIS BE USED FOR PERSONAL ???
+							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object
 							createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
-							
 						}
 						
 						// Ensure that this item has no parent
@@ -1728,14 +1732,7 @@ class SyncEngine {
 						if (debugLogging) {addLogEntry("Handling a Business or SharePoint Shared Item JSON object", ["debug"]);}
 						
 						if (appConfig.accountType == "business") {
-							// Create a 'root' DB Tie Record for this JSON object
-							
-							addLogEntry("HITTING THIS - BUSINESS SHARED FOLDER");
-							
-							// THIS MAY NEED TO BE KEPT THE SAME 
-							//createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
-							
-							// NEW CODE FOR CREATING SHARED FOLDER DB ENTRIES .. 
+							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object
 							createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
 							
 							// Ensure that this item has no parent
@@ -2445,12 +2442,9 @@ class SyncEngine {
 		
 		// What account type is this? This needs to be configured correctly so this can be queried correctly
 		if (appConfig.accountType == "personal") {
-		
-			// NEED SOMEETHING HERE MAYBE FOR PERSONAL ACCOUNTS
-			
-			addLogEntry("PERSONAL ACCOUNT SOURCE JSON: " ~ to!string(onedriveJSONItem));
-			
-			
+			// OneDrive Personal JSON has this structure that we need to use
+			parentDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
+			parentObjectId = onedriveJSONItem["remoteItem"]["id"].str;
 		} else {
 			// OneDrive Business|Sharepoint JSON has this structure that we need to use
 			parentDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
@@ -2490,18 +2484,24 @@ class SyncEngine {
 			sharedFolderDatabaseTie.driveId = onlineParentData["parentReference"]["driveId"].str;
 		}
 		
-		// Is sharedFolderDatabaseTie.parentId.empty?
-		if (sharedFolderDatabaseTie.parentId.empty) {
-			// This cannot be empty - set to the correct reference for the Shared Folder DB Tie record
-			if (debugLogging) {addLogEntry("The Shared Folder DB Tie record entry for 'parentId' is empty ... correcting it" , ["debug"]);}
-			sharedFolderDatabaseTie.parentId = onlineParentData["id"].str;
+		
+		// Personal Account Shared Folder Handling
+		if (appConfig.accountType != "personal") {
+			// Is sharedFolderDatabaseTie.parentId.empty?
+			if (sharedFolderDatabaseTie.parentId.empty) {
+				// This cannot be empty - set to the correct reference for the Shared Folder DB Tie record
+				if (debugLogging) {addLogEntry("The Shared Folder DB Tie record entry for 'parentId' is empty ... correcting it" , ["debug"]);}
+				sharedFolderDatabaseTie.parentId = onlineParentData["id"].str;
+			}
+		} else {
+			// The database Tie Record for Personal Accounts must be empty .. no change, leave 'parentId' empty
 		}
 		
 		// If a user has added the 'whole' SharePoint Document Library, then the DB Shared Folder Tie Record and 'root' record are the 'same'
 		if ((isItemRoot(onlineParentData)) && (onlineParentData["parentReference"]["driveType"].str == "documentLibrary")) {
 			// Yes this is a DocumentLibrary 'root' object
 			if (debugLogging) {
-				addLogEntry("Updating DB Item object with correct values as this is a 'root' object as it is a SharePoint Library Root Object" , ["debug"]);
+				addLogEntry("Updating Shared Folder DB Tie record entry with correct values as this is a 'root' object as it is a SharePoint Library Root Object" , ["debug"]);
 				addLogEntry(" sharedFolderDatabaseTie.parentId = null", ["debug"]);
 				addLogEntry(" sharedFolderDatabaseTie.type = ItemType.root", ["debug"]);
 			}
@@ -7102,7 +7102,6 @@ class SyncEngine {
 	
 	// Get the children of an item id from the database
 	Item[] getChildren(string driveId, string id) {
-				
 		Item[] children;
 		children ~= itemDB.selectChildren(driveId, id);
 		foreach (Item child; children) {
@@ -9616,11 +9615,6 @@ class SyncEngine {
 	
 	// Create a DB Tie Record for a Shared Folder 
 	void createDatabaseTieRecordForOnlineSharedFolder(Item parentItem) {
-	
-	
-		addLogEntry("CALLED createDatabaseTieRecordForOnlineSharedFolder .... LOOK INTO IT");
-	
-	
 		// Creating|Updating a DB Tie
 		if (debugLogging) {
 			//addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder: " ~ parentItem.name, ["debug"]);
