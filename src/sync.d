@@ -4325,15 +4325,14 @@ class SyncEngine {
 				// In a --resync scenario - the database is empty
 				if (parentInDatabase) {
 					// Calculate this items path based on database entries
-					//addLogEntry("parent in DB");
+					if (debugLogging) {addLogEntry("Parent path details are in DB", ["debug"]);}
 					newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-					//addLogEntry("newItemPath (computeItemPath) = " ~ to!string(newItemPath));
 				} else {
 					// parent is not in the database .. we need to compute it .. why ????
 					if (appConfig.getValueBool("resync")) {
-						//addLogEntry("Parent NOT in DB .. we need to manually comute this path due to --resync being used");
+						if (debugLogging) {addLogEntry("Parent NOT in DB .. we need to manually compute this path due to --resync being used", ["debug"]);}
 					} else {
-						//addLogEntry("Parent NOT in DB .. we need to manually comute this path .......");
+						if (debugLogging) {addLogEntry("Parent NOT in DB .. we need to manually compute this path .......", ["debug"]);}
 					}
 					
 					// gather the applicable path details
@@ -4351,31 +4350,21 @@ class SyncEngine {
 						}
 						
 						// Issue #2731
-						// Is this potentially a shared folder?
+						// Is this potentially a shared folder? This is the only reliable way to determine this ...
 						if (onedriveJSONItem["parentReference"]["driveId"].str != appConfig.defaultDriveId) {
 							// Yes this JSON is from a Shared Folder
-							//addLogEntry("THIS WAS TRIGGERED");
-							
-							//addLogEntry("shared folder json = " ~ to!string(onedriveJSONItem));
-							
-							// Download item specifics
+							// Get the remoteDriveId from JSON record
 							string remoteDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
-							//string remoteId = baseName(splitPaths[0]);
-						
-							// Query the database for the parent folder details
+							
+							// Query the database for the 'remote' folder details from the database
+							if (debugLogging) {addLogEntry("Query database for this 'remoteDriveId' record: " ~ to!string(remoteDriveId), ["debug"]);}
 							Item remoteItem;
 							itemDB.selectByRemoteDriveId(remoteDriveId, remoteItem);
+							if (debugLogging) {addLogEntry("Query returned result (itemDB.selectByRemoteDriveId): " ~ to!string(remoteItem), ["debug"]);}
 							
-							//addLogEntry("DB query remoteDriveId = " ~ remoteDriveId);
-							//addLogEntry("DB query remoteId = " ~ remoteId);
-						
-							//addLogEntry("returned result (itemDB.selectByRemoteId): " ~ to!string(remoteItem));
-							
-							// Update the path that will be used to check 'sync_list' with
+							// Update the path that will be used to check 'sync_list' with the 'name' of the remoteDriveId database record
 							selfBuiltPath = remoteItem.name ~ selfBuiltPath;
-							
-							//addLogEntry("selfBuiltPath after shared folder update = " ~ to!string(selfBuiltPath));
-							
+							if (debugLogging) {addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath), ["debug"]);}
 						}
 						
 						// Issue #2740
@@ -4400,10 +4389,8 @@ class SyncEngine {
 							newItemPath = selfBuiltPath;
 						}
 						
-						// The final format of newItemPath when self building needs to be the same as newItemPath when computed using computeItemPath
-						
-						//addLogEntry("newItemPath built by selfBuiltPath = " ~ to!string(selfBuiltPath));
-						
+						// The final format of newItemPath when self building needs to be the same as newItemPath when computed using computeItemPath .. this is handled later below
+						if (debugLogging) {addLogEntry("newItemPath as manually computed by selfBuiltPath process = " ~ to!string(selfBuiltPath), ["debug"]);}
 					} else {
 						// no parent reference path available in provided JSON
 						newItemPath = thisItemName;
@@ -4411,12 +4398,11 @@ class SyncEngine {
 				}
 				
 				// The 'newItemPath' needs to be updated to ensure it is in the right format
-				//addLogEntry("newItemPath before modification = " ~ newItemPath);
+				// Regardless of built from DB or computed it needs to be in this format:
+				//   ./path/path/ etc
+				// This then makes the path output with 'sync_list' consistent, and, more importantly consistent for 'sync_list' evaluations
 				newItemPath = ensureStartsWithDotSlash(newItemPath);
-				//addLogEntry("newItemPath after modification = " ~ newItemPath);
-				// At this point 'newItemPath' should be in the same format
-				// ./path/path/ etc
-				
+								
 				// Check for HTML entities (e.g., '%20' for space) in newItemPath
 				if (containsURLEncodedItems(newItemPath)) {
 					addLogEntry("CAUTION:    The JSON element transmitted by the Microsoft OneDrive API includes HTML URL encoded items, which may complicate pattern matching and potentially lead to synchronisation problems for this item.");
@@ -4427,7 +4413,7 @@ class SyncEngine {
 				}
 				
 				
-				// THIS SECTION OF CODE DOES NOT MAKE MUCH SENSE ANYMORE ........
+				// THIS SECTION OF CODE DOES NOT MAKE MUCH SENSE ANYMORE ........ IF ZERO IMPACT WITH PERSONAL ACCOUNTS .. REMOVE
 				
 				/**
 				
@@ -4447,7 +4433,7 @@ class SyncEngine {
 				**/
 				
 				
-				// THIS SECTION OF CODE DOES NOT MAKE MUCH SENSE ANYMORE ........
+				// THIS SECTION OF CODE DOES NOT MAKE MUCH SENSE ANYMORE ........ IF ZERO IMPACT WITH PERSONAL ACCOUNTS .. REMOVE
 				
 				/**
 				
