@@ -1705,6 +1705,8 @@ class SyncEngine {
 							if (debugLogging) {addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);}
 							// Create a 'root' DB Tie Record for this JSON object
 							
+							addLogEntry("HITTING THIS - PERSONAL SHARED FOLDER");
+							
 							// THIS MAY NEED TO BE KEPT THE SAME 
 							//createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
 							
