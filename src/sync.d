@@ -1271,38 +1271,42 @@ class SyncEngine {
 			// This then allows the application to look for any remaining 'N' values, and delete these as no longer needed locally
 			deltaChanges = generateDeltaResponse(pathToQuery);
 			
-			// How many changes were returned?
-			long nrChanges = count(deltaChanges["value"].array);
-			int changeCount = 0;
-			if (debugLogging) {addLogEntry("API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["debug"]);}
-			// Update the count of items received
-			jsonItemsReceived = jsonItemsReceived + nrChanges;
+			// deltaChanges must be a valid JSON object / array of data
+			if (deltaChanges.type() == JSONType.object) {
+				// How many changes were returned?
+				long nrChanges = count(deltaChanges["value"].array);
+				int changeCount = 0;
+				if (debugLogging) {addLogEntry("API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["debug"]);}
+				// Update the count of items received
+				jsonItemsReceived = jsonItemsReceived + nrChanges;
+				
+				// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
+				auto jsonArrayToProcess = deltaChanges["value"].array;
+				foreach (onedriveJSONItem; deltaChanges["value"].array) {
+					// increment change count for this item
+					changeCount++;
+					// Process the received OneDrive object item JSON for this JSON bundle
+					// When we generate a /delta response .. there is no currentDeltaLink value
+					processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);
+				}
+				
+				// Clear up this data
+				jsonArrayToProcess = null;
+				
+				// To finish off the JSON processing items, this is needed to reflect this in the log
+				if (debugLogging) {addLogEntry("------------------------------------------------------------------", ["debug"]);}
 			
-			// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
-			auto jsonArrayToProcess = deltaChanges["value"].array;
-			foreach (onedriveJSONItem; deltaChanges["value"].array) {
-				// increment change count for this item
-				changeCount++;
-				// Process the received OneDrive object item JSON for this JSON bundle
-				// When we generate a /delta response .. there is no currentDeltaLink value
-				processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);
-			}
-			
-			// Clear up this data
-			jsonArrayToProcess = null;
-			// Perform Garbage Collection
-			GC.collect();
-			
-			// To finish off the JSON processing items, this is needed to reflect this in the log
-			if (debugLogging) {addLogEntry("------------------------------------------------------------------", ["debug"]);}
-			
-			// Log that we have finished generating our self generated /delta response
-			if (!appConfig.suppressLoggingOutput) {
-				addLogEntry("Finished processing self generated /delta JSON response from the OneDrive API");
+				// Log that we have finished generating our self generated /delta response
+				if (!appConfig.suppressLoggingOutput) {
+					addLogEntry("Finished processing self generated /delta JSON response from the OneDrive API");
+				}
 			}
 			
 			// Cleanup deltaChanges as this is no longer needed
 			deltaChanges = null;
+			
+			// Perform Garbage Collection
+			GC.collect();
 		}
 		
 		// Cleanup deltaChanges as this is no longer needed
@@ -2455,12 +2459,36 @@ class SyncEngine {
 		try {
 			onlineParentData = onlineParentOneDriveApiInstance.getPathDetailsById(parentDriveId, parentObjectId);
 		} catch (OneDriveException exception) {
-			// Catch all errors
-			// Display what the error is
-			// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-			displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-			// If we get an error, we cannot do much else
-			return;
+			// If we get a 404 .. the shared item does not exist online ... perhaps a broken 'Add shortcut to My files' link in the account holders directory?
+			if ((exception.httpStatusCode == 403) || (exception.httpStatusCode == 404)) {
+				// The API call returned a 404 error response
+				if (debugLogging) {addLogEntry("onlineParentData = onlineParentOneDriveApiInstance.getPathDetailsById(parentDriveId, parentObjectId); generated a 404 - shared folder path does not exist online", ["debug"]);}
+				string errorMessage = format("WARNING: The OneDrive Shared Folder link target '%s' cannot be found online using the provided online data.", onedriveJSONItem["name"].str);
+				// detail what this 404 error response means
+				addLogEntry();
+				addLogEntry(errorMessage);
+				addLogEntry("WARNING: This is potentially a broken online OneDrive Shared Folder link or you no longer have access to it. Please correct this error online.");
+				addLogEntry();
+				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+				onlineParentOneDriveApiInstance.releaseCurlEngine();
+				onlineParentOneDriveApiInstance = null;
+				// Perform Garbage Collection
+				GC.collect();
+				// we have to return at this point
+				return;
+			} else {
+				// Catch all other errors
+				// Display what the error is
+				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+				onlineParentOneDriveApiInstance.releaseCurlEngine();
+				onlineParentOneDriveApiInstance = null;
+				// Perform Garbage Collection
+				GC.collect();
+				// If we get an error, we cannot do much else
+				return;
+			}
 		}
 		
 		// Create a 'root' DB Tie Record for a Shared Folder from the parent folder JSON data
@@ -2525,6 +2553,12 @@ class SyncEngine {
 		
 		// Save item
 		itemDB.upsert(sharedFolderDatabaseTie);
+		
+		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+		onlineParentOneDriveApiInstance.releaseCurlEngine();
+		onlineParentOneDriveApiInstance = null;
+		// Perform Garbage Collection
+		GC.collect();
 	}
 	
 	// If the JSON item IS in the database, this will be an update to an existing in-sync item
@@ -6036,9 +6070,9 @@ class SyncEngine {
 					// Is this a remote folder
 					if (isItemRemote(onlinePathData)) {
 						// The folder is a remote item ... 
-						if (debugLogging) {addLogEntry("Existing Remote Online Folder is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);}
+						if (debugLogging) {addLogEntry("The existing Remote Online Folder and 'onlinePathData' indicate this is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);}
 						
-						// Is Shared Business Folder Syncing enabled ?
+						// Is Shared Business Folder Syncing actually enabled?
 						if (!appConfig.getValueBool("sync_business_shared_items")) {
 							// Shared Business Folder Syncing is NOT enabled
 							if (debugLogging) {addLogEntry("We need to skip this path: " ~ thisNewPathToCreate, ["debug"]);}
@@ -6053,6 +6087,7 @@ class SyncEngine {
 							GC.collect();
 							return;
 						} else {
+							// Shared Business Folder Syncing IS enabled
 							// It is a 'remote' JSON item denoting a potential shared folder
 							// Create the required database entries in a consistent manner
 							createRequiredSharedFolderDatabaseRecords(onlinePathData);
@@ -7460,16 +7495,15 @@ class SyncEngine {
 					searchItem.id = pathData["remoteItem"]["id"].str;
 					remotePathObject = true;
 				}
-			} catch (OneDriveException e) {
+			} catch (OneDriveException exception) {
 				// Display error message
-				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-				
+				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+					
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
 				generateDeltaResponseOneDriveApiInstance = null;
 				// Perform Garbage Collection
 				GC.collect();
-				
 				// Must force exit here, allow logging to be done
 				forceExit();
 			}
@@ -7502,18 +7536,40 @@ class SyncEngine {
 		try {
 			driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id);
 		} catch (OneDriveException exception) {
+			// An error was generated
 			if (debugLogging) {addLogEntry("driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id) generated a OneDriveException", ["debug"]);}
-			
 			string thisFunctionName = getFunctionName!({});
-			// Default operation if not 408,429,503,504 errors
-			// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
-			// Display what the error is
-			displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+			
+			// Was this a 403 or 404 ?
+			if ((exception.httpStatusCode == 403) || (exception.httpStatusCode == 404)) {
+				// The API call returned a 404 error response
+				if (debugLogging) {addLogEntry("onlineParentData = onlineParentOneDriveApiInstance.getPathDetailsById(parentDriveId, parentObjectId); generated a 404 - shared folder path does not exist online", ["debug"]);}
+				string errorMessage = format("WARNING: The OneDrive Shared Folder link target '%s' cannot be found online using the provided online data.", pathToQuery);
+				// detail what this 404 error response means
+				addLogEntry();
+				addLogEntry(errorMessage);
+				addLogEntry("WARNING: This is potentially a broken online OneDrive Shared Folder link or you no longer have access to it. Please correct this error online.");
+				addLogEntry();
+				
+				// Release curl engine
+				generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
+				// Free object and memory
+				generateDeltaResponseOneDriveApiInstance = null;
+				// Perform Garbage Collection
+				GC.collect();
+				
+				// Return the generated JSON response
+				return selfGeneratedDeltaResponse;
+			} else {
+				// Default operation if not 408,429,503,504 errors
+				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
+				// Display what the error is
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+			}
 		}
 		
 		// Was a valid JSON response for 'driveData' provided?
 		if (driveData.type() == JSONType.object) {
-		
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.suppressLoggingOutput) {
@@ -7551,7 +7607,7 @@ class SyncEngine {
 		} else {
 			// driveData is an invalid JSON object
 			addLogEntry("CODING TO DO: The query of OneDrive API to getPathDetailsById generated an invalid JSON response - thus we cant build our own /delta simulated response ... how to handle?");
-			// Must exit here
+			// Release curl engine
 			generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
 			// Free object and memory
 			generateDeltaResponseOneDriveApiInstance = null;
