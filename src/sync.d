@@ -1279,7 +1279,7 @@ class SyncEngine {
 					// shared folder details are not even in the database ... fall back to this
 					pathToQuery = sharedFolderName;
 				}
-				// At this point we have either calcuated the shared folder path, or not and can attempt to generate a /delta response from that path entry online
+				// At this point we have either calculated the shared folder path, or not and can attempt to generate a /delta response from that path entry online
 			}
 			
 			// Generate the simulated /delta response
