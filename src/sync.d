@@ -3337,7 +3337,7 @@ class SyncEngine {
 			string fullLocalPath;
 			
 			// Get the DB entry
-			itemDB.selctRemoteTypeByRemoteDriveId(thisDriveId, remoteEntryItem);
+			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, remoteEntryItem);
 			// Calculate the local path extension for this item
 			string localPathExtension = itemDB.computePath(remoteEntryItem.driveId, remoteEntryItem.id);
 			if (debugLogging) {addLogEntry(" localPathExtension = " ~ to!string(localPathExtension), ["debug"]);}
