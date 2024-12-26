@@ -234,8 +234,8 @@ final class ItemDatabase {
 	string selectItemByRemoteIdStmt;
 	string selectItemByRemoteDriveIdStmt;
 	string selectItemByParentIdStmt;
-	string selctRemoteTypeByNameStmt;
-	string selctRemoteTypeByRemoteDriveIdStmt;
+	string selectRemoteTypeByNameStmt;
+	string selectRemoteTypeByRemoteDriveIdStmt;
 	string deleteItemByIdStmt;
 	bool databaseInitialised = false;
 	private Mutex databaseLock;
@@ -361,13 +361,13 @@ final class ItemDatabase {
 			FROM item
 			WHERE remoteDriveId = ?1
 		";
-		selctRemoteTypeByNameStmt = "
+		selectRemoteTypeByNameStmt = "
 			SELECT *
 			FROM item
 			WHERE type = 'remote'
 			AND name = ?1
 		";
-		selctRemoteTypeByRemoteDriveIdStmt = "
+		selectRemoteTypeByRemoteDriveIdStmt = "
 			SELECT *
 			FROM item
 			WHERE type = 'remote'
@@ -616,7 +616,7 @@ final class ItemDatabase {
 	// This should return the 'remote' DB entry for the given 'name'
 	bool selectByRemoteEntryByName(const(char)[] entryName, out Item item) {
 		synchronized(databaseLock) {
-			auto p = db.prepare(selctRemoteTypeByNameStmt);
+			auto p = db.prepare(selectRemoteTypeByNameStmt);
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
 			try {
 				p.bind(1, entryName);
@@ -636,7 +636,7 @@ final class ItemDatabase {
 	// This should return the 'remote' DB entry for the given 'remoteDriveId'
 	bool selctRemoteTypeByRemoteDriveId(const(char)[] entryName, out Item item) {
 		synchronized(databaseLock) {
-			auto p = db.prepare(selctRemoteTypeByRemoteDriveIdStmt);
+			auto p = db.prepare(selectRemoteTypeByRemoteDriveIdStmt);
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
 			try {
 				p.bind(1, entryName);
