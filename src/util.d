@@ -697,7 +697,7 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 	
 	// Where in the code was this error generated
 	if (verboseLogging) {addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);}
-	
+	if (debugLogging) {addLogEntry("  Calling Function: " ~ callingFunction, ["debug"]);}
 	// Extra Debug if we are using --verbose --verbose
 	if (debugLogging) {
 		addLogEntry("Raw Error Data: " ~ message, ["debug"]);
