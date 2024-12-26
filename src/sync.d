@@ -4458,39 +4458,6 @@ class SyncEngine {
 					}
 				}
 				
-				
-				// THIS SECTION OF CODE DOES NOT MAKE MUCH SENSE ANYMORE ........ IF ZERO IMPACT WITH PERSONAL ACCOUNTS .. REMOVE
-				
-				/**
-				
-				// If this is a Shared Folder, we need to 'trim' the resulting path to that of the 'folder' that is actually shared with us so that this can be appropriately checked against 'sync_list' entries
-				if (sharedFolderDeltaGeneration) {
-					// Find the index of 'currentSharedFolderName' in 'newItemPath'
-					int pos = cast(int) newItemPath.indexOf(currentSharedFolderName);
-					
-					// If currentSharedFolderName is found within newItemPath
-					if (pos != -1) {
-						// Get the substring from the position of currentSharedFolderName
-						string result = newItemPath[pos .. $];
-						newItemPath = result;
-					}
-				}
-				
-				**/
-				
-				
-				// THIS SECTION OF CODE DOES NOT MAKE MUCH SENSE ANYMORE ........ IF ZERO IMPACT WITH PERSONAL ACCOUNTS .. REMOVE
-				
-				/**
-				
-				
-				// Update newItemPath, remove leading '/' if present
-				if(newItemPath[0] == '/') {
-					newItemPath = newItemPath[1..$];
-				}
-				
-				**/
-				
 				// What path are we checking against sync_list?
 				if (debugLogging) {addLogEntry("Path to check against 'sync_list' entries: " ~ newItemPath, ["debug"]);}
 				
