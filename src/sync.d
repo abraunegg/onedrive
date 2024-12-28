@@ -739,7 +739,9 @@ class SyncEngine {
 					
 					// Directory name is not excluded or skip_dir is not populated
 					if (!appConfig.suppressLoggingOutput) {
-						addLogEntry("Syncing this OneDrive Personal Shared Folder: " ~ remoteItem.name);
+						// So that we represent correctly where this shared folder is, calculate the path
+						string sharedFolderLogicalPath = computeItemPath(remoteItem.driveId, remoteItem.id);
+						addLogEntry("Syncing this OneDrive Personal Shared Folder: " ~ ensureStartsWithDotSlash(sharedFolderLogicalPath));
 					}
 					// Check this OneDrive Personal Shared Folder for changes
 					fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
@@ -7608,12 +7610,13 @@ class SyncEngine {
 		// Was a valid JSON response for 'driveData' provided?
 		if (driveData.type() == JSONType.object) {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
+			string generatingDeltaResponseMessage = format("Generating a /delta response from the OneDrive API from this Drive ID: %s and Item ID: %s", searchItem.driveId, searchItem.id);
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.suppressLoggingOutput) {
-					addProcessingLogHeaderEntry("Generating a /delta response from the OneDrive API from this Item ID: " ~ searchItem.id, appConfig.verbosityCount);
+					addProcessingLogHeaderEntry(generatingDeltaResponseMessage, appConfig.verbosityCount);
 				}
 			} else {
-				if (verboseLogging) {addLogEntry("Generating a /delta response from the OneDrive API from this Item ID: " ~ searchItem.id, ["verbose"]);}
+				if (verboseLogging) {addLogEntry(generatingDeltaResponseMessage, ["verbose"]);}
 			}
 		
 			// Process this initial JSON response
