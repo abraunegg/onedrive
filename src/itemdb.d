@@ -234,6 +234,8 @@ final class ItemDatabase {
 	string selectItemByRemoteIdStmt;
 	string selectItemByRemoteDriveIdStmt;
 	string selectItemByParentIdStmt;
+	string selectRemoteTypeByNameStmt;
+	string selectRemoteTypeByRemoteDriveIdStmt;
 	string deleteItemByIdStmt;
 	bool databaseInitialised = false;
 	private Mutex databaseLock;
@@ -358,6 +360,18 @@ final class ItemDatabase {
 			SELECT *
 			FROM item
 			WHERE remoteDriveId = ?1
+		";
+		selectRemoteTypeByNameStmt = "
+			SELECT *
+			FROM item
+			WHERE type = 'remote'
+			AND name = ?1
+		";
+		selectRemoteTypeByRemoteDriveIdStmt = "
+			SELECT *
+			FROM item
+			WHERE type = 'remote'
+			AND remoteDriveId = ?1
 		";
 		selectItemByParentIdStmt = "SELECT * FROM item WHERE driveId = ? AND parentId = ?";
 		deleteItemByIdStmt = "DELETE FROM item WHERE driveId = ? AND id = ?";
@@ -595,11 +609,50 @@ final class ItemDatabase {
 				// Handle the error appropriately
 				detailSQLErrorMessage(exception);
 			}
-
+			return false;
+		}
+	}
+	
+	// This should return the 'remote' DB entry for the given 'name'
+	bool selectByRemoteEntryByName(const(char)[] entryName, out Item item) {
+		synchronized(databaseLock) {
+			auto p = db.prepare(selectRemoteTypeByNameStmt);
+			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
+			try {
+				p.bind(1, entryName);
+				auto r = p.exec();
+				if (!r.empty) {
+					item = buildItem(r);
+					return true;
+				}
+			} catch (SqliteException exception) {
+				// Handle the error appropriately
+				detailSQLErrorMessage(exception);
+			}
 			return false;
 		}
 	}
 
+	// This should return the 'remote' DB entry for the given 'remoteDriveId'
+	bool selectRemoteTypeByRemoteDriveId(const(char)[] entryName, out Item item) {
+		synchronized(databaseLock) {
+			auto p = db.prepare(selectRemoteTypeByRemoteDriveIdStmt);
+			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
+			try {
+				p.bind(1, entryName);
+				auto r = p.exec();
+				if (!r.empty) {
+					item = buildItem(r);
+					return true;
+				}
+			} catch (SqliteException exception) {
+				// Handle the error appropriately
+				detailSQLErrorMessage(exception);
+			}
+			return false;
+		}
+	}
+	
 	// returns true if an item id is in the database
 	bool idInLocalDatabase(const(string) driveId, const(string) id) {
 		synchronized(databaseLock) {

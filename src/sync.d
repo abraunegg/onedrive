@@ -739,7 +739,9 @@ class SyncEngine {
 					
 					// Directory name is not excluded or skip_dir is not populated
 					if (!appConfig.suppressLoggingOutput) {
-						addLogEntry("Syncing this OneDrive Personal Shared Folder: " ~ remoteItem.name);
+						// So that we represent correctly where this shared folder is, calculate the path
+						string sharedFolderLogicalPath = computeItemPath(remoteItem.driveId, remoteItem.id);
+						addLogEntry("Syncing this OneDrive Personal Shared Folder: " ~ ensureStartsWithDotSlash(sharedFolderLogicalPath));
 					}
 					// Check this OneDrive Personal Shared Folder for changes
 					fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
@@ -777,7 +779,9 @@ class SyncEngine {
 							
 							// Directory name is not excluded or skip_dir is not populated
 							if (!appConfig.suppressLoggingOutput) {
-								addLogEntry("Syncing this OneDrive Business Shared Folder: " ~ remoteItem.name);
+								// So that we represent correctly where this shared folder is, calculate the path
+								string sharedFolderLogicalPath = computeItemPath(remoteItem.driveId, remoteItem.id);
+								addLogEntry("Syncing this OneDrive Business Shared Folder: " ~ sharedFolderLogicalPath);
 							}
 							
 							// Debug log output
@@ -1254,9 +1258,30 @@ class SyncEngine {
 				pathToQuery = appConfig.getValueString("single_directory");
 			}
 			
-			// We could also be syncing a Shared Folder of some description
+			// We could also be syncing a Shared Folder of some description - is this empty?
 			if (!sharedFolderName.empty) {
-				pathToQuery = sharedFolderName;
+				// We need to build 'pathToQuery' to support Shared Folders being anywhere in the directory structure (#2824)
+				// Is the itemIdToQuery in the database? If this is not there, we cannot build the path
+				if (itemDB.idInLocalDatabase(driveIdToQuery, itemIdToQuery)) {
+					// The entries are in our DB, but we need to use our Drive details to compute the actual local path the the point of the 'remote' record and DB Tie Record
+					Item remoteEntryItem;
+					itemDB.selectByRemoteEntryByName(sharedFolderName, remoteEntryItem);
+					
+					// Use the 'remote' item type DB entry to calculate the local path of this item, which then will match the path online for this Shared Folder
+					string computedLocalPathToQuery = computeItemPath(remoteEntryItem.driveId, remoteEntryItem.id);
+					// If we have a computed path, use it, else use 'sharedFolderName'
+					if (!computedLocalPathToQuery.empty) {
+						// computedLocalPathToQuery is not empty
+						pathToQuery = computedLocalPathToQuery;	
+					} else {
+						// computedLocalPathToQuery is empty
+						pathToQuery = sharedFolderName;
+					}
+				} else {
+					// shared folder details are not even in the database ... fall back to this
+					pathToQuery = sharedFolderName;
+				}
+				// At this point we have either calculated the shared folder path, or not and can attempt to generate a /delta response from that path entry online
 			}
 			
 			// Generate the simulated /delta response
@@ -3276,21 +3301,65 @@ class SyncEngine {
 	}
 	
 	// Query itemdb.computePath() and catch potential assert when DB consistency issue occurs
+	// This function returns what that local physical path should be on the local disk
 	string computeItemPath(string thisDriveId, string thisItemId) {
 		// static declare this for this function
 		static import core.exception;
 		string calculatedPath;
+		string initialCalculatedPath;
+		string fullCalculatedPath;
+		bool calculateLocalExtension = false;
 		
 		// What driveID and itemID we trying to calculate the path for
 		if (debugLogging) {addLogEntry("Attempting to calculate local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
 		
+		// Perform the original calculation of the path using the values provided
 		try {
-			calculatedPath = itemDB.computePath(thisDriveId, thisItemId);
+			initialCalculatedPath = itemDB.computePath(thisDriveId, thisItemId);
+			if (debugLogging) {addLogEntry("Initial calculated path = " ~ to!string(initialCalculatedPath), ["debug"]);}
 		} catch (core.exception.AssertError) {
 			// broken tree in the database, we cant compute the path for this item id, exit
 			addLogEntry("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
 			// Must force exit here, allow logging to be done
 			forceExit();
+		}
+		
+		// To support OneDrive Shared Folders being stored anywhere (#2824) if 'thisDriveId' is not our account drive, we need to switch this up and calculate the path to the 'remote' item type DB object
+		// By doing this, we calculate the local path correctly to account for the difference in Shared Folder root path details that start from that Shared Folder online
+		// This then needs to be 'appended' to the shared drive calculation to get the full calculated local path which gest returned
+		
+		// Do we need to perform the local path extension for a shared folder?
+		// - Is this potentially a shared folder that we are trying to compute the path for? This is the only reliable way to determine this ...
+		if (thisDriveId != appConfig.defaultDriveId) {
+			// The driveId is not our account driveId
+			if (debugLogging) {addLogEntry("The path we are trying to calculate extends to a OneDrive Shared Folder .. need to perform multiple calculations to calculate the full true local path", ["debug"]);}
+		
+			// Use the 'thisDriveId' value to obtain the 'remote' item type record which represents the local path junction point to the shared folder
+			Item remoteEntryItem;
+			string fullLocalPath;
+			
+			// Get the DB entry
+			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, remoteEntryItem);
+			// Calculate the local path extension for this item
+			string localPathExtension = itemDB.computePath(remoteEntryItem.driveId, remoteEntryItem.id);
+			if (debugLogging) {addLogEntry(" localPathExtension = " ~ to!string(localPathExtension), ["debug"]);}
+			
+			if (initialCalculatedPath == ".") {
+				// The '.' represents the root shared folder ... 
+				fullLocalPath = localPathExtension;
+			} else {
+				// Now to combine the two
+				// - replace remoteEntryItem.name in 'initialCalculatedPath' with 'localPathExtension'
+				fullLocalPath = initialCalculatedPath.replace(remoteEntryItem.name, localPathExtension);
+			}
+			
+			if (debugLogging) {addLogEntry(" fullLocalPath = " ~ to!string(fullLocalPath), ["debug"]);}
+			
+			// Update calculatedPath
+			calculatedPath = fullLocalPath;
+		} else {
+			// not a remote shared folder
+			calculatedPath = initialCalculatedPath;
 		}
 		
 		// return calculated path as string
@@ -3712,7 +3781,7 @@ class SyncEngine {
 		
 		// What is the source of this item data?
 		string itemSource = "database";
-		
+
 		// Does this item|file still exist on disk?
 		if (exists(localFilePath)) {
 			// Path exists locally, is this path a file?
@@ -7464,13 +7533,14 @@ class SyncEngine {
 				}
 			} catch (OneDriveException exception) {
 				// Display error message
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-					
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
 				generateDeltaResponseOneDriveApiInstance = null;
 				// Perform Garbage Collection
 				GC.collect();
+
 				// Must force exit here, allow logging to be done
 				forceExit();
 			}
@@ -7538,12 +7608,13 @@ class SyncEngine {
 		// Was a valid JSON response for 'driveData' provided?
 		if (driveData.type() == JSONType.object) {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
+			string generatingDeltaResponseMessage = format("Generating a /delta response from the OneDrive API from this Drive ID: %s and Item ID: %s", searchItem.driveId, searchItem.id);
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.suppressLoggingOutput) {
-					addProcessingLogHeaderEntry("Generating a /delta response from the OneDrive API from this Item ID: " ~ searchItem.id, appConfig.verbosityCount);
+					addProcessingLogHeaderEntry(generatingDeltaResponseMessage, appConfig.verbosityCount);
 				}
 			} else {
-				if (verboseLogging) {addLogEntry("Generating a /delta response from the OneDrive API from this Item ID: " ~ searchItem.id, ["verbose"]);}
+				if (verboseLogging) {addLogEntry(generatingDeltaResponseMessage, ["verbose"]);}
 			}
 		
 			// Process this initial JSON response
