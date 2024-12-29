@@ -1462,8 +1462,9 @@ class SyncEngine {
 			// Debug output of change evaluation items
 			if (debugLogging) {
 				addLogEntry("defaultRootId                                        = " ~ appConfig.defaultRootId, ["debug"]);
-				addLogEntry("'search id'                                          = " ~ thisItemId, ["debug"]);
-				addLogEntry("id == defaultRootId                                  = " ~ to!string(itemIdMatchesDefaultRootId), ["debug"]);
+				addLogEntry("thisItemName                                         = " ~ onedriveJSONItem["name"].str, ["debug"]);
+				addLogEntry("thisItemId                                           = " ~ thisItemId, ["debug"]);
+				addLogEntry("thisItemId == defaultRootId                          = " ~ to!string(itemIdMatchesDefaultRootId), ["debug"]);
 				addLogEntry("isItemRoot(onedriveJSONItem)                         = " ~ to!string(itemIsRoot), ["debug"]);
 				addLogEntry("onedriveJSONItem['name'].str == 'root'               = " ~ to!string(itemNameExplicitMatchRoot), ["debug"]);
 				addLogEntry("itemHasParentReferenceId                             = " ~ to!string(itemHasParentReferenceId), ["debug"]);
@@ -1873,8 +1874,8 @@ class SyncEngine {
 			if (!unwanted) {
 				// Only check path if config is != ""
 				if (!appConfig.getValueString("skip_dir").empty) {
-					// Is the item a folder?
-					if (isItemFolder(onedriveJSONItem)) {
+					// Is the item a folder or a remote item? (which itself is a directory, but is missing the 'folder' JSON element we use to determine JSON being a directory or not)
+					if ((isItemFolder(onedriveJSONItem)) || (isRemoteFolderItem(onedriveJSONItem))) {
 						// work out the 'snippet' path where this folder would be created
 						string simplePathToCheck = "";
 						string complexPathToCheck = "";
