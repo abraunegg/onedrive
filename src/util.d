@@ -697,7 +697,7 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 	
 	// Where in the code was this error generated
 	if (verboseLogging) {addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);}
-	
+	if (debugLogging) {addLogEntry("  Calling Function: " ~ callingFunction, ["debug"]);}
 	// Extra Debug if we are using --verbose --verbose
 	if (debugLogging) {
 		addLogEntry("Raw Error Data: " ~ message, ["debug"]);
@@ -1057,6 +1057,14 @@ bool hasParentReferencePath(JSONValue item) {
 
 bool isFolderItem(const ref JSONValue item) {
 	return ("folder" in item) != null;
+}
+
+bool isRemoteFolderItem(const ref JSONValue item) {
+	if (isItemRemote(item)) {
+		return ("folder" in item["remoteItem"]) != null;
+	} else {
+		return false;
+	}
 }
 
 bool isFileItem(const ref JSONValue item) {
