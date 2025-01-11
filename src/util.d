@@ -1059,6 +1059,14 @@ bool isFolderItem(const ref JSONValue item) {
 	return ("folder" in item) != null;
 }
 
+bool isRemoteFolderItem(const ref JSONValue item) {
+	if (isItemRemote(item)) {
+		return ("folder" in item["remoteItem"]) != null;
+	} else {
+		return false;
+	}
+}
+
 bool isFileItem(const ref JSONValue item) {
 	return ("file" in item) != null;
 }
