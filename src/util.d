@@ -1533,3 +1533,27 @@ void checkOpenSSLVersion() {
 		}
 	}
 }
+
+// Set the timestamp of the provided file path to ensure this is done in a consistent manner
+void setFileTimestamp(bool dryRun, string filePath, SysTime newTimeStamp) {
+	// Try and set the local file timestamp, catch filesystem error
+	try {
+		// set the correct time on the requested filepath
+		if (!dryRun) {
+			if (debugLogging) {
+				addLogEntry("Calling setTimes() for this file:      " ~ filePath, ["debug"]);
+				addLogEntry("* new timestamp for this file will be: " ~ to!string(newTimeStamp), ["debug"]);
+			}
+			// make the change
+			try {
+				setTimes(filePath, newTimeStamp, newTimeStamp);
+			} catch (FileException e) {
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+			}
+		}
+	} catch (FileException e) {
+		// display the error message
+		displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+	}
+}
