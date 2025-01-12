@@ -2424,16 +2424,18 @@ class SyncEngine {
 					// Create the new directory
 					if (debugLogging) {addLogEntry("Requested local path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);}
 					mkdirRecurse(newItemPath);
+					
 					// Configure the applicable permissions for the folder
 					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);}
 					newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+					
 					// Update the time of the folder to match the last modified time as is provided by OneDrive
 					// If there are any files then downloaded into this folder, the last modified time will get 
 					// updated by the local Operating System with the latest timestamp - as this is normal operation
 					// as the directory has been modified
-					if (debugLogging) {addLogEntry("Setting directory lastModifiedDateTime for: " ~ newItemPath ~ " to " ~ to!string(newDatabaseItem.mtime), ["debug"]);}
-					if (debugLogging) {addLogEntry("Calling setTimes() for this directory: " ~ newItemPath, ["debug"]);}
-					setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
+					// Set the timestamp, logging and error handling done within function
+					setPathTimestamp(dryRun, newItemPath, newDatabaseItem.mtime);
+					
 					// Save the newDatabaseItem to the database
 					saveDatabaseItem(newDatabaseItem);
 				} catch (FileException e) {
@@ -2650,7 +2652,7 @@ class SyncEngine {
 						// which is 'correct' .. but we need to report locally the online timestamp here as the move was made online
 						if (changedOneDriveItem.type == ItemType.file) {
 							// Set the timestamp, logging and error handling done within function
-							setFileTimestamp(dryRun, changedItemPath, changedOneDriveItem.mtime);
+							setPathTimestamp(dryRun, changedItemPath, changedOneDriveItem.mtime);
 						}
 					} else {
 						// --dry-run situation - the actual rename did not occur - but we need to track like it did
@@ -2969,7 +2971,7 @@ class SyncEngine {
 								if (debugLogging) {addLogEntry("Downloaded file matches reported size and reported file hash", ["debug"]);}
 								
 								// Set the timestamp, logging and error handling done within function
-								setFileTimestamp(dryRun, newItemPath, itemModifiedTime);
+								setPathTimestamp(dryRun, newItemPath, itemModifiedTime);
 							} else {
 								// Downloaded file does not match size or hash .. which is it?
 								bool downloadValueMismatch = false;
@@ -3047,7 +3049,7 @@ class SyncEngine {
 							
 							// Whilst the download integrity checks were disabled, we still have to set the correct timestamp on the file
 							// Set the timestamp, logging and error handling done within function
-							setFileTimestamp(dryRun, newItemPath, itemModifiedTime);
+							setPathTimestamp(dryRun, newItemPath, itemModifiedTime);
 						}	// end of (!disableDownloadValidation)
 					} else {
 						addLogEntry("ERROR: File failed to download. Increase logging verbosity to determine why.");
@@ -3141,7 +3143,7 @@ class SyncEngine {
 								// The source of the out-of-date timestamp was the local item and needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
 								if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --resync", ["verbose"]);}
 								// Fix the timestamp, logging and error handling done within function
-								setFileTimestamp(dryRun, path, item.mtime);
+								setPathTimestamp(dryRun, path, item.mtime);
 							} else {
 								// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
 								if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);}
@@ -3159,14 +3161,14 @@ class SyncEngine {
 							// --download-only is being used ... local file needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
 							if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);}
 							// Fix the timestamp, logging and error handling done within function
-							setFileTimestamp(dryRun, path, item.mtime);
+							setPathTimestamp(dryRun, path, item.mtime);
 						}
 					} else if (!dryRun) {
 						// The source of the out-of-date timestamp was the local file and this needs to be corrected to avoid always generating a hash test if timestamp is different
 						if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally", ["verbose"]);}
 						
 						// Fix the timestamp, logging and error handling done within function
-						setFileTimestamp(dryRun, path, item.mtime);
+						setPathTimestamp(dryRun, path, item.mtime);
 					}
 					return false;
 				} else {
@@ -3819,14 +3821,14 @@ class SyncEngine {
 										if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online, however file is a OneDrive Business Shared File - correcting local timestamp", ["verbose"]);}
 										
 										// Set the timestamp, logging and error handling done within function
-										setFileTimestamp(dryRun, localFilePath, dbItem.mtime);
+										setPathTimestamp(dryRun, localFilePath, dbItem.mtime);
 									}
 								}
 							} else {
 								// --download-only being used
 								if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online - correcting local timestamp due to --download-only being used to ensure local file matches timestamp online", ["verbose"]);}
 								// Set the timestamp, logging and error handling done within function
-								setFileTimestamp(dryRun, localFilePath, dbItem.mtime);
+								setPathTimestamp(dryRun, localFilePath, dbItem.mtime);
 							}
 						}
 					} else {
@@ -4929,7 +4931,7 @@ class SyncEngine {
 							onlineItem = makeItem(uploadResponse);
 							// Correct the local file timestamp to avoid creating a new version online
 							// Set the timestamp, logging and error handling done within function
-							setFileTimestamp(dryRun, localFilePath, onlineItem.mtime);
+							setPathTimestamp(dryRun, localFilePath, onlineItem.mtime);
 						} else {
 							// Create a new online version of the file by updating the metadata, which negates the need to download the file
 							uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);	

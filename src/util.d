@@ -1534,19 +1534,25 @@ void checkOpenSSLVersion() {
 	}
 }
 
-// Set the timestamp of the provided file path to ensure this is done in a consistent manner
-void setFileTimestamp(bool dryRun, string filePath, SysTime newTimeStamp) {
-	// Try and set the local file timestamp, catch filesystem error
+// Set the timestamp of the provided path to ensure this is done in a consistent manner
+void setPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) {
+	// Try and set the local path timestamp, catch filesystem error
 	try {
-		// set the correct time on the requested filepath
+		// Set the correct time on the requested inputPath
 		if (!dryRun) {
 			if (debugLogging) {
-				addLogEntry("Calling setTimes() for this file:      " ~ filePath, ["debug"]);
-				addLogEntry("* new timestamp for this file will be: " ~ to!string(newTimeStamp), ["debug"]);
+				addLogEntry("Setting 'lastAccessTime' and 'lastModificationTime' properties for: " ~ inputPath ~ " to " ~ to!string(newTimeStamp), ["debug"]);
 			}
-			// make the change
+			// Make the timestamp change for the path provided
 			try {
-				setTimes(filePath, newTimeStamp, newTimeStamp);
+				// Function detailed here: https://dlang.org/library/std/file/set_times.html
+				// 		setTimes(path, accessTime, modificationTime)
+				// We use the provided 'newTimeStamp' to set both:
+				//		accessTime			Time the file/folder was last accessed.
+				//		modificationTime	Time the file/folder was last modified.
+				if (debugLogging) {addLogEntry("Calling setTimes() for the given path", ["debug"]);}
+				setTimes(inputPath, newTimeStamp, newTimeStamp);
+				if (debugLogging) {addLogEntry("Timestamp updated for this path: " ~ inputPath, ["debug"]);}
 			} catch (FileException e) {
 				// display the error message
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
