@@ -1264,7 +1264,7 @@ string getMaxOpenFiles() {
     }
 }
 
-// Retrieves the maximum inotify watches allowed (Linux) or a placeholder for other platforms.
+// Retrieves the maximum inotify watches allowed (Linux) or a placeholder for other platforms
 string getMaxInotifyWatches() {
     version (Linux) {
         try {
@@ -1283,7 +1283,6 @@ string getMaxInotifyWatches() {
         return "Unsupported platform";
     }
 }
-
 
 // Print error message when --sync or --monitor has not been used and no valid 'no-sync' operation was requested
 void printMissingOperationalSwitchesError() {

@@ -20,6 +20,7 @@ import std.regex;
 import std.stdio;
 import std.string;
 import std.conv;
+import core.sync.mutex;
 
 // What other modules that we have created do we need to import?
 import config;
@@ -57,13 +58,19 @@ class MonitorBackgroundWorker {
 		int wd = inotify_add_watch(fd, toStringz(pathname), mask);
 		if (wd < 0) {
 			if (errno() == ENOSPC) {
-				// Get the current value
-				ulong maxInotifyWatches = to!int(strip(readText("/proc/sys/fs/inotify/max_user_watches")));
-				addLogEntry("The user limit on the total number of inotify watches has been reached.");
-				addLogEntry("Your current limit of inotify watches is: " ~ to!string(maxInotifyWatches));
-				addLogEntry("It is recommended that you change the max number of inotify watches to at least double your existing value.");
-				addLogEntry("To change the current max number of watches to " ~ to!string((maxInotifyWatches * 2)) ~ " run:");
-				addLogEntry("EXAMPLE: sudo sysctl fs.inotify.max_user_watches=" ~ to!string((maxInotifyWatches * 2)));
+				version (Linux) {
+					// Read max inotify watches from procfs on Linux
+					ulong maxInotifyWatches = to!int(strip(readText("/proc/sys/fs/inotify/max_user_watches")));
+					addLogEntry("The user limit on the total number of inotify watches has been reached.");
+					addLogEntry("Your current limit of inotify watches is: " ~ to!string(maxInotifyWatches));
+					addLogEntry("It is recommended that you change the max number of inotify watches to at least double your existing value.");
+					addLogEntry("To change the current max number of watches to " ~ to!string((maxInotifyWatches * 2)) ~ " run:");
+					addLogEntry("EXAMPLE: sudo sysctl fs.inotify.max_user_watches=" ~ to!string((maxInotifyWatches * 2)));
+				} else {
+					// some other platform
+					addLogEntry("The user limit on the total number of inotify watches has been reached.");
+					addLogEntry("Please seek support from your distribution on how to increase the max number of inotify watches to at least double your existing value.");
+				}
 			}
 			if (errno() == 13) {
 				if (verboseLogging) {addLogEntry("WARNING: inotify_add_watch failed - permission denied: " ~ pathname, ["verbose"]);}
@@ -85,6 +92,11 @@ class MonitorBackgroundWorker {
 	}
 
 	shared int removeInotifyWatch(int wd) {
+		assert(fd > 0, "File descriptor 'fd' is invalid.");
+		assert(wd > 0, "Watch descriptor 'wd' is invalid.");
+		// Debug logging of the inotify watch being removed
+		if (debugLogging) {addLogEntry("Attempting to remove inotify watch: fd=" ~ fd.to!string ~ ", wd=" ~ wd.to!string, ["debug"]);}
+		// return the value of performing the action
 		return inotify_rm_watch(fd, wd);
 	}
 
@@ -263,6 +275,9 @@ final class Monitor {
 	private string[int] cookieToPath;
 	// buffer to receive the inotify events
 	private void[] buffer;
+	
+	// Mutex to support thread safe access of inotify watch descriptors
+	private Mutex inotifyMutex;
 
 	// Configure function delegates
 	void delegate(string path) onDirCreated;
@@ -273,12 +288,14 @@ final class Monitor {
 	// List of paths that were moved, not deleted
 	bool[string] movedNotDeleted;
 
+	// An array of actions
 	ActionHolder actionHolder;
 	
 	// Configure the class variable to consume the application configuration including selective sync
 	this(ApplicationConfig appConfig, ClientSideFiltering selectiveSync) {
 		this.appConfig = appConfig;
 		this.selectiveSync = selectiveSync;
+		inotifyMutex = new Mutex(); // Define a Mutex for thread-safe access
 	}
 	
 	// The destructor should only clean up resources owned directly by this instance
@@ -313,7 +330,6 @@ final class Monitor {
 		
 		// Start monitoring
 		workerTid = spawn(&startMonitorJob, worker, thisTid);
-
 		initialised = true;
 	}
 
@@ -328,11 +344,16 @@ final class Monitor {
 			return;
 		initialised = false;
 		// Release all resources
-		removeAll();
-		// Notify the worker that the monitor has been shutdown
-		worker.interrupt();
-		send(false);
-		wdToDirName = null;
+		synchronized(inotifyMutex) {
+			// Interrupt the worker to allow removal of inotify watch descriptors
+			worker.interrupt();
+			// Remove all the inotify watch descriptors
+			removeAll();
+			// Notify the worker that the monitor has been shutdown
+			worker.interrupt();
+			send(false);
+			wdToDirName = null;
+		}
 	}
 
 	// Recursively add this path to be monitored
@@ -445,7 +466,12 @@ final class Monitor {
 
 	// Remove a watch descriptor
 	private void removeAll() {
-		string[int] copy = wdToDirName.dup;
+		string[int] copy;
+		synchronized(inotifyMutex) {
+			copy = wdToDirName.dup; // Make a thread-safe copy
+		}
+
+		// Loop through the watch descriptors and remove
 		foreach (wd, path; copy) {
 			remove(wd);
 		}
@@ -453,10 +479,13 @@ final class Monitor {
 
 	private void remove(int wd) {
 		assert(wd in wdToDirName);
-		int ret = worker.removeInotifyWatch(wd);
-		if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
-		if (verboseLogging) {addLogEntry("Monitored directory removed: " ~ to!string(wdToDirName[wd]), ["verbose"]);}
-		wdToDirName.remove(wd);
+		
+		synchronized(inotifyMutex) {
+			int ret = worker.removeInotifyWatch(wd);
+			if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
+			if (verboseLogging) {addLogEntry("Monitored directory removed: " ~ to!string(wdToDirName[wd]), ["verbose"]);}
+			wdToDirName.remove(wd);
+		}
 	}
 
 	// Remove the watch descriptors associated to the given path
