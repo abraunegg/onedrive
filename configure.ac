@@ -227,17 +227,39 @@ AC_SUBST([NOTIFICATIONS],$enable_notifications)
 dnl
 dnl iNotify Support
 AC_CANONICAL_HOST
+
 # Conditionally set bsd_inotify_LIBS based on the platform
 case "$host_os" in
     freebsd*)
         bsd_inotify_LIBS="-linotify"
         ;;
+	openbsd*)
+		bsd_inotify_LIBS="-linotify"
+		;;
     *)
         bsd_inotify_LIBS=""
         ;;
 esac
 
 AC_SUBST([bsd_inotify_LIBS])
+
+dnl
+dnl Dynamic Linker Support
+
+# Conditionally set dynamic_linker_LIBS based on the platform
+case "$host_os" in
+    freebsd*)
+        dynamic_linker_LIBS=""
+        ;;
+	openbsd*)
+		dynamic_linker_LIBS=""
+		;;
+    *)
+        dynamic_linker_LIBS="-ldl"
+        ;;
+esac
+
+AC_SUBST([dynamic_linker_LIBS])
 
 dnl
 dnl Completion support
