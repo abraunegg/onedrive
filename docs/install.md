@@ -184,34 +184,21 @@ sudo zypper install libnotify-devel
 ```
 
 ### Dependencies: OpenBSD
-Generally you will want to install the same dependencies as the [FreeBSD port](https://www.freshports.org/net/onedrive/)
-> [!CAUTION]
-> Not all FreeBSD port paths and names are exactly the same but they are close enough that you should be able to find the equivalent in the OpenBSD port tree
-
-1. Install either DMD or LDC compiler via ports. Have not tested using LDC but contrary to other OS instructions, DMD does not need to be "activated" on OpenBSD. After installing from ports, it will just work.
-2. Install `git` from ports
-3. Install dependencies listed for FreeBSD. Some are installed in the baseline system, others are packages, and still others are ports.
-4. Install `libinotify` from ports.
-
-The base installation of OpenBSD uses `ksh` instead of `bash` so when running the `configure` scripts from the repo, be sure to run them something like this:
-```text
-$bash configure
-```
-After configuring the `Makefile` with the `configure` script, you will need to modify it manually.
-1. On line 110, remove the section `-L-ldl`. This library is Linux only and OpenBSD already has the necessary equivilant as part of the base system libraries.
-2. On line 27 (`notify_LIBS` var), add `-L/usr/local/lib/inotify -linotify` to the line.
-
-At this point, you should be able to:
-> [!CAUTION]
-> Using DMD, you may run into an "our of memory" type error during compile. This is due to the extra security layers of OpenBSD and their "login class database" parameters. Check out `man login.conf` for more details but generally you will be looking for a `datasize-cur` and `datasize-max` setting under whichever login class your build user belongs to; most likely `default:`, so start there.
 
 ```text
-$gmake clean; gmake;
+pkg_add bash bash-completion gmake pkgconf autoconf automake newsyslog libinotify git sqlite3 dmd
 ```
-As instructed in the installation documentation (swaping `make` for `gmake` as is necessary for OpenBSD). However, you will not be able to run `onedrive` yet as there is a minor `ld.so` quirk you need to fix:
-1. The `libinotify` port installs into a subdirectory of `/usr/local/lib` so it is not picked up by the default `ld.so` "hints" or search paths.
-2. Use `ldconfig` to modify the shared library search path. There are a number of ways to do this so check out `man ldconfig` for your prefered way to do it.
-3. `ldconfig -m /usr/local/lib/inotify` is one simple way for example
+> [!NOTE]
+> If asked to chose package for autoconf, select `autoconf-2.72p0`
+> 
+> If asked to chose package for automake, select `automake-1.16.5`
+
+For GUI notifications the following is also necessary:
+```text
+pkg_add libnotify
+```
+> [!NOTE]
+> Install the required OpenBSD packages as 'root' unless you have installed 'sudo'
 
 ## Compilation & Installation
 ### High Level Steps
@@ -242,6 +229,9 @@ sudo make install
 ```
 
 ### FreeBSD: Building the application using FreeBSD version of LDC
+> [!NOTE]
+> It is recommended to build and install the application as 'root' unless you have installed 'sudo'
+
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
@@ -249,8 +239,74 @@ cd onedrive
 gmake clean; gmake;
 gmake install
 ```
+
+### OpenBSD: Building the application using OpenBSD version of DMD
 > [!NOTE]
-> Install the application as 'root' unless you have installed 'sudo'
+> It is recommended to build and install the application as 'root' unless you have installed 'sudo'
+
+#### Configure 'ldconfig' for libinotify
+The `libinotify` port installs into a subdirectory of `/usr/local/lib` so it is not picked up by the default `ld.so` "hints" or search paths.
+
+Use `ldconfig` to modify the shared library search path. There are a number of ways to do this so check out `man ldconfig` for your prefered way to do it. An example is:
+```
+ldconfig -m /usr/local/lib/inotify
+```
+
+#### Configure 'login.conf' for non-root users for compilation
+When compiling the application, you may run into an "our of memory" type error during compile. This is due to the extra security layers of OpenBSD and their "login class database" parameters. 
+
+Check out `man login.conf` for more details but generally you will be looking for a `datasize-cur` and `datasize-max` setting under whichever login class your build user belongs to; most likely `default:`.
+
+The settings below were used to compile the application to create this documentation:
+```
+#
+# The default values
+# To alter the default authentication types change the line:
+#       :tc=auth-defaults:\
+# to read something like: (enables passwd, "myauth", and activ)
+#       :auth=passwd,myauth,activ:\
+# Any value changed in the daemon class should be reset in default
+# class.
+#
+default:\
+        :path=/usr/bin /bin /usr/sbin /sbin /usr/X11R6/bin /usr/local/bin /usr/local/sbin:\
+        :umask=022:\
+        :datasize-max=infinity:\
+        :datasize-cur=8192M:\
+        :maxproc-max=256:\
+        :maxproc-cur=128:\
+        :openfiles-max=1024:\
+        :openfiles-cur=512:\
+        :stacksize-cur=4M:\
+        :localcipher=blowfish,a:\
+        :tc=auth-defaults:\
+        :tc=auth-ftp-defaults:
+.....
+#
+# Staff have fewer restrictions and can login even when nologins are set.
+#
+staff:\
+        :datasize-cur=8192M:\
+        :datasize-max=infinity:\
+        :maxproc-max=512:\
+        :maxproc-cur=256:\
+        :ignorenologin:\
+        :requirehome@:\
+        :tc=default:
+```
+Ensure you run `cap_mkdb /etc/login.conf` to apply the new settings for users.
+
+Confirm these changes with `ulimit -a` after logging out and logging back in with your non-root user.
+
+#### Compiling the application on OpenBSD
+The base installation of OpenBSD uses `ksh` instead of `bash` so when running the `configure` scripts from the repo, bash must be used.
+```
+git clone https://github.com/abraunegg/onedrive.git
+cd onedrive
+bash ./configure
+gmake clean; gmake;
+gmake install
+```
 
 ### Build options
 #### GUI Notification Support
