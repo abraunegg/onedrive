@@ -595,6 +595,7 @@ bashcompdir
 COMPLETIONS
 NOTIFICATIONS
 notify_LIBS
+bsd_inotify_LIBS
 notify_CFLAGS
 HAVE_SYSTEMD
 systemduserunitdir
@@ -678,6 +679,7 @@ sqlite_CFLAGS
 sqlite_LIBS
 notify_CFLAGS
 notify_LIBS
+bsd_inotify_LIBS
 bashcompdir'
 
 
@@ -1309,23 +1311,21 @@ Optional Packages:
                           Directory for fish completion files
 
 Some influential environment variables:
-  DC          D compiler executable
-  DCFLAGS     flags for D compiler
-  PKG_CONFIG  path to pkg-config utility
-  PKG_CONFIG_PATH
-              directories to add to pkg-config's search path
+  DC               D compiler executable
+  DCFLAGS          flags for D compiler
+  PKG_CONFIG       path to pkg-config utility
+  PKG_CONFIG_PATH  directories to add to pkg-config's search path
   PKG_CONFIG_LIBDIR
-              path overriding pkg-config's built-in search path
-  curl_CFLAGS C compiler flags for curl, overriding pkg-config
-  curl_LIBS   linker flags for curl, overriding pkg-config
-  sqlite_CFLAGS
-              C compiler flags for sqlite, overriding pkg-config
-  sqlite_LIBS linker flags for sqlite, overriding pkg-config
-  notify_CFLAGS
-              C compiler flags for notify, overriding pkg-config
-  notify_LIBS linker flags for notify, overriding pkg-config
-  bashcompdir value of completionsdir for bash-completion, overriding
-              pkg-config
+                   path overriding pkg-config's built-in search path
+  curl_CFLAGS      C compiler flags for curl, overriding pkg-config
+  curl_LIBS        linker flags for curl, overriding pkg-config
+  sqlite_CFLAGS    C compiler flags for sqlite, overriding pkg-config
+  sqlite_LIBS      linker flags for sqlite, overriding pkg-config
+  notify_CFLAGS    C compiler flags for GUI notifications, overriding pkg-config
+  notify_LIBS      linker flags for GUI notifications, overriding pkg-config
+  bsd_inotify_LIBS linker flags for inotify support on BSD
+  bashcompdir      value of completionsdir for bash-completion, overriding
+                   pkg-config
 
 Use these variables to override the choices made by `configure' or to help
 it to find libraries and programs with nonstandard names/locations.
@@ -2509,6 +2509,24 @@ else
 fi
 NOTIFICATIONS=$enable_notifications
 
+# Check if Linux or BSD Platform
+case "$(uname -s)" in
+    Linux)
+        bsd_inotify_LIBS=""
+        ;;
+    FreeBSD)
+        bsd_inotify_LIBS="-L/usr/local/lib -linotify"
+        ;;
+    OpenBSD)
+        bsd_inotify_LIBS=""
+        ;;
+    *)
+        bsd_inotify_LIBS=""
+        ;;
+esac
+
+# Export the variable for use in the script
+export bsd_inotify_LIBS
 
 # Check whether --enable-completions was given.
 if test "${enable_completions+set}" = set; then :

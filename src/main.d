@@ -867,11 +867,9 @@ int main(string[] cliArgs) {
 			performFileSystemMonitoring = true;
 		
 			// What are the current values for the platform we are running on
-			// Max number of open files /proc/sys/fs/file-max
-			string maxOpenFiles = strip(readText("/proc/sys/fs/file-max"));
+			string maxOpenFiles = strip(getMaxOpenFiles());
 			// What is the currently configured maximum inotify watches that can be used
-			// /proc/sys/fs/inotify/max_user_watches
-			string maxInotifyWatches = strip(readText("/proc/sys/fs/inotify/max_user_watches"));
+			string maxInotifyWatches = strip(getMaxInotifyWatches());
 			
 			// Start the monitor process
 			addLogEntry("OneDrive synchronisation interval (seconds): " ~ to!string(appConfig.getValueLong("monitor_interval")));
@@ -1236,6 +1234,54 @@ int main(string[] cliArgs) {
 	} else {
 		return EXIT_FAILURE;
 	}
+}
+
+// Retrieves the maximum number of open files allowed by the system
+string getMaxOpenFiles() {
+    version (Linux) {
+        try {
+            // Read max open files from procfs on Linux
+            return strip(readText("/proc/sys/fs/file-max"));
+        } catch (Exception e) {
+            return "Unknown (Error reading /proc/sys/fs/file-max)";
+        }
+    } else version (FreeBSD) {
+        try {
+            // Read max open files using sysctl on FreeBSD
+            return strip(executeShell("sysctl -n kern.maxfiles").output);
+        } catch (Exception e) {
+            return "Unknown (sysctl error)";
+        }
+    } else version (OpenBSD) {
+        try {
+            // Read max open files using sysctl on OpenBSD
+            return strip(executeShell("sysctl -n kern.maxfiles").output);
+        } catch (Exception e) {
+            return "Unknown (sysctl error)";
+        }
+    } else {
+        return "Unsupported platform";
+    }
+}
+
+// Retrieves the maximum inotify watches allowed (Linux) or a placeholder for other platforms
+string getMaxInotifyWatches() {
+    version (Linux) {
+        try {
+            // Read max inotify watches from procfs on Linux
+            return strip(readText("/proc/sys/fs/inotify/max_user_watches"));
+        } catch (Exception e) {
+            return "Unknown (Error reading /proc/sys/fs/inotify/max_user_watches)";
+        }
+    } else version (FreeBSD) {
+        // FreeBSD uses kqueue instead of inotify, no direct equivalent
+        return "N/A (uses kqueue)";
+    } else version (OpenBSD) {
+        // OpenBSD uses kqueue instead of inotify, no direct equivalent
+        return "N/A (uses kqueue)";
+    } else {
+        return "Unsupported platform";
+    }
 }
 
 // Print error message when --sync or --monitor has not been used and no valid 'no-sync' operation was requested

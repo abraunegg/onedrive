@@ -18,6 +18,7 @@ Only the current release version or greater is supported. Earlier versions are n
 | Debian 12                       | [onedrive](https://packages.debian.org/bookworm/source/onedrive)                                         |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_12/onedrive.svg?header=" alt="Debian 12 package" width="46" height="20"></a>|✔|✔|✔|✔| **Note:** Do not install from Debian Package Repositories as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Debian 12 that you install from OpenSuSE Build Service using the Debian Package Install [Instructions](ubuntu-package-install.md) |
 | Debian Sid                      | [onedrive](https://packages.debian.org/sid/onedrive)                                                     |<a href="https://packages.debian.org/sid/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_unstable/onedrive.svg?header=" alt="Debian Sid package" width="46" height="20"></a>|✔|✔|✔|✔| |
 | Fedora                          | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/fedora_rawhide/onedrive.svg?header=" alt="Fedora Rawhide package" width="46" height="20"></a>|✔|✔|✔|✔| |
+| FreeBSD                         | [onedrive](https://www.freshports.org/net/onedrive)                                                      |<a href="https://www.freshports.org/net/onedrive"><img src="https://repology.org/badge/version-for-repo/freebsd/onedrive.svg?header=" alt="FreeBSD package" width="46" height="20"></a>|❌|✔|❌|❌| |
 | Gentoo                          | [onedrive](https://gpo.zugaina.org/net-misc/onedrive)                                                    | No API Available |✔|✔|❌|❌| |
 | Homebrew                        | [onedrive](https://formulae.brew.sh/formula/onedrive)                                                    |<a href="https://formulae.brew.sh/formula/onedrive"><img src="https://repology.org/badge/version-for-repo/homebrew/onedrive.svg?header=" alt="Homebrew package" width="46" height="20"></a> |❌|✔|❌|❌| |
 | Linux Mint 20.x                 | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Linux Mint Repositories as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Linux Mint that you install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
@@ -59,7 +60,7 @@ curl -fsS https://dlang.org/install.sh | bash -s ldc
 ```text
 sudo pacman -S git make pkg-config curl sqlite ldc
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo pacman -S libnotify
 ```
@@ -76,10 +77,21 @@ sudo dnf groupinstall 'Development Tools'
 sudo dnf install libcurl-devel sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo dnf install libnotify-devel
 ```
+
+### Dependencies: FreeBSD
+```text
+pkg install bash bash-completion gmake pkgconf autoconf automake logrotate libinotify git sqlite3 ldc
+```
+For GUI notifications the following is also necessary:
+```text
+pkg install libnotify
+```
+> [!NOTE]
+> Install the required FreeBSD packages as 'root' unless you have installed 'sudo'
 
 ### Dependencies: Gentoo
 ```text
@@ -88,7 +100,7 @@ sudo layman -a dlang
 ```
 Add ebuild from contrib/gentoo to a local overlay to use.
 
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo emerge x11-libs/libnotify
 ```
@@ -113,7 +125,7 @@ sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo apt install libnotify-dev
 ```
@@ -134,7 +146,7 @@ These instructions were validated using:
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo apt install libnotify-dev
 ```
@@ -145,7 +157,7 @@ sudo zypper addrepo https://download.opensuse.org/repositories/devel:languages:D
 sudo zypper refresh
 sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo zypper install libnotify-devel
 ```
@@ -156,7 +168,7 @@ sudo zypper addrepo https://download.opensuse.org/repositories/devel:languages:D
 sudo zypper refresh
 sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo zypper install libnotify-devel
 ```
@@ -166,19 +178,20 @@ sudo zypper install libnotify-devel
 sudo zypper refresh
 sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo zypper install libnotify-devel
 ```
 
 ## Compilation & Installation
 ### High Level Steps
-1.  Install the platform dependencies for your Linux OS
-2.  Activate your DMD or LDC compiler
-3.  Clone the GitHub repository, run configure and make, then install
-4.  Deactivate your DMD or LDC compiler
+1.  Install the platform dependencies for your platform
+2.  Activate your DMD or LDC compiler if required
+3.  Clone the GitHub repository, 
+4.  Run the 'configure' command then build the application and install it
+5.  Deactivate your DMD or LDC compiler if required
 
-### Building using DMD Reference Compiler
+### Linux: Building the application using the DMD Reference Compiler
 Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per example below:
 ```text
 Run `source ~/dlang/dmd-2.088.0/activate` in your shell to use dmd-2.088.0.
@@ -197,6 +210,17 @@ cd onedrive
 make clean; make;
 sudo make install
 ```
+
+### FreeBSD: Building the application using FreeBSD version of LDC
+```text
+git clone https://github.com/abraunegg/onedrive.git
+cd onedrive
+./configure
+gmake clean; gmake;
+gmake install
+```
+> [!NOTE]
+> Install the application as 'root' unless you have installed 'sudo'
 
 ### Build options
 #### GUI Notification Support
@@ -230,7 +254,7 @@ as far as possible automatically, but can be overridden by passing
 > For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space. To verify your system's swap space availability, you can use the `swapon` command. Ensuring these requirements are met is vital for the application's compilation process.
 
 > [!NOTE]
-> The 'configure' step will detect the correct version of LDC to be used when compiling the client under ARMHF and ARM64 cpu architectures.
+> The 'configure' step will detect the correct version of LDC to be used when compiling the client under ARMHF and ARM64 CPU architectures.
 
 ```text
 git clone https://github.com/abraunegg/onedrive.git
