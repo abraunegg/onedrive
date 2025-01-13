@@ -60,7 +60,7 @@ curl -fsS https://dlang.org/install.sh | bash -s ldc
 ```text
 sudo pacman -S git make pkg-config curl sqlite ldc
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo pacman -S libnotify
 ```
@@ -77,10 +77,21 @@ sudo dnf groupinstall 'Development Tools'
 sudo dnf install libcurl-devel sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo dnf install libnotify-devel
 ```
+
+### Dependencies: FreeBSD
+```text
+pkg install bash bash-completion gmake pkgconf autoconf automake logrotate libinotify git sqlite3 ldc
+```
+For GUI notifications the following is also necessary:
+```text
+pkg install libnotify
+```
+> [!NOTE]
+> Install the required packages as 'root'
 
 ### Dependencies: Gentoo
 ```text
@@ -89,7 +100,7 @@ sudo layman -a dlang
 ```
 Add ebuild from contrib/gentoo to a local overlay to use.
 
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo emerge x11-libs/libnotify
 ```
@@ -114,7 +125,7 @@ sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo apt install libnotify-dev
 ```
@@ -135,7 +146,7 @@ These instructions were validated using:
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo apt install libnotify-dev
 ```
@@ -146,7 +157,7 @@ sudo zypper addrepo https://download.opensuse.org/repositories/devel:languages:D
 sudo zypper refresh
 sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo zypper install libnotify-devel
 ```
@@ -157,7 +168,7 @@ sudo zypper addrepo https://download.opensuse.org/repositories/devel:languages:D
 sudo zypper refresh
 sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo zypper install libnotify-devel
 ```
@@ -167,7 +178,7 @@ sudo zypper install libnotify-devel
 sudo zypper refresh
 sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static
 ```
-For notifications the following is also necessary:
+For GUI notifications the following is also necessary:
 ```text
 sudo zypper install libnotify-devel
 ```
