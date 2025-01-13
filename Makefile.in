@@ -111,13 +111,19 @@ onedrive: $(SOURCES)
 	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) $(addprefix -L,$(bsd_inotify_LIBS)) -L-ldl $(SOURCES) -of$@
 
 install: all
-	$(INSTALL) -D onedrive $(DESTDIR)$(bindir)/onedrive
-	$(INSTALL) -D -m 0644 onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
-	$(INSTALL) -D -m 0644 contrib/logrotate/onedrive.logrotate $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
+	mkdir -p $(DESTDIR)$(bindir)
+	$(INSTALL) onedrive $(DESTDIR)$(bindir)/onedrive
+	mkdir -p $(DESTDIR)$(mandir)/man1
+	$(INSTALL) -m 0644 onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
+	mkdir -p $(DESTDIR)$(sysconfdir)/logrotate.d
+	$(INSTALL) -m 0644 contrib/logrotate/onedrive.logrotate $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
 	mkdir -p $(DESTDIR)$(docdir)
-	$(INSTALL) -D -m 0644 $(DOCFILES) $(DESTDIR)$(docdir)
+	for file in $(DOCFILES); do \
+		$(INSTALL) -m 0644 $$file $(DESTDIR)$(docdir); \
+	done
 ifeq ($(HAVE_SYSTEMD),yes)
-	$(INSTALL) -d -m 0755 $(DESTDIR)$(systemduserunitdir) $(DESTDIR)$(systemdsystemunitdir)
+	mkdir -p $(DESTDIR)$(systemduserunitdir)
+	mkdir -p $(DESTDIR)$(systemdsystemunitdir)
 ifeq ($(RHEL),1)
 	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
 	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemdsystemunitdir)
@@ -127,14 +133,17 @@ else
 endif
 else
 ifeq ($(RHEL_VERSION),6)
-	install -D contrib/init.d/onedrive.init $(DESTDIR)/etc/init.d/onedrive
-	install -D contrib/init.d/onedrive_service.sh $(DESTDIR)$(bindir)/onedrive_service.sh
+	$(INSTALL) contrib/init.d/onedrive.init $(DESTDIR)/etc/init.d/onedrive
+	$(INSTALL) contrib/init.d/onedrive_service.sh $(DESTDIR)$(bindir)/onedrive_service.sh
 endif
 endif
 ifeq ($(COMPLETIONS),yes)
-	$(INSTALL) -D -m 0644 contrib/completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
-	$(INSTALL) -D -m 0644 contrib/completions/complete.bash $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
-	$(INSTALL) -D -m 0644 contrib/completions/complete.fish $(DESTDIR)$(FISH_COMPLETION_DIR)/onedrive.fish
+	mkdir -p $(DESTDIR)$(ZSH_COMPLETION_DIR)
+	$(INSTALL) -m 0644 contrib/completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
+	mkdir -p $(DESTDIR)$(BASH_COMPLETION_DIR)
+	$(INSTALL) -m 0644 contrib/completions/complete.bash $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
+	mkdir -p $(DESTDIR)$(FISH_COMPLETION_DIR)
+	$(INSTALL) -m 0644 contrib/completions/complete.fish $(DESTDIR)$(FISH_COMPLETION_DIR)/onedrive.fish
 endif
 
 uninstall:
