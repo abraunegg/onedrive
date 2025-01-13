@@ -26,6 +26,7 @@ curl_LIBS = @curl_LIBS@
 sqlite_LIBS = @sqlite_LIBS@
 notify_LIBS = @notify_LIBS@
 bsd_inotify_LIBS = @bsd_inotify_LIBS@
+dynamic_linker_LIBS = @dynamic_linker_LIBS@
 COMPLETIONS = @COMPLETIONS@
 BASH_COMPLETION_DIR = @BASH_COMPLETION_DIR@
 ZSH_COMPLETION_DIR = @ZSH_COMPLETION_DIR@
@@ -108,7 +109,7 @@ onedrive: $(SOURCES)
 	else \
 		echo $(version) > version ; \
 	fi
-	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) $(addprefix -L,$(bsd_inotify_LIBS)) -L-ldl $(SOURCES) -of$@
+	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) $(addprefix -L,$(bsd_inotify_LIBS)) $(addprefix -L,$(dynamic_linker_LIBS)) $(SOURCES) -of$@
 
 install: all
 	mkdir -p $(DESTDIR)$(bindir)
