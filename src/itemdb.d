@@ -652,7 +652,7 @@ final class ItemDatabase {
 			return false;
 		}
 	}
-	
+
 	// returns true if an item id is in the database
 	bool idInLocalDatabase(const(string) driveId, const(string) id) {
 		synchronized(databaseLock) {
