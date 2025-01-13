@@ -91,7 +91,7 @@ For GUI notifications the following is also necessary:
 pkg install libnotify
 ```
 > [!NOTE]
-> Install the required packages as 'root'
+> Install the required FreeBSD packages as 'root' unless you have installed 'sudo'
 
 ### Dependencies: Gentoo
 ```text
@@ -185,12 +185,13 @@ sudo zypper install libnotify-devel
 
 ## Compilation & Installation
 ### High Level Steps
-1.  Install the platform dependencies for your Linux OS
-2.  Activate your DMD or LDC compiler
-3.  Clone the GitHub repository, run configure and make, then install
-4.  Deactivate your DMD or LDC compiler
+1.  Install the platform dependencies for your platform
+2.  Activate your DMD or LDC compiler if required
+3.  Clone the GitHub repository, 
+4.  Run the 'configure' command then build the application and install it
+5.  Deactivate your DMD or LDC compiler if required
 
-### Building using DMD Reference Compiler
+### Linux: Building the application using the DMD Reference Compiler
 Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per example below:
 ```text
 Run `source ~/dlang/dmd-2.088.0/activate` in your shell to use dmd-2.088.0.
@@ -209,6 +210,17 @@ cd onedrive
 make clean; make;
 sudo make install
 ```
+
+### FreeBSD: Building the application using FreeBSD version of LDC
+```text
+git clone https://github.com/abraunegg/onedrive.git
+cd onedrive
+./configure
+gmake clean; gmake;
+gmake install
+```
+> [!NOTE]
+> Install the application as 'root' unless you have installed 'sudo'
 
 ### Build options
 #### GUI Notification Support

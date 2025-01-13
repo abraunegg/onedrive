@@ -28,6 +28,7 @@ AThings
 aufxw
 aur
 autoclean
+automake
 autoprocess
 autoupdate
 avmkfdiitirnrenzljwc
@@ -129,6 +130,7 @@ getenforce
 gfortran
 GFree
 Gibi
+gmake
 gmodule
 GObject
 gpg
@@ -188,6 +190,7 @@ libglib
 libgobject
 liblphobos
 libm
+libinotify
 libnotify
 libsqlite
 Lighttpd
@@ -272,6 +275,7 @@ phlibi
 phobos
 pidx
 pixbuf
+pkgconf
 pki
 pkolmann
 podman
