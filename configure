@@ -596,6 +596,7 @@ COMPLETIONS
 NOTIFICATIONS
 notify_LIBS
 bsd_inotify_LIBS
+dynamic_linker_LIBS
 notify_CFLAGS
 HAVE_SYSTEMD
 systemduserunitdir
@@ -680,6 +681,7 @@ sqlite_LIBS
 notify_CFLAGS
 notify_LIBS
 bsd_inotify_LIBS
+dynamic_linker_LIBS
 bashcompdir'
 
 
@@ -1324,6 +1326,8 @@ Some influential environment variables:
   notify_CFLAGS    C compiler flags for GUI notifications, overriding pkg-config
   notify_LIBS      linker flags for GUI notifications, overriding pkg-config
   bsd_inotify_LIBS linker flags for inotify support on BSD
+  dynamic_linker_LIBS
+                   dynamic linker flags for Linux
   bashcompdir      value of completionsdir for bash-completion, overriding
                    pkg-config
 
@@ -2509,7 +2513,7 @@ else
 fi
 NOTIFICATIONS=$enable_notifications
 
-# Check if Linux or BSD Platform
+# Check if Linux or BSD Platform to configure the inotify libraries
 case "$(uname -s)" in
     Linux)
         bsd_inotify_LIBS=""
@@ -2518,7 +2522,7 @@ case "$(uname -s)" in
         bsd_inotify_LIBS="-L/usr/local/lib -linotify"
         ;;
     OpenBSD)
-        bsd_inotify_LIBS=""
+        bsd_inotify_LIBS="-L/usr/local/lib/inotify -linotify"
         ;;
     *)
         bsd_inotify_LIBS=""
@@ -2527,6 +2531,19 @@ esac
 
 # Export the variable for use in the script
 export bsd_inotify_LIBS
+
+# Check if Linux or BSD Platform to configure the dynamic linker libraries
+case "$(uname -s)" in
+    Linux)
+        dynamic_linker_LIBS="-ldl"
+        ;;
+    *)
+        dynamic_linker_LIBS=""
+        ;;
+esac
+
+# Export the variable for use in the script
+export dynamic_linker_LIBS
 
 # Check whether --enable-completions was given.
 if test "${enable_completions+set}" = set; then :
