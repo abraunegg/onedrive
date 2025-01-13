@@ -1236,7 +1236,7 @@ int main(string[] cliArgs) {
 	}
 }
 
-// Retrieves the maximum number of open files allowed by the system.
+// Retrieves the maximum number of open files allowed by the system
 string getMaxOpenFiles() {
     version (Linux) {
         try {
