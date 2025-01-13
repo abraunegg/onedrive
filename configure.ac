@@ -225,6 +225,21 @@ AS_IF([test "x$enable_notifications" = "xyes"],
 AC_SUBST([NOTIFICATIONS],$enable_notifications)
 
 dnl
+dnl iNotify Support
+AC_CANONICAL_HOST
+# Conditionally set bsd_inotify_LIBS based on the platform
+case "$host_os" in
+    freebsd*)
+        bsd_inotify_LIBS="-linotify"
+        ;;
+    *)
+        bsd_inotify_LIBS=""
+        ;;
+esac
+
+AC_SUBST([bsd_inotify_LIBS])
+
+dnl
 dnl Completion support
 dnl First determine whether completions are requested, pass that to Makefile
 AC_ARG_ENABLE([completions],
