@@ -288,7 +288,7 @@ final class Monitor {
 	// List of paths that were moved, not deleted
 	bool[string] movedNotDeleted;
 
-	// An arrary of actions
+	// An array of actions
 	ActionHolder actionHolder;
 	
 	// Configure the class variable to consume the application configuration including selective sync
@@ -345,7 +345,7 @@ final class Monitor {
 		initialised = false;
 		// Release all resources
 		synchronized(inotifyMutex) {
-			// Interupt the worker to allow removal of inotify watch descriptors
+			// Interrupt the worker to allow removal of inotify watch descriptors
 			worker.interrupt();
 			// Remove all the inotify watch descriptors
 			removeAll();
