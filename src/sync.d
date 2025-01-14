@@ -3050,6 +3050,21 @@ class SyncEngine {
 							// Whilst the download integrity checks were disabled, we still have to set the correct timestamp on the file
 							// Set the timestamp, logging and error handling done within function
 							setPathTimestamp(dryRun, newItemPath, itemModifiedTime);
+							
+							// Azure Information Protection (AIP) protected files potentially have missing data and/or inconsistent data
+							if (appConfig.accountType != "personal") {
+							
+								// Debug output the JSON
+								addLogEntry("ISSUE 3070 DEBUG - Response JSON: " ~ to!string(onedriveJSONItem));
+								addLogEntry("ISSUE 3070 DEBUG - Online XOR   : " ~ to!string(OneDriveFileXORHash));
+								addLogEntry("ISSUE 3070 DEBUG - Online Size  : " ~ to!string(jsonFileSize));
+								addLogEntry("ISSUE 3070 DEBUG - Local XOR    : " ~ to!string(computeQuickXorHash(newItemPath)));
+								addLogEntry("ISSUE 3070 DEBUG - Local Size   : " ~ to!string(getSize(newItemPath)));
+												
+							
+							}
+							
+							
 						}	// end of (!disableDownloadValidation)
 					} else {
 						addLogEntry("ERROR: File failed to download. Increase logging verbosity to determine why.");
