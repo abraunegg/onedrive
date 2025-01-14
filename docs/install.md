@@ -122,7 +122,7 @@ These dependencies are also applicable for all Ubuntu based distributions such a
 *   Peppermint OS
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:
@@ -144,7 +144,7 @@ These instructions were validated using:
 
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev
 ```
 For GUI notifications the following is also necessary:
 ```text
