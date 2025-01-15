@@ -3055,12 +3055,35 @@ class SyncEngine {
 							if (appConfig.accountType != "personal") {
 							
 								// Debug output the JSON
-								addLogEntry("ISSUE 3070 DEBUG - Response JSON: " ~ to!string(onedriveJSONItem));
-								addLogEntry("ISSUE 3070 DEBUG - Online XOR   : " ~ to!string(OneDriveFileXORHash));
-								addLogEntry("ISSUE 3070 DEBUG - Online Size  : " ~ to!string(jsonFileSize));
-								addLogEntry("ISSUE 3070 DEBUG - Local XOR    : " ~ to!string(computeQuickXorHash(newItemPath)));
-								addLogEntry("ISSUE 3070 DEBUG - Local Size   : " ~ to!string(getSize(newItemPath)));
+								//addLogEntry("ISSUE 3070 DEBUG - Response JSON: " ~ to!string(onedriveJSONItem));
+								//addLogEntry("ISSUE 3070 DEBUG - Online XOR   : " ~ to!string(OneDriveFileXORHash));
+								//addLogEntry("ISSUE 3070 DEBUG - Online Size  : " ~ to!string(jsonFileSize));
+								//addLogEntry("ISSUE 3070 DEBUG - Local XOR    : " ~ to!string(computeQuickXorHash(newItemPath)));
+								//addLogEntry("ISSUE 3070 DEBUG - Local Size   : " ~ to!string(getSize(newItemPath)));
 												
+							
+								// AIP Protected Files cause issues here, as the online size & hash are not what has been downloaded
+								// There is ZERO way to determine if this is an AIP protected file either from the JSON data
+								
+								// Calculate the local file hash and get the local file size
+								string localFileHash = computeQuickXorHash(newItemPath);
+								long downloadFileSize = getSize(newItemPath);
+								
+								if ((OneDriveFileXORHash != localFileHash) && (jsonFileSize != downloadFileSize)) {
+								
+									// High potential to be an AIP protected file given the following scenario
+									// Business | SharePoint Account Type (not a personal account)
+									// --disable-download-validation is being used .. meaning the user has specifically configured this due the Microsoft SharePoint Enrichment Feature (bug)
+									// The file downloaded but the XOR hash and file size locally is not as per the provided JSON - both are different
+									//
+									// Update the 'onedriveJSONItem' JSON data with the local values ..... 
+									addLogEntry("ISSUE 3070 - CHANGING SOURCE JSON DATA BASED ON DOWNLOADED VALUES (quickXorHash,size)");
+									
+									onedriveJSONItem["file"]["hashes"]["quickXorHash"] = localFileHash;
+									onedriveJSONItem["size"] = downloadFileSize;
+									
+							
+								}
 							
 							}
 							
