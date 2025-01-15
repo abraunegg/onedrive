@@ -2285,6 +2285,7 @@ class SyncEngine {
 					addLogEntry("The item to sync is already present on the local filesystem and is in-sync with what is reported online", ["debug"]);
 					addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
 				}
+				// Add item to database
 				itemDB.upsert(newDatabaseItem);
 				
 				// With the 'newDatabaseItem' saved to the database, regardless of --dry-run situation - was that new database item a 'remote' item?
@@ -2485,6 +2486,7 @@ class SyncEngine {
 		
 		// Try and fetch this shared folder parent's details
 		try {
+			if (debugLogging) {addLogEntry(format("Fetching online data for parentDriveId '%s' and parentObjectId '%s'", parentDriveId, parentObjectId), ["debug"]);}
 			onlineParentData = onlineParentOneDriveApiInstance.getPathDetailsById(parentDriveId, parentObjectId);
 		} catch (OneDriveException exception) {
 			// If we get a 404 .. the shared item does not exist online ... perhaps a broken 'Add shortcut to My files' link in the account holders directory?
@@ -7413,6 +7415,37 @@ class SyncEngine {
 				} else {
 					// zero file size
 					if (debugLogging) {addLogEntry("This item file is zero size - potentially no hash provided by the OneDrive API", ["debug"]);}
+				}
+			}
+		}
+		
+		// OneDrive Personal Account driveId and remoteDriveId length check
+		// Issue #3072 (https://github.com/abraunegg/onedrive/issues/3072) illustrated that the OneDrive API is inconsistent in response for:
+		// - driveId
+		// - remoteDriveId
+		// When the Drive ID starts with a zero ('0')
+		// Example:
+		// 024470056f5c3e43 (driveId)
+		// 24470056f5c3e43  (remoteDriveId)
+		// If we this is a OneDrive Personal Account, ensure that these values are 16 characters, padded by leading zero's if needed
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+		
+			// Check the newDatabaseItem.driveId
+			if (!newDatabaseItem.driveId.empty) {
+				// Ensure driveId is 16 characters long by padding with leading zeros if required
+				if (newDatabaseItem.driveId.length < 16) {
+					if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided DriveID is not 16 Characters in length - padding with leading zero's", ["debug"]);}
+					newDatabaseItem.driveId = format("%16s", newDatabaseItem.driveId).replace(" ", "0");
+				}
+			}
+			
+			// Check the newDatabaseItem.remoteDriveId
+			if (!newDatabaseItem.remoteDriveId.empty) {
+				// Ensure remoteDriveId is 16 characters long by padding with leading zeros if required
+				if (newDatabaseItem.driveId.length < 16) {
+					if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided RemoteDriveID is not 16 Characters in length - padding with leading zero's", ["debug"]);}
+					newDatabaseItem.driveId = format("%16s", newDatabaseItem.driveId).replace(" ", "0");
 				}
 			}
 		}
