@@ -7437,7 +7437,18 @@ class SyncEngine {
 				if (newDatabaseItem.driveId.length < 16) {
 					// Debug logging
 					if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided DriveID is not 16 Characters in length - padding with leading zero's", ["debug"]);}
-					newDatabaseItem.driveId = format("%16s", newDatabaseItem.driveId).replace(" ", "0");
+					
+					// Generate the change
+					string oldEntry = newDatabaseItem.driveId;
+					string newEntry = oldEntry.padLeft(16, '0').text; // Explicitly use padLeft for leading zero padding
+					
+					if (debugLogging) {
+							addLogEntry(" - old newDatabaseItem.driveId = " ~ oldEntry, ["debug"]);
+							addLogEntry(" - new newDatabaseItem.driveId = " ~ newEntry, ["debug"]);
+					}
+					
+					// Make the change
+					newDatabaseItem.driveId = newEntry;
 				}
 			}
 			
@@ -7447,7 +7458,18 @@ class SyncEngine {
 				if (newDatabaseItem.remoteDriveId.length < 16) {
 					// Debug logging
 					if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided RemoteDriveID is not 16 Characters in length - padding with leading zero's", ["debug"]);}
-					newDatabaseItem.remoteDriveId = format("%16s", newDatabaseItem.remoteDriveId).replace(" ", "0");
+					
+					// Generate the change
+					string oldEntry = newDatabaseItem.remoteDriveId;
+					string newEntry = oldEntry.padLeft(16, '0').text; // Explicitly use padLeft for leading zero padding
+					
+					if (debugLogging) {
+							addLogEntry(" - old newDatabaseItem.remoteDriveId = " ~ oldEntry, ["debug"]);
+							addLogEntry(" - new newDatabaseItem.remoteDriveId = " ~ newEntry, ["debug"]);
+					}
+					
+					// Make the change
+					newDatabaseItem.remoteDriveId = newEntry;
 				}
 			}
 		}
