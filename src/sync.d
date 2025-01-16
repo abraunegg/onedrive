@@ -7435,6 +7435,7 @@ class SyncEngine {
 			if (!newDatabaseItem.driveId.empty) {
 				// Ensure driveId is 16 characters long by padding with leading zeros if required
 				if (newDatabaseItem.driveId.length < 16) {
+					// Debug logging
 					if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided DriveID is not 16 Characters in length - padding with leading zero's", ["debug"]);}
 					newDatabaseItem.driveId = format("%16s", newDatabaseItem.driveId).replace(" ", "0");
 				}
@@ -7443,9 +7444,10 @@ class SyncEngine {
 			// Check the newDatabaseItem.remoteDriveId
 			if (!newDatabaseItem.remoteDriveId.empty) {
 				// Ensure remoteDriveId is 16 characters long by padding with leading zeros if required
-				if (newDatabaseItem.driveId.length < 16) {
+				if (newDatabaseItem.remoteDriveId.length < 16) {
+					// Debug logging
 					if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided RemoteDriveID is not 16 Characters in length - padding with leading zero's", ["debug"]);}
-					newDatabaseItem.driveId = format("%16s", newDatabaseItem.driveId).replace(" ", "0");
+					newDatabaseItem.remoteDriveId = format("%16s", newDatabaseItem.remoteDriveId).replace(" ", "0");
 				}
 			}
 		}
