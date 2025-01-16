@@ -2486,7 +2486,7 @@ class SyncEngine {
 		
 		// Try and fetch this shared folder parent's details
 		try {
-			if (debugLogging) {addLogEntry(format("Fetching online data for parentDriveId '%s' and parentObjectId '%s'", parentDriveId, parentObjectId), ["debug"]);}
+			if (debugLogging) {addLogEntry(format("Fetching Shared Folder online data for parentDriveId '%s' and parentObjectId '%s'", parentDriveId, parentObjectId), ["debug"]);}
 			onlineParentData = onlineParentOneDriveApiInstance.getPathDetailsById(parentDriveId, parentObjectId);
 		} catch (OneDriveException exception) {
 			// If we get a 404 .. the shared item does not exist online ... perhaps a broken 'Add shortcut to My files' link in the account holders directory?
@@ -7427,7 +7427,7 @@ class SyncEngine {
 		// Example:
 		// 024470056f5c3e43 (driveId)
 		// 24470056f5c3e43  (remoteDriveId)
-		// If we this is a OneDrive Personal Account, ensure that these values are 16 characters, padded by leading zero's if needed
+		// If this is a OneDrive Personal Account, ensure that these values are 16 characters, padded by leading zero's if needed
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
 		
