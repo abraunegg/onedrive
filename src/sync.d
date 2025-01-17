@@ -662,7 +662,7 @@ class SyncEngine {
 				if (appConfig.defaultRootId.indexOf("sea8cc6beffdb43d7976fbc7da445c639") != -1) {
 					// Yes ... flag account issue, we cannot proceed
 					addLogEntry();
-					addLogEntry("ERROR: You have a Microsoft OneDrive Account Problem. Please raise a support request with Microsoft. You cannot use Microsoft OneDrive at this point in time.");
+					addLogEntry("ERROR: You have a Microsoft OneDrive Account Problem. Please raise a support request with Microsoft. You cannot use Microsoft OneDrive at this point in time.", ["info", "notify"]);
 					addLogEntry("ERROR: Account Root ID contains the string 'sea8cc6beffdb43d7976fbc7da445c639'.");
 					addLogEntry();
 					// Force Exit
