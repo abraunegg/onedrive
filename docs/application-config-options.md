@@ -260,7 +260,11 @@ _**CLI Option Use:**_ `--disable-download-validation`
 > If you're downloading data from SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack. Enabling this option disables all download integrity checks.
 
 > [!CAUTION]
-> If you are using OneDrive Business Accounts and your organisation implements Azure Information Protection, these AIP files will report as one size & hash online, but when downloaded, will report a totally different size and hash. By default these files will fail integrity checking and be deleted, meaning that AIP files will not reside on your platform. When you enable this option, the AIP files will download to your platform, however, if there are any other genuine download failures where the size and hash are different, these too will be retained locally meaning you may experience data integrity loss. Use this option with extreme caution.
+> If you are using OneDrive Business Accounts and your organisation implements Azure Information Protection, these AIP files will report as one size & hash online, but when downloaded, will report a totally different size and hash. 
+>
+> By default these files will fail integrity checking and be deleted, meaning that AIP files will not reside on your platform. 
+> 
+> When you enable this option, the AIP files will download to your platform, however, if there are any other genuine download failures where the size and hash are different, these too will be retained locally meaning you may experience data integrity loss. Use this option with extreme caution.
 
 ### disable_notifications
 _**Description:**_ This setting controls whether GUI notifications are sent from the client to your display manager session. 
