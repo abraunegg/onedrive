@@ -648,9 +648,27 @@ class SyncEngine {
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
 		if ((defaultOneDriveRootDetails.type() == JSONType.object) && (hasId(defaultOneDriveRootDetails))) {
+		
+			// Read the returned JSON data for the root drive details
 			if (debugLogging) {addLogEntry("OneDrive Account Default Root Details:       " ~ to!string(defaultOneDriveRootDetails), ["debug"]);}
 			appConfig.defaultRootId = defaultOneDriveRootDetails["id"].str;
 			if (debugLogging) {addLogEntry("appConfig.defaultRootId      = " ~ appConfig.defaultRootId, ["debug"]);}
+			
+			// Issue #2957 Handling for the Personal Account Root ID issues. Shared Folders coming from another account where this issue exists will need a different approach.
+			// If the returned data for appConfig.defaultRootId contains the string 'sea8cc6beffdb43d7976fbc7da445c639' .. this account has account issues with Microsoft
+			// This is only applicable for Microsoft Personal Accounts
+			if (appConfig.accountType == "personal") {
+				// Does the string 'sea8cc6beffdb43d7976fbc7da445c639' exist in the root id for the account?
+				if (appConfig.defaultRootId.indexOf("sea8cc6beffdb43d7976fbc7da445c639") != -1) {
+					// Yes ... flag account issue, we cannot proceed
+					addLogEntry();
+					addLogEntry("ERROR: You have a Microsoft OneDrive Account Problem. Please raise a support request with Microsoft. You cannot use Microsoft OneDrive at this point in time.", ["info", "notify"]);
+					addLogEntry("ERROR: Account Root ID contains the string 'sea8cc6beffdb43d7976fbc7da445c639'.");
+					addLogEntry();
+					// Force Exit
+					forceExit();
+				}
+			}
 			
 			// Save the item to the database, so the account root drive is is always going to be present in the DB
 			saveItem(defaultOneDriveRootDetails);
