@@ -648,27 +648,9 @@ class SyncEngine {
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
 		if ((defaultOneDriveRootDetails.type() == JSONType.object) && (hasId(defaultOneDriveRootDetails))) {
-		
-			// Read the returned JSON data for the root drive details
 			if (debugLogging) {addLogEntry("OneDrive Account Default Root Details:       " ~ to!string(defaultOneDriveRootDetails), ["debug"]);}
 			appConfig.defaultRootId = defaultOneDriveRootDetails["id"].str;
 			if (debugLogging) {addLogEntry("appConfig.defaultRootId      = " ~ appConfig.defaultRootId, ["debug"]);}
-			
-			// Issue #2957 Handling for the Personal Account Root ID issues. Shared Folders coming from another account where this issue exists will need a different approach.
-			// If the returned data for appConfig.defaultRootId contains the string 'sea8cc6beffdb43d7976fbc7da445c639' .. this account has account issues with Microsoft
-			// This is only applicable for Microsoft Personal Accounts
-			if (appConfig.accountType == "personal") {
-				// Does the string 'sea8cc6beffdb43d7976fbc7da445c639' exist in the root id for the account?
-				if (appConfig.defaultRootId.indexOf("sea8cc6beffdb43d7976fbc7da445c639") != -1) {
-					// Yes ... flag account issue, we cannot proceed
-					addLogEntry();
-					addLogEntry("ERROR: You have a Microsoft OneDrive Account Problem. Please raise a support request with Microsoft. You cannot use Microsoft OneDrive at this point in time.", ["info", "notify"]);
-					addLogEntry("ERROR: Account Root ID contains the string 'sea8cc6beffdb43d7976fbc7da445c639'.");
-					addLogEntry();
-					// Force Exit
-					forceExit();
-				}
-			}
 			
 			// Save the item to the database, so the account root drive is is always going to be present in the DB
 			saveItem(defaultOneDriveRootDetails);
@@ -3068,6 +3050,38 @@ class SyncEngine {
 							// Whilst the download integrity checks were disabled, we still have to set the correct timestamp on the file
 							// Set the timestamp, logging and error handling done within function
 							setPathTimestamp(dryRun, newItemPath, itemModifiedTime);
+							
+							// Azure Information Protection (AIP) protected files potentially have missing data and/or inconsistent data
+							if (appConfig.accountType != "personal") {
+								// AIP Protected Files cause issues here, as the online size & hash are not what has been downloaded
+								// There is ZERO way to determine if this is an AIP protected file either from the JSON data
+								
+								// Calculate the local file hash and get the local file size
+								string localFileHash = computeQuickXorHash(newItemPath);
+								long downloadFileSize = getSize(newItemPath);
+								
+								if ((OneDriveFileXORHash != localFileHash) && (jsonFileSize != downloadFileSize)) {
+								
+									// High potential to be an AIP protected file given the following scenario
+									// Business | SharePoint Account Type (not a personal account)
+									// --disable-download-validation is being used .. meaning the user has specifically configured this due the Microsoft SharePoint Enrichment Feature (bug)
+									// The file downloaded but the XOR hash and file size locally is not as per the provided JSON - both are different
+									//
+									// Update the 'onedriveJSONItem' JSON data with the local values ..... 
+									if (debugLogging) {
+										string aipLogMessage = format("POTENTIAL AIP FILE (Issue 3070) - Changing the source JSON data provided by Graph API to use actual on-disk values (quickXorHash,size): %s", newItemPath);
+										addLogEntry(aipLogMessage, ["debug"]);
+										addLogEntry(" - Online XOR   : " ~ to!string(OneDriveFileXORHash), ["debug"]);
+										addLogEntry(" - Online Size  : " ~ to!string(jsonFileSize), ["debug"]);
+										addLogEntry(" - Local XOR    : " ~ to!string(computeQuickXorHash(newItemPath)), ["debug"]);
+										addLogEntry(" - Local Size   : " ~ to!string(getSize(newItemPath)), ["debug"]);
+									}
+									
+									// Make the change in the JSON using local values
+									onedriveJSONItem["file"]["hashes"]["quickXorHash"] = localFileHash;
+									onedriveJSONItem["size"] = downloadFileSize;
+								}
+							}
 						}	// end of (!disableDownloadValidation)
 					} else {
 						addLogEntry("ERROR: File failed to download. Increase logging verbosity to determine why.");

@@ -1,5 +1,5 @@
 #
-# Other allow entries
+# Allowed words not found in configured dictionaries
 #
 AADSTS
 aarch
@@ -9,6 +9,7 @@ accrightslen
 adamdruppe
 addrepo
 adr
+aip
 alex
 alpinelinux
 annobin
