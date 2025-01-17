@@ -654,7 +654,7 @@ class SyncEngine {
 			appConfig.defaultRootId = defaultOneDriveRootDetails["id"].str;
 			if (debugLogging) {addLogEntry("appConfig.defaultRootId      = " ~ appConfig.defaultRootId, ["debug"]);}
 			
-			// Issue #2957 Handling for the Account Root. Shared Folders coming from another account where this issue exists will need a different approach.
+			// Issue #2957 Handling for the Personal Account Root ID issues. Shared Folders coming from another account where this issue exists will need a different approach.
 			// If the returned data for appConfig.defaultRootId contains the string 'sea8cc6beffdb43d7976fbc7da445c639' .. this account has account issues with Microsoft
 			// This is only applicable for Microsoft Personal Accounts
 			if (appConfig.accountType == "personal") {
