@@ -927,6 +927,8 @@ class SyncEngine {
 					// The path we are seeking is remote to our account drive id
 					searchItem.driveId = onlinePathData["remoteItem"]["parentReference"]["driveId"].str;
 					searchItem.id = onlinePathData["remoteItem"]["id"].str;
+					// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
+					createRequiredSharedFolderDatabaseRecords(onlinePathData);
 				} else {
 					// This is a shared folder location, but we are not a 'personal' account, and 'sync_business_shared_items' has not been enabled
 					addLogEntry();
@@ -1745,7 +1747,7 @@ class SyncEngine {
 						if (hasSharedElement(onedriveJSONItem)) {
 							// Has the Shared JSON structure
 							if (debugLogging) {addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);}
-							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object
+							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 							createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
 						}
 						
@@ -1762,7 +1764,7 @@ class SyncEngine {
 						if (debugLogging) {addLogEntry("Handling a Business or SharePoint Shared Item JSON object", ["debug"]);}
 						
 						if (appConfig.accountType == "business") {
-							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object
+							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 							createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
 							
 							// Ensure that this item has no parent
@@ -2293,6 +2295,7 @@ class SyncEngine {
 				if (newDatabaseItem.type == ItemType.remote) {
 					// yes this is a remote item type
 					if (debugLogging) {addLogEntry("The 'newDatabaseItem' (applyPotentiallyNewLocalItem) is a remote item type - we need to create all of the associated database tie records for this database entry" , ["debug"]);}
+					// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 					createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
 				}
 				
@@ -2455,6 +2458,7 @@ class SyncEngine {
 			if (newDatabaseItem.type == ItemType.remote) {
 				// yes this is a remote item type
 				if (debugLogging) {addLogEntry("The 'newDatabaseItem' (handleLocalDirectoryCreation) is a remote item type - we need to create all of the associated database tie records for this database entry" , ["debug"]);}
+				// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 				createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
 			}
 		}
@@ -3616,7 +3620,7 @@ class SyncEngine {
 			
 			// Freshen the cached quota details for this driveID
 			addOrUpdateOneDriveOnlineDetails(driveId);
-			
+
 			// What OneDrive API query do we use?
 			// - Are we running against a National Cloud Deployments that does not support /delta ?
 			//   National Cloud Deployments do not support /delta as a query
@@ -3634,7 +3638,7 @@ class SyncEngine {
 				// https://docs.microsoft.com/en-us/graph/deployments#supported-features
 				// We dont use /delta for --single-directory as, in order to sync a single path with /delta, we need to query the entire OneDrive API JSON data to then filter out
 				// objects that we dont want, thus, it is easier to use the same method as National Cloud Deployments, but query just the objects we are after
-			
+
 				// For each unique OneDrive driveID we know about
 				Item[] outOfSyncItems = itemDB.selectOutOfSyncItems(driveId);
 				foreach (outOfSyncItem; outOfSyncItems) {
@@ -4667,7 +4671,7 @@ class SyncEngine {
 				if (sharedFolderDeltaGeneration) {
 					if (currentSharedFolderName == onlinePathData["name"].str) {
 						if (debugLogging) {addLogEntry("createLocalPathStructure parent matches the current shared folder name, creating applicable shared folder database records", ["debug"]);}
-						// Create the required database entries in a consistent manner
+						// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 						createRequiredSharedFolderDatabaseRecords(onlinePathData);
 					}
 				} 
@@ -6125,7 +6129,7 @@ class SyncEngine {
 						} else {
 							// Shared Business Folder Syncing IS enabled
 							// It is a 'remote' JSON item denoting a potential shared folder
-							// Create the required database entries in a consistent manner
+							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 							createRequiredSharedFolderDatabaseRecords(onlinePathData);
 						}
 					}
@@ -6761,11 +6765,17 @@ class SyncEngine {
 										// we are not downloading a file, warn that file differences will exist
 										addLogEntry("WARNING: The file uploaded to Microsoft OneDrive has been modified through its SharePoint 'enrichment' process and no longer matches your local version.");
 										addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
+										// Create a new online version of the file by updating the metadata - this ensures that the file we uploaded is the file online
+										uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
 									}
 								} else {
 									// Create a new online version of the file by updating the metadata, which negates the need to download the file
 									uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
 								}
+							} else {
+								// integrity checks passed
+								// save the uploadResponse to the database
+								saveItem(uploadResponse);
 							}
 						}
 					}
@@ -6791,7 +6801,7 @@ class SyncEngine {
 				if (debugLogging) {addLogEntry("uploadFileOneDriveApiInstance.simpleUpload or session.upload call returned an invalid JSON Object from the OneDrive API", ["debug"]);}
 			}
 		}
-		
+
 		// Return upload status
 		return uploadFailed;
 	}
@@ -9509,7 +9519,7 @@ class SyncEngine {
 	
 	// Add this driveId plus relevant details for future reference and use
 	void addOrUpdateOneDriveOnlineDetails(string driveId) {
-	
+
 		bool quotaRestricted;
 		bool quotaAvailable;
 		long quotaRemaining;
