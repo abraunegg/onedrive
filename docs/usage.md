@@ -8,6 +8,7 @@ Before reading this document, please ensure you are running application version 
   - [Memory Usage](#memory-usage)
   - [Upgrading from the 'skilion' Client](#upgrading-from-the-skilion-client)
   - [Guidelines for Local File and Folder Naming in the Synchronisation Directory](#guidelines-for-local-file-and-folder-naming-in-the-synchronisation-directory)
+  - [Support for Microsoft Azure Information Protected Files](#support-for-microsoft-azure-information-protected-files)
   - [Compatibility with curl](#compatibility-with-curl)
 - [First Steps](#first-steps)
   - [Authorise the Application with Your Microsoft OneDrive Account](#authorise-the-application-with-your-microsoft-onedrive-account)
@@ -116,6 +117,16 @@ The above guidelines are essential for maintaining synchronisation integrity wit
 * [Restrictions and limitations in OneDrive and SharePoint](https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa)
 
 **Adherence to these guidelines is not optional but mandatory to avoid sync disruptions.**
+
+### Support for Microsoft Azure Information Protected Files
+> [!CAUTION]
+> If you are using OneDrive Business Accounts and your organisation implements Azure Information Protection, these AIP files will report as one size & hash online, but when downloaded, will report a totally different size and hash. 
+>
+> By default these files will fail integrity checking and be deleted locally, meaning that AIP files will not reside on your platform. These AIP files will be flagged as a failed download.
+> 
+> If you chose to enable `--disable-download-validation` , the AIP files will download to your platform, however, if there are any other genuine download failures where the size and hash are different, these too will be retained locally meaning you may experience data integrity loss. This is due to the Microsoft Graph API lacking any capability to identify up-front that a file utilises AIP, thus zero capability to differentiate between AIP and non-AIP files for failure.
+> 
+> Please use the `--disable-download-validation` option with extreme caution and understand the risk if you enable it.
 
 ### Compatibility with curl
 If your system uses curl < 7.47.0, curl will default to HTTP/1.1 for HTTPS operations, and the client will follow suit, using HTTP/1.1.
