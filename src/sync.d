@@ -7534,13 +7534,14 @@ class SyncEngine {
 			} catch (OneDriveException exception) {
 				// Display error message
 				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-
+				
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
 				generateDeltaResponseOneDriveApiInstance = null;
+				
 				// Perform Garbage Collection
 				GC.collect();
-
+				
 				// Must force exit here, allow logging to be done
 				forceExit();
 			}
