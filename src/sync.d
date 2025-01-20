@@ -1460,6 +1460,13 @@ class SyncEngine {
 			objectParentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 			itemIsRemoteItem  = isItemRemote(onedriveJSONItem);
 			
+			// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+			// What account type is this?
+			if (appConfig.accountType == "personal") {
+				// Test JSON value
+				objectParentDriveId = testParentReferenceForLengthIssue(objectParentDriveId);
+			}
+			
 			// Test is this is the OneDrive Users Root?
 			// Debug output of change evaluation items
 			if (debugLogging) {
@@ -1611,6 +1618,13 @@ class SyncEngine {
 		// Use the JSON elements rather can computing a DB struct via makeItem()
 		string thisItemId = onedriveJSONItem["id"].str;
 		string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+		
+		// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test JSON value
+			thisItemDriveId = testParentReferenceForLengthIssue(thisItemDriveId);
+		}
 			
 		// Check if the item has been seen before
 		Item existingDatabaseItem;
@@ -1685,6 +1699,13 @@ class SyncEngine {
 			string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 			string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
 			string thisItemName = onedriveJSONItem["name"].str;
+			
+			// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+			// What account type is this?
+			if (appConfig.accountType == "personal") {
+				// Test JSON value
+				thisItemDriveId = testParentReferenceForLengthIssue(thisItemDriveId);
+			}
 			
 			// Create an empty item struct for an existing DB item
 			Item existingDatabaseItem;
@@ -2287,6 +2308,7 @@ class SyncEngine {
 					addLogEntry("The item to sync is already present on the local filesystem and is in-sync with what is reported online", ["debug"]);
 					addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
 				}
+				// Add item to database
 				itemDB.upsert(newDatabaseItem);
 				
 				// With the 'newDatabaseItem' saved to the database, regardless of --dry-run situation - was that new database item a 'remote' item?
@@ -2489,6 +2511,7 @@ class SyncEngine {
 		
 		// Try and fetch this shared folder parent's details
 		try {
+			if (debugLogging) {addLogEntry(format("Fetching Shared Folder online data for parentDriveId '%s' and parentObjectId '%s'", parentDriveId, parentObjectId), ["debug"]);}
 			onlineParentData = onlineParentOneDriveApiInstance.getPathDetailsById(parentDriveId, parentObjectId);
 		} catch (OneDriveException exception) {
 			// If we get a 404 .. the shared item does not exist online ... perhaps a broken 'Add shortcut to My files' link in the account holders directory?
@@ -2542,8 +2565,14 @@ class SyncEngine {
 			// This cannot be empty - set to the correct reference for the Shared Folder DB Tie record
 			if (debugLogging) {addLogEntry("The Shared Folder DB Tie record entry for 'driveId' is empty ... correcting it" , ["debug"]);}
 			sharedFolderDatabaseTie.driveId = onlineParentData["parentReference"]["driveId"].str;
+			
+			// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+			// What account type is this?
+			if (appConfig.accountType == "personal") {
+				// Test JSON value
+				sharedFolderDatabaseTie.driveId = testParentReferenceForLengthIssue(sharedFolderDatabaseTie.driveId);
+			}
 		}
-		
 		
 		// Ensure 'parentId' is not empty, except for Personal Accounts 
 		if (appConfig.accountType != "personal") {
@@ -2771,6 +2800,13 @@ class SyncEngine {
 		string downloadItemName = onedriveJSONItem["name"].str;
 		string downloadDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 		string downloadParentId = onedriveJSONItem["parentReference"]["id"].str;
+		
+		// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test JSON value
+			downloadDriveId = testParentReferenceForLengthIssue(downloadDriveId);
+		}
 		
 		// Calculate this items path
 		string newItemPath = computeItemPath(downloadDriveId, downloadParentId) ~ "/" ~ downloadItemName;
@@ -4227,6 +4263,13 @@ class SyncEngine {
 		string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
 		string thisItemName = onedriveJSONItem["name"].str;
 		
+		// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test JSON value
+			thisItemDriveId = testParentReferenceForLengthIssue(thisItemDriveId);
+		}
+		
 		// Is this parent is in the database
 		bool parentInDatabase = false;
 		
@@ -4467,13 +4510,20 @@ class SyncEngine {
 							selfBuiltPath = splitPaths[1];
 						}
 						
+						// Get the remoteDriveId from JSON record
+						string remoteDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+						
+						// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+						// What account type is this?
+						if (appConfig.accountType == "personal") {
+							// Test JSON value
+							remoteDriveId = testParentReferenceForLengthIssue(remoteDriveId);
+						}
+						
 						// Issue #2731
 						// Is this potentially a shared folder? This is the only reliable way to determine this ...
-						if (onedriveJSONItem["parentReference"]["driveId"].str != appConfig.defaultDriveId) {
+						if (remoteDriveId != appConfig.defaultDriveId) {
 							// Yes this JSON is from a Shared Folder
-							// Get the remoteDriveId from JSON record
-							string remoteDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
-							
 							// Query the database for the 'remote' folder details from the database
 							if (debugLogging) {addLogEntry("Query database for this 'remoteDriveId' record: " ~ to!string(remoteDriveId), ["debug"]);}
 							Item remoteItem;
@@ -4580,7 +4630,17 @@ class SyncEngine {
 							// If this is --dry-run
 							if (dryRun) {
 								// we dont create the directory, but we need to track that we 'faked it'
-								idsFaked ~= [onedriveJSONItem["parentReference"]["driveId"].str, onedriveJSONItem["parentReference"]["id"].str];
+								string parentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+								string parentId = onedriveJSONItem["parentReference"]["id"].str;
+								
+								// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+								// What account type is this?
+								if (appConfig.accountType == "personal") {
+									// Test JSON value
+									parentDriveId = testParentReferenceForLengthIssue(parentDriveId);
+								}
+								// add records to array
+								idsFaked ~= [parentDriveId, parentId];
 							}
 						}
 					} else {
@@ -4644,6 +4704,13 @@ class SyncEngine {
 		// Configure these variables based on the JSON input
 		thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 		
+		// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test JSON value
+			thisItemDriveId = testParentReferenceForLengthIssue(thisItemDriveId);
+		}
+		
 		// OneDrive Personal JSON responses are in-consistent with not having 'id' available
 		if (hasParentReferenceId(onedriveJSONItem)) {
 			// Use the parent reference id
@@ -4681,6 +4748,13 @@ class SyncEngine {
 				string grandparentItemParentId;
 				grandparentItemDriveId = onlinePathData["parentReference"]["driveId"].str;
 				
+				// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+				// What account type is this?
+				if (appConfig.accountType == "personal") {
+					// Test JSON value
+					grandparentItemDriveId = testParentReferenceForLengthIssue(grandparentItemDriveId);
+				}
+				
 				// OneDrive Personal JSON responses are in-consistent with not having 'id' available
 				if (hasParentReferenceId(onlinePathData)) {
 					// Use the parent reference id
@@ -4699,7 +4773,17 @@ class SyncEngine {
 				// If this is --dry-run
 				if (dryRun) {
 					// we dont create the directory, but we need to track that we 'faked it'
-					idsFaked ~= [onlinePathData["parentReference"]["driveId"].str, onlinePathData["parentReference"]["id"].str];
+					string parentDriveId = onlinePathData["parentReference"]["driveId"].str;
+					string parentId = onlinePathData["parentReference"]["id"].str;
+					
+					// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+					// What account type is this?
+					if (appConfig.accountType == "personal") {
+						// Test JSON value
+						parentDriveId = testParentReferenceForLengthIssue(parentDriveId);
+					}
+					// add records to array
+					idsFaked ~= [parentDriveId, parentId];
 				}
 				
 				// Does the parental path exist locally?
@@ -6436,6 +6520,13 @@ class SyncEngine {
 									string changedItemId = fileDetailsFromOneDrive["id"].str;
 									addLogEntry("Skipping uploading this item as a new file, will upload as a modified file (online file already exists): " ~ fileToUpload);
 									
+									// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+									// What account type is this?
+									if (appConfig.accountType == "personal") {
+										// Test JSON value
+										changedItemParentDriveId = testParentReferenceForLengthIssue(changedItemParentDriveId);
+									}
+									
 									// In order for the processing of the local item as a 'changed' item, unfortunately we need to save the online data of the existing online file to the local DB
 									saveItem(fileDetailsFromOneDrive);
 									
@@ -7354,6 +7445,13 @@ class SyncEngine {
 								addLogEntry(logMessage, ["debug"]);
 							}
 							item.driveId = jsonItem["parentReference"]["driveId"].str;
+							
+							// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+							// What account type is this?
+							if (appConfig.accountType == "personal") {
+								// Test JSON value
+								item.driveId = testParentReferenceForLengthIssue(item.driveId);
+							}
 						}
 						
 						// We only should be adding our account 'root' to the database, not shared folder 'root' items
@@ -7460,6 +7558,61 @@ class SyncEngine {
 			}
 		}
 		
+		// OneDrive Personal Account driveId and remoteDriveId length check
+		// Issue #3072 (https://github.com/abraunegg/onedrive/issues/3072) illustrated that the OneDrive API is inconsistent in response for:
+		// - driveId
+		// - remoteDriveId
+		// When the Drive ID starts with a zero ('0')
+		// Example:
+		// 024470056f5c3e43 (driveId)
+		// 24470056f5c3e43  (remoteDriveId)
+		// If this is a OneDrive Personal Account, ensure that these values are 16 characters, padded by leading zero's if needed
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+		
+			// Check the newDatabaseItem.driveId
+			if (!newDatabaseItem.driveId.empty) {
+				// Ensure driveId is 16 characters long by padding with leading zeros if required
+				if (newDatabaseItem.driveId.length < 16) {
+					// Debug logging
+					if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided DriveID is not 16 Characters in length - padding with leading zero's", ["debug"]);}
+					
+					// Generate the change
+					string oldEntry = newDatabaseItem.driveId;
+					string newEntry = to!string(oldEntry.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding
+					
+					if (debugLogging) {
+							addLogEntry(" - old newDatabaseItem.driveId = " ~ oldEntry, ["debug"]);
+							addLogEntry(" - new newDatabaseItem.driveId = " ~ newEntry, ["debug"]);
+					}
+					
+					// Make the change
+					newDatabaseItem.driveId = newEntry;
+				}
+			}
+			
+			// Check the newDatabaseItem.remoteDriveId
+			if (!newDatabaseItem.remoteDriveId.empty) {
+				// Ensure remoteDriveId is 16 characters long by padding with leading zeros if required
+				if (newDatabaseItem.remoteDriveId.length < 16) {
+					// Debug logging
+					if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided RemoteDriveID is not 16 Characters in length - padding with leading zero's", ["debug"]);}
+					
+					// Generate the change
+					string oldEntry = newDatabaseItem.remoteDriveId;
+					string newEntry = to!string(oldEntry.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding
+					
+					if (debugLogging) {
+							addLogEntry(" - old newDatabaseItem.remoteDriveId = " ~ oldEntry, ["debug"]);
+							addLogEntry(" - new newDatabaseItem.remoteDriveId = " ~ newEntry, ["debug"]);
+					}
+					
+					// Make the change
+					newDatabaseItem.remoteDriveId = newEntry;
+				}
+			}
+		}
+		
 		// Return the new database item
 		return newDatabaseItem;
 	}
@@ -7542,6 +7695,14 @@ class SyncEngine {
 					searchItem.id = pathData["remoteItem"]["id"].str;
 					remotePathObject = true;
 				}
+				
+				// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+				// What account type is this?
+				if (appConfig.accountType == "personal") {
+					// Test JSON value
+					searchItem.driveId = testParentReferenceForLengthIssue(searchItem.driveId);
+				}
+				
 			} catch (OneDriveException exception) {
 				// Display error message
 				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
@@ -7717,6 +7878,14 @@ class SyncEngine {
 							// This child folder has children
 							string childIdToQuery = child["id"].str;
 							string childDriveToQuery = child["parentReference"]["driveId"].str;
+							
+							// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+							// What account type is this?
+							if (appConfig.accountType == "personal") {
+								// Test JSON value
+								childDriveToQuery = testParentReferenceForLengthIssue(childDriveToQuery);
+							}
+							
 							auto childParentPath = child["parentReference"]["path"].str.split(":");
 							string folderPathToScan = childParentPath[1] ~ "/" ~ child["name"].str;
 							
@@ -7834,6 +8003,14 @@ class SyncEngine {
 								// This child folder has children
 								string childIdToQuery = child["id"].str;
 								string childDriveToQuery = child["parentReference"]["driveId"].str;
+								
+								// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+								// What account type is this?
+								if (appConfig.accountType == "personal") {
+									// Test JSON value
+									childDriveToQuery = testParentReferenceForLengthIssue(childDriveToQuery);
+								}
+								
 								auto grandchildParentPath = child["parentReference"]["path"].str.split(":");
 								string folderPathToScan = grandchildParentPath[1] ~ "/" ~ child["name"].str;
 								string newLoggingPath = pathForLogging ~ "/" ~ child["name"].str;
@@ -8944,6 +9121,13 @@ class SyncEngine {
 					thisItemId = onedriveJSONItem["id"].str;
 				}
 				
+				// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+				// What account type is this?
+				if (appConfig.accountType == "personal") {
+					// Test JSON value
+					thisItemParentDriveId = testParentReferenceForLengthIssue(thisItemParentDriveId);
+				}
+				
 				// Get the file hash
 				if (hasHashes(onedriveJSONItem)) {
 					// At a minimum we require 'quickXorHash' to exist
@@ -9069,6 +9253,14 @@ class SyncEngine {
 							JSONValue accessScope;
 							JSONValue createShareableLinkResponse;
 							string thisDriveId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
+							
+							// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+							// What account type is this?
+							if (appConfig.accountType == "personal") {
+								// Test JSON value
+								thisDriveId = testParentReferenceForLengthIssue(thisDriveId);
+							}
+							
 							string thisItemId = fileDetailsFromOneDrive["id"].str;
 							string fileShareLink;
 							bool writeablePermissions = appConfig.getValueBool("with_editing_perms");
@@ -9705,6 +9897,13 @@ class SyncEngine {
 			}
 		}
 		
+		// Issue #3072 - Validate ["parentReference"]["driveId"].str length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test JSON value
+			tieDBItem.driveId = testParentReferenceForLengthIssue(tieDBItem.driveId);
+		}
+		
 		// set the item type
 		tieDBItem.type = ItemType.root;
 		
@@ -10334,5 +10533,46 @@ class SyncEngine {
 		}
 	
 		return loggingOptions;
+	}
+	
+	// OneDrive Personal parentReference driveId must be 16 characters in length
+	string testParentReferenceForLengthIssue(string objectParentDriveId) {
+	
+		// Issue #3072 (https://github.com/abraunegg/onedrive/issues/3072) illustrated that the OneDrive API is inconsistent in response for:
+		// - ["parentReference"]["driveId"].str from the JSON
+		// When the Drive ID starts with a zero ('0')
+		// Example:
+		// 024470056f5c3e43 (driveId)
+		// 24470056f5c3e43  (remoteDriveId)
+		// If this is a OneDrive Personal Account, ensure that these values are 16 characters, padded by leading zero's if needed
+		
+		string oldEntry;
+		string newEntry;
+		
+		// Check the provided objectParentDriveId
+		if (!objectParentDriveId.empty) {
+			// Ensure remoteDriveId is 16 characters long by padding with leading zeros if required
+			if (objectParentDriveId.length < 16) {
+				// Debug logging
+				if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided ['parentReference']['driveId'].str from the JSON is not 16 Characters in length - padding with leading zero's", ["debug"]);}
+				
+				// Generate the change
+				oldEntry = objectParentDriveId;
+				newEntry = to!string(oldEntry.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding
+				if (debugLogging) {
+					addLogEntry(" - old value = " ~ oldEntry, ["debug"]);
+					addLogEntry(" - new value = " ~ newEntry, ["debug"]);
+				}
+				
+				// Return the new padded value
+				return newEntry;
+			} else {
+				// Return input value
+				return objectParentDriveId;
+			}
+		} else {
+			// Return input value
+			return objectParentDriveId;
+		}
 	}
 }
