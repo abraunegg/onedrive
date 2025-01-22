@@ -1777,6 +1777,10 @@ class SyncEngine {
 						remoteItem.parentId = null;
 						// Add this record to the local database
 						if (debugLogging) {addLogEntry("Update/Insert local database with Personal Shared Item JSON object with remoteItem.parentId as null: " ~ to!string(remoteItem), ["debug"]);}
+						
+						// Issue #3072 - Validate length and must be lowercase
+						remoteItem.driveId = testParentReferenceForLengthIssue(remoteItem.driveId);
+						
 						itemDB.upsert(remoteItem);
 						// Due to OneDrive API inconsistency, again with European Data Centres, as we have handled this JSON - flag as unwanted as processing is complete for this JSON item
 						unwanted = true;
@@ -2308,6 +2312,13 @@ class SyncEngine {
 					addLogEntry("The item to sync is already present on the local filesystem and is in-sync with what is reported online", ["debug"]);
 					addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
 				}
+				
+				// Issue #3072 - Validate length and must be lowercase
+				// What account type is this?
+				if (appConfig.accountType == "personal") {
+					newDatabaseItem.driveId = testParentReferenceForLengthIssue(newDatabaseItem.driveId);
+				}
+				
 				// Add item to database
 				itemDB.upsert(newDatabaseItem);
 				
@@ -2403,6 +2414,14 @@ class SyncEngine {
 							addLogEntry("File timestamps are equal, no further action required", ["debug"]); // correct message as timestamps are equal
 							addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
 						}
+						
+						// Issue #3072 - Validate length and must be lowercase
+						// What account type is this?
+						if (appConfig.accountType == "personal") {
+							newDatabaseItem.driveId = testParentReferenceForLengthIssue(newDatabaseItem.driveId);
+						}
+						
+						// Add item to database
 						itemDB.upsert(newDatabaseItem);
 						return;
 					}
