@@ -10535,7 +10535,7 @@ class SyncEngine {
 		return loggingOptions;
 	}
 	
-	// OneDrive Personal parentReference driveId must be 16 characters in length
+	// OneDrive Personal driveId or parentReference driveId must be 16 characters in length, and must be returned as lower case
 	string testParentReferenceForLengthIssue(string objectParentDriveId) {
 	
 		// Issue #3072 (https://github.com/abraunegg/onedrive/issues/3072) illustrated that the OneDrive API is inconsistent in response for:
@@ -10565,14 +10565,14 @@ class SyncEngine {
 				}
 				
 				// Return the new padded value
-				return newEntry;
+				return newEntry.toLower;
 			} else {
 				// Return input value
-				return objectParentDriveId;
+				return objectParentDriveId.toLower;
 			}
 		} else {
 			// Return input value
-			return objectParentDriveId;
+			return objectParentDriveId.toLower;
 		}
 	}
 }
