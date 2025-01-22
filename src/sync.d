@@ -7579,7 +7579,7 @@ class SyncEngine {
 					
 					// Generate the change
 					string oldEntry = newDatabaseItem.driveId;
-					string newEntry = to!string(oldEntry.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding
+					string newEntry = to!string(oldEntry.padLeft('0', 16)).toLower; // Explicitly use padLeft for leading zero padding
 					
 					if (debugLogging) {
 							addLogEntry(" - old newDatabaseItem.driveId = " ~ oldEntry, ["debug"]);
@@ -7600,7 +7600,7 @@ class SyncEngine {
 					
 					// Generate the change
 					string oldEntry = newDatabaseItem.remoteDriveId;
-					string newEntry = to!string(oldEntry.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding
+					string newEntry = to!string(oldEntry.padLeft('0', 16)).toLower; // Explicitly use padLeft for leading zero padding
 					
 					if (debugLogging) {
 							addLogEntry(" - old newDatabaseItem.remoteDriveId = " ~ oldEntry, ["debug"]);
@@ -10558,7 +10558,7 @@ class SyncEngine {
 				
 				// Generate the change
 				oldEntry = objectParentDriveId;
-				newEntry = to!string(oldEntry.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding
+				newEntry = to!string(oldEntry.padLeft('0', 16)).toLower; // Explicitly use padLeft for leading zero padding
 				if (debugLogging) {
 					addLogEntry(" - old value = " ~ oldEntry, ["debug"]);
 					addLogEntry(" - new value = " ~ newEntry, ["debug"]);
