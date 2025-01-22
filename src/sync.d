@@ -2606,6 +2606,9 @@ class SyncEngine {
 				addLogEntry(" sharedFolderDatabaseTie.type = ItemType.root", ["debug"]);
 			}
 			sharedFolderDatabaseTie.type = ItemType.root;
+			
+			// Issue #3072 - Validate sharedFolderDatabaseTie.driveId length and case
+			sharedFolderDatabaseTie.driveId = testParentReferenceForLengthIssue(sharedFolderDatabaseTie.driveId);
 		}
 		
 		// Log action
