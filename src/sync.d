@@ -2383,6 +2383,8 @@ class SyncEngine {
 							addLogEntry("File timestamps are equal, no further action required", ["debug"]); // correct message as timestamps are equal
 							addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
 						}
+						
+						// Add item to database
 						itemDB.upsert(newDatabaseItem);
 						return;
 					}
@@ -7476,7 +7478,7 @@ class SyncEngine {
 			// Check the newDatabaseItem.remoteDriveId
 			if (!newDatabaseItem.remoteDriveId.empty) {
 				// Ensure newDatabaseItem.remoteDriveId is 16 characters long by padding with leading zeros if required
-				if (newDatabaseItem.remoteDriveId.length < 17) {
+				if (newDatabaseItem.remoteDriveId.length < 16) {
 					// Debug logging
 					if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided 'remoteDriveId' is not 16 Characters in length - fetching correct value from Microsoft Graph API via getDriveIdRoot call", ["debug"]);}
 					
@@ -10444,7 +10446,7 @@ class SyncEngine {
 		// Check the provided objectParentDriveId
 		if (!objectParentDriveId.empty) {
 			// Ensure objectParentDriveId is 16 characters long by padding with leading zeros if required
-			if (objectParentDriveId.length < 17) {
+			if (objectParentDriveId.length < 16) {
 				// Debug logging
 				if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided ['parentReference']['driveId'].str from the JSON is not 16 Characters in length - fetching correct value from Microsoft Graph API via getDriveIdRoot call", ["debug"]);}
 				
