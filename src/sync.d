@@ -2287,6 +2287,8 @@ class SyncEngine {
 					addLogEntry("The item to sync is already present on the local filesystem and is in-sync with what is reported online", ["debug"]);
 					addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
 				}
+				
+				// Add item to database
 				itemDB.upsert(newDatabaseItem);
 				
 				// With the 'newDatabaseItem' saved to the database, regardless of --dry-run situation - was that new database item a 'remote' item?
@@ -2381,6 +2383,8 @@ class SyncEngine {
 							addLogEntry("File timestamps are equal, no further action required", ["debug"]); // correct message as timestamps are equal
 							addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
 						}
+						
+						// Add item to database
 						itemDB.upsert(newDatabaseItem);
 						return;
 					}
@@ -2489,6 +2493,7 @@ class SyncEngine {
 		
 		// Try and fetch this shared folder parent's details
 		try {
+			if (debugLogging) {addLogEntry(format("Fetching Shared Folder online data for parentDriveId '%s' and parentObjectId '%s'", parentDriveId, parentObjectId), ["debug"]);}
 			onlineParentData = onlineParentOneDriveApiInstance.getPathDetailsById(parentDriveId, parentObjectId);
 		} catch (OneDriveException exception) {
 			// If we get a 404 .. the shared item does not exist online ... perhaps a broken 'Add shortcut to My files' link in the account holders directory?
@@ -2544,8 +2549,7 @@ class SyncEngine {
 			sharedFolderDatabaseTie.driveId = onlineParentData["parentReference"]["driveId"].str;
 		}
 		
-		
-		// Ensure 'parentId' is not empty, except for Personal Accounts 
+		// Ensure 'parentId' is not empty, except for Personal Accounts
 		if (appConfig.accountType != "personal") {
 			// Is sharedFolderDatabaseTie.parentId.empty?
 			if (sharedFolderDatabaseTie.parentId.empty) {
@@ -4468,12 +4472,11 @@ class SyncEngine {
 						}
 						
 						// Issue #2731
+						// Get the remoteDriveId from JSON record
+						string remoteDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 						// Is this potentially a shared folder? This is the only reliable way to determine this ...
-						if (onedriveJSONItem["parentReference"]["driveId"].str != appConfig.defaultDriveId) {
+						if (remoteDriveId != appConfig.defaultDriveId) {
 							// Yes this JSON is from a Shared Folder
-							// Get the remoteDriveId from JSON record
-							string remoteDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
-							
 							// Query the database for the 'remote' folder details from the database
 							if (debugLogging) {addLogEntry("Query database for this 'remoteDriveId' record: " ~ to!string(remoteDriveId), ["debug"]);}
 							Item remoteItem;
@@ -7460,6 +7463,86 @@ class SyncEngine {
 			}
 		}
 		
+		// OneDrive Personal Account driveId and remoteDriveId length check
+		// Issue #3072 (https://github.com/abraunegg/onedrive/issues/3072) illustrated that the OneDrive API is inconsistent in response when the Drive ID starts with a zero ('0')
+		// - driveId
+		// - remoteDriveId
+		// 
+		// Example:
+		//   024470056F5C3E43 (driveId)
+		//   24470056f5c3e43  (remoteDriveId)
+		// If this is a OneDrive Personal Account, ensure this value is 16 characters, padded by leading zero's if eventually required
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+		
+			// Check the newDatabaseItem.remoteDriveId
+			if (!newDatabaseItem.remoteDriveId.empty) {
+				// Ensure newDatabaseItem.remoteDriveId is 16 characters long by padding with leading zeros if required
+				if (newDatabaseItem.remoteDriveId.length < 16) {
+					// Debug logging
+					if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided 'remoteDriveId' is not 16 Characters in length - fetching correct value from Microsoft Graph API via getDriveIdRoot call", ["debug"]);}
+					
+					// Generate the change
+					string oldEntry = newDatabaseItem.remoteDriveId;
+					string onlineDriveValue;
+					string newEntry;
+					JSONValue remoteDriveDetails;
+					
+					OneDriveApi fetchDriveDetailsOneDriveApiInstance;
+					
+					// Create new OneDrive API Instance
+					fetchDriveDetailsOneDriveApiInstance = new OneDriveApi(appConfig);
+					fetchDriveDetailsOneDriveApiInstance.initialise();
+					
+					// Get root details for the provided driveId
+					try {
+						remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(oldEntry);
+					} catch (OneDriveException exception) {
+						if (debugLogging) {addLogEntry("remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(oldEntry) generated a OneDriveException", ["debug"]);}
+						
+						string thisFunctionName = getFunctionName!({});
+						// Default operation if not 408,429,503,504 errors
+						// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
+						// Display what the error is
+						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+					}
+					
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+					fetchDriveDetailsOneDriveApiInstance.releaseCurlEngine();
+					fetchDriveDetailsOneDriveApiInstance = null;
+					// Perform Garbage Collection
+					GC.collect();
+					
+					// This entry ALSO needs to be validated
+					onlineDriveValue = remoteDriveDetails["parentReference"]["driveId"].str;
+					
+					// Check the onlineDriveValue value
+					if (!onlineDriveValue.empty) {
+						// Ensure onlineDriveValue is 16 characters long by padding with leading zeros if required
+						if (onlineDriveValue.length < 16) {
+							// online value is not 16 characters in length
+							// Debug logging
+							if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided online ['parentReference']['driveId'] value is not 16 Characters in length - padding with leading zero's", ["debug"]);}
+							// Generate the change
+							newEntry = to!string(onlineDriveValue.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding, leave case as-is
+						} else {
+							// Online value is 16 characters in length, use as-is
+							newEntry = onlineDriveValue;
+						}
+					}
+					
+					// Debug Logging of result
+					if (debugLogging) {
+							addLogEntry(" - old newDatabaseItem.remoteDriveId = " ~ oldEntry, ["debug"]);
+							addLogEntry(" - new newDatabaseItem.remoteDriveId = " ~ newEntry, ["debug"]);
+					}
+					
+					// Make the change to the generated new database item
+					newDatabaseItem.remoteDriveId = newEntry;
+				}
+			}
+		}
+		
 		// Return the new database item
 		return newDatabaseItem;
 	}
@@ -7563,6 +7646,13 @@ class SyncEngine {
 			// Reuse these prior set values
 			searchItem.driveId = singleDirectoryScopeDriveId;
 			searchItem.id = singleDirectoryScopeItemId;
+		}
+		
+		// Issue #3072 - Validate searchItem.driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test searchItem.driveId length and validation
+			searchItem.driveId = testProvidedDriveIdForLengthIssue(searchItem.driveId);
 		}
 		
 		// Before we get any data from the OneDrive API, flag any child object in the database as out-of-sync for this driveId & and object id
@@ -10334,5 +10424,95 @@ class SyncEngine {
 		}
 	
 		return loggingOptions;
+	}
+	
+	// OneDrive Personal driveId or parentReference driveId must be 16 characters in length
+	string testProvidedDriveIdForLengthIssue(string objectParentDriveId) {
+	
+		// OneDrive Personal Account driveId and remoteDriveId length check
+		// Issue #3072 (https://github.com/abraunegg/onedrive/issues/3072) illustrated that the OneDrive API is inconsistent in response when the Drive ID starts with a zero ('0')
+		// - driveId
+		// - remoteDriveId
+		// 
+		// Example:
+		//   024470056F5C3E43 (driveId)
+		//   24470056f5c3e43  (remoteDriveId)
+		//
+		// If this is a OneDrive Personal Account, ensure this value is 16 characters, padded by leading zero's if eventually required
+		
+		string oldEntry;
+		string newEntry;
+		
+		// Check the provided objectParentDriveId
+		if (!objectParentDriveId.empty) {
+			// Ensure objectParentDriveId is 16 characters long by padding with leading zeros if required
+			if (objectParentDriveId.length < 16) {
+				// Debug logging
+				if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided ['parentReference']['driveId'].str from the JSON is not 16 Characters in length - fetching correct value from Microsoft Graph API via getDriveIdRoot call", ["debug"]);}
+				
+				// Generate the change
+				oldEntry = objectParentDriveId;
+				string onlineDriveValue;
+				JSONValue remoteDriveDetails;
+				
+				OneDriveApi fetchDriveDetailsOneDriveApiInstance;
+				
+				// Create new OneDrive API Instance
+				fetchDriveDetailsOneDriveApiInstance = new OneDriveApi(appConfig);
+				fetchDriveDetailsOneDriveApiInstance.initialise();
+				
+				// Get root details for the provided driveId
+				try {
+					remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(oldEntry);
+				} catch (OneDriveException exception) {
+					if (debugLogging) {addLogEntry("remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(oldEntry) generated a OneDriveException", ["debug"]);}
+					
+					string thisFunctionName = getFunctionName!({});
+					// Default operation if not 408,429,503,504 errors
+					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
+					// Display what the error is
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+				}
+				
+				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+				fetchDriveDetailsOneDriveApiInstance.releaseCurlEngine();
+				fetchDriveDetailsOneDriveApiInstance = null;
+				// Perform Garbage Collection
+				GC.collect();
+				
+				// This entry ALSO needs to be validated
+				onlineDriveValue = remoteDriveDetails["parentReference"]["driveId"].str;
+				
+				// Check the onlineDriveValue value
+				if (!onlineDriveValue.empty) {
+					// Ensure remoteDriveId is 16 characters long by padding with leading zeros if required
+					if (onlineDriveValue.length < 16) {
+						// online value is not 16 characters in length
+						// Debug logging
+						if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided online ['parentReference']['driveId'] value is not 16 Characters in length - padding with leading zero's", ["debug"]);}
+						// Generate the change
+						newEntry = to!string(onlineDriveValue.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding, leave case as-is
+					} else {
+						// Online value is 16 characters in length, use as-is
+						newEntry = onlineDriveValue;
+					}
+				}
+				
+				// Debug Logging of result
+				if (debugLogging) {
+						addLogEntry(" - old 'driveId' value = " ~ oldEntry, ["debug"]);
+						addLogEntry(" - new 'driveId' value = " ~ newEntry, ["debug"]);
+				}
+				
+				// Return the new calculated value
+				return newEntry;
+			} else {
+				// Return input value as-is
+				return objectParentDriveId;
+			}
+		} else {
+			// Return input value as-is
+			return objectParentDriveId;
+		}
 	}
 }
