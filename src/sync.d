@@ -10500,8 +10500,8 @@ class SyncEngine {
 				
 				// Debug Logging of result
 				if (debugLogging) {
-						addLogEntry(" - old newDatabaseItem.remoteDriveId = " ~ oldEntry, ["debug"]);
-						addLogEntry(" - new newDatabaseItem.remoteDriveId = " ~ newEntry, ["debug"]);
+						addLogEntry(" - old 'driveId' value = " ~ oldEntry, ["debug"]);
+						addLogEntry(" - new 'driveId' value = " ~ newEntry, ["debug"]);
 				}
 				
 				// Return the new calculated value
