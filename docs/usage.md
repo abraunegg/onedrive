@@ -165,9 +165,6 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 | 8.5.0        | Alpine Linux 3.15, Ubuntu 24.04 LTS (Noble Numbat) | 8,9,10,11,12,13 |
 | 8.10.0       | Alpine Linux 3.17 | 13 |
 
-> [!CAUTION]
-> If you use a curl/libcurl version with known HTTP/2 bugs you will experience application runtime issues such as randomly exiting for zero reason or incomplete download/upload of your data potentially leading to file deletion.
-
 > [!IMPORTANT]
 > If your distribution provides one of these curl versions you must upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl. Refer to [curl releases](https://curl.se/docs/releases.html) for curl version information.
 >
@@ -179,14 +176,16 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 >          Please read https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#compatibility-with-curl for more information.
 > ```
 >
-> The WARNING line will be sent to the GUI for notification purposes if notifications have been enabled. To avoid this message and/or the GUI notification your only path of remediation is to upgrade your curl version on your platform.
+> The WARNING line will be sent to the GUI for notification purposes if notifications have been enabled. To avoid this message and/or the GUI notification your only have 2 options:
+> 1. Upgrade your curl version on your platform
+> 2. Configure the client to always downgrade client operations to HTTP/1.1 and use IPv4 only
 >
-> If you are unable to upgrade your version of curl, you must add the following to your config file:
+> If you are unable to upgrade your version of curl, to always downgrade client operations to HTTP/1.1 you must add the following to your config file:
 > ```text
 > force_http_11 = "true"
 > ip_protocol_version = "1"
 > ```
-> When these two options are applied to your application configuration, the following application message will be generated and no GUI alert will be sent:
+> When these two options are applied to your application configuration, the following application message will be generated:
 > ```text
 > WARNING: Your curl/libcurl version (curl.version.number) has known operational bugs that impact the use of this application.
 >          Please report this to your distribution and request that they provide a newer curl version for your platform or upgrade this yourself.
@@ -195,27 +194,29 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 > The WARNING line will be now only be written to application logging output, no longer sending a GUI notification message.
 
 > [!IMPORTANT]
-> There are significant HTTP/2 bugs in all curl versions < 8.6.x that can lead to HTTP/2 errors such as `Error in the HTTP2 framing layer on handle` or `Stream error in the HTTP/2 framing layer on handle`
+> Outside of the above known broken curl versions, there are significant HTTP/2 bugs in all curl versions < 8.6.x that can lead to HTTP/2 errors such as `Error in the HTTP2 framing layer on handle` or `Stream error in the HTTP/2 framing layer on handle`
 >
-> The only options to resolve this are the following:
+> The only options to resolve this issue are the following:
 > 1. Upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl. Refer to [curl releases](https://curl.se/docs/releases.html) for curl version information.
-> 2. Configure the client to only use HTTP/1.1 via the config option `--force-http-11` flag or setting the configuration option `force_http_11 = "true"`
+> 2. Configure the client to only use HTTP/1.1 via the config option `--force-http-11` flag or set the configuration file option `force_http_11 = "true"`
 
 > [!IMPORTANT]
-> It has been evidenced that curl has an internal DNS resolution bug that at random times will skip using IPv4 for DNS resolution and only uses IPv6 DNS resolution when the host system is configured to use IPv4 and IPv6 addressing.
+> Outside of the above known broken curl versions, it has also been evidenced that curl has an internal DNS resolution bug that at random times will skip using IPv4 for DNS resolution and only uses IPv6 DNS resolution when the host system is configured to use IPv4 and IPv6 addressing.
 > 
-> As a result of this curl resolution bug, if your system does not have an IPv6 DNS resolver, and/or does not have a valid IPv6 network path to Microsoft OneDrive, you may encounter these errors: 
+> As a result of this internal curl resolution bug, if your system does not have an IPv6 DNS resolver, and/or does not have a valid IPv6 network path to Microsoft OneDrive, you may encounter these errors: 
 > 
 > * `A libcurl timeout has been triggered - data transfer too slow, no DNS resolution response, no server response`
 > * `Could not connect to server on handle ABC12DEF3456`
 >
-> The only options to resolve this are the following:
+> The only options to resolve this issue are the following:
 > 1. Implement and/or ensure that IPv6 DNS resolution is possible on your system; allow IPv6 network connectivity between your system and Microsoft OneDrive
 > 2. Configure the client to only use IPv4 DNS resolution via setting the configuration option `ip_protocol_version = "1"`
 
 > [!IMPORTANT]
 > If you are using Debian 12 or Linux Mint Debian Edition (LMDE) 6, you can install curl version 8.10.1 from the respective backports repositories to address the bugs present in the default Debian 12 curl version.
 
+> [!CAUTION]
+> If you continue to use a curl/libcurl version with known HTTP/2 bugs you will experience application runtime issues such as randomly exiting for zero reason or incomplete download/upload of your data.
 
 ## First Steps
 ### Authorise the Application with Your Microsoft OneDrive Account
