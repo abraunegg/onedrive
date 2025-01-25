@@ -8,6 +8,7 @@ Before reading this document, please ensure you are running application version 
   - [Memory Usage](#memory-usage)
   - [Upgrading from the 'skilion' Client](#upgrading-from-the-skilion-client)
   - [Guidelines for Local File and Folder Naming in the Synchronisation Directory](#guidelines-for-local-file-and-folder-naming-in-the-synchronisation-directory)
+  - [Support for Microsoft Azure Information Protected Files](#support-for-microsoft-azure-information-protected-files)
   - [Compatibility with curl](#compatibility-with-curl)
 - [First Steps](#first-steps)
   - [Authorise the Application with Your Microsoft OneDrive Account](#authorise-the-application-with-your-microsoft-onedrive-account)
@@ -117,6 +118,16 @@ The above guidelines are essential for maintaining synchronisation integrity wit
 
 **Adherence to these guidelines is not optional but mandatory to avoid sync disruptions.**
 
+### Support for Microsoft Azure Information Protected Files
+> [!CAUTION]
+> If you are using OneDrive Business Accounts and your organisation implements Azure Information Protection, these AIP files will report as one size & hash online, but when downloaded, will report a totally different size and hash. This is due to how the Microsoft Graph API handles AIP files and how Microsoft SharePoint (the technology behind Microsoft OneDrive for Business) serves these files via the API.
+>
+> By default these files will fail integrity checking and be deleted locally, meaning that AIP files will not reside on your platform. These AIP files will be flagged as a failed download during application operation.
+> 
+> If you chose to enable `--disable-download-validation` , the AIP files will download to your platform, however, if there are any other genuine download failures where the size and hash are different, these too will be retained locally meaning you may experience data integrity loss. This is due to the Microsoft Graph API lacking any capability to identify up-front that a file utilises AIP, thus zero capability to differentiate between AIP and non-AIP files for failure detection.
+> 
+> Please use the `--disable-download-validation` option with extreme caution and understand the risk if you enable it.
+
 ### Compatibility with curl
 If your system uses curl < 7.47.0, curl will default to HTTP/1.1 for HTTPS operations, and the client will follow suit, using HTTP/1.1.
 
@@ -164,7 +175,12 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 >          Downgrading all application operations to use HTTP/1.1 to ensure maximum operational stability.
 >          Please read https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#compatibility-with-curl for more information.
 > ```
-> If you are unable to upgrade your version of curl, you must add the following to your config file:
+>
+> The WARNING line will be sent to the GUI for notification purposes if notifications have been enabled. To avoid this message and/or the GUI notification your only have 2 options:
+> 1. Upgrade your curl version on your platform
+> 2. Configure the client to always downgrade client operations to HTTP/1.1 and use IPv4 only
+>
+> If you are unable to upgrade your version of curl, to always downgrade client operations to HTTP/1.1 you must add the following to your config file:
 > ```text
 > force_http_11 = "true"
 > ip_protocol_version = "1"
@@ -174,30 +190,33 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 > WARNING: Your curl/libcurl version (curl.version.number) has known operational bugs that impact the use of this application.
 >          Please report this to your distribution and request that they provide a newer curl version for your platform or upgrade this yourself.
 > ```
-> In both cases, the WARNING line will be sent to the GUI for notification purposes if notifications have been enabled. To avoid this message and/or the GUI notification your only path of remediation is to upgrade your curl version on your platform.
-
-> [!IMPORTANT]
-> There are significant HTTP/2 bugs in all curl versions < 8.6.x that can lead to HTTP/2 errors such as `Error in the HTTP2 framing layer on handle` or `Stream error in the HTTP/2 framing layer on handle`
 >
-> The only options to resolve this are the following:
-> 1. Upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl. Refer to [curl releases](https://curl.se/docs/releases.html) for curl version information.
-> 2. Configure the client to only use HTTP/1.1 via the config option `--force-http-11` flag or setting the configuration option `force_http_11 = "true"`
+> The WARNING line will be now only be written to application logging output, no longer sending a GUI notification message.
 
 > [!IMPORTANT]
-> It has been evidenced that curl has an internal DNS resolution bug that at random times will skip using IPv4 for DNS resolution and only uses IPv6 DNS resolution when the host system is configured to use IPv4 and IPv6 addressing.
+> Outside of the above known broken curl versions, there are significant HTTP/2 bugs in all curl versions < 8.6.x that can lead to HTTP/2 errors such as `Error in the HTTP2 framing layer on handle` or `Stream error in the HTTP/2 framing layer on handle`
+>
+> The only options to resolve this issue are the following:
+> 1. Upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl. Refer to [curl releases](https://curl.se/docs/releases.html) for curl version information.
+> 2. Configure the client to only use HTTP/1.1 via the config option `--force-http-11` flag or set the configuration file option `force_http_11 = "true"`
+
+> [!IMPORTANT]
+> Outside of the above known broken curl versions, it has also been evidenced that curl has an internal DNS resolution bug that at random times will skip using IPv4 for DNS resolution and only uses IPv6 DNS resolution when the host system is configured to use IPv4 and IPv6 addressing.
 > 
-> As a result of this curl resolution bug, if your system does not have an IPv6 DNS resolver, and/or does not have a valid IPv6 network path to Microsoft OneDrive, you may encounter these errors: 
+> As a result of this internal curl resolution bug, if your system does not have an IPv6 DNS resolver, and/or does not have a valid IPv6 network path to Microsoft OneDrive, you may encounter these errors: 
 > 
 > * `A libcurl timeout has been triggered - data transfer too slow, no DNS resolution response, no server response`
 > * `Could not connect to server on handle ABC12DEF3456`
 >
-> The only options to resolve this are the following:
+> The only options to resolve this issue are the following:
 > 1. Implement and/or ensure that IPv6 DNS resolution is possible on your system; allow IPv6 network connectivity between your system and Microsoft OneDrive
 > 2. Configure the client to only use IPv4 DNS resolution via setting the configuration option `ip_protocol_version = "1"`
 
 > [!IMPORTANT]
-> If you are using Debian 12 or Linux Mint Debian Edition (LMDE) 6, you can install curl version 8.10.1 from the respective backports repositories to address the bugs present in the default curl version.
+> If you are using Debian 12 or Linux Mint Debian Edition (LMDE) 6, you can install curl version 8.10.1 from the respective backports repositories to address the bugs present in the default Debian 12 curl version.
 
+> [!CAUTION]
+> If you continue to use a curl/libcurl version with known HTTP/2 bugs you will experience application runtime issues such as randomly exiting for zero reason or incomplete download/upload of your data.
 
 ## First Steps
 ### Authorise the Application with Your Microsoft OneDrive Account

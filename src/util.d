@@ -255,11 +255,11 @@ bool testInternetReachability(ApplicationConfig appConfig) {
 		// Check response for HTTP status code
 		if (http.statusLine.code >= 200 && http.statusLine.code < 400) {
 			addLogEntry("Successfully reached Microsoft OneDrive Login Service");
+			return true;
 		} else {
 			addLogEntry("Failed to reach Microsoft OneDrive Login Service. HTTP status code: " ~ to!string(http.statusLine.code));
-			throw new Exception("HTTP Request Failed with Status Code: " ~ to!string(http.statusLine.code));
+			return false;
 		}
-		return true;
     } catch (SocketException e) {
 		addLogEntry("Cannot connect to Microsoft OneDrive Service - Socket Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));

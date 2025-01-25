@@ -1,5 +1,5 @@
 #
-# Other allow entries
+# Allowed words not found in configured dictionaries
 #
 AADSTS
 aarch
@@ -9,6 +9,7 @@ accrightslen
 adamdruppe
 addrepo
 adr
+aip
 alex
 alpinelinux
 annobin
@@ -331,7 +332,6 @@ sargs
 sbindir
 scgi
 sdlang
-sea8cc6beffdb43d7976fbc7da445c639
 semanage
 sendfd
 setsebool
