@@ -352,6 +352,10 @@ class ApplicationConfig {
 		// GUI File Transfer and Deletion Notifications
 		boolValues["notify_file_actions"] = false;
 		
+		// Display file transfer metrics
+		// - Enable the calculation of transfer metrics (duration,speed) for the transfer of a file
+		boolValues["display_transfer_metrics"] = false;
+		
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
