@@ -21,6 +21,7 @@ Before reading this document, please ensure you are running application version 
   - [disable_notifications](#disable_notifications)
   - [disable_upload_validation](#disable_upload_validation)
   - [display_running_config](#display_running_config)
+  - [display_transfer_metrics](#display_transfer_metrics)
   - [dns_timeout](#dns_timeout)
   - [download_only](#download_only)
   - [drive_id](#drive_id)
@@ -301,6 +302,19 @@ _**Default Value:**_ False
 _**Config Example:**_ `display_running_config = "false"` or `display_running_config = "true"`
 
 _**CLI Option Use:**_ `--display-running-config`
+
+### display_transfer_metrics
+_**Description:**_ This option will display file transfer metrics when enabled.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `display_transfer_metrics = "false"` or `display_transfer_metrics = "true"`
+
+_**Output Example:**_ `Transfer Metrics -  File: path/to/file.data | Size: 35768 Bytes | Duration: 2.27 Seconds | Speed: 0.02 Mbps (approx)`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
 
 ### dns_timeout
 _**Description:**_ This setting controls the libcurl DNS cache value. By default, libcurl caches this info for 60 seconds. This libcurl DNS cache timeout is entirely speculative that a name resolves to the same address for a small amount of time into the future as libcurl does not use DNS TTL properties. We recommend users not to tamper with this option unless strictly necessary.

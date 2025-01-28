@@ -2735,7 +2735,7 @@ class SyncEngine {
 		}
 	}
 	
-	// Download new file items as identified
+	// Download new/changed file items as identified
 	void downloadOneDriveItems() {
 		// Lets deal with all the JSON items that need to be downloaded in a batch process
 		size_t batchSize = to!int(appConfig.getValueLong("threads"));
@@ -2769,6 +2769,9 @@ class SyncEngine {
 		long jsonFileSize = 0;
 		Item databaseItem;
 		bool fileFoundInDB = false;
+		
+		// Capture what time this download started
+		SysTime downloadStartTime = Clock.currTime();
 		
 		// Download item specifics
 		string downloadItemId = onedriveJSONItem["id"].str;
@@ -3112,6 +3115,10 @@ class SyncEngine {
 			if (!downloadFailed) {
 				// Download did not fail
 				addLogEntry("Downloading file: " ~ newItemPath ~ " ... done", fileTransferNotifications());
+				
+				// As no download failure, calculate transfer metrics in a consistent manner
+				displayTransferMetrics(newItemPath, jsonFileSize, downloadStartTime, Clock.currTime());
+				
 				// Save this item into the database
 				saveItem(onedriveJSONItem);
 				
@@ -4777,6 +4784,9 @@ class SyncEngine {
 		// Flag for if space is available online
 		bool spaceAvailableOnline = false;
 		
+		// Capture what time this upload started
+		SysTime uploadStartTime = Clock.currTime();
+		
 		// When we are uploading OneDrive Business Shared Files, we need to be targeting the right driveId and itemId
 		string targetDriveId;
 		string targetItemId;
@@ -4896,6 +4906,9 @@ class SyncEngine {
 		} else {
 			// Upload was successful
 			addLogEntry("Uploading modified file: " ~ localFilePath ~ " ... done", fileTransferNotifications());
+			
+			// As no upload failure, calculate transfer metrics in a consistent manner
+			displayTransferMetrics(localFilePath, thisFileSizeLocal, uploadStartTime, Clock.currTime());
 			
 			// What do we save to the DB? Is this a OneDrive Business Shared File?
 			if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
@@ -6553,8 +6566,8 @@ class SyncEngine {
 		// Create the OneDriveAPI Upload Instance
 		OneDriveApi uploadFileOneDriveApiInstance;
 		
-		// Calculate upload speed
-		auto uploadStartTime = Clock.currTime();
+		// Capture what time this upload started
+		SysTime uploadStartTime = Clock.currTime();
 		
 		// Is this a dry-run scenario?
 		if (!dryRun) {
@@ -6713,18 +6726,11 @@ class SyncEngine {
 			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
 		}
 		
-		// Upload has finished
-		auto uploadFinishTime = Clock.currTime();
-		// If no upload failure, calculate metrics, perform integrity validation
+		// If no upload failure, calculate transfer metrics, perform integrity validation
 		if (!uploadFailed) {
 			// Upload did not fail ...
-			auto uploadDuration = uploadFinishTime - uploadStartTime;
-			if (debugLogging) {
-				addLogEntry("File Size: " ~ to!string(thisFileSize) ~ " Bytes", ["debug"]);
-				addLogEntry("Upload Duration: " ~ to!string((uploadDuration.total!"msecs"/1e3)) ~ " Seconds", ["debug"]);
-				auto uploadSpeed = (thisFileSize / (uploadDuration.total!"msecs"/1e3)/ 1024 / 1024);
-				addLogEntry("Upload Speed: " ~ to!string(uploadSpeed) ~ " Mbps (approx)", ["debug"]);
-			}
+			// As no upload failure, calculate transfer metrics in a consistent manner
+			displayTransferMetrics(fileToUpload, thisFileSize, uploadStartTime, Clock.currTime());
 			
 			// OK as the upload did not fail, we need to save the response from OneDrive, but it has to be a valid JSON response
 			if (uploadResponse.type() == JSONType.object) {
@@ -10513,6 +10519,30 @@ class SyncEngine {
 		} else {
 			// Return input value as-is
 			return objectParentDriveId;
+		}
+	}
+	
+	// Calculate the transfer metrics for the file to aid in performance discussions when they are raised
+	void displayTransferMetrics(string fileTransfered, long transferedBytes, SysTime transferStartTime, SysTime transferEndTime) {
+	
+		// We only calculate this if 'display_transfer_metrics' is enabled or we are doing debug logging
+		if (appConfig.getValueBool("display_transfer_metrics") || debugLogging) {
+	
+			// Calculations must be done on files > 0 transferedBytes
+			if (transferedBytes > 0) {
+				// Calculate transfer metrics
+				auto transferDuration = transferEndTime - transferStartTime;
+				double transferDurationAsSeconds = (transferDuration.total!"msecs"/1e3); // msec --> seconds
+				double transferSpeedAsMbps = ((transferedBytes / transferDurationAsSeconds) / 1024 / 1024); // bytes --> Mbps
+				
+				// Output the transfer metrics
+				string transferMetrics = format("File: %s | Size: %d Bytes | Duration: %.2f Seconds | Speed: %.2f Mbps (approx)", fileTransfered, transferedBytes, transferDurationAsSeconds, transferSpeedAsMbps);
+				addLogEntry("Transfer Metrics -  " ~ transferMetrics);
+				
+			} else {
+				// Zero bytes - not applicable
+				addLogEntry("Transfer Metrics -  N/A (Zero Byte File)");
+			}
 		}
 	}
 }
