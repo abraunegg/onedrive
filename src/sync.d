@@ -10523,20 +10523,20 @@ class SyncEngine {
 	}
 	
 	// Calculate the transfer metrics for the file to aid in performance discussions when they are raised
-	void displayTransferMetrics(string fileTransfered, long transferedBytes, SysTime transferStartTime, SysTime transferEndTime) {
+	void displayTransferMetrics(string fileTransferred, long transferredBytes, SysTime transferStartTime, SysTime transferEndTime) {
 	
 		// We only calculate this if 'display_transfer_metrics' is enabled or we are doing debug logging
 		if (appConfig.getValueBool("display_transfer_metrics") || debugLogging) {
 	
-			// Calculations must be done on files > 0 transferedBytes
-			if (transferedBytes > 0) {
+			// Calculations must be done on files > 0 transferredBytes
+			if (transferredBytes > 0) {
 				// Calculate transfer metrics
 				auto transferDuration = transferEndTime - transferStartTime;
 				double transferDurationAsSeconds = (transferDuration.total!"msecs"/1e3); // msec --> seconds
-				double transferSpeedAsMbps = ((transferedBytes / transferDurationAsSeconds) / 1024 / 1024); // bytes --> Mbps
+				double transferSpeedAsMbps = ((transferredBytes / transferDurationAsSeconds) / 1024 / 1024); // bytes --> Mbps
 				
 				// Output the transfer metrics
-				string transferMetrics = format("File: %s | Size: %d Bytes | Duration: %.2f Seconds | Speed: %.2f Mbps (approx)", fileTransfered, transferedBytes, transferDurationAsSeconds, transferSpeedAsMbps);
+				string transferMetrics = format("File: %s | Size: %d Bytes | Duration: %.2f Seconds | Speed: %.2f Mbps (approx)", fileTransferred, transferredBytes, transferDurationAsSeconds, transferSpeedAsMbps);
 				addLogEntry("Transfer Metrics -  " ~ transferMetrics);
 				
 			} else {
