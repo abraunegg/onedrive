@@ -2530,7 +2530,7 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// Due to this function, we need to keep the 'return' codeas-is, so that this function operates as efficently as possible.
+		// Due to this function, we need to keep the 'return' code as-is, so that this function operates as efficiently as possible.
 		// Whilst this means some extra code / duplication in this function, it cannot be helped
 			
 		// The JSON and Database items being passed in here have passed the following checks:
@@ -2817,7 +2817,7 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// Due to this function, we need to keep the return code, so that this function operates as efficently as possible.
+		// Due to this function, we need to keep the return code, so that this function operates as efficiently as possible.
 		// Whilst this means some extra code / duplication in this function, it cannot be helped
 	
 		// Detail what we are doing
@@ -3595,7 +3595,7 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// Due to this function, we need to keep the return <bool value>; code, so that this function operates as efficently as possible.
+		// Due to this function, we need to keep the return <bool value>; code, so that this function operates as efficiently as possible.
 		// It is pointless having the entire code run through and performing additional needless checks where it is not required
 		// Whilst this means some extra code / duplication in this function, it cannot be helped
 		
@@ -3960,7 +3960,7 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// Due to this function, we need to keep the return <bool value>; code, so that this function operates as efficently as possible.
+		// Due to this function, we need to keep the return <bool value>; code, so that this function operates as efficiently as possible.
 		// It is pointless having the entire code run through and performing additional needless checks where it is not required
 		// Whilst this means some extra code / duplication in this function, it cannot be helped
 		
@@ -4415,7 +4415,7 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// Due to this function, we need to keep the return <bool value>; code, so that this function operates as efficently as possible.
+		// Due to this function, we need to keep the return <bool value>; code, so that this function operates as efficiently as possible.
 		// It is pointless having the entire code run through and performing additional needless checks where it is not required
 		// Whilst this means some extra code / duplication in this function, it cannot be helped
 			
@@ -11014,7 +11014,7 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// Due to this function, we need to keep the return <bool value>; code, so that this function operates as efficently as possible.
+		// Due to this function, we need to keep the return <bool value>; code, so that this function operates as efficiently as possible.
 		// It is pointless having the entire code run through and performing additional needless checks where it is not required
 		// Whilst this means some extra code / duplication in this function, it cannot be helped
 		
@@ -12412,7 +12412,7 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// Due to this function, we need to keep the return <string value>; code, so that this function operates as efficently as possible.
+		// Due to this function, we need to keep the return <string value>; code, so that this function operates as efficiently as possible.
 		// Whilst this means some extra code / duplication in this function, it cannot be helped
 	
 		// OneDrive Personal Account driveId and remoteDriveId length check
