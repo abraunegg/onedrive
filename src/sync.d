@@ -341,6 +341,17 @@ class SyncEngine {
 	
 	// Initialise the Sync Engine class
 	bool initialise() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		// Control whether the worker threads are daemon threads. A daemon thread is automatically terminated when all non-daemon threads have terminated.
 		processPool.isDaemon(true); // daemon thread
 		
@@ -454,17 +465,53 @@ class SyncEngine {
 		
 		// API was initialised
 		if (verboseLogging) {addLogEntry("Sync Engine Initialised with new Onedrive API instance", ["verbose"]);}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// return required value
 		return true;
 	}
 	
 	// Shutdown the sync engine, wait for anything in processPool to complete
 	void shutdown() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+
 		if (debugLogging) {addLogEntry("SyncEngine: Waiting for all internal threads to complete", ["debug"]);}
 		shutdownProcessPool();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}	
 	}
 	
 	// Shut down all running tasks that are potentially running in parallel
 	void shutdownProcessPool() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// TaskPool needs specific shutdown based on compiler version otherwise this causes a segfault
 		if (processPool.size > 0) {
 			// TaskPool is still configured for 'thread' size
@@ -473,10 +520,26 @@ class SyncEngine {
 			// All worker threads are daemon threads which are automatically terminated when all non-daemon threads have terminated.
 			processPool.finish(true); // If blocking argument is true, wait for all worker threads to terminate before returning.
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 		
 	// Get Default Drive Details for this Account
 	void getDefaultDriveDetails() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// Function variables
 		JSONValue defaultOneDriveDriveDetails;
@@ -499,8 +562,7 @@ class SyncEngine {
 			defaultOneDriveDriveDetails = getDefaultDriveApiInstance.getDefaultDriveDetails();
 		} catch (OneDriveException exception) {
 			if (debugLogging) {addLogEntry("defaultOneDriveDriveDetails = getDefaultDriveApiInstance.getDefaultDriveDetails() generated a OneDriveException", ["debug"]);}
-			string thisFunctionName = getFunctionName!({});
-			
+						
 			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
 				// Handle the 400 | 401 error
 				handleClientUnauthorised(exception.httpStatusCode, exception.error);
@@ -508,7 +570,7 @@ class SyncEngine {
 				// Default operation if not 400,401 errors
 				// - 408,429,503,504 errors are handled as a retry within getDefaultDriveApiInstance
 				// Display what the error is
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 			}
 		}
 		
@@ -607,10 +669,26 @@ class SyncEngine {
 		getDefaultDriveApiInstance = null;
 		// Perform Garbage Collection
 		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Get Default Root Details for this Account
 	void getDefaultRootDetails() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// Function variables
 		JSONValue defaultOneDriveRootDetails;
@@ -633,8 +711,7 @@ class SyncEngine {
 			defaultOneDriveRootDetails = getDefaultRootApiInstance.getDefaultRootDetails();
 		} catch (OneDriveException exception) {
 			if (debugLogging) {addLogEntry("defaultOneDriveRootDetails = getDefaultRootApiInstance.getDefaultRootDetails() generated a OneDriveException", ["debug"]);}
-			string thisFunctionName = getFunctionName!({});
-
+			
 			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
 				// Handle the 400 | 401 error
 				handleClientUnauthorised(exception.httpStatusCode, exception.error);
@@ -642,7 +719,7 @@ class SyncEngine {
 				// Default operation if not 400,401 errors
 				// - 408,429,503,504 errors are handled as a retry within getDefaultRootApiInstance
 				// Display what the error is
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 			}
 		}
 		
@@ -667,10 +744,27 @@ class SyncEngine {
 		getDefaultRootApiInstance = null;
 		// Perform Garbage Collection
 		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Reset syncFailures to false based on file activity
 	void resetSyncFailures() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// Log initial status and any non-empty arrays
 		string logMessage = "Evaluating reset of syncFailures: ";
 		if (fileDownloadFailures.length > 0) {
@@ -695,6 +789,12 @@ class SyncEngine {
 
 		// Log the final decision and conditions
 		if (debugLogging) {addLogEntry(logMessage, ["debug"]);}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Perform a sync of the OneDrive Account
@@ -705,6 +805,16 @@ class SyncEngine {
 	// - Detail any files that we failed to download
 	// - Process any deletes (remove local data)
 	void syncOneDriveAccountToLocalDisk() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		// performFullScanTrueUp value
 		if (debugLogging) {addLogEntry("Perform a Full Scan True-Up: " ~ to!string(appConfig.fullScanTrueUpRequired), ["debug"]);}
@@ -852,10 +962,28 @@ class SyncEngine {
 				}
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Cleanup arrays when used in --monitor loops
 	void cleanupArrays() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Debug what we are doing
 		if (debugLogging) {addLogEntry("Cleaning up all internal arrays used when processing data", ["debug"]);}
 		
 		// Multi Dimensional Arrays
@@ -883,11 +1011,27 @@ class SyncEngine {
 		// Perform Garbage Collection on this destroyed curl engine
 		GC.collect();
 		if (debugLogging) {addLogEntry("Cleaning of internal arrays complete", ["debug"]);}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Configure singleDirectoryScope = true if this function is called
 	// By default, singleDirectoryScope = false
 	void setSingleDirectoryScope(string normalisedSingleDirectoryPath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// Function variables
 		Item searchItem;
@@ -947,10 +1091,26 @@ class SyncEngine {
 			addLogEntry();
 			forceExit();
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Query OneDrive API for /delta changes and iterate through items online
 	void fetchOneDriveDeltaAPIResponse(string driveIdToQuery = null, string itemIdToQuery = null, string sharedFolderName = null) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 				
 		string deltaLink = null;
 		string currentDeltaLink = null;
@@ -1417,10 +1577,26 @@ class SyncEngine {
 			// Add this driveId to the drive cache
 			addOrUpdateOneDriveOnlineDetails(driveIdToQuery);
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Process the /delta API JSON response items
 	void processDeltaJSONItem(JSONValue onedriveJSONItem, long nrChanges, int changeCount, long responseBundleCount, bool singleDirectoryScope) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// Variables for this JSON item
 		string thisItemId;
@@ -1603,10 +1779,26 @@ class SyncEngine {
 			Duration jsonProcessingElapsedTime = MonoTime.currTime() - jsonProcessingStartTime;
 			addLogEntry("Initial JSON item processing time: " ~ to!string(jsonProcessingElapsedTime), ["debug"]);
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Process 'root' and 'deleted' OneDrive JSON items
 	void processRootAndDeletedJSONItems(JSONValue onedriveJSONItem, string driveId, bool handleItemAsRootObject, bool itemIsDeletedOnline, bool itemHasParentReferenceId) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// Use the JSON elements rather can computing a DB struct via makeItem()
 		string thisItemId = onedriveJSONItem["id"].str;
@@ -1660,10 +1852,26 @@ class SyncEngine {
 				skippedItems.insert(thisItemId);
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Process each of the elements contained in jsonItemsToProcess[]
 	void processJSONItemsInBatch(JSONValue[] array, long batchGroup, long batchCount) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		long batchElementCount = array.length;
 		MonoTime jsonProcessingStartTime;
@@ -2177,10 +2385,26 @@ class SyncEngine {
 			// Tracking as to if this item was processed
 			processedCount++;
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Perform the download of any required objects in parallel
 	void processDownloadActivities() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 			
 		// Are there any items to delete locally? Cleanup space locally first
 		if (!idsToDelete.empty) {
@@ -2230,29 +2454,84 @@ class SyncEngine {
 			// Now that the DB is updated, when we perform the last examination of the most recent online data, cache this so this can be obtained this from memory
 			cacheLatestDeltaLink(deltaLinkInfo, deltaLinkCache.driveId, deltaLinkCache.latestDeltaLink);		
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Function to add or update a key pair in the deltaLinkInfo array
 	void cacheLatestDeltaLink(ref DeltaLinkInfo deltaLinkInfo, string driveId, string latestDeltaLink) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		if (driveId !in deltaLinkInfo) {
 			if (debugLogging) {addLogEntry("Added new latestDeltaLink entry: " ~ driveId ~ " -> " ~ latestDeltaLink, ["debug"]);}
 		} else {
 			if (debugLogging) {addLogEntry("Updated latestDeltaLink entry for " ~ driveId ~ " from " ~ deltaLinkInfo[driveId] ~ " to " ~ latestDeltaLink, ["debug"]);}
 		}
 		deltaLinkInfo[driveId] = latestDeltaLink;
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Function to get the latestDeltaLink based on driveId
 	string getDeltaLinkFromCache(ref DeltaLinkInfo deltaLinkInfo, string driveId) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		string cachedDeltaLink;
 		if (driveId in deltaLinkInfo) {
 			cachedDeltaLink = deltaLinkInfo[driveId];
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// return value
 		return cachedDeltaLink;
 	}
 	
 	// If the JSON item is not in the database, it is potentially a new item that we need to action
 	void applyPotentiallyNewLocalItem(Item newDatabaseItem, JSONValue onedriveJSONItem, string newItemPath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Due to this function, we need to keep the 'return' codeas-is, so that this function operates as efficently as possible.
+		// Whilst this means some extra code / duplication in this function, it cannot be helped
 			
 		// The JSON and Database items being passed in here have passed the following checks:
 		// - skip_file
@@ -2273,6 +2552,14 @@ class SyncEngine {
 					// reading the symbolic link failed	
 					if (debugLogging) {addLogEntry("Reading the symbolic link target failed ........ ", ["debug"]);}
 					addLogEntry("Skipping item - invalid symbolic link: " ~ newItemPath, ["info", "notify"]);
+					
+					// Display function processing time if configured to do so
+					if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+						// Combine module name & running Function
+						displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+					}
+					
+					// return - invalid symbolic link
 					return;
 				}
 			}
@@ -2299,6 +2586,12 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("The 'newDatabaseItem' (applyPotentiallyNewLocalItem) is a remote item type - we need to create all of the associated database tie records for this database entry" , ["debug"]);}
 					// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 					createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
+				}
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 				}
 				
 				// all done processing this potential new local item
@@ -2341,6 +2634,13 @@ class SyncEngine {
 							if (verboseLogging) {addLogEntry("Local file modified time is newer based on UTC time conversion - keeping local file as this exists in the local database", ["verbose"]);}
 							if (debugLogging) {addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time being newer than OneDrive file and present in the sqlite database", ["debug"]);}
 						}
+						
+						// Display function processing time if configured to do so
+						if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+							// Combine module name & running Function
+							displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+						}
+						
 						// Return as no further action needed
 						return;
 					} else {
@@ -2386,6 +2686,14 @@ class SyncEngine {
 						
 						// Add item to database
 						itemDB.upsert(newDatabaseItem);
+						
+						// Display function processing time if configured to do so
+						if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+							// Combine module name & running Function
+							displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+						}
+						
+						// everything all OK, DB updated
 						return;
 					}
 				}
@@ -2398,11 +2706,13 @@ class SyncEngine {
 			case ItemType.file:
 				// Add to the file to the download array for processing later
 				fileJSONItemsToDownload ~= onedriveJSONItem;
-				break;
+				goto functionCompletion;
+				
 			case ItemType.dir:
 				// Create the directory immediately as we depend on its entry existing
 				handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
-				break;
+				goto functionCompletion;
+				
 			case ItemType.remote:
 				// Add to the directory and relevant details for processing later
 				if (newDatabaseItem.remoteType == ItemType.dir) {
@@ -2411,17 +2721,37 @@ class SyncEngine {
 					// Add to the file to the download array for processing later
 					fileJSONItemsToDownload ~= onedriveJSONItem;
 				}
-				break;
+				goto functionCompletion;
+				
 			case ItemType.root:
 			case ItemType.unknown:
 			case ItemType.none:
 				// Unknown type - we dont action or sync these items
-				break;
+				goto functionCompletion;
 		}
+		
+		// To correctly handle a switch|case statement we use goto post the switch|case statement as if 'break' is used, we never get to this point
+		functionCompletion:
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
 	}
 	
 	// Handle the creation of a new local directory
 	void handleLocalDirectoryCreation(Item newDatabaseItem, string newItemPath, JSONValue onedriveJSONItem) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// To create a path, 'newItemPath' must not be empty
 		if (!newItemPath.empty) {
 			// Update the logging output to be consistent
@@ -2447,7 +2777,7 @@ class SyncEngine {
 					saveDatabaseItem(newDatabaseItem);
 				} catch (FileException e) {
 					// display the error message
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName);
 				}
 			} else {
 				// we dont create the directory, but we need to track that we 'faked it'
@@ -2466,10 +2796,30 @@ class SyncEngine {
 				createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Create 'root' DB Tie Record and 'Shared Folder' DB Record in a consistent manner
 	void createRequiredSharedFolderDatabaseRecords(JSONValue onedriveJSONItem) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Due to this function, we need to keep the return code, so that this function operates as efficently as possible.
+		// Whilst this means some extra code / duplication in this function, it cannot be helped
+	
 		// Detail what we are doing
 		if (debugLogging) {addLogEntry("We have been requested to create 'root' and 'Shared Folder' DB Tie Records in a consistent manner" , ["debug"]);}
 		
@@ -2479,6 +2829,9 @@ class SyncEngine {
 		OneDriveApi onlineParentOneDriveApiInstance;
 		onlineParentOneDriveApiInstance = new OneDriveApi(appConfig);
 		onlineParentOneDriveApiInstance.initialise();
+		
+		// Using the onlineParentData JSON data make a DB record for this parent item so that it exists in the database
+		Item sharedFolderDatabaseTie;
 		
 		// What account type is this? This needs to be configured correctly so this can be queried correctly
 		if (appConfig.accountType == "personal") {
@@ -2511,18 +2864,32 @@ class SyncEngine {
 				onlineParentOneDriveApiInstance = null;
 				// Perform Garbage Collection
 				GC.collect();
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
 				// we have to return at this point
 				return;
 			} else {
 				// Catch all other errors
 				// Display what the error is
 				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				onlineParentOneDriveApiInstance.releaseCurlEngine();
 				onlineParentOneDriveApiInstance = null;
 				// Perform Garbage Collection
 				GC.collect();
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
 				// If we get an error, we cannot do much else
 				return;
 			}
@@ -2534,9 +2901,6 @@ class SyncEngine {
 		
 		if (debugLogging) {addLogEntry("Creating the Shared Folder DB Tie Record that binds the 'root' record to the 'folder'" , ["debug"]);}
 		
-		// Using the onlineParentData JSON data make a DB record for this parent item so that it exists in the database
-		Item sharedFolderDatabaseTie;
-				
 		// Make an item from the online JSON data
 		sharedFolderDatabaseTie = makeItem(onlineParentData);
 		// Ensure we use our online name, as we may have renamed the folder in our location
@@ -2595,10 +2959,27 @@ class SyncEngine {
 		onlineParentOneDriveApiInstance = null;
 		// Perform Garbage Collection
 		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}		
 	}
 	
 	// If the JSON item IS in the database, this will be an update to an existing in-sync item
 	void applyPotentiallyChangedItem(Item existingDatabaseItem, string existingItemPath, Item changedOneDriveItem, string changedItemPath, JSONValue onedriveJSONItem) {
+	
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 				
 		// If we are moving the item, we do not need to download it again
 		bool itemWasMoved = false;
@@ -2671,7 +3052,7 @@ class SyncEngine {
 					}
 				} catch (FileException e) {
 					// display the error message
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName);
 				}
 			}
 			
@@ -2733,10 +3114,27 @@ class SyncEngine {
 				itemDB.upsert(changedOneDriveItem);
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Download new/changed file items as identified
 	void downloadOneDriveItems() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		// Lets deal with all the JSON items that need to be downloaded in a batch process
 		size_t batchSize = to!int(appConfig.getValueLong("threads"));
 		long batchCount = (fileJSONItemsToDownload.length + batchSize - 1) / batchSize;
@@ -2749,20 +3147,54 @@ class SyncEngine {
 		
 		// For this set of items, perform a DB PASSIVE checkpoint
 		itemDB.performCheckpoint("PASSIVE");
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Download items in parallel
 	void downloadOneDriveItemsInParallel(JSONValue[] array) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// This function received an array of JSON items to download, the number of elements based on appConfig.getValueLong("threads")
 		foreach (i, onedriveJSONItem; processPool.parallel(array)) {
 			// Take each JSON item and 
 			downloadFileItem(onedriveJSONItem);
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Perform the actual download of an object from OneDrive
 	void downloadFileItem(JSONValue onedriveJSONItem, bool ignoreDataPreservationCheck = false) {
-				
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Function variables		
 		bool downloadFailed = false;
 		string OneDriveFileXORHash;
 		string OneDriveFileSHA256Hash;
@@ -2896,7 +3328,6 @@ class SyncEngine {
 						
 					} catch (OneDriveException exception) {
 						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize); generated a OneDriveException", ["debug"]);}
-						string thisFunctionName = getFunctionName!({});
 						
 						// HTTP request returned status code 403
 						if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
@@ -2907,17 +3338,17 @@ class SyncEngine {
 							// Default operation if not a 403 error
 							// - 408,429,503,504 errors are handled as a retry within downloadFileOneDriveApiInstance
 							// Display what the error is
-							displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 						}
 					} catch (FileException e) {
 						// There was a file system error
 						// display the error message
-						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+						displayFileSystemErrorMessage(e.msg, thisFunctionName);
 						downloadFailed = true;
 					} catch (ErrnoException e) {
 						// There was a file system error
 						// display the error message
-						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+						displayFileSystemErrorMessage(e.msg, thisFunctionName);
 						downloadFailed = true;
 					}
 				
@@ -3143,11 +3574,42 @@ class SyncEngine {
 				}
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Test if the given item is in-sync. Returns true if the given item corresponds to the local one
 	bool isItemSynced(Item item, string path, string itemSource) {
-		if (!exists(path)) return false;
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Due to this function, we need to keep the return <bool value>; code, so that this function operates as efficently as possible.
+		// It is pointless having the entire code run through and performing additional needless checks where it is not required
+		// Whilst this means some extra code / duplication in this function, it cannot be helped
+		
+		if (!exists(path)) {
+			if (debugLogging) {addLogEntry("Unable to determine the sync state of this file as it does not exist: " ~ path, ["debug"]);}
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+
+			return false;
+		}
 
 		// Combine common logic for readability and file check into a single block
 		if (item.type == ItemType.file || ((item.type == ItemType.remote) && (item.remoteType == ItemType.file))) {
@@ -3155,6 +3617,13 @@ class SyncEngine {
 			if (!readLocalFile(path)) {
 				// Unable to read local file
 				addLogEntry("Unable to determine the sync state of this file as it cannot be read (file permissions or file corruption): " ~ path);
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
 				return false;
 			}
 			
@@ -3166,6 +3635,13 @@ class SyncEngine {
 			itemModifiedTime.fracSecs = Duration.zero;
 
 			if (localModifiedTime == itemModifiedTime) {
+			
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+			
 				return true;
 			} else {
 				// The file has a different timestamp ... is the hash the same meaning no file modification?
@@ -3217,25 +3693,63 @@ class SyncEngine {
 						// Fix the timestamp, logging and error handling done within function
 						setPathTimestamp(dryRun, path, item.mtime);
 					}
+					
+					// Display function processing time if configured to do so
+					if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+						// Combine module name & running Function
+						displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+					}
+					
 					return false;
 				} else {
 					// The hash is different so the content of the file has to be different as to what is stored online
 					if (verboseLogging) {addLogEntry("The local file has a different hash when compared to " ~ itemSource ~ " file hash", ["verbose"]);}
+					
+					// Display function processing time if configured to do so
+					if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+						// Combine module name & running Function
+						displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+					}
+					
 					return false;
 				}
 			}
 		} else if (item.type == ItemType.dir || ((item.type == ItemType.remote) && (item.remoteType == ItemType.dir))) {
 			// item is a directory
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			
 			return true;
 		} else {
 			// ItemType.unknown or ItemType.none
 			// Logically, we might not want to sync these items, but a more nuanced approach may be needed based on application context
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			
 			return true;
 		}
 	}
 	
 	// Get the /delta data using the provided details
 	JSONValue getDeltaChangesByItemId(string selectedDriveId, string selectedItemId, string providedDeltaLink, OneDriveApi getDeltaQueryOneDriveApiInstance) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 			
 		// Function variables
 		JSONValue deltaChangesBundle;
@@ -3255,8 +3769,8 @@ class SyncEngine {
 			// caught an exception
 			if (debugLogging) {addLogEntry("getDeltaQueryOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink) generated a OneDriveException", ["debug"]);}
 			
+			// get the error message
 			auto errorArray = splitLines(exception.msg);
-			string thisFunctionName = getFunctionName!({});
 			
 			// Error handling operation if not 408,429,503,504 errors
 			// - 408,429,503,504 errors are handled as a retry within getDeltaQueryOneDriveApiInstance
@@ -3280,6 +3794,12 @@ class SyncEngine {
 			}
 		}
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// Return data
 		return deltaChangesBundle;
 	}
@@ -3293,14 +3813,27 @@ class SyncEngine {
 	
 	// Handle an unhandled API error
 	void defaultUnhandledHTTPErrorCode(OneDriveException exception) {
+		// compute function name
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
 		// display error
-		displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+		displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 		// Must force exit here, allow logging to be done
 		forceExit();
 	}
 	
 	// Display the pertinent details of the sync engine
 	void displaySyncEngineDetails() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
 		addLogEntry("Application Version:  " ~ appConfig.applicationVersion, ["verbose"]);
 		addLogEntry("Account Type:         " ~ appConfig.accountType, ["verbose"]);
@@ -3323,11 +3856,28 @@ class SyncEngine {
 				addLogEntry("Remaining Free Space: Not Available", ["verbose"]);
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Query itemdb.computePath() and catch potential assert when DB consistency issue occurs
 	// This function returns what that local physical path should be on the local disk
 	string computeItemPath(string thisDriveId, string thisItemId) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// static declare this for this function
 		static import core.exception;
 		string calculatedPath;
@@ -3387,24 +3937,79 @@ class SyncEngine {
 			calculatedPath = initialCalculatedPath;
 		}
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// return calculated path as string
 		return calculatedPath;
 	}
 	
 	// Try and compute the file hash for the given item
 	bool testFileHash(string path, Item item) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Due to this function, we need to keep the return <bool value>; code, so that this function operates as efficently as possible.
+		// It is pointless having the entire code run through and performing additional needless checks where it is not required
+		// Whilst this means some extra code / duplication in this function, it cannot be helped
 		
 		// Generate QuickXORHash first before attempting to generate any other type of hash
 		if (item.quickXorHash) {
-			if (item.quickXorHash == computeQuickXorHash(path)) return true;
+			if (item.quickXorHash == computeQuickXorHash(path)) {
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+			
+				return true;
+			}
 		} else if (item.sha256Hash) {
-			if (item.sha256Hash == computeSHA256Hash(path)) return true;
+			if (item.sha256Hash == computeSHA256Hash(path)) {
+			
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+			
+				return true;
+			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		return false;
 	}
 	
 	// Process items that need to be removed
 	void processDeleteItems() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		foreach_reverse (i; idsToDelete) {
 			Item item;
@@ -3476,7 +4081,7 @@ class SyncEngine {
 							rmdirRecurse(path);
 						} catch (FileException e) {
 							// display the error message
-							displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+							displayFileSystemErrorMessage(e.msg, thisFunctionName);
 						}
 					}
 				}
@@ -3487,10 +4092,27 @@ class SyncEngine {
 			// Cleanup array memory
 			idsToDelete = [];
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// List items that were deleted online, but, due to --download-only being used, will not be deleted locally
 	void listDeletedItems() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		// For each id in the idsToDelete array
 		foreach_reverse (i; idsToDelete) {
 			Item item;
@@ -3508,10 +4130,26 @@ class SyncEngine {
 				}
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Update the timestamp of an object online
 	void uploadLastModifiedTime(Item originItem, string driveId, string id, SysTime mtime, string eTag) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		string itemModifiedTime;
 		itemModifiedTime = mtime.toISOExtString();
@@ -3562,7 +4200,6 @@ class SyncEngine {
 				saveItem(response);
 			} 
 		} catch (OneDriveException exception) {
-			string thisFunctionName = getFunctionName!({});
 			// Handle a 409 - ETag does not match current item's value
 			// Handle a 412 - A precondition provided in the request (such as an if-match header) does not match the resource's current state.
 			if ((exception.httpStatusCode == 409) || (exception.httpStatusCode == 412)) {
@@ -3591,7 +4228,7 @@ class SyncEngine {
 				// Any other error that should be handled
 				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 				// Display what the error is
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 			}
 			
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -3600,10 +4237,26 @@ class SyncEngine {
 			// Perform Garbage Collection
 			GC.collect();
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Perform a database integrity check - checking all the items that are in-sync at the moment, validating what we know should be on disk, to what is actually on disk
 	void performDatabaseConsistencyAndIntegrityCheck() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// Log what we are doing
 		if (!appConfig.suppressLoggingOutput) {
@@ -3741,10 +4394,30 @@ class SyncEngine {
 				databaseItemsWhereContentHasChanged = [];
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Check this Database Item for its consistency on disk
 	void checkDatabaseItemForConsistency(Item dbItem) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Due to this function, we need to keep the return <bool value>; code, so that this function operates as efficently as possible.
+		// It is pointless having the entire code run through and performing additional needless checks where it is not required
+		// Whilst this means some extra code / duplication in this function, it cannot be helped
 			
 		// What is the local path item
 		string localFilePath;
@@ -3753,6 +4426,13 @@ class SyncEngine {
 		
 		// Remote directory items we can 'skip'
 		if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.dir)) {
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			
 			// return .. nothing to check here, no logging needed
 			return;
 		}
@@ -3784,25 +4464,46 @@ class SyncEngine {
 		case ItemType.file:
 			// Logging output result is handled by checkFileDatabaseItemForConsistency
 			checkFileDatabaseItemForConsistency(dbItem, localFilePath);
-			break;
+			goto functionCompletion;
+			
 		case ItemType.dir, ItemType.root:
 			// Logging output result is handled by checkDirectoryDatabaseItemForConsistency
 			checkDirectoryDatabaseItemForConsistency(dbItem, localFilePath);
-			break;
+			goto functionCompletion;
+			
 		case ItemType.remote:
 			// DB items that match: dbItem.remoteType == ItemType.dir - these should have been skipped above
 			// This means that anything that hits here should be: dbItem.remoteType == ItemType.file
 			checkFileDatabaseItemForConsistency(dbItem, localFilePath);
-			break;
+			goto functionCompletion;
+			
 		case ItemType.unknown:
 		case ItemType.none:
 			// Unknown type - we dont action these items
-			break;
+			goto functionCompletion;
 		}
+		
+		// To correctly handle a switch|case statement we use goto post the switch|case statement as if 'break' is used, we never get to this point
+		functionCompletion:
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
 	}
 	
 	// Perform the database consistency check on this file item
 	void checkFileDatabaseItemForConsistency(Item dbItem, string localFilePath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// What is the source of this item data?
 		string itemSource = "database";
@@ -3917,10 +4618,26 @@ class SyncEngine {
 				}
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Perform the database consistency check on this directory item
 	void checkDirectoryDatabaseItemForConsistency(Item dbItem, string localFilePath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 			
 		// What is the source of this item data?
 		string itemSource = "database";
@@ -3950,7 +4667,7 @@ class SyncEngine {
 				}
 			} catch (FileException e) {
 				// display the error message
-				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				displayFileSystemErrorMessage(e.msg, thisFunctionName);
 			}
 		} else {
 			// Directory does not exist locally, but it is in our database as a dbItem containing all the data was passed into this function
@@ -3999,10 +4716,26 @@ class SyncEngine {
 				}
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Does this local path (directory or file) conform with the Microsoft Naming Restrictions? It needs to conform otherwise we cannot create the directory or upload the file.
 	bool checkPathAgainstMicrosoftNamingRestrictions(string localFilePath, string logModifier = "item") {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 			
 		// Check if the given path violates certain Microsoft restrictions and limitations
 		// Return a true|false response
@@ -4048,12 +4781,28 @@ class SyncEngine {
 			}
 		}
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// Return if this is a valid path
 		return invalidPath;
 	}
 	
 	// Does this local path (directory or file) get excluded from any operation based on any client side filtering rules?
 	bool checkPathAgainstClientSideFiltering(string localFilePath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// Check the path against client side filtering rules
 		// - check_nosync
@@ -4213,12 +4962,29 @@ class SyncEngine {
 			}
 		}
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// return if path is excluded
 		return clientSideRuleExcludesPath;
 	}
 	
 	// Does this JSON item (as received from OneDrive API) get excluded from any operation based on any client side filtering rules?
 	// This function is used when we are fetching objects from the OneDrive API using a /children query to help speed up what object we query or when checking OneDrive Business Shared Files
 	bool checkJSONAgainstClientSideFiltering(JSONValue onedriveJSONItem) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 			
 		bool clientSideRuleExcludesPath = false;
 		
@@ -4613,12 +5379,29 @@ class SyncEngine {
 			}
 		}
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// return if path is excluded
 		return clientSideRuleExcludesPath;
 	}
 	
 	// Ensure the path passed in, is in the correct format to use when evaluating 'sync_list' rules
 	string ensureStartsWithDotSlash(string inputPath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		// Check if the path starts with './'
 		if (inputPath.startsWith("./")) {
 			return inputPath; // No modification needed
@@ -4629,12 +5412,28 @@ class SyncEngine {
 			return "." ~ inputPath; // Prepend '.' to ensure it starts with './'
 		}
 
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// If the path starts with any other character or is missing './', add './'
 		return "./" ~ inputPath;
 	}
 	
 	// When using 'sync_list' if a file is to be included, ensure that the path that the file resides in, is available locally and in the database, and the path exists locally
 	void createLocalPathStructure(JSONValue onedriveJSONItem, string newLocalParentalPath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		// Function variables
 		bool parentInDatabase;
@@ -4674,7 +5473,7 @@ class SyncEngine {
 				} catch (OneDriveException exception) {
 					// Display what the error is
 					// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
 				
 				// Does this JSON match the root name of a shared folder we may be trying to match?
@@ -4733,10 +5532,26 @@ class SyncEngine {
 		onlinePathOneDriveApiInstance = null;
 		// Perform Garbage Collection
 		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Process the list of local changes to upload to OneDrive
 	void processChangedLocalItemsToUpload() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// Each element in this array 'databaseItemsWhereContentHasChanged' is an Database Item ID that has been modified locally
 		size_t batchSize = to!int(appConfig.getValueLong("threads"));
@@ -4750,20 +5565,53 @@ class SyncEngine {
 		
 		// For this set of items, perform a DB PASSIVE checkpoint
 		itemDB.performCheckpoint("PASSIVE");
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 
 	// Process all the changed local items in parallel
 	void processChangedLocalItemsToUploadInParallel(string[3][] array) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+
 		// This function received an array of string items to upload, the number of elements based on appConfig.getValueLong("threads")
 		foreach (i, localItemDetails; processPool.parallel(array)) {
 			if (debugLogging) {addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);}
 			uploadChangedLocalFileToOneDrive(localItemDetails);
 			if (debugLogging) {addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Upload changed local files to OneDrive in parallel
 	void uploadChangedLocalFileToOneDrive(string[3] localItemDetails) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// These are the details of the item we need to upload
 		string changedItemParentId = localItemDetails[0];
@@ -4992,11 +5840,26 @@ class SyncEngine {
 				}
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
-	
 	
 	// Perform the upload of a locally modified file to OneDrive
 	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 			
 		// Function variables
 		JSONValue uploadResponse;
@@ -5039,7 +5902,7 @@ class SyncEngine {
 			} catch (OneDriveException exception) {
 				// Display what the error is
 				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 			}
 			
 			// Was a valid JSON response provided?
@@ -5117,8 +5980,6 @@ class SyncEngine {
 				try {
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUploadReplace(localFilePath, targetDriveId, targetItemId);
 				} catch (OneDriveException exception) {
-					// Function name
-					string thisFunctionName = getFunctionName!({});
 					// HTTP request returned status code 403
 					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
 						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
@@ -5138,7 +5999,7 @@ class SyncEngine {
 					}
 				} catch (FileException e) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName);
 				}
 			} else {
 				// As this is a unique thread, the sessionFilePath for where we save the data needs to be unique
@@ -5150,9 +6011,6 @@ class SyncEngine {
 					// create the session
 					uploadSessionData = createSessionForFileUpload(uploadFileOneDriveApiInstance, localFilePath, targetDriveId, targetParentId, baseName(localFilePath), currentOnlineItemData.eTag, threadUploadSessionFilePath);
 				} catch (OneDriveException exception) {
-					// an exception was generated
-					string thisFunctionName = getFunctionName!({});
-					
 					// HTTP request returned status code 403
 					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
 						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
@@ -5175,7 +6033,7 @@ class SyncEngine {
 					}
 				} catch (FileException e) {
 					addLogEntry("DEBUG TO REMOVE: Modified file upload FileException Handling (Create the Upload Session)");
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName);
 				}
 				
 				// Do we have a valid session URL that we can use ?
@@ -5192,9 +6050,6 @@ class SyncEngine {
 						// attempt the session upload using the session data provided
 						uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSizeLocal, uploadSessionData, threadUploadSessionFilePath);
 					} catch (OneDriveException exception) {
-						// Function name
-						string thisFunctionName = getFunctionName!({});
-						
 						// Handle all other HTTP status codes
 						// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
 						// Display what the error is
@@ -5202,7 +6057,7 @@ class SyncEngine {
 						
 					} catch (FileException e) {
 						addLogEntry("DEBUG TO REMOVE: Modified file upload FileException Handling (Perform the Upload using the session)");
-						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+						displayFileSystemErrorMessage(e.msg, thisFunctionName);
 					}
 				} else {
 					// Create session Upload URL failed
@@ -5223,12 +6078,29 @@ class SyncEngine {
 		// Perform Garbage Collection
 		GC.collect();
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// Return JSON
 		return uploadResponse;
 	}
 		
 	// Query the OneDrive API using the provided driveId to get the latest quota details
 	string[3][] getRemainingFreeSpaceOnline(string driveId) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// Get the quota details for this driveId
 		// Quota details are ONLY available for the main default driveId, as the OneDrive API does not provide quota details for shared folders
 		JSONValue currentDriveQuota;
@@ -5326,11 +6198,30 @@ class SyncEngine {
 		
 		// Return result
 		result ~= [to!string(quotaRestricted), to!string(quotaAvailable), to!string(quotaRemainingOnline)];
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// return new drive array data
 		return result;
 	}
 
 	// Perform a filesystem walk to uncover new data to upload to OneDrive
 	void scanLocalFilesystemPathForNewData(string path) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// Cleanup array memory before we start adding files
 		pathsToCreateOnline = [];
 		newLocalFilesToUploadToOneDrive = [];
@@ -5343,10 +6234,27 @@ class SyncEngine {
 		
 		// Upload new data that has been identified
 		processNewLocalItemsToUpload();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 
 	// Scan the local filesystem for new data to upload
 	void scanLocalFilesystemPathForNewDataToUpload(string path) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// To improve logging output for this function, what is the 'logical path' we are scanning for file & folder differences?
 		string logPath;
 		if (path == ".") {
@@ -5420,9 +6328,27 @@ class SyncEngine {
 			Duration elapsedTime = finishTime - startTime;
 			addLogEntry("Elapsed Time Filesystem Walk:          " ~ to!string(elapsedTime), ["debug"]);
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
+	// Create new directories online
 	void processNewDirectoriesToCreateOnline() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		// Are there any new local directories to create online?
 		if (!pathsToCreateOnline.empty) {
 			// There are new directories to create online
@@ -5432,10 +6358,27 @@ class SyncEngine {
 				createDirectoryOnline(pathToCreateOnline);
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Upload new data that has been identified to Microsoft OneDrive
 	void processNewLocalItemsToUpload() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+
 		// Are there any new local items to upload?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
 			// There are elements to upload
@@ -5484,10 +6427,26 @@ class SyncEngine {
 			// Cleanup array memory after uploading all files
 			newLocalFilesToUploadToOneDrive = [];
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Scan this path for new data
 	void scanPathForNewData(string path) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		// Add a processing '.'
 		if (exists(path)) {
@@ -5641,7 +6600,7 @@ class SyncEngine {
 												attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
 											} catch (FileException e) {
 												// display the error message
-												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+												displayFileSystemErrorMessage(e.msg, thisFunctionName);
 											}
 										}
 									}
@@ -5660,14 +6619,22 @@ class SyncEngine {
 											rmdirRecurse(path);
 										} catch (FileException e) {
 											// display the error message
-											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+											displayFileSystemErrorMessage(e.msg, thisFunctionName);
 										}
 										
 									}
 								}
 							} catch (FileException e) {
 								// display the error message
-								displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+								displayFileSystemErrorMessage(e.msg, thisFunctionName);
+								
+								// Display function processing time if configured to do so
+								if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+									// Combine module name & running Function
+									displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+								}
+								
+								// return as there was an error
 								return;
 							}
 						}
@@ -5701,7 +6668,15 @@ class SyncEngine {
 								object.destroy(directoryEntries);
 							} catch (FileException e) {
 								// display the error message
-								displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+								displayFileSystemErrorMessage(e.msg, thisFunctionName);
+								
+								// Display function processing time if configured to do so
+								if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+									// Combine module name & running Function
+									displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+								}
+								
+								// return as there was an error
 								return;
 							}
 						}
@@ -5715,6 +6690,14 @@ class SyncEngine {
 						// Is the file a '.nosync' file?
 						if (canFind(path, ".nosync")) {
 							if (debugLogging) {addLogEntry("Skipping .nosync file", ["debug"]);}
+							
+							// Display function processing time if configured to do so
+							if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+								// Combine module name & running Function
+								displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+							}
+							
+							// return as there was an error
 							return;
 						}
 					
@@ -5748,10 +6731,27 @@ class SyncEngine {
 			// This path was skipped - why?
 			addLogEntry("Skipping item '" ~ path ~ "' due to the full path exceeding " ~ to!string(maxPathLength) ~ " characters (Microsoft OneDrive limitation)", ["info", "notify"]);
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Handle a single file inotify trigger when using --monitor
 	void handleLocalFileTrigger(string[] changedLocalFilesToUploadToOneDrive) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// Is this path a new file or an existing one?
 		// Normally we would use pathFoundInDatabase() to calculate, but we need 'databaseItem' as well if the item is in the database
 		foreach (localFilePath; changedLocalFilesToUploadToOneDrive) {
@@ -5762,6 +6762,14 @@ class SyncEngine {
 				foreach (driveId; onlineDriveDetails.keys) {
 					if (itemDB.selectByPath(localFilePath, driveId, databaseItem)) {
 						fileFoundInDB = true;
+						
+						// Display function processing time if configured to do so
+						if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+							// Combine module name & running Function
+							displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+						}
+						
+						// file found, search no more
 						break;
 					}
 				}
@@ -5787,10 +6795,26 @@ class SyncEngine {
 			}
 		}
 		processNewLocalItemsToUpload();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Query the database to determine if this path is within the existing database
 	bool pathFoundInDatabase(string searchPath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// Check if this path in the database
 		Item databaseItem;
@@ -5799,9 +6823,23 @@ class SyncEngine {
 		foreach (driveId; onlineDriveDetails.keys) {
 			if (itemDB.selectByPath(searchPath, driveId, databaseItem)) {
 				if (debugLogging) {addLogEntry("DB Record for search path: " ~ to!string(databaseItem), ["debug"]);}
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
 				return true; // Early exit on finding the path in the DB
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		return false; // Return false if path is not found in any drive
 	}
 	
@@ -5809,6 +6847,17 @@ class SyncEngine {
 	// - Test if we can get the parent path details from the database, otherwise we need to search online
 	//   for the path flow and create the folder that way
 	void createDirectoryOnline(string thisNewPathToCreate) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// Log what we are doing
 		if (verboseLogging) {addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate, ["verbose"]);}
 		
@@ -5822,6 +6871,14 @@ class SyncEngine {
 		if (canFind(thisNewPathToCreate, baseName(appConfig.configuredBusinessSharedFilesDirectoryName))) {
 			// Log why this is being skipped
 			addLogEntry("Skipping creating '" ~ thisNewPathToCreate ~ "' as this path is used for handling OneDrive Business Shared Files", ["info", "notify"]);
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+
+			// return early as skipping
 			return;
 		}
 		
@@ -5888,7 +6945,6 @@ class SyncEngine {
 						onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
 						parentItem = makeItem(onlinePathData);
 					} else {
-						string thisFunctionName = getFunctionName!({});
 						// Default operation if not 408,429,503,504 errors
 						// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 						// Display what the error is
@@ -5924,6 +6980,14 @@ class SyncEngine {
 				} else {
 					// This is a shared folder location, but we are not a 'personal' account, and 'sync_business_shared_items' has not been enabled
 					addLogEntry("ERROR: Unable to create directory online as 'sync_business_shared_items' is not enabled");
+					
+					// Display function processing time if configured to do so
+					if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+						// Combine module name & running Function
+						displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+					}
+					
+					// return as we cannot continue here
 					return;
 				}
 			} else {
@@ -6064,19 +7128,26 @@ class SyncEngine {
 							createDirectoryOnlineOneDriveApiInstance = null;
 							// Perform Garbage Collection
 							GC.collect();
-							return;
 						} else {
 							// some other error from OneDrive was returned - display what it is
 							addLogEntry("OneDrive generated an error when creating this path: " ~ thisNewPathToCreate);
-							displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 							// Shutdown this API instance, as we will create API instances as required, when required
 							createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
 							// Free object and memory
 							createDirectoryOnlineOneDriveApiInstance = null;
 							// Perform Garbage Collection
 							GC.collect();
-							return;
 						}
+						
+						// Display function processing time if configured to do so
+						if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+							// Combine module name & running Function
+							displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+						}
+						
+						// return due to OneDriveException
+						return;
 					}
 				} else {
 					// Simulate a successful 'directory create' & save it to the dryRun database copy
@@ -6093,6 +7164,14 @@ class SyncEngine {
 				createDirectoryOnlineOneDriveApiInstance = null;
 				// Perform Garbage Collection
 				GC.collect();
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
+				// shutdown & return
 				return;
 			} else {
 				// Default operation if not 408,429,503,504 errors
@@ -6141,6 +7220,14 @@ class SyncEngine {
 							createDirectoryOnlineOneDriveApiInstance = null;
 							// Perform Garbage Collection
 							GC.collect();
+							
+							// Display function processing time if configured to do so
+							if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+								// Combine module name & running Function
+								displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+							}
+							
+							// return due to skipped path
 							return;
 						} else {
 							// Shared Business Folder Syncing IS enabled
@@ -6161,6 +7248,14 @@ class SyncEngine {
 				createDirectoryOnlineOneDriveApiInstance = null;
 				// Perform Garbage Collection
 				GC.collect();
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
+				// return due to path found online
 				return;
 			} else {
 				// Normally this would throw an error, however we cant use throw new PosixException()
@@ -6177,6 +7272,14 @@ class SyncEngine {
 				createDirectoryOnlineOneDriveApiInstance = null;
 				// Perform Garbage Collection
 				GC.collect();
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
+				// manual POSIX exception
 				return;
 			}
 		} else {
@@ -6189,12 +7292,31 @@ class SyncEngine {
 			createDirectoryOnlineOneDriveApiInstance = null;
 			// Perform Garbage Collection
 			GC.collect();
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			
+			// generic error
 			return;
 		}
 	}
 	
 	// Test that the online name actually matches the requested local name
 	bool performPosixTest(string localNameToCheck, string onlineName) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
 		// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
 		// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
@@ -6208,11 +7330,29 @@ class SyncEngine {
 			posixIssue = true;
 		}
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// return the posix evaluation
 		return posixIssue;
 	}
 	
 	// Upload new file items as identified
 	void uploadNewLocalFileItems() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+
 		// Lets deal with the new local items in a batch process
 		size_t batchSize = to!int(appConfig.getValueLong("threads"));
 		long batchCount = (newLocalFilesToUploadToOneDrive.length + batchSize - 1) / batchSize;
@@ -6224,20 +7364,54 @@ class SyncEngine {
 		
 		// For this set of items, perform a DB PASSIVE checkpoint
 		itemDB.performCheckpoint("PASSIVE");
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Upload the file batches in parallel
 	void uploadNewLocalFileItemsInParallel(string[] array) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// This function received an array of string items to upload, the number of elements based on appConfig.getValueLong("threads")
 		foreach (i, fileToUpload; processPool.parallel(array)) {
 			if (debugLogging) {addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);}
 			uploadNewFile(fileToUpload);
 			if (debugLogging) {addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Upload a new file to OneDrive
 	void uploadNewFile(string fileToUpload) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// Debug for the moment
 		if (debugLogging) {addLogEntry("fileToUpload: " ~ fileToUpload, ["debug"]);}
 		
@@ -6495,7 +7669,6 @@ class SyncEngine {
 									uploadFailed = performNewFileUpload(parentItem, fileToUpload, thisFileSize);
 								} else {
 									// some other error
-									string thisFunctionName = getFunctionName!({});
 									// Default operation if not 408,429,503,504 errors
 									// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 									// Display what the error is
@@ -6552,10 +7725,26 @@ class SyncEngine {
 			// Need to add this to fileUploadFailures to capture at the end
 			fileUploadFailures ~= fileToUpload;
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 		
 	// Perform the actual upload to OneDrive
 	bool performNewFileUpload(Item parentItem, string fileToUpload, long thisFileSize) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 			
 		// Assume that by default the upload fails
 		bool uploadFailed = true;
@@ -6601,8 +7790,6 @@ class SyncEngine {
 					
 				} catch (OneDriveException exception) {
 					// An error was responded with - what was it
-					
-					string thisFunctionName = getFunctionName!({});
 					// Default operation if not 408,429,503,504 errors
 					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
@@ -6618,7 +7805,7 @@ class SyncEngine {
 				} catch (FileException e) {
 					// display the error message
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName);
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -6645,8 +7832,6 @@ class SyncEngine {
 					uploadSessionData = createSessionForFileUpload(uploadFileOneDriveApiInstance, fileToUpload, parentItem.driveId, parentItem.id, baseName(fileToUpload), null, threadUploadSessionFilePath);
 				} catch (OneDriveException exception) {
 					// An error was responded with - what was it
-					
-					string thisFunctionName = getFunctionName!({});
 					// Default operation if not 408,429,503,504 errors
 					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
@@ -6656,7 +7841,7 @@ class SyncEngine {
 				} catch (FileException e) {
 					// display the error message
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName);
 				}
 				
 				// Do we have a valid session URL that we can use ?
@@ -6694,8 +7879,6 @@ class SyncEngine {
 								uploadFailed = true;
 							}
 						} catch (OneDriveException exception) {
-						
-							string thisFunctionName = getFunctionName!({});
 							// Default operation if not 408,429,503,504 errors
 							// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 							// Display what the error is
@@ -6812,12 +7995,28 @@ class SyncEngine {
 			}
 		}
 
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// Return upload status
 		return uploadFailed;
 	}
 	
 	// Create the OneDrive Upload Session
 	JSONValue createSessionForFileUpload(OneDriveApi activeOneDriveApiInstance, string fileToUpload, string parentDriveId, string parentId, string filename, string eTag, string threadUploadSessionFilePath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// Upload file via a OneDrive API session
 		JSONValue uploadSession;
@@ -6853,23 +8052,56 @@ class SyncEngine {
 			// return upload() will return a JSONValue response, create an empty JSONValue response to return
 			uploadSession = null;
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// Return the JSON
 		return uploadSession;
 	}
 	
 	// Save the session upload data
 	void saveSessionFile(string threadUploadSessionFilePath, JSONValue uploadSessionData) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		try {
 			std.file.write(threadUploadSessionFilePath, uploadSessionData.toString());
 		} catch (FileException e) {
 			// display the error message
-			displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+			displayFileSystemErrorMessage(e.msg, thisFunctionName);
+		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
 	
 	// Perform the upload of file via the Upload Session that was created
 	JSONValue performSessionFileUpload(OneDriveApi activeOneDriveApiInstance, long thisFileSize, JSONValue uploadSessionData, string threadUploadSessionFilePath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 			
 		// Response for upload
 		JSONValue uploadResponse;
@@ -6968,7 +8200,7 @@ class SyncEngine {
 				
 				// display what the error is
 				if (exception.httpStatusCode != 404) {
-					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
 				
 				// retry fragment upload in case error is transient
@@ -7002,18 +8234,18 @@ class SyncEngine {
 					// OneDrive threw another error on retry
 					if (verboseLogging) {addLogEntry("Retry to upload fragment failed", ["verbose"]);}
 					// display what the error is
-					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					displayOneDriveErrorMessage(e.msg, thisFunctionName);
 					// set uploadResponse to null as the fragment upload was in error twice
 					uploadResponse = null;
 				} catch (std.exception.ErrnoException e) {
 					// There was a file system error - display the error message
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName);
 					return uploadResponse;
 				}
 			} catch (ErrnoException e) {
 				// There was a file system error
 				// display the error message
-				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				displayFileSystemErrorMessage(e.msg, thisFunctionName);
 				uploadResponse = null;
 				return uploadResponse;
 			}
@@ -7054,12 +8286,28 @@ class SyncEngine {
 			remove(threadUploadSessionFilePath);
 		}
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// Return the session upload response
 		return uploadResponse;
 	}
 	
 	// Delete an item on OneDrive
 	void uploadDeletedItem(Item itemToDelete, string path) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		OneDriveApi uploadDeletedItemOneDriveApiInstance;
 			
@@ -7199,10 +8447,27 @@ class SyncEngine {
 				if (debugLogging) {addLogEntry("Not pushing local delete to Microsoft OneDrive due to --download-only being used", ["debug"]);}
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Get the children of an item id from the database
 	Item[] getChildren(string driveId, string id) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		Item[] children;
 		children ~= itemDB.selectChildren(driveId, id);
 		foreach (Item child; children) {
@@ -7211,11 +8476,29 @@ class SyncEngine {
 				children ~= getChildren(child.driveId, child.id);
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// return the database records
 		return children;
 	}
 	
 	// Perform a 'reverse' delete of all child objects on OneDrive
 	void performReverseDeletionOfOneDriveItems(Item[] children, Item itemToDelete) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// Log what is happening
 		if (debugLogging) {addLogEntry("Attempting a reverse delete of all child objects from OneDrive", ["debug"]);}
@@ -7256,12 +8539,28 @@ class SyncEngine {
 		performReverseDeletionOneDriveApiInstance = null;
 		// Perform Garbage Collection
 		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Create a fake OneDrive response suitable for use with saveItem
-	// Create a fake OneDrive response suitable for use with saveItem
 	JSONValue createFakeResponse(string path) {
 		import std.digest.sha;
+		
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// Generate a simulated JSON response which can be used
 		// At a minimum we need:
@@ -7323,11 +8622,30 @@ class SyncEngine {
 		}
 
 		if (debugLogging) {addLogEntry("Generated Fake OneDrive Response: " ~ to!string(fakeResponse), ["debug"]);}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// return the generated fake API response
 		return fakeResponse;
 	}
 
 	// Save JSON item details into the item database
 	void saveItem(JSONValue jsonItem) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// jsonItem has to be a valid object
 		if (jsonItem.type() == JSONType.object) {
 			// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
@@ -7398,10 +8716,27 @@ class SyncEngine {
 			addLogEntry("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object that can be processed.");
 			addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Save an already created database object into the database
 	void saveDatabaseItem(Item newDatabaseItem) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// Add the database record
 		if (debugLogging) {addLogEntry("Creating a new database record for a new local path that has been created: " ~ to!string(newDatabaseItem), ["debug"]);}
 		itemDB.upsert(newDatabaseItem);
@@ -7416,10 +8751,26 @@ class SyncEngine {
 				addOrUpdateOneDriveOnlineDetails(newDatabaseItem.remoteDriveId);
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Wrapper function for makeDatabaseItem so we can check to ensure that the item has the required hashes
 	Item makeItem(JSONValue onedriveJSONItem) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 			
 		// Make the DB Item from the JSON data provided
 		Item newDatabaseItem = makeDatabaseItem(onedriveJSONItem);
@@ -7505,8 +8856,6 @@ class SyncEngine {
 						remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(oldEntry);
 					} catch (OneDriveException exception) {
 						if (debugLogging) {addLogEntry("remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(oldEntry) generated a OneDriveException", ["debug"]);}
-						
-						string thisFunctionName = getFunctionName!({});
 						// Default operation if not 408,429,503,504 errors
 						// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 						// Display what the error is
@@ -7549,12 +8898,29 @@ class SyncEngine {
 			}
 		}
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// Return the new database item
 		return newDatabaseItem;
 	}
 	
 	// Print the fileDownloadFailures and fileUploadFailures arrays if they are not empty
 	void displaySyncFailures() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		bool logFailures(string[] failures, string operation) {
 			if (failures.empty) return false;
 
@@ -7581,6 +8947,12 @@ class SyncEngine {
 		bool downloadFailuresLogged = logFailures(fileDownloadFailures, "download");
 		bool uploadFailuresLogged = logFailures(fileUploadFailures, "upload");
 		syncFailures = downloadFailuresLogged || uploadFailuresLogged;
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Generate a /delta compatible response - for use when we cant actually use /delta
@@ -7589,6 +8961,17 @@ class SyncEngine {
 	// then once the target of the --single-directory request is hit, all of the children of that path can be queried, giving a much more focused
 	// JSON response which can then be processed, negating the need to continuously traverse the tree and 'exclude' items
 	JSONValue generateDeltaResponse(string pathToQuery = null) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		// JSON value which will be responded with
 		JSONValue selfGeneratedDeltaResponse;
 		
@@ -7633,7 +9016,7 @@ class SyncEngine {
 				}
 			} catch (OneDriveException exception) {
 				// Display error message
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
@@ -7683,7 +9066,6 @@ class SyncEngine {
 		} catch (OneDriveException exception) {
 			// An error was generated
 			if (debugLogging) {addLogEntry("driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id) generated a OneDriveException", ["debug"]);}
-			string thisFunctionName = getFunctionName!({});
 			
 			// Was this a 403 or 404 ?
 			if ((exception.httpStatusCode == 403) || (exception.httpStatusCode == 404)) {
@@ -7734,8 +9116,6 @@ class SyncEngine {
 						rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId);
 					} catch (OneDriveException exception) {
 						if (debugLogging) {addLogEntry("rootData = onedrive.getDriveIdRoot(searchItem.driveId) generated a OneDriveException", ["debug"]);}
-						
-						string thisFunctionName = getFunctionName!({});
 						// Default operation if not 408,429,503,504 errors
 						// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 						// Display what the error is
@@ -7783,8 +9163,6 @@ class SyncEngine {
 					addLogEntry("idToQuery: " ~ searchItem.id, ["debug"]);
 					addLogEntry("nextLink:  " ~ nextLink, ["debug"]);
 				}
-				
-				string thisFunctionName = getFunctionName!({});
 				// Default operation if not 408,429,503,504 errors
 				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 				// Display what the error is
@@ -7867,12 +9245,28 @@ class SyncEngine {
 		// Perform Garbage Collection
 		GC.collect();
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// Return the generated JSON response
 		return selfGeneratedDeltaResponse;
 	}
 	
 	// Query the OneDrive API for the specified child id for any children objects
 	JSONValue[] queryForChildren(string driveId, string idToQuery, string childParentPath, string pathForLogging) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 				
 		// function variables
 		JSONValue thisLevelChildren;
@@ -7972,12 +9366,28 @@ class SyncEngine {
 		// Perform Garbage Collection
 		GC.collect();
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// return response
 		return thisLevelChildrenData;
 	}
 	
 	// Query the OneDrive API for the child objects for this element
 	JSONValue queryThisLevelChildren(string driveId, string idToQuery, string nextLink, OneDriveApi queryChildrenOneDriveApiInstance) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// function variables 
 		JSONValue thisLevelChildren;
@@ -7998,7 +9408,6 @@ class SyncEngine {
 				addLogEntry("nextLink: " ~ nextLink, ["debug"]);
 			}
 			
-			string thisFunctionName = getFunctionName!({});
 			// Default operation if not 408,429,503,504 errors
 			// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 			// Display what the error is
@@ -8006,6 +9415,12 @@ class SyncEngine {
 			
 		}
 				
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// return response
 		return thisLevelChildren;
 	}
@@ -8020,6 +9435,16 @@ class SyncEngine {
 	// This function also ensures that each path in the requested path actually matches the requested element to ensure that the OneDrive API response
 	// is not falsely matching a 'case insensitive' match to the actual request which is a POSIX compliance issue.
 	JSONValue queryOneDriveForSpecificPathAndCreateIfMissing(string thisNewPathToSearch, bool createPathIfMissing) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// function variables
 		JSONValue getPathDetailsAPIResponse;
@@ -8059,8 +9484,6 @@ class SyncEngine {
 					saveItem(getPathDetailsAPIResponse);
 					directoryFoundOnline = true;
 				} catch (OneDriveException exception) {
-				
-					string thisFunctionName = getFunctionName!({});
 					// Default operation if not 408,429,503,504 errors
 					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
@@ -8120,7 +9543,6 @@ class SyncEngine {
 						if (exception.httpStatusCode == 404) {
 							directoryFoundOnline = false;
 						} else {
-							string thisFunctionName = getFunctionName!({});
 							// Default operation if not 408,429,503,504 errors
 							// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 							// Display what the error is
@@ -8244,7 +9666,7 @@ class SyncEngine {
 								} else {
 									// some other error from OneDrive was returned - display what it is
 									addLogEntry("OneDrive generated an error when creating this path: " ~ thisFolderName);
-									displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+									displayOneDriveErrorMessage(e.msg, thisFunctionName);
 								}
 							}
 						} else {
@@ -8267,12 +9689,30 @@ class SyncEngine {
 		
 		// Output our search results
 		if (debugLogging) {addLogEntry("queryOneDriveForSpecificPathAndCreateIfMissing.getPathDetailsAPIResponse = " ~ to!string(getPathDetailsAPIResponse), ["debug"]);}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// return JSON result
 		return getPathDetailsAPIResponse;
 	}
 	
 	// Delete an item by it's path
 	// This function is only used in --monitor mode to remove a directory online
 	void deleteByPath(string path) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 		
 		// function variables
 		Item dbItem;
@@ -8319,14 +9759,30 @@ class SyncEngine {
 				addLogEntry(e.msg);
 			} else {
 				// display what the error is
-				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+				displayOneDriveErrorMessage(e.msg, thisFunctionName);
 			}
+		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
 	
 	// Delete an item by it's path
 	// Delete a directory on OneDrive without syncing. This function is only used with --remove-directory
 	void deleteByPathNoSync(string path) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		// Attempt to delete the requested path within OneDrive without performing a sync
 		addLogEntry("Attempting to delete the requested path within Microsoft OneDrive");
@@ -8363,7 +9819,7 @@ class SyncEngine {
 			// Default operation if not 408,429,503,504 errors
 			// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 			// Display what the error is
-			displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+			displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 			return;	
 		}
 		
@@ -8389,7 +9845,7 @@ class SyncEngine {
 				addLogEntry("The requested directory to delete online has been deleted");
 			} catch (OneDriveException exception) {
 				// Display what the error is
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 			}
 		} else {
 			// --remove-directory is for removing directories
@@ -8402,12 +9858,29 @@ class SyncEngine {
 		deleteByPathNoSyncAPIInstance = null;
 		// Perform Garbage Collection
 		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move
 	// This function is only called in monitor mode when an move event is coming from
 	// inotify and we try to move the item.
 	void uploadMoveItem(string oldPath, string newPath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// Log that we are doing a move
 		addLogEntry("Moving " ~ oldPath ~ " to " ~ newPath);
 		// Is this move unwanted?
@@ -8562,10 +10035,26 @@ class SyncEngine {
 			addLogEntry("Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive");
 			uploadDeletedItem(oldItem, oldPath);
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Perform integrity validation of the file that was uploaded
 	bool performUploadIntegrityValidationChecks(JSONValue uploadResponse, string localFilePath, long localFileSize) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		bool integrityValid = false;
 	
@@ -8633,12 +10122,29 @@ class SyncEngine {
 			addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath, ["info", "notify"]);
 		}
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// Is the file integrity online valid?
 		return integrityValid;
 	}
 	
 	// Query Office 365 SharePoint Shared Library site name to obtain it's Drive ID
 	void querySiteCollectionForDriveID(string sharepointLibraryNameToQuery) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// Steps to get the ID:
 		// 1. Query https://graph.microsoft.com/v1.0/sites?search= with the name entered
 		// 2. Evaluate the response. A valid response will contain the description and the id. If the response comes back with nothing, the site name cannot be found or no access
@@ -8714,7 +10220,7 @@ class SyncEngine {
 				// Default operation if not 408,429,503,504 errors
 				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 				// Display what the error is
-				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+				displayOneDriveErrorMessage(e.msg, thisFunctionName);
 				
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				querySharePointLibraryNameApiInstance.releaseCurlEngine();
@@ -8747,7 +10253,7 @@ class SyncEngine {
 								} catch (OneDriveException e) {
 									addLogEntry("ERROR: Query of OneDrive for Office Site ID failed");
 									// display what the error is
-									displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+									displayOneDriveErrorMessage(e.msg, thisFunctionName);
 									
 									// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 									querySharePointLibraryNameApiInstance.releaseCurlEngine();
@@ -8890,10 +10396,26 @@ class SyncEngine {
 		querySharePointLibraryNameApiInstance = null;
 		// Perform Garbage Collection
 		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Query the sync status of the client and the local system
 	void queryOneDriveForSyncStatus(string pathToQueryStatusOn) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		// Query the account driveId and rootId to get the /delta JSON information
 		// Process that JSON data for relevancy
@@ -9085,10 +10607,26 @@ class SyncEngine {
 			// No changes were returned
 			addLogEntry("There are no pending changes from Microsoft OneDrive; your local directory matches the data online.");
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Query OneDrive for file details of a given path, returning either the 'webURL' or 'lastModifiedBy' JSON facet
 	void queryOneDriveForFileDetails(string inputFilePath, string runtimePath, string outputType) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		OneDriveApi queryOneDriveForFileDetailsApiInstance;
 		
@@ -9119,7 +10657,7 @@ class SyncEngine {
 						
 					} catch (OneDriveException exception) {
 						// display what the error is
-						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 						
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						queryOneDriveForFileDetailsApiInstance.releaseCurlEngine();
@@ -9189,7 +10727,7 @@ class SyncEngine {
 								createShareableLinkResponse = queryOneDriveForFileDetailsApiInstance.createShareableLink(thisDriveId, thisItemId, accessScope);
 							} catch (OneDriveException exception) {
 								// display what the error is
-								displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+								displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 								return;
 							}
 							
@@ -9222,10 +10760,27 @@ class SyncEngine {
 			// File does not exist locally
 			addLogEntry("Selected path not found on local system: " ~ inputFilePath);
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Query OneDrive for the quota details
 	void queryOneDriveForQuotaDetails() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// This function is similar to getRemainingFreeSpace() but is different in data being analysed and output method
 		JSONValue currentDriveQuota;
 		string driveId;
@@ -9306,11 +10861,27 @@ class SyncEngine {
 			} else {
 				writeln("Microsoft OneDrive quota information is being restricted for this Drive ID: ", driveId);
 			}
-		} 
+		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Query the system for session_upload.* files
 	bool checkForInterruptedSessionUploads() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		bool interruptedUploads = false;
 		long interruptedUploadsCount;
@@ -9330,12 +10901,29 @@ class SyncEngine {
 			interruptedUploads = true;
 		}
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		// return if there are interrupted uploads to process
 		return interruptedUploads;
 	}
 	
 	// Clear any session_upload.* files
 	void clearInterruptedSessionUploads() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		// Scan the filesystem for the files we are interested in, build up interruptedUploadsSessionFiles array
 		foreach (sessionFile; dirEntries(appConfig.configDirName, "session_upload.*", SpanMode.shallow)) {
 			// calculate the full path
@@ -9348,10 +10936,27 @@ class SyncEngine {
 				safeRemove(tempPath);
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Process interrupted 'session_upload' files
 	void processForInterruptedSessionUploads() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		// For each upload_session file that has been found, process the data to ensure it is still valid
 		foreach (sessionFilePath; interruptedUploadsSessionFiles) {
 			// What session data are we trying to restore
@@ -9387,11 +10992,31 @@ class SyncEngine {
 			// For this set of items, perform a DB PASSIVE checkpoint
 			itemDB.performCheckpoint("PASSIVE");
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// A resume session upload file need to be valid to be used
 	// This function validates this data
 	bool validateUploadSessionFileData(string sessionFilePath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Due to this function, we need to keep the return <bool value>; code, so that this function operates as efficently as possible.
+		// It is pointless having the entire code run through and performing additional needless checks where it is not required
+		// Whilst this means some extra code / duplication in this function, it cannot be helped
 		
 		JSONValue sessionFileData;
 		OneDriveApi validateUploadSessionFileDataApiInstance;
@@ -9404,10 +11029,26 @@ class SyncEngine {
 			} else {
 				// No data to read in - invalid file
 				if (debugLogging) {addLogEntry("SESSION-RESUME: Invalid JSON file: " ~ sessionFilePath, ["debug"]);}
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
+				// return session file is invalid
 				return false;
 			}
 		} catch (JSONException e) {
 			if (debugLogging) {addLogEntry("SESSION-RESUME: Invalid JSON data in: " ~ sessionFilePath, ["debug"]);}
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			
+			// return session file is invalid
 			return false;
 		}
 		
@@ -9419,17 +11060,41 @@ class SyncEngine {
 			// Does the file exist?
 			if (!exists(sessionLocalFilePath)) {
 				if (verboseLogging) {addLogEntry("The local file to upload does not exist locally anymore", ["verbose"]);}
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
+				// return session file is invalid
 				return false;
 			}
 			
 			// Can we read the file?
 			if (!readLocalFile(sessionLocalFilePath)) {
 				// filesystem error already returned if unable to read
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
+				// return session file is invalid
 				return false;
 			}
 			
 		} else {
 			if (debugLogging) {addLogEntry("SESSION-RESUME: No localPath data in: " ~ sessionFilePath, ["debug"]);}
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			
+			// return session file is invalid
 			return false;
 		}
 		
@@ -9446,16 +11111,40 @@ class SyncEngine {
 			} else {
 				// invalid timestamp from JSON file
 				addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ expirationTimestamp);
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
+				// return session file is invalid
 				return false;
 			}
 			
 			// valid timestamp
 			if (expiration < Clock.currTime()) {
 				if (verboseLogging) {addLogEntry("The upload session has expired for: " ~ sessionFilePath, ["verbose"]);}
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
+				// return session file is invalid
 				return false;
 			}
 		} else {
 			if (debugLogging) {addLogEntry("SESSION-RESUME: No expirationDateTime data in: " ~ sessionFilePath, ["debug"]);}
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			
+			// return session file is invalid
 			return false;
 		}
 		
@@ -9477,6 +11166,8 @@ class SyncEngine {
 				// Perform Garbage Collection
 				GC.collect();
 				
+				// no error .. potentially all still valid
+				
 			} catch (OneDriveException e) {
 				// handle any onedrive error response as invalid
 				if (debugLogging) {addLogEntry("SESSION-RESUME: Invalid response when using uploadUrl in: " ~ sessionFilePath, ["debug"]);}
@@ -9486,7 +11177,15 @@ class SyncEngine {
 				validateUploadSessionFileDataApiInstance = null;
 				// Perform Garbage Collection
 				GC.collect();
-				return false;
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
+				// return session file is invalid
+				return false;				
 			}
 			
 			// Do we have a valid response from OneDrive?
@@ -9499,19 +11198,51 @@ class SyncEngine {
 					
 					if (sessionFileData["nextExpectedRanges"].array.length == 0) {
 						if (verboseLogging) {addLogEntry("The upload session was already completed", ["verbose"]);}
+						
+						// Display function processing time if configured to do so
+						if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+							// Combine module name & running Function
+							displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+						}
+						
+						// return session file is invalid
 						return false;
 					}
 				} else {
 					if (debugLogging) {addLogEntry("SESSION-RESUME: No expirationDateTime & nextExpectedRanges data in Microsoft OneDrive API response: " ~ to!string(response), ["debug"]);}
+					
+					// Display function processing time if configured to do so
+					if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+						// Combine module name & running Function
+						displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+					}
+					
+					// return session file is invalid
 					return false;
 				}
 			} else {
 				// not a JSON object
 				if (verboseLogging) {addLogEntry("Restore file upload session failed - invalid response from Microsoft OneDrive", ["verbose"]);}
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
+				// return session file is invalid
 				return false;
 			}
 		} else {
 			if (debugLogging) {addLogEntry("SESSION-RESUME: No uploadUrl data in: " ~ sessionFilePath, ["debug"]);}
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			
+			// return session file is invalid
 			return false;
 		}
 		
@@ -9520,11 +11251,30 @@ class SyncEngine {
 		
 		// Add sessionFileData to jsonItemsToResumeUpload as it is now valid
 		jsonItemsToResumeUpload ~= sessionFileData;
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// return session file is invalid
 		return true;
 	}
 	
 	// Resume all resumable session uploads in parallel
 	void resumeSessionUploadsInParallel(JSONValue[] array) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		// This function received an array of JSON items to resume upload, the number of elements based on appConfig.getValueLong("threads")
 		foreach (i, jsonItemToResume; processPool.parallel(array)) {
 			// Take each JSON item and resume upload using the JSON data
@@ -9582,30 +11332,76 @@ class SyncEngine {
 				addLogEntry("CODING TO DO: what to do when session upload resumption JSON data is not valid ... nothing ? error message ?");
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Function to process the path by removing prefix up to ':' - remove '/drive/root:' from a path string
 	string processPathToRemoveRootReference(ref string pathToCheck) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
 		size_t colonIndex = pathToCheck.indexOf(":");
 		if (colonIndex != -1) {
 			if (debugLogging) {addLogEntry("Updating " ~ pathToCheck ~ " to remove prefix up to ':'", ["debug"]);}
 			pathToCheck = pathToCheck[colonIndex + 1 .. $];
 			if (debugLogging) {addLogEntry("Updated path: " ~ pathToCheck, ["debug"]);}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// return updated path
 		return pathToCheck;
 	}
 	
 	// Generate path from JSON data
 	string generatePathFromJSONData(JSONValue onedriveJSONItem) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		string itemName = onedriveJSONItem["name"].str;
 		string parentPath = onedriveJSONItem["parentReference"]["path"].str;
 		string combinedPath = buildNormalizedPath(buildPath(parentPath, itemName));
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
 		return processPathToRemoveRootReference(combinedPath);
 	}
 	
 	// Function to find a given DriveId in the onlineDriveDetails associative array that maps driveId to DriveDetailsCache
 	// If 'true' will return 'driveDetails' containing the struct data 'DriveDetailsCache'
 	bool canFindDriveId(string driveId, out DriveDetailsCache driveDetails) {
+		
+		// Not adding performance metrics to this function
+	
 		auto ptr = driveId in onlineDriveDetails;
 		if (ptr !is null) {
 			driveDetails = *ptr; // Dereference the pointer to get the value
@@ -9617,6 +11413,16 @@ class SyncEngine {
 	
 	// Add this driveId plus relevant details for future reference and use
 	void addOrUpdateOneDriveOnlineDetails(string driveId) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 
 		bool quotaRestricted;
 		bool quotaAvailable;
@@ -9631,10 +11437,19 @@ class SyncEngine {
 		
 		// Debug log what the cached array now contains
 		if (debugLogging) {addLogEntry("onlineDriveDetails: " ~ to!string(onlineDriveDetails), ["debug"]);}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 
 	// Return a specific 'driveId' details from 'onlineDriveDetails'
 	DriveDetailsCache getDriveDetails(string driveId) {
+		
+		// Not adding performance metrics to this function
+		
 		auto ptr = driveId in onlineDriveDetails;
 		if (ptr !is null) {
 			return *ptr;  // Dereference the pointer to get the value
@@ -9646,6 +11461,16 @@ class SyncEngine {
 	
 	// Search a given Drive ID, Item ID and filename to see if this exists in the location specified
 	JSONValue searchDriveItemForFile(string parentItemDriveId, string parentItemId, string fileToUpload) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		JSONValue onedriveJSONItem;
 		string searchName = baseName(fileToUpload);
@@ -9677,7 +11502,6 @@ class SyncEngine {
 					addLogEntry("nextLink:  " ~ nextLink, ["debug"]);
 				}
 				
-				string thisFunctionName = getFunctionName!({});
 				// Default operation if not 408,429,503,504 errors
 				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 				// Display what the error is
@@ -9697,7 +11521,13 @@ class SyncEngine {
 					// Perform Garbage Collection
 					GC.collect();
 					
-					// Return child
+					// Display function processing time if configured to do so
+					if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+						// Combine module name & running Function
+						displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+					}
+					
+					// Return child as found item
                     return child;
                 }
             }
@@ -9719,13 +11549,29 @@ class SyncEngine {
 		checkFileOneDriveApiInstance = null;
 		// Perform Garbage Collection
 		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 					
-		// return an empty JSON item
+		// return an empty JSON item, as search item was not found
 		return onedriveJSONItem;
 	}
 	
 	// Update 'onlineDriveDetails' with the latest data about this drive
 	void updateDriveDetailsCache(string driveId, bool quotaRestricted, bool quotaAvailable, long localFileSize) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		// As each thread is running differently, what is the current 'quotaRemaining' for 'driveId' ?
 		long quotaRemaining;
@@ -9755,19 +11601,53 @@ class SyncEngine {
 		
 		// Updated the details
 		onlineDriveDetails[driveId] = DriveDetailsCache(driveId, quotaRestricted, quotaAvailable, quotaRemaining);
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Update all of the known cached driveId quota details
 	void freshenCachedDriveQuotaDetails() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		foreach (driveId; onlineDriveDetails.keys) {
 			// Update this driveid quota details
 			if (debugLogging) {addLogEntry("Freshen Quota Details for this driveId: " ~ driveId, ["debug"]);}
 			addOrUpdateOneDriveOnlineDetails(driveId);
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Create a 'root' DB Tie Record for a Shared Folder from the JSON data
 	void createDatabaseRootTieRecordForOnlineSharedFolder(JSONValue onedriveJSONItem) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// Creating|Updating a DB Tie
 		if (debugLogging) {
 			addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder: " ~ onedriveJSONItem["name"].str, ["debug"]);
@@ -9823,10 +11703,27 @@ class SyncEngine {
 		// Add this DB Tie parent record to the local database
 		if (debugLogging) {addLogEntry("Creating|Updating into local database a 'root' DB Tie record for a OneDrive Shared Folder online: " ~ to!string(tieDBItem), ["debug"]);}
 		itemDB.upsert(tieDBItem);
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Create a DB Tie Record for a Shared Folder 
 	void createDatabaseTieRecordForOnlineSharedFolder(Item parentItem) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
 		// Creating|Updating a DB Tie
 		if (debugLogging) {
 			//addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder: " ~ parentItem.name, ["debug"]);
@@ -9890,7 +11787,7 @@ class SyncEngine {
 			
 				} catch (OneDriveException e) {
 					// Display error message
-					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					displayOneDriveErrorMessage(e.msg, thisFunctionName);
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					getPathDetailsApiInstance.releaseCurlEngine();
@@ -9908,10 +11805,26 @@ class SyncEngine {
 		// Add tie DB record to the local database
 		if (debugLogging) {addLogEntry("Creating|Updating into local database a DB Tie record: " ~ to!string(tieDBItem), ["debug"]);}
 		itemDB.upsert(tieDBItem);
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// List all the OneDrive Business Shared Items for the user to see
 	void listBusinessSharedObjects() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		JSONValue sharedWithMeItems;
 		
@@ -9931,7 +11844,7 @@ class SyncEngine {
 			
 		} catch (OneDriveException e) {
 			// Display error message
-			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+			displayOneDriveErrorMessage(e.msg, thisFunctionName);
 			
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			sharedWithMeOneDriveApiInstance.releaseCurlEngine();
@@ -10008,10 +11921,26 @@ class SyncEngine {
 				addLogEntry();
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Query all the OneDrive Business Shared Objects to sync only Shared Files
 	void queryBusinessSharedObjects() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		JSONValue sharedWithMeItems;
 		Item sharedFilesRootDirectoryDatabaseRecord;
@@ -10028,7 +11957,7 @@ class SyncEngine {
 			
 		} catch (OneDriveException e) {
 			// Display error message
-			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+			displayOneDriveErrorMessage(e.msg, thisFunctionName);
 			
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			sharedWithMeOneDriveApiInstance.releaseCurlEngine();
@@ -10241,10 +12170,26 @@ class SyncEngine {
 		sharedWithMeOneDriveApiInstance = null;
 		// Perform Garbage Collection
 		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Renaming or moving a directory online manually using --source-directory 'path/as/source/' --destination-directory 'path/as/destination'
 	void moveOrRenameDirectoryOnline(string sourcePath, string destinationPath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		// Function Variables
 		bool sourcePathExists = false;
@@ -10279,7 +12224,7 @@ class SyncEngine {
 				// An error, regardless of what it is ... not good
 				// Display what the error is
 				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				forceExit();
 			}
 		}
@@ -10298,7 +12243,7 @@ class SyncEngine {
 				// An error, regardless of what it is ... not good
 				// Display what the error is
 				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				forceExit();
 			}
 		}
@@ -10360,7 +12305,7 @@ class SyncEngine {
 							} else {
 								// Display what the error is
 								// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-								displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+								displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 								forceExit();
 							}
 						}
@@ -10389,7 +12334,7 @@ class SyncEngine {
 					} catch (OneDriveException exception) {
 						// Display what the error is
 						// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 						forceExit();	
 					}
 				}
@@ -10399,10 +12344,26 @@ class SyncEngine {
 				forceExit();
 			}
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	}
 	
 	// Return an array of the notification parameters when this is called. This implements FR #2760
 	string[] fileTransferNotifications() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
 	
 		// Based on the configuration option, send the file transfer actions to the GUI notifications if configured
 		// GUI notifications are already sent for files that meet this criteria:
@@ -10428,12 +12389,31 @@ class SyncEngine {
 			// Logging to console and/or logfile only
 			loggingOptions = ["info"];
 		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
 	
 		return loggingOptions;
 	}
 	
 	// OneDrive Personal driveId or parentReference driveId must be 16 characters in length
 	string testProvidedDriveIdForLengthIssue(string objectParentDriveId) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Due to this function, we need to keep the return <string value>; code, so that this function operates as efficently as possible.
+		// Whilst this means some extra code / duplication in this function, it cannot be helped
 	
 		// OneDrive Personal Account driveId and remoteDriveId length check
 		// Issue #3072 (https://github.com/abraunegg/onedrive/issues/3072) illustrated that the OneDrive API is inconsistent in response when the Drive ID starts with a zero ('0')
@@ -10472,8 +12452,6 @@ class SyncEngine {
 					remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(oldEntry);
 				} catch (OneDriveException exception) {
 					if (debugLogging) {addLogEntry("remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(oldEntry) generated a OneDriveException", ["debug"]);}
-					
-					string thisFunctionName = getFunctionName!({});
 					// Default operation if not 408,429,503,504 errors
 					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
@@ -10510,13 +12488,31 @@ class SyncEngine {
 						addLogEntry(" - new 'driveId' value = " ~ newEntry, ["debug"]);
 				}
 				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
 				// Return the new calculated value
 				return newEntry;
 			} else {
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+			
 				// Return input value as-is
 				return objectParentDriveId;
 			}
 		} else {
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+		
 			// Return input value as-is
 			return objectParentDriveId;
 		}
@@ -10524,9 +12520,20 @@ class SyncEngine {
 	
 	// Calculate the transfer metrics for the file to aid in performance discussions when they are raised
 	void displayTransferMetrics(string fileTransferred, long transferredBytes, SysTime transferStartTime, SysTime transferEndTime) {
-	
 		// We only calculate this if 'display_transfer_metrics' is enabled or we are doing debug logging
 		if (appConfig.getValueBool("display_transfer_metrics") || debugLogging) {
+		
+			// Function Start Time
+			SysTime functionStartTime;
+			string logKey;
+			string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+			// Only set this if we are generating performance processing times
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				functionStartTime = Clock.currTime();
+				logKey = generateAlphanumericString();
+				displayFunctionProcessingStart(thisFunctionName, logKey);
+			}
+		
 	
 			// Calculations must be done on files > 0 transferredBytes
 			if (transferredBytes > 0) {
@@ -10537,11 +12544,17 @@ class SyncEngine {
 				
 				// Output the transfer metrics
 				string transferMetrics = format("File: %s | Size: %d Bytes | Duration: %.2f Seconds | Speed: %.2f Mbps (approx)", fileTransferred, transferredBytes, transferDurationAsSeconds, transferSpeedAsMbps);
-				addLogEntry("Transfer Metrics -  " ~ transferMetrics);
+				addLogEntry("Transfer Metrics - " ~ transferMetrics);
 				
 			} else {
 				// Zero bytes - not applicable
-				addLogEntry("Transfer Metrics -  N/A (Zero Byte File)");
+				addLogEntry("Transfer Metrics - N/A (Zero Byte File)");
+			}
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 			}
 		}
 	}

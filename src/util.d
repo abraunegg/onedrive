@@ -1563,3 +1563,20 @@ void setPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) {
 		displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 	}
 }
+
+// Generate the initial function processing time log entry
+void displayFunctionProcessingStart(string functionName, string logKey) {
+	// Output the function processing header
+	addLogEntry(format("[%s] Application Function '%s' Started", strip(logKey), strip(functionName)));
+}
+
+// Calculate the time taken to perform the application Function
+void displayFunctionProcessingTime(string functionName, SysTime functionStartTime, SysTime functionEndTime, string logKey) {
+	// Calculate processing time
+	auto functionDuration = functionEndTime - functionStartTime;
+	double functionDurationAsSeconds = (functionDuration.total!"msecs"/1e3); // msec --> seconds
+	
+	// Output the function processing time
+	string processingTime = format("[%s] Application Function '%s' Processing Time = %.4f Seconds", strip(logKey), strip(functionName), functionDurationAsSeconds);
+	addLogEntry(processingTime);
+}
