@@ -106,14 +106,26 @@ class ClientSideFiltering {
 			// Skip comments in file
 			if (line[0] == ';' || line[0] == '#') continue;
 			
-			// Is the rule a legacy 'include all root files lazy rule?'
+			// Is the rule a legacy 'include all root files' lazy rule?
 			if ((strip(line) == "/*") || (strip(line) == "/")) {
 				// yes ...
 				string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(strip(line)) ~ "' detected. Please use 'sync_root_files = \"true\"' or --sync-root-files option to sync files in the root path.";
 				addLogEntry();
 				addLogEntry(errorMessage, ["info", "notify"]);
 				addLogEntry();
+				// do not add this rule
 			} else {
+				// Ensure that 'sync_list' rules do not start with the sequence './'
+				if ((line[0] == '.') && (line[1] == '/')) {
+					// Display warning about 'sync_list' rule composition
+					string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(strip(line)) ~ "' detected. Rule should not start with './' - please fix your 'sync_list' rule.";
+					addLogEntry();
+					addLogEntry(errorMessage, ["info", "notify"]);
+					addLogEntry();
+					// this broken rule will be added, but will not work right until the user fixes it ... user action required
+				}
+				
+				// add rule to list of rules
 				syncListRules ~= buildNormalizedPath(line);
 			}
 		}
