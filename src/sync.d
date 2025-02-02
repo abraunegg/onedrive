@@ -9098,7 +9098,7 @@ class SyncEngine {
 		// Was a valid JSON response for 'driveData' provided?
 		if (driveData.type() == JSONType.object) {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
-			string generatingDeltaResponseMessage = format("Generating a /delta response from the OneDrive API from this Drive ID: %s and Item ID: %s", searchItem.driveId, searchItem.id);
+			string generatingDeltaResponseMessage = format("Generating a /delta response from the OneDrive API for this Drive ID: %s and Item ID: %s", searchItem.driveId, searchItem.id);
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.suppressLoggingOutput) {
 					addProcessingLogHeaderEntry(generatingDeltaResponseMessage, appConfig.verbosityCount);
