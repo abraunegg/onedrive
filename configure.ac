@@ -9,7 +9,7 @@ dnl - commit the changed files (configure.ac, configure)
 dnl - tag the release
 
 AC_PREREQ([2.69])
-AC_INIT([onedrive],[v2.5.3], [https://github.com/abraunegg/onedrive], [onedrive])
+AC_INIT([onedrive],[v2.5.4], [https://github.com/abraunegg/onedrive], [onedrive])
 AC_CONFIG_SRCDIR([src/main.d])
 
 
@@ -226,16 +226,18 @@ AC_SUBST([NOTIFICATIONS],$enable_notifications)
 
 dnl
 dnl iNotify Support
-AC_CANONICAL_HOST
 
 # Conditionally set bsd_inotify_LIBS based on the platform
-case "$host_os" in
-    freebsd*)
-        bsd_inotify_LIBS="-linotify"
+case "$(uname -s)" in
+    Linux)
+        bsd_inotify_LIBS=""
         ;;
-	openbsd*)
-		bsd_inotify_LIBS="-linotify"
-		;;
+    FreeBSD)
+        bsd_inotify_LIBS="-L/usr/local/lib -linotify"
+        ;;
+    OpenBSD)
+        bsd_inotify_LIBS="-L/usr/local/lib/inotify -linotify"
+        ;;
     *)
         bsd_inotify_LIBS=""
         ;;
@@ -247,15 +249,12 @@ dnl
 dnl Dynamic Linker Support
 
 # Conditionally set dynamic_linker_LIBS based on the platform
-case "$host_os" in
-    freebsd*)
-        dynamic_linker_LIBS=""
-        ;;
-	openbsd*)
-		dynamic_linker_LIBS=""
-		;;
-    *)
+case "$(uname -s)" in
+    Linux)
         dynamic_linker_LIBS="-ldl"
+        ;;
+    *)
+        dynamic_linker_LIBS=""
         ;;
 esac
 
