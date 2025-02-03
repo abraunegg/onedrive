@@ -2,15 +2,63 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.4 - 2025-02-03
+
+### Added
+*   Implement Feature Request: Support Permanent Delete on OneDrive
+*   Implement Feature Request: Support the moving of Shared Folder Links to other folders (Business Accounts only)
+*   Enhancement: Added due to ongoing Ubuntu issues with 'curl' and 'libcurl', updated the documentation to include all relevant curl bugs and affected versions
+*   Enhancement: Added quota status messages for nearing | critical | exceeded based on OneDrive Account API response
+*   Enhancement: Added Docker variable to implement a sync once option
+*   Enhancement: Added configuration option 'create_new_file_version' to force create new versions if that is the desire
+*   Enhancement: Added support for adding SharePoint Libraries as Shared Folder Links
+*   Enhancement: Added code and documentation changes to support FreeBSD
+*   Enhancement: Added a check for the 'sea8cc6beffdb43d7976fbc7da445c639' string in the Microsoft OneDrive Personal Account Root ID response that denotes that the account cannot access Microsoft OneDrive at this point in time
+*   Enhancement: Added './' sync_list rule check as this does not align to the documentation and these rules will not get matched correctly.
+
+### Changed
+*   Changed how debug logging outputs HTTP response headers and when this occurs
+*   Changed when the check for no --sync | --monitor occurs so that this fails faster to avoid setting up all the other components
+*   Changed isValidUTF8 function to use 'validate' rather than individual character checking and enhance checks including length constraints
+*   Changed --dry-run authentication message to remove ambiguity that --dry-run cannot be used to authenticate the application
+
+### Fixed
+*   Fix Regression: Fixed regression that sync_list does not traverse shared directories
+*   Fix Regression: Fixed regression of --display-config use after fast failing if --sync or --monitor has not been used
+*   Fix Regression: Fixed regression from v2.4.x in handling uploading new and modified content to OneDrive Business and SharePoint to not create new versions of files post upload which adds to user quota
+*   Fix Regression: Add back file transfer metrics which was available in v2.4.x
+*   Fix Regression: Add code to support using 'display_processing_time' for functional performance which was available in v2.4.x
+*   Fix Bug: Fixed build issue for OpenBSD (however support for OpenBSD itself is still a work-in-progress)
+*   Fix Bug: Fixed issue regarding parsing OpenSSL and when unable to be parsed, do not force the application to exit
+*   Fix Bug: Fixed the import of 'sync_list' rules due to OneDriveGUI creating a blank empty file by default
+*   Fix Bug: Fixed the display of 'sync_list' rules due to OneDriveGUI creating a blank empty file by default
+*   Fix Bug: Fixed that Business Shared Items shortcuts are skipped as being incorrectly detected as Microsoft OneNote Notebook items
+*   Fix Bug: Fixed space calculations due to using ulong variable type to ensure that if calculation is negative, value is negative
+*   Fix Bug: Fixed issue when downloading a file, and this fails due to an API error (400, 401, 5xx), online file is then not deleted
+*   Fix Bug: Fixed skip_dir logic when reverse traversing folder structure
+*   Fix Bug: Fixed issue that when using 'sync_list' if a file is moved to a newly created online folder, whilst the folder is created database wise, ensure this folder exists on local disk
+*   Fix Bug: Fixed path got deleted in handling of move & close_write event when using 'vim'.
+*   Fix Bug: Fixed that the root Personal Shared Folder is not handled due to missing API data European Data Centres
+*   Fix Bug: Fixed the the local timestamp is not set when using --disable-download-validation
+*   Fix Bug: Fixed Upload|Download Loop for AIP Protected File in Monitor Mode
+*   Fix Bug: Fixed --single-directory Shared Folder DB entry creation
+*   Fix Bug: Fixed API Bug to ensure that OneDrive Personal Drive ID and Remote Drive ID values are 16 characters, padded by leading zeros if the provided JSON data has dropped these leading zeros
+*   Fix Bug: Fixed testInternetReachability function so that this always returns a boolean value and not throw an exception
+
+### Updated
+*   Updated documentation
+
+
 ## 2.5.3 - 2024-11-16
 
 ### Added
-*   Implement Docker ENV variable for --cleanup-local-files
-*   Setup a specific SIGPIPE Signal handler for curl/openssl generated signals
-*   Add Check Spelling GitHub Action
-*   Add passive database checkpoints to optimise database operations
-*   Ensure application notifies user of curl versions that contain HTTP/2 bugs that impact the operation of this client
-*   Add OpenSSL version warning
+*   Implement Feature Request: Implement Docker ENV variable for --cleanup-local-files
+*   Enhancement: Setup a specific SIGPIPE Signal handler for curl/openssl generated signals
+*   Enhancement: Add Check Spelling GitHub Action
+*   Enhancement: Add passive database checkpoints to optimise database operations
+*   Enhancement: Ensure application notifies user of curl versions that contain HTTP/2 bugs that impact the operation of this client
+*   Enhancement: Add OpenSSL version warning
+*   Enhancement: Improve performance with reduced execution time and lower CPU/system resource usage
 
 ### Changed
 *   Specifically use a 'mutex' to perform the lock on database actions
@@ -18,20 +66,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Allow no-sync operations to complete online account checks
 
 ### Fixed
-*   Improve performance with reduced execution time and lower CPU/system resource usage
-*   Fix that a 'sync_list' entry of '/' will cause a index [0] is out of bounds
-*   Fix that when creating a new folder online the application generates an exception if it is in a Shared Online Folder
-*   Fix application crash when session upload files contain zero data or are corrupt
-*   Fix regression for Docker 'sync_dir' use
-*   Fix that curl generates a SIGPIPE that causes application to exit due to upstream device killing idle TCP connection
-*   Fix that skip_dir is not flagging directories correctly causing deletion if parental path structure needs to be created for sync_list handling
-*   Fix application crash caused by unable to drop table
-*   Fix that skip_file in config does not override defaults
-*   Handle DB upgrades from v2.4.x without causing application crash
-*   Fix a database statement execution error occurred: NOT NULL constraint failed: item.type due to Microsoft OneNote items
-*   Fix Operation not permitted FileException Error when attempting to use setTimes() function
-*   Fix that files with no mime type cause sync to crash
-*   Fix that bypass_data_preservation operates as intended
+*   Fix Regression: Fix regression for Docker 'sync_dir' use
+*   Fix Bug: Fix that a 'sync_list' entry of '/' will cause a index [0] is out of bounds
+*   Fix Bug: Fix that when creating a new folder online the application generates an exception if it is in a Shared Online Folder
+*   Fix Bug: Fix application crash when session upload files contain zero data or are corrupt
+*   Fix Bug: Fix that curl generates a SIGPIPE that causes application to exit due to upstream device killing idle TCP connection
+*   Fix Bug: Fix that skip_dir is not flagging directories correctly causing deletion if parental path structure needs to be created for sync_list handling
+*   Fix Bug: Fix application crash caused by unable to drop table
+*   Fix Bug: Fix that skip_file in config does not override defaults
+*   Fix Bug: Handle DB upgrades from v2.4.x without causing application crash
+*   Fix Bug: Fix a database statement execution error occurred: NOT NULL constraint failed: item.type due to Microsoft OneNote items
+*   Fix Bug: Fix Operation not permitted FileException Error when attempting to use setTimes() function
+*   Fix Bug: Fix that files with no mime type cause sync to crash
+*   Fix Bug: Fix that bypass_data_preservation operates as intended
 
 ### Updated
 *   Fixed spelling errors across all documentation and code
@@ -99,7 +146,19 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   OneDrive Business Shared Folder Sync has been 100% re-written in v2.5.0. If you are using this feature, please read the new documentation carefully.
 *   The application function --download-only no longer automatically deletes local files. Please read the new documentation regarding this feature.
 
-### Changes
+### Added
+*   Implement Feature Request: Multi-threaded uploading/downloading of files
+*   Implement Feature Request: Renaming/Relocation of OneDrive Business shared folders
+*   Implement Feature Request: Support the syncing of individual business shared files
+*   Implement Feature Request: Implement application output to detail upload|download failures at the end of a sync process
+*   Implement Feature Request: Log when manual Authorization is required when using --auth-files
+*   Implement Feature Request: Add cmdline parameter to display (human readable) quota status
+*   Implement Feature Request: Add capability to disable 'fullscan_frequency'
+*   Implement Feature Request: Ability to set --disable-download-validation from Docker environment variable
+*   Implement Feature Request: Ability to set --sync-shared-files from Docker environment variable
+*   Implement Feature Request: file sync (upload/download/delete) notifications
+
+### Changed
 *   Renamed various documentation files to align with document content
 *   Implement buffered logging so that all logging from all upload & download activities are handled correctly
 *   Replace polling monitor loop with blocking wait
@@ -135,18 +194,6 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Fix Bug: Fix that --get-sharepoint-drive-id does not handle a SharePoint site with more than 200 entries
 *   Fix Bug: Fix that 'sync_list' does not include files that should be included, when specified just as *.ext_type
 *   Fix Bug: Fix 'sync_list' processing so that '.folder_name' is excluded but 'folder_name' is included
-
-### Added
-*   Implement Feature Request: Multi-threaded uploading/downloading of files
-*   Implement Feature Request: Renaming/Relocation of OneDrive Business shared folders
-*   Implement Feature Request: Support the syncing of individual business shared files
-*   Implement Feature Request: Implement application output to detail upload|download failures at the end of a sync process
-*   Implement Feature Request: Log when manual Authorization is required when using --auth-files
-*   Implement Feature Request: Add cmdline parameter to display (human readable) quota status
-*   Implement Feature Request: Add capability to disable 'fullscan_frequency'
-*   Implement Feature Request: Ability to set --disable-download-validation from Docker environment variable
-*   Implement Feature Request: Ability to set --sync-shared-files from Docker environment variable
-*   Implement Feature Request: file sync (upload/download/delete) notifications
 
 ### Updated
 *   Overhauled all documentation
