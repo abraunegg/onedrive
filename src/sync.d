@@ -2089,6 +2089,7 @@ class SyncEngine {
 				} else {
 					// Why was this unwanted?
 					if (newItemPath.empty) {
+						if (debugLogging) {addLogEntry("OOPS: newItemPath is empty ....... need to calculate it", ["debug"]);}
 						// Compute this item path & need the full path for this file
 						newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
 						if (debugLogging) {addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);}
@@ -2228,6 +2229,7 @@ class SyncEngine {
 					if (parentInDatabase) {
 						// Compute this item path & need the full path for this file
 						if (newItemPath.empty) {
+							if (debugLogging) {addLogEntry("OOPS: newItemPath is empty ....... need to calculate it", ["debug"]);}
 							newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
 							if (debugLogging) {addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);}
 						}
@@ -2262,6 +2264,7 @@ class SyncEngine {
 					// Compute the item path if empty - as to check sync_list we need an actual path to check
 					if (newItemPath.empty) {
 						// Calculate this items path
+						if (debugLogging) {addLogEntry("OOPS: newItemPath is empty ....... need to calculate it", ["debug"]);}
 						newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
 						if (debugLogging) {addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);}
 					}
