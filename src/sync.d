@@ -1901,7 +1901,11 @@ class SyncEngine {
 			bool unwanted = false; // meaning by default we will WANT this item
 			// Is this parent is in the database
 			bool parentInDatabase = false;
-			// What is the path of the new item
+			// Is this the 'root' folder of a Shared Folder
+			bool rootSharedFolder = false;
+			
+			// What is the full path of the new item
+			string computedItemPath;
 			string newItemPath;
 			
 			// Configure the remoteItem - so if it is used, it can be utilised later
@@ -1916,7 +1920,29 @@ class SyncEngine {
 			// Calculate the path of this JSON item, but we can only do this if the parent is in the database
 			if (parentInDatabase) {
 				// Calculate this items path
-				newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
+				computedItemPath = computeItemPath(thisItemDriveId, thisItemParentId);
+				
+				// is 'thisItemParentId' in the DB as a 'root' object?
+				Item databaseItem;
+				
+				// Is this a remote drive?
+				if (thisItemDriveId != appConfig.defaultDriveId) {
+					// query the database for the actual thisItemParentId record
+					itemDB.selectById(thisItemDriveId, thisItemParentId, databaseItem);
+				}
+				
+				// calculate newItemPath
+				if (databaseItem.type == ItemType.root) {
+					// if the record type is now a root record, we dont want to add the name to itself
+					newItemPath = computedItemPath;
+					// set this for later use
+					rootSharedFolder = true;
+				} else {
+					// add the item name to the computed path
+					newItemPath = computedItemPath ~ "/" ~ thisItemName;
+				}	
+				
+				// debug logging of what was calculated
 				if (debugLogging) {addLogEntry("JSON Item calculated full path is: " ~ newItemPath, ["debug"]);}
 			} else {
 				// Parent not in the database
@@ -2093,15 +2119,24 @@ class SyncEngine {
 						
 						if (hasParentReference(onedriveJSONItem)) {
 							// we need to workout the FULL path for this item
-							// simple path
+							// simple path caclulation
 							if (("name" in onedriveJSONItem["parentReference"]) != null) {
-								simplePathToCheck = onedriveJSONItem["parentReference"]["name"].str ~ "/" ~ onedriveJSONItem["name"].str;
+								// how do we build the simplePathToCheck path up ?
+								// did we flag this as the root shared folder object earlier?
+								if (rootSharedFolder) {
+									// just use item name
+									simplePathToCheck = onedriveJSONItem["name"].str;
+								} else {
+									// add parent name to item name
+									simplePathToCheck = onedriveJSONItem["parentReference"]["name"].str ~ "/" ~ onedriveJSONItem["name"].str;
+								}
 							} else {
+								// just use item name
 								simplePathToCheck = onedriveJSONItem["name"].str;
 							}
 							if (debugLogging) {addLogEntry("skip_dir path to check (simple):  " ~ simplePathToCheck, ["debug"]);}
 							
-							// complex path
+							// complex path calculation
 							if (parentInDatabase) {
 								// build up complexPathToCheck
 								complexPathToCheck = buildNormalizedPath(newItemPath);
