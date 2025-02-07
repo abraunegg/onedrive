@@ -2119,7 +2119,7 @@ class SyncEngine {
 						
 						if (hasParentReference(onedriveJSONItem)) {
 							// we need to workout the FULL path for this item
-							// simple path caclulation
+							// simple path calculation
 							if (("name" in onedriveJSONItem["parentReference"]) != null) {
 								// how do we build the simplePathToCheck path up ?
 								// did we flag this as the root shared folder object earlier?
