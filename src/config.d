@@ -356,6 +356,9 @@ class ApplicationConfig {
 		// - Enable the calculation of transfer metrics (duration,speed) for the transfer of a file
 		boolValues["display_transfer_metrics"] = false;
 		
+		// Diable setting the permissions for directories and files, using the inherited permissions
+		boolValues["disable_permission_set"] = false;
+		
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts

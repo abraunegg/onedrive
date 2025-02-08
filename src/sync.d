@@ -2807,9 +2807,15 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("Requested local path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);}
 					mkdirRecurse(newItemPath);
 					
-					// Configure the applicable permissions for the folder
-					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);}
-					newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+					// Has the user disabled the setting of filesystem permissions?
+					if (!appConfig.getValueBool("disable_permission_set")) {
+						// Configure the applicable permissions for the folder
+						if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);}
+						newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+					} else {
+						// Use inherited permissions
+						if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ newItemPath, ["debug"]);}
+					}
 					
 					// Update the time of the folder to match the last modified time as is provided by OneDrive
 					// If there are any files then downloaded into this folder, the last modified time will get 
