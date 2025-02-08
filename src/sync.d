@@ -1922,25 +1922,32 @@ class SyncEngine {
 				// Calculate this items path
 				computedItemPath = computeItemPath(thisItemDriveId, thisItemParentId);
 				
-				// is 'thisItemParentId' in the DB as a 'root' object?
-				Item databaseItem;
-				
-				// Is this a remote drive?
-				if (thisItemDriveId != appConfig.defaultDriveId) {
-					// query the database for the actual thisItemParentId record
-					itemDB.selectById(thisItemDriveId, thisItemParentId, databaseItem);
-				}
-				
-				// calculate newItemPath
-				if (databaseItem.type == ItemType.root) {
-					// if the record type is now a root record, we dont want to add the name to itself
-					newItemPath = computedItemPath;
-					// set this for later use
-					rootSharedFolder = true;
+				// Use the original method of calculation for Personal Accounts
+				if (appConfig.accountType == "personal") {
+					// Calculate this items path
+					newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
 				} else {
-					// add the item name to the computed path
-					newItemPath = computedItemPath ~ "/" ~ thisItemName;
-				}	
+					// Business Accounts
+					// is 'thisItemParentId' in the DB as a 'root' object?
+					Item databaseItem;
+					
+					// Is this a remote drive?
+					if (thisItemDriveId != appConfig.defaultDriveId) {
+						// query the database for the actual thisItemParentId record
+						itemDB.selectById(thisItemDriveId, thisItemParentId, databaseItem);
+					}
+					
+					// calculate newItemPath
+					if (databaseItem.type == ItemType.root) {
+						// if the record type is now a root record, we dont want to add the name to itself
+						newItemPath = computedItemPath;
+						// set this for later use
+						rootSharedFolder = true;
+					} else {
+						// add the item name to the computed path
+						newItemPath = computedItemPath ~ "/" ~ thisItemName;
+					}
+				}
 				
 				// debug logging of what was calculated
 				if (debugLogging) {addLogEntry("JSON Item calculated full path is: " ~ newItemPath, ["debug"]);}
