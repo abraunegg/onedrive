@@ -1919,15 +1919,16 @@ class SyncEngine {
 			
 			// Calculate the path of this JSON item, but we can only do this if the parent is in the database
 			if (parentInDatabase) {
-				// Calculate this items path
-				computedItemPath = computeItemPath(thisItemDriveId, thisItemParentId);
-				
 				// Use the original method of calculation for Personal Accounts
 				if (appConfig.accountType == "personal") {
+					// Personal Accounts
 					// Calculate this items path
 					newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
 				} else {
 					// Business Accounts
+					// Calculate this items path for business accounts
+					computedItemPath = computeItemPath(thisItemDriveId, thisItemParentId);
+					
 					// is 'thisItemParentId' in the DB as a 'root' object?
 					Item databaseItem;
 					
