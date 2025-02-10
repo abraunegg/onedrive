@@ -1429,6 +1429,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'sync_file_permissions'        = " ~ to!string(getValueLong("sync_file_permissions")));
 		addLogEntry("Config option 'space_reservation'            = " ~ to!string(getValueLong("space_reservation")));
 		addLogEntry("Config option 'permanent_delete'             = " ~ to!string(getValueBool("permanent_delete")));
+		addLogEntry("Config option 'write_xattr_data'             = " ~ to!string(getValueBool("write_xattr_data")));
 		
 		// curl operations
 		addLogEntry("Config option 'application_id'               = " ~ getValueString("application_id"));
