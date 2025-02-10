@@ -419,3 +419,5 @@ yourfile
 yourprogram
 Zorin
 zypper
+setxattr
+getxattr
