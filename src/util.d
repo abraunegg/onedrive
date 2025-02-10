@@ -1168,6 +1168,46 @@ bool hasName(const ref JSONValue item) {
 	return ("name" in item) != null;
 }
 
+bool hasCreatedBy(const ref JSONValue item) {
+	return ("createdBy" in item) != null;
+}
+
+bool hasCreatedByUser(const ref JSONValue item) {
+	return ("user" in item["createdBy"]) != null;
+}
+
+bool hasCreatedByUserDisplayName(const ref JSONValue item) {
+	if (hasCreatedBy(item)) {
+		if (hasCreatedByUser(item)) {
+			return ("displayName" in item["createdBy"]["user"]) != null;
+		} else {
+			return false;
+		}
+	} else {
+		return false;
+	}
+}
+
+bool hasLastModifiedBy(const ref JSONValue item) {
+	return ("lastModifiedBy" in item) != null;
+}
+
+bool hasLastModifiedByUser(const ref JSONValue item) {
+	return ("user" in item["lastModifiedBy"]) != null;
+}
+
+bool hasLastModifiedByUserDisplayName(const ref JSONValue item) {
+	if (hasCreatedBy(item)) {
+		if (hasCreatedByUser(item)) {
+			return ("displayName" in item["lastModifiedBy"]["user"]) != null;
+		} else {
+			return false;
+		}
+	} else {
+		return false;
+	}
+}
+
 // Convert bytes to GB
 string byteToGibiByte(ulong bytes) {
     if (bytes == 0) {

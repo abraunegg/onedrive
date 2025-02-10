@@ -86,7 +86,8 @@ SOURCES = \
 	src/sqlite.d \
 	src/clientSideFiltering.d \
 	src/monitor.d \
-	src/arsd/cgi.d
+	src/arsd/cgi.d \
+	src/xattr.d
 
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
