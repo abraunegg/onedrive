@@ -2635,6 +2635,11 @@ class SyncEngine {
 					createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
 				}
 				
+				// Did the user configure to save xattr data about this file?
+				if (appConfig.getValueBool("write_xattr_data")) {
+					writeXattrData(newItemPath, onedriveJSONItem);
+				}
+				
 				// Display function processing time if configured to do so
 				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 					// Combine module name & running Function
@@ -2733,6 +2738,11 @@ class SyncEngine {
 						
 						// Add item to database
 						itemDB.upsert(newDatabaseItem);
+						
+						// Did the user configure to save xattr data about this file?
+						if (appConfig.getValueBool("write_xattr_data")) {
+							writeXattrData(newItemPath, onedriveJSONItem);
+						}
 						
 						// Display function processing time if configured to do so
 						if (appConfig.getValueBool("display_processing_time") && debugLogging) {
