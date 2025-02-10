@@ -1414,6 +1414,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'resync'                       = " ~ to!string(getValueBool("resync")));
 		addLogEntry("Config option 'resync_auth'                  = " ~ to!string(getValueBool("resync_auth")));
 		addLogEntry("Config option 'cleanup_local_files'          = " ~ to!string(getValueBool("cleanup_local_files")));
+		addLogEntry("Config option 'disable_permission_set'       = " ~ to!string(getValueBool("disable_permission_set")));
 
 		// data integrity
 		addLogEntry("Config option 'classify_as_big_delete'       = " ~ to!string(getValueLong("classify_as_big_delete")));
