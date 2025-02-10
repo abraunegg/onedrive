@@ -65,6 +65,7 @@ Before reading this document, please ensure you are running application version 
   - [webhook_listening_port](#webhook_listening_port)
   - [webhook_public_url](#webhook_public_url)
   - [webhook_renewal_interval](#webhook_renewal_interval)
+  - [write_xattr_data](#write_xattr_data)
 - [Command Line Interface (CLI) Only Options](#command-line-interface-cli-only-options)
   - [CLI Option: --auth-files](#cli-option---auth-files)
   - [CLI Option: --auth-response](#cli-option---auth-response)
@@ -1015,6 +1016,24 @@ _**Value Type:**_ Integer
 _**Default Value:**_ 60
 
 _**Config Example:**_ `webhook_retry_interval = "120"`
+
+### write_xattr_data
+_**Description:**_ This setting enables writing xattr values detailing the 'createdBy' and 'lastModifiedBy' information provided by the OneDrive API
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `write_xattr_data = "false"` or `write_xattr_data = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+_**xattr Data Example:**_
+```
+user.onedrive.createdBy="Account Display Name"
+user.onedrive.lastModifiedBy="Account Display Name"
+```
+
 
 ## Command Line Interface (CLI) Only Options
 
