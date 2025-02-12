@@ -3931,6 +3931,13 @@ class SyncEngine {
 		string fullCalculatedPath;
 		bool calculateLocalExtension = false;
 		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			thisDriveId = testProvidedDriveIdForLengthIssue(thisDriveId);
+		}
+		
 		// What driveID and itemID we trying to calculate the path for
 		if (debugLogging) {addLogEntry("Attempting to calculate local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
 		
