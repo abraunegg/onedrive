@@ -847,19 +847,19 @@ class ApplicationConfig {
 				} else if (key == "transfer_order") {
 					switch (value) {
 						case "size_asc":
-							addLogEntry("Files will be transfered sorted by ascending size (smallest first)");
+							addLogEntry("Files will be transferred sorted by ascending size (smallest first)");
 							break;
 						case "size_dsc":
-							addLogEntry("Files will be transfered sorted by descending size (largest first)");
+							addLogEntry("Files will be transferred sorted by descending size (largest first)");
 							break;
 						case "name_asc":
-							addLogEntry("Files will be transfered sorted by ascending name (A -> Z)");
+							addLogEntry("Files will be transferred sorted by ascending name (A -> Z)");
 							break;
 						case "name_dsc":
-							addLogEntry("Files will be transfered sorted by descending name (Z -> A)");
+							addLogEntry("Files will be transferred sorted by descending name (Z -> A)");
 							break;
 						default:
-							addLogEntry("Files will be transfered in original order that they were received (FIFO)");
+							addLogEntry("Files will be transferred in original order that they were received (FIFO)");
 					}
 				} else if (key == "application_id") {
 					string tempApplicationId = strip(value);
