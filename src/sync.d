@@ -9324,6 +9324,13 @@ class SyncEngine {
 		queryChildrenOneDriveApiInstance = new OneDriveApi(appConfig);
 		queryChildrenOneDriveApiInstance.initialise();
 		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			driveId = testProvidedDriveIdForLengthIssue(driveId);
+		}
+		
 		while (true) {
 			// Check if exitHandlerTriggered is true
 			if (exitHandlerTriggered) {
@@ -9433,6 +9440,13 @@ class SyncEngine {
 			functionStartTime = Clock.currTime();
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			driveId = testProvidedDriveIdForLengthIssue(driveId);
 		}
 		
 		// function variables 
