@@ -19,6 +19,7 @@ Before reading this document, please ensure you are running application version 
   - [debug_https](#debug_https)
   - [disable_download_validation](#disable_download_validation)
   - [disable_notifications](#disable_notifications)
+  - [disable_permission_set](#disable_permission_set)
   - [disable_upload_validation](#disable_upload_validation)
   - [display_running_config](#display_running_config)
   - [display_transfer_metrics](#display_transfer_metrics)
@@ -278,6 +279,17 @@ _**Default Value:**_ False
 _**Config Example:**_ `disable_notifications = "false"` or `disable_notifications = "true"`
 
 _**CLI Option Use:**_ `--disable-notifications`
+
+### disable_permission_set
+_**Description:**_ This setting controls whether the application will set the permissions on files and directories using the values of 'sync_dir_permissions' and 'sync_file_permissions'. When this option is enabled, file system permission inheritance will be used to assign the permissions for your data. This option may be useful if the file system configured does not allow setting of POSIX permissions.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `disable_permission_set = "false"` or `disable_permission_set = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
 
 ### disable_upload_validation
 _**Description:**_ This option determines whether the client will conduct integrity validation on files uploaded to Microsoft OneDrive. Sometimes, when uploading files, particularly to SharePoint, SharePoint will modify your file post upload by adding new data to your file which breaks the integrity checking of the upload performed by this client. Enable this option to disable the integrity checks performed by this client.
