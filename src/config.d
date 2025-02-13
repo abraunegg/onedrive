@@ -2573,6 +2573,7 @@ void outputLongHelp(Option[] opt) {
 			"--source-directory",
 			"--space-reservation",
 			"--syncdir",
+			"--share-password",
 			"--user-agent" ];
 		writeln(`onedrive - A client for the Microsoft OneDrive Cloud Service
 
