@@ -57,6 +57,7 @@ Before reading this document, please ensure you are running application version 
   - [sync_file_permissions](#sync_file_permissions)
   - [sync_root_files](#sync_root_files)
   - [threads](#threads)
+  - [transfer_order](#transfer_order)
   - [upload_only](#upload_only)
   - [user_agent](#user_agent)
   - [webhook_enabled](#webhook_enabled)
@@ -886,6 +887,32 @@ _**Config Example:**_ `threads = "16"`
 
 > [!WARNING]
 > Increasing the threads beyond the default will lead to increased system utilisation and local TCP port use, which may lead to unpredictable behaviour and/or may lead application stability issues.
+
+### transfer_order
+_**Description:**_ This configuration option controls the transfer order of files between your local system and Microsoft OneDrive.
+
+_**Value Type:**_ String
+
+_**Default Value:**_ `default`
+
+_**Config Example:**_
+#### Transfer by size, smallest first
+```
+transfer_order = "size_asc"
+```
+
+#### Transfer by size, largest first
+```
+transfer_order = "size_dsc"
+```
+#### Transfer by file name sorted A to Z
+```
+transfer_order = "name_asc"
+```
+#### Transfer by file name sorted Z to A
+```
+transfer_order = "name_dsc"
+```
 
 ### upload_only
 _**Description:**_ This setting forces the client to only upload data to Microsoft OneDrive and replicate the locate state online. By default, this will also remove content online, that has been removed locally.
