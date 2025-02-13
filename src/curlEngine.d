@@ -71,7 +71,7 @@ class CurlResponse {
 			json = content.parseJSON();
 		} catch (JSONException e) {
 			// Log that a JSON Exception was caught, dont output the HTML response from OneDrive
-			if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further", ["debug"]);}
+			if (debugLogging) {addLogEntry("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further", ["debug"]);}
 		}
 		return json;
 	};
@@ -125,7 +125,7 @@ class CurlResponse {
 			// This value is based on log files and data when determining correct process for 429 response handling
 			delayBeforeRetry = 120;
 			// Update that we are over-riding the provided value with a default
-			if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("HTTP Response Header retry-after value was missing - Using a preconfigured default of: " ~ to!string(delayBeforeRetry), ["debug"]);}
+			if (debugLogging) {addLogEntry("HTTP Response Header retry-after value was missing - Using a preconfigured default of: " ~ to!string(delayBeforeRetry), ["debug"]);}
 		}
 		return delayBeforeRetry;
 	}
