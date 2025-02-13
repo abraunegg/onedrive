@@ -3911,10 +3911,11 @@ class SyncEngine {
 		}
 	
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-		addLogEntry("Application Version:  " ~ appConfig.applicationVersion, ["verbose"]);
-		addLogEntry("Account Type:         " ~ appConfig.accountType, ["verbose"]);
-		addLogEntry("Default Drive ID:     " ~ appConfig.defaultDriveId, ["verbose"]);
-		addLogEntry("Default Root ID:      " ~ appConfig.defaultRootId, ["verbose"]);
+		addLogEntry("Application Version:   " ~ appConfig.applicationVersion, ["verbose"]);
+		addLogEntry("Account Type:          " ~ appConfig.accountType, ["verbose"]);
+		addLogEntry("Default Drive ID:      " ~ appConfig.defaultDriveId, ["verbose"]);
+		addLogEntry("Default Root ID:       " ~ appConfig.defaultRootId, ["verbose"]);
+		addLogEntry("Microsoft Data Centre: " ~ microsoftDataCentre, ["verbose"]);
 	
 		// Fetch the details from cachedOnlineDriveData
 		DriveDetailsCache cachedOnlineDriveData;

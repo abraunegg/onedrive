@@ -81,31 +81,23 @@ class CurlResponse {
 		this.responseHeaders = http.responseHeaders();
 		this.statusLine = http.statusLine;
 		
-		
-		
-		// Extract the 'x-ms-ags-diagnostic' header if it exists
-		if ("x-ms-ags-diagnostic" in this.responseHeaders) {
-		
-			addLogEntry("x-ms-ags-diagnostic is in header");
-			
-			
-			try {
-				// attempt to extract the data centre location from the header
-				auto diagHeaderData = parseJSON(this.responseHeaders["x-ms-ags-diagnostic"]);
-				string dataCentre = diagHeaderData["ServerInfo"]["DataCenter"].str;
-			
-				addLogEntry("dataCentre = " ~ dataCentre);
-			
-			
-			} catch (Exception e) {
-				// do nothing
+		// has 'microsoftDataCentre' been set yet?
+		if (microsoftDataCentre.empty) {
+			// Extract the 'x-ms-ags-diagnostic' header if it exists
+			if ("x-ms-ags-diagnostic" in this.responseHeaders) {
+				// try and extract the data centre details
+				try {
+					// attempt to extract the data centre location from the header
+					auto diagHeaderData = parseJSON(this.responseHeaders["x-ms-ags-diagnostic"]);
+					string dataCentre = diagHeaderData["ServerInfo"]["DataCenter"].str;
+					// set the Microsoft Data Centre value
+					microsoftDataCentre = dataCentre;
+				} catch (Exception e) {
+					// do nothing
+				}	
 			}
-			
-			
-			
 		}
-		
-		
+				
 		// Output the response headers only if using debug mode + debugging https itself
 		if ((debugLogging) && (debugHTTPSResponse)) {
 			addLogEntry("HTTP Response Headers: " ~ to!string(this.responseHeaders), ["debug"]);
