@@ -851,6 +851,9 @@ sync_file_permissions = "600"
 > [!IMPORTANT]
 > Please note that special permission bits such as setuid, setgid, and the sticky bit are not supported. Valid permission values range from `000` to `777` only.
 
+> [!NOTE]
+> To prevent the application from modifying file or directory permissions and instead rely on the existing file system permission inheritance, add `disable_permission_set = "true"` to your configuration file.
+
 ### How are uploads and downloads managed?
 The system manages downloads and uploads using a multi-threaded approach. Specifically, the application utilises by default 8 threads (a maximum of 16 can be configured) for these processes. This thread count is preset and cannot be modified by users. This design ensures efficient handling of data transfers.
 

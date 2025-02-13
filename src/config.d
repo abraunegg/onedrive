@@ -231,9 +231,17 @@ class ApplicationConfig {
 		//     AD Endpoint:    https://login.chinacloudapi.cn
 		//     Graph Endpoint: 	https://microsoftgraph.chinacloudapi.cn
 		stringValues["azure_ad_endpoint"] = "";
-		
 		// Support single-tenant applications that are not able to use the "common" multiplexer
 		stringValues["azure_tenant_id"] = "";
+		
+		// Support synchronising files based on user desire
+		// - default = whatever order these came in as, processed essentially FIFO
+		// - size_asc = file size ascending
+		// - size_dsc = file size descending
+		// - name_asc = file name ascending
+		// - name_dsc = file name descending
+		stringValues["transfer_order"] = "default";
+				
 		// - Store how many times was --verbose added
 		longValues["verbose"] = verbosityCount; 
 		// - The amount of time (seconds) between monitor sync loops
@@ -355,6 +363,9 @@ class ApplicationConfig {
 		// Display file transfer metrics
 		// - Enable the calculation of transfer metrics (duration,speed) for the transfer of a file
 		boolValues["display_transfer_metrics"] = false;
+		
+		// Diable setting the permissions for directories and files, using the inherited permissions
+		boolValues["disable_permission_set"] = false;
 		
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
@@ -835,6 +846,23 @@ class ApplicationConfig {
 							break;
 						default:
 							addLogEntry("Unknown Azure AD Endpoint - using Global Azure AD Endpoints");
+					}
+				} else if (key == "transfer_order") {
+					switch (value) {
+						case "size_asc":
+							addLogEntry("Files will be transferred sorted by ascending size (smallest first)");
+							break;
+						case "size_dsc":
+							addLogEntry("Files will be transferred sorted by descending size (largest first)");
+							break;
+						case "name_asc":
+							addLogEntry("Files will be transferred sorted by ascending name (A -> Z)");
+							break;
+						case "name_dsc":
+							addLogEntry("Files will be transferred sorted by descending name (Z -> A)");
+							break;
+						default:
+							addLogEntry("Files will be transferred in original order that they were received (FIFO)");
 					}
 				} else if (key == "application_id") {
 					string tempApplicationId = strip(value);
@@ -1411,6 +1439,8 @@ class ApplicationConfig {
 		addLogEntry("Config option 'resync'                       = " ~ to!string(getValueBool("resync")));
 		addLogEntry("Config option 'resync_auth'                  = " ~ to!string(getValueBool("resync_auth")));
 		addLogEntry("Config option 'cleanup_local_files'          = " ~ to!string(getValueBool("cleanup_local_files")));
+		addLogEntry("Config option 'disable_permission_set'       = " ~ to!string(getValueBool("disable_permission_set")));
+		addLogEntry("Config option 'transfer_order'               = " ~ getValueString("transfer_order"));
 
 		// data integrity
 		addLogEntry("Config option 'classify_as_big_delete'       = " ~ to!string(getValueLong("classify_as_big_delete")));
