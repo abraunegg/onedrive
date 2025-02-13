@@ -965,6 +965,7 @@ class ApplicationConfig {
 		stringValues["source_directory"] = "";
 		stringValues["auth_files"] = "";
 		stringValues["auth_response"] = "";
+		stringValues["share_password"] = "";
 		boolValues["display_config"] = false;
 		boolValues["display_sync_status"] = false;
 		boolValues["display_quota"] = false;
@@ -1152,6 +1153,9 @@ class ApplicationConfig {
 				"syncdir",
 					"Specify the local directory used for synchronisation to OneDrive",
 					&stringValues["sync_dir_cli"],
+				"share-password",
+                                        "Require a password to access the shared link when used with --create-share-link <file>",
+                                        &stringValues["share_password"], 
 				"sync|s",
 					"Perform a synchronisation with Microsoft OneDrive",
 					&boolValues["synchronize"],
