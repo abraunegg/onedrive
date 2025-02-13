@@ -3924,13 +3924,13 @@ class SyncEngine {
 		// What do we display here for space remaining
 		if (cachedOnlineDriveData.quotaRemaining > 0) {
 			// Display the actual value
-			addLogEntry("Remaining Free Space: " ~ to!string(byteToGibiByte(cachedOnlineDriveData.quotaRemaining)) ~ " GB (" ~ to!string(cachedOnlineDriveData.quotaRemaining) ~ " bytes)", ["verbose"]);
+			addLogEntry("Remaining Free Space:  " ~ to!string(byteToGibiByte(cachedOnlineDriveData.quotaRemaining)) ~ " GB (" ~ to!string(cachedOnlineDriveData.quotaRemaining) ~ " bytes)", ["verbose"]);
 		} else {
 			// zero or non-zero value or restricted
 			if (!cachedOnlineDriveData.quotaRestricted){
-				addLogEntry("Remaining Free Space: 0 KB", ["verbose"]);
+				addLogEntry("Remaining Free Space:  0 KB", ["verbose"]);
 			} else {
-				addLogEntry("Remaining Free Space: Not Available", ["verbose"]);
+				addLogEntry("Remaining Free Space:  Not Available", ["verbose"]);
 			}
 		}
 		
