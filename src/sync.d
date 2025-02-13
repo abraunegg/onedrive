@@ -27,6 +27,8 @@ import std.uri;
 import std.utf;
 import std.math;
 
+import std.typecons;
+
 // What other modules that we have created do we need to import?
 import config;
 import log;
@@ -2819,9 +2821,15 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("Requested local path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);}
 					mkdirRecurse(newItemPath);
 					
-					// Configure the applicable permissions for the folder
-					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);}
-					newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+					// Has the user disabled the setting of filesystem permissions?
+					if (!appConfig.getValueBool("disable_permission_set")) {
+						// Configure the applicable permissions for the folder
+						if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);}
+						newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+					} else {
+						// Use inherited permissions
+						if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ newItemPath, ["debug"]);}
+					}
 					
 					// Update the time of the folder to match the last modified time as is provided by OneDrive
 					// If there are any files then downloaded into this folder, the last modified time will get 
@@ -3197,6 +3205,28 @@ class SyncEngine {
 		long batchCount = (fileJSONItemsToDownload.length + batchSize - 1) / batchSize;
 		long batchesProcessed = 0;
 		
+		// Transfer order
+		string transferOrder = appConfig.getValueString("transfer_order");
+		
+		// Has the user configured to specify the transfer order of files?
+		if (transferOrder != "default") {
+			// If we have more than 1 item to download, sort the items
+			if (count(fileJSONItemsToDownload) > 1) {
+			
+				// Perform sorting based on transferOrder
+				if (transferOrder == "size_asc") {
+					fileJSONItemsToDownload.sort!((a, b) => a["size"].integer < b["size"].integer); // sort the array by ascending size
+				} else if (transferOrder == "size_dsc") {
+					fileJSONItemsToDownload.sort!((a, b) => a["size"].integer > b["size"].integer); // sort the array by descending size
+				} else if (transferOrder == "name_asc") {
+					fileJSONItemsToDownload.sort!((a, b) => a["name"].str < b["name"].str); // sort the array by ascending name
+				} else if (transferOrder == "name_dsc") {
+					fileJSONItemsToDownload.sort!((a, b) => a["name"].str > b["name"].str); // sort the array by descending name
+				}
+			}
+		}
+		
+		// Process fileJSONItemsToDownload
 		foreach (chunk; fileJSONItemsToDownload.chunks(batchSize)) {
 			// send an array containing 'appConfig.getValueLong("threads")' JSON items to download
 			downloadOneDriveItemsInParallel(chunk);
@@ -7467,7 +7497,37 @@ class SyncEngine {
 		long batchCount = (newLocalFilesToUploadToOneDrive.length + batchSize - 1) / batchSize;
 		long batchesProcessed = 0;
 		
+		// Transfer order
+		string transferOrder = appConfig.getValueString("transfer_order");
+		
+		// Has the user configured to specify the transfer order of files?
+		if (transferOrder != "default") {
+			// If we have more than 1 item to upload, sort the items
+			if (count(newLocalFilesToUploadToOneDrive) > 1) {
+				// Create an array of tuples (file path, file size)
+				auto fileInfo = newLocalFilesToUploadToOneDrive
+					.map!(file => tuple(file, getSize(file))) // Get file size for each file that needs to be uploaded
+					.array;
+
+				// Perform sorting based on transferOrder
+				if (transferOrder == "size_asc") {
+					fileInfo.sort!((a, b) => a[1] < b[1]); // sort the array by ascending size
+				} else if (transferOrder == "size_dsc") {
+					fileInfo.sort!((a, b) => a[1] > b[1]); // sort the array by descending size
+				} else if (transferOrder == "name_asc") {
+					fileInfo.sort!((a, b) => a[0] < b[0]); // sort the array by ascending name
+				} else if (transferOrder == "name_dsc") {
+					fileInfo.sort!((a, b) => a[0] > b[0]); // sort the array by descending name
+				}
+				
+				// Extract sorted file paths
+				newLocalFilesToUploadToOneDrive = fileInfo.map!(t => t[0]).array;
+			}
+		}
+		
+		// Process newLocalFilesToUploadToOneDrive
 		foreach (chunk; newLocalFilesToUploadToOneDrive.chunks(batchSize)) {
+			// send an array containing 'appConfig.getValueLong("threads")' local files to upload
 			uploadNewLocalFileItemsInParallel(chunk);
 		}
 		

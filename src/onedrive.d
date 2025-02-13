@@ -780,9 +780,15 @@ class OneDriveApi {
 			try {
 				if (debugLogging) {addLogEntry("Requested local path does not exist, creating directory structure: " ~ newPath, ["debug"]);}
 				mkdirRecurse(newPath);
-				// Configure the applicable permissions for the folder
-				if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newPath, ["debug"]);}
-				newPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+				// Has the user disabled the setting of filesystem permissions?
+				if (!appConfig.getValueBool("disable_permission_set")) {
+					// Configure the applicable permissions for the folder
+					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newPath, ["debug"]);}
+					newPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+				} else {
+					// Use inherited permissions
+					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ newPath, ["debug"]);}
+				}
 			} catch (FileException exception) {
 				// display the error message
 				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
@@ -794,9 +800,15 @@ class OneDriveApi {
 		downloadFile(url, saveToPath, fileSize);
 		// Does path exist?
 		if (exists(saveToPath)) {
-			// File was downloaded successfully - configure the applicable permissions for the file
-			if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
-			saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
+			// Has the user disabled the setting of filesystem permissions?
+			if (!appConfig.getValueBool("disable_permission_set")) {
+				// File was downloaded successfully - configure the applicable permissions for the file
+				if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
+				saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
+			} else {
+				// Use inherited permissions
+				if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ newPath, ["debug"]);}
+			}
 		}
 	}
 	
