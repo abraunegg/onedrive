@@ -115,7 +115,7 @@ class CurlResponse {
 		// Is 'retry-after' in the response headers
 		if ("retry-after" in responseHeaders) {
 			// Set the retry-after value
-			if ((debugLogging) && (debugHTTPSResponse)) {
+			if (debugLogging) {
 				addLogEntry("curlEngine.http.perform() => Received a 'Retry-After' Header Response with the following value: " ~ to!string(responseHeaders["retry-after"]), ["debug"]);
 				addLogEntry("curlEngine.http.perform() => Setting retryAfterValue to: " ~ responseHeaders["retry-after"], ["debug"]);
 			}
