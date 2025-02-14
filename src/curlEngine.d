@@ -80,6 +80,25 @@ class CurlResponse {
 		hasResponse = true;
 		this.responseHeaders = http.responseHeaders();
 		this.statusLine = http.statusLine;
+		
+		// has 'microsoftDataCentre' been set yet?
+		if (microsoftDataCentre.empty) {
+			// Extract the 'x-ms-ags-diagnostic' header if it exists
+			if ("x-ms-ags-diagnostic" in this.responseHeaders) {
+				// try and extract the data centre details
+				try {
+					// attempt to extract the data centre location from the header
+					auto diagHeaderData = parseJSON(this.responseHeaders["x-ms-ags-diagnostic"]);
+					string dataCentre = diagHeaderData["ServerInfo"]["DataCenter"].str;
+					// set the Microsoft Data Centre value
+					microsoftDataCentre = dataCentre;
+				} catch (Exception e) {
+					// do nothing
+				}	
+			}
+		}
+				
+		// Output the response headers only if using debug mode + debugging https itself
 		if ((debugLogging) && (debugHTTPSResponse)) {
 			addLogEntry("HTTP Response Headers: " ~ to!string(this.responseHeaders), ["debug"]);
 			addLogEntry("HTTP Status Line: " ~ to!string(this.statusLine), ["debug"]);
@@ -198,7 +217,7 @@ class CurlEngine {
         http = HTTP();   // Directly initializes HTTP using its default constructor
         response = null; // Initialize as null
 		internalThreadId = generateAlphanumericString(); // Give this CurlEngine instance a unique ID
-		if (debugLogging) {addLogEntry("Created new CurlEngine instance id: " ~ to!string(internalThreadId), ["debug"]);}
+		if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("Created new CurlEngine instance id: " ~ to!string(internalThreadId), ["debug"]);}
     }
 
 	// The destructor should only clean up resources owned directly by this CurlEngine instance
@@ -225,7 +244,7 @@ class CurlEngine {
 		// Set timestamp of release
 		releaseTimestamp = Clock.currTime(UTC());
 		// Log that we are releasing this engine back to the pool
-		if (debugLogging) {
+		if ((debugLogging) && (debugHTTPSResponse)) {
 			addLogEntry("CurlEngine releaseEngine() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
 			addLogEntry("CurlEngine curlEnginePool size before release: " ~ to!string(curlEnginePool.length), ["debug"]);
 			string engineReleaseMessage = format("Release Timestamp for CurlEngine %s: %s", to!string(internalThreadId), to!string(releaseTimestamp));
@@ -236,7 +255,7 @@ class CurlEngine {
 		cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
         synchronized (CurlEngine.classinfo) {
             curlEnginePool ~= this;
-			if (debugLogging) {addLogEntry("CurlEngine curlEnginePool size after release: " ~ to!string(curlEnginePool.length), ["debug"]);}
+			if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine curlEnginePool size after release: " ~ to!string(curlEnginePool.length), ["debug"]);}
         }
 		// Perform Garbage Collection
 		GC.collect();
@@ -334,7 +353,7 @@ class CurlEngine {
 		
 		if (httpsDebug) {
 			// Output what options we are using so that in the debug log this can be tracked
-			if (debugLogging) {
+			if ((debugLogging) && (debugHTTPSResponse)) {
 				addLogEntry("http.dnsTimeout = " ~ to!string(dnsTimeout), ["debug"]);
 				addLogEntry("http.connectTimeout = " ~ to!string(connectTimeout), ["debug"]);
 				addLogEntry("http.dataTimeout = " ~ to!string(dataTimeout), ["debug"]);
@@ -456,7 +475,7 @@ class CurlEngine {
 	// Cleanup this instance internal variables that may have been set
 	void cleanup(bool flushCookies = false) {
 		// Reset any values to defaults, freeing any set objects
-		if (debugLogging) {addLogEntry("CurlEngine cleanup() called on instance id: " ~ to!string(internalThreadId), ["debug"]);}
+		if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine cleanup() called on instance id: " ~ to!string(internalThreadId), ["debug"]);}
 		
 		// Is the instance is stopped?
 		if (!http.isStopped) {
@@ -493,23 +512,23 @@ class CurlEngine {
 	// Shut down the curl instance & close any open sockets
 	void shutdownCurlHTTPInstance() {
 		// Log that we are attempting to shutdown this curl instance
-		if (debugLogging) {addLogEntry("CurlEngine shutdownCurlHTTPInstance() called on instance id: " ~ to!string(internalThreadId), ["debug"]);}
+		if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine shutdownCurlHTTPInstance() called on instance id: " ~ to!string(internalThreadId), ["debug"]);}
 		
 		// Is this curl instance is stopped?
 		if (!http.isStopped) {
-			if (debugLogging) {
+			if ((debugLogging) && (debugHTTPSResponse)) {
 				addLogEntry("HTTP instance still active: " ~ to!string(internalThreadId), ["debug"]);
 				addLogEntry("HTTP instance isStopped state before http.shutdown(): " ~ to!string(http.isStopped), ["debug"]);
 			}
 			http.shutdown();
-			if (debugLogging) {addLogEntry("HTTP instance isStopped state post http.shutdown(): " ~ to!string(http.isStopped), ["debug"]);}
+			if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("HTTP instance isStopped state post http.shutdown(): " ~ to!string(http.isStopped), ["debug"]);}
 			object.destroy(http); // Destroy, however we cant set to null
-			if (debugLogging) {addLogEntry("HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);}
+			if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);}
 			
 		} else {
 			// Already stopped .. destroy it
 			object.destroy(http); // Destroy, however we cant set to null
-			if (debugLogging) {addLogEntry("Stopped HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);}
+			if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("Stopped HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);}
 		}
 		// Perform Garbage Collection
 		GC.collect();
@@ -522,14 +541,14 @@ class CurlEngine {
 
 // Get a curl instance for the OneDrive API to use
 CurlEngine getCurlInstance() {
-	if (debugLogging) {addLogEntry("CurlEngine getCurlInstance() called", ["debug"]);}
+	if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine getCurlInstance() called", ["debug"]);}
 	
 	synchronized (CurlEngine.classinfo) {
 		// What is the current pool size
-		if (debugLogging) {addLogEntry("CurlEngine curlEnginePool current size: " ~ to!string(curlEnginePool.length), ["debug"]);}
+		if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine curlEnginePool current size: " ~ to!string(curlEnginePool.length), ["debug"]);}
 	
 		if (curlEnginePool.empty) {
-			if (debugLogging) {addLogEntry("CurlEngine curlEnginePool is empty - constructing a new CurlEngine instance", ["debug"]);}
+			if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine curlEnginePool is empty - constructing a new CurlEngine instance", ["debug"]);}
 			return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
 		} else {
 			CurlEngine curlEngine = curlEnginePool[$ - 1];
@@ -538,12 +557,12 @@ CurlEngine getCurlInstance() {
 			// Is this engine stopped?
 			if (curlEngine.http.isStopped) {
 				// return a new curl engine as a stopped one cannot be used
-				if (debugLogging) {addLogEntry("CurlEngine was in a stopped state (not usable) - constructing a new CurlEngine instance", ["debug"]);}
+				if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine was in a stopped state (not usable) - constructing a new CurlEngine instance", ["debug"]);}
 				return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
 			} else {
 				// When was this engine last used?
 				auto elapsedTime = Clock.currTime(UTC()) - curlEngine.releaseTimestamp;
-				if (debugLogging) {
+				if ((debugLogging) && (debugHTTPSResponse)) {
 					string engineIdleMessage = format("CurlEngine %s time since last use: %s", to!string(curlEngine.internalThreadId), to!string(elapsedTime));
 					addLogEntry(engineIdleMessage, ["debug"]);
 				}
@@ -555,18 +574,18 @@ CurlEngine getCurlInstance() {
 				
 				if (elapsedTime > dur!"seconds"(curlEngine.maxIdleTime)) {
 					// Too long idle engine, clean it up and create a new one
-					if (debugLogging) {
+					if ((debugLogging) && (debugHTTPSResponse)) {
 						string curlTooOldMessage = format("CurlEngine idle for > %d seconds .... destroying and returning a new curl engine instance", curlEngine.maxIdleTime);
 						addLogEntry(curlTooOldMessage, ["debug"]);
 					}
 					
 					curlEngine.cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
 					curlEngine.shutdownCurlHTTPInstance();  // Assume proper cleanup of any resources used by HTTP
-					if (debugLogging) {addLogEntry("Returning NEW curlEngine instance", ["debug"]);}
+					if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("Returning NEW curlEngine instance", ["debug"]);}
 					return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
 				} else {
 					// return an existing curl engine
-					if (debugLogging) {
+					if ((debugLogging) && (debugHTTPSResponse)) {
 						addLogEntry("CurlEngine was in a valid state - returning existing CurlEngine instance", ["debug"]);
 						addLogEntry("Using CurlEngine instance ID: " ~ curlEngine.internalThreadId, ["debug"]);
 					}
@@ -581,10 +600,10 @@ CurlEngine getCurlInstance() {
 
 // Release all CurlEngine instances
 void releaseAllCurlInstances() {
-	if (debugLogging) {addLogEntry("CurlEngine releaseAllCurlInstances() called", ["debug"]);}
+	if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine releaseAllCurlInstances() called", ["debug"]);}
 	synchronized (CurlEngine.classinfo) {
 		// What is the current pool size
-		if (debugLogging) {addLogEntry("CurlEngine curlEnginePool size to release: " ~ to!string(curlEnginePool.length), ["debug"]);}
+		if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine curlEnginePool size to release: " ~ to!string(curlEnginePool.length), ["debug"]);}
 		if (curlEnginePool.length > 0) {
 			// Safely iterate and clean up each CurlEngine instance
 			foreach (curlEngineInstance; curlEnginePool) {
@@ -602,7 +621,7 @@ void releaseAllCurlInstances() {
 				// Perform Garbage Collection on this destroyed curl engine
 				GC.collect();
 				// Log release
-				if (debugLogging) {addLogEntry("CurlEngine destroyed", ["debug"]);}
+				if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine destroyed", ["debug"]);}
 			}
 		
 			// Clear the array after all instances have been handled
@@ -614,7 +633,7 @@ void releaseAllCurlInstances() {
 	// Return free memory to the OS
 	GC.minimize();
 	// Log that all curl engines have been released
-	if (debugLogging) {addLogEntry("CurlEngine releaseAllCurlInstances() completed", ["debug"]);}
+	if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine releaseAllCurlInstances() completed", ["debug"]);}
 }
 
 // Return how many curl engines there are

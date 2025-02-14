@@ -383,7 +383,7 @@ class OneDriveApi {
 	// Release CurlEngine bask to the Curl Engine Pool
 	void releaseCurlEngine() {
 		// Log that this was called
-		if (debugLogging) {addLogEntry("OneDrive API releaseCurlEngine() Called", ["debug"]);}
+		if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("OneDrive API releaseCurlEngine() Called", ["debug"]);}
 		
 		// Release curl instance back to the pool
 		if (curlEngine !is null) {
