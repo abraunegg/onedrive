@@ -1993,6 +1993,9 @@ class SyncEngine {
 							if (debugLogging) {addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);}
 							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 							createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
+						} else {
+							// The Shared JSON structure is missing .....
+							if (debugLogging) {addLogEntry("Personal Shared Item JSON object is MISSING the 'shared' JSON structure ... API BUG ?", ["debug"]);}
 						}
 						
 						// Ensure that this item has no parent
@@ -3997,8 +4000,8 @@ class SyncEngine {
 			Item remoteEntryItem;
 			string fullLocalPath;
 			
-			// Get the DB entry
-			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, remoteEntryItem);
+			// Get the DB entry for this 'remote' item
+			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, thisItemId, remoteEntryItem);
 			// Calculate the local path extension for this item
 			string localPathExtension = itemDB.computePath(remoteEntryItem.driveId, remoteEntryItem.id);
 			if (debugLogging) {addLogEntry(" localPathExtension = " ~ to!string(localPathExtension), ["debug"]);}
