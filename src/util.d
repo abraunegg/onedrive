@@ -1197,8 +1197,8 @@ bool hasLastModifiedByUser(const ref JSONValue item) {
 }
 
 bool hasLastModifiedByUserDisplayName(const ref JSONValue item) {
-	if (hasCreatedBy(item)) {
-		if (hasCreatedByUser(item)) {
+	if (hasLastModifiedBy(item)) {
+		if (hasLastModifiedByUser(item)) {
 			return ("displayName" in item["lastModifiedBy"]["user"]) != null;
 		} else {
 			return false;

@@ -109,17 +109,17 @@ estr
 eventfd
 evt
 fasynchronous
+fbc
 fcf
 fcgid
 fcgienv
-FFFD
 FCGX
-fbc
 fcontext
 fedoraproject
 fefefe
 fexceptions
 ffat
+FFFD
 fhandler
 flto
 fstack
@@ -130,6 +130,7 @@ gdc
 gdk
 gerror
 getenforce
+getxattr
 gfortran
 GFree
 Gibi
@@ -191,9 +192,9 @@ libgdk
 libgio
 libglib
 libgobject
+libinotify
 liblphobos
 libm
-libinotify
 libnotify
 libsqlite
 Lighttpd
@@ -336,6 +337,7 @@ semanage
 sendfd
 setsebool
 settime
+setxattr
 sev
 sfn
 sharedstatedir
@@ -419,5 +421,3 @@ yourfile
 yourprogram
 Zorin
 zypper
-setxattr
-getxattr
