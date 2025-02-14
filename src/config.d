@@ -364,7 +364,7 @@ class ApplicationConfig {
 		// - Enable the calculation of transfer metrics (duration,speed) for the transfer of a file
 		boolValues["display_transfer_metrics"] = false;
 		
-    // Enable writing extended attributes about a file to xattr values
+		// Enable writing extended attributes about a file to xattr values
 		// - file creator
 		// - file last modifier
 		boolValues["write_xattr_data"] = false;
