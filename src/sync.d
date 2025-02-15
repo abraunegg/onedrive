@@ -4004,7 +4004,7 @@ class SyncEngine {
 			if (debugLogging) {addLogEntry("Attempting to calculate shared folder local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
 			
 			// Get the DB entry for this 'remote' item
-			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, thisItemId, remoteEntryItem);
+			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, remoteEntryItem);
 			
 			// What was returned from the Database?
 			if (debugLogging) {addLogEntry("remoteEntryItem: " ~ to!string(remoteEntryItem), ["debug"]);}
