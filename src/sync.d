@@ -1993,6 +1993,9 @@ class SyncEngine {
 							if (debugLogging) {addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);}
 							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 							createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
+						} else {
+							// The Shared JSON structure is missing .....
+							if (debugLogging) {addLogEntry("Personal Shared Item JSON object is MISSING the 'shared' JSON structure ... API BUG ?", ["debug"]);}
 						}
 						
 						// Ensure that this item has no parent
@@ -3962,8 +3965,15 @@ class SyncEngine {
 		string fullCalculatedPath;
 		bool calculateLocalExtension = false;
 		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			thisDriveId = testProvidedDriveIdForLengthIssue(thisDriveId);
+		}
+		
 		// What driveID and itemID we trying to calculate the path for
-		if (debugLogging) {addLogEntry("Attempting to calculate local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
+		if (debugLogging) {addLogEntry("Attempting to calculate initial local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
 		
 		// Perform the original calculation of the path using the values provided
 		try {
@@ -3989,13 +3999,28 @@ class SyncEngine {
 			// Use the 'thisDriveId' value to obtain the 'remote' item type record which represents the local path junction point to the shared folder
 			Item remoteEntryItem;
 			string fullLocalPath;
+			string localPathExtension;
 			
-			// Get the DB entry
+			if (debugLogging) {addLogEntry("Attempting to calculate shared folder local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
+			
+			// Get the DB entry for this 'remote' item
 			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, remoteEntryItem);
-			// Calculate the local path extension for this item
-			string localPathExtension = itemDB.computePath(remoteEntryItem.driveId, remoteEntryItem.id);
+			
+			// What was returned from the Database?
+			if (debugLogging) {addLogEntry("remoteEntryItem: " ~ to!string(remoteEntryItem), ["debug"]);}
+			
+			// What details do we use?
+			if (!remoteEntryItem.driveId.empty) {
+				// use the returned 'remote' DB entry values
+				localPathExtension = itemDB.computePath(remoteEntryItem.driveId, remoteEntryItem.id);
+			} else {
+				// do nothing at the moment ....
+			}
+			
+			// result for localPathExtension
 			if (debugLogging) {addLogEntry(" localPathExtension = " ~ to!string(localPathExtension), ["debug"]);}
 			
+			// what do we use?
 			if (initialCalculatedPath == ".") {
 				// The '.' represents the root shared folder ... 
 				fullLocalPath = localPathExtension;
@@ -9385,6 +9410,13 @@ class SyncEngine {
 		queryChildrenOneDriveApiInstance = new OneDriveApi(appConfig);
 		queryChildrenOneDriveApiInstance.initialise();
 		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			driveId = testProvidedDriveIdForLengthIssue(driveId);
+		}
+		
 		while (true) {
 			// Check if exitHandlerTriggered is true
 			if (exitHandlerTriggered) {
@@ -9494,6 +9526,13 @@ class SyncEngine {
 			functionStartTime = Clock.currTime();
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			driveId = testProvidedDriveIdForLengthIssue(driveId);
 		}
 		
 		// function variables 
