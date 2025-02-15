@@ -3973,7 +3973,7 @@ class SyncEngine {
 		}
 		
 		// What driveID and itemID we trying to calculate the path for
-		if (debugLogging) {addLogEntry("Attempting to calculate local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
+		if (debugLogging) {addLogEntry("Attempting to calculate initial local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
 		
 		// Perform the original calculation of the path using the values provided
 		try {
@@ -3999,13 +3999,28 @@ class SyncEngine {
 			// Use the 'thisDriveId' value to obtain the 'remote' item type record which represents the local path junction point to the shared folder
 			Item remoteEntryItem;
 			string fullLocalPath;
+			string localPathExtension;
+			
+			if (debugLogging) {addLogEntry("Attempting to calculate shared folder local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
 			
 			// Get the DB entry for this 'remote' item
 			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, thisItemId, remoteEntryItem);
-			// Calculate the local path extension for this item
-			string localPathExtension = itemDB.computePath(remoteEntryItem.driveId, remoteEntryItem.id);
+			
+			// What was returned from the Database?
+			if (debugLogging) {addLogEntry("remoteEntryItem: " ~ to!string(remoteEntryItem), ["debug"]);}
+			
+			// What details do we use?
+			if (!remoteEntryItem.driveId.empty) {
+				// use the returned 'remote' DB entry values
+				localPathExtension = itemDB.computePath(remoteEntryItem.driveId, remoteEntryItem.id);
+			} else {
+				// do nothing at the moment ....
+			}
+			
+			// result for localPathExtension
 			if (debugLogging) {addLogEntry(" localPathExtension = " ~ to!string(localPathExtension), ["debug"]);}
 			
+			// what do we use?
 			if (initialCalculatedPath == ".") {
 				// The '.' represents the root shared folder ... 
 				fullLocalPath = localPathExtension;
