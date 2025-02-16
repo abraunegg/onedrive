@@ -371,7 +371,7 @@ class ClientSideFiltering {
 							if (matchRuleSegmentsToPathSegments(syncListRuleEntry, path)) {
 								// PARENTAL PATH MATCH
 								if (debugLogging) {addLogEntry("Parental path match with 'sync_list' rule entry", ["debug"]);}
-								
+								// What sort of rule was this?
 								if (!thisIsAnExcludeRule) {
 									// Include Rule
 									if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: parental path match", ["debug"]);}
@@ -481,63 +481,81 @@ class ClientSideFiltering {
 			}
 			
 			// Does the 'sync_list' rule contain a wildcard (*) or globbing (**) reference anywhere in the rule?
+			//	EXCLUSION
+			//		!/Programming/Projects/Android/**/build/*
 			if (canFind(syncListRuleEntry, wildcard)) {
 				// reset the applicable flag
 				wildcardRuleMatched = false;
-			
-				// sync_list rule contains some sort of wildcard sequence
-				if (thisIsAnExcludeRule) {
-					if (debugLogging) {addLogEntry("wildcard (* or **) exclusion rule: !" ~ syncListRuleEntry, ["debug"]);}
-				} else {
-					if (debugLogging) {addLogEntry("wildcard (* or **) inclusion rule: " ~ syncListRuleEntry, ["debug"]);}
+				
+				// Does this 'wildcard' rule even apply to this path?
+				auto wildcardDepth = firstWildcardDepth(syncListRuleEntry);
+				auto pathSegments = count(pathSplitter(path));
+				
+				// If the input path starts with a '/' the path segment count needs to be reduced by 1, as pathSplitter adds this as the first array element
+				if (to!string(path[0]) == "/") {
+					pathSegments = pathSegments - 1;
 				}
 				
-				// Is this a globbing rule (**) or just a single wildcard (*) entries
-				if (canFind(syncListRuleEntry, globbing)) {
-					// globbing (**) rule processing
-					if (matchPathAgainstRule(path, syncListRuleEntry)) {
-						// set the applicable flag
-						wildcardRuleMatched = true;
-						if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: globbing pattern match", ["debug"]);}
-					}
+				// are there enough path segments for this wildcard rule to apply?
+				if (pathSegments < wildcardDepth) {
+					// there are not enough path segments up to the first wildcard character for this rule to even be applicable
+					if (debugLogging) {addLogEntry("- This sync list wildcard rule should not be evaluated as the wildcard appears beyond the current input path", ["debug"]);}
 				} else {
-					// wildcard (*) rule processing
-					// create regex from 'syncListRuleEntry'
-					auto allowedMask = regex(createRegexCompatiblePath(syncListRuleEntry));
-					if (matchAll(path, allowedMask)) {
-						// set the applicable flag
-						wildcardRuleMatched = true;
-						if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard pattern match", ["debug"]);}
+					// path segments are enough for this wildcard rule to potentially apply
+					// sync_list rule contains some sort of wildcard sequence
+					if (thisIsAnExcludeRule) {
+						if (debugLogging) {addLogEntry("wildcard (* or **) exclusion rule: !" ~ syncListRuleEntry, ["debug"]);}
 					} else {
-						// matchAll no match ... try another way just to be sure
+						if (debugLogging) {addLogEntry("wildcard (* or **) inclusion rule: " ~ syncListRuleEntry, ["debug"]);}
+					}
+					
+					// Is this a globbing rule (**) or just a single wildcard (*) entries
+					if (canFind(syncListRuleEntry, globbing)) {
+						// globbing (**) rule processing
 						if (matchPathAgainstRule(path, syncListRuleEntry)) {
 							// set the applicable flag
 							wildcardRuleMatched = true;
-							if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard pattern match using segment matching", ["debug"]);}
+							if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: globbing pattern match using segment matching", ["debug"]);}
+						}
+					} else {
+						// wildcard (*) rule processing
+						// create regex from 'syncListRuleEntry'
+						auto allowedMask = regex(createRegexCompatiblePath(syncListRuleEntry));
+						if (matchAll(path, allowedMask)) {
+							// set the applicable flag
+							wildcardRuleMatched = true;
+							if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard pattern match", ["debug"]);}
+						} else {
+							// matchAll no match ... try another way just to be sure
+							if (matchPathAgainstRule(path, syncListRuleEntry)) {
+								// set the applicable flag
+								wildcardRuleMatched = true;
+								if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard pattern match using segment matching", ["debug"]);}
+							}
 						}
 					}
-				}
-				
-				// Was the rule matched?
-				if (wildcardRuleMatched) {
-					// Is this an exclude rule?
-					if (thisIsAnExcludeRule) {
-						// Yes exclude rule
-						if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing rule matched and must be excluded", ["debug"]);}
-						excludeWildcardMatched = true;
-						exclude = true;
-						finalResult = true;
-					} else {
-						// include rule
-						if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing pattern matched and must be included", ["debug"]);}
-						finalResult = false;
-						excludeWildcardMatched = false;
+					
+					// Was the rule matched?
+					if (wildcardRuleMatched) {
+						// Is this an exclude rule?
+						if (thisIsAnExcludeRule) {
+							// Yes exclude rule
+							if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing rule matched and must be excluded", ["debug"]);}
+							excludeWildcardMatched = true;
+							exclude = true;
+							finalResult = true;
+						} else {
+							// include rule
+							if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing pattern matched and must be included", ["debug"]);}
+							finalResult = false;
+							excludeWildcardMatched = false;
+						}
 					}
 				}
 			}
 		}
 		
-		
+		// debug logging post 'sync_list' rule evaluations
 		if (debugLogging) {
 			// Rule evaluation complete
 			addLogEntry("------------------------------------------------------------------------", ["debug"]);
@@ -563,6 +581,19 @@ class ClientSideFiltering {
 		if (debugLogging) {addLogEntry("******************* SYNC LIST RULES EVALUATION END *********************", ["debug"]);}
 		return finalResult;
 	}
+	
+	// Calculate wildcard character depth in path
+	int firstWildcardDepth(string syncListRuleEntry)
+	{
+		int depth = 0;
+		foreach (segment; pathSplitter(syncListRuleEntry))
+		{
+			if (segment.canFind("*")) // Check for wildcard characters
+				return depth;
+			depth++;
+		}
+		return depth; // No wildcard found should be '0'
+}
 	
 	// Create a wildcard regex compatible string based on the sync list rule
 	string createRegexCompatiblePath(string regexCompatiblePath) {
