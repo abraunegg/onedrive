@@ -10828,7 +10828,7 @@ class SyncEngine {
 								];
 							}
 							// If a share-password was passed use it when creating the link 
-							if (appConfig.getValueString("share_password") != "") {
+							if (strip(appConfig.getValueString("share_password")) != "") {
                                                                 accessScope["password"] = appConfig.getValueString("share_password");
                                                         }
 							
