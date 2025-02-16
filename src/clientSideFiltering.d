@@ -662,12 +662,6 @@ class ClientSideFiltering {
 		auto ruleSegments = rulePath.strip.split("/").filter!(s => !s.empty).array;
 		auto inputSegments = inputPath.strip.split("/").filter!(s => !s.empty).array;
 		
-		// Print rule and input segments for validation
-		if (debugLogging) {
-			addLogEntry("Rule Segments: " ~ to!string(ruleSegments), ["debug"]);
-			addLogEntry("Input Segments: " ~ to!string(inputSegments), ["debug"]);
-		}
-
 		// If rule has more segments than input, or input has more segments than rule, no match is possible
 		if ((ruleSegments.length > inputSegments.length) || ( inputSegments.length > ruleSegments.length)) {
 			return false;
@@ -692,12 +686,6 @@ class ClientSideFiltering {
 		auto ruleSegments = rulePath.strip.split("/").filter!(s => !s.empty).array;
 		auto inputSegments = inputPath.strip.split("/").filter!(s => !s.empty).array;
 		
-		// Print rule and input segments for validation
-		if (debugLogging) {
-			addLogEntry("Rule Segments: " ~ to!string(ruleSegments), ["debug"]);
-			addLogEntry("Input Segments: " ~ to!string(inputSegments), ["debug"]);
-		}
-
 		// If rule has more segments than input, no match is possible
 		if (ruleSegments.length > inputSegments.length) {
 			return false;
@@ -712,12 +700,6 @@ class ClientSideFiltering {
 		// Split both paths by '/'
 		auto ruleSegments = rulePath.strip.split("/").filter!(s => !s.empty).array;
 		auto inputSegments = inputPath.strip.split("/").filter!(s => !s.empty).array;
-		
-		// Print rule and input segments for validation
-		if (debugLogging) {
-			addLogEntry("Rule Segments: " ~ to!string(ruleSegments), ["debug"]);
-			addLogEntry("Input Segments: " ~ to!string(inputSegments), ["debug"]);
-		}
 		
 		// Check that both segments are not empty
 		if (ruleSegments.length == 0 || inputSegments.length == 0) {
