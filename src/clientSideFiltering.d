@@ -335,7 +335,17 @@ class ClientSideFiltering {
 			// wildcard (*) rules are below if we get there, if this rule does not contain a wildcard
 			if ((to!string(syncListRuleEntry[0]) == "/") && (!canFind(syncListRuleEntry, wildcard))) {
 				// attempt to perform an exact segment match
-				if (exactMatchRuleSegmentsToPathSegments(syncListRuleEntry, path)) {
+				// split both paths by '/' to create segment arrays
+				string[] ruleSegments = syncListRuleEntry.strip.split("/").filter!(s => !s.empty).array;
+				string[] pathSegments = path.strip.split("/").filter!(s => !s.empty).array;
+				
+				// Print rule and input segments for validation during debug
+				if (debugLogging) {
+					addLogEntry("Rule Segments: " ~ to!string(ruleSegments), ["debug"]);
+					addLogEntry("Path Segments: " ~ to!string(pathSegments), ["debug"]);
+				}
+				
+				if (exactMatchRuleSegmentsToPathSegments(ruleSegments, pathSegments)) {
 					// EXACT PATH MATCH
 					if (debugLogging) {addLogEntry("Exact path match with 'sync_list' rule entry", ["debug"]);}
 					
@@ -359,16 +369,15 @@ class ClientSideFiltering {
 				} else {
 					// NOT an EXACT MATCH, so check the very first path segment
 					// - This is so that paths in 'sync_list' as specified as /some path/another path/ actually get included|excluded correctly
-					if (matchFirstSegmentToPathFirstSegment(syncListRuleEntry, path)) {
+					if (matchFirstSegmentToPathFirstSegment(ruleSegments, pathSegments)) {
 						// PARENT ROOT MATCH
 						if (debugLogging) {addLogEntry("Parent root path match with 'sync_list' rule entry", ["debug"]);}
 						
 						// Does the 'rest' of the input path match?
 						// We only need to do this step if the input path has more and 1 segment (the parent folder)
-						auto inputSegments = path.strip.split("/").filter!(s => !s.empty).array;
-						if (count(inputSegments) > 1) {
+						if (count(pathSegments) > 1) {
 							// More segments to check, so do a parental path match
-							if (matchRuleSegmentsToPathSegments(syncListRuleEntry, path)) {
+							if (matchRuleSegmentsToPathSegments(ruleSegments, pathSegments)) {
 								// PARENTAL PATH MATCH
 								if (debugLogging) {addLogEntry("Parental path match with 'sync_list' rule entry", ["debug"]);}
 								// What sort of rule was this?
@@ -483,18 +492,15 @@ class ClientSideFiltering {
 			// Does the 'sync_list' rule contain a wildcard (*) or globbing (**) reference anywhere in the rule?
 			//	EXCLUSION
 			//		!/Programming/Projects/Android/**/build/*
+			//  INCLUSION
+			//		/Programming/Projects/Android/**/build/*
 			if (canFind(syncListRuleEntry, wildcard)) {
 				// reset the applicable flag
 				wildcardRuleMatched = false;
 				
 				// Does this 'wildcard' rule even apply to this path?
 				auto wildcardDepth = firstWildcardDepth(syncListRuleEntry);
-				auto pathSegments = count(pathSplitter(path));
-				
-				// If the input path starts with a '/' the path segment count needs to be reduced by 1, as pathSplitter adds this as the first array element
-				if (to!string(path[0]) == "/") {
-					pathSegments = pathSegments - 1;
-				}
+				auto pathSegments = count(path.strip.split("/").filter!(s => !s.empty).array);
 				
 				// are there enough path segments for this wildcard rule to apply?
 				if (pathSegments < wildcardDepth) {
@@ -583,8 +589,7 @@ class ClientSideFiltering {
 	}
 	
 	// Calculate wildcard character depth in path
-	int firstWildcardDepth(string syncListRuleEntry)
-	{
+	int firstWildcardDepth(string syncListRuleEntry) {
 		int depth = 0;
 		foreach (segment; pathSplitter(syncListRuleEntry))
 		{
@@ -593,7 +598,7 @@ class ClientSideFiltering {
 			depth++;
 		}
 		return depth; // No wildcard found should be '0'
-}
+	}
 	
 	// Create a wildcard regex compatible string based on the sync list rule
 	string createRegexCompatiblePath(string regexCompatiblePath) {
@@ -656,11 +661,8 @@ class ClientSideFiltering {
 		return j == ruleSegments.length || (j == ruleSegments.length - 1 && ruleSegments[j] == "**") || lastSegmentMatchesRule;
 	}
 	
-	bool exactMatchRuleSegmentsToPathSegments(string rulePath, string inputPath) {
+	bool exactMatchRuleSegmentsToPathSegments(string[] ruleSegments, string[] inputSegments) {
 		if (debugLogging) {addLogEntry("Running exactMatchRuleSegmentsToPathSegments()", ["debug"]);}
-		// Split both paths by '/'
-		auto ruleSegments = rulePath.strip.split("/").filter!(s => !s.empty).array;
-		auto inputSegments = inputPath.strip.split("/").filter!(s => !s.empty).array;
 		
 		// If rule has more segments than input, or input has more segments than rule, no match is possible
 		if ((ruleSegments.length > inputSegments.length) || ( inputSegments.length > ruleSegments.length)) {
@@ -680,11 +682,8 @@ class ClientSideFiltering {
 		return true;
 	}
 	
-	bool matchRuleSegmentsToPathSegments(string rulePath, string inputPath) {
+	bool matchRuleSegmentsToPathSegments(string[] ruleSegments, string[] inputSegments) {
 		if (debugLogging) {addLogEntry("Running matchRuleSegmentsToPathSegments()", ["debug"]);}
-		// Split both paths by '/'
-		auto ruleSegments = rulePath.strip.split("/").filter!(s => !s.empty).array;
-		auto inputSegments = inputPath.strip.split("/").filter!(s => !s.empty).array;
 		
 		// If rule has more segments than input, no match is possible
 		if (ruleSegments.length > inputSegments.length) {
@@ -695,12 +694,9 @@ class ClientSideFiltering {
 		return equal(ruleSegments, inputSegments[0 .. ruleSegments.length]);
 	}
 	
-	bool matchFirstSegmentToPathFirstSegment(string rulePath, string inputPath) {
+	bool matchFirstSegmentToPathFirstSegment(string[] ruleSegments, string[] inputSegments) {
 		if (debugLogging) {addLogEntry("Running matchFirstSegmentToPathFirstSegment()", ["debug"]);}
-		// Split both paths by '/'
-		auto ruleSegments = rulePath.strip.split("/").filter!(s => !s.empty).array;
-		auto inputSegments = inputPath.strip.split("/").filter!(s => !s.empty).array;
-		
+				
 		// Check that both segments are not empty
 		if (ruleSegments.length == 0 || inputSegments.length == 0) {
 			return false; // Return false if either segment array is empty
