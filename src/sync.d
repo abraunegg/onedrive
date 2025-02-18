@@ -2901,6 +2901,13 @@ class SyncEngine {
 			parentObjectId = onedriveJSONItem["remoteItem"]["id"].str;
 		}
 		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			parentDriveId = testProvidedDriveIdForLengthIssue(parentDriveId);
+		}
+		
 		// Try and fetch this shared folder parent's details
 		try {
 			if (debugLogging) {addLogEntry(format("Fetching Shared Folder online data for parentDriveId '%s' and parentObjectId '%s'", parentDriveId, parentObjectId), ["debug"]);}
@@ -3004,6 +3011,13 @@ class SyncEngine {
 			sharedFolderDatabaseTie.type = ItemType.root;
 		}
 		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			sharedFolderDatabaseTie.driveId = testProvidedDriveIdForLengthIssue(sharedFolderDatabaseTie.driveId);
+		}
+				
 		// Log action
 		addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder from the online parental data: " ~ sharedFolderDatabaseTie.name, ["debug"]);
 		addLogEntry("Shared Folder DB Tie Record data: " ~ to!string(sharedFolderDatabaseTie), ["debug"]);
@@ -11845,6 +11859,13 @@ class SyncEngine {
 		
 		// ensure there is no parentId
 		tieDBItem.parentId = null;
+		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			tieDBItem.driveId = testProvidedDriveIdForLengthIssue(tieDBItem.driveId);
+		}
 		
 		// Add this DB Tie parent record to the local database
 		if (debugLogging) {addLogEntry("Creating|Updating into local database a 'root' DB Tie record for a OneDrive Shared Folder online: " ~ to!string(tieDBItem), ["debug"]);}
