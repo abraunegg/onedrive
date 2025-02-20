@@ -36,6 +36,7 @@ import util;
 import onedrive;
 import itemdb;
 import clientSideFiltering;
+import xattr;
 
 class JsonResponseException: Exception {
 	@safe pure this(string inputMessage) {
@@ -2636,6 +2637,11 @@ class SyncEngine {
 					createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
 				}
 				
+				// Did the user configure to save xattr data about this file?
+				if (appConfig.getValueBool("write_xattr_data")) {
+					writeXattrData(newItemPath, onedriveJSONItem);
+				}
+				
 				// Display function processing time if configured to do so
 				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 					// Combine module name & running Function
@@ -2734,6 +2740,11 @@ class SyncEngine {
 						
 						// Add item to database
 						itemDB.upsert(newDatabaseItem);
+						
+						// Did the user configure to save xattr data about this file?
+						if (appConfig.getValueBool("write_xattr_data")) {
+							writeXattrData(newItemPath, onedriveJSONItem);
+						}
 						
 						// Display function processing time if configured to do so
 						if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -3641,6 +3652,11 @@ class SyncEngine {
 					// Remove 'newItemPath' from 'fileDownloadFailures' as this is no longer a failed download
 					fileDownloadFailures = fileDownloadFailures.filter!(item => item != newItemPath).array;
 				}
+				
+				// Did the user configure to save xattr data about this file?
+				if (appConfig.getValueBool("write_xattr_data")) {
+					writeXattrData(newItemPath, onedriveJSONItem);
+				}
 			} else {
 				// Output download failed
 				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!", ["info", "notify"]);
@@ -3656,6 +3672,53 @@ class SyncEngine {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
+	}
+	
+	// Write xattr data if configured to do so
+	void writeXattrData(string filePath, JSONValue onedriveJSONItem) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// This function will write the following xattr attributes based on the JSON data received from Microsoft onedrive
+		// - createdBy using the 'displayName' value
+		// - lastModifiedBy using the 'displayName' value
+		
+		string createdBy;
+		string lastModifiedBy;
+		
+		// Configure 'createdBy' from the JSON data
+		if (hasCreatedByUserDisplayName(onedriveJSONItem)) {
+			createdBy = onedriveJSONItem["createdBy"]["user"]["displayName"].str;
+		} else {
+			// required data not in JSON data
+			createdBy = "Unknown";
+		}
+		
+		// Configure 'lastModifiedBy' from the JSON data
+		if (hasLastModifiedByUserDisplayName(onedriveJSONItem)) {
+			lastModifiedBy = onedriveJSONItem["lastModifiedBy"]["user"]["displayName"].str;
+		} else {
+			// required data not in JSON data
+			lastModifiedBy = "Unknown";
+		}
+		
+		// Set the xattr values
+		setXAttr(filePath, "user.onedrive.createdBy", createdBy);
+		setXAttr(filePath, "user.onedrive.lastModifiedBy", lastModifiedBy);
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}	
 	}
 	
 	// Test if the given item is in-sync. Returns true if the given item corresponds to the local one
