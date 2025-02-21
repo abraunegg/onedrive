@@ -833,7 +833,7 @@ By default, the location where your Microsoft OneDrive data is stored, is within
 To change this location, the application configuration option 'sync_dir' is used to specify a new local directory where your Microsoft OneDrive data should be stored.
 
 > [!IMPORTANT]
->  Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
+>  Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of local file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
 
 ### How to change what file and directory permissions are assigned to data that is downloaded from Microsoft OneDrive?
 The following are the application default permissions for any new directory or file that is created locally when downloaded from Microsoft OneDrive:
@@ -850,6 +850,9 @@ sync_file_permissions = "600"
 
 > [!IMPORTANT]
 > Please note that special permission bits such as setuid, setgid, and the sticky bit are not supported. Valid permission values range from `000` to `777` only.
+
+> [!NOTE]
+> To prevent the application from modifying file or directory permissions and instead rely on the existing file system permission inheritance, add `disable_permission_set = "true"` to your configuration file.
 
 ### How are uploads and downloads managed?
 The system manages downloads and uploads using a multi-threaded approach. Specifically, the application utilises by default 8 threads (a maximum of 16 can be configured) for these processes. This thread count is preset and cannot be modified by users. This design ensures efficient handling of data transfers.

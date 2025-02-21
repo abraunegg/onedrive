@@ -1168,6 +1168,46 @@ bool hasName(const ref JSONValue item) {
 	return ("name" in item) != null;
 }
 
+bool hasCreatedBy(const ref JSONValue item) {
+	return ("createdBy" in item) != null;
+}
+
+bool hasCreatedByUser(const ref JSONValue item) {
+	return ("user" in item["createdBy"]) != null;
+}
+
+bool hasCreatedByUserDisplayName(const ref JSONValue item) {
+	if (hasCreatedBy(item)) {
+		if (hasCreatedByUser(item)) {
+			return ("displayName" in item["createdBy"]["user"]) != null;
+		} else {
+			return false;
+		}
+	} else {
+		return false;
+	}
+}
+
+bool hasLastModifiedBy(const ref JSONValue item) {
+	return ("lastModifiedBy" in item) != null;
+}
+
+bool hasLastModifiedByUser(const ref JSONValue item) {
+	return ("user" in item["lastModifiedBy"]) != null;
+}
+
+bool hasLastModifiedByUserDisplayName(const ref JSONValue item) {
+	if (hasLastModifiedBy(item)) {
+		if (hasLastModifiedByUser(item)) {
+			return ("displayName" in item["lastModifiedBy"]["user"]) != null;
+		} else {
+			return false;
+		}
+	} else {
+		return false;
+	}
+}
+
 // Convert bytes to GB
 string byteToGibiByte(ulong bytes) {
     if (bytes == 0) {
@@ -1562,4 +1602,21 @@ void setPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) {
 		// display the error message
 		displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 	}
+}
+
+// Generate the initial function processing time log entry
+void displayFunctionProcessingStart(string functionName, string logKey) {
+	// Output the function processing header
+	addLogEntry(format("[%s] Application Function '%s' Started", strip(logKey), strip(functionName)));
+}
+
+// Calculate the time taken to perform the application Function
+void displayFunctionProcessingTime(string functionName, SysTime functionStartTime, SysTime functionEndTime, string logKey) {
+	// Calculate processing time
+	auto functionDuration = functionEndTime - functionStartTime;
+	double functionDurationAsSeconds = (functionDuration.total!"msecs"/1e3); // msec --> seconds
+	
+	// Output the function processing time
+	string processingTime = format("[%s] Application Function '%s' Processing Time = %.4f Seconds", strip(logKey), strip(functionName), functionDurationAsSeconds);
+	addLogEntry(processingTime);
 }

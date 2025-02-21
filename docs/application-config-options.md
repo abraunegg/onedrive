@@ -19,8 +19,10 @@ Before reading this document, please ensure you are running application version 
   - [debug_https](#debug_https)
   - [disable_download_validation](#disable_download_validation)
   - [disable_notifications](#disable_notifications)
+  - [disable_permission_set](#disable_permission_set)
   - [disable_upload_validation](#disable_upload_validation)
   - [display_running_config](#display_running_config)
+  - [display_transfer_metrics](#display_transfer_metrics)
   - [dns_timeout](#dns_timeout)
   - [download_only](#download_only)
   - [drive_id](#drive_id)
@@ -56,6 +58,7 @@ Before reading this document, please ensure you are running application version 
   - [sync_file_permissions](#sync_file_permissions)
   - [sync_root_files](#sync_root_files)
   - [threads](#threads)
+  - [transfer_order](#transfer_order)
   - [upload_only](#upload_only)
   - [user_agent](#user_agent)
   - [webhook_enabled](#webhook_enabled)
@@ -64,6 +67,7 @@ Before reading this document, please ensure you are running application version 
   - [webhook_listening_port](#webhook_listening_port)
   - [webhook_public_url](#webhook_public_url)
   - [webhook_renewal_interval](#webhook_renewal_interval)
+  - [write_xattr_data](#write_xattr_data)
 - [Command Line Interface (CLI) Only Options](#command-line-interface-cli-only-options)
   - [CLI Option: --auth-files](#cli-option---auth-files)
   - [CLI Option: --auth-response](#cli-option---auth-response)
@@ -277,6 +281,17 @@ _**Config Example:**_ `disable_notifications = "false"` or `disable_notification
 
 _**CLI Option Use:**_ `--disable-notifications`
 
+### disable_permission_set
+_**Description:**_ This setting controls whether the application will set the permissions on files and directories using the values of 'sync_dir_permissions' and 'sync_file_permissions'. When this option is enabled, file system permission inheritance will be used to assign the permissions for your data. This option may be useful if the file system configured does not allow setting of POSIX permissions.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `disable_permission_set = "false"` or `disable_permission_set = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
 ### disable_upload_validation
 _**Description:**_ This option determines whether the client will conduct integrity validation on files uploaded to Microsoft OneDrive. Sometimes, when uploading files, particularly to SharePoint, SharePoint will modify your file post upload by adding new data to your file which breaks the integrity checking of the upload performed by this client. Enable this option to disable the integrity checks performed by this client.
 
@@ -301,6 +316,19 @@ _**Default Value:**_ False
 _**Config Example:**_ `display_running_config = "false"` or `display_running_config = "true"`
 
 _**CLI Option Use:**_ `--display-running-config`
+
+### display_transfer_metrics
+_**Description:**_ This option will display file transfer metrics when enabled.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `display_transfer_metrics = "false"` or `display_transfer_metrics = "true"`
+
+_**Output Example:**_ `Transfer Metrics -  File: path/to/file.data | Size: 35768 Bytes | Duration: 2.27 Seconds | Speed: 0.02 Mbps (approx)`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
 
 ### dns_timeout
 _**Description:**_ This setting controls the libcurl DNS cache value. By default, libcurl caches this info for 60 seconds. This libcurl DNS cache timeout is entirely speculative that a name resolves to the same address for a small amount of time into the future as libcurl does not use DNS TTL properties. We recommend users not to tamper with this option unless strictly necessary.
@@ -873,6 +901,32 @@ _**Config Example:**_ `threads = "16"`
 > [!WARNING]
 > Increasing the threads beyond the default will lead to increased system utilisation and local TCP port use, which may lead to unpredictable behaviour and/or may lead application stability issues.
 
+### transfer_order
+_**Description:**_ This configuration option controls the transfer order of files between your local system and Microsoft OneDrive.
+
+_**Value Type:**_ String
+
+_**Default Value:**_ `default`
+
+_**Config Example:**_
+#### Transfer by size, smallest first
+```
+transfer_order = "size_asc"
+```
+
+#### Transfer by size, largest first
+```
+transfer_order = "size_dsc"
+```
+#### Transfer by file name sorted A to Z
+```
+transfer_order = "name_asc"
+```
+#### Transfer by file name sorted Z to A
+```
+transfer_order = "name_dsc"
+```
+
 ### upload_only
 _**Description:**_ This setting forces the client to only upload data to Microsoft OneDrive and replicate the locate state online. By default, this will also remove content online, that has been removed locally.
 
@@ -1001,6 +1055,24 @@ _**Value Type:**_ Integer
 _**Default Value:**_ 60
 
 _**Config Example:**_ `webhook_retry_interval = "120"`
+
+### write_xattr_data
+_**Description:**_ This setting enables writing xattr values detailing the 'createdBy' and 'lastModifiedBy' information provided by the OneDrive API
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `write_xattr_data = "false"` or `write_xattr_data = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+_**xattr Data Example:**_
+```
+user.onedrive.createdBy="Account Display Name"
+user.onedrive.lastModifiedBy="Account Display Name"
+```
+
 
 ## Command Line Interface (CLI) Only Options
 

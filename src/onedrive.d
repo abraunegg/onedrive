@@ -383,7 +383,7 @@ class OneDriveApi {
 	// Release CurlEngine bask to the Curl Engine Pool
 	void releaseCurlEngine() {
 		// Log that this was called
-		if (debugLogging) {addLogEntry("OneDrive API releaseCurlEngine() Called", ["debug"]);}
+		if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("OneDrive API releaseCurlEngine() Called", ["debug"]);}
 		
 		// Release curl instance back to the pool
 		if (curlEngine !is null) {
@@ -527,7 +527,7 @@ class OneDriveApi {
 			url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
 		}
 		// Add select clause
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy";
 		return get(url);
 	}
 	
@@ -536,7 +536,7 @@ class OneDriveApi {
 	JSONValue getPathDetailsById(string driveId, string id) {
 		string url;
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,webUrl,lastModifiedBy,lastModifiedDateTime";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,webUrl,lastModifiedDateTime";
 		return get(url);
 	}
 	
@@ -561,7 +561,7 @@ class OneDriveApi {
 		// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/concepts/addressing-driveitems?view=odsp-graph-online
 		// Required format: /drives/{drive-id}/root:/{item-path}:
 		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path) ~ ":";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy";
 		return get(url);
 	}
 	
@@ -582,7 +582,7 @@ class OneDriveApi {
 		if (deltaLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
 			// Reduce what we ask for in the response - which reduces the data transferred back to us, and reduces what is held in memory during initial JSON processing
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy";
 		} else {
 			url = deltaLink;
 		}
@@ -601,7 +601,7 @@ class OneDriveApi {
 		// configure URL to query
 		if (nextLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/children";
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy";
 		} else {
 			url = nextLink;
 		}
@@ -780,9 +780,15 @@ class OneDriveApi {
 			try {
 				if (debugLogging) {addLogEntry("Requested local path does not exist, creating directory structure: " ~ newPath, ["debug"]);}
 				mkdirRecurse(newPath);
-				// Configure the applicable permissions for the folder
-				if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newPath, ["debug"]);}
-				newPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+				// Has the user disabled the setting of filesystem permissions?
+				if (!appConfig.getValueBool("disable_permission_set")) {
+					// Configure the applicable permissions for the folder
+					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newPath, ["debug"]);}
+					newPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+				} else {
+					// Use inherited permissions
+					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ newPath, ["debug"]);}
+				}
 			} catch (FileException exception) {
 				// display the error message
 				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
@@ -794,9 +800,15 @@ class OneDriveApi {
 		downloadFile(url, saveToPath, fileSize);
 		// Does path exist?
 		if (exists(saveToPath)) {
-			// File was downloaded successfully - configure the applicable permissions for the file
-			if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
-			saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
+			// Has the user disabled the setting of filesystem permissions?
+			if (!appConfig.getValueBool("disable_permission_set")) {
+				// File was downloaded successfully - configure the applicable permissions for the file
+				if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
+				saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
+			} else {
+				// Use inherited permissions
+				if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ newPath, ["debug"]);}
+			}
 		}
 	}
 	
