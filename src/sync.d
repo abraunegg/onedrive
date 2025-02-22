@@ -2016,6 +2016,9 @@ class SyncEngine {
 							if (debugLogging) {addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);}
 							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 							createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
+						} else {
+							// The Shared JSON structure is missing .....
+							if (debugLogging) {addLogEntry("Personal Shared Item JSON object is MISSING the 'shared' JSON structure ... API BUG ?", ["debug"]);}
 						}
 						
 						// Ensure that this item has no parent
@@ -2931,6 +2934,13 @@ class SyncEngine {
 			parentObjectId = onedriveJSONItem["remoteItem"]["id"].str;
 		}
 		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			parentDriveId = testProvidedDriveIdForLengthIssue(parentDriveId);
+		}
+		
 		// Try and fetch this shared folder parent's details
 		try {
 			if (debugLogging) {addLogEntry(format("Fetching Shared Folder online data for parentDriveId '%s' and parentObjectId '%s'", parentDriveId, parentObjectId), ["debug"]);}
@@ -3034,6 +3044,13 @@ class SyncEngine {
 			sharedFolderDatabaseTie.type = ItemType.root;
 		}
 		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			sharedFolderDatabaseTie.driveId = testProvidedDriveIdForLengthIssue(sharedFolderDatabaseTie.driveId);
+		}
+				
 		// Log action
 		addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder from the online parental data: " ~ sharedFolderDatabaseTie.name, ["debug"]);
 		addLogEntry("Shared Folder DB Tie Record data: " ~ to!string(sharedFolderDatabaseTie), ["debug"]);
@@ -4047,8 +4064,15 @@ class SyncEngine {
 		string fullCalculatedPath;
 		bool calculateLocalExtension = false;
 		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			thisDriveId = testProvidedDriveIdForLengthIssue(thisDriveId);
+		}
+		
 		// What driveID and itemID we trying to calculate the path for
-		if (debugLogging) {addLogEntry("Attempting to calculate local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
+		if (debugLogging) {addLogEntry("Attempting to calculate initial local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
 		
 		// Perform the original calculation of the path using the values provided
 		try {
@@ -4074,13 +4098,28 @@ class SyncEngine {
 			// Use the 'thisDriveId' value to obtain the 'remote' item type record which represents the local path junction point to the shared folder
 			Item remoteEntryItem;
 			string fullLocalPath;
+			string localPathExtension;
 			
-			// Get the DB entry
+			if (debugLogging) {addLogEntry("Attempting to calculate shared folder local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
+			
+			// Get the DB entry for this 'remote' item
 			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, remoteEntryItem);
-			// Calculate the local path extension for this item
-			string localPathExtension = itemDB.computePath(remoteEntryItem.driveId, remoteEntryItem.id);
+			
+			// What was returned from the Database?
+			if (debugLogging) {addLogEntry("remoteEntryItem: " ~ to!string(remoteEntryItem), ["debug"]);}
+			
+			// What details do we use?
+			if (!remoteEntryItem.driveId.empty) {
+				// use the returned 'remote' DB entry values
+				localPathExtension = itemDB.computePath(remoteEntryItem.driveId, remoteEntryItem.id);
+			} else {
+				// do nothing at the moment ....
+			}
+			
+			// result for localPathExtension
 			if (debugLogging) {addLogEntry(" localPathExtension = " ~ to!string(localPathExtension), ["debug"]);}
 			
+			// what do we use?
 			if (initialCalculatedPath == ".") {
 				// The '.' represents the root shared folder ... 
 				fullLocalPath = localPathExtension;
@@ -9522,6 +9561,13 @@ class SyncEngine {
 		queryChildrenOneDriveApiInstance = new OneDriveApi(appConfig);
 		queryChildrenOneDriveApiInstance.initialise();
 		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			driveId = testProvidedDriveIdForLengthIssue(driveId);
+		}
+		
 		while (true) {
 			// Check if exitHandlerTriggered is true
 			if (exitHandlerTriggered) {
@@ -9631,6 +9677,13 @@ class SyncEngine {
 			functionStartTime = Clock.currTime();
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			driveId = testProvidedDriveIdForLengthIssue(driveId);
 		}
 		
 		// function variables 
@@ -11943,6 +11996,13 @@ class SyncEngine {
 		
 		// ensure there is no parentId
 		tieDBItem.parentId = null;
+		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			tieDBItem.driveId = testProvidedDriveIdForLengthIssue(tieDBItem.driveId);
+		}
 		
 		// Add this DB Tie parent record to the local database
 		if (debugLogging) {addLogEntry("Creating|Updating into local database a 'root' DB Tie record for a OneDrive Shared Folder online: " ~ to!string(tieDBItem), ["debug"]);}

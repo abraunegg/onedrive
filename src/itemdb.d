@@ -633,13 +633,13 @@ final class ItemDatabase {
 		}
 	}
 
-	// This should return the 'remote' DB entry for the given 'remoteDriveId'
-	bool selectRemoteTypeByRemoteDriveId(const(char)[] entryName, out Item item) {
+	// This should return the 'remote' DB entry for the given 'remoteDriveId' and 'remoteId'
+	bool selectRemoteTypeByRemoteDriveId(const(char)[] remoteDriveId, out Item item) {
 		synchronized(databaseLock) {
 			auto p = db.prepare(selectRemoteTypeByRemoteDriveIdStmt);
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
 			try {
-				p.bind(1, entryName);
+				p.bind(1, remoteDriveId);
 				auto r = p.exec();
 				if (!r.empty) {
 					item = buildItem(r);
