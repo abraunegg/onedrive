@@ -6885,10 +6885,10 @@ class SyncEngine {
 				}
 			} else {
 				// Issue #3126 - https://github.com/abraunegg/onedrive/discussions/3126
-				// At this point, this path that we want to scan for new data has been excluded .. we may have a and include 'sync_list' rule for a subfolder of this excluded parent ...
+				// At this point, this path that we want to scan for new data has been excluded .. we may have an include 'sync_list' rule for a subfolder of this excluded parent ...
 				// If the data is created online, this is not usually a problem, but essentially if we create new data locally, in a folder we are expecting to included by an existing configuration,
 				// unless we actually scan the entire tree, including those directories that are excluded, we are not going to detect the new locally added data in a parent that has been excluded, 
-				// but the child has been included
+				// but the child content has to be included
 				if (isDir(path)) {
 					// Do we actually traverse this path?
 					if (!skipFolderTraverse) {
