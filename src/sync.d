@@ -205,7 +205,11 @@ class SyncEngine {
 	// Shared Folder Flags for 'sync_list' processing
 	bool sharedFolderDeltaGeneration = false;
 	string currentSharedFolderName = "";
-			
+	
+	// Directory excluded by 'sync_list flag so that when scanning that directory, if it is excluded, 
+	// can be scanned for new data which may be included by other include rule, but parent is excluded
+	bool syncListDirExcluded = false;
+
 	// Configure this class instance
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
 	
@@ -4971,8 +4975,10 @@ class SyncEngine {
 		// - sync_list
 		// - skip_size
 		// Return a true|false response
-		
 		bool clientSideRuleExcludesPath = false;
+		
+		// Reset global syncListDirExcluded
+		syncListDirExcluded = false;
 		
 		// does the path exist?
 		if (!exists(localFilePath)) {
@@ -5092,6 +5098,8 @@ class SyncEngine {
 								} else {
 									// directory
 									if (verboseLogging) {addLogEntry("Skipping path - excluded by sync_list config: " ~ localFilePath, ["verbose"]);}
+									// update syncListDirExcluded
+									syncListDirExcluded = true;
 								}
 								
 								// flag as excluded
@@ -6724,6 +6732,9 @@ class SyncEngine {
 				}
 			}
 			
+			// Before we traverse this 'path', we need to make a last check to see if this was just excluded
+			bool skipFolderTraverse = skipBusinessSharedFolder(path);
+			
 			if (!unwanted) {
 				// At this point, this path, we want to scan for new data as it is not excluded
 				if (isDir(path)) {
@@ -6798,21 +6809,9 @@ class SyncEngine {
 						}
 					}
 				
-					// flag for if we are going traverse this path
-					bool skipFolderTraverse = false;
 					
-					// Before we traverse this 'path', we need to make a last check to see if this was just excluded
-					if (appConfig.accountType == "business") {
-						// search businessSharedFoldersOnlineToSkip for this path
-						if (canFind(businessSharedFoldersOnlineToSkip, path)) {
-							// This path was skipped - why?
-							addLogEntry("Skipping item '" ~ path ~ "' due to this path matching an existing online Business Shared Folder name", ["info", "notify"]);
-							addLogEntry("To sync this Business Shared Folder, consider enabling 'sync_business_shared_folders' within your application configuration.", ["info"]);
-							skipFolderTraverse = true;
-						}
-					}
 					
-					// Do we traverse this path?
+					// Do we actually traverse this path?
 					if (!skipFolderTraverse) {
 						// Try and access this directory and any path below
 						if (exists(path)) {
@@ -6884,6 +6883,46 @@ class SyncEngine {
 						addLogEntry("Skipping item - item is not a valid file: " ~ path, ["info", "notify"]);
 					}
 				}
+			} else {
+				// Issue #3126 - https://github.com/abraunegg/onedrive/discussions/3126
+				// At this point, this path that we want to scan for new data has been excluded .. we may have a and include 'sync_list' rule for a subfolder of this excluded parent ...
+				// If the data is created online, this is not usually a problem, but essentially if we create new data locally, in a folder we are expecting to included by an existing configuration,
+				// unless we actually scan the entire tree, including those directories that are excluded, we are not going to detect the new locally added data in a parent that has been excluded, 
+				// but the child has been included
+				if (isDir(path)) {
+					// Do we actually traverse this path?
+					if (!skipFolderTraverse) {
+						// Not a Business Shared Folder that must not be traversed if 'sync_business_shared_folders' is not enabled
+						// Was this path excluded by the 'sync_list' exclusion process
+						if (syncListDirExcluded) {
+							// yes .. this parent path was excluded by the 'sync_list' ... we need to scan this path for potential new data that may be included
+							if (verboseLogging) {addLogEntry("Bypassing 'sync_list' exclusion to scan directory for potential new data that may be included", ["verbose"]);}
+					
+							// try and go through the excluded directory path
+							try {
+								auto directoryEntries = dirEntries(path, SpanMode.shallow, false);
+								foreach (DirEntry entry; directoryEntries) {
+									string thisPath = entry.name;
+									scanPathForNewData(thisPath);
+								}
+								// Clear directoryEntries
+								object.destroy(directoryEntries);
+							} catch (FileException e) {
+								// display the error message
+								displayFileSystemErrorMessage(e.msg, thisFunctionName);
+								
+								// Display function processing time if configured to do so
+								if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+									// Combine module name & running Function
+									displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+								}
+								
+								// return as there was an error
+								return;
+							}
+						}
+					}
+				}
 			}
 		} else {
 			// This path was skipped - why?
@@ -6895,6 +6934,23 @@ class SyncEngine {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
+	}
+	
+	// Do we skip this path as it might be an Online Business Shared Folder
+	bool skipBusinessSharedFolder(string path) {
+		// Is this a business account?
+		if (appConfig.accountType == "business") {
+			// search businessSharedFoldersOnlineToSkip for this path
+			if (canFind(businessSharedFoldersOnlineToSkip, path)) {
+				// This path was skipped - why?
+				addLogEntry("Skipping item '" ~ path ~ "' due to this path matching an existing online Business Shared Folder name", ["info", "notify"]);
+				addLogEntry("To sync this Business Shared Folder, consider enabling 'sync_business_shared_folders' within your application configuration.", ["info"]);
+				return true;
+			}
+		}
+	
+		// return value
+		return false;
 	}
 	
 	// Handle a single file inotify trigger when using --monitor
