@@ -335,7 +335,17 @@ class ClientSideFiltering {
 			// wildcard (*) rules are below if we get there, if this rule does not contain a wildcard
 			if ((to!string(syncListRuleEntry[0]) == "/") && (!canFind(syncListRuleEntry, wildcard))) {
 				// attempt to perform an exact segment match
-				if (exactMatchRuleSegmentsToPathSegments(syncListRuleEntry, path)) {
+				// split both paths by '/' to create segment arrays
+				string[] ruleSegments = syncListRuleEntry.strip.split("/").filter!(s => !s.empty).array;
+				string[] pathSegments = path.strip.split("/").filter!(s => !s.empty).array;
+				
+				// Print rule and input segments for validation during debug
+				if (debugLogging) {
+					addLogEntry("Rule Segments: " ~ to!string(ruleSegments), ["debug"]);
+					addLogEntry("Path Segments: " ~ to!string(pathSegments), ["debug"]);
+				}
+				
+				if (exactMatchRuleSegmentsToPathSegments(ruleSegments, pathSegments)) {
 					// EXACT PATH MATCH
 					if (debugLogging) {addLogEntry("Exact path match with 'sync_list' rule entry", ["debug"]);}
 					
@@ -359,19 +369,18 @@ class ClientSideFiltering {
 				} else {
 					// NOT an EXACT MATCH, so check the very first path segment
 					// - This is so that paths in 'sync_list' as specified as /some path/another path/ actually get included|excluded correctly
-					if (matchFirstSegmentToPathFirstSegment(syncListRuleEntry, path)) {
+					if (matchFirstSegmentToPathFirstSegment(ruleSegments, pathSegments)) {
 						// PARENT ROOT MATCH
 						if (debugLogging) {addLogEntry("Parent root path match with 'sync_list' rule entry", ["debug"]);}
 						
 						// Does the 'rest' of the input path match?
 						// We only need to do this step if the input path has more and 1 segment (the parent folder)
-						auto inputSegments = path.strip.split("/").filter!(s => !s.empty).array;
-						if (count(inputSegments) > 1) {
+						if (count(pathSegments) > 1) {
 							// More segments to check, so do a parental path match
-							if (matchRuleSegmentsToPathSegments(syncListRuleEntry, path)) {
+							if (matchRuleSegmentsToPathSegments(ruleSegments, pathSegments)) {
 								// PARENTAL PATH MATCH
 								if (debugLogging) {addLogEntry("Parental path match with 'sync_list' rule entry", ["debug"]);}
-								
+								// What sort of rule was this?
 								if (!thisIsAnExcludeRule) {
 									// Include Rule
 									if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: parental path match", ["debug"]);}
@@ -481,63 +490,78 @@ class ClientSideFiltering {
 			}
 			
 			// Does the 'sync_list' rule contain a wildcard (*) or globbing (**) reference anywhere in the rule?
+			//	EXCLUSION
+			//		!/Programming/Projects/Android/**/build/*
+			//  INCLUSION
+			//		/Programming/Projects/Android/**/build/*
 			if (canFind(syncListRuleEntry, wildcard)) {
 				// reset the applicable flag
 				wildcardRuleMatched = false;
-			
-				// sync_list rule contains some sort of wildcard sequence
-				if (thisIsAnExcludeRule) {
-					if (debugLogging) {addLogEntry("wildcard (* or **) exclusion rule: !" ~ syncListRuleEntry, ["debug"]);}
-				} else {
-					if (debugLogging) {addLogEntry("wildcard (* or **) inclusion rule: " ~ syncListRuleEntry, ["debug"]);}
-				}
 				
-				// Is this a globbing rule (**) or just a single wildcard (*) entries
-				if (canFind(syncListRuleEntry, globbing)) {
-					// globbing (**) rule processing
-					if (matchPathAgainstRule(path, syncListRuleEntry)) {
-						// set the applicable flag
-						wildcardRuleMatched = true;
-						if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: globbing pattern match", ["debug"]);}
-					}
+				// Does this 'wildcard' rule even apply to this path?
+				auto wildcardDepth = firstWildcardDepth(syncListRuleEntry);
+				auto pathSegments = count(path.strip.split("/").filter!(s => !s.empty).array);
+				
+				// are there enough path segments for this wildcard rule to apply?
+				if (pathSegments < wildcardDepth) {
+					// there are not enough path segments up to the first wildcard character for this rule to even be applicable
+					if (debugLogging) {addLogEntry("- This sync list wildcard rule should not be evaluated as the wildcard appears beyond the current input path", ["debug"]);}
 				} else {
-					// wildcard (*) rule processing
-					// create regex from 'syncListRuleEntry'
-					auto allowedMask = regex(createRegexCompatiblePath(syncListRuleEntry));
-					if (matchAll(path, allowedMask)) {
-						// set the applicable flag
-						wildcardRuleMatched = true;
-						if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard pattern match", ["debug"]);}
+					// path segments are enough for this wildcard rule to potentially apply
+					// sync_list rule contains some sort of wildcard sequence
+					if (thisIsAnExcludeRule) {
+						if (debugLogging) {addLogEntry("wildcard (* or **) exclusion rule: !" ~ syncListRuleEntry, ["debug"]);}
 					} else {
-						// matchAll no match ... try another way just to be sure
+						if (debugLogging) {addLogEntry("wildcard (* or **) inclusion rule: " ~ syncListRuleEntry, ["debug"]);}
+					}
+					
+					// Is this a globbing rule (**) or just a single wildcard (*) entries
+					if (canFind(syncListRuleEntry, globbing)) {
+						// globbing (**) rule processing
 						if (matchPathAgainstRule(path, syncListRuleEntry)) {
 							// set the applicable flag
 							wildcardRuleMatched = true;
-							if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard pattern match using segment matching", ["debug"]);}
+							if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: globbing pattern match using segment matching", ["debug"]);}
+						}
+					} else {
+						// wildcard (*) rule processing
+						// create regex from 'syncListRuleEntry'
+						auto allowedMask = regex(createRegexCompatiblePath(syncListRuleEntry));
+						if (matchAll(path, allowedMask)) {
+							// set the applicable flag
+							wildcardRuleMatched = true;
+							if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard pattern match", ["debug"]);}
+						} else {
+							// matchAll no match ... try another way just to be sure
+							if (matchPathAgainstRule(path, syncListRuleEntry)) {
+								// set the applicable flag
+								wildcardRuleMatched = true;
+								if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard pattern match using segment matching", ["debug"]);}
+							}
 						}
 					}
-				}
-				
-				// Was the rule matched?
-				if (wildcardRuleMatched) {
-					// Is this an exclude rule?
-					if (thisIsAnExcludeRule) {
-						// Yes exclude rule
-						if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing rule matched and must be excluded", ["debug"]);}
-						excludeWildcardMatched = true;
-						exclude = true;
-						finalResult = true;
-					} else {
-						// include rule
-						if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing pattern matched and must be included", ["debug"]);}
-						finalResult = false;
-						excludeWildcardMatched = false;
+					
+					// Was the rule matched?
+					if (wildcardRuleMatched) {
+						// Is this an exclude rule?
+						if (thisIsAnExcludeRule) {
+							// Yes exclude rule
+							if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing rule matched and must be excluded", ["debug"]);}
+							excludeWildcardMatched = true;
+							exclude = true;
+							finalResult = true;
+						} else {
+							// include rule
+							if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing pattern matched and must be included", ["debug"]);}
+							finalResult = false;
+							excludeWildcardMatched = false;
+						}
 					}
 				}
 			}
 		}
 		
-		
+		// debug logging post 'sync_list' rule evaluations
 		if (debugLogging) {
 			// Rule evaluation complete
 			addLogEntry("------------------------------------------------------------------------", ["debug"]);
@@ -562,6 +586,18 @@ class ClientSideFiltering {
 		}
 		if (debugLogging) {addLogEntry("******************* SYNC LIST RULES EVALUATION END *********************", ["debug"]);}
 		return finalResult;
+	}
+	
+	// Calculate wildcard character depth in path
+	int firstWildcardDepth(string syncListRuleEntry) {
+		int depth = 0;
+		foreach (segment; pathSplitter(syncListRuleEntry))
+		{
+			if (segment.canFind("*")) // Check for wildcard characters
+				return depth;
+			depth++;
+		}
+		return depth; // No wildcard found should be '0'
 	}
 	
 	// Create a wildcard regex compatible string based on the sync list rule
@@ -625,18 +661,9 @@ class ClientSideFiltering {
 		return j == ruleSegments.length || (j == ruleSegments.length - 1 && ruleSegments[j] == "**") || lastSegmentMatchesRule;
 	}
 	
-	bool exactMatchRuleSegmentsToPathSegments(string rulePath, string inputPath) {
+	bool exactMatchRuleSegmentsToPathSegments(string[] ruleSegments, string[] inputSegments) {
 		if (debugLogging) {addLogEntry("Running exactMatchRuleSegmentsToPathSegments()", ["debug"]);}
-		// Split both paths by '/'
-		auto ruleSegments = rulePath.strip.split("/").filter!(s => !s.empty).array;
-		auto inputSegments = inputPath.strip.split("/").filter!(s => !s.empty).array;
 		
-		// Print rule and input segments for validation
-		if (debugLogging) {
-			addLogEntry("Rule Segments: " ~ to!string(ruleSegments), ["debug"]);
-			addLogEntry("Input Segments: " ~ to!string(inputSegments), ["debug"]);
-		}
-
 		// If rule has more segments than input, or input has more segments than rule, no match is possible
 		if ((ruleSegments.length > inputSegments.length) || ( inputSegments.length > ruleSegments.length)) {
 			return false;
@@ -655,18 +682,9 @@ class ClientSideFiltering {
 		return true;
 	}
 	
-	bool matchRuleSegmentsToPathSegments(string rulePath, string inputPath) {
+	bool matchRuleSegmentsToPathSegments(string[] ruleSegments, string[] inputSegments) {
 		if (debugLogging) {addLogEntry("Running matchRuleSegmentsToPathSegments()", ["debug"]);}
-		// Split both paths by '/'
-		auto ruleSegments = rulePath.strip.split("/").filter!(s => !s.empty).array;
-		auto inputSegments = inputPath.strip.split("/").filter!(s => !s.empty).array;
 		
-		// Print rule and input segments for validation
-		if (debugLogging) {
-			addLogEntry("Rule Segments: " ~ to!string(ruleSegments), ["debug"]);
-			addLogEntry("Input Segments: " ~ to!string(inputSegments), ["debug"]);
-		}
-
 		// If rule has more segments than input, no match is possible
 		if (ruleSegments.length > inputSegments.length) {
 			return false;
@@ -676,18 +694,9 @@ class ClientSideFiltering {
 		return equal(ruleSegments, inputSegments[0 .. ruleSegments.length]);
 	}
 	
-	bool matchFirstSegmentToPathFirstSegment(string rulePath, string inputPath) {
+	bool matchFirstSegmentToPathFirstSegment(string[] ruleSegments, string[] inputSegments) {
 		if (debugLogging) {addLogEntry("Running matchFirstSegmentToPathFirstSegment()", ["debug"]);}
-		// Split both paths by '/'
-		auto ruleSegments = rulePath.strip.split("/").filter!(s => !s.empty).array;
-		auto inputSegments = inputPath.strip.split("/").filter!(s => !s.empty).array;
-		
-		// Print rule and input segments for validation
-		if (debugLogging) {
-			addLogEntry("Rule Segments: " ~ to!string(ruleSegments), ["debug"]);
-			addLogEntry("Input Segments: " ~ to!string(inputSegments), ["debug"]);
-		}
-		
+				
 		// Check that both segments are not empty
 		if (ruleSegments.length == 0 || inputSegments.length == 0) {
 			return false; // Return false if either segment array is empty
