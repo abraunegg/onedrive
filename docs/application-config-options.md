@@ -89,6 +89,7 @@ Before reading this document, please ensure you are running application version 
   - [CLI Option: --print-access-token](#cli-option---print-access-token)
   - [CLI Option: --reauth](#cli-option---reauth)
   - [CLI Option: --remove-directory](#cli-option---remove-directory)
+  - [CLI Option: --share-password](#cli-option---share-password)
   - [CLI Option: --single-directory](#cli-option---single-directory)
   - [CLI Option: --source-directory](#cli-option---source-directory)
   - [CLI Option: --sync | -s](#cli-option---sync--s)
@@ -1281,6 +1282,11 @@ _**Usage Example:**_ `onedrive --remove-directory 'path/of/new/folder/structure/
 
 > [!IMPORTANT]
 > The specified path to remove is relative to your configured 'sync_dir'.
+
+### CLI Option: --share-password
+_**Description:**_ This CLI option enables the creation of a shareable file link that can only be accessed by providing the valid password.  This option can only be used in conjunction with `--create-share-link`
+
+_**Usage Example:**_ `onedrive --create-share-link 'relative/path/to/your/file.txt' --share-password 'valid password'`
 
 ### CLI Option: --single-directory
 _**Description:**_ This CLI option controls the applications ability to sync a specific single directory.
