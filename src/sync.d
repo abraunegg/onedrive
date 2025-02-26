@@ -8957,6 +8957,13 @@ class SyncEngine {
 						}
 					}
 					
+					// Issue #3115 - Validate driveId length
+					// What account type is this?
+					if (appConfig.accountType == "personal") {
+						// Test item.driveId length and validation
+						item.driveId = testProvidedDriveIdForLengthIssue(item.driveId);
+					}
+					
 					// Add to the local database
 					if (debugLogging) {addLogEntry("Saving this DB item record: " ~ to!string(item), ["debug"]);}
 					itemDB.upsert(item);
