@@ -3196,7 +3196,20 @@ class SyncEngine {
 				
 					// Is the last modified timestamp in the DB the same as the API data or are we running an operational mode where we simulated the /delta response?
 					if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generateSimulatedDeltaResponse)) {
-					// Save this item in the database
+						// Save this item in the database
+						
+						// Issue #3115 - Personal Account Shared Folder
+						// What account type is this?
+						if (appConfig.accountType == "personal") {
+							// Is this a 'remote' DB record
+							if (changedOneDriveItem.type == ItemType.remote) {
+								// Fetch the actual online record for this item
+								// This returns the actual OneDrive Personal driveId value and is 15 character checked
+								string actualOnlineDriveId = fetchRealOnlineDriveIdentifier(changedOneDriveItem.remoteDriveId);
+								changedOneDriveItem.remoteDriveId = actualOnlineDriveId;
+							}
+						}
+						
 						// Add to the local database
 						if (debugLogging) {addLogEntry("Adding changed OneDrive Item to database: " ~ to!string(changedOneDriveItem), ["debug"]);}
 						itemDB.upsert(changedOneDriveItem);
@@ -3231,6 +3244,19 @@ class SyncEngine {
 			// Is the last modified timestamp in the DB the same as the API data or are we running an operational mode where we simulated the /delta response?
 			if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generateSimulatedDeltaResponse)) {
 				// Database update needed for this item because our local record is out-of-date
+				
+				// Issue #3115 - Personal Account Shared Folder
+				// What account type is this?
+				if (appConfig.accountType == "personal") {
+					// Is this a 'remote' DB record
+					if (changedOneDriveItem.type == ItemType.remote) {
+						// Fetch the actual online record for this item
+						// This returns the actual OneDrive Personal driveId value and is 15 character checked
+						string actualOnlineDriveId = fetchRealOnlineDriveIdentifier(changedOneDriveItem.remoteDriveId);
+						changedOneDriveItem.remoteDriveId = actualOnlineDriveId;
+					}
+				}
+				
 				// Add to the local database
 				if (debugLogging) {addLogEntry("Adding changed OneDrive Item to database: " ~ to!string(changedOneDriveItem), ["debug"]);}
 				itemDB.upsert(changedOneDriveItem);
@@ -4090,7 +4116,10 @@ class SyncEngine {
 		}
 		
 		// What driveID and itemID we trying to calculate the path for
-		if (debugLogging) {addLogEntry("Attempting to calculate initial local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
+		if (debugLogging) {
+			string initialComputeLogMessage = format("Attempting to calculate initial local filesystem path for '%s' and '%s'", thisDriveId, thisItemId);
+			addLogEntry(initialComputeLogMessage, ["debug"]);
+			}
 		
 		// Perform the original calculation of the path using the values provided
 		try {
@@ -4119,7 +4148,7 @@ class SyncEngine {
 			string fullLocalPath;
 			string localPathExtension;
 			
-			if (debugLogging) {addLogEntry("Attempting to calculate shared folder local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
+			if (debugLogging) {addLogEntry("Attempting to calculate Shared Folder local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
 			
 			// Get the DB entry for this 'remote' item
 			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, thisItemId, remoteEntryItem);
@@ -9234,6 +9263,12 @@ class SyncEngine {
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
+		
+		// What are we doing
+		if (debugLogging) {
+			string fetchRealValueLogMessage = format("Fetching actual online 'driveId' value for '%s'", inputDriveId);
+			addLogEntry(fetchRealValueLogMessage, ["debug"]);
+		}
 	
 		// variables for this function
 		JSONValue remoteDriveDetails;
@@ -9387,6 +9422,15 @@ class SyncEngine {
 					searchItem.driveId = pathData["remoteItem"]["parentReference"]["driveId"].str;
 					searchItem.id = pathData["remoteItem"]["id"].str;
 					remotePathObject = true;
+					
+					// Issue #3115 - Personal Account Shared Folder
+					// What account type is this?
+					if (appConfig.accountType == "personal") {
+						// Fetch the actual online record for this item
+						// This returns the actual OneDrive Personal driveId value and is 15 character checked
+						string actualOnlineDriveId = fetchRealOnlineDriveIdentifier(searchItem.driveId);
+						searchItem.driveId = actualOnlineDriveId;
+					}
 				}
 			} catch (OneDriveException exception) {
 				// Display error message
