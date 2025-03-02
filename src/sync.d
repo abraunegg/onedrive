@@ -587,6 +587,13 @@ class SyncEngine {
 			appConfig.accountType = defaultOneDriveDriveDetails["driveType"].str;
 			appConfig.defaultDriveId = defaultOneDriveDriveDetails["id"].str;
 			
+			// Issue #3115 - Validate driveId length
+			// What account type is this?
+			if (appConfig.accountType == "personal") {
+				// Test driveId length and validation
+				appConfig.defaultDriveId = testProvidedDriveIdForLengthIssue(appConfig.defaultDriveId);
+			}
+			
 			// Make sure that appConfig.defaultDriveId is in our driveIDs array to use when checking if item is in database
 			// Keep the DriveDetailsCache array with unique entries only
 			DriveDetailsCache cachedOnlineDriveData;
@@ -1079,6 +1086,14 @@ class SyncEngine {
 					// The path we are seeking is remote to our account drive id
 					searchItem.driveId = onlinePathData["remoteItem"]["parentReference"]["driveId"].str;
 					searchItem.id = onlinePathData["remoteItem"]["id"].str;
+					
+					// Issue #3115 - Validate driveId length
+					// What account type is this?
+					if (appConfig.accountType == "personal") {
+						// Test driveId length and validation
+						searchItem.driveId = testProvidedDriveIdForLengthIssue(searchItem.driveId);
+					}
+					
 					// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 					createRequiredSharedFolderDatabaseRecords(onlinePathData);
 				} else {
@@ -1329,6 +1344,13 @@ class SyncEngine {
 					
 					// Store this currentDeltaLink as latestDeltaLink
 					latestDeltaLink = deltaChanges["@odata.deltaLink"].str;
+					
+					// Issue #3115 - Validate driveId length
+					// What account type is this?
+					if (appConfig.accountType == "personal") {
+						// Test driveId length and validation
+						driveIdToQuery = testProvidedDriveIdForLengthIssue(driveIdToQuery);
+					}
 					
 					// Update deltaLinkCache
 					deltaLinkCache.driveId = driveIdToQuery;
@@ -2626,6 +2648,19 @@ class SyncEngine {
 			// What is the source of this item data?
 			string itemSource = "remote";
 			if (isItemSynced(newDatabaseItem, newItemPath, itemSource)) {
+			
+				// Issue #3115 - Personal Account Shared Folder
+				// What account type is this?
+				if (appConfig.accountType == "personal") {
+					// Is this a 'remote' DB record
+					if (newDatabaseItem.type == ItemType.remote) {
+						// Fetch the actual online record for this item
+						// This returns the actual OneDrive Personal driveId value and is 15 character checked
+						string actualOnlineDriveId = fetchRealOnlineDriveIdentifier(newDatabaseItem.remoteDriveId);
+						newDatabaseItem.remoteDriveId = actualOnlineDriveId;
+					}
+				}
+			
 				// Item details from OneDrive and local item details in database are in-sync
 				if (debugLogging) {
 					addLogEntry("The item to sync is already present on the local filesystem and is in-sync with what is reported online", ["debug"]);
@@ -4074,6 +4109,7 @@ class SyncEngine {
 		
 		// Do we need to perform the local path extension for a shared folder?
 		// - Is this potentially a shared folder that we are trying to compute the path for? This is the only reliable way to determine this ...
+		// Both 'thisDriveId' and 'appConfig.defaultDriveId' have been validated for 15 character OneDrive Personal Account 'driveId' issue
 		if (thisDriveId != appConfig.defaultDriveId) {
 			// The driveId is not our account driveId
 			if (debugLogging) {addLogEntry("The path we are trying to calculate extends to a OneDrive Shared Folder .. need to perform multiple calculations to calculate the full true local path", ["debug"]);}
@@ -4086,7 +4122,7 @@ class SyncEngine {
 			if (debugLogging) {addLogEntry("Attempting to calculate shared folder local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
 			
 			// Get the DB entry for this 'remote' item
-			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, remoteEntryItem);
+			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, thisItemId, remoteEntryItem);
 			
 			// What was returned from the Database?
 			if (debugLogging) {addLogEntry("remoteEntryItem: " ~ to!string(remoteEntryItem), ["debug"]);}
@@ -4096,7 +4132,8 @@ class SyncEngine {
 				// use the returned 'remote' DB entry values
 				localPathExtension = itemDB.computePath(remoteEntryItem.driveId, remoteEntryItem.id);
 			} else {
-				// do nothing at the moment ....
+				// set 'localPathExtension' to initialCalculatedPath
+				localPathExtension = initialCalculatedPath;
 			}
 			
 			// result for localPathExtension
@@ -7145,6 +7182,13 @@ class SyncEngine {
 			bool parentPathFoundInDB = false;
 			
 			foreach (driveId; onlineDriveDetails.keys) {
+				// Issue #3115 - Validate driveId length
+				// What account type is this?
+				if (appConfig.accountType == "personal") {
+					// Test driveId length and validation
+					driveId = testProvidedDriveIdForLengthIssue(driveId);
+				}
+			
 				if (debugLogging) {addLogEntry("Query DB with this driveID for the Parent Path: " ~ driveId, ["debug"]);}
 				// Query the database for this parent path using each driveId that we know about
 				if (itemDB.selectByPath(parentPath, driveId, databaseItem)) {
@@ -7230,6 +7274,13 @@ class SyncEngine {
 				// Use parent item for the query item
 				if (debugLogging) {addLogEntry("Standard Query, use parentItem", ["debug"]);}
 				queryItem = parentItem;
+			}
+			
+			// Issue #3115 - Validate driveId length
+			// What account type is this?
+			if (appConfig.accountType == "personal") {
+				// Test driveId length and validation
+				queryItem.driveId = testProvidedDriveIdForLengthIssue(queryItem.driveId);
 			}
 			
 			if (queryItem.driveId == appConfig.defaultDriveId) {
@@ -9010,6 +9061,18 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
+		// Issue #3115 - Personal Account Shared Folder
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Is this a 'remote' DB record
+			if (newDatabaseItem.type == ItemType.remote) {
+				// Fetch the actual online record for this item
+				// This returns the actual OneDrive Personal driveId value and is 15 character checked
+				string actualOnlineDriveId = fetchRealOnlineDriveIdentifier(newDatabaseItem.remoteDriveId);
+				newDatabaseItem.remoteDriveId = actualOnlineDriveId;
+			}
+		}
+		
 		// Add the database record
 		if (debugLogging) {addLogEntry("Creating a new database record for a new local path that has been created: " ~ to!string(newDatabaseItem), ["debug"]);}
 		itemDB.upsert(newDatabaseItem);
@@ -9114,35 +9177,12 @@ class SyncEngine {
 					
 					// Generate the change
 					string oldEntry = newDatabaseItem.remoteDriveId;
-					string onlineDriveValue;
 					string newEntry;
-					JSONValue remoteDriveDetails;
+					string onlineDriveValue;
 					
-					OneDriveApi fetchDriveDetailsOneDriveApiInstance;
-					
-					// Create new OneDrive API Instance
-					fetchDriveDetailsOneDriveApiInstance = new OneDriveApi(appConfig);
-					fetchDriveDetailsOneDriveApiInstance.initialise();
-					
-					// Get root details for the provided driveId
-					try {
-						remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(oldEntry);
-					} catch (OneDriveException exception) {
-						if (debugLogging) {addLogEntry("remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(oldEntry) generated a OneDriveException", ["debug"]);}
-						// Default operation if not 408,429,503,504 errors
-						// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
-						// Display what the error is
-						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-					}
-					
-					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
-					fetchDriveDetailsOneDriveApiInstance.releaseCurlEngine();
-					fetchDriveDetailsOneDriveApiInstance = null;
-					// Perform Garbage Collection
-					GC.collect();
-					
-					// This entry ALSO needs to be validated
-					onlineDriveValue = remoteDriveDetails["parentReference"]["driveId"].str;
+					// Fetch the actual online record for this item
+					// This returns the actual OneDrive Personal driveId value and is 15 character checked
+					onlineDriveValue = fetchRealOnlineDriveIdentifier(oldEntry);
 					
 					// Check the onlineDriveValue value
 					if (!onlineDriveValue.empty) {
@@ -9180,6 +9220,67 @@ class SyncEngine {
 		// Return the new database item
 		return newDatabaseItem;
 	}
+	
+	// For OneDrive Personal Accounts, the case sensitivity depending on the API call means the 'driveId' can be uppercase or lowercase
+	// For this application use, this causes issues as, in POSIX environments - 024470056F5C3E43 != 024470056f5c3e43 despite on Windows this being treated as the same
+	string fetchRealOnlineDriveIdentifier(string inputDriveId) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
+		// variables for this function
+		JSONValue remoteDriveDetails;
+		OneDriveApi fetchDriveDetailsOneDriveApiInstance;
+		string outputDriveId;
+		
+		// Create new OneDrive API Instance
+		fetchDriveDetailsOneDriveApiInstance = new OneDriveApi(appConfig);
+		fetchDriveDetailsOneDriveApiInstance.initialise();
+		
+		// Get root details for the provided driveId
+		try {
+			remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(inputDriveId);
+		} catch (OneDriveException exception) {
+			if (debugLogging) {addLogEntry("remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(inputDriveId) generated a OneDriveException", ["debug"]);}
+			// Default operation if not 408,429,503,504 errors
+			// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
+			// Display what the error is
+			displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+		}
+		
+		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+		fetchDriveDetailsOneDriveApiInstance.releaseCurlEngine();
+		fetchDriveDetailsOneDriveApiInstance = null;
+		// Perform Garbage Collection
+		GC.collect();
+		
+		// Do we have details we can use?
+		if (hasParentReferenceDriveId(remoteDriveDetails)) {
+			// We have a [parentReference][driveId] reference driveId to use
+			outputDriveId = testProvidedDriveIdForLengthIssue(remoteDriveDetails["parentReference"]["driveId"].str);
+		} else {
+			// We dont have a value from online we can use
+			// Test existing driveId length and validation
+			outputDriveId = testProvidedDriveIdForLengthIssue(inputDriveId);
+		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// Return the outputDriveId
+		return outputDriveId;
+	}
+	
 	
 	// Print the fileDownloadFailures and fileUploadFailures arrays if they are not empty
 	void displaySyncFailures() {
@@ -12028,10 +12129,12 @@ class SyncEngine {
 		// New DB Tie Item to bind the 'remote' path to our parent path in the database
 		Item tieDBItem;
 		tieDBItem.name = parentItem.name;
-		tieDBItem.driveId = parentItem.remoteDriveId;
 		tieDBItem.id = parentItem.remoteId;
 		tieDBItem.type = ItemType.dir;
 		tieDBItem.mtime = parentItem.mtime;
+		
+		// Initially set this
+		tieDBItem.driveId = parentItem.remoteDriveId;
 		
 		// What account type is this as this determines what 'tieDBItem.parentId' should be set to
 		// There is a difference in the JSON responses between 'personal' and 'business' account types for Shared Folders
@@ -12040,6 +12143,11 @@ class SyncEngine {
 			// Set tieDBItem.parentId to null
 			tieDBItem.parentId = null;
 			tieDBItem.type = ItemType.root;
+			
+			// Fetch the actual online record for this item
+			// This returns the actual OneDrive Personal driveId value and is 15 character checked
+			string actualOnlineDriveId = fetchRealOnlineDriveIdentifier(tieDBItem.driveId);
+			tieDBItem.driveId = actualOnlineDriveId;
 		} else {
 			// The tieDBItem.parentId needs to be the correct driveId id reference
 			// Query the DB 
@@ -12726,40 +12834,22 @@ class SyncEngine {
 		// Check the provided objectParentDriveId
 		if (!objectParentDriveId.empty) {
 			// Ensure objectParentDriveId is 16 characters long by padding with leading zeros if required
+			if (debugLogging) {
+				string validationMessage = format("Validating that the provided OneDrive Personal 'driveId' value '%s' is 16 characters", objectParentDriveId);
+				addLogEntry(validationMessage, ["debug"]);
+			}
+			
 			if (objectParentDriveId.length < 16) {
 				// Debug logging
-				if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided ['parentReference']['driveId'].str from the JSON is not 16 Characters in length - fetching correct value from Microsoft Graph API via getDriveIdRoot call", ["debug"]);}
+				if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG (Issue #3072): The provided 'driveId' is not 16 characters in length - fetching the correct value from Microsoft Graph API via getDriveIdRoot call", ["debug"]);}
 				
 				// Generate the change
 				oldEntry = objectParentDriveId;
 				string onlineDriveValue;
-				JSONValue remoteDriveDetails;
 				
-				OneDriveApi fetchDriveDetailsOneDriveApiInstance;
-				
-				// Create new OneDrive API Instance
-				fetchDriveDetailsOneDriveApiInstance = new OneDriveApi(appConfig);
-				fetchDriveDetailsOneDriveApiInstance.initialise();
-				
-				// Get root details for the provided driveId
-				try {
-					remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(oldEntry);
-				} catch (OneDriveException exception) {
-					if (debugLogging) {addLogEntry("remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(oldEntry) generated a OneDriveException", ["debug"]);}
-					// Default operation if not 408,429,503,504 errors
-					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
-					// Display what the error is
-					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-				}
-				
-				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
-				fetchDriveDetailsOneDriveApiInstance.releaseCurlEngine();
-				fetchDriveDetailsOneDriveApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
-				
-				// This entry ALSO needs to be validated
-				onlineDriveValue = remoteDriveDetails["parentReference"]["driveId"].str;
+				// Fetch the actual online record for this item
+				// This returns the actual OneDrive Personal driveId value and is 15 character checked
+				onlineDriveValue = fetchRealOnlineDriveIdentifier(oldEntry);
 				
 				// Check the onlineDriveValue value
 				if (!onlineDriveValue.empty) {
