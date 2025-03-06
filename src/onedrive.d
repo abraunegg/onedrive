@@ -574,10 +574,9 @@ class OneDriveApi {
 		string[string] requestHeaders;
 		
 		// From March 1st 2025, this needs to be added to ensure that Shared Folders are sent in the Delta Query Response
-		// TO BE CONFIRMED .. adding 'Include-Feature=AddToOneDrive' to header is NOT WORKING for /delta
 		if (appConfig.accountType == "personal") {
 			// OneDrive Personal Account
-			addIncludeFeatureRequestHeader(&requestHeaders); // NOT WORKING !!!!!!!
+			addIncludeFeatureRequestHeader(&requestHeaders);
 		} else {
 			// Business or SharePoint Library
 			// Only add if configured to do so
