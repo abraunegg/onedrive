@@ -591,6 +591,7 @@ class SyncEngine {
 			// What account type is this?
 			if (appConfig.accountType == "personal") {
 				// Test driveId length and validation
+				// Once checked and validated, we only need to check 'driveId' if it does not match exactly 'appConfig.defaultDriveId'
 				appConfig.defaultDriveId = testProvidedDriveIdForLengthIssue(appConfig.defaultDriveId);
 			}
 			
@@ -1090,8 +1091,10 @@ class SyncEngine {
 					// Issue #3115 - Validate driveId length
 					// What account type is this?
 					if (appConfig.accountType == "personal") {
-						// Test driveId length and validation
-						searchItem.driveId = testProvidedDriveIdForLengthIssue(searchItem.driveId);
+						// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+						if (searchItem.driveId != appConfig.defaultDriveId) {
+							searchItem.driveId = testProvidedDriveIdForLengthIssue(searchItem.driveId);
+						}
 					}
 					
 					// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
@@ -1348,8 +1351,10 @@ class SyncEngine {
 					// Issue #3115 - Validate driveId length
 					// What account type is this?
 					if (appConfig.accountType == "personal") {
-						// Test driveId length and validation
-						driveIdToQuery = testProvidedDriveIdForLengthIssue(driveIdToQuery);
+						// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+						if (driveIdToQuery != appConfig.defaultDriveId) {
+							driveIdToQuery = testProvidedDriveIdForLengthIssue(driveIdToQuery);
+						}
 					}
 					
 					// Update deltaLinkCache
@@ -2648,15 +2653,15 @@ class SyncEngine {
 			// What is the source of this item data?
 			string itemSource = "remote";
 			if (isItemSynced(newDatabaseItem, newItemPath, itemSource)) {
-			
 				// Issue #3115 - Personal Account Shared Folder
 				// What account type is this?
 				if (appConfig.accountType == "personal") {
 					// Is this a 'remote' DB record
 					if (newDatabaseItem.type == ItemType.remote) {
+						// Issue #3136, #3139 #3143
 						// Fetch the actual online record for this item
-						// This returns the actual OneDrive Personal driveId value and is 15 character checked
-						string actualOnlineDriveId = fetchRealOnlineDriveIdentifier(newDatabaseItem.remoteDriveId);
+						// This returns the 'actual' OneDrive Personal driveId value and is 15 character checked
+						string actualOnlineDriveId = testProvidedDriveIdForLengthIssue(fetchRealOnlineDriveIdentifier(newDatabaseItem.remoteDriveId));
 						newDatabaseItem.remoteDriveId = actualOnlineDriveId;
 					}
 				}
@@ -2955,8 +2960,10 @@ class SyncEngine {
 		// Issue #3115 - Validate driveId length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
-			// Test driveId length and validation
-			parentDriveId = testProvidedDriveIdForLengthIssue(parentDriveId);
+			// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+			if (parentDriveId != appConfig.defaultDriveId) {
+				parentDriveId = testProvidedDriveIdForLengthIssue(parentDriveId);
+			}
 		}
 		
 		// Try and fetch this shared folder parent's details
@@ -3014,6 +3021,7 @@ class SyncEngine {
 		// - This maps the Shared Folder 'driveId' with the parent folder where the shared folder exists, so we can call the parent folder to query for changes to this Shared Folder
 		createDatabaseRootTieRecordForOnlineSharedFolder(onlineParentData);
 		
+		// Log that we are created the Shared Folder Tie record now
 		if (debugLogging) {addLogEntry("Creating the Shared Folder DB Tie Record that binds the 'root' record to the 'folder'" , ["debug"]);}
 		
 		// Make an item from the online JSON data
@@ -3065,8 +3073,10 @@ class SyncEngine {
 		// Issue #3115 - Validate driveId length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
-			// Test driveId length and validation
-			sharedFolderDatabaseTie.driveId = testProvidedDriveIdForLengthIssue(sharedFolderDatabaseTie.driveId);
+			// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+			if (sharedFolderDatabaseTie.driveId != appConfig.defaultDriveId) {
+				sharedFolderDatabaseTie.driveId = testProvidedDriveIdForLengthIssue(sharedFolderDatabaseTie.driveId);
+			}
 		}
 				
 		// Log action
@@ -3203,9 +3213,10 @@ class SyncEngine {
 						if (appConfig.accountType == "personal") {
 							// Is this a 'remote' DB record
 							if (changedOneDriveItem.type == ItemType.remote) {
+								// Issue #3136, #3139 #3143
 								// Fetch the actual online record for this item
 								// This returns the actual OneDrive Personal driveId value and is 15 character checked
-								string actualOnlineDriveId = fetchRealOnlineDriveIdentifier(changedOneDriveItem.remoteDriveId);
+								string actualOnlineDriveId = testProvidedDriveIdForLengthIssue(fetchRealOnlineDriveIdentifier(changedOneDriveItem.remoteDriveId));
 								changedOneDriveItem.remoteDriveId = actualOnlineDriveId;
 							}
 						}
@@ -3250,9 +3261,10 @@ class SyncEngine {
 				if (appConfig.accountType == "personal") {
 					// Is this a 'remote' DB record
 					if (changedOneDriveItem.type == ItemType.remote) {
+						// Issue #3136, #3139 #3143
 						// Fetch the actual online record for this item
 						// This returns the actual OneDrive Personal driveId value and is 15 character checked
-						string actualOnlineDriveId = fetchRealOnlineDriveIdentifier(changedOneDriveItem.remoteDriveId);
+						string actualOnlineDriveId = testProvidedDriveIdForLengthIssue(fetchRealOnlineDriveIdentifier(changedOneDriveItem.remoteDriveId));
 						changedOneDriveItem.remoteDriveId = actualOnlineDriveId;
 					}
 				}
@@ -4107,13 +4119,6 @@ class SyncEngine {
 		string initialCalculatedPath;
 		string fullCalculatedPath;
 		bool calculateLocalExtension = false;
-		
-		// Issue #3115 - Validate driveId length
-		// What account type is this?
-		if (appConfig.accountType == "personal") {
-			// Test driveId length and validation
-			thisDriveId = testProvidedDriveIdForLengthIssue(thisDriveId);
-		}
 		
 		// What driveID and itemID we trying to calculate the path for
 		if (debugLogging) {
@@ -7214,8 +7219,11 @@ class SyncEngine {
 				// Issue #3115 - Validate driveId length
 				// What account type is this?
 				if (appConfig.accountType == "personal") {
-					// Test driveId length and validation
-					driveId = testProvidedDriveIdForLengthIssue(driveId);
+				
+					// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+					if (driveId != appConfig.defaultDriveId) {
+						driveId = testProvidedDriveIdForLengthIssue(driveId);
+					}
 				}
 			
 				if (debugLogging) {addLogEntry("Query DB with this driveID for the Parent Path: " ~ driveId, ["debug"]);}
@@ -7308,8 +7316,10 @@ class SyncEngine {
 			// Issue #3115 - Validate driveId length
 			// What account type is this?
 			if (appConfig.accountType == "personal") {
-				// Test driveId length and validation
-				queryItem.driveId = testProvidedDriveIdForLengthIssue(queryItem.driveId);
+				// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+				if (queryItem.driveId != appConfig.defaultDriveId) {
+					queryItem.driveId = testProvidedDriveIdForLengthIssue(queryItem.driveId);
+				}
 			}
 			
 			if (queryItem.driveId == appConfig.defaultDriveId) {
@@ -9040,8 +9050,10 @@ class SyncEngine {
 					// Issue #3115 - Validate driveId length
 					// What account type is this?
 					if (appConfig.accountType == "personal") {
-						// Test item.driveId length and validation
-						item.driveId = testProvidedDriveIdForLengthIssue(item.driveId);
+						// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+						if (item.driveId != appConfig.defaultDriveId) {
+							item.driveId = testProvidedDriveIdForLengthIssue(item.driveId);
+						}
 					}
 					
 					// Add to the local database
@@ -9095,10 +9107,14 @@ class SyncEngine {
 		if (appConfig.accountType == "personal") {
 			// Is this a 'remote' DB record
 			if (newDatabaseItem.type == ItemType.remote) {
-				// Fetch the actual online record for this item
-				// This returns the actual OneDrive Personal driveId value and is 15 character checked
-				string actualOnlineDriveId = fetchRealOnlineDriveIdentifier(newDatabaseItem.remoteDriveId);
-				newDatabaseItem.remoteDriveId = actualOnlineDriveId;
+				// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+				if (newDatabaseItem.remoteDriveId != appConfig.defaultDriveId) {
+					// Issue #3136, #3139 #3143
+					// Fetch the actual online record for this item
+					// This returns the actual OneDrive Personal driveId value and is 15 character checked
+					string actualOnlineDriveId = testProvidedDriveIdForLengthIssue(fetchRealOnlineDriveIdentifier(newDatabaseItem.remoteDriveId));
+					newDatabaseItem.remoteDriveId = actualOnlineDriveId;
+				}
 			}
 		}
 		
@@ -9196,47 +9212,12 @@ class SyncEngine {
 		// If this is a OneDrive Personal Account, ensure this value is 16 characters, padded by leading zero's if eventually required
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
-		
 			// Check the newDatabaseItem.remoteDriveId
 			if (!newDatabaseItem.remoteDriveId.empty) {
-				// Ensure newDatabaseItem.remoteDriveId is 16 characters long by padding with leading zeros if required
-				if (newDatabaseItem.remoteDriveId.length < 16) {
-					// Debug logging
-					if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided 'remoteDriveId' is not 16 Characters in length - fetching correct value from Microsoft Graph API via getDriveIdRoot call", ["debug"]);}
-					
-					// Generate the change
-					string oldEntry = newDatabaseItem.remoteDriveId;
-					string newEntry;
-					string onlineDriveValue;
-					
-					// Fetch the actual online record for this item
-					// This returns the actual OneDrive Personal driveId value and is 15 character checked
-					onlineDriveValue = fetchRealOnlineDriveIdentifier(oldEntry);
-					
-					// Check the onlineDriveValue value
-					if (!onlineDriveValue.empty) {
-						// Ensure onlineDriveValue is 16 characters long by padding with leading zeros if required
-						if (onlineDriveValue.length < 16) {
-							// online value is not 16 characters in length
-							// Debug logging
-							if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided online ['parentReference']['driveId'] value is not 16 Characters in length - padding with leading zero's", ["debug"]);}
-							// Generate the change
-							newEntry = to!string(onlineDriveValue.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding, leave case as-is
-						} else {
-							// Online value is 16 characters in length, use as-is
-							newEntry = onlineDriveValue;
-						}
-					}
-					
-					// Debug Logging of result
-					if (debugLogging) {
-							addLogEntry(" - old newDatabaseItem.remoteDriveId = " ~ oldEntry, ["debug"]);
-							addLogEntry(" - new newDatabaseItem.remoteDriveId = " ~ newEntry, ["debug"]);
-					}
-					
-					// Make the change to the generated new database item
-					newDatabaseItem.remoteDriveId = newEntry;
-				}
+				// Issue #3136, #3139 #3143
+				// Test searchItem.driveId length and validation
+				// - This check the length, fetch online value and return a 16 character driveId
+				newDatabaseItem.remoteDriveId = testProvidedDriveIdForLengthIssue(fetchRealOnlineDriveIdentifier(newDatabaseItem.remoteDriveId));
 			}
 		}
 		
@@ -9252,6 +9233,7 @@ class SyncEngine {
 	
 	// For OneDrive Personal Accounts, the case sensitivity depending on the API call means the 'driveId' can be uppercase or lowercase
 	// For this application use, this causes issues as, in POSIX environments - 024470056F5C3E43 != 024470056f5c3e43 despite on Windows this being treated as the same
+	// This function does NOT do a 15 character driveId validation
 	string fetchRealOnlineDriveIdentifier(string inputDriveId) {
 		// Function Start Time
 		SysTime functionStartTime;
@@ -9299,11 +9281,11 @@ class SyncEngine {
 		// Do we have details we can use?
 		if (hasParentReferenceDriveId(remoteDriveDetails)) {
 			// We have a [parentReference][driveId] reference driveId to use
-			outputDriveId = testProvidedDriveIdForLengthIssue(remoteDriveDetails["parentReference"]["driveId"].str);
+			outputDriveId = remoteDriveDetails["parentReference"]["driveId"].str;
 		} else {
 			// We dont have a value from online we can use
 			// Test existing driveId length and validation
-			outputDriveId = testProvidedDriveIdForLengthIssue(inputDriveId);
+			outputDriveId = inputDriveId;
 		}
 		
 		// Display function processing time if configured to do so
@@ -9426,8 +9408,9 @@ class SyncEngine {
 					// Issue #3115 - Personal Account Shared Folder
 					// What account type is this?
 					if (appConfig.accountType == "personal") {
+						// Issue #3136, #3139 #3143
 						// Fetch the actual online record for this item
-						// This returns the actual OneDrive Personal driveId value and is 15 character checked
+						// This returns the actual OneDrive Personal driveId value. The check of 'searchItem.driveId' to comply with 16 characters is done below
 						string actualOnlineDriveId = fetchRealOnlineDriveIdentifier(searchItem.driveId);
 						searchItem.driveId = actualOnlineDriveId;
 					}
@@ -9458,8 +9441,10 @@ class SyncEngine {
 		// Issue #3072 - Validate searchItem.driveId length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
-			// Test searchItem.driveId length and validation
-			searchItem.driveId = testProvidedDriveIdForLengthIssue(searchItem.driveId);
+			// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+			if (searchItem.driveId != appConfig.defaultDriveId) {
+				searchItem.driveId = testProvidedDriveIdForLengthIssue(searchItem.driveId);
+			}
 		}
 		
 		// Before we get any data from the OneDrive API, flag any child object in the database as out-of-sync for this driveId & and object id
@@ -9699,8 +9684,10 @@ class SyncEngine {
 		// Issue #3115 - Validate driveId length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
-			// Test driveId length and validation
-			driveId = testProvidedDriveIdForLengthIssue(driveId);
+			// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+			if (driveId != appConfig.defaultDriveId) {
+				driveId = testProvidedDriveIdForLengthIssue(driveId);
+			}
 		}
 		
 		while (true) {
@@ -9815,11 +9802,8 @@ class SyncEngine {
 		}
 		
 		// Issue #3115 - Validate driveId length
-		// What account type is this?
-		if (appConfig.accountType == "personal") {
-			// Test driveId length and validation
-			driveId = testProvidedDriveIdForLengthIssue(driveId);
-		}
+		// - The function 'queryForChildren' checks the 'driveId' value and that value is the input to this function.
+		//   It is redundant to then check 'driveid' again as this is not changed when this function is called
 		
 		// function variables 
 		JSONValue thisLevelChildren;
@@ -12135,8 +12119,10 @@ class SyncEngine {
 		// Issue #3115 - Validate driveId length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
-			// Test driveId length and validation
-			tieDBItem.driveId = testProvidedDriveIdForLengthIssue(tieDBItem.driveId);
+			// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+			if (tieDBItem.driveId != appConfig.defaultDriveId) {
+				tieDBItem.driveId = testProvidedDriveIdForLengthIssue(tieDBItem.driveId);
+			}
 		}
 		
 		// Add this DB Tie parent record to the local database
@@ -12188,9 +12174,10 @@ class SyncEngine {
 			tieDBItem.parentId = null;
 			tieDBItem.type = ItemType.root;
 			
+			// Issue #3136, #3139 #3143
 			// Fetch the actual online record for this item
 			// This returns the actual OneDrive Personal driveId value and is 15 character checked
-			string actualOnlineDriveId = fetchRealOnlineDriveIdentifier(tieDBItem.driveId);
+			string actualOnlineDriveId = testProvidedDriveIdForLengthIssue(fetchRealOnlineDriveIdentifier(tieDBItem.driveId));
 			tieDBItem.driveId = actualOnlineDriveId;
 		} else {
 			// The tieDBItem.parentId needs to be the correct driveId id reference
@@ -12883,6 +12870,7 @@ class SyncEngine {
 				addLogEntry(validationMessage, ["debug"]);
 			}
 			
+			// Is this less than 16 characters
 			if (objectParentDriveId.length < 16) {
 				// Debug logging
 				if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG (Issue #3072): The provided 'driveId' is not 16 characters in length - fetching the correct value from Microsoft Graph API via getDriveIdRoot call", ["debug"]);}
@@ -12892,16 +12880,17 @@ class SyncEngine {
 				string onlineDriveValue;
 				
 				// Fetch the actual online record for this item
-				// This returns the actual OneDrive Personal driveId value and is 15 character checked
+				// This returns the actual OneDrive Personal driveId value based on the input value.
+				// The function 'fetchRealOnlineDriveIdentifier' does not check for length issue, this is done below
 				onlineDriveValue = fetchRealOnlineDriveIdentifier(oldEntry);
 				
-				// Check the onlineDriveValue value
+				// Check the onlineDriveValue value for 15 character issue
 				if (!onlineDriveValue.empty) {
 					// Ensure remoteDriveId is 16 characters long by padding with leading zeros if required
 					if (onlineDriveValue.length < 16) {
 						// online value is not 16 characters in length
 						// Debug logging
-						if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG: The provided online ['parentReference']['driveId'] value is not 16 Characters in length - padding with leading zero's", ["debug"]);}
+						if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG (Issue #3072): The provided online ['parentReference']['driveId'] value is not 16 Characters in length - padding with leading zero's", ["debug"]);}
 						// Generate the change
 						newEntry = to!string(onlineDriveValue.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding, leave case as-is
 					} else {
