@@ -13001,7 +13001,7 @@ class SyncEngine {
 		return true;
 	}
 	
-	// Sanatise the provided onedriveJSONItem into a string that can actually be printed without error or issue
+	// Sanitise the provided onedriveJSONItem into a string that can actually be printed without error or issue
 	string sanitiseJSONItem(JSONValue onedriveJSONItem) {
 		// Function Start Time
 		SysTime functionStartTime;
