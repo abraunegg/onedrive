@@ -209,7 +209,11 @@ class SyncEngine {
 	// Directory excluded by 'sync_list flag so that when scanning that directory, if it is excluded, 
 	// can be scanned for new data which may be included by other include rule, but parent is excluded
 	bool syncListDirExcluded = false;
-
+	
+	// Debug Logging Break Lines
+	string debugLogBreakType1 = "-----------------------------------------------------------------------------------------------------------";
+	string debugLogBreakType2 = "===========================================================================================================";
+	
 	// Configure this class instance
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
 	
@@ -1370,10 +1374,10 @@ class SyncEngine {
 				// To allow for better debugging, what are all the JSON elements in the array the API responded with in this set?
 				if (count(jsonArrayToProcess) > 0) {
 					if (debugLogging) {
-						string debugLogHeader = format("------------------------------- jsonArrayToProcess - response bundle %s -----------------------------------", to!string(responseBundleCount));
+						string debugLogHeader = format("=============================== jsonArrayToProcess - response bundle %s ===================================", to!string(responseBundleCount));
 						addLogEntry(debugLogHeader, ["debug"]);
 						addLogEntry(to!string(jsonArrayToProcess), ["debug"]);
-						addLogEntry("-----------------------------------------------------------------------------------------------------------", ["debug"]);
+						addLogEntry(debugLogBreakType2, ["debug"]);
 					}
 				}
 				
@@ -1415,7 +1419,7 @@ class SyncEngine {
 			GC.collect();
 			
 			// To finish off the JSON processing items, this is needed to reflect this in the log
-			if (debugLogging) {addLogEntry("------------------------------------------------------------------", ["debug"]);}
+			if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
 			
 			// Log that we have finished querying the /delta API
 			if (appConfig.verbosityCount == 0) {
@@ -1516,7 +1520,7 @@ class SyncEngine {
 				jsonArrayToProcess = null;
 				
 				// To finish off the JSON processing items, this is needed to reflect this in the log
-				if (debugLogging) {addLogEntry("------------------------------------------------------------------", ["debug"]);}
+				if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
 			
 				// Log that we have finished generating our self generated /delta response
 				if (!appConfig.suppressLoggingOutput) {
@@ -1575,7 +1579,7 @@ class SyncEngine {
 				processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount);
 				
 				// To finish off the JSON processing items, this is needed to reflect this in the log
-				if (debugLogging) {addLogEntry("------------------------------------------------------------------", ["debug"]);}
+				if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
 				
 				// For this set of items, perform a DB PASSIVE checkpoint
 				itemDB.performCheckpoint("PASSIVE");
@@ -1648,10 +1652,10 @@ class SyncEngine {
 		
 		// Debugging the processing start of the JSON item
 		if (debugLogging) {
-			addLogEntry("------------------------------------------------------------------", ["debug"]);
+			addLogEntry(debugLogBreakType1, ["debug"]);
 			jsonProcessingStartTime = MonoTime.currTime();
 			addLogEntry("Processing OneDrive Item " ~ to!string(changeCount) ~ " of " ~ to!string(nrChanges) ~ " from API Response Bundle " ~ to!string(responseBundleCount), ["debug"]);
-			addLogEntry("Raw JSON OneDrive Item: " ~ to!string(onedriveJSONItem), ["debug"]);
+			addLogEntry("Raw JSON OneDrive Item: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 		}
 		
 		// What is this item's id
@@ -1918,7 +1922,7 @@ class SyncEngine {
 			
 			// To show this is the processing for this particular item, start off with this breaker line
 			if (debugLogging) {
-				addLogEntry("------------------------------------------------------------------", ["debug"]);
+				addLogEntry(debugLogBreakType1, ["debug"]);
 				addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of JSON Item Batch " ~ to!string(batchGroup) ~ " of " ~ to!string(batchCount), ["debug"]);
 				addLogEntry("Raw JSON OneDrive Item (Batched Item): " ~ to!string(onedriveJSONItem), ["debug"]);
 			}
@@ -2010,7 +2014,7 @@ class SyncEngine {
 					// Edge case as the parent (from another users OneDrive account) will never be in the database - potentially a shared object?
 					if (debugLogging) {
 						addLogEntry("The reported parentId is not in the database. This potentially is a shared folder as 'remoteItem.driveId' != 'appConfig.defaultDriveId'. Relevant Details: remoteItem.driveId (" ~ remoteItem.driveId ~ "), remoteItem.parentId (" ~ remoteItem.parentId ~ ")", ["debug"]);
-						addLogEntry("Potential Shared Object JSON: " ~ to!string(onedriveJSONItem), ["debug"]);
+						addLogEntry("Potential Shared Object JSON: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 					}
 
 					// Format the OneDrive change into a consumable object for the database
@@ -3990,11 +3994,11 @@ class SyncEngine {
 		
 		// Get the /delta data for this account | driveId | deltaLink combination
 		if (debugLogging) {
-			addLogEntry("------------------------------------------------------------------", ["debug"]);
+			addLogEntry(debugLogBreakType1, ["debug"]);
 			addLogEntry("selectedDriveId:   " ~ selectedDriveId, ["debug"]);
 			addLogEntry("selectedItemId:    " ~ selectedItemId, ["debug"]);
 			addLogEntry("providedDeltaLink: " ~ providedDeltaLink, ["debug"]);
-			addLogEntry("------------------------------------------------------------------", ["debug"]);
+			addLogEntry(debugLogBreakType1, ["debug"]);
 		}
 		
 		try {
@@ -6579,7 +6583,7 @@ class SyncEngine {
 		
 		// To finish off the processing items, this is needed to reflect this in the log
 		if (debugLogging) {
-			addLogEntry("------------------------------------------------------------------", ["debug"]);
+			addLogEntry(debugLogBreakType1, ["debug"]);
 			// finish filesystem walk time
 			SysTime finishTime = Clock.currTime();
 			addLogEntry("Finished Filesystem Walk (Local Time): " ~ to!string(finishTime), ["debug"]);
@@ -6723,7 +6727,7 @@ class SyncEngine {
 		
 		// Add this logging break to assist with what was checked for each path
 		if (path != ".") {
-			if (debugLogging) {addLogEntry("------------------------------------------------------------------", ["debug"]);}
+			if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
 		}
 		
 		// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
@@ -7352,7 +7356,7 @@ class SyncEngine {
 								// High confidence that this child folder is a direct match we are trying to create and it already exists online
 								if (debugLogging) {
 									addLogEntry("Path we are searching for exists online (Direct Match): " ~ baseName(thisNewPathToCreate), ["debug"]);
-									addLogEntry("childJSON: " ~ to!string(childJSON), ["debug"]);
+									addLogEntry("childJSON: " ~ sanitiseJSONItem(childJSON), ["debug"]);
 								}
 								foundDirectoryOnline = true;
 								foundDirectoryJSONItem = childJSON;
@@ -7374,7 +7378,7 @@ class SyncEngine {
 									// Found the directory in the location, using case in-sensitive matching
 									if (debugLogging) {
 										addLogEntry("Path we are searching for exists online (POSIX 'case in-sensitive match'): " ~ baseName(thisNewPathToCreate), ["debug"]);
-										addLogEntry("childJSON: " ~ to!string(childJSON), ["debug"]);
+										addLogEntry("childJSON: " ~ sanitiseJSONItem(childJSON), ["debug"]);
 									}
 									foundDirectoryOnline = true;
 									foundDirectoryJSONItem = childJSON;
@@ -7434,7 +7438,7 @@ class SyncEngine {
 						if (debugLogging) {
 							addLogEntry("requiredDriveId:      " ~ requiredDriveId, ["debug"]);
 							addLogEntry("requiredParentItemId: " ~ requiredParentItemId, ["debug"]);
-							addLogEntry("newDriveItem JSON:    " ~ to!string(newDriveItem), ["debug"]);
+							addLogEntry("newDriveItem JSON:    " ~ sanitiseJSONItem(newDriveItem), ["debug"]);
 						}
 					
 						// Create the new folder
@@ -9014,7 +9018,7 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);}
 				} else {
 					// What is the JSON item we are trying to create a DB record with?
-					if (debugLogging) {addLogEntry("saveItem - creating DB item from this JSON: " ~ to!string(jsonItem), ["debug"]);}
+					if (debugLogging) {addLogEntry("saveItem - creating DB item from this JSON: " ~ sanitiseJSONItem(jsonItem), ["debug"]);}
 					
 					// Takes a JSON input and formats to an item which can be used by the database
 					Item item = makeItem(jsonItem);
@@ -9074,7 +9078,7 @@ class SyncEngine {
 			} else {
 				// log error
 				addLogEntry("ERROR: OneDrive response missing required 'id' element");
-				addLogEntry("ERROR: " ~ to!string(jsonItem));
+				addLogEntry("ERROR: " ~ sanitiseJSONItem(jsonItem));
 			}
 		} else {
 			// log error
@@ -9560,7 +9564,7 @@ class SyncEngine {
 			} catch (OneDriveException exception) {
 				// OneDrive threw an error
 				if (debugLogging) {
-					addLogEntry("------------------------------------------------------------------", ["debug"]);
+					addLogEntry(debugLogBreakType1, ["debug"]);
 					addLogEntry("Query Error: topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)", ["debug"]);
 					addLogEntry("driveId:   " ~ searchItem.driveId, ["debug"]);
 					addLogEntry("idToQuery: " ~ searchItem.id, ["debug"]);
@@ -9817,7 +9821,7 @@ class SyncEngine {
 		} catch (OneDriveException exception) {
 			// OneDrive threw an error
 			if (debugLogging) {
-				addLogEntry("------------------------------------------------------------------", ["debug"]);
+				addLogEntry(debugLogBreakType1, ["debug"]);
 				addLogEntry("Query Error: thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)", ["debug"]);
 				addLogEntry("driveId: " ~ driveId, ["debug"]);
 				addLogEntry("idToQuery: " ~ idToQuery, ["debug"]);
@@ -11911,7 +11915,7 @@ class SyncEngine {
 			} catch (OneDriveException exception) {
 				// OneDrive threw an error
 				if (debugLogging) {
-					addLogEntry("------------------------------------------------------------------", ["debug"]);
+					addLogEntry(debugLogBreakType1, ["debug"]);
 					addLogEntry("Query Error: thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink)", ["debug"]);
 					addLogEntry("driveId:   " ~ parentItemDriveId, ["debug"]);
 					addLogEntry("idToQuery: " ~ parentItemId, ["debug"]);
@@ -12317,7 +12321,7 @@ class SyncEngine {
 					}
 					
 					// Output query result
-					addLogEntry("-----------------------------------------------------------------------------------");
+					addLogEntry(debugLogBreakType1);
 					if (isItemFile(searchResult)) {
 						addLogEntry("Shared File:     " ~ to!string(searchResult["name"].str));
 					} else {
@@ -12344,7 +12348,7 @@ class SyncEngine {
 				}
 				
 				// Close out the loop
-				addLogEntry("-----------------------------------------------------------------------------------");
+				addLogEntry(debugLogBreakType1);
 				addLogEntry();
 				
 			} else {
@@ -12416,7 +12420,7 @@ class SyncEngine {
 				
 				if (isItemFile(searchResult)) {
 					// Debug response output
-					if (debugLogging) {addLogEntry("getSharedWithMe Response Shared File JSON: " ~ to!string(searchResult), ["debug"]);}
+					if (debugLogging) {addLogEntry("getSharedWithMe Response Shared File JSON: " ~ sanitiseJSONItem(searchResult), ["debug"]);}
 					
 					// Make a DB item from this JSON
 					Item sharedFileOriginalData = makeItem(searchResult);
@@ -12974,5 +12978,66 @@ class SyncEngine {
 				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 			}
 		}
+	}
+	
+	// Recursively validate JSONValue for UTF-8 compliance
+	bool validateUTF8JSON(in JSONValue json) {
+		switch (json.type) {
+			case JSONType.string:
+				return isValidUTF8(json.str);
+			case JSONType.array:
+				foreach (ref item; json.array) {
+					if (!validateUTF8JSON(item)) return false;
+				}
+				break;
+			case JSONType.object:
+				foreach (key, ref value; json.object) {
+					if (!isValidUTF8(key) || !validateUTF8JSON(value)) return false;
+				}
+				break;
+			default:
+				break; // Other types (null, bool, int, float) don't need UTF-8 validation
+		}
+		return true;
+	}
+	
+	// Sanatise the provided onedriveJSONItem into a string that can actually be printed without error or issue
+	string sanitiseJSONItem(JSONValue onedriveJSONItem) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Eventual output variable
+		string sanitisedJSONString;
+		
+		// Validate UTF-8 before serialisation
+		if (!validateUTF8JSON(onedriveJSONItem)) {
+			return "JSON Validation Failed: Contains Invalid UTF-8 Data";
+		}
+		
+		// Try and serialise the JSON into a string
+		try {
+			auto app = appender!string();
+			toJSON(app, onedriveJSONItem);
+			sanitisedJSONString = app.data;
+		} catch (Exception e) {
+			sanitisedJSONString = "JSON Serialisation Failed: " ~ e.msg;
+		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// Return sanitised JSON string for logging output
+		return sanitisedJSONString;
 	}
 }
