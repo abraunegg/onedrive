@@ -496,27 +496,12 @@ bool isValidUTF8Timestamp(string input) {
 		// Validate the entire string for UTF-8 correctness
 		validate(input); // Throws UTFException if invalid UTF-8 is found
 
-		// Iterate through each character using byUTF to ensure proper UTF-8 decoding
-		auto it = input.byUTF!(char);
-		foreach (_; it) {
-			// Iterating over the range ensures every UTF-8 sequence in the string is decoded into valid `dchar`s.
-			// Throws a UTFException if an invalid UTF-8 sequence is encountered during decoding.
-		}
-
-		// Check for replacement characters
-		if (input.count!((dchar c) => c == '\uFFFD') > 0) {
-			// contains replacement character
-			addLogEntry("UTF-8 validation failed: Input contains replacement characters (�).");
+		// Validate the input against UTF-8 test cases
+		if (!isValidUTF8(input)) {
+			// error message already printed
 			return false;
 		}
-
-		// is the string empty?
-		if (input.empty) {
-			// input is empty
-			addLogEntry("UTF-8 validation failed: Input is empty.");
-			return false;
-		}
-	
+		
 		// Additional edge-case handling because the input format is known and controlled:
 		// Ensure input length is within the expected range for a UTC datetime
 		if (input.length < 20 || input.length > 30) {
