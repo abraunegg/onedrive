@@ -7530,6 +7530,21 @@ class SyncEngine {
 					addLogEntry(" onlinePathData: " ~ to!string(onlinePathData), ["debug"]);
 				}
 				
+				// OneDrive Personal Shared Folder Check
+				if (appConfig.accountType == "personal") {
+					// We are a personal account, this existing online folder, it could be a Shared Online Folder could be a 'Add shortcut to My files' item
+					// Is this a remote folder
+					if (isItemRemote(onlinePathData)) {
+						// The folder is a remote item ...
+						if (debugLogging) {addLogEntry("The existing Remote Online Folder and 'onlinePathData' indicate this is most likely a OneDrive Personal Shared Folder Link added by 'Add shortcut to My files'", ["debug"]);}
+						
+						// It is a 'remote' JSON item denoting a potential shared folder
+						// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
+						createRequiredSharedFolderDatabaseRecords(onlinePathData);
+					}
+				}
+				
+				// OneDrive Business Shared Folder Check
 				if (appConfig.accountType == "business") {
 					// We are a business account, this existing online folder, it could be a Shared Online Folder could be a 'Add shortcut to My files' item
 					// Is this a remote folder
