@@ -151,8 +151,9 @@ int main(string[] cliArgs) {
 	}
 	
 	// Determine the application logging verbosity
+	// - As these flags are used to reduce application processing when not required, specifically in a 'debug' scenario, both verboseLogging and debugLogging need to be enabled
 	if (verbosityCount == 1) { verboseLogging = true;} // set __gshared bool verboseLogging in log.d
-	if (verbosityCount >= 2) { debugLogging = true;}   // set __gshared bool debugLogging in log.d
+	if (verbosityCount >= 2) { verboseLogging = true; debugLogging = true;}   // set __gshared bool verboseLogging & debugLogging in log.d
 	
 	// Initialize the application logging class, as we know the application verbosity level
 	// If we need to enable logging to a file, we can only do this once we know the application configuration which is done slightly later on
