@@ -13033,7 +13033,7 @@ class SyncEngine {
 		
 		// Validate UTF-8 before serialisation
 		if (!validateUTF8JSON(onedriveJSONItem)) {
-			return "JSON Validation Failed: Contains Invalid UTF-8 Data";
+			return "JSON Validation Failed: JSON data from OneDrive API contains invalid UTF-8 characters";
 		}
 		
 		// Try and serialise the JSON into a string
