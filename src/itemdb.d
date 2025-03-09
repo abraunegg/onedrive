@@ -225,7 +225,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 
 final class ItemDatabase {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 15;
+	immutable int itemDatabaseVersion = 16;
 
 	Database db;
 	string insertItemStmt;
@@ -371,7 +371,7 @@ final class ItemDatabase {
 			SELECT *
 			FROM item
 			WHERE type = 'remote'
-			AND remoteDriveId = ?1
+			AND remoteDriveId = ?1 AND remoteId = ?2
 		";
 		selectItemByParentIdStmt = "SELECT * FROM item WHERE driveId = ? AND parentId = ?";
 		deleteItemByIdStmt = "DELETE FROM item WHERE driveId = ? AND id = ?";
@@ -633,13 +633,14 @@ final class ItemDatabase {
 		}
 	}
 
-	// This should return the 'remote' DB entry for the given 'remoteDriveId'
-	bool selectRemoteTypeByRemoteDriveId(const(char)[] entryName, out Item item) {
+	// This should return the 'remote' DB entry for the given 'remoteDriveId' and 'remoteId'
+	bool selectRemoteTypeByRemoteDriveId(const(char)[] remoteDriveId, const(char)[] remoteId, out Item item) {
 		synchronized(databaseLock) {
 			auto p = db.prepare(selectRemoteTypeByRemoteDriveIdStmt);
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
 			try {
-				p.bind(1, entryName);
+				p.bind(1, remoteDriveId);
+				p.bind(2, remoteId);
 				auto r = p.exec();
 				if (!r.empty) {
 					item = buildItem(r);
