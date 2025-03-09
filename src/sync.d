@@ -5456,7 +5456,6 @@ class SyncEngine {
 					
 					// what are we checking
 					if (debugLogging) {addLogEntry("skip_file item to check (file name only - parent path not in database): " ~ exclusionTestPath, ["debug"]);}
-					clientSideRuleExcludesPath = selectiveSync.isFileNameExcluded(exclusionTestPath);
 				}
 				
 				// Perform the 'skip_file' evaluation
