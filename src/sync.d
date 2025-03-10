@@ -8745,35 +8745,58 @@ class SyncEngine {
 					Item actualItemToDelete;
 					Item remoteShortcutLinkItem;
 					
+					// OneDrive Shared Folder Link Handling
+					// - If the item to delete is on a remote drive ... technically we do not own this and should not be deleting this online
+					//   We should however be deleting the 'link' in our account online, and, remove the DB link entries (root / folder DB Tie records)
+					bool businessSharingEnabled = false;
+					
 					// OneDrive Business Shared Folder Deletion Handling
 					// Is this a Business Account with Sync Business Shared Items enabled?
 					if ((appConfig.accountType == "business") && (appConfig.getValueBool("sync_business_shared_items"))) {
-						// Syncing Business Shared Items is enabled
-						if (itemToDelete.driveId != appConfig.defaultDriveId) {
-							// The item to delete is on a remote drive ... technically we do not own this and should not be deleting this online
-							// We should however be deleting the 'link' in our account online, and, remove the DB link entry
-							if (itemToDelete.type == ItemType.dir) {			
-								// Query the database for this potential link
-								itemDB.selectByPathIncludingRemoteItems(path, appConfig.defaultDriveId, remoteShortcutLinkItem);
-							}
-						}
+						businessSharingEnabled = true;
 					}
 					
-					// Configure actualItemToDelete
-					if (remoteShortcutLinkItem.id != "") {
-						// A DB entry was returned
-						if (debugLogging) {addLogEntry("remoteShortcutLinkItem: " ~ to!string(remoteShortcutLinkItem), ["debug"]);}
-						// Set actualItemToDelete to this data
-						actualItemToDelete = remoteShortcutLinkItem;
-						// Delete the shortcut reference in the local database
-						itemDB.deleteById(remoteShortcutLinkItem.driveId, remoteShortcutLinkItem.id);
-						if (debugLogging) {addLogEntry("Deleted OneDrive Business Shared Folder 'Shortcut Link'", ["debug"]);}
+					// Is this a 'personal' account type or is this a Business Account with Sync Business Shared Items enabled?
+					if ((appConfig.accountType == "personal") || businessSharingEnabled) {
+						// Personal account type or syncing Business Shared Items is enabled
+						// Is the 'drive' where this is to be deleted on 'our' drive or is this a remote 'drive' ?
+						if (itemToDelete.driveId != appConfig.defaultDriveId) {
+							// The item to delete is on a remote drive ... this must be handled in a specific way
+							if (itemToDelete.type == ItemType.dir) {
+								// Select the 'remote' database object type using these details
+								// Get the DB entry for this 'remote' item
+								itemDB.selectRemoteTypeByRemoteDriveId(itemToDelete.driveId, itemToDelete.id, remoteShortcutLinkItem);
+							}	
+						}
+						
+						// We potentially now have the correct details to delete in our account
+						if (remoteShortcutLinkItem.type == ItemType.remote) {
+							// A valid 'remote' DB entry was returned
+							if (debugLogging) {addLogEntry("remoteShortcutLinkItem: " ~ to!string(remoteShortcutLinkItem), ["debug"]);}
+							// Set actualItemToDelete to this data
+							actualItemToDelete = remoteShortcutLinkItem;
+							
+							// Delete the shortcut reference in the local database
+							if (appConfig.accountType == "personal") {
+								// Personal Shared Folder deletion message
+								if (debugLogging) {addLogEntry("Deleted OneDrive Personal Shared Folder 'Shortcut Link'", ["debug"]);}
+							} else {
+								// Business Shared Folder deletion message
+								if (debugLogging) {addLogEntry("Deleted OneDrive Business Shared Folder 'Shortcut Link'", ["debug"]);}
+							}
+							
+							// Perform action deletion from database
+							itemDB.deleteById(remoteShortcutLinkItem.driveId, remoteShortcutLinkItem.id);
+						} else {
+							// No data was returned, use the original data
+							actualItemToDelete = itemToDelete;
+						}
 					} else {
-						// No data was returned, use the original data
+						// Set actualItemToDelete to original data
 						actualItemToDelete = itemToDelete;
 					}
 					
-					// Try the online deletion
+					// Try the online deletion using the 'actualItemToDelete' values
 					try {
 						// Create new OneDrive API Instance
 						uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
@@ -8808,9 +8831,18 @@ class SyncEngine {
 					
 					// Delete the reference in the local database - use the original input
 					itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
-					if (itemToDelete.remoteId != null) {
-						// If the item is a remote item, delete the reference in the local database
-						itemDB.deleteById(itemToDelete.remoteDriveId, itemToDelete.remoteId);
+					
+					// Was the original item a 'Shared Folder' ?
+					if (remoteShortcutLinkItem.type == ItemType.remote) {
+						// Are there any other 'children' for itemToDelete parent ... this parent may have other Shared Folders added to our account that we have not removed ..
+						Item[] remainingChildren;
+						remainingChildren ~= itemDB.selectChildren(itemToDelete.driveId, itemToDelete.parentId);
+						
+						// Only if there are zero children for this parent item, remove the 'root' record
+						if (count(remainingChildren) == 0) {
+							// No more children for this parental object
+							itemDB.deleteById(itemToDelete.driveId, itemToDelete.parentId);
+						}
 					}
 				} else {
 					// log that this is a dry-run activity
