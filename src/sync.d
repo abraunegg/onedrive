@@ -8753,6 +8753,7 @@ class SyncEngine {
 					// OneDrive Business Shared Folder Deletion Handling
 					// Is this a Business Account with Sync Business Shared Items enabled?
 					if ((appConfig.accountType == "business") && (appConfig.getValueBool("sync_business_shared_items"))) {
+						// Syncing Business Shared Items is enabled
 						businessSharingEnabled = true;
 					}
 					
