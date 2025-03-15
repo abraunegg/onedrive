@@ -11188,6 +11188,10 @@ class SyncEngine {
 									"scope": "anonymous"
 								];
 							}
+							// If a share-password was passed use it when creating the link 
+							if (strip(appConfig.getValueString("share_password")) != "") {
+                                                                accessScope["password"] = appConfig.getValueString("share_password");
+                                                        }
 							
 							// Try and create the shareable file link
 							try {
