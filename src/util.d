@@ -490,6 +490,33 @@ bool containsASCIIControlCodes(string path) {
     return !matchResult.empty;
 }
 
+// Is the string a valid UTF-8 timestamp string?
+bool isValidUTF8Timestamp(string input) {
+	try {
+		// Validate the entire string for UTF-8 correctness
+		validate(input); // Throws UTFException if invalid UTF-8 is found
+
+		// Validate the input against UTF-8 test cases
+		if (!isValidUTF8(input)) {
+			// error message already printed
+			return false;
+		}
+		
+		// Additional edge-case handling because the input format is known and controlled:
+		// Ensure input length is within the expected range for a UTC datetime
+		if (input.length < 20 || input.length > 30) {
+			// not the correct length
+			addLogEntry("UTF-8 validation failed: Input '" ~ input ~ "' is not within the expected length range for UTC datetime strings (20-30 characters).");
+			return false;
+		}
+
+		return true;
+	} catch (UTFException) {
+		addLogEntry("UTF-8 validation failed: Input '" ~ input ~ "' contains invalid UTF-8 characters.");
+		return false;
+	}
+}
+
 // Is the string a valid UTF-8 string?
 bool isValidUTF8(string input) {
 	try {
@@ -510,7 +537,6 @@ bool isValidUTF8(string input) {
 			return false;
 		}
 
-		
 		// is the string empty?
 		if (input.empty) {
 			// input is empty
@@ -518,14 +544,7 @@ bool isValidUTF8(string input) {
 			return false;
 		}
 	
-		// Additional edge-case handling because the input format is known and controlled:
-		// Ensure input length is within the expected range for a UTC datetime
-		if (input.length < 20 || input.length > 30) {
-			// not the correct length
-			addLogEntry("UTF-8 validation failed: Input '" ~ input ~ "' is not within the expected length range for UTC datetime strings (20-30 characters).");
-			return false;
-		}
-
+		// return true
 		return true;
 	} catch (UTFException) {
 		addLogEntry("UTF-8 validation failed: Input '" ~ input ~ "' contains invalid UTF-8 characters.");
@@ -577,7 +596,7 @@ bool isValidUTCDateTime(string dateTimeString) {
 	auto pattern = regex(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$");
 		
 	// Validate for UTF-8 first
-	if (!isValidUTF8(dateTimeString)) {
+	if (!isValidUTF8Timestamp(dateTimeString)) {
 		if (dateTimeString.empty) {
 			// empty string
 			addLogEntry("BAD TIMESTAMP (UTF-8 FAIL): empty string");
