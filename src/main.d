@@ -1239,7 +1239,9 @@ int main(string[] cliArgs) {
 
 // Retrieves the maximum number of open files allowed by the system
 string getMaxOpenFiles() {
-    version (Linux) {
+	// Predefined Versions
+	// https://dlang.org/spec/version.html#predefined-versions
+	version (linux) {
         try {
             // Read max open files from procfs on Linux
             return strip(readText("/proc/sys/fs/file-max"));
@@ -1265,9 +1267,11 @@ string getMaxOpenFiles() {
     }
 }
 
-// Retrieves the maximum inotify watches allowed (Linux) or a placeholder for other platforms
+// Retrieves the maximum inotify watches allowed by the system
 string getMaxInotifyWatches() {
-    version (Linux) {
+	// Predefined Versions
+	// https://dlang.org/spec/version.html#predefined-versions
+    version (linux) {
         try {
             // Read max inotify watches from procfs on Linux
             return strip(readText("/proc/sys/fs/inotify/max_user_watches"));

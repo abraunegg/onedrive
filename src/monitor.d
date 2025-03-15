@@ -58,7 +58,9 @@ class MonitorBackgroundWorker {
 		int wd = inotify_add_watch(fd, toStringz(pathname), mask);
 		if (wd < 0) {
 			if (errno() == ENOSPC) {
-				version (Linux) {
+				// Predefined Versions
+				// https://dlang.org/spec/version.html#predefined-versions
+				version (linux) {
 					// Read max inotify watches from procfs on Linux
 					ulong maxInotifyWatches = to!int(strip(readText("/proc/sys/fs/inotify/max_user_watches")));
 					addLogEntry("The user limit on the total number of inotify watches has been reached.");
