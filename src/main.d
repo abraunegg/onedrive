@@ -1242,51 +1242,51 @@ string getMaxOpenFiles() {
 	// Predefined Versions
 	// https://dlang.org/spec/version.html#predefined-versions
 	version (linux) {
-        try {
-            // Read max open files from procfs on Linux
-            return strip(readText("/proc/sys/fs/file-max"));
-        } catch (Exception e) {
-            return "Unknown (Error reading /proc/sys/fs/file-max)";
-        }
-    } else version (FreeBSD) {
-        try {
-            // Read max open files using sysctl on FreeBSD
-            return strip(executeShell("sysctl -n kern.maxfiles").output);
-        } catch (Exception e) {
-            return "Unknown (sysctl error)";
-        }
-    } else version (OpenBSD) {
-        try {
-            // Read max open files using sysctl on OpenBSD
-            return strip(executeShell("sysctl -n kern.maxfiles").output);
-        } catch (Exception e) {
-            return "Unknown (sysctl error)";
-        }
-    } else {
-        return "Unsupported platform";
-    }
+		try {
+			// Read max open files from procfs on Linux
+			return strip(readText("/proc/sys/fs/file-max"));
+		} catch (Exception e) {
+			return "Unknown (Error reading /proc/sys/fs/file-max)";
+		}
+	} else version (FreeBSD) {
+		try {
+			// Read max open files using sysctl on FreeBSD
+			return strip(executeShell("sysctl -n kern.maxfiles").output);
+		} catch (Exception e) {
+			return "Unknown (sysctl error)";
+		}
+	} else version (OpenBSD) {
+		try {
+			// Read max open files using sysctl on OpenBSD
+			return strip(executeShell("sysctl -n kern.maxfiles").output);
+		} catch (Exception e) {
+			return "Unknown (sysctl error)";
+		}
+	} else {
+		return "Unsupported platform";
+	}
 }
 
 // Retrieves the maximum inotify watches allowed by the system
 string getMaxInotifyWatches() {
 	// Predefined Versions
 	// https://dlang.org/spec/version.html#predefined-versions
-    version (linux) {
-        try {
-            // Read max inotify watches from procfs on Linux
-            return strip(readText("/proc/sys/fs/inotify/max_user_watches"));
-        } catch (Exception e) {
-            return "Unknown (Error reading /proc/sys/fs/inotify/max_user_watches)";
-        }
-    } else version (FreeBSD) {
-        // FreeBSD uses kqueue instead of inotify, no direct equivalent
-        return "N/A (uses kqueue)";
-    } else version (OpenBSD) {
-        // OpenBSD uses kqueue instead of inotify, no direct equivalent
-        return "N/A (uses kqueue)";
-    } else {
-        return "Unsupported platform";
-    }
+	version (linux) {
+		try {
+			// Read max inotify watches from procfs on Linux
+			return strip(readText("/proc/sys/fs/inotify/max_user_watches"));
+		} catch (Exception e) {
+			return "Unknown (Error reading /proc/sys/fs/inotify/max_user_watches)";
+		}
+	} else version (FreeBSD) {
+		// FreeBSD uses kqueue instead of inotify, no direct equivalent
+		return "N/A (uses kqueue)";
+	} else version (OpenBSD) {
+		// OpenBSD uses kqueue instead of inotify, no direct equivalent
+		return "N/A (uses kqueue)";
+	} else {
+		return "Unsupported platform";
+	}
 }
 
 // Print error message when --sync or --monitor has not been used and no valid 'no-sync' operation was requested
