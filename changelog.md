@@ -2,6 +2,34 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.5 - 2025-03-17
+
+### Added
+*   Implement Feature Request: Implement 'transfer_order' configuration option to allow the user to determine what order files are transferred in
+*   Implement Feature Request: Implement 'disable_permission_set' configuration option to not set directory and file permissions
+*   Implement Feature Request: Implement 'write_xattr_data' configuration option to add information about file creator/last editor as extended file attributes
+*   Enhancement: Add support for --share-password option when --create-share-link is called
+*   Enhancement: Add support 'localizedMessage' error messages in application output if this is provided in the JSON response from Microsoft Graph API
+
+### Changed
+*   Changed curl debug logging to --debug-https as this is more relevant
+*   Comprehensively overhauled how OneDrive Personal Shared Folders are handled due to major OneDrive API backend platform user migration and major differences in API response output
+*   Comprehensively changed OneDrive Personal 'driveId' value checking due to major OneDrive API backend platform user migration and major differences in API response output
+
+### Fixed
+*   Fix Bug: Fix path calculation for Client Side Filtering evaluations for Personal Accounts
+*   Fix Bug: Fix path calculation for Client Side Filtering evaluations for Business Accounts
+*   Fix Bug: Only perform path calculation if this is actually required
+*   Fix Bug: Fix check for 'globbing' and 'wildcard' rules, that the number of segments before the first wildcard character need to match before the actual rule can be applied
+*   Fix Bug: When using 'sync_list' , ignore specific exclusion to scan that path for new data, which may be actually included by an include rule, but the parent path is excluded
+*   Fix Bug: When removing a OneDrive Personal Shared Folder, remove the actual link, not the remote user folder
+*   Fix Bug: Fix 'Unsupported platform' for inotify watches by using the correct predefined version definition for Linux.
+
+### Updated
+*   Updated Fedora Docker OS version to Fedora 41
+*   Updated Alpine Docker OS version to Alpine 3.21
+*   Updated documentation
+
 ## 2.5.4 - 2025-02-03
 
 ### Added
@@ -47,7 +75,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Updated
 *   Updated documentation
-
 
 ## 2.5.3 - 2024-11-16
 
