@@ -645,7 +645,7 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 	addLogEntry();
 	addLogEntry("ERROR: Microsoft OneDrive API returned an error with the following message:");
 	auto errorArray = splitLines(message);
-	addLogEntry("  Error Message:    " ~ to!string(errorArray[0]));
+	addLogEntry("  Error Message:       " ~ to!string(errorArray[0]));
 	// Extract 'message' as the reason
 	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
 	
@@ -656,6 +656,7 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 		string errorCode;
 		string requestDate;
 		string requestId;
+		string localizedMessage;
 		
 		// set the reason for the error
 		try {
@@ -673,15 +674,23 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 			// we dont want to do anything here
 		}
 		
+		// Microsoft has started adding 'localizedMessage' to error JSON responses. If this is available, use this
+		try {
+			// Use ["error"]["localizedMessage"] as localised reason
+			localizedMessage = errorMessage["error"]["localizedMessage"].str;	
+		} catch (JSONException e) {
+			// we dont want to do anything here if not available
+		}
+		
 		// Display the error reason
 		if (errorReason.startsWith("<!DOCTYPE")) {
 			// a HTML Error Reason was given
-			addLogEntry("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view this error");
+			addLogEntry("  Error Reason:        A HTML Error response was provided. Use debug logging (--verbose --verbose) to view this error");
 			if (debugLogging) {addLogEntry(errorReason, ["debug"]);}
 			
 		} else {
 			// a non HTML Error Reason was given
-			addLogEntry("  Error Reason:     " ~ errorReason);
+			addLogEntry("  Error Reason:        " ~ errorReason);
 		}
 		
 		// Get the error code if available
@@ -708,15 +717,16 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 			// we dont want to do anything here
 		}
 		
-		// Display the error code, date and request id if available
-		if (errorCode != "")   addLogEntry("  Error Code:       " ~ errorCode);
-		if (requestDate != "") addLogEntry("  Error Timestamp:  " ~ requestDate);
-		if (requestId != "")   addLogEntry("  API Request ID:   " ~ requestId);
+		// Display the localizedMessage, error code, date and request id if available
+		if (localizedMessage != "")   addLogEntry("  Error Reason (L10N): " ~ localizedMessage);
+		if (errorCode != "")   addLogEntry("  Error Code:          " ~ errorCode);
+		if (requestDate != "") addLogEntry("  Error Timestamp:     " ~ requestDate);
+		if (requestId != "")   addLogEntry("  API Request ID:      " ~ requestId);		   
 	}
 	
 	// Where in the code was this error generated
-	if (verboseLogging) {addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);}
-	if (debugLogging) {addLogEntry("  Calling Function: " ~ callingFunction, ["debug"]);}
+	if (verboseLogging) {addLogEntry("  Calling Function:    " ~ callingFunction, ["verbose"]);}
+	if (debugLogging) {addLogEntry("  Calling Function:    " ~ callingFunction, ["debug"]);}
 	// Extra Debug if we are using --verbose --verbose
 	if (debugLogging) {
 		addLogEntry("Raw Error Data: " ~ message, ["debug"]);
