@@ -1760,6 +1760,17 @@ class SyncEngine {
 				}
 			}
 			
+			// Microsoft OneNote container objects present neither folder or file
+			// "package": {
+			//			"type": "oneNote"
+			//		},
+			// Confirmed with Microsoft OneDrive Business
+			if (isOneNotePackageFolder(onedriveJSONItem)) {
+				// This JSON has this element
+				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook Package'" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+				discardDeltaJSONItem = true;
+			}
+			
 			// Microsoft OneDrive OneNote file objects will report as files but have 'application/msonenote' or 'application/octet-stream' as their mime type and will not have any hash entry
 			// Is there a 'file' JSON element and it has a 'mimeType' element?
 			if (isItemFile(onedriveJSONItem) && hasMimeType(onedriveJSONItem)) {

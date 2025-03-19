@@ -1142,6 +1142,16 @@ bool isMalware(const ref JSONValue item) {
 	return ("malware" in item) != null;
 }
 
+bool isOneNotePackageFolder(const ref JSONValue item) {
+    if ("package" in item) {
+        auto pkg = item["package"];
+        if ("type" in pkg && pkg["type"].type == JSONType.string) {
+            return pkg["type"].str == "oneNote";
+        }
+    }
+    return false;
+}
+
 bool hasHashes(const ref JSONValue item) {
 	return ("hashes" in item["file"]) != null;
 }
