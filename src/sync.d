@@ -1752,7 +1752,7 @@ class SyncEngine {
 			// Confirmed with Microsoft OneDrive Business
 			if (isOneNotePackageFolder(onedriveJSONItem)) {
 				// This JSON has this element
-				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook Package'" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook Package '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
 				discardDeltaJSONItem = true;
 			}
 			
