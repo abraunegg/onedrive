@@ -1744,20 +1744,16 @@ class SyncEngine {
 			// Do we discard this JSON item?
 			bool discardDeltaJSONItem = false;
 			
-			// Microsoft OneNote container objects present neither folder or file but has file size
-			if ((!isItemFile(onedriveJSONItem)) && (!isItemFolder(onedriveJSONItem)) && (hasFileSize(onedriveJSONItem))) {
-				// This JSON:
-				// - Is not a file 
-				// - Is not a folder
-				// - Has a 'size' element
-				
-				// Online Shared Folder Shortcuts can match the same criteria - we need to ensure this is not a Online Shared Folder Shortcuts
-				if (!itemIsRemoteItem) {
-					// Not a pointer to a remote item, thus high confidence this is not a shared folder link
-					// Log that this was skipped as this was a Microsoft OneNote item and unsupported
-					if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
-					discardDeltaJSONItem = true;
-				}
+			// Microsoft OneNote container objects present neither folder or file but contain a 'package' element
+			// "package": {
+			//			"type": "oneNote"
+			//		},
+			// Confirmed with Microsoft OneDrive Personal
+			// Confirmed with Microsoft OneDrive Business
+			if (isOneNotePackageFolder(onedriveJSONItem)) {
+				// This JSON has this element
+				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook Package '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+				discardDeltaJSONItem = true;
 			}
 			
 			// Microsoft OneDrive OneNote file objects will report as files but have 'application/msonenote' or 'application/octet-stream' as their mime type and will not have any hash entry
