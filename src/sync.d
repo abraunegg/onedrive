@@ -1759,21 +1759,21 @@ class SyncEngine {
 			// Microsoft OneDrive OneNote file objects will report as files but have 'application/msonenote' or 'application/octet-stream' as their mime type and will not have any hash entry
 			// Is there a 'file' JSON element and it has a 'mimeType' element?
 			if (isItemFile(onedriveJSONItem) && hasMimeType(onedriveJSONItem)) {
-				// and the mimeType is 'application/msonenote' or 'application/octet-stream'
+				// Is the mimeType 'application/msonenote' or 'application/octet-stream'
 				
 				// However there is API inconsistency here between Personal and Business Accounts
 				// Personal OneNote .onetoc2 and .one items all report mimeType as 'application/msonenote'
 				// Business OneNote .onetoc2 and .one items however are different:
-				//  .onetoc2 = 'application/octet-stream' mimeType
 				//  .one = 'application/msonenote' mimeType
-				
+				//  .onetoc2 = 'application/octet-stream' mimeType
 				if (isMicrosoftOneNoteMimeType1(onedriveJSONItem) || isMicrosoftOneNoteMimeType2(onedriveJSONItem)) {
-					// and must not have any hash
-					// Personal Accounts hashes are 100% missing
-					// Business Accounts hashes exist, but JSON array is empty	
-					if ((!hasHashes(onedriveJSONItem)) || (hasZeroHashes(onedriveJSONItem))) {
-						// extreme confidence these are Microsoft OneNote file references which cannot be supported
-						// Log that this was skipped as this was a Microsoft OneNote item and unsupported
+					// We have a 'mimeType' match
+					// What is the file extension?
+					// .one (Type1)
+					// .onetoc2 (Type2)
+					if (isMicrosoftOneNoteFileExtensionType1(onedriveJSONItem) || isMicrosoftOneNoteFileExtensionType2(onedriveJSONItem)) {
+						// Extreme confidence this JSON is a Microsoft OneNote file reference which cannot be supported
+						// Log that this will be skipped as this this is a Microsoft OneNote item and unsupported
 						if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook File '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
 						discardDeltaJSONItem = true;
 					}
@@ -11850,9 +11850,36 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
+		// Function variables
+		string parentPath;
+		string combinedPath;
+		string computedItemPath;
+		bool parentInDatabase = false;
+		
+		// Set itemName
 		string itemName = onedriveJSONItem["name"].str;
-		string parentPath = onedriveJSONItem["parentReference"]["path"].str;
-		string combinedPath = buildNormalizedPath(buildPath(parentPath, itemName));
+		// If this item is on our 'driveId' then use the following, otherwise we need to calculate parental path to display the 'correct' path
+		string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+		string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
+		
+		if (thisItemDriveId == appConfig.defaultDriveId) {
+			// As this is on our driveId, use the path details as is
+			parentPath = onedriveJSONItem["parentReference"]["path"].str;
+			combinedPath = buildNormalizedPath(buildPath(parentPath, itemName));
+		} else {
+			// As this is not our driveId, the 'path' reference above is the 'full' remote path, which is not reflective of our location'
+			// Are the 'parent' details in the database?
+			parentInDatabase = itemDB.idInLocalDatabase(thisItemDriveId, thisItemParentId);
+			if (parentInDatabase) {
+				// Parent in DB .. we can calculate path
+				computedItemPath = computeItemPath(thisItemDriveId, thisItemParentId);
+				combinedPath = buildNormalizedPath(buildPath(computedItemPath, itemName));
+			} else {
+				// We cant calculate this path
+				parentPath = onedriveJSONItem["parentReference"]["name"].str;
+				combinedPath = buildNormalizedPath(buildPath(parentPath, itemName));
+			}
+		}
 		
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
