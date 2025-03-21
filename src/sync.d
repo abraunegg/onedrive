@@ -1768,7 +1768,7 @@ class SyncEngine {
 				//  .onetoc2 = 'application/octet-stream' mimeType
 				if (isMicrosoftOneNoteMimeType1(onedriveJSONItem) || isMicrosoftOneNoteMimeType2(onedriveJSONItem)) {
 					// We have a 'mimeType' match
-					// What is the file extention?
+					// What is the file extension?
 					// .one (Type1)
 					// .onetoc2 (Type2)
 					if (isMicrosoftOneNoteFileExtensionType1(onedriveJSONItem) || isMicrosoftOneNoteFileExtensionType2(onedriveJSONItem)) {
