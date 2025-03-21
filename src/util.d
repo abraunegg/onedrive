@@ -1183,6 +1183,14 @@ bool isMicrosoftOneNoteMimeType2(const ref JSONValue item) {
 	return (item["file"]["mimeType"].str) == "application/octet-stream";
 }
 
+bool isMicrosoftOneNoteFileExtensionType1(const ref JSONValue item) {
+    return item["name"].str.endsWith(".one");
+}
+
+bool isMicrosoftOneNoteFileExtensionType2(const ref JSONValue item) {
+    return item["name"].str.endsWith(".onetoc2");
+}
+
 bool hasUploadURL(const ref JSONValue item) {
 	return ("uploadUrl" in item) != null;
 }
