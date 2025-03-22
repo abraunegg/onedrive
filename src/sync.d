@@ -4253,7 +4253,7 @@ class SyncEngine {
 		return false;
 	}
 	
-	// Process items that need to be removed
+	// Process items that need to be removed from the local filesystem as they were removed online
 	void processDeleteItems() {
 		// Function Start Time
 		SysTime functionStartTime;
@@ -4313,30 +4313,49 @@ class SyncEngine {
 					needsRemoval = true;
 				}
 			}
+			
+			// Does this need local removal?
 			if (needsRemoval) {
 				// Log the action
 				if (item.type == ItemType.file) {
-					addLogEntry("Deleting local file: " ~ path, fileTransferNotifications());
+					// Has the user configured to use the 'Recycle Bin' locally, for any files that are deleted online?
+					if (appConfig.getValueBool("use_recycle_bin")) {
+						addLogEntry("Moving local file to configured 'Recycle Bin': " ~ path, fileTransferNotifications());
+					} else {
+						addLogEntry("Deleting local file: " ~ path, fileTransferNotifications());
+					}
 				} else {
-					addLogEntry("Deleting local directory: " ~ path, fileTransferNotifications());
+					// Has the user configured to use the 'Recycle Bin' locally, for any files that are deleted online?
+					if (appConfig.getValueBool("use_recycle_bin")) {
+						addLogEntry("Moving local directory to configured 'Recycle Bin': " ~ path, fileTransferNotifications());
+					} else {
+						addLogEntry("Deleting local directory: " ~ path, fileTransferNotifications());
+					}
 				}
 				
-				// Perform the action
+				// Perform the actual required action
 				if (!dryRun) {
-					if (isFile(path)) {
-						remove(path);
+					// Do we move to the 'Recycle Bin' or 'Delete'
+					if (appConfig.getValueBool("use_recycle_bin")) {
+						// Move the file to the configured recycle bin
+						movePathToRecycleBin(path);
 					} else {
-						try {
-							// Remove any children of this path if they still exist
-							// Resolve 'Directory not empty' error when deleting local files
-							foreach (DirEntry child; dirEntries(path, SpanMode.depth, false)) {
-								attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
+						// Perform local file removal
+						if (isFile(path)) {
+							remove(path);
+						} else {
+							try {
+								// Remove any children of this path if they still exist
+								// Resolve 'Directory not empty' error when deleting local files
+								foreach (DirEntry child; dirEntries(path, SpanMode.depth, false)) {
+									attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
+								}
+								// Remove the path now that it is empty of children
+								rmdirRecurse(path);
+							} catch (FileException e) {
+								// display the error message
+								displayFileSystemErrorMessage(e.msg, thisFunctionName);
 							}
-							// Remove the path now that it is empty of children
-							rmdirRecurse(path);
-						} catch (FileException e) {
-							// display the error message
-							displayFileSystemErrorMessage(e.msg, thisFunctionName);
 						}
 					}
 				}
@@ -4346,6 +4365,93 @@ class SyncEngine {
 		if (!dryRun) {
 			// Cleanup array memory
 			idsToDelete = [];
+		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+	}
+	
+	// Move to the 'Recycle Bin' rather than a hard delete locally of the online deleted item	
+	void movePathToRecycleBin(string path) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// This is a 2 step process
+		// 1. Move the file
+		//    - If the destination 'name' already exists, the file being moved to the 'Recycle Bin' needs to have a number added to it.
+		// 2. Create the metadata about where the file came from
+		//    - This is in a specific format:
+		//    		[Trash Info]
+		//    		Path=/original/absolute/path/to/the/file/or/folder
+		//    		DeletionDate=YYYY-MM-DDTHH:MM:SS
+		
+		// Calculate all the initial paths required
+		string computedFullLocalPath = absolutePath(path);
+		string fileNameOnly = baseName(path);
+		string computedRecycleBinFilePath = appConfig.recycleBinFilePath ~ fileNameOnly;
+		string computedRecycleBinInfoPath = appConfig.recycleBinInfoPath ~ fileNameOnly ~ ".trashinfo";
+		bool isPathFile = isFile(computedFullLocalPath);
+		
+		// The 'destination' needs to be unique, but if there is a 'collision' the RecycleBin paths need to be updated to be:
+		// - file1.data (1)
+		// - file1.data (1).trashinfo
+		if (exists(computedRecycleBinFilePath)) {
+			// There is an existing file with the same name already in the 'Recycle Bin'
+			int n = 1;
+			
+			while (exists(format(appConfig.recycleBinFilePath ~ fileNameOnly ~ " (%d)",n))) {
+				n++;
+			}
+			
+			// Generate newFileNameOnly
+			string newFileNameOnly = format(fileNameOnly ~ " (%d)",n);
+			
+			// UPDATE:
+			// - computedRecycleBinFilePath
+			// - computedRecycleBinInfoPath
+			computedRecycleBinFilePath = appConfig.recycleBinFilePath ~ newFileNameOnly;
+			computedRecycleBinInfoPath = appConfig.recycleBinInfoPath ~ newFileNameOnly ~ ".trashinfo";
+		}
+		
+		// Move the file to the 'Recycle Bin' path computedRecycleBinFilePath
+		// - DMD has no 'move' specifically, it uses 'rename' to achieve this
+		//   https://forum.dlang.org/thread/kwnwrlqtjehldckyfmau@forum.dlang.org
+		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
+		try {
+			rename(computedFullLocalPath, computedRecycleBinFilePath);
+		} catch (Exception e) {
+			// Handle exceptions, e.g., log error
+			if (isPathFile) {
+				addLogEntry("Move of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
+			} else {
+				addLogEntry("Move of local directory failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
+			}
+		}
+		
+		// Generate the 'Recycle Bin' metadata file using computedRecycleBinInfoPath
+		auto now = Clock.currTime().toLocalTime();
+		string deletionDate = format("%04d-%02d-%02dT%02d:%02d:%02d",now.year, now.month, now.day, now.hour, now.minute, now.second);
+		
+		// Format the content of the .trashinfo file
+		string content = format("[Trash Info]\nPath=%s\nDeletionDate=%s\n", computedFullLocalPath, deletionDate);
+		// Write the metadata file
+		
+		try {
+			std.file.write(computedRecycleBinInfoPath, content);
+		} catch (Exception e) {
+			// Handle exceptions, e.g., log error
+			addLogEntry("Writing of .trashinfo metadata file failed for " ~ computedRecycleBinInfoPath ~ ": " ~ e.msg, ["error"]);
 		}
 		
 		// Display function processing time if configured to do so
