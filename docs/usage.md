@@ -30,7 +30,7 @@ Before reading this document, please ensure you are running application version 
   - [Enabling the Client Activity Log](#enabling-the-client-activity-log)
     - [Client Activity Log Example:](#client-activity-log-example)
     - [Client Activity Log Differences](#client-activity-log-differences)
-  - [Handling Online Deletion Actions](#handling-online-deletion-actions)
+  - [Using a local Recycle Bin](#using-a-local-recycle-bin)
   - [GUI Notifications](#gui-notifications)
   - [Handling a Microsoft OneDrive Account Password Change](#handling-a-microsoft-onedrive-account-password-change)
   - [Determining the synchronisation result](#determining-the-synchronisation-result)
@@ -740,7 +740,7 @@ Using 'user' configuration path for application state data: /home/user/.config/o
 Using the following path to store the runtime application log: /var/log/onedrive
 ```
 
-### Handling Online Deletion Actions
+### Using a local Recycle Bin
 By default, this application will process online deletions and directly delete the corresponding file or folder directly from your configured 'sync_dir'.
 
 In some cases, it may actually be desirable to move these files to your Linux user default 'Recycle Bin', so that you can manually delete the files at your own discretion.
@@ -750,10 +750,20 @@ To enable this application functionality, add the following to your 'config' fil
 use_recycle_bin = "true"
 ```
 
-To specify an explicit 'Recycle Bin' directory, add the following to your 'config' file:
+This capability is designed to be compatible with the FreeDesktop.org Trash Specification, ensuring interoperability with GUI-based desktop environments such as GNOME (GIO) and KDE (KIO). It follows the required structure by:
+* Moving deleted files and directories to `~/.local/share/Trash/files/`
+* Creating matching metadata files in `~/.local/share/Trash/info/` with the correct `.trashinfo` format, including the original absolute path and ISO 8601-formatted deletion timestamp
+* Resolving filename collisions using a `name.N.ext` pattern (e.g., `Document.2.docx`), consistent with GNOME’s behaviour
+
+
+
+To specify an explicit a different 'Recycle Bin' directory, add the following to your 'config' file:
 ```
 recycle_bin_path = "/path/to/desired/location/"
 ```
+
+The same FreeDesktop.org Trash Specification will be used with this path
+
 
 ### GUI Notifications
 To enable GUI notifications, you must compile the application with GUI Notification Support. Refer to [GUI Notification Support](install.md#gui-notification-support) for details. Once compiled, GUI notifications will work by default in the display manager session under the following conditions:
