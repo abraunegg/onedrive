@@ -1795,9 +1795,40 @@ class SyncEngine {
 			
 			// Add this JSON item for further processing if this is not being discarded
 			if (!discardDeltaJSONItem) {
+				// If 'personal' account type, we must validate ["parentReference"]["driveId"] value in this raw
+				// Issue #3115 - Validate driveId length
+				// What account type is this?
+				if (appConfig.accountType == "personal") {
+					
+					string existingDriveIdEntry = onedriveJSONItem["parentReference"]["driveId"].str;
+					string newDriveIdEntry;
+					
+					// Perform the required length test
+					if (existingDriveIdEntry.length < 16) {
+						// existingDriveIdEntry value is not 16 characters in length
+					
+						// Is this 'driveId' in this JSON a 15 character representation of our actual 'driveId' which we have already corrected?
+						if (appConfig.defaultDriveId.canFind(existingDriveIdEntry)) {
+							// The JSON provided value is our 'driveId'
+							// Debug logging for correction
+							if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG (Issue #3072): The provided raw JSON ['parentReference']['driveId'] value is not 16 Characters in length - correcting with validated appConfig.defaultDriveId value", ["debug"]);}
+							newDriveIdEntry = appConfig.defaultDriveId;
+						} else {
+							// No match, potentially a Shared Folder ... 
+							// Debug logging for correction
+							if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG (Issue #3072): The provided raw JSON ['parentReference']['driveId'] value is not 16 Characters in length - padding with leading zero's", ["debug"]);}
+							// Generate the change
+							newDriveIdEntry = to!string(existingDriveIdEntry.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding, leave case as-is
+						}
+					}
+					
+					// Make the change to the JSON data before submit for further processing
+					onedriveJSONItem["parentReference"]["driveId"] = newDriveIdEntry;
+				}
+			
 				// Add onedriveJSONItem to jsonItemsToProcess
 				if (debugLogging) {
-					addLogEntry("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing", ["debug"]);
+					addLogEntry("Adding this raw JSON OneDrive Item to jsonItemsToProcess array for further processing", ["debug"]);
 					if (itemIsRemoteItem) {
 						addLogEntry("- This JSON record represents a online remote folder, thus needs special handling when being processed further", ["debug"]);
 					}
@@ -1805,7 +1836,7 @@ class SyncEngine {
 				jsonItemsToProcess ~= onedriveJSONItem;
 			} else {
 				// detail we are discarding the json
-				if (debugLogging) {addLogEntry("Discarding this Raw JSON OneDrive Item as this has been determined to be unwanted", ["debug"]);}
+				if (debugLogging) {addLogEntry("Discarding this raw JSON OneDrive Item as this has been determined to be unwanted", ["debug"]);}
 			}
 		}
 		
