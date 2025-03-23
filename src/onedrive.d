@@ -1597,6 +1597,9 @@ class OneDriveApi {
 			case 304:
 				message = "Not Modified";
 				break;
+			case 308:
+				message = "Permanent Redirect";
+				break;
 			case 400:
 				message = "Bad Request";
 				break;
