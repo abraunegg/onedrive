@@ -752,7 +752,7 @@ use_recycle_bin = "true"
 
 To specify an explicit 'Recycle Bin' directory, add the following to your 'config' file:
 ```
-recycle_bin_path = "/path/to/desired/location/
+recycle_bin_path = "/path/to/desired/location/"
 ```
 
 ### GUI Notifications
