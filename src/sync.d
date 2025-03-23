@@ -1820,10 +1820,10 @@ class SyncEngine {
 							// Generate the change
 							newDriveIdEntry = to!string(existingDriveIdEntry.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding, leave case as-is
 						}
+						
+						// Make the change to the JSON data before submit for further processing
+						onedriveJSONItem["parentReference"]["driveId"] = newDriveIdEntry;
 					}
-					
-					// Make the change to the JSON data before submit for further processing
-					onedriveJSONItem["parentReference"]["driveId"] = newDriveIdEntry;
 				}
 			
 				// Add onedriveJSONItem to jsonItemsToProcess
@@ -7231,8 +7231,8 @@ class SyncEngine {
 		if (parentPath == ".") {
 			// Parent path is '.' which is the account root
 			// Use client defaults
-			parentItem.driveId = appConfig.defaultDriveId; 	// Should give something like 12345abcde1234a1
-			parentItem.id = appConfig.defaultRootId;  		// Should give something like 12345ABCDE1234A1!101
+			parentItem.driveId = appConfig.defaultDriveId;
+			parentItem.id = appConfig.defaultRootId;
 		} else {
 			// Query the parent path online
 			if (debugLogging) {addLogEntry("Attempting to query Local Database for this parent path: " ~ parentPath, ["debug"]);}
