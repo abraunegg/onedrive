@@ -42,6 +42,7 @@ Before reading this document, please ensure you are running application version 
   - [permanent_delete](#permanent_delete)
   - [rate_limit](#rate_limit)
   - [read_only_auth_scope](#read_only_auth_scope)
+  - [recycle_bin_path](#recycle_bin_path)
   - [remove_source_files](#remove_source_files)
   - [resync](#resync)
   - [resync_auth](#resync_auth)
@@ -60,6 +61,7 @@ Before reading this document, please ensure you are running application version 
   - [threads](#threads)
   - [transfer_order](#transfer_order)
   - [upload_only](#upload_only)
+  - [use_recycle_bin](#use_recycle_bin)
   - [user_agent](#user_agent)
   - [webhook_enabled](#webhook_enabled)
   - [webhook_expiration_interval](#webhook_expiration_interval)
@@ -624,6 +626,17 @@ _**Config Example:**_ `read_only_auth_scope = "false"` or `read_only_auth_scope 
 > [!IMPORTANT]
 > When using 'read_only_auth_scope' you also will need to remove your existing application access consent otherwise old authentication consent will be valid and will be used. This will mean the application will technically have the consent to upload data until you revoke this consent.
 
+### recycle_bin_path
+_**Description:**_ This configuration option allows you to specify the 'Recycle Bin' path for the application.
+
+_**Value Type:**_ String
+
+_**Default Value:**_ *None* however the application will use `~/.local/share/Trash` as the pre-defined default so that files will be placed in the correct location for your user profile.
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+_**Config Example:**_ `recycle_bin_path = "/path/to/desired/location/"`
+
 ### remove_source_files
 _**Description:**_ This configuration option controls whether the OneDrive Client for Linux removes the local file post successful transfer to Microsoft OneDrive.
 
@@ -941,6 +954,17 @@ _**CLI Option Use:**_ `--upload-only`
 
 > [!IMPORTANT]
 > To ensure that data deleted locally remains accessible online, you can use the 'no_remote_delete' option. If you want to delete the data from your local storage after a successful upload to Microsoft OneDrive, you can use the 'remove_source_files' option.
+
+### use_recycle_bin
+_**Description:**_ This configuration option controls the applciation function to move online deleted files to a 'Recycle Bin' on your system. This allows you to review online deleted data manually before this is purged from your actual system.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `use_recycle_bin = "false"` or `use_recycle_bin = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
 
 ### user_agent
 _**Description:**_ This configuration option controls the 'User-Agent' request header that is presented to Microsoft Graph API when accessing the Microsoft OneDrive service. This string lets servers and network peers identify the application, operating system, vendor, and/or version of the application making the request. We recommend users not to tamper with this option unless strictly necessary.

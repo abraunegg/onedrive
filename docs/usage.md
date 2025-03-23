@@ -30,6 +30,7 @@ Before reading this document, please ensure you are running application version 
   - [Enabling the Client Activity Log](#enabling-the-client-activity-log)
     - [Client Activity Log Example:](#client-activity-log-example)
     - [Client Activity Log Differences](#client-activity-log-differences)
+  - [Handling Online Deletion Actions](#handling-online-deletion-actions)
   - [GUI Notifications](#gui-notifications)
   - [Handling a Microsoft OneDrive Account Password Change](#handling-a-microsoft-onedrive-account-password-change)
   - [Determining the synchronisation result](#determining-the-synchronisation-result)
@@ -739,6 +740,21 @@ Using 'user' configuration path for application state data: /home/user/.config/o
 Using the following path to store the runtime application log: /var/log/onedrive
 ```
 
+### Handling Online Deletion Actions
+By default, this application will process online deletions and directly delete the corresponding file or folder directly from your configured 'sync_dir'.
+
+In some cases, it may actually be desirable to move these files to your Linux user default 'Recycle Bin', so that you can manually delete the files at your own discretion.
+
+To enable this application functionality, add the following to your 'config' file:
+```
+use_recycle_bin = "true"
+```
+
+To specify an explicit 'Recycle Bin' directory, add the following to your 'config' file:
+```
+recycle_bin_path = "/path/to/desired/location/
+```
+
 ### GUI Notifications
 To enable GUI notifications, you must compile the application with GUI Notification Support. Refer to [GUI Notification Support](install.md#gui-notification-support) for details. Once compiled, GUI notifications will work by default in the display manager session under the following conditions:
 
@@ -771,6 +787,11 @@ Additionally, GUI notifications can also be sent for the following activities:
 To enable these specific notifications, add the following to your 'config' file:
 ```
 notify_file_actions = "true"
+```
+
+To disable *all* GUI notifications, add the following to your 'config' file:
+```
+disable_notifications = "true"
 ```
 
 ### Handling a Microsoft OneDrive Account Password Change
