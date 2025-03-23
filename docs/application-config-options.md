@@ -956,7 +956,7 @@ _**CLI Option Use:**_ `--upload-only`
 > To ensure that data deleted locally remains accessible online, you can use the 'no_remote_delete' option. If you want to delete the data from your local storage after a successful upload to Microsoft OneDrive, you can use the 'remove_source_files' option.
 
 ### use_recycle_bin
-_**Description:**_ This configuration option controls the applciation function to move online deleted files to a 'Recycle Bin' on your system. This allows you to review online deleted data manually before this is purged from your actual system.
+_**Description:**_ This configuration option controls the application function to move online deleted files to a 'Recycle Bin' on your system. This allows you to review online deleted data manually before this is purged from your actual system.
 
 _**Value Type:**_ Boolean
 
