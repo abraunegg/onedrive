@@ -4320,14 +4320,14 @@ class SyncEngine {
 				if (item.type == ItemType.file) {
 					// Has the user configured to use the 'Recycle Bin' locally, for any files that are deleted online?
 					if (appConfig.getValueBool("use_recycle_bin")) {
-						addLogEntry("Moving local file to configured 'Recycle Bin': " ~ path, fileTransferNotifications());
+						addLogEntry("Moving this local file to configured 'Recycle Bin': " ~ path, fileTransferNotifications());
 					} else {
 						addLogEntry("Deleting local file: " ~ path, fileTransferNotifications());
 					}
 				} else {
 					// Has the user configured to use the 'Recycle Bin' locally, for any files that are deleted online?
 					if (appConfig.getValueBool("use_recycle_bin")) {
-						addLogEntry("Moving local directory to configured 'Recycle Bin': " ~ path, fileTransferNotifications());
+						addLogEntry("Moving this local directory to configured 'Recycle Bin': " ~ path, fileTransferNotifications());
 					} else {
 						addLogEntry("Deleting local directory: " ~ path, fileTransferNotifications());
 					}
@@ -4408,14 +4408,20 @@ class SyncEngine {
 		// - file1.data (1).trashinfo
 		if (exists(computedRecycleBinFilePath)) {
 			// There is an existing file with the same name already in the 'Recycle Bin'
-			int n = 1;
+			// - Testing has show that this counter MUST start at 2 ....
+			int n = 2;
 			
-			while (exists(format(appConfig.recycleBinFilePath ~ fileNameOnly ~ " (%d)",n))) {
+			// We need to split this out
+			string nameOnly = stripExtension(fileNameOnly); // "file1"
+			string extension = extension(fileNameOnly);     // ".data"
+			
+			// We need to test for this: nameOnly.n.extension
+			while (exists(format(appConfig.recycleBinFilePath ~ nameOnly ~ ".%d." ~ extension, n))) {
 				n++;
 			}
 			
 			// Generate newFileNameOnly
-			string newFileNameOnly = format(fileNameOnly ~ " (%d)",n);
+			string newFileNameOnly = format(nameOnly ~ ".%d." ~ extension, n);
 			
 			// UPDATE:
 			// - computedRecycleBinFilePath
