@@ -1553,7 +1553,7 @@ class OneDriveApi {
 		// If the HTTP response code meets any of these conditions, it is considered acceptable, and no exception will be thrown.
 		//
 		
-		if ((httpResponseCode >= 100 && httpResponseCode < 300) || httpResponseCode in acceptedRedirectCodes || httpResponseCode == 0) {
+		if ((httpResponseCode >= 100 && httpResponseCode < 300) || canFind(acceptedRedirectCodes, httpResponseCode) || httpResponseCode == 0) {
             shouldThrow = false;
         } else {
             shouldThrow = true;
