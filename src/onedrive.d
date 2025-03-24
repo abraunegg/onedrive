@@ -1532,7 +1532,10 @@ class OneDriveApi {
 	private bool checkHttpResponseCode(int httpResponseCode) {
 	
 		bool shouldThrow = false;
-	
+		
+		// Redirect Codes
+		immutable acceptedRedirectCodes = [301, 302, 304, 307, 308];
+
 		//
 		// This condition checks if the HTTP response code falls within the acceptable range for both HTTP 1.1 and HTTP 2.0.
 		//
@@ -1550,7 +1553,7 @@ class OneDriveApi {
 		// If the HTTP response code meets any of these conditions, it is considered acceptable, and no exception will be thrown.
 		//
 		
-		if ((httpResponseCode >= 100 && httpResponseCode < 200) || (httpResponseCode >= 200 && httpResponseCode < 300) || httpResponseCode == 302 || httpResponseCode == 0) {
+		if ((httpResponseCode >= 100 && httpResponseCode < 300) || httpResponseCode in acceptedRedirectCodes || httpResponseCode == 0) {
             shouldThrow = false;
         } else {
             shouldThrow = true;
@@ -1596,6 +1599,9 @@ class OneDriveApi {
 				break;
 			case 304:
 				message = "Not Modified";
+				break;
+			case 307:
+				message = "Temporary Redirect";
 				break;
 			case 308:
 				message = "Permanent Redirect";
