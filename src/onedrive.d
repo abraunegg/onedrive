@@ -741,10 +741,19 @@ class OneDriveApi {
 	}
 
 	JSONValue createSubscription(string notificationUrl, SysTime expirationDateTime) {
-		string driveId = appConfig.getValueString("drive_id");
+		string driveId;
 		string url = subscriptionUrl;
 		
-		// Create a resource item based on if we have a driveId
+		// What do we set for driveId
+		if (appConfig.getValueString("drive_id").length) {
+			// Use the 'config' file option
+			driveId = appConfig.getValueString("drive_id");
+		} else {
+			// use appConfig.defaultDriveId
+			driveId = appConfig.defaultDriveId;
+		}
+		
+		// Create a resource item based on if we have a driveId now configured
 		string resourceItem;
 		if (driveId.length) {
 				resourceItem = "/drives/" ~ driveId ~ "/root";
