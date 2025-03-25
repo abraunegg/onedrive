@@ -1795,7 +1795,7 @@ class SyncEngine {
 			
 			// Add this JSON item for further processing if this is not being discarded
 			if (!discardDeltaJSONItem) {
-				// If 'personal' account type, we must validate ["parentReference"]["driveId"] value in this raw
+				// If 'personal' account type, we must validate ["parentReference"]["driveId"] value in this raw JSON
 				// Issue #3115 - Validate driveId length
 				// What account type is this?
 				if (appConfig.accountType == "personal") {
@@ -9132,6 +9132,15 @@ class SyncEngine {
 								addLogEntry(logMessage, ["debug"]);
 							}
 							item.driveId = jsonItem["parentReference"]["driveId"].str;
+							
+							// Issue #3115 - Validate driveId length
+							// What account type is this?
+							if (appConfig.accountType == "personal") {
+								// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+								if (item.driveId != appConfig.defaultDriveId) {
+									item.driveId = testProvidedDriveIdForLengthIssue(item.driveId);
+								}
+							}
 						}
 						
 						// We only should be adding our account 'root' to the database, not shared folder 'root' items
