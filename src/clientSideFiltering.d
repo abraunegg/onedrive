@@ -599,15 +599,21 @@ class ClientSideFiltering {
 		}
 		return depth; // No wildcard found should be '0'
 	}
-	
+
 	// Create a wildcard regex compatible string based on the sync list rule
 	string createRegexCompatiblePath(string regexCompatiblePath) {
+		// Escape special regex characters that could break regex parsing
+		foreach (ch; ["[", "]", "(", ")", "{", "}", "+", "?", "|", "^", "$", "\\"]) {
+			regexCompatiblePath = regexCompatiblePath.replace(ch, "\\" ~ ch);
+		}
+
 		regexCompatiblePath = regexCompatiblePath.replace(".", "\\."); // Escape the dot (.) if present
-		regexCompatiblePath = regexCompatiblePath.replace(" ", "\\s");  // Escape spaces if present
+		regexCompatiblePath = regexCompatiblePath.replace(" ", "\\ "); // Escape space correctly (literal space, not \s)
 		regexCompatiblePath = regexCompatiblePath.replace("*", ".*");  // Replace * with '.*' to be compatible with function and to match any characters
+
 		return regexCompatiblePath;
 	}
-	
+
 	// Create a regex compatible string to match a relevant segment
 	bool matchSegment(string ruleSegment, string pathSegment) {
 		ruleSegment = ruleSegment.replace("*", ".*");  // Replace * with '.*' to be compatible with function and to match any characters
