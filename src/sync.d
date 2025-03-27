@@ -2324,7 +2324,7 @@ class SyncEngine {
 						unwanted = selectiveSync.isFileNameExcluded(exclusionTestPath);
 						if (debugLogging) {addLogEntry("Result: " ~ to!string(unwanted), ["debug"]);}
 						if (unwanted) {
-							if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_dir config: " ~ thisItemName, ["verbose"]);}
+							if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_file config: " ~ thisItemName, ["verbose"]);}
 						}
 					} else {
 						// parent id is not in the database
@@ -5196,7 +5196,7 @@ class SyncEngine {
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
 					if (selectiveSync.isFileNameExcluded(localFilePath.strip('.'))) {
-						if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_dir config: " ~ localFilePath, ["verbose"]);}
+						if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_file config: " ~ localFilePath, ["verbose"]);}
 						clientSideRuleExcludesPath = true;
 					}
 				}
@@ -5491,7 +5491,7 @@ class SyncEngine {
 				
 				if (clientSideRuleExcludesPath) {
 					// This path should be skipped
-					if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_dir config: " ~ exclusionTestPath, ["verbose"]);}
+					if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_file config: " ~ exclusionTestPath, ["verbose"]);}
 				}
 			}
 		}
