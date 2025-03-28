@@ -201,6 +201,50 @@ int main(string[] cliArgs) {
 		syncOrMonitorMissing = true; // --sync or --monitor is missing 
 	}
 	
+	// Has the user configured to use the 'Recycle Bin' locally, for any files that are deleted online?
+	if (appConfig.getValueBool("use_recycle_bin")) {
+		// Configure the internal application paths which will be used to move rather than delete any online deletes to
+		appConfig.setRecycleBinPaths();
+		
+		// We need to ensure that the Recycle Bin Paths exist on the file system, and if they do not exist, create them
+		// Test for appConfig.recycleBinFilePath
+		if (!exists(appConfig.recycleBinFilePath)) {
+			try {
+				// Attempt to create the 'Recycle Bin' file path we have been configured with
+				mkdirRecurse(appConfig.recycleBinFilePath);
+				
+				// Configure the applicable permissions for the folder
+				if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ appConfig.recycleBinFilePath, ["debug"]);}
+				appConfig.recycleBinFilePath.setAttributes(octal!700); // Set to 0700 as Trash may contain sensitive and is the expected default permissions by GIO or KIO
+				
+			} catch (std.file.FileException e) {
+				// Creating the 'Recycle Bin' file path failed
+				addLogEntry("ERROR: Unable to create the configured local 'Recycle Bin' file directory: " ~ e.msg, ["info", "notify"]);
+				// Use exit scopes to shutdown API
+				return EXIT_FAILURE;
+			}
+		}
+		
+		// Test for appConfig.recycleBinInfoPath
+		if (!exists(appConfig.recycleBinInfoPath)) {
+			try {
+				// Attempt to create the 'Recycle Bin' info path we have been configured with
+				mkdirRecurse(appConfig.recycleBinInfoPath);
+				
+				// Configure the applicable permissions for the folder
+				if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ appConfig.recycleBinInfoPath, ["debug"]);}
+				appConfig.recycleBinInfoPath.setAttributes(octal!700); // Set to 0700 as Trash may contain sensitive and is the expected default permissions by GIO or KIO
+				
+				
+			} catch (std.file.FileException e) {
+				// Creating the 'Recycle Bin' info path failed
+				addLogEntry("ERROR: Unable to create the configured local 'Recycle Bin' info directory: " ~ e.msg, ["info", "notify"]);
+				// Use exit scopes to shutdown API
+				return EXIT_FAILURE;
+			}
+		}
+	}
+	
 	// Are we performing some sort of 'no-sync' operation task?
 	noSyncTaskOperationRequested = appConfig.hasNoSyncOperationBeenRequested(); // returns true if we are
 	
