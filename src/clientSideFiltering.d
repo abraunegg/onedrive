@@ -605,7 +605,7 @@ class ClientSideFiltering {
 		// Escape all special regex characters that could break regex parsing
 		regexCompatiblePath = escaper(regexCompatiblePath).text;
 		
-		// Restore wildcard support
+		// Restore wildcard (*) support with '.*' to be compatible with function and to match any characters
 		regexCompatiblePath = regexCompatiblePath.replace("\\*", ".*");
 		
 		// Ensure space matches only literal space, not \s (tabs, etc.)
@@ -617,10 +617,9 @@ class ClientSideFiltering {
 
 	// Create a regex compatible string to match a relevant segment
 	bool matchSegment(string ruleSegment, string pathSegment) {
-		ruleSegment = ruleSegment.replace("*", ".*");  // Replace * with '.*' to be compatible with function and to match any characters
-		ruleSegment = ruleSegment.replace(" ", "\\s");  // Escape spaces if present
-		auto pattern = regex("^" ~ ruleSegment ~ "$");
-		// Check if there's a match
+		// Create the required pattern
+		auto pattern = regex("^" ~ createRegexCompatiblePath(ruleSegment) ~ "$");
+		// Check if there's a match and return result
 		return !match(pathSegment, pattern).empty;
 	}
 	
