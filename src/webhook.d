@@ -247,9 +247,27 @@ class OneDriveWebhook {
 	}
 	
 	private void logSubscriptionError(OneDriveException e) {
+		string errorMsg;
+
+		try {
+			// Attempt to extract the specific error message from the JSON if possible
+			if (e.error.type == JSONType.object &&
+				"error" in e.error &&
+				e.error["error"].type == JSONType.object &&
+				"message" in e.error["error"]) {
+				errorMsg = e.error["error"]["message"].str;
+			} else {
+				throw new Exception("Invalid error structure");
+			}
+		} catch (Exception ex) {
+			// Fallback to the message stored in the exception if the JSON is malformed or not structured as expected
+			errorMsg = e.msg;
+		}
+
 		// Log a message to the GUI only
-		addLogEntry("ERROR: An issue has occurred with webhook subscriptions: " ~ e.error["error"]["message"].str, ["notify"]);
+		addLogEntry("ERROR: An issue has occurred with webhook subscriptions: " ~ errorMsg, ["notify"]);
+
 		// Use the standard OneDrive API logging method
-		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+		displayOneDriveErrorMessage(errorMsg, getFunctionName!({}));
 	}
 }
