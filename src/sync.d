@@ -1795,9 +1795,40 @@ class SyncEngine {
 			
 			// Add this JSON item for further processing if this is not being discarded
 			if (!discardDeltaJSONItem) {
+				// If 'personal' account type, we must validate ["parentReference"]["driveId"] value in this raw JSON
+				// Issue #3115 - Validate driveId length
+				// What account type is this?
+				if (appConfig.accountType == "personal") {
+					
+					string existingDriveIdEntry = onedriveJSONItem["parentReference"]["driveId"].str;
+					string newDriveIdEntry;
+					
+					// Perform the required length test
+					if (existingDriveIdEntry.length < 16) {
+						// existingDriveIdEntry value is not 16 characters in length
+					
+						// Is this 'driveId' in this JSON a 15 character representation of our actual 'driveId' which we have already corrected?
+						if (appConfig.defaultDriveId.canFind(existingDriveIdEntry)) {
+							// The JSON provided value is our 'driveId'
+							// Debug logging for correction
+							if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG (Issue #3072): The provided raw JSON ['parentReference']['driveId'] value is not 16 Characters in length - correcting with validated 'appConfig.defaultDriveId' value", ["debug"]);}
+							newDriveIdEntry = appConfig.defaultDriveId;
+						} else {
+							// No match, potentially a Shared Folder ... 
+							// Debug logging for correction
+							if (debugLogging) {addLogEntry("ONEDRIVE PERSONAL API BUG (Issue #3072): The provided raw JSON ['parentReference']['driveId'] value is not 16 Characters in length - padding with leading zero's", ["debug"]);}
+							// Generate the change
+							newDriveIdEntry = to!string(existingDriveIdEntry.padLeft('0', 16)); // Explicitly use padLeft for leading zero padding, leave case as-is
+						}
+						
+						// Make the change to the JSON data before submit for further processing
+						onedriveJSONItem["parentReference"]["driveId"] = newDriveIdEntry;
+					}
+				}
+			
 				// Add onedriveJSONItem to jsonItemsToProcess
 				if (debugLogging) {
-					addLogEntry("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing", ["debug"]);
+					addLogEntry("Adding this raw JSON OneDrive Item to jsonItemsToProcess array for further processing", ["debug"]);
 					if (itemIsRemoteItem) {
 						addLogEntry("- This JSON record represents a online remote folder, thus needs special handling when being processed further", ["debug"]);
 					}
@@ -1805,7 +1836,7 @@ class SyncEngine {
 				jsonItemsToProcess ~= onedriveJSONItem;
 			} else {
 				// detail we are discarding the json
-				if (debugLogging) {addLogEntry("Discarding this Raw JSON OneDrive Item as this has been determined to be unwanted", ["debug"]);}
+				if (debugLogging) {addLogEntry("Discarding this raw JSON OneDrive Item as this has been determined to be unwanted", ["debug"]);}
 			}
 		}
 		
@@ -2293,7 +2324,7 @@ class SyncEngine {
 						unwanted = selectiveSync.isFileNameExcluded(exclusionTestPath);
 						if (debugLogging) {addLogEntry("Result: " ~ to!string(unwanted), ["debug"]);}
 						if (unwanted) {
-							if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_dir config: " ~ thisItemName, ["verbose"]);}
+							if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_file config: " ~ thisItemName, ["verbose"]);}
 						}
 					} else {
 						// parent id is not in the database
@@ -5277,7 +5308,7 @@ class SyncEngine {
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
 					if (selectiveSync.isFileNameExcluded(localFilePath.strip('.'))) {
-						if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_dir config: " ~ localFilePath, ["verbose"]);}
+						if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_file config: " ~ localFilePath, ["verbose"]);}
 						clientSideRuleExcludesPath = true;
 					}
 				}
@@ -5572,7 +5603,7 @@ class SyncEngine {
 				
 				if (clientSideRuleExcludesPath) {
 					// This path should be skipped
-					if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_dir config: " ~ exclusionTestPath, ["verbose"]);}
+					if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_file config: " ~ exclusionTestPath, ["verbose"]);}
 				}
 			}
 		}
@@ -7312,8 +7343,8 @@ class SyncEngine {
 		if (parentPath == ".") {
 			// Parent path is '.' which is the account root
 			// Use client defaults
-			parentItem.driveId = appConfig.defaultDriveId; 	// Should give something like 12345abcde1234a1
-			parentItem.id = appConfig.defaultRootId;  		// Should give something like 12345ABCDE1234A1!101
+			parentItem.driveId = appConfig.defaultDriveId;
+			parentItem.id = appConfig.defaultRootId;
 		} else {
 			// Query the parent path online
 			if (debugLogging) {addLogEntry("Attempting to query Local Database for this parent path: " ~ parentPath, ["debug"]);}
@@ -7327,17 +7358,9 @@ class SyncEngine {
 			bool parentPathFoundInDB = false;
 			
 			foreach (driveId; onlineDriveDetails.keys) {
-				// Issue #3115 - Validate driveId length
-				// What account type is this?
-				if (appConfig.accountType == "personal") {
-				
-					// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
-					if (driveId != appConfig.defaultDriveId) {
-						driveId = testProvidedDriveIdForLengthIssue(driveId);
-					}
-				}
-			
+				// driveId comes from the DB .. trust it is has been validated
 				if (debugLogging) {addLogEntry("Query DB with this driveID for the Parent Path: " ~ driveId, ["debug"]);}
+				
 				// Query the database for this parent path using each driveId that we know about
 				if (itemDB.selectByPath(parentPath, driveId, databaseItem)) {
 					parentPathFoundInDB = true;
@@ -7345,6 +7368,7 @@ class SyncEngine {
 						addLogEntry("Parent databaseItem: " ~ to!string(databaseItem), ["debug"]);
 						addLogEntry("parentPathFoundInDB: " ~ to!string(parentPathFoundInDB), ["debug"]);
 					}
+					
 					// Set parentItem to the item returned from the database
 					parentItem = databaseItem;
 				}
@@ -7353,7 +7377,7 @@ class SyncEngine {
 			// After querying all DB entries for each driveID for the parent path, what are the details in parentItem?
 			if (debugLogging) {addLogEntry("Parent parentItem after DB Query exhausted: " ~ to!string(parentItem), ["debug"]);}
 
-			// Step 2: Query for the path online if not found in the local database
+			// Step 2: Query for the path online if NOT found in the local database
 			if (!parentPathFoundInDB) {
 				// parent path not found in database
 				try {
@@ -7394,14 +7418,14 @@ class SyncEngine {
 			// A Shared Folder will be 'remote' so we need to check the remote parent id, rather than parentItem details
 			Item queryItem;
 			
+			// If we are doing a normal sync, 'parentItem.type == ItemType.remote' comparison works
+			// If we are doing a --local-first 'parentItem.type == ItemType.remote' fails as the returned object is not a remote item, but is remote based on the 'driveId'
 			if (parentItem.type == ItemType.remote) {
 				// This folder is a potential shared object
 				if (debugLogging) {addLogEntry("ParentItem is a remote item object", ["debug"]);}
 				
 				// Is this a Personal Account Type or has 'sync_business_shared_items' been enabled?
 				if ((appConfig.accountType == "personal") || (appConfig.getValueBool("sync_business_shared_items"))) {
-					// Need to create the DB Tie for this shared object to ensure this exists in the database
-					createDatabaseTieRecordForOnlineSharedFolder(parentItem);
 					// Update the queryItem values
 					queryItem.driveId = parentItem.remoteDriveId;
 					queryItem.id = parentItem.remoteId;
@@ -7634,20 +7658,44 @@ class SyncEngine {
 				// OneDrive 'name' matches local path name
 				if (debugLogging) {
 					addLogEntry("The path to query/search for online was found online", ["debug"]);
-					addLogEntry(" onlinePathData: " ~ to!string(onlinePathData), ["debug"]);
+					addLogEntry(" onlinePathData via query/search: " ~ to!string(onlinePathData), ["debug"]);
 				}
 				
-				// OneDrive Personal Shared Folder Check
+				// Now we know the location of this folder via query/search - go get the actual path details using the 'onlinePathData'
+				Item onlineItem = makeItem(onlinePathData);
+				
+				// Fetch the real data in a consistent manner to ensure the JSON response contains the elements we are expecting
+				JSONValue realOnlinePathData;
+				
+				// Get drive details for the provided driveId
+				try {
+					realOnlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsById(onlineItem.driveId, onlineItem.id);
+					if (debugLogging) {
+						addLogEntry(" realOnlinePathData via getPathDetailsById call: " ~ to!string(realOnlinePathData), ["debug"]);
+					}
+				} catch (OneDriveException exception) {
+					// An error was generated
+					if (debugLogging) {addLogEntry("realOnlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsById(onlineItem.driveId, onlineItem.id) generated a OneDriveException", ["debug"]);}
+					
+					// Default operation if not 408,429,503,504 errors
+					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
+					// Display what the error is
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+					
+					// abort ..
+					return;
+				}
+				
+				// OneDrive Personal Shared Folder Check - Use the REAL online data here
 				if (appConfig.accountType == "personal") {
 					// We are a personal account, this existing online folder, it could be a Shared Online Folder could be a 'Add shortcut to My files' item
 					// Is this a remote folder
-					if (isItemRemote(onlinePathData)) {
+					if (isItemRemote(realOnlinePathData)) {
 						// The folder is a remote item ...
-						if (debugLogging) {addLogEntry("The existing Remote Online Folder and 'onlinePathData' indicate this is most likely a OneDrive Personal Shared Folder Link added by 'Add shortcut to My files'", ["debug"]);}
-						
+						if (debugLogging) {addLogEntry("The existing Online Folder and 'realOnlinePathData' indicate this is most likely a OneDrive Personal Shared Folder Link added by 'Add shortcut to My files'", ["debug"]);}
 						// It is a 'remote' JSON item denoting a potential shared folder
 						// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
-						createRequiredSharedFolderDatabaseRecords(onlinePathData);
+						createRequiredSharedFolderDatabaseRecords(realOnlinePathData);
 					}
 				}
 				
@@ -7655,9 +7703,9 @@ class SyncEngine {
 				if (appConfig.accountType == "business") {
 					// We are a business account, this existing online folder, it could be a Shared Online Folder could be a 'Add shortcut to My files' item
 					// Is this a remote folder
-					if (isItemRemote(onlinePathData)) {
+					if (isItemRemote(realOnlinePathData)) {
 						// The folder is a remote item ... 
-						if (debugLogging) {addLogEntry("The existing Remote Online Folder and 'onlinePathData' indicate this is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);}
+						if (debugLogging) {addLogEntry("The existing Online Folder and 'realOnlinePathData' indicate this is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);}
 						
 						// Is Shared Business Folder Syncing actually enabled?
 						if (!appConfig.getValueBool("sync_business_shared_items")) {
@@ -7685,7 +7733,7 @@ class SyncEngine {
 							// Shared Business Folder Syncing IS enabled
 							// It is a 'remote' JSON item denoting a potential shared folder
 							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
-							createRequiredSharedFolderDatabaseRecords(onlinePathData);
+							createRequiredSharedFolderDatabaseRecords(realOnlinePathData);
 						}
 					}
 				}
@@ -7693,7 +7741,7 @@ class SyncEngine {
 				// Path found online
 				if (verboseLogging) {addLogEntry("The requested directory to create was found on OneDrive - skipping creating the directory online: " ~ thisNewPathToCreate, ["verbose"]);}
 				// Is the response a valid JSON object - validation checking done in saveItem
-				saveItem(onlinePathData);
+				saveItem(realOnlinePathData);
 				
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
@@ -9196,6 +9244,15 @@ class SyncEngine {
 								addLogEntry(logMessage, ["debug"]);
 							}
 							item.driveId = jsonItem["parentReference"]["driveId"].str;
+							
+							// Issue #3115 - Validate driveId length
+							// What account type is this?
+							if (appConfig.accountType == "personal") {
+								// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+								if (item.driveId != appConfig.defaultDriveId) {
+									item.driveId = testProvidedDriveIdForLengthIssue(item.driveId);
+								}
+							}
 						}
 						
 						// We only should be adding our account 'root' to the database, not shared folder 'root' items
