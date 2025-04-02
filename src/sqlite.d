@@ -111,9 +111,9 @@ struct Database {
 		
 		// Does the file we need to open actually exist?
 		if (exists(filename)) {
-			if (debugLogging) {addLogEntry("Database file EXISTS on disk"), ["debug"]);}
+			if (debugLogging) {addLogEntry("Database file EXISTS on disk", ["debug"]);}
 		} else {
-			if (debugLogging) {addLogEntry("Database file DOES NOT EXIST on disk"), ["debug"]);}
+			if (debugLogging) {addLogEntry("Database file DOES NOT EXIST on disk", ["debug"]);}
 		}
 		
 		int rc = sqlite3_open_v2(
