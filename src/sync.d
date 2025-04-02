@@ -1995,7 +1995,7 @@ class SyncEngine {
 					// Calculate this items path for business accounts
 					computedItemPath = computeItemPath(thisItemDriveId, thisItemParentId);
 					
-					// is 'thisItemParentId' in the DB as a 'root' object?
+					// Is 'thisItemParentId' in the DB as a 'root' object?
 					Item databaseItem;
 					
 					// Is this a remote drive?
@@ -2004,14 +2004,33 @@ class SyncEngine {
 						itemDB.selectById(thisItemDriveId, thisItemParentId, databaseItem);
 					}
 					
-					// calculate newItemPath
+					// Calculate newItemPath to
+					// This needs to factor in:
+					// - Shared Folders = ItemType.root with a name of 'root'
+					// - SharePoint Document Root = ItemType.root with a name of the actual shared folder
+					// - Relocatable Shared Folders where a user moves a Shared Folder Link to a sub folder elsewhere within their directory structure online
+					
 					if (databaseItem.type == ItemType.root) {
-						// if the record type is now a root record, we dont want to add the name to itself
-						newItemPath = computedItemPath;
-						// set this for later use
+						// 'root' database object
+						if (databaseItem.name == "root") {
+							// OneDrive Business Shared Folder 'root' shortcut link
+							// If the record type is now a root record, we dont want to add the name to itself
+							newItemPath = computedItemPath;
+						} else {
+							// OneDrive Business SharePoint Document 'root' shortcut link
+							if (databaseItem.name == thisItemName) {
+								// If the record type is now a root record, we dont want to add the name to itself
+								newItemPath = computedItemPath;
+							} else {
+								// add the item name to the computed path
+								newItemPath = computedItemPath ~ "/" ~ thisItemName;
+							}
+						}
+						
+						// Set this for later use
 						rootSharedFolder = true;
 					} else {
-						// add the item name to the computed path
+						// Add the item name to the computed path
 						newItemPath = computedItemPath ~ "/" ~ thisItemName;
 					}
 				}
@@ -4206,8 +4225,15 @@ class SyncEngine {
 			
 			// what do we use?
 			if (initialCalculatedPath == ".") {
-				// The '.' represents the root shared folder ... 
-				fullLocalPath = localPathExtension;
+				// The '.' represents the root shared folder ... however if this is a OneDrive Business 'relocated' Shared Folder Link .. the '.' is not the actual local path extension
+				if (appConfig.accountType == "personal") {
+					// OneDrive Personal Accounts do not support relocatable Shared Folders
+					fullLocalPath = localPathExtension;
+				} else {
+					// OneDrive Business Account Type
+					// Thus this needs some further calculation - #3193 Marker
+					fullLocalPath = localPathExtension;
+				}
 			} else {
 				// Now to combine the two
 				// - replace remoteEntryItem.name in 'initialCalculatedPath' with 'localPathExtension'
