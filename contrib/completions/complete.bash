@@ -10,13 +10,13 @@ _onedrive()
 	cur=${COMP_WORDS[COMP_CWORD]}
 	prev=${COMP_WORDS[COMP_CWORD-1]}
 
-	options='--check-for-nomount --check-for-nosync --debug-https --disable-notifications --display-config --display-sync-status --download-only --disable-upload-validation --dry-run --enable-logging --force-http-1.1 --force-http-2 --get-file-link --local-first --logout -m --monitor --no-remote-delete --print-token --reauth --resync --skip-dot-files --skip-symlinks --synchronize --upload-only -v --verbose --version -h --help'
-	argopts='--create-directory --get-O365-drive-id --remove-directory --single-directory --source-directory'
+	options='--check-for-nomount --check-for-nosync --cleanup-local-files --debug-https --disable-notifications --display-config --display-quota --display-sync-status --disable-download-validation --disable-upload-validation --display-running-config --download-only --dry-run --enable-logging --force --force-http-11 --force-sync --list-shared-items --local-first --logout -m --monitor --no-remote-delete --print-access-token --reauth --remove-source-files --resync --resync-auth --skip-dir-strict-match --skip-dot-files --skip-symlinks -s --sync --sync-root-files --sync-shared-files --upload-only -v+ --verbose --version -h --help --with-editing-perms'
+	argopts='--auth-files --auth-response --classify-as-big-delete --confdir --create-directory --create-share-link --destination-directory --get-O365-drive-id --get-file-link --get-sharepoint-drive-id --log-dir --modified-by --monitor-fullscan-frequency --monitor-interval --monitor-log-frequency --remove-directory --share-password --single-directory --skip-dir --skip-file --skip-size --source-directory --space-reservation --syncdir'
 
 	# Loop on the arguments to manage conflicting options
 	for (( i=0; i < ${#COMP_WORDS[@]}-1; i++ )); do
 		#exclude some mutually exclusive options
-		[[ ${COMP_WORDS[i]} == '--synchronize' ]] && options=${options/--monitor}
+		[[ ${COMP_WORDS[i]} == '--sync' ]] && options=${options/--monitor}
 		[[ ${COMP_WORDS[i]} == '--monitor' ]] && options=${options/--synchronize}
 	done
 
