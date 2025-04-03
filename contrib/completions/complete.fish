@@ -3,35 +3,67 @@
 
 complete -c onedrive -f
 
-complete -c onedrive -l check-for-nomount -d 'Check for the presence of .nosync in the syncdir root. If found, do not perform sync.'
-complete -c onedrive -l check-for-nosync -d 'Check for the presence of .nosync in each directory. If found, skip directory from sync.'
-complete -c onedrive -l create-directory -d 'Create a directory on OneDrive - no sync will be performed.'
-complete -c onedrive -l debug-https -d 'Debug OneDrive HTTPS communication.'
-complete -c onedrive -l disable-notifications -d 'Do not use desktop notifications in monitor mode.'
-complete -c onedrive -l disable-upload-validation -d 'Disable upload validation when uploading to OneDrive.'
-complete -c onedrive -l display-config -d 'Display what options the client will use as currently configured - no sync will be performed.'
-complete -c onedrive -l display-sync-status -d 'Display the sync status of the client - no sync will be performed.'
-complete -c onedrive -l download-only -d 'Only download remote changes.'
-complete -c onedrive -l dry-run -d 'Perform a trial sync with no changes made.'
-complete -c onedrive -l enable-logging -d 'Enable client activity to a separate log file.'
-complete -c onedrive -l force-http-1.1 -d 'Force the use of HTTP 1.1 for all operations.'
-complete -c onedrive -l force-http-2 -d 'Force the use of HTTP 2 for all operations.'
-complete -c onedrive -l get-file-link -d 'Display the file link of a synced file.'
-complete -c onedrive -l get-O365-drive-id -d 'Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library.'
-complete -c onedrive -s h -l help -d 'Print help information.'
-complete -c onedrive -l local-first -d 'Synchronize from the local directory source first, before downloading changes from OneDrive.'
-complete -c onedrive -l logout -d 'Logout the current user.'
-complete -c onedrive -n "not __fish_seen_subcommand_from --synchronize" -a "-m --monitor" -d 'Keep monitoring for local and remote changes.'
-complete -c onedrive -l no-remote-delete -d 'Do not delete local file deletes from OneDrive when using --upload-only.'
-complete -c onedrive -l print-token -d 'Print the access token, useful for debugging.'
-complete -c onedrive -l remote-directory -d 'Remove a directory on OneDrive - no sync will be performed.'
-complete -c onedrive -l reauth -d 'Reauthenticate the client with OneDrive.'
-complete -c onedrive -l resync -d 'Forget the last saved state, perform a full sync.'
-complete -c onedrive -l single-directory -d 'Specify a single local directory within the OneDrive root to sync.'
-complete -c onedrive -l skip-dot-files -d 'Skip dot files and folders from syncing.'
-complete -c onedrive -l skip-symlinks -d 'Skip syncing of symlinks.'
-complete -c onedrive -l source-directory -d 'Source directory to rename or move on OneDrive - no sync will be performed.'
-complete -c onedrive -n "not __fish_seen_subcommand_from --monitor; and not __fish_seen_subcommand_from -m" -l synchronize -d 'Perform a synchronization.'
-complete -c onedrive -l upload-only -d 'Only upload to OneDrive, do not sync changes from OneDrive locally'
-complete -c onedrive -s v -l verbose -d 'Print more details, useful for debugging (repeat for extra debugging).'
-complete -c onedrive -l version -d 'Print the version and exit.'
+complete -c onedrive -l auth-files -d "Authenticate using input/output files"
+complete -c onedrive -l auth-response -d "Authenticate using the response URL"
+complete -c onedrive -l check-for-nomount -d "Skip sync if .nosync found in sync dir root"
+complete -c onedrive -l check-for-nosync -d "Skip directories containing .nosync"
+complete -c onedrive -l classify-as-big-delete -d "Classify as big delete when children exceed number"
+complete -c onedrive -l cleanup-local-files -d "Cleanup local files when using --download-only"
+complete -c onedrive -l confdir -d "Directory for configuration files"
+complete -c onedrive -l create-directory -d "Create directory on OneDrive"
+complete -c onedrive -l create-share-link -d "Create a shareable link for a file"
+complete -c onedrive -l debug-https -d "Debug HTTPS communication"
+complete -c onedrive -l destination-directory -d "Target directory for move/rename operations"
+complete -c onedrive -l disable-download-validation -d "Disable validation of downloaded files"
+complete -c onedrive -l disable-notifications -d "Disable desktop notifications in monitor mode"
+complete -c onedrive -l disable-upload-validation -d "Disable validation of uploaded files"
+complete -c onedrive -l display-config -d "Display current config"
+complete -c onedrive -l display-quota -d "Display OneDrive quota"
+complete -c onedrive -l display-running-config -d "Display config used at startup"
+complete -c onedrive -l display-sync-status -d "Show current sync status"
+complete -c onedrive -l download-only -d "Only download remote changes"
+complete -c onedrive -l dry-run -d "Simulate sync without making changes"
+complete -c onedrive -l enable-logging -d "Enable logging to a file"
+complete -c onedrive -l force -d "Force delete on big delete detection"
+complete -c onedrive -l force-http-11 -d "Force HTTP 1.1 usage"
+complete -c onedrive -l force-sync -d "Force sync of specified folder"
+complete -c onedrive -l get-O365-drive-id -d "Get Drive ID for O365 SharePoint (deprecated)"
+complete -c onedrive -l get-file-link -d "Get shareable link for a file"
+complete -c onedrive -l get-sharepoint-drive-id -d "Get Drive ID for SharePoint"
+complete -c onedrive -l help -d "Show help message"
+complete -c onedrive -l list-shared-items -d "List shared OneDrive items"
+complete -c onedrive -l local-first -d "Prefer local changes during sync"
+complete -c onedrive -l log-dir -d "Directory for logs"
+complete -c onedrive -l logout -d "Logout current session"
+complete -c onedrive -l modified-by -d "Show who last modified a file"
+complete -c onedrive -l monitor -d "Run in monitor mode"
+complete -c onedrive -l monitor-fullscan-frequency -d "Full scan every N runs"
+complete -c onedrive -l monitor-interval -d "Sync interval in monitor mode"
+complete -c onedrive -l monitor-log-frequency -d "Log status every N seconds in monitor mode"
+complete -c onedrive -l no-remote-delete -d "Don't delete remote files in --upload-only"
+complete -c onedrive -l print-access-token -d "Show access token"
+complete -c onedrive -l reauth -d "Reauthenticate client"
+complete -c onedrive -l remove-directory -d "Delete remote directory"
+complete -c onedrive -l remove-source-files -d "Remove uploaded local files"
+complete -c onedrive -l resync -d "Perform full resync"
+complete -c onedrive -l resync-auth -d "Confirm resync action"
+complete -c onedrive -l share-password -d "Password-protect shared link"
+complete -c onedrive -l single-directory -d "Sync a single local directory"
+complete -c onedrive -l skip-dir -d "Skip matching directories"
+complete -c onedrive -l skip-dir-strict-match -d "Strict matching for skipped dirs"
+complete -c onedrive -l skip-dot-files -d "Skip hidden files and folders"
+complete -c onedrive -l skip-file -d "Skip matching files"
+complete -c onedrive -l skip-size -d "Skip files above given size"
+complete -c onedrive -l skip-symlinks -d "Ignore symlinks"
+complete -c onedrive -l source-directory -d "Source path for move/rename"
+complete -c onedrive -l space-reservation -d "Reserve disk space (MB)"
+complete -c onedrive -l sync -d "Start sync operation"
+complete -c onedrive -l sync-root-files -d "Sync root files with sync_list"
+complete -c onedrive -l sync-shared-files -d "Sync shared business files"
+complete -c onedrive -l syncdir -d "Local sync directory"
+complete -c onedrive -l synchronize -d "Deprecated alias for --sync"
+complete -c onedrive -l upload-only -d "Only upload local changes"
+complete -c onedrive -l verbose -d "Increase verbosity"
+complete -c onedrive -l version -d "Show version"
+complete -c onedrive -l with-editing-perms -d "Create read-write shared link"
+

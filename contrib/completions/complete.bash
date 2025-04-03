@@ -17,7 +17,7 @@ _onedrive()
 	for (( i=0; i < ${#COMP_WORDS[@]}-1; i++ )); do
 		#exclude some mutually exclusive options
 		[[ ${COMP_WORDS[i]} == '--sync' ]] && options=${options/--monitor}
-		[[ ${COMP_WORDS[i]} == '--monitor' ]] && options=${options/--synchronize}
+		[[ ${COMP_WORDS[i]} == '--monitor' ]] && options=${options/--sync}
 	done
 
 	case "$prev" in
