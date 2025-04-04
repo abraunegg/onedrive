@@ -600,11 +600,6 @@ class ApplicationConfig {
 			}
 		}
 		
-		// If the 'user' did not specify any 'skip_file' configuration in any loaded configuration file, load the defaults for 'skip_file'
-		if (configFileSkipFile.empty) {
-			configFileSkipFile = defaultSkipFile;
-		}
-		
 		// return if the configuration was initialised
 		return configurationInitialised;
 	}
