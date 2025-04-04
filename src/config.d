@@ -199,6 +199,11 @@ class ApplicationConfig {
 	bool xdg_exists = false;
 	bool dbus_exists = false;
 	
+	// Recycle Bin Configuration
+	// These paths are used by the application, if 'use_recycle_bin' is enabled
+	string recycleBinFilePath;
+	string recycleBinInfoPath;
+	
 	// Initialise the application configuration
 	bool initialise(string confdirOption, bool helpRequested) {
 		
@@ -242,6 +247,12 @@ class ApplicationConfig {
 		// - name_dsc = file name descending
 		stringValues["transfer_order"] = "default";
 				
+		// Recycle Bin Configuration
+		// Enable|Disable feature
+		boolValues["use_recycle_bin"] = false;
+		// Recycle Bin Folder - empty string as a default
+		stringValues["recycle_bin_path"] = "";
+		
 		// - Store how many times was --verbose added
 		longValues["verbose"] = verbosityCount; 
 		// - The amount of time (seconds) between monitor sync loops
@@ -395,8 +406,15 @@ class ApplicationConfig {
 			}
 		}
 		
-		// outcome of setting defaultHomePath
+		// Outcome of setting 'defaultHomePath'
 		if (debugLogging) {addLogEntry("runtime_environment: Calculated defaultHomePath: " ~ defaultHomePath, ["debug"]);}
+		
+		// Configure the default path for the Recycle Bin
+		// Both GNOME and KDE use '~/.local/share/Trash/' as the default path
+		// ~/.local/share/Trash/
+		// ├── files/   # The actual trashed files
+		// └── info/    # .trashinfo metadata about each file (original path, deletion date)
+		setValueString("recycle_bin_path", defaultHomePath ~ "/.local/share/Trash/");
 		
 		// DEVELOPER OPTIONS
 		// display_memory = true | false
@@ -1159,8 +1177,8 @@ class ApplicationConfig {
 					"Specify the local directory used for synchronisation to OneDrive",
 					&stringValues["sync_dir_cli"],
 				"share-password",
-                                        "Require a password to access the shared link when used with --create-share-link <file>",
-                                        &stringValues["share_password"], 
+					"Require a password to access the shared link when used with --create-share-link <file>",
+					&stringValues["share_password"],
 				"sync|s",
 					"Perform a synchronisation with Microsoft OneDrive",
 					&boolValues["synchronize"],
@@ -1450,7 +1468,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'cleanup_local_files'          = " ~ to!string(getValueBool("cleanup_local_files")));
 		addLogEntry("Config option 'disable_permission_set'       = " ~ to!string(getValueBool("disable_permission_set")));
 		addLogEntry("Config option 'transfer_order'               = " ~ getValueString("transfer_order"));
-
+		
 		// data integrity
 		addLogEntry("Config option 'classify_as_big_delete'       = " ~ to!string(getValueLong("classify_as_big_delete")));
 		addLogEntry("Config option 'disable_upload_validation'    = " ~ to!string(getValueBool("disable_upload_validation")));
@@ -1489,6 +1507,10 @@ class ApplicationConfig {
 			addLogEntry("Compile time option --enable-notifications   = false");
 		}
 		
+		// Recycle Bin 
+		addLogEntry("Config option 'use_recycle_bin'              = " ~ to!string(getValueBool("use_recycle_bin")));
+		addLogEntry("Config option 'recycle_bin_path'             = " ~ getValueString("recycle_bin_path"));
+				
 		// Is sync_list configured and contains entries?
 		if (exists(syncListFilePath) && getSize(syncListFilePath) > 0) {
 			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
@@ -2549,6 +2571,13 @@ class ApplicationConfig {
 
 		// Return result
 		return variablesAvailable;
+	}
+	
+	// Set the Recycle Bin Paths
+	void setRecycleBinPaths() {
+		// Set these values based on the recycle bin path
+		recycleBinFilePath = getValueString("recycle_bin_path") ~ "files/";
+		recycleBinInfoPath = getValueString("recycle_bin_path") ~ "info/";
 	}
 }
 
