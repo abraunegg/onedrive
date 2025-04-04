@@ -8,6 +8,7 @@ import std.string: fromStringz, toStringz;
 import core.stdc.stdlib;
 import std.conv;
 import std.format;
+import std.file;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -107,6 +108,14 @@ struct Database {
 	void open(const(char)[] filename) {
 		// https://www.sqlite.org/c3ref/open.html
 		// Safest multithreaded way to open the database
+		
+		// Does the file we need to open actually exist?
+		if (exists(filename)) {
+			if (debugLogging) {addLogEntry("Database file EXISTS on disk", ["debug"]);}
+		} else {
+			if (debugLogging) {addLogEntry("Database file DOES NOT EXIST on disk", ["debug"]);}
+		}
+		
 		int rc = sqlite3_open_v2(
 			toStringz(filename), /* Database filename (UTF-8) */
 			&pDb,                /* OUT: SQLite db handle */
