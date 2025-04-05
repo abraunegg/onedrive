@@ -1,58 +1,197 @@
 # Configuration for OneDrive Linux Client
-# This file contains the list of supported configuration fields
-# with their default values.
+# This file contains the list of supported configuration fields with their default values.
 # All values need to be enclosed in quotes
-# When changing a config option below, remove the '#' from the start of the line
-# For explanations of all config options below see docs/usage.md or the man page.
-#
-# sync_dir = "~/OneDrive"
-# skip_file = "~*|.~*|*.tmp"
-# monitor_interval = "300"
-# skip_dir = ""
-# log_dir = "/var/log/onedrive/"
-# drive_id = ""
-# upload_only = "false"
-# check_nomount = "false"
-# check_nosync = "false"
-# download_only = "false"
-# disable_notifications = "false"
-# disable_upload_validation = "false"
-# enable_logging = "false"
-# force_http_11 = "false"
-# local_first = "false"
-# no_remote_delete = "false"
-# skip_symlinks = "false"
-# debug_https = "false"
-# skip_dotfiles = "false"
-# skip_size = "1000"
-# dry_run = "false"
-# min_notify_changes = "5"
-# monitor_log_frequency = "6"
-# monitor_fullscan_frequency = "12"
-# sync_root_files = "false"
-# classify_as_big_delete = "1000"
-# user_agent = ""
-# remove_source_files = "false"
-# skip_dir_strict_match = "false"
-# application_id = ""
-# resync = "false"
-# resync_auth = "false"
-# bypass_data_preservation = "false"
-# azure_ad_endpoint = ""
-# azure_tenant_id = "common"
-# sync_business_shared_items = "false"
-# sync_dir_permissions = "700"
-# sync_file_permissions = "600"
-# rate_limit = "131072"
-# operation_timeout = "3600"
-# webhook_enabled = "false"
-# webhook_public_url = ""
-# webhook_listening_host = ""
-# webhook_listening_port = "8888"
-# webhook_expiration_interval = "600"
-# webhook_renewal_interval = "300"
-# webhook_retry_interval = "60"
-# space_reservation = "50"
-# display_running_config = "false"
-# read_only_auth_scope = "false"
-# cleanup_local_files = "false"
+# When changing a config option below, remove the '#' from the start of the config line
+# For a more detailed explanation of all config options below see docs/application-config-options.md or the man page.
+
+## This is the config option for application id that used to identify itself to Microsoft OneDrive. 
+#application_id = "d50ca740-c83f-4d1b-b616-12c519384f0c"
+
+## This is the config option to change the Microsoft Azure Authentication Endpoint that the client uses to conform with data and security requirements that requires data to reside within the geographic borders of that country.
+#azure_ad_endpoint = ""
+
+## This config option allows the locking of the client to a specific single tenant and will configure your client to use the specified tenant id in its Azure AD and Graph endpoint URIs, instead of "common".
+#azure_tenant_id = ""
+
+## This config option allows the disabling of preserving local data by renaming the local file in the event of data conflict. If this is enabled, you will experience data loss on your local data as the local file will be over-written with data from OneDrive online. Use with care and caution.
+#bypass_data_preservation = "false"
+
+## This config option is useful to prevent application startup & ongoing use in 'Monitor Mode' if the configured 'sync_dir' is a separate disk that is being mounted by your system.
+#check_nomount = "false"
+
+## This config option is useful to prevent the sync of a *local* directory to Microsoft OneDrive. It will *not* check for this file online to prevent the download of directories to your local system.
+#check_nosync = "false"
+
+## This config option defines the number of children in a path that is locally removed which will be classified as a 'big data delete' to safeguard large data removals - which are typically accidental local delete events.
+#classify_as_big_delete = "1000"
+
+## This config option provides the capability to cleanup local files and folders if they are removed online.
+#cleanup_local_files = "false"
+
+## This configuration setting manages the TCP connection timeout duration in seconds for HTTPS connections to Microsoft OneDrive when using the curl library.
+#connect_timeout = "10"
+
+## This setting controls how the application handles the Microsoft SharePoint feature which modifies all PDF, MS Office & HTML files post upload, effectively breaking the integrity of your data online.
+#create_new_file_version = "false"
+
+## This setting controls the timeout duration, in seconds, for when data is not received on an active connection to Microsoft OneDrive over HTTPS.
+#data_timeout = "60"
+
+## This setting controls whether the curl library is configured to output additional data to assist with diagnosing HTTPS issues and problems.
+#debug_https = "false"
+
+## This option determines whether the client will conduct integrity validation on files downloaded from Microsoft OneDrive.
+#disable_download_validation = "false"
+
+## This setting controls whether GUI notifications are sent from the client to your display manager session.
+#disable_notifications = "false"
+
+## This setting controls whether the application will set the permissions on files and directories using the values of 'sync_dir_permissions' and 'sync_file_permissions'.
+#disable_permission_set = "false"
+
+## This option determines whether the client will conduct integrity validation on files uploaded to Microsoft OneDrive.
+#disable_upload_validation = "false"
+
+## This option will include the running config of the application at application startup.
+#display_running_config = "false"
+
+## This option will display file transfer metrics when enabled.
+#display_transfer_metrics = "false"
+
+## This setting controls the libcurl DNS cache value.
+#dns_timeout = "60"
+
+## This setting forces the client to only download data from Microsoft OneDrive and replicate that data locally.
+#download_only = "false"
+
+## This setting controls the specific drive identifier the client will use when syncing with Microsoft OneDrive.
+#drive_id = ""
+
+## This setting controls the application capability to test your application configuration without actually performing any real activity.
+#dry_run = "false"
+
+## This setting controls the application logging all actions to a separate file.
+#enable_logging = "false"
+
+## This setting controls the application HTTP protocol version, downgrading to HTTP/1.1 when enabled.
+#force_http_11 = "false"
+
+## This setting controls the application IP protocol used when communicating with Microsoft OneDrive.
+#ip_protocol_version = "0"
+
+## This setting controls what the application considers the 'source of truth' for your data.
+#local_first = "false"
+
+## This setting controls the custom application log path when 'enable_logging' has been enabled.
+#log_dir = ""
+
+## This configuration option controls the number of seconds a cURL engine is considered stale and destroyed after last use.
+#max_curl_idle = "120"
+
+## This configuration option controls how often a full scan of your data is performed in monitor mode.
+#monitor_fullscan_frequency = "12"
+
+## This setting determines how often the sync loop runs in --monitor mode.
+#monitor_interval = "300"
+
+## This configuration option controls suppression of frequent monitor log messages.
+#monitor_log_frequency = "12"
+
+## This configuration option controls whether local deletes are replicated to OneDrive when using --upload-only.
+#no_remote_delete = "false"
+
+## This setting controls whether the client logs GUI notifications when file actions occur.
+#notify_file_actions = "false"
+
+## This configuration controls the maximum amount of time a file operation is allowed to take.
+#operation_timeout = "3600"
+
+## Permanently delete online items when removed locally. Bypasses OneDrive recycle bin.
+#permanent_delete = "false"
+
+## This setting limits the per-thread bandwidth used by the client.
+#rate_limit = "0"
+
+## This configuration option controls whether the client operates in read-only mode.
+#read_only_auth_scope = "false"
+
+## This option removes the local file after a successful upload to OneDrive.
+#remove_source_files = "false"
+
+## This configuration controls whether a full resync is performed at application startup.
+#resync = "false"
+
+## This option approves use of --resync, useful in automated environments.
+#resync_auth = "false"
+
+## This option controls which directories are excluded from sync.
+#skip_dir = ""
+
+## When enabled, skip_dir matches must be strict, full path matches only.
+#skip_dir_strict_match = "false"
+
+## When enabled, skip dotfiles and dot folders from sync.
+#skip_dotfiles = "false"
+
+## This setting controls which files are skipped during sync.
+#skip_file = "~*|.~*|*.tmp|*.swp|*.partial"
+
+## Skip syncing files larger than this size in MB.
+#skip_size = "0"
+
+## Skip symbolic links during sync.
+#skip_symlinks = "false"
+
+## Reserve this much free disk space (in MB) to avoid disk full issues.
+#space_reservation = "50"
+
+## Sync OneDrive Business shared folders that are shortcuts in 'My Files'. These will be stored in a local folder called 'Files Shared With Me'.
+#sync_business_shared_items = "false"
+
+## Local directory to sync with OneDrive.
+#sync_dir = "~/OneDrive"
+
+## Permissions to apply to created local directories.
+#sync_dir_permissions = "700"
+
+## Permissions to apply to created local files.
+#sync_file_permissions = "600"
+
+## Sync all root files in sync_dir when using sync_list.
+#sync_root_files = "false"
+
+## Number of threads to use for upload/download.
+#threads = "8"
+
+## File transfer ordering between client and OneDrive.
+#transfer_order = "default"
+
+## Only upload changes to OneDrive, do not download from cloud.
+#upload_only = "false"
+
+## Custom User-Agent string for requests to OneDrive. If you change this, you will get throttled by the Microsoft Graph API. Change with caution.
+#user_agent = "ISV|abraunegg|OneDrive Client for Linux/vX.Y.Z-A-bcdefghi"
+
+## Enable webhook-based remote update notifications in monitor mode.
+#webhook_enabled = "false"
+
+## Time in seconds before webhook subscription expires.
+#webhook_expiration_interval = "600"
+
+## IP address to listen on for incoming webhook updates.
+#webhook_listening_host = "0.0.0.0"
+
+## TCP port to listen on for incoming webhook updates.
+#webhook_listening_port = "8888"
+
+## Public webhook URL for Microsoft to send notifications to.
+#webhook_public_url = ""
+
+## Frequency (in seconds) to renew webhook subscription.
+#webhook_renewal_interval = "300"
+
+## Frequency (in seconds) to retry a failed webhook subscription renewal.
+#webhook_retry_interval = "60"
+
+## Write xattr metadata fields (createdBy, lastModifiedBy) to synced files.
+#write_xattr_data = "false"
