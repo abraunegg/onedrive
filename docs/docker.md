@@ -328,7 +328,7 @@ docker container run -e ONEDRIVE_UID=9999 -e ONEDRIVE_GID=9999 -v onedrive_conf:
 > [!IMPORTANT]
 > Is using a Docker Environment Variable that requires you to specify a 'path' (ONEDRIVE_AUTHFILES, ONEDRIVE_AUTHRESPONSE, ONEDRIVE_SINGLE_DIRECTORY), the placement of quotes around the path is critically important.
 >
-> Please ensure you are formatting the option use correctly:
+> Please ensure you are formatting the option correctly:
 >```
 > -e OPTION="path/which/needs/to/be/synced"
 >```
