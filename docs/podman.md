@@ -331,6 +331,19 @@ podman run -it -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ON
 ```bash
 podman run -it -e ONEDRIVE_REAUTH=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:edge
 ```
+**Perform a sync using ONEDRIVE_SINGLE_DIRECTORY:**
+```bash
+podman run -e ONEDRIVE_SINGLE_DIRECTORY="path/which/needs/to/be/synced" -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:edge
+```
+> [!IMPORTANT]
+> Is using a Podman Environment Variable that requires you to specify a 'path' (ONEDRIVE_AUTHFILES, ONEDRIVE_AUTHRESPONSE, ONEDRIVE_SINGLE_DIRECTORY), the placement of quotes around the path is critically important.
+>
+> Please ensure you are formatting the option correctly:
+>```
+> -e OPTION="path/which/needs/to/be/synced"
+>```
+> Please also ensure that the path specified complies with the actual application usage argument. Please read the relevant config option advice in the [CLI Option Documentation](./application-config-options.md)
+
 
 ## Building a custom Podman image
 You can also build your own image instead of pulling the one from [hub.docker.com](https://hub.docker.com/r/driveone/onedrive):
