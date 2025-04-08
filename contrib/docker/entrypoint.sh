@@ -175,7 +175,7 @@ if [ "${ONEDRIVE_SYNC_SHARED_FILES:=0}" == "1" ]; then
 fi
 
 if [ ${#} -gt 0 ]; then
-	ARGS=("${@}")
+	ARGS=("${@}" "${ARGS[@]}")
 fi
 
 # Only switch user if not running as target uid (ie. Docker)
