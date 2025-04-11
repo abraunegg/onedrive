@@ -1362,9 +1362,20 @@ string getUserName() {
 
     // Retrieve password file entry for the user
     auto pw = getpwuid(uid);
-    enforce(pw !is null, "Failed to retrieve user information for UID: " ~ to!string(uid));
+	
+	// If user info is not found (e.g. no /etc/passwd entry), fallback to environment
+    if (pw is null) {
+        if (debugLogging) {
+            addLogEntry("Unable to retrieve user info for UID: " ~ to!string(uid), ["debug"]);
+            addLogEntry("Falling back to environment variable USER or returning 'unknown'", ["debug"]);
+        }
 
-    // Extract username and convert to immutable string
+        // Try environment variable
+        string userEnv = environment.get("USER", "unknown");
+        return userEnv.length > 0 ? userEnv : "unknown";
+    }
+	
+	// If pw is valid, we can safely access pw.pw_name
     string userName = to!string(fromStringz(pw.pw_name));
 
     // Log User identifiers from process
