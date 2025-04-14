@@ -128,10 +128,29 @@ fi
 
 
 
-AC_SUBST([DC_TYPE])
 dnl In case the environment variable DCFLAGS is set, we export it to the
 dnl generated Makefile at configure run:
 AC_SUBST([DCFLAGS])
+
+dnl Default flags for each compiler
+case "$DC_TYPE" in
+	dmd)
+		DEBUG_DCFLAGS="-g -debug -gs"
+		RELEASE_DCFLAGS=-O
+		VERSION_DCFLAG=-version
+		LINKER_DCFLAG=-L
+		;;
+	ldc)
+		DEBUG_DCFLAGS="-g -d-debug -gc"
+		RELEASE_DCFLAGS=-O
+		VERSION_DCFLAG=-d-version
+		LINKER_DCFLAG=-L
+		;;
+esac
+AC_SUBST([DEBUG_DCFLAGS])
+AC_SUBST([RELEASE_DCFLAGS])
+AC_SUBST([VERSION_DCFLAG])
+AC_SUBST([LINKER_DCFLAG])
 
 dnl The package date is only used in the man page onedrive.1.in
 dnl we generate onedrive.1 from it during configure run, but we want
