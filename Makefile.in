@@ -110,7 +110,7 @@ onedrive: $(SOURCES)
 	else \
 		echo $(version) > version ; \
 	fi
-	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) $(addprefix -L,$(bsd_inotify_LIBS)) $(addprefix -L,$(dynamic_linker_LIBS)) $(SOURCES) -of$@
+	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) $(addprefix -L,$(bsd_inotify_LIBS)) $(addprefix -L,$(dynamic_linker_LIBS)) $^ -of$@
 
 install: all
 	mkdir -p $(DESTDIR)$(bindir)
