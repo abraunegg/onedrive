@@ -36,7 +36,7 @@ DEBUG = @DEBUG@
 DC = @DC@
 DC_TYPE = @DC_TYPE@
 DCFLAGS = @DCFLAGS@
-DCFLAGS += -w -J.
+DCFLAGS += -w
 ifeq ($(DEBUG),yes)
 ifeq ($(DC_TYPE),dmd)
 # Add DMD Debugging Flags
@@ -56,7 +56,6 @@ NOTIF_VERSIONS=-version=NoPragma -version=NoGdk -version=Notifications
 ifeq ($(DC_TYPE),ldc)
         NOTIF_VERSIONS := $(addprefix -d,$(NOTIF_VERSIONS))
 endif
-DCFLAGS += $(NOTIF_VERSIONS)
 endif
 
 system_unit_files = contrib/systemd/onedrive@.service
@@ -110,7 +109,7 @@ onedrive: $(SOURCES)
 	else \
 		echo $(version) > version ; \
 	fi
-	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) $(addprefix -L,$(bsd_inotify_LIBS)) $(addprefix -L,$(dynamic_linker_LIBS)) $^ -of$@
+	$(DC) -J. $(NOTIF_VERSIONS) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) $(addprefix -L,$(bsd_inotify_LIBS)) $(addprefix -L,$(dynamic_linker_LIBS)) $^ -of$@
 
 install: all
 	mkdir -p $(DESTDIR)$(bindir)
