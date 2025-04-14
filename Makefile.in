@@ -35,8 +35,10 @@ DEBUG_DCFLAGS = @DEBUG_DCFLAGS@
 RELEASE_DCFLAGS = @RELEASE_DCFLAGS@
 VERSION_DCFLAG = @VERSION_DCFLAG@
 LINKER_DCFLAG = @LINKER_DCFLAG@
+OUTPUT_DCFLAG = @OUTPUT_DCFLAG@
+WERROR_DCFLAG = @WERROR_DCFLAG@
 
-DCFLAGS += -w
+DCFLAGS += $(WERROR_DCFLAG)
 ifeq ($(DEBUG),yes)
 DCFLAGS += $(DEBUG_DCFLAGS)
 else
@@ -98,7 +100,7 @@ onedrive: $(SOURCES)
 	else \
 		echo $(version) > version ; \
 	fi
-	$(DC) -J. $(NOTIF_VERSIONS) $(DCFLAGS) $(addprefix $(LINKER_DCFLAG),$(all_libs)) $^ -of$@
+	$(DC) -J. $(NOTIF_VERSIONS) $(DCFLAGS) $(addprefix $(LINKER_DCFLAG),$(all_libs)) $^ $(OUTPUT_DCFLAG)$@
 
 install: all
 	mkdir -p $(DESTDIR)$(bindir)
