@@ -136,7 +136,15 @@ void safeRemove(const(char)[] path) {
 // Returns the SHA1 hash hex string of a file
 string computeSha1Hash(string path) {
 	SHA1 sha;
-	auto file = File(path, "rb");
+	File file;
+
+	try {
+		file = File(path, "rb");
+	} catch (ErrnoException e) {
+		// log that we could not generate a hash
+		addLogEntry("Failed to open file to compute SHA1 Hash: " ~ path ~ " - " ~ e.msg);
+	}
+	
 	scope(exit) file.close(); // Ensure file is closed post read
 	foreach (ubyte[] data; chunks(file, 4096)) {
 		sha.put(data);
@@ -150,7 +158,15 @@ string computeSha1Hash(string path) {
 // Returns the quickXorHash base64 string of a file
 string computeQuickXorHash(string path) {
 	QuickXor qxor;
-	auto file = File(path, "rb");
+	File file;
+
+	try {
+		file = File(path, "rb");
+	} catch (ErrnoException e) {
+		// log that we could not generate a hash
+		addLogEntry("Failed to open file to compute QuickXor Hash: " ~ path ~ " - " ~ e.msg);
+	}
+	
 	scope(exit) file.close(); // Ensure file is closed post read
 	foreach (ubyte[] data; chunks(file, 4096)) {
 		qxor.put(data);
@@ -164,7 +180,15 @@ string computeQuickXorHash(string path) {
 // Returns the SHA256 hex string of a file
 string computeSHA256Hash(string path) {
 	SHA256 sha256;
-    auto file = File(path, "rb");
+	File file;
+
+	try {
+		file = File(path, "rb");
+	} catch (ErrnoException e) {
+		// log that we could not generate a hash
+		addLogEntry("Failed to open file to compute SHA256 Hash: " ~ path ~ " - " ~ e.msg);
+	}
+	
 	scope(exit) file.close(); // Ensure file is closed post read
     foreach (ubyte[] data; chunks(file, 4096)) {
         sha256.put(data);
