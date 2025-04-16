@@ -173,6 +173,7 @@ journalctl
 jsvar
 kdbx
 keepass
+kotlin
 lalen
 lbl
 lcurl

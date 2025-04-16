@@ -22,11 +22,7 @@ NOTIFICATIONS = @NOTIFICATIONS@
 HAVE_SYSTEMD = @HAVE_SYSTEMD@
 systemduserunitdir = @systemduserunitdir@
 systemdsystemunitdir = @systemdsystemunitdir@
-curl_LIBS = @curl_LIBS@
-sqlite_LIBS = @sqlite_LIBS@
-notify_LIBS = @notify_LIBS@
-bsd_inotify_LIBS = @bsd_inotify_LIBS@
-dynamic_linker_LIBS = @dynamic_linker_LIBS@
+all_libs = @curl_LIBS@ @sqlite_LIBS@ @notify_LIBS@ @bsd_inotify_LIBS@ @dynamic_linker_LIBS@
 COMPLETIONS = @COMPLETIONS@
 BASH_COMPLETION_DIR = @BASH_COMPLETION_DIR@
 ZSH_COMPLETION_DIR = @ZSH_COMPLETION_DIR@
@@ -34,29 +30,23 @@ FISH_COMPLETION_DIR = @FISH_COMPLETION_DIR@
 DEBUG = @DEBUG@
 
 DC = @DC@
-DC_TYPE = @DC_TYPE@
 DCFLAGS = @DCFLAGS@
-DCFLAGS += -w -J.
+DEBUG_DCFLAGS = @DEBUG_DCFLAGS@
+RELEASE_DCFLAGS = @RELEASE_DCFLAGS@
+VERSION_DCFLAG = @VERSION_DCFLAG@
+LINKER_DCFLAG = @LINKER_DCFLAG@
+OUTPUT_DCFLAG = @OUTPUT_DCFLAG@
+WERROR_DCFLAG = @WERROR_DCFLAG@
+
+DCFLAGS += $(WERROR_DCFLAG)
 ifeq ($(DEBUG),yes)
-ifeq ($(DC_TYPE),dmd)
-# Add DMD Debugging Flags
-DCFLAGS += -g -debug -gs
+DCFLAGS += $(DEBUG_DCFLAGS)
 else
-# Add LDC Debugging Flags
-DCFLAGS += -g -d-debug -gc
-endif
-else
-# Only add optimisation flags if debugging is not enabled
-DCFLAGS += -O
+DCFLAGS += $(RELEASE_DCFLAGS)
 endif
 
 ifeq ($(NOTIFICATIONS),yes)
-NOTIF_VERSIONS=-version=NoPragma -version=NoGdk -version=Notifications
-# support ldc2 which needs -d prefix for version specification
-ifeq ($(DC_TYPE),ldc)
-        NOTIF_VERSIONS := $(addprefix -d,$(NOTIF_VERSIONS))
-endif
-DCFLAGS += $(NOTIF_VERSIONS)
+NOTIF_VERSIONS = $(addprefix $(VERSION_DCFLAG)=,NoPragma NoGdk Notifications)
 endif
 
 system_unit_files = contrib/systemd/onedrive@.service
@@ -110,7 +100,7 @@ onedrive: $(SOURCES)
 	else \
 		echo $(version) > version ; \
 	fi
-	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) $(addprefix -L,$(bsd_inotify_LIBS)) $(addprefix -L,$(dynamic_linker_LIBS)) $(SOURCES) -of$@
+	$(DC) -J. $(NOTIF_VERSIONS) $(DCFLAGS) $(addprefix $(LINKER_DCFLAG),$(all_libs)) $^ $(OUTPUT_DCFLAG)$@
 
 install: all
 	mkdir -p $(DESTDIR)$(bindir)
