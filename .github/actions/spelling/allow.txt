@@ -381,6 +381,7 @@ thnk
 tidx
 timerfd
 tlsv
+trashinfo
 Tting
 typecons
 uda
