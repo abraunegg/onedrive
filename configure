@@ -606,7 +606,12 @@ sqlite_CFLAGS
 curl_LIBS
 curl_CFLAGS
 PACKAGE_DATE
-DC_TYPE
+WERROR_DCFLAG
+OUTPUT_DCFLAG
+LINKER_DCFLAG
+VERSION_DCFLAG
+RELEASE_DCFLAGS
+DEBUG_DCFLAGS
 PKG_CONFIG_LIBDIR
 PKG_CONFIG_PATH
 PKG_CONFIG
@@ -2009,7 +2014,7 @@ $as_echo "no" >&6; }
 	fi
 fi
 
-for ac_prog in dmd ldmd2 ldc2
+for ac_prog in dmd ldmd2 ldc2 gdmd gdc
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
 set dummy $ac_prog; ac_word=$2
@@ -2054,9 +2059,9 @@ test -n "$DC" || DC="NOT_FOUND"
 
 DC_TYPE=
 case $(basename $DC) in
-        dmd) DC_TYPE=dmd ;;
-        ldmd2) DC_TYPE=dmd ;;
+        dmd|ldmd2|gdmd) DC_TYPE=dmd ;;
         ldc2) DC_TYPE=ldc ;;
+        gdc) DC_TYPE=gdc ;;
         NOT_FOUND) as_fn_error 1 "Could not find any compatible D compiler" "$LINENO" 5
 esac
 
@@ -2145,6 +2150,21 @@ case $(basename $DC) in
 		# now version should be something like L.M.N
 		MINVERSION=2.088.0
 		;;
+	gdmd|gdc)
+		# Both gdmd and gdc print the same version information
+		VERSION=`${DC} --version | head -n1`
+		# Some examples of output:
+		# gdc (Gentoo 14.2.1_p20250301 p8) 14.2.1 20250301
+		# gcc (GCC) 14.2.1 20250207 # Arch
+		# gdc (GCC) 14.2.1 20250110 (Red Hat 14.2.1-7)
+		# gdc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
+		VERSION=${VERSION#gdc }
+		# VERSION=(...) VER DATE ...
+		VERSION=${VERSION#*) }
+		# VERSION=VER DATE ...
+		VERSION=${VERSION%% *}
+		MINVERSION=15
+		;;
 esac
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $VERSION" >&5
@@ -2163,8 +2183,40 @@ fi
 
 
 
+case "$DC_TYPE" in
+	dmd)
+		DEBUG_DCFLAGS="-g -debug -gs"
+		RELEASE_DCFLAGS=-O
+		VERSION_DCFLAG=-version
+		LINKER_DCFLAG=-L
+		OUTPUT_DCFLAG=-of
+		WERROR_DCFLAG=-w
+		;;
+	ldc)
+		DEBUG_DCFLAGS="-g -d-debug -gc"
+		RELEASE_DCFLAGS=-O
+		VERSION_DCFLAG=-d-version
+		LINKER_DCFLAG=-L
+		OUTPUT_DCFLAG=-of
+		WERROR_DCFLAG=-w
+		;;
+	gdc)
+		DEBUG_DCFLAGS="-g -fdebug"
+		RELEASE_DCFLAGS=-O
+		VERSION_DCFLAG=-fversion
+		LINKER_DCFLAG=-Wl,
+		OUTPUT_DCFLAG=-o
+		WERROR_DCFLAG=-Werror
+		;;
+esac
 
-PACKAGE_DATE="March 2025"
+
+
+
+
+
+
+PACKAGE_DATE="April 2025"
 
 
 
