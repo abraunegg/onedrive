@@ -38,10 +38,10 @@ Only the current release version or greater is supported. Earlier versions are n
 ## Building from Source - High Level Requirements
 *   For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space.
 *   Install the required distribution package dependencies covering the required development tools and development libraries for curl and sqlite
-*   Install the [Digital Mars D Compiler (DMD)](https://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
+*   Install the [Digital Mars D Compiler (DMD)](https://dlang.org/download.html), [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc), or, at least version 15 of the [GNU D Compiler (GDC)](https://www.gdcproject.org/)
 
 > [!IMPORTANT]
-> To compile this application successfully, it is essential to use either DMD version **2.088.0** or higher, or LDC version **1.18.0** or higher. Ensuring compatibility and optimal performance necessitates the use of these specific versions or their more recent updates.
+> To compile this application successfully, the minimum supported versions of each compiler are: DMD **2.088.0**, LDC **1.18.0**, and, GDC **15**. Ensuring compatibility and optimal performance necessitates the use of these specific versions or their more recent updates.
 
 ### Example for installing DMD Compiler
 ```text
@@ -52,6 +52,9 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```text
 curl -fsS https://dlang.org/install.sh | bash -s ldc
 ```
+
+### Installing GDC
+As stated above, you will need at least GDC version 15. If your distribution's repositories include a suitable version, you can install it from there. Common names for the GDC package are listed on the [GDC website](https://www.gdcproject.org/downloads#linux-distribution-packages). If the package is unavailable or its version is too old, you can try building it from source following [these instructions](https://wiki.dlang.org/GDC/Installation).
 
 ## Distribution Package Dependencies
 
@@ -305,6 +308,28 @@ cd onedrive
 bash ./configure
 gmake clean; gmake;
 gmake install
+```
+
+### Linux: Building the application with GDC
+First, make sure at least version 15 of GDC is available in your path:
+```text
+$ gdc --version
+gdc (Gentoo Hardened 15.0.1_pre20250413 p54) 15.0.1 20250413 (experimental)
+Copyright (C) 2025 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+```
+Then, clone the repository and run the build commands:
+```
+git clone https://github.com/abraunegg/onedrive.git
+cd onedrive
+./configure
+make clean; make;
+sudo make install
+```
+If you have another D compiler installed on your system you may need to explicitly specify that you want to use GDC to the `configure` script. To do this replace the `./configure` step above with:
+```
+./configure DC=gdc
 ```
 
 ### Build options

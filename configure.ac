@@ -9,7 +9,7 @@ dnl - commit the changed files (configure.ac, configure)
 dnl - tag the release
 
 AC_PREREQ([2.69])
-AC_INIT([onedrive],[v2.5.4], [https://github.com/abraunegg/onedrive], [onedrive])
+AC_INIT([onedrive],[v2.5.5], [https://github.com/abraunegg/onedrive], [onedrive])
 AC_CONFIG_SRCDIR([src/main.d])
 
 
@@ -24,12 +24,12 @@ dnl Determine D compiler
 dnl we check for dmd, dmd2, and ldc2 in this order
 dnl furthermore, we set DC_TYPE to either dmd or ldc and export this into the
 dnl Makefile so that we can adjust command line arguments
-AC_CHECK_PROGS([DC], [dmd ldmd2 ldc2], NOT_FOUND)
+AC_CHECK_PROGS([DC], [dmd ldmd2 ldc2 gdmd gdc], NOT_FOUND)
 DC_TYPE=
 case $(basename $DC) in
-        dmd) DC_TYPE=dmd ;;
-        ldmd2) DC_TYPE=dmd ;;
+        dmd|ldmd2|gdmd) DC_TYPE=dmd ;;
         ldc2) DC_TYPE=ldc ;;
+        gdc) DC_TYPE=gdc ;;
         NOT_FOUND) AC_MSG_ERROR(Could not find any compatible D compiler, 1)
 esac
 
@@ -114,6 +114,21 @@ case $(basename $DC) in
 		# now version should be something like L.M.N
 		MINVERSION=2.088.0
 		;;
+	gdmd|gdc)
+		# Both gdmd and gdc print the same version information
+		VERSION=`${DC} --version | head -n1`
+		# Some examples of output:
+		# gdc (Gentoo 14.2.1_p20250301 p8) 14.2.1 20250301
+		# gcc (GCC) 14.2.1 20250207 # Arch
+		# gdc (GCC) 14.2.1 20250110 (Red Hat 14.2.1-7)
+		# gdc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
+		VERSION=${VERSION#gdc }
+		# VERSION=(...) VER DATE ...
+		VERSION=${VERSION#*) }
+		# VERSION=VER DATE ...
+		VERSION=${VERSION%% *}
+		MINVERSION=15
+		;;
 esac
 
 AC_MSG_RESULT([$VERSION])
@@ -128,10 +143,43 @@ fi
 
 
 
-AC_SUBST([DC_TYPE])
 dnl In case the environment variable DCFLAGS is set, we export it to the
 dnl generated Makefile at configure run:
 AC_SUBST([DCFLAGS])
+
+dnl Default flags for each compiler
+case "$DC_TYPE" in
+	dmd)
+		DEBUG_DCFLAGS="-g -debug -gs"
+		RELEASE_DCFLAGS=-O
+		VERSION_DCFLAG=-version
+		LINKER_DCFLAG=-L
+		OUTPUT_DCFLAG=-of
+		WERROR_DCFLAG=-w
+		;;
+	ldc)
+		DEBUG_DCFLAGS="-g -d-debug -gc"
+		RELEASE_DCFLAGS=-O
+		VERSION_DCFLAG=-d-version
+		LINKER_DCFLAG=-L
+		OUTPUT_DCFLAG=-of
+		WERROR_DCFLAG=-w
+		;;
+	gdc)
+		DEBUG_DCFLAGS="-g -fdebug"
+		RELEASE_DCFLAGS=-O
+		VERSION_DCFLAG=-fversion
+		LINKER_DCFLAG=-Wl,
+		OUTPUT_DCFLAG=-o
+		WERROR_DCFLAG=-Werror
+		;;
+esac
+AC_SUBST([DEBUG_DCFLAGS])
+AC_SUBST([RELEASE_DCFLAGS])
+AC_SUBST([VERSION_DCFLAG])
+AC_SUBST([LINKER_DCFLAG])
+AC_SUBST([OUTPUT_DCFLAG])
+AC_SUBST([WERROR_DCFLAG])
 
 dnl The package date is only used in the man page onedrive.1.in
 dnl we generate onedrive.1 from it during configure run, but we want

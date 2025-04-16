@@ -527,7 +527,7 @@ class OneDriveApi {
 			url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
 		}
 		// Add select clause
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package";
 		return get(url);
 	}
 	
@@ -536,7 +536,7 @@ class OneDriveApi {
 	JSONValue getPathDetailsById(string driveId, string id) {
 		string url;
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,webUrl,lastModifiedDateTime";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,webUrl,lastModifiedDateTime,package";
 		return get(url);
 	}
 	
@@ -561,7 +561,7 @@ class OneDriveApi {
 		// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/concepts/addressing-driveitems?view=odsp-graph-online
 		// Required format: /drives/{drive-id}/root:/{item-path}:
 		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path) ~ ":";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package";
 		return get(url);
 	}
 	
@@ -591,7 +591,7 @@ class OneDriveApi {
 		if (deltaLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
 			// Reduce what we ask for in the response - which reduces the data transferred back to us, and reduces what is held in memory during initial JSON processing
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package";
 		} else {
 			url = deltaLink;
 		}
@@ -621,7 +621,7 @@ class OneDriveApi {
 		// configure URL to query
 		if (nextLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/children";
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package";
 		} else {
 			url = nextLink;
 		}
@@ -741,10 +741,19 @@ class OneDriveApi {
 	}
 
 	JSONValue createSubscription(string notificationUrl, SysTime expirationDateTime) {
-		string driveId = appConfig.getValueString("drive_id");
+		string driveId;
 		string url = subscriptionUrl;
 		
-		// Create a resource item based on if we have a driveId
+		// What do we set for driveId
+		if (appConfig.getValueString("drive_id").length) {
+			// Use the 'config' file option
+			driveId = appConfig.getValueString("drive_id");
+		} else {
+			// use appConfig.defaultDriveId
+			driveId = appConfig.defaultDriveId;
+		}
+		
+		// Create a resource item based on if we have a driveId now configured
 		string resourceItem;
 		if (driveId.length) {
 				resourceItem = "/drives/" ~ driveId ~ "/root";
@@ -1532,7 +1541,10 @@ class OneDriveApi {
 	private bool checkHttpResponseCode(int httpResponseCode) {
 	
 		bool shouldThrow = false;
-	
+		
+		// Redirect Codes
+		immutable acceptedRedirectCodes = [301, 302, 304, 307, 308];
+
 		//
 		// This condition checks if the HTTP response code falls within the acceptable range for both HTTP 1.1 and HTTP 2.0.
 		//
@@ -1550,7 +1562,7 @@ class OneDriveApi {
 		// If the HTTP response code meets any of these conditions, it is considered acceptable, and no exception will be thrown.
 		//
 		
-		if ((httpResponseCode >= 100 && httpResponseCode < 200) || (httpResponseCode >= 200 && httpResponseCode < 300) || httpResponseCode == 302 || httpResponseCode == 0) {
+		if ((httpResponseCode >= 100 && httpResponseCode < 300) || canFind(acceptedRedirectCodes, httpResponseCode) || httpResponseCode == 0) {
             shouldThrow = false;
         } else {
             shouldThrow = true;
@@ -1596,6 +1608,12 @@ class OneDriveApi {
 				break;
 			case 304:
 				message = "Not Modified";
+				break;
+			case 307:
+				message = "Temporary Redirect";
+				break;
+			case 308:
+				message = "Permanent Redirect";
 				break;
 			case 400:
 				message = "Bad Request";
