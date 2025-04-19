@@ -106,6 +106,7 @@ endinaness
 enduml
 envp
 epfd
+eselect
 estr
 eventfd
 evt
@@ -267,6 +268,7 @@ ofonedrive
 onbinarymessage
 onedrive
 onetoc
+onlydeps
 onmicrosoft
 ontextmessage
 opensuse
