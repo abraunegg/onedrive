@@ -106,6 +106,17 @@ class ClientSideFiltering {
 			// Skip comments in file
 			if (line[0] == ';' || line[0] == '#') continue;
 			
+			// Is this an 'exclude' all rule because documentation has not been read correctly?
+			if ((strip(line) == "!/*") || (strip(line) == "!/")) {
+				// yes ...
+				string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(strip(line)) ~ "' detected. Please read the 'sync_list' documentation.";
+				addLogEntry();
+				addLogEntry(errorMessage, ["info", "notify"]);
+				addLogEntry();
+				// do not add this rule
+				continue;
+			}
+			
 			// Is the rule a legacy 'include all root files' lazy rule?
 			if ((strip(line) == "/*") || (strip(line) == "/")) {
 				// yes ...
