@@ -5929,7 +5929,7 @@ class SyncEngine {
 		}
 		
 		// These are the details of the item we need to upload
-		string changedItemParentId = localItemDetails[0];
+		string changedItemDriveId = localItemDetails[0];
 		string changedItemId = localItemDetails[1];
 		string localFilePath = localItemDetails[2];
 		
@@ -5957,32 +5957,108 @@ class SyncEngine {
 		// Unfortunately, we cant store an array of Item's ... so we have to re-query the DB again - unavoidable extra processing here
 		// This is because the Item[] has no other functions to allow is to parallel process those elements, so we have to use a string array as input to this function
 		Item dbItem;
-		itemDB.selectById(changedItemParentId, changedItemId, dbItem);
+		itemDB.selectById(changedItemDriveId, changedItemId, dbItem);
 		
-		// Is this a remote target?
-		if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
-			// This is a remote file
-			targetDriveId = dbItem.remoteDriveId;
-			targetItemId = dbItem.remoteId;
-			// we are going to make the assumption here that as this is a OneDrive Business Shared File, that there is space available
-			spaceAvailableOnline = true;
+		// Was a valid DB response returned
+		if (!dbItem.driveId.empty) {
+			// Is this a remote driveId target based on the database response?
+			if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
+				// This is a remote file
+				targetDriveId = dbItem.remoteDriveId;
+				targetItemId = dbItem.remoteId;
+				// we are going to make the assumption here that as this is a OneDrive Business Shared File, that there is space available
+				spaceAvailableOnline = true;
+			} else {
+				// This is not a remote file
+				targetDriveId = dbItem.driveId;
+				targetItemId = dbItem.id;
+			}
 		} else {
-			// This is not a remote file
-			targetDriveId = dbItem.driveId;
-			targetItemId = dbItem.id;
+			// No valid DB response was provided
+			if (debugLogging) {
+				string logMessage = format("No valid DB response was provided when searching for '%s' and '%s'", changedItemDriveId, changedItemId);
+				addLogEntry(logMessage, ["debug"]);
+				
+				// Fetch the online data again for this file 
+				addLogEntry("Fetching latest online details for this item due to zero DB data available", ["debug"]);
+			}
+				
+			OneDriveApi checkFileOneDriveApiInstance;
+			JSONValue fileDetailsFromOneDrive;
+			
+			// Create a new API Instance for this thread and initialise it
+			checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
+			checkFileOneDriveApiInstance.initialise();
+
+			// Try and get the absolute latest object details from online to potentially build a DB record we can use
+			try {
+				fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsById(changedItemDriveId, changedItemId);
+			} catch (OneDriveException exception) {
+				// Display what the error is
+				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+			}
+			
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			checkFileOneDriveApiInstance.releaseCurlEngine();
+			checkFileOneDriveApiInstance = null;
+			// Perform Garbage Collection
+			GC.collect();
+			
+			// Turn 'fileDetailsFromOneDrive' into a DB item
+			if (fileDetailsFromOneDrive.type() == JSONType.object) {
+				// Yes
+				if (debugLogging) {addLogEntry("Creating DB item from online API response: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);}
+				dbItem = makeItem(fileDetailsFromOneDrive);
+			} else {
+				// No
+				addLogEntry("Unable to upload this modified file at this point in time: " ~ localFilePath);
+				return;
+			}
+		}
+		
+		// Are we in an --upload-only & --remove-source-files scenario?
+		// - In this scenario, and even more so in a --resync scenario when using these options, there is potentially 100% zero database entry for the modified file we are uploading
+		//   This will be in the logs when we are in this scenario:
+		//     Skipping adding to database as --upload-only & --remove-source-files configured
+		if ((uploadOnly) && (localDeleteAfterUpload)) {
+			// We are in the potential scenario where 'targetDriveId' and 'targetItemId' are still an empty value(s)
+			// Check targetDriveId
+			if (targetDriveId.empty) {
+				if (debugLogging) {
+					string logMessage = format("Updating 'targetDriveId' to '%s' due to --upload-only and --remove-source-files being used", changedItemDriveId);
+					addLogEntry(logMessage, ["debug"]);
+				}
+				// set the value
+				targetDriveId = changedItemDriveId;
+			}
+			// Check targetItemId	
+			if (targetItemId.empty) {
+				if (debugLogging) {
+					string logMessage = format("Updating 'targetItemId' to '%s' due to --upload-only and --remove-source-files being used", changedItemId);
+					addLogEntry(logMessage, ["debug"]);
+				}
+				// set the value
+				targetItemId = changedItemId;
+			}
 		}
 			
-		// Fetch the details from cachedOnlineDriveData
+		// Fetch the details from cachedOnlineDriveData if this is available
 		// - cachedOnlineDriveData.quotaRestricted;
 		// - cachedOnlineDriveData.quotaAvailable;
 		// - cachedOnlineDriveData.quotaRemaining;
 		DriveDetailsCache cachedOnlineDriveData;
+		
+		// Query the details using the correct 'targetDriveId' for this modified file to be uploaded
 		cachedOnlineDriveData = getDriveDetails(targetDriveId);
+		
+		// Configure 'remainingFreeSpace' based on the 'targetDriveId'
 		remainingFreeSpace = cachedOnlineDriveData.quotaRemaining;
 		
 		// Get the file size from the actual file
 		long thisFileSizeLocal = getSize(localFilePath);
-		// Get the file size from the DB data
+		
+		// Get the file size from the DB data, if DB data was returned, otherwise we have zero size value from the DB
 		long thisFileSizeFromDB;
 		if (!dbItem.size.empty) {
 			thisFileSizeFromDB = to!long(dbItem.size);
@@ -5996,9 +6072,9 @@ class SyncEngine {
 		
 		// Based on what we know, for this thread - can we safely upload this modified local file?
 		if (debugLogging) {
-			string estimatedMessage = format("This Thread Estimated Free Space Online (%s): ", targetDriveId);
+			string estimatedMessage = format("This Thread (Upload Changed File) Estimated Free Space Online (%s): ", targetDriveId);
 			addLogEntry(estimatedMessage ~ to!string(remainingFreeSpace), ["debug"]);
-			addLogEntry("This Thread Calculated Free Space Online Post Upload:    " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+			addLogEntry("This Thread (Upload Changed File) Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 		}
 		
 		// Is there quota available for the given drive where we are uploading to?
@@ -6153,6 +6229,12 @@ class SyncEngine {
 						}
 					}
 				}
+				
+				// Are we in an --upload-only & --remove-source-files scenario?
+				if ((uploadOnly) && (localDeleteAfterUpload)) {
+					// Perform the local file deletion
+					removeLocalFilePostUpload(localFilePath);
+				}
 			}
 		}
 		
@@ -6163,6 +6245,29 @@ class SyncEngine {
 		}
 	}
 	
+	// Remove the local file if using --upload-only & --remove-source-files scenario in a consistent manner
+	void removeLocalFilePostUpload(string localPathToRemove) {
+		// File has to exist before removal
+		if (exists(localPathToRemove)) {
+			// Log that we are deleting a local item
+			addLogEntry("Attempting removal of local file as --upload-only & --remove-source-files configured");
+			
+			// Are we in a --dry-run scenario?
+			if (!dryRun) {
+				// Not in a --dry-run scenario
+				if (debugLogging) {addLogEntry("Removing local file: " ~ localPathToRemove, ["debug"]);}
+				safeRemove(localPathToRemove);
+				addLogEntry("Removed local file:  " ~ localPathToRemove);
+			} else {
+				// --dry-run scenario
+				addLogEntry("Not removing local file as --dry-run configured");
+			}
+		} else {
+			// Log that the path to remove does not exist locally
+			addLogEntry("Removing local file not possible as local file does not exist");
+		}
+	}
+		
 	// Perform the upload of a locally modified file to OneDrive
 	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal) {
 		// Function Start Time
@@ -7952,9 +8057,9 @@ class SyncEngine {
 						
 						// Based on what we know, for this thread - can we safely upload this modified local file?
 						if (debugLogging) {
-							string estimatedMessage = format("This Thread Estimated Free Space Online (%s): ", parentItem.driveId);
+							string estimatedMessage = format("This Thread (Upload New File) Estimated Free Space Online (%s): ", parentItem.driveId);
 							addLogEntry(estimatedMessage ~ to!string(remainingFreeSpaceOnline), ["debug"]);
-							addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+							addLogEntry("This Thread (Upload New File) Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 						}
 			
 						// If 'personal' accounts, if driveId == defaultDriveId, then we will have data - appConfig.quotaAvailable will be updated
@@ -8419,15 +8524,9 @@ class SyncEngine {
 					
 					// Are we in an --upload-only & --remove-source-files scenario?
 					// Use actual config values as we are doing an upload session recovery
-					if (localDeleteAfterUpload) {
-						// Log that we are deleting a local item
-						addLogEntry("Removing local file as --upload-only & --remove-source-files configured");
-						// Are we in a --dry-run scenario?
-						if (!dryRun) {
-							// No --dry-run ... process local file delete
-							if (debugLogging) {addLogEntry("Removing local file: " ~ fileToUpload, ["debug"]);}
-							safeRemove(fileToUpload);
-						}
+					if ((uploadOnly) && (localDeleteAfterUpload)) {
+						// Perform the local file deletion
+						removeLocalFilePostUpload(fileToUpload);
 					}
 				} else {
 					// will be removed in different event!
@@ -11858,19 +11957,10 @@ class SyncEngine {
 				
 				// Are we in an --upload-only & --remove-source-files scenario?
 				// Use actual config values as we are doing an upload session recovery
-				if (localDeleteAfterUpload) {
-					// Log that we are deleting a local item
-					addLogEntry("Removing local file as --upload-only & --remove-source-files configured");
-					// are we in a --dry-run scenario?
-					if (!dryRun) {
-						// No --dry-run ... process local file delete
-						// Only perform the delete if we have a valid file path
-						if (exists(jsonItemToResume["localPath"].str)) {
-							// file exists
-							if (debugLogging) {addLogEntry("Removing local file: " ~ jsonItemToResume["localPath"].str, ["debug"]);}
-							safeRemove(jsonItemToResume["localPath"].str);
-						}
-					}
+				if ((uploadOnly) && (localDeleteAfterUpload)) {
+					// Perform the local file deletion
+					removeLocalFilePostUpload(jsonItemToResume["localPath"].str);
+					
 					// as file is removed, we have nothing to add to the local database
 					if (debugLogging) {addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);}
 				} else {
