@@ -5974,10 +5974,46 @@ class SyncEngine {
 				targetItemId = dbItem.id;
 			}
 		} else {
-			// no valid DB response was provided
+			// No valid DB response was provided
 			if (debugLogging) {
 				string logMessage = format("No valid DB response was provided when searching for '%s' and '%s'", changedItemDriveId, changedItemId);
 				addLogEntry(logMessage, ["debug"]);
+				
+				// Fetch the online data again for this file 
+				addLogEntry("Fetching latest online details for this item due to zero DB data available", ["debug"]);
+			}
+				
+			OneDriveApi checkFileOneDriveApiInstance;
+			JSONValue fileDetailsFromOneDrive;
+			
+			// Create a new API Instance for this thread and initialise it
+			checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
+			checkFileOneDriveApiInstance.initialise();
+
+			// Try and get the absolute latest object details from online to potentially build a DB record we can use
+			try {
+				fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsById(changedItemDriveId, changedItemId);
+			} catch (OneDriveException exception) {
+				// Display what the error is
+				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+			}
+			
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			checkFileOneDriveApiInstance.releaseCurlEngine();
+			checkFileOneDriveApiInstance = null;
+			// Perform Garbage Collection
+			GC.collect();
+			
+			// Turn 'fileDetailsFromOneDrive' into a DB item
+			if (fileDetailsFromOneDrive.type() == JSONType.object) {
+				// Yes
+				if (debugLogging) {addLogEntry("Creating DB item from online API response: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);}
+				dbItem = makeItem(fileDetailsFromOneDrive);
+			} else {
+				// No
+				addLogEntry("Unable to upload this modified file at this point in time: " ~ localFilePath);
+				return;
 			}
 		}
 		
@@ -6038,7 +6074,7 @@ class SyncEngine {
 		if (debugLogging) {
 			string estimatedMessage = format("This Thread (Upload Changed File) Estimated Free Space Online (%s): ", targetDriveId);
 			addLogEntry(estimatedMessage ~ to!string(remainingFreeSpace), ["debug"]);
-			addLogEntry("This Thread (Upload Changed File) Calculated Free Space Online Post Upload:    " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+			addLogEntry("This Thread (Upload Changed File) Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 		}
 		
 		// Is there quota available for the given drive where we are uploading to?
