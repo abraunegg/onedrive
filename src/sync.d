@@ -5929,7 +5929,7 @@ class SyncEngine {
 		}
 		
 		// These are the details of the item we need to upload
-		string changedItemParentId = localItemDetails[0];
+		string changedItemDriveId = localItemDetails[0];
 		string changedItemId = localItemDetails[1];
 		string localFilePath = localItemDetails[2];
 		
@@ -5957,32 +5957,72 @@ class SyncEngine {
 		// Unfortunately, we cant store an array of Item's ... so we have to re-query the DB again - unavoidable extra processing here
 		// This is because the Item[] has no other functions to allow is to parallel process those elements, so we have to use a string array as input to this function
 		Item dbItem;
-		itemDB.selectById(changedItemParentId, changedItemId, dbItem);
+		itemDB.selectById(changedItemDriveId, changedItemId, dbItem);
 		
-		// Is this a remote target?
-		if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
-			// This is a remote file
-			targetDriveId = dbItem.remoteDriveId;
-			targetItemId = dbItem.remoteId;
-			// we are going to make the assumption here that as this is a OneDrive Business Shared File, that there is space available
-			spaceAvailableOnline = true;
+		// Was a valid DB response returned
+		if (!dbItem.driveId.empty) {
+			// Is this a remote driveId target based on the database response?
+			if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
+				// This is a remote file
+				targetDriveId = dbItem.remoteDriveId;
+				targetItemId = dbItem.remoteId;
+				// we are going to make the assumption here that as this is a OneDrive Business Shared File, that there is space available
+				spaceAvailableOnline = true;
+			} else {
+				// This is not a remote file
+				targetDriveId = dbItem.driveId;
+				targetItemId = dbItem.id;
+			}
 		} else {
-			// This is not a remote file
-			targetDriveId = dbItem.driveId;
-			targetItemId = dbItem.id;
+			// no valid DB response was provided
+			if (debugLogging) {
+				string logMessage = format("No valid DB response was provided when searching for '%s' and '%s'", changedItemDriveId, changedItemId);
+				addLogEntry(logMessage, ["debug"]);
+			}
+		}
+		
+		// Are we in an --upload-only & --remove-source-files scenario?
+		// - In this scenario, and even more so in a --resync scenario when using these options, there is potentially 100% zero database entry for the modified file we are uploading
+		//   This will be in the logs when we are in this scenario:
+		//     Skipping adding to database as --upload-only & --remove-source-files configured
+		if ((uploadOnly) && (localDeleteAfterUpload)) {
+			// We are in the potential scenario where 'targetDriveId' and 'targetItemId' are still an empty value(s)
+			// Check targetDriveId
+			if (targetDriveId.empty) {
+				if (debugLogging) {
+					string logMessage = format("Updating 'targetDriveId' to '%s' due to --upload-only and --remove-source-files being used", changedItemDriveId);
+					addLogEntry(logMessage, ["debug"]);
+				}
+				// set the value
+				targetDriveId = changedItemDriveId;
+			}
+			// Check targetItemId	
+			if (targetItemId.empty) {
+				if (debugLogging) {
+					string logMessage = format("Updating 'targetItemId' to '%s' due to --upload-only and --remove-source-files being used", changedItemId);
+					addLogEntry(logMessage, ["debug"]);
+				}
+				// set the value
+				targetItemId = changedItemId;
+			}
 		}
 			
-		// Fetch the details from cachedOnlineDriveData
+		// Fetch the details from cachedOnlineDriveData if this is available
 		// - cachedOnlineDriveData.quotaRestricted;
 		// - cachedOnlineDriveData.quotaAvailable;
 		// - cachedOnlineDriveData.quotaRemaining;
 		DriveDetailsCache cachedOnlineDriveData;
+		
+		// Query the details using the correct 'targetDriveId' for this modified file to be uploaded
 		cachedOnlineDriveData = getDriveDetails(targetDriveId);
+		
+		// Configure 'remainingFreeSpace' based on the 'targetDriveId'
 		remainingFreeSpace = cachedOnlineDriveData.quotaRemaining;
 		
 		// Get the file size from the actual file
 		long thisFileSizeLocal = getSize(localFilePath);
-		// Get the file size from the DB data
+		
+		// Get the file size from the DB data, if DB data was returned, otherwise we have zero size value from the DB
 		long thisFileSizeFromDB;
 		if (!dbItem.size.empty) {
 			thisFileSizeFromDB = to!long(dbItem.size);
@@ -5996,9 +6036,9 @@ class SyncEngine {
 		
 		// Based on what we know, for this thread - can we safely upload this modified local file?
 		if (debugLogging) {
-			string estimatedMessage = format("This Thread Estimated Free Space Online (%s): ", targetDriveId);
+			string estimatedMessage = format("This Thread (Upload Changed File) Estimated Free Space Online (%s): ", targetDriveId);
 			addLogEntry(estimatedMessage ~ to!string(remainingFreeSpace), ["debug"]);
-			addLogEntry("This Thread Calculated Free Space Online Post Upload:    " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+			addLogEntry("This Thread (Upload Changed File) Calculated Free Space Online Post Upload:    " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 		}
 		
 		// Is there quota available for the given drive where we are uploading to?
@@ -7952,9 +7992,9 @@ class SyncEngine {
 						
 						// Based on what we know, for this thread - can we safely upload this modified local file?
 						if (debugLogging) {
-							string estimatedMessage = format("This Thread Estimated Free Space Online (%s): ", parentItem.driveId);
+							string estimatedMessage = format("This Thread (Upload New File) Estimated Free Space Online (%s): ", parentItem.driveId);
 							addLogEntry(estimatedMessage ~ to!string(remainingFreeSpaceOnline), ["debug"]);
-							addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+							addLogEntry("This Thread (Upload New File) Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 						}
 			
 						// If 'personal' accounts, if driveId == defaultDriveId, then we will have data - appConfig.quotaAvailable will be updated
