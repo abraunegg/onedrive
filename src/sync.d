@@ -6229,6 +6229,14 @@ class SyncEngine {
 						}
 					}
 				}
+				
+				// Are we in an --upload-only & --remove-source-files scenario?
+				if ((uploadOnly) && (localDeleteAfterUpload)) {
+					// Log that we are deleting a local item
+					addLogEntry("Removing local file as --upload-only & --remove-source-files configured");	
+					if (debugLogging) {addLogEntry("Removing local file: " ~ localFilePath, ["debug"]);}
+					safeRemove(localFilePath);
+				}
 			}
 		}
 		
