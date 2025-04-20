@@ -6232,10 +6232,8 @@ class SyncEngine {
 				
 				// Are we in an --upload-only & --remove-source-files scenario?
 				if ((uploadOnly) && (localDeleteAfterUpload)) {
-					// Log that we are deleting a local item
-					addLogEntry("Removing local file as --upload-only & --remove-source-files configured");	
-					if (debugLogging) {addLogEntry("Removing local file: " ~ localFilePath, ["debug"]);}
-					safeRemove(localFilePath);
+					// Perform the local file deletion
+					removeLocalFilePostUpload(localFilePath);
 				}
 			}
 		}
@@ -6247,6 +6245,29 @@ class SyncEngine {
 		}
 	}
 	
+	// Remove the local file if using --upload-only & --remove-source-files scenario in a consistent manner
+	void removeLocalFilePostUpload(string localPathToRemove) {
+		// File has to exist before removal
+		if (exists(localPathToRemove)) {
+			// Log that we are deleting a local item
+			addLogEntry("Attempting removal of local file as --upload-only & --remove-source-files configured");
+			
+			// Are we in a --dry-run scenario?
+			if (!dryRun) {
+				// Not in a --dry-run scenario
+				if (debugLogging) {addLogEntry("Removing local file: " ~ localPathToRemove, ["debug"]);}
+				safeRemove(localPathToRemove);
+				addLogEntry("Removed local file:  " ~ localPathToRemove);
+			} else {
+				// --dry-run scenario
+				addLogEntry("Not removing local file as --dry-run configured");
+			}
+		} else {
+			// Log that the path to remove does not exist locally
+			addLogEntry("Removing local file not possible as local file does not exist");
+		}
+	}
+		
 	// Perform the upload of a locally modified file to OneDrive
 	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal) {
 		// Function Start Time
@@ -8503,15 +8524,9 @@ class SyncEngine {
 					
 					// Are we in an --upload-only & --remove-source-files scenario?
 					// Use actual config values as we are doing an upload session recovery
-					if (localDeleteAfterUpload) {
-						// Log that we are deleting a local item
-						addLogEntry("Removing local file as --upload-only & --remove-source-files configured");
-						// Are we in a --dry-run scenario?
-						if (!dryRun) {
-							// No --dry-run ... process local file delete
-							if (debugLogging) {addLogEntry("Removing local file: " ~ fileToUpload, ["debug"]);}
-							safeRemove(fileToUpload);
-						}
+					if ((uploadOnly) && (localDeleteAfterUpload)) {
+						// Perform the local file deletion
+						removeLocalFilePostUpload(fileToUpload);
 					}
 				} else {
 					// will be removed in different event!
@@ -11942,19 +11957,10 @@ class SyncEngine {
 				
 				// Are we in an --upload-only & --remove-source-files scenario?
 				// Use actual config values as we are doing an upload session recovery
-				if (localDeleteAfterUpload) {
-					// Log that we are deleting a local item
-					addLogEntry("Removing local file as --upload-only & --remove-source-files configured");
-					// are we in a --dry-run scenario?
-					if (!dryRun) {
-						// No --dry-run ... process local file delete
-						// Only perform the delete if we have a valid file path
-						if (exists(jsonItemToResume["localPath"].str)) {
-							// file exists
-							if (debugLogging) {addLogEntry("Removing local file: " ~ jsonItemToResume["localPath"].str, ["debug"]);}
-							safeRemove(jsonItemToResume["localPath"].str);
-						}
-					}
+				if ((uploadOnly) && (localDeleteAfterUpload)) {
+					// Perform the local file deletion
+					removeLocalFilePostUpload(jsonItemToResume["localPath"].str);
+					
 					// as file is removed, we have nothing to add to the local database
 					if (debugLogging) {addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);}
 				} else {
