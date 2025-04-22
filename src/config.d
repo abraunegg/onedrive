@@ -2570,9 +2570,17 @@ class ApplicationConfig {
 	
 	// Set the Recycle Bin Paths
 	void setRecycleBinPaths() {
-		// Set these values based on the recycle bin path
-		recycleBinFilePath = getValueString("recycle_bin_path") ~ "files/";
-		recycleBinInfoPath = getValueString("recycle_bin_path") ~ "info/";
+		// Get the configured base path
+		string basePath = getValueString("recycle_bin_path");
+
+		// Ensure basePath ends with a single '/'
+		if (!basePath.endsWith("/")) {
+			basePath ~= "/";
+		}
+
+		// Append subdirectories based on the recycle bin path
+		recycleBinFilePath = basePath ~ "files/";
+		recycleBinInfoPath = basePath ~ "info/";
 	}
 }
 
