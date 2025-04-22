@@ -45,6 +45,8 @@ struct Item {
 	ItemType remoteType;
 	string   syncStatus;
 	string   size;
+	string   relocDriveId;
+	string   relocParentId;
 }
 
 // Construct an Item DB struct from a JSON driveItem
@@ -225,7 +227,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 
 final class ItemDatabase {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 16;
+	immutable int itemDatabaseVersion = 17;
 
 	Database db;
 	string insertItemStmt;
@@ -338,12 +340,12 @@ final class ItemDatabase {
 		} 
 		
 		insertItemStmt = "
-			INSERT OR REPLACE INTO item (driveId, id, name, remoteName, type, eTag, cTag, mtime, parentId, quickXorHash, sha256Hash, remoteDriveId, remoteParentId, remoteId, remoteType, syncStatus, size)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+			INSERT OR REPLACE INTO item (driveId, id, name, remoteName, type, eTag, cTag, mtime, parentId, quickXorHash, sha256Hash, remoteDriveId, remoteParentId, remoteId, remoteType, syncStatus, size, relocDriveId, relocParentId)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
 		";
 		updateItemStmt = "
 			UPDATE item
-			SET name = ?3, remoteName = ?4, type = ?5, eTag = ?6, cTag = ?7, mtime = ?8, parentId = ?9, quickXorHash = ?10, sha256Hash = ?11, remoteDriveId = ?12, remoteParentId = ?13, remoteId = ?14, remoteType = ?15, syncStatus = ?16, size = ?17
+			SET name = ?3, remoteName = ?4, type = ?5, eTag = ?6, cTag = ?7, mtime = ?8, parentId = ?9, quickXorHash = ?10, sha256Hash = ?11, remoteDriveId = ?12, remoteParentId = ?13, remoteId = ?14, remoteType = ?15, syncStatus = ?16, size = ?17, relocDriveId = ?18, relocParentId = ?19
 			WHERE driveId = ?1 AND id = ?2
 		";
 		selectItemByIdStmt = "
@@ -415,6 +417,8 @@ final class ItemDatabase {
 				deltaLink        TEXT,
 				syncStatus       TEXT,
 				size             TEXT,
+				relocDriveId     TEXT,
+				relocParentId    TEXT,
 				PRIMARY KEY (driveId, id),
 				FOREIGN KEY (driveId, parentId)
 				REFERENCES item (driveId, id)
@@ -803,12 +807,14 @@ final class ItemDatabase {
 			bind(15, remoteTypeStr);
 			bind(16, syncStatus);
 			bind(17, size);
+			bind(18, relocDriveId);
+			bind(19, relocParentId);
 		}
 	}
 
 	private Item buildItem(Statement.Result result) {
-		assert(!result.empty, "The result must not be empty");
-		assert(result.front.length == 18, "The result must have 18 columns");
+		assert(!result.empty, "The DB result must not be empty");
+		assert(result.front.length == 20, "The DB result must have 20 columns");
 		
 		// Check the DB record timestamp entry. Rather than assert(), use forceExit() and exit in a more graceful manner
 		// - empty values
@@ -843,6 +849,8 @@ final class ItemDatabase {
 			// column 15: deltaLink
 			// column 16: syncStatus
 			// column 17: size
+			// column 18: relocDriveId
+			// column 19: relocParentId
 				
 			driveId: result.front[0].dup,
 			id: result.front[1].dup,
@@ -861,7 +869,9 @@ final class ItemDatabase {
 			// Column 14 is remoteType - not set here
 			// Column 15 is deltaLink - not set here
 			syncStatus: result.front[16].dup,
-			size: result.front[17].dup
+			size: result.front[17].dup,
+			relocDriveId: result.front[18].dup,
+			relocParentId: result.front[19].dup
 		};
 		
 		// Configure item.type
@@ -885,60 +895,75 @@ final class ItemDatabase {
 		return item;
 	}
 
-	// computes the path of the given item id
-	// the path is relative to the sync directory ex: "Music/Turbo Killer.mp3"
-	// the trailing slash is not added even if the item is a directory
-	string computePath(const(char)[] driveId, const(char)[] id) {
+	// Computes the relative path of the given item ID as stored in the OneDrive item database.
+	//
+	// The path is reconstructed by traversing the item's parent hierarchy via parentId,
+	// optionally resolving relocation fields (relocDriveId and relocParentId) if present.
+	// The returned path is relative to the configured sync directory, e.g. "Music/Turbo Killer.mp3".
+	//
+	// Behaviour includes:
+	// - Handling normal items and directory structures
+	// - Supporting relocated shared folder roots via relocDriveId and relocParentId
+	// - Skipping inclusion of any item with ItemType.root to avoid adding "root" as a path segment
+	// - Ensuring folders named "root" (with ItemType.dir) are still correctly included
+	//
+	// Note: The returned path does not end with a trailing slash, even for directories.
+	string computePath(const(char)[] driveIdInput, const(char)[] itemIdInput) {
 		synchronized(databaseLock) {
-			assert(driveId && id);
+			assert(driveIdInput && itemIdInput);
+
 			string path;
+			string driveId = driveIdInput.idup;
+			string id = itemIdInput.idup;
 			Item item;
+			
 			auto s = db.prepare("SELECT * FROM item WHERE driveId = ?1 AND id = ?2");
 			auto s2 = db.prepare("SELECT driveId, id FROM item WHERE remoteDriveId = ?1 AND remoteId = ?2");
-			
+
 			scope(exit) {
 				s.finalise(); // Ensure that the prepared statement is finalised after execution.
 				s2.finalise(); // Ensure that the prepared statement is finalised after execution.
 			}
-			
+
 			try {
 				while (true) {
 					s.bind(1, driveId);
 					s.bind(2, id);
 					auto r = s.exec();
+
 					if (!r.empty) {
 						item = buildItem(r);
-						if (item.type == ItemType.remote) {
-							// substitute the last name with the current
-							ptrdiff_t idx = indexOf(path, '/');
-							path = idx >= 0 ? item.name ~ path[idx .. $] : item.name;
-						} else {
-							if (path) path = item.name ~ "/" ~ path;
-							else path = item.name;
+
+						// Skip only if name == "root" AND item.type == ItemType.root
+						bool skipAppend = (item.name == "root") && (item.type == ItemType.root);
+
+						if (!skipAppend) {
+							if (item.type == ItemType.remote) {
+								ptrdiff_t idx = indexOf(path, '/');
+								path = idx >= 0 ? item.name ~ path[idx .. $] : item.name;
+							} else {
+								path = path.length ? item.name ~ "/" ~ path : item.name;
+							}
 						}
+
+						// Move up one level
 						id = item.parentId;
+
+						// Check for relocation
+						if (item.type == ItemType.root && item.relocDriveId !is null && item.relocParentId !is null) {
+							driveId = item.relocDriveId;
+							id = item.relocParentId;
+						}
 					} else {
+						// Handle remote-to-dir link
 						if (id == null) {
-							// check for remoteItem
 							s2.bind(1, item.driveId);
 							s2.bind(2, item.id);
 							auto r2 = s2.exec();
+
 							if (r2.empty) {
-								// root reached
-								assert(path.length >= 4);
-								// remove "root/" from path string if it exists
-								if (path.length >= 5) {
-									if (canFind(path, "root/")){
-										path = path[5 .. $];
-									}
-								} else {
-									path = path[4 .. $];
-								}
-								// special case of computing the path of the root itself
-								if (path.length == 0) path = ".";
 								break;
 							} else {
-								// remote folder
 								driveId = r2.front[0].dup;
 								id = r2.front[1].dup;
 							}
@@ -955,7 +980,12 @@ final class ItemDatabase {
 				// Handle the error appropriately
 				detailSQLErrorMessage(exception);
 			}
+
+			if (path.length == 0) {
+				path = ".";
+			}
 			
+			// Return the computed path
 			return path;
 		}
 	}
