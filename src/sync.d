@@ -7153,6 +7153,7 @@ class SyncEngine {
 							// --download-only --cleanup-local-files not used
 							// Create this directory on OneDrive so that we can upload files to it
 							// Add this path to an array so that the directory online can be created before we upload files
+							if (debugLogging) {addLogEntry("Adding path to create online (directory inclusion): " ~ path, ["debug"]);}
 							pathsToCreateOnline ~= [path];
 						} else {
 							// we need to clean up this directory
@@ -7272,6 +7273,13 @@ class SyncEngine {
 							// Do we upload the file or clean up the file?
 							if (!cleanupLocalFiles) {
 								// --download-only --cleanup-local-files not used
+								
+								// Ensure this directory on OneDrive so that we can upload files to it
+								// Add this path to an array so that the directory online can be created before we upload files
+								string parentPath = dirName(path);
+								if (debugLogging) {addLogEntry("Adding parental path to create online (file inclusion): " ~ parentPath, ["debug"]);}
+								pathsToCreateOnline ~= [parentPath];
+								
 								// Add this path as a file we need to upload
 								if (debugLogging) {addLogEntry("OneDrive Client flagging to upload this file to Microsoft OneDrive: " ~ path, ["debug"]);}
 								newLocalFilesToUploadToOneDrive ~= path;
