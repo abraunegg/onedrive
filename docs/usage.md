@@ -750,19 +750,19 @@ To enable this application functionality, add the following to your 'config' fil
 use_recycle_bin = "true"
 ```
 
-This capability is designed to be compatible with the FreeDesktop.org Trash Specification, ensuring interoperability with GUI-based desktop environments such as GNOME (GIO) and KDE (KIO). It follows the required structure by:
+This capability is designed to be compatible with the [FreeDesktop.org Trash Specification](https://specifications.freedesktop.org/trash-spec/1.0/), ensuring interoperability with GUI-based desktop environments such as GNOME (GIO) and KDE (KIO). It follows the required structure by:
 * Moving deleted files and directories to `~/.local/share/Trash/files/`
 * Creating matching metadata files in `~/.local/share/Trash/info/` with the correct `.trashinfo` format, including the original absolute path and ISO 8601-formatted deletion timestamp
-* Resolving filename collisions using a `name.N.ext` pattern (e.g., `Document.2.docx`), consistent with GNOME’s behaviour
+* Resolving filename collisions using a `name.N.ext` pattern (e.g., `Document.2.docx`), consistent with GNOME and KDE behaviour.
 
 
 
-To specify an explicit a different 'Recycle Bin' directory, add the following to your 'config' file:
+To specify an explicit 'Recycle Bin' directory, add the following to your 'config' file:
 ```
 recycle_bin_path = "/path/to/desired/location/"
 ```
 
-The same FreeDesktop.org Trash Specification will be used with this path
+The same FreeDesktop.org Trash Specification will be used with this explicit 'Recycle Bin' directory.
 
 
 ### GUI Notifications
