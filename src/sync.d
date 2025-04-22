@@ -2732,8 +2732,31 @@ class SyncEngine {
 				if (newDatabaseItem.type == ItemType.remote) {
 					// yes this is a remote item type
 					if (debugLogging) {addLogEntry("The 'newDatabaseItem' (applyPotentiallyNewLocalItem) is a remote item type - we need to create all of the associated database tie records for this database entry" , ["debug"]);}
+					
+					string relocatedFolderDriveId;
+					string relocatedFolderParentId;
+					
+					// Is this a relocated Shared Folder? OneDrive Business supports the relocation of Shared Folder links to other folders
+					if (appConfig.accountType != "personal") {
+						// Is this parentId equal to our defaultRootId .. if not it is highly likely that this Shared Folder is in a sub folder in our online folder structure
+						if (newDatabaseItem.parentId != appConfig.defaultRootId) {
+							// The parentId is not our defaultRootId .. most likely a relocated shared folder
+							if (debugLogging) {
+								addLogEntry("The folder path for this Shared Folder is not our account root, thus is a relocated Shared Folder item. We must pass in the correct parent details for this Shared Folder 'root' object" , ["debug"]);
+								// What are we setting
+								addLogEntry("Setting relocatedFolderDriveId to:  " ~ newDatabaseItem.driveId);
+								addLogEntry("Setting relocatedFolderParentId to: " ~ newDatabaseItem.parentId);
+							}
+							
+							// Configure the relocated folders data
+							relocatedFolderDriveId = newDatabaseItem.driveId;
+							relocatedFolderParentId = newDatabaseItem.parentId;
+						}
+					}
+					
 					// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
-					createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
+					// We pass in the JSON element so we can create the right records + if this is a relocated shared folder, give the local parental record identifier
+					createRequiredSharedFolderDatabaseRecords(onedriveJSONItem, relocatedFolderDriveId, relocatedFolderParentId);
 				}
 				
 				// Did the user configure to save xattr data about this file?
@@ -2964,7 +2987,7 @@ class SyncEngine {
 				if (appConfig.accountType != "personal") {
 					// Is this parentId equal to our defaultRootId .. if not it is highly likely that this Shared Folder is in a sub folder in our online folder structure
 					if (newDatabaseItem.parentId != appConfig.defaultRootId) {
-					
+						// The parentId is not our defaultRootId .. most likely a relocated shared folder
 						if (debugLogging) {
 							addLogEntry("The folder path for this Shared Folder is not our account root, thus is a relocated Shared Folder item. We must pass in the correct parent details for this Shared Folder 'root' object" , ["debug"]);
 							// What are we setting
