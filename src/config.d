@@ -179,6 +179,7 @@ class ApplicationConfig {
 	// Store items that come in from the 'config' file, otherwise these need to be set the defaults
 	private string configFileSyncDir = defaultSyncDir;
 	private string configFileSkipFile = ""; // Default for now, if post reading in any user configuration, if still empty, default will be used
+	private bool configFileSkipFileReadIn = false; // If we actually read in something from 'config' file, this gets set to true
 	private string configFileSkipDir = ""; // Default here is no directories are skipped
 	private string configFileDriveId = ""; // Default here is that no drive id is specified
 	private bool configFileSkipDotfiles = false;
@@ -198,6 +199,11 @@ class ApplicationConfig {
 	// GUI Notification Environment variables
 	bool xdg_exists = false;
 	bool dbus_exists = false;
+	
+	// Recycle Bin Configuration
+	// These paths are used by the application, if 'use_recycle_bin' is enabled
+	string recycleBinFilePath;
+	string recycleBinInfoPath;
 	
 	// Initialise the application configuration
 	bool initialise(string confdirOption, bool helpRequested) {
@@ -242,6 +248,12 @@ class ApplicationConfig {
 		// - name_dsc = file name descending
 		stringValues["transfer_order"] = "default";
 				
+		// Recycle Bin Configuration
+		// Enable|Disable feature
+		boolValues["use_recycle_bin"] = false;
+		// Recycle Bin Folder - empty string as a default
+		stringValues["recycle_bin_path"] = "";
+		
 		// - Store how many times was --verbose added
 		longValues["verbose"] = verbosityCount; 
 		// - The amount of time (seconds) between monitor sync loops
@@ -395,8 +407,15 @@ class ApplicationConfig {
 			}
 		}
 		
-		// outcome of setting defaultHomePath
+		// Outcome of setting 'defaultHomePath'
 		if (debugLogging) {addLogEntry("runtime_environment: Calculated defaultHomePath: " ~ defaultHomePath, ["debug"]);}
+		
+		// Configure the default path for the Recycle Bin
+		// Both GNOME and KDE use '~/.local/share/Trash/' as the default path
+		// ~/.local/share/Trash/
+		// ├── files/   # The actual trashed files
+		// └── info/    # .trashinfo metadata about each file (original path, deletion date)
+		setValueString("recycle_bin_path", defaultHomePath ~ "/.local/share/Trash/");
 		
 		// DEVELOPER OPTIONS
 		// display_memory = true | false
@@ -803,6 +822,8 @@ class ApplicationConfig {
 						forceExit();
 					}
 				} else if (key == "skip_file") {
+					// Flag this as true
+					configFileSkipFileReadIn = true;
 					// Handle multiple 'config' file entries of skip_file
 					if (configFileSkipFile.empty) {
 						// currently no entry exists
@@ -1154,8 +1175,8 @@ class ApplicationConfig {
 					"Specify the local directory used for synchronisation to OneDrive",
 					&stringValues["sync_dir_cli"],
 				"share-password",
-                                        "Require a password to access the shared link when used with --create-share-link <file>",
-                                        &stringValues["share_password"], 
+					"Require a password to access the shared link when used with --create-share-link <file>",
+					&stringValues["share_password"],
 				"sync|s",
 					"Perform a synchronisation with Microsoft OneDrive",
 					&boolValues["synchronize"],
@@ -1445,7 +1466,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'cleanup_local_files'          = " ~ to!string(getValueBool("cleanup_local_files")));
 		addLogEntry("Config option 'disable_permission_set'       = " ~ to!string(getValueBool("disable_permission_set")));
 		addLogEntry("Config option 'transfer_order'               = " ~ getValueString("transfer_order"));
-
+		
 		// data integrity
 		addLogEntry("Config option 'classify_as_big_delete'       = " ~ to!string(getValueLong("classify_as_big_delete")));
 		addLogEntry("Config option 'disable_upload_validation'    = " ~ to!string(getValueBool("disable_upload_validation")));
@@ -1484,6 +1505,10 @@ class ApplicationConfig {
 			addLogEntry("Compile time option --enable-notifications   = false");
 		}
 		
+		// Recycle Bin 
+		addLogEntry("Config option 'use_recycle_bin'              = " ~ to!string(getValueBool("use_recycle_bin")));
+		addLogEntry("Config option 'recycle_bin_path'             = " ~ getValueString("recycle_bin_path"));
+				
 		// Is sync_list configured and contains entries?
 		if (exists(syncListFilePath) && getSize(syncListFilePath) > 0) {
 			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
@@ -1750,8 +1775,8 @@ class ApplicationConfig {
 									skip_file_present = true;
 									// Handle multiple entries of skip_file
 									if (backupConfigFileSkipFile.empty) {
-										// currently no entry exists, include 'defaultSkipFile' entries
-										backupConfigFileSkipFile = defaultSkipFile ~ "|" ~ to!string(c.front.dup);
+										// currently no entry value exists
+										backupConfigFileSkipFile = to!string(c.front.dup);
 									} else {
 										// add to existing backupConfigFileSkipFile entry
 										backupConfigFileSkipFile = backupConfigFileSkipFile ~ "|" ~ to!string(c.front.dup);
@@ -1763,8 +1788,8 @@ class ApplicationConfig {
 									skip_dir_present = true;
 									// Handle multiple entries of skip_dir
 									if (backupConfigFileSkipDir.empty) {
-										// currently no entry exists
-										backupConfigFileSkipDir = c.front.dup;
+										// currently no entry value exists
+										backupConfigFileSkipDir = to!string(c.front.dup);
 									} else {
 										// add to existing backupConfigFileSkipDir entry
 										backupConfigFileSkipDir = backupConfigFileSkipDir ~ "|" ~ to!string(c.front.dup);
@@ -1792,17 +1817,32 @@ class ApplicationConfig {
 							}
 						}
 					}
+					
+					// Debug logging
+					if (debugLogging) {
+						addLogEntry("skip_file in actual config = " ~ to!string(configFileSkipFileReadIn), ["debug"]);
+						addLogEntry("skip_file in backup config = " ~ to!string(skip_file_present), ["debug"]);
+						addLogEntry("defaultSkipFile value = " ~ to!string(defaultSkipFile), ["debug"]);
+						addLogEntry("configFileSkipFile value = " ~ to!string(configFileSkipFile), ["debug"]);
+						addLogEntry("backupConfigFileSkipFile value = " ~ to!string(backupConfigFileSkipFile), ["debug"]);
+					}
 				
 					// skip_file can be specified multiple times
 					if (skip_file_present && backupConfigFileSkipFile != configFileSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
 					
+					// skip_file can also be an empty string, thus when removed, as an empty string, we are going back to application defaults
+					if (skip_file_present && backupConfigFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
+					
 					// skip_dir can be specified multiple times
 					if (skip_dir_present && backupConfigFileSkipDir != configFileSkipDir) logAndSetDifference("skip_dir" ~ configOptionModifiedMessage, 5);
 					
-					// Check for newly added configuration options
+					// Check for newly added configuration options to the 'config' file vs being present in the 'backup' config file
 					if (!drive_id_present && configFileDriveId != "") logAndSetDifference("drive_id newly added ... --resync needed", 2);
 					if (!sync_dir_present && configFileSyncDir != defaultSyncDir) logAndSetDifference("sync_dir newly added ... --resync needed", 3);
-					if (!skip_file_present && configFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file newly added ... --resync needed", 4);
+					if (configFileSkipFileReadIn) {
+						// We actually read a 'skip_file' configuration line from the 'config' file
+						if (!skip_file_present && configFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file newly added ... --resync needed", 4);
+					}
 					if (!skip_dir_present && configFileSkipDir != "") logAndSetDifference("skip_dir newly added ... --resync needed", 5);
 					if (!skip_dotfiles_present && configFileSkipDotfiles) logAndSetDifference("skip_dotfiles newly added ... --resync needed", 6);
 					if (!skip_symlinks_present && configFileSkipSymbolicLinks) logAndSetDifference("skip_symlinks newly added ... --resync needed", 7);
@@ -2544,6 +2584,21 @@ class ApplicationConfig {
 
 		// Return result
 		return variablesAvailable;
+	}
+	
+	// Set the Recycle Bin Paths
+	void setRecycleBinPaths() {
+		// Get the configured base path
+		string basePath = getValueString("recycle_bin_path");
+
+		// Ensure basePath ends with a single '/'
+		if (!basePath.endsWith("/")) {
+			basePath ~= "/";
+		}
+
+		// Append subdirectories based on the recycle bin path
+		recycleBinFilePath = basePath ~ "files/";
+		recycleBinInfoPath = basePath ~ "info/";
 	}
 }
 
