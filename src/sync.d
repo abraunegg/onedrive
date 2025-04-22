@@ -4285,81 +4285,69 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		foreach_reverse (i; idsToDelete) {
-			Item item;
-			string path;
-			if (!itemDB.selectById(i[0], i[1], item)) continue; // check if the item is in the db
-			// Compute this item path
-			path = computeItemPath(i[0], i[1]);
-			
-			// Log the action if the path exists .. it may of already been removed and this is a legacy array item
-			if (exists(path)) {
-				if (item.type == ItemType.file) {
-					addLogEntry("Trying to delete local file: " ~ path);
-				} else {
-					addLogEntry("Trying to delete local directory: " ~ path);
-				}
-			}
-			
-			// Process the database entry removal. In a --dry-run scenario, this is being done against a DB copy
-			itemDB.deleteById(item.driveId, item.id);
-			if (item.remoteDriveId != null) {
-				// delete the linked remote folder
-				itemDB.deleteById(item.remoteDriveId, item.remoteId);
-			}
-			
-			// Add to pathFakeDeletedArray
-			// We dont want to try and upload this item again, so we need to track this objects removal
-			if (dryRun) {
-				// We need to add './' here so that it can be correctly searched to ensure it is not uploaded
-				string pathToAdd = "./" ~ path;
-				pathFakeDeletedArray ~= pathToAdd;
-			}
+		// Has the user configured to use the 'Recycle Bin' locally, for any files that are deleted online?
+		if (!appConfig.getValueBool("use_recycle_bin")) {
+		
+			if (debugLogging) {addLogEntry("Performing filesystem deletion, using reverse order of items to delete", ["debug"]);}
+		
+			foreach_reverse (i; idsToDelete) {
+				Item item;
+				string path;
+				if (!itemDB.selectById(i[0], i[1], item)) continue; // check if the item is in the db
+				// Compute this item path
+				path = computeItemPath(i[0], i[1]);
 				
-			bool needsRemoval = false;
-			if (exists(path)) {
-				// path exists on the local system	
-				// make sure that the path refers to the correct item
-				Item pathItem;
-				if (itemDB.selectByPath(path, item.driveId, pathItem)) {
-					if (pathItem.id == item.id) {
-						needsRemoval = true;
+				// Log the action if the path exists .. it may of already been removed and this is a legacy array item
+				if (exists(path)) {
+					if (item.type == ItemType.file) {
+						addLogEntry("Trying to delete local file: " ~ path);
 					} else {
-						addLogEntry("Skipped due to id difference!");
+						addLogEntry("Trying to delete local directory: " ~ path);
 					}
-				} else {
-					// item has disappeared completely
-					needsRemoval = true;
 				}
-			}
-			
-			// Does this need local removal?
-			if (needsRemoval) {
-				// Log the action
-				if (item.type == ItemType.file) {
-					// Has the user configured to use the 'Recycle Bin' locally, for any files that are deleted online?
-					if (appConfig.getValueBool("use_recycle_bin")) {
-						addLogEntry("Moving this local file to configured 'Recycle Bin': " ~ path, fileTransferNotifications());
+				
+				// Process the database entry removal. In a --dry-run scenario, this is being done against a DB copy
+				itemDB.deleteById(item.driveId, item.id);
+				if (item.remoteDriveId != null) {
+					// delete the linked remote folder
+					itemDB.deleteById(item.remoteDriveId, item.remoteId);
+				}
+				
+				// Add to pathFakeDeletedArray
+				// We dont want to try and upload this item again, so we need to track this objects removal
+				if (dryRun) {
+					// We need to add './' here so that it can be correctly searched to ensure it is not uploaded
+					string pathToAdd = "./" ~ path;
+					pathFakeDeletedArray ~= pathToAdd;
+				}
+					
+				bool needsRemoval = false;
+				if (exists(path)) {
+					// path exists on the local system	
+					// make sure that the path refers to the correct item
+					Item pathItem;
+					if (itemDB.selectByPath(path, item.driveId, pathItem)) {
+						if (pathItem.id == item.id) {
+							needsRemoval = true;
+						} else {
+							addLogEntry("Skipped due to id difference!");
+						}
 					} else {
-						addLogEntry("Deleting local file: " ~ path, fileTransferNotifications());
+						// item has disappeared completely
+						needsRemoval = true;
 					}
-				} else {
-					// Has the user configured to use the 'Recycle Bin' locally, for any files that are deleted online?
-					if (appConfig.getValueBool("use_recycle_bin")) {
-						addLogEntry("Moving this local directory to configured 'Recycle Bin': " ~ path, fileTransferNotifications());
+				}
+				
+				if (needsRemoval) {
+					// Log the action
+					if (item.type == ItemType.file) {
+						addLogEntry("Deleting local file: " ~ path, fileTransferNotifications());
 					} else {
 						addLogEntry("Deleting local directory: " ~ path, fileTransferNotifications());
 					}
-				}
-				
-				// Perform the actual required action
-				if (!dryRun) {
-					// Do we move to the 'Recycle Bin' or 'Delete'
-					if (appConfig.getValueBool("use_recycle_bin")) {
-						// Move the file to the configured recycle bin
-						movePathToRecycleBin(path);
-					} else {
-						// Perform local file removal
+					
+					// Perform the action
+					if (!dryRun) {
 						if (isFile(path)) {
 							remove(path);
 						} else {
@@ -4379,6 +4367,75 @@ class SyncEngine {
 					}
 				}
 			}
+			
+		} else {
+		
+			if (debugLogging) {addLogEntry("Moving online deleted files to configured local Recycle Bin", ["debug"]);}
+			
+			// Process in normal order, so that the parent, if a folder, gets moved 'first' mirroring how files / folders are deleted in GNOME and KDE
+			foreach (i; idsToDelete) {
+				Item item;
+				string path;
+				if (!itemDB.selectById(i[0], i[1], item)) continue; // check if the item is in the db
+				// Compute this item path
+				path = computeItemPath(i[0], i[1]);
+				
+				// Log the action if the path exists .. it may of already been removed and this is a legacy array item
+				if (exists(path)) {
+					if (item.type == ItemType.file) {
+						addLogEntry("Trying to move this local file to the configured 'Recycle Bin': " ~ path);
+					} else {
+						addLogEntry("Trying to move this local directory to the configured 'Recycle Bin': " ~ path);
+					}
+				}
+				
+				// Process the database entry removal. In a --dry-run scenario, this is being done against a DB copy
+				itemDB.deleteById(item.driveId, item.id);
+				if (item.remoteDriveId != null) {
+					// delete the linked remote folder
+					itemDB.deleteById(item.remoteDriveId, item.remoteId);
+				}
+				
+				// Add to pathFakeDeletedArray
+				// We dont want to try and upload this item again, so we need to track this objects removal
+				if (dryRun) {
+					// We need to add './' here so that it can be correctly searched to ensure it is not uploaded
+					string pathToAdd = "./" ~ path;
+					pathFakeDeletedArray ~= pathToAdd;
+				}
+				
+				bool needsRemoval = false;
+				if (exists(path)) {
+					// path exists on the local system	
+					// make sure that the path refers to the correct item
+					Item pathItem;
+					if (itemDB.selectByPath(path, item.driveId, pathItem)) {
+						if (pathItem.id == item.id) {
+							needsRemoval = true;
+						} else {
+							addLogEntry("Skipped due to id difference!");
+						}
+					} else {
+						// item has disappeared completely
+						needsRemoval = true;
+					}
+				}
+				
+				if (needsRemoval) {
+					// Log the action
+					if (item.type == ItemType.file) {
+						addLogEntry("Moving this local file to the configured 'Recycle Bin': " ~ path, fileTransferNotifications());
+					} else {
+						addLogEntry("Moving this local directory to the configured 'Recycle Bin': " ~ path, fileTransferNotifications());
+					}
+					
+					// Perform the action
+					if (!dryRun) {
+						// Move the 'path' to the configured recycle bin
+						movePathToRecycleBin(path);
+					}
+				}
+			}
 		}
 		
 		if (!dryRun) {
@@ -4392,7 +4449,7 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-	
+
 	// Move to the 'Recycle Bin' rather than a hard delete locally of the online deleted item	
 	void movePathToRecycleBin(string path) {
 		// Function Start Time
@@ -4427,7 +4484,7 @@ class SyncEngine {
 		// - file1.data (1).trashinfo
 		if (exists(computedRecycleBinFilePath)) {
 			// There is an existing file with the same name already in the 'Recycle Bin'
-			// - Testing has show that this counter MUST start at 2 ....
+			// - Testing has show that this counter MUST start at 2 to be compatible with FreeDesktop.org Trash Specification ....
 			int n = 2;
 			
 			// We need to split this out

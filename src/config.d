@@ -179,6 +179,7 @@ class ApplicationConfig {
 	// Store items that come in from the 'config' file, otherwise these need to be set the defaults
 	private string configFileSyncDir = defaultSyncDir;
 	private string configFileSkipFile = ""; // Default for now, if post reading in any user configuration, if still empty, default will be used
+	private bool configFileSkipFileReadIn = false; // If we actually read in something from 'config' file, this gets set to true
 	private string configFileSkipDir = ""; // Default here is no directories are skipped
 	private string configFileDriveId = ""; // Default here is that no drive id is specified
 	private bool configFileSkipDotfiles = false;
@@ -821,6 +822,8 @@ class ApplicationConfig {
 						forceExit();
 					}
 				} else if (key == "skip_file") {
+					// Flag this as true
+					configFileSkipFileReadIn = true;
 					// Handle multiple 'config' file entries of skip_file
 					if (configFileSkipFile.empty) {
 						// currently no entry exists
@@ -1772,8 +1775,8 @@ class ApplicationConfig {
 									skip_file_present = true;
 									// Handle multiple entries of skip_file
 									if (backupConfigFileSkipFile.empty) {
-										// currently no entry exists, include 'defaultSkipFile' entries
-										backupConfigFileSkipFile = defaultSkipFile ~ "|" ~ to!string(c.front.dup);
+										// currently no entry value exists
+										backupConfigFileSkipFile = to!string(c.front.dup);
 									} else {
 										// add to existing backupConfigFileSkipFile entry
 										backupConfigFileSkipFile = backupConfigFileSkipFile ~ "|" ~ to!string(c.front.dup);
@@ -1785,8 +1788,8 @@ class ApplicationConfig {
 									skip_dir_present = true;
 									// Handle multiple entries of skip_dir
 									if (backupConfigFileSkipDir.empty) {
-										// currently no entry exists
-										backupConfigFileSkipDir = c.front.dup;
+										// currently no entry value exists
+										backupConfigFileSkipDir = to!string(c.front.dup);
 									} else {
 										// add to existing backupConfigFileSkipDir entry
 										backupConfigFileSkipDir = backupConfigFileSkipDir ~ "|" ~ to!string(c.front.dup);
@@ -1814,17 +1817,32 @@ class ApplicationConfig {
 							}
 						}
 					}
+					
+					// Debug logging
+					if (debugLogging) {
+						addLogEntry("skip_file in actual config = " ~ to!string(configFileSkipFileReadIn), ["debug"]);
+						addLogEntry("skip_file in backup config = " ~ to!string(skip_file_present), ["debug"]);
+						addLogEntry("defaultSkipFile value = " ~ to!string(defaultSkipFile), ["debug"]);
+						addLogEntry("configFileSkipFile value = " ~ to!string(configFileSkipFile), ["debug"]);
+						addLogEntry("backupConfigFileSkipFile value = " ~ to!string(backupConfigFileSkipFile), ["debug"]);
+					}
 				
 					// skip_file can be specified multiple times
 					if (skip_file_present && backupConfigFileSkipFile != configFileSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
 					
+					// skip_file can also be an empty string, thus when removed, as an empty string, we are going back to application defaults
+					if (skip_file_present && backupConfigFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
+					
 					// skip_dir can be specified multiple times
 					if (skip_dir_present && backupConfigFileSkipDir != configFileSkipDir) logAndSetDifference("skip_dir" ~ configOptionModifiedMessage, 5);
 					
-					// Check for newly added configuration options
+					// Check for newly added configuration options to the 'config' file vs being present in the 'backup' config file
 					if (!drive_id_present && configFileDriveId != "") logAndSetDifference("drive_id newly added ... --resync needed", 2);
 					if (!sync_dir_present && configFileSyncDir != defaultSyncDir) logAndSetDifference("sync_dir newly added ... --resync needed", 3);
-					if (!skip_file_present && configFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file newly added ... --resync needed", 4);
+					if (configFileSkipFileReadIn) {
+						// We actually read a 'skip_file' configuration line from the 'config' file
+						if (!skip_file_present && configFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file newly added ... --resync needed", 4);
+					}
 					if (!skip_dir_present && configFileSkipDir != "") logAndSetDifference("skip_dir newly added ... --resync needed", 5);
 					if (!skip_dotfiles_present && configFileSkipDotfiles) logAndSetDifference("skip_dotfiles newly added ... --resync needed", 6);
 					if (!skip_symlinks_present && configFileSkipSymbolicLinks) logAndSetDifference("skip_symlinks newly added ... --resync needed", 7);
