@@ -5742,8 +5742,10 @@ class SyncEngine {
 								newItemPath = decodeComponent(selfBuiltPath);
 							} catch (URIException exception) {
 								// why?
-								addLogEntry("ERROR: Unable to URL Decode path: " ~ exception.msg);
-								addLogEntry("ERROR: To resolve, rename this item online: " ~ selfBuiltPath);
+								if (verboseLogging) {
+									addLogEntry("ERROR: Unable to URL Decode path: " ~ exception.msg, ["verbose"]);
+									addLogEntry("ERROR: To resolve, rename this item online: " ~ selfBuiltPath, ["verbose"]);
+								}
 								// have to use as-is due to decode error
 								newItemPath = selfBuiltPath;
 							}
@@ -5768,8 +5770,8 @@ class SyncEngine {
 								
 				// Check for HTML entities (e.g., '%20' for space) in newItemPath
 				if (containsURLEncodedItems(newItemPath)) {
-					addLogEntry("CAUTION:    The JSON element transmitted by the Microsoft OneDrive API includes HTML URL encoded items, which may complicate pattern matching and potentially lead to synchronisation problems for this item.");
 					if (verboseLogging) {
+						addLogEntry("CAUTION:    The JSON element transmitted by the Microsoft OneDrive API includes HTML URL encoded items, which may complicate pattern matching and potentially lead to synchronisation problems for this item.", ["verbose"]);
 						addLogEntry("WORKAROUND: An alternative solution could be to change the name of this item through the online platform: " ~ newItemPath, ["verbose"]);
 						addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details", ["verbose"]);
 					}
