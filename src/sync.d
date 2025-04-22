@@ -1986,9 +1986,6 @@ class SyncEngine {
 			// Calculate the local path of this JSON item, but we can only do this if the parent is in the database
 			if (parentInDatabase) {
 				// Use the original method of calculation for Personal Accounts
-				
-				
-				
 				if (appConfig.accountType == "personal") {
 					// Personal Accounts
 					// Compute the full local path for an item based on its position within the OneDrive hierarchy
@@ -2038,10 +2035,6 @@ class SyncEngine {
 						newItemPath = computedItemPath ~ "/" ~ thisItemName;
 					}
 				}
-				
-				
-				
-				
 				
 				// debug logging of what was calculated
 				if (debugLogging) {addLogEntry("JSON Item calculated full path is: " ~ newItemPath, ["debug"]);}
@@ -12342,7 +12335,7 @@ class SyncEngine {
 		// This 'relocatedFolderParentId' variable is only ever set if using OneDrive Business account types and the shared folder is located online in another folder
 		if ((!relocatedFolderDriveId.empty) && (!relocatedFolderParentId.empty)) {
 			// Ensure that we set the relocParentId to the provided relocatedFolderParentId record
-			if (debugLogging) {addLogEntry("Relocated Shared Folder references were provideded - adding these to the 'root' DB Tie Record", ["debug"]);}
+			if (debugLogging) {addLogEntry("Relocated Shared Folder references were provided - adding these to the 'root' DB Tie Record", ["debug"]);}
 			tieDBItem.relocDriveId = relocatedFolderDriveId;
 			tieDBItem.relocParentId = relocatedFolderParentId;
 		}
