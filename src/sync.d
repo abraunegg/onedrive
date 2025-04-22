@@ -6912,6 +6912,15 @@ class SyncEngine {
 		}
 	}
 	
+	// Ensure we have a full list of unique paths to create online
+	void addPathToCreateOnline(string pathToAdd) {
+		// Only add unique paths
+		if (!pathsToCreateOnline.canFind(pathToAdd)) {
+			// Add this unique path to the created online
+			pathsToCreateOnline ~= pathToAdd;
+		}
+	}
+	
 	// Create new directories online
 	void processNewDirectoriesToCreateOnline() {
 		// Function Start Time
@@ -6924,15 +6933,44 @@ class SyncEngine {
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
-	
+		
+		// This list of local paths that need to be created online
+		string[] uniquePathsToCreateOnline;
+		
 		// Are there any new local directories to create online?
 		if (!pathsToCreateOnline.empty) {
 			// There are new directories to create online
-			addLogEntry("New directories to create on Microsoft OneDrive: " ~ to!string(pathsToCreateOnline.length) );
-			foreach(pathToCreateOnline; pathsToCreateOnline) {
-				// Create this directory on OneDrive so that we can upload files to it
-				createDirectoryOnline(pathToCreateOnline);
+			addLogEntry("New directories to create on Microsoft OneDrive: " ~ to!string(pathsToCreateOnline.length));
+			if (debugLogging) {addLogEntry("pathsToCreateOnline = " ~ to!string(pathsToCreateOnline), ["debug"]);}
+			
+			// Process 'pathsToCreateOnline' into each array element, then create each path based on path segments
+			foreach (fullPath; pathsToCreateOnline) {
+				// Normalise path and strip leading "./" if present
+				string normalised = fullPath;
+				if (normalised.startsWith("./"))
+					normalised = normalised[2 .. $];
+				if (normalised.endsWith("/"))
+					normalised = normalised[0 .. $ - 1];
+
+				auto segments = normalised.split("/").filter!(s => !s.empty).array;
+				string pathToCreate = ".";
+
+				foreach (i; 0 .. segments.length) {
+					pathToCreate = buildPath(pathToCreate, segments[i]);
+					
+					// Only add unique paths to avoid duplication of the same path creation request
+					if (!uniquePathsToCreateOnline.canFind(pathToCreate)) {
+						// Add this unique path to the created online
+						uniquePathsToCreateOnline ~= pathToCreate;
+					}
+				}
 			}
+		}
+		
+		// Now that all the paths have been rationalised and potential duplicate creation requests filtered out, create the paths online
+		foreach (onlinePathToCreate; uniquePathsToCreateOnline) {
+			// Create the path online
+			createDirectoryOnline(onlinePathToCreate);
 		}
 		
 		// Display function processing time if configured to do so
@@ -7156,7 +7194,7 @@ class SyncEngine {
 							// Create this directory on OneDrive so that we can upload files to it
 							// Add this path to an array so that the directory online can be created before we upload files
 							if (debugLogging) {addLogEntry("Adding path to create online (directory inclusion): " ~ path, ["debug"]);}
-							pathsToCreateOnline ~= [path];
+							addPathToCreateOnline(path);
 						} else {
 							// we need to clean up this directory
 							addLogEntry("Removing local directory as --download-only & --cleanup-local-files configured");
@@ -7219,9 +7257,7 @@ class SyncEngine {
 							}
 						}
 					}
-				
-					
-					
+
 					// Do we actually traverse this path?
 					if (!skipFolderTraverse) {
 						// Try and access this directory and any path below
@@ -7280,7 +7316,7 @@ class SyncEngine {
 								// Add this path to an array so that the directory online can be created before we upload files
 								string parentPath = dirName(path);
 								if (debugLogging) {addLogEntry("Adding parental path to create online (file inclusion): " ~ parentPath, ["debug"]);}
-								pathsToCreateOnline ~= [parentPath];
+								addPathToCreateOnline(parentPath);
 								
 								// Add this path as a file we need to upload
 								if (debugLogging) {addLogEntry("OneDrive Client flagging to upload this file to Microsoft OneDrive: " ~ path, ["debug"]);}
@@ -7568,9 +7604,25 @@ class SyncEngine {
 					onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
 					if (debugLogging) {addLogEntry("Online Parent Path Query Response: " ~ to!string(onlinePathData), ["debug"]);}
 					
-					// Save item to the database
-					saveItem(onlinePathData);
+					// Make the parentItem from the online data
 					parentItem = makeItem(onlinePathData);
+					
+					// Before we 'save' this item to the database, is the parent of this parent in the database?
+					// We need to go and check the grandparent item for this parent item
+					Item grandparentDatabaseItem;
+					bool grandparentInDatabase = itemDB.selectById(onlinePathData["parentReference"]["driveId"].str, onlinePathData["parentReference"]["id"].str, grandparentDatabaseItem);
+					
+					// Is the 'grandparent' in the database?
+					if (!grandparentInDatabase) {
+						// No ..
+						string grandParentPath = dirName(parentPath);
+						// create/add grandparent path online, add to database
+						createDirectoryOnline(grandParentPath);
+					}
+					
+					// Save parent item to the database
+					saveItem(onlinePathData);
+					
 				} catch (OneDriveException exception) {
 					if (exception.httpStatusCode == 404) {
 						// Parent does not exist ... need to create parent
