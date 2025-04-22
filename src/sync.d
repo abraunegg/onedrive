@@ -1983,16 +1983,17 @@ class SyncEngine {
 			// Calculate if the Parent Item is in the database so that it can be re-used
 			parentInDatabase = itemDB.idInLocalDatabase(thisItemDriveId, thisItemParentId);
 			
-			// Calculate the path of this JSON item, but we can only do this if the parent is in the database
+			// Calculate the local path of this JSON item, but we can only do this if the parent is in the database
 			if (parentInDatabase) {
 				// Use the original method of calculation for Personal Accounts
 				if (appConfig.accountType == "personal") {
 					// Personal Accounts
-					// Calculate this items path
+					// Compute the full local path for an item based on its position within the OneDrive hierarchy
 					newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
 				} else {
 					// Business Accounts
-					// Calculate this items path for business accounts
+					// Compute the full local path for an item based on its position within the OneDrive hierarchy
+					// This also accounts for Shared Folders in our account root, plus Shared Folders in a folder (relocated shared folders)
 					computedItemPath = computeItemPath(thisItemDriveId, thisItemParentId);
 					
 					// Is 'thisItemParentId' in the DB as a 'root' object?
@@ -2955,8 +2956,31 @@ class SyncEngine {
 			if (newDatabaseItem.type == ItemType.remote) {
 				// yes this is a remote item type
 				if (debugLogging) {addLogEntry("The 'newDatabaseItem' (handleLocalDirectoryCreation) is a remote item type - we need to create all of the associated database tie records for this database entry" , ["debug"]);}
+				
+				string relocatedFolderDriveId;
+				string relocatedFolderParentId;
+				
+				// Is this a relocated Shared Folder? OneDrive Business supports the relocation of Shared Folder links to other folders
+				if (appConfig.accountType != "personal") {
+					// Is this parentId equal to our defaultRootId .. if not it is highly likely that this Shared Folder is in a sub folder in our online folder structure
+					if (newDatabaseItem.parentId != appConfig.defaultRootId) {
+					
+						if (debugLogging) {
+							addLogEntry("The folder path for this Shared Folder is not our account root, thus is a relocated Shared Folder item. We must pass in the correct parent details for this Shared Folder 'root' object" , ["debug"]);
+							// What are we setting
+							addLogEntry("Setting relocatedFolderDriveId to:  " ~ newDatabaseItem.driveId);
+							addLogEntry("Setting relocatedFolderParentId to: " ~ newDatabaseItem.parentId);
+						}
+						
+						// Configure the relocated folders data
+						relocatedFolderDriveId = newDatabaseItem.driveId;
+						relocatedFolderParentId = newDatabaseItem.parentId;
+					}
+				}
+				
 				// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
-				createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
+				// We pass in the JSON element so we can create the right records + if this is a relocated shared folder, give the local parental record identifier
+				createRequiredSharedFolderDatabaseRecords(onedriveJSONItem, relocatedFolderDriveId, relocatedFolderParentId);
 			}
 		}
 		
@@ -2968,7 +2992,7 @@ class SyncEngine {
 	}
 	
 	// Create 'root' DB Tie Record and 'Shared Folder' DB Record in a consistent manner
-	void createRequiredSharedFolderDatabaseRecords(JSONValue onedriveJSONItem) {
+	void createRequiredSharedFolderDatabaseRecords(JSONValue onedriveJSONItem, string relocatedFolderDriveId = null, string relocatedFolderParentId = null) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -3069,7 +3093,7 @@ class SyncEngine {
 		
 		// Create a 'root' DB Tie Record for a Shared Folder from the parent folder JSON data
 		// - This maps the Shared Folder 'driveId' with the parent folder where the shared folder exists, so we can call the parent folder to query for changes to this Shared Folder
-		createDatabaseRootTieRecordForOnlineSharedFolder(onlineParentData);
+		createDatabaseRootTieRecordForOnlineSharedFolder(onlineParentData, relocatedFolderDriveId, relocatedFolderParentId);
 		
 		// Log that we are created the Shared Folder Tie record now
 		if (debugLogging) {addLogEntry("Creating the Shared Folder DB Tie Record that binds the 'root' record to the 'folder'" , ["debug"]);}
@@ -3120,10 +3144,10 @@ class SyncEngine {
 			sharedFolderDatabaseTie.type = ItemType.root;
 		}
 		
-		// Issue #3115 - Validate driveId length
+		// Issue #3115 - Validate sharedFolderDatabaseTie.driveId length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
-			// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+			// Test sharedFolderDatabaseTie.driveId length and validation if the sharedFolderDatabaseTie.driveId we are testing is not equal to appConfig.defaultDriveId
 			if (sharedFolderDatabaseTie.driveId != appConfig.defaultDriveId) {
 				sharedFolderDatabaseTie.driveId = testProvidedDriveIdForLengthIssue(sharedFolderDatabaseTie.driveId);
 			}
@@ -4166,87 +4190,25 @@ class SyncEngine {
 		// static declare this for this function
 		static import core.exception;
 		string calculatedPath;
-		string initialCalculatedPath;
-		string fullCalculatedPath;
-		bool calculateLocalExtension = false;
 		
 		// What driveID and itemID we trying to calculate the path for
 		if (debugLogging) {
-			string initialComputeLogMessage = format("Attempting to calculate initial local filesystem path for '%s' and '%s'", thisDriveId, thisItemId);
+			string initialComputeLogMessage = format("Attempting to calculate local filesystem path for '%s' and '%s'", thisDriveId, thisItemId);
 			addLogEntry(initialComputeLogMessage, ["debug"]);
 			}
 		
 		// Perform the original calculation of the path using the values provided
 		try {
-			initialCalculatedPath = itemDB.computePath(thisDriveId, thisItemId);
-			if (debugLogging) {addLogEntry("Initial calculated path = " ~ to!string(initialCalculatedPath), ["debug"]);}
+			// The 'itemDB.computePath' will calculate the full path for the combination of provided driveId and itemId values.
+			// This function traverses the parent chain of a given item (e.g., folder or file) using stored parent-child relationships 
+			// in the database, reconstructing the correct path from the item's root to itself.
+			calculatedPath = itemDB.computePath(thisDriveId, thisItemId);
+			if (debugLogging) {addLogEntry("Calculated local path = " ~ to!string(calculatedPath), ["debug"]);}
 		} catch (core.exception.AssertError) {
 			// broken tree in the database, we cant compute the path for this item id, exit
 			addLogEntry("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
 			// Must force exit here, allow logging to be done
 			forceExit();
-		}
-		
-		// To support OneDrive Shared Folders being stored anywhere (#2824) if 'thisDriveId' is not our account drive, we need to switch this up and calculate the path to the 'remote' item type DB object
-		// By doing this, we calculate the local path correctly to account for the difference in Shared Folder root path details that start from that Shared Folder online
-		// This then needs to be 'appended' to the shared drive calculation to get the full calculated local path which gest returned
-		
-		// Do we need to perform the local path extension for a shared folder?
-		// - Is this potentially a shared folder that we are trying to compute the path for? This is the only reliable way to determine this ...
-		// Both 'thisDriveId' and 'appConfig.defaultDriveId' have been validated for 15 character OneDrive Personal Account 'driveId' issue
-		if (thisDriveId != appConfig.defaultDriveId) {
-			// The driveId is not our account driveId
-			if (debugLogging) {addLogEntry("The path we are trying to calculate extends to a OneDrive Shared Folder .. need to perform multiple calculations to calculate the full true local path", ["debug"]);}
-		
-			// Use the 'thisDriveId' value to obtain the 'remote' item type record which represents the local path junction point to the shared folder
-			Item remoteEntryItem;
-			string fullLocalPath;
-			string localPathExtension;
-			
-			if (debugLogging) {addLogEntry("Attempting to calculate Shared Folder local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);}
-			
-			// Get the DB entry for this 'remote' item
-			itemDB.selectRemoteTypeByRemoteDriveId(thisDriveId, thisItemId, remoteEntryItem);
-			
-			// What was returned from the Database?
-			if (debugLogging) {addLogEntry("remoteEntryItem: " ~ to!string(remoteEntryItem), ["debug"]);}
-			
-			// What details do we use?
-			if (!remoteEntryItem.driveId.empty) {
-				// use the returned 'remote' DB entry values
-				localPathExtension = itemDB.computePath(remoteEntryItem.driveId, remoteEntryItem.id);
-			} else {
-				// set 'localPathExtension' to initialCalculatedPath
-				localPathExtension = initialCalculatedPath;
-			}
-			
-			// result for localPathExtension
-			if (debugLogging) {addLogEntry(" localPathExtension = " ~ to!string(localPathExtension), ["debug"]);}
-			
-			// what do we use?
-			if (initialCalculatedPath == ".") {
-				// The '.' represents the root shared folder ... however if this is a OneDrive Business 'relocated' Shared Folder Link .. the '.' is not the actual local path extension
-				if (appConfig.accountType == "personal") {
-					// OneDrive Personal Accounts do not support relocatable Shared Folders
-					fullLocalPath = localPathExtension;
-				} else {
-					// OneDrive Business Account Type
-					// Thus this needs some further calculation - #3193 Marker
-					fullLocalPath = localPathExtension;
-				}
-			} else {
-				// Now to combine the two
-				// - replace remoteEntryItem.name in 'initialCalculatedPath' with 'localPathExtension'
-				fullLocalPath = initialCalculatedPath.replace(remoteEntryItem.name, localPathExtension);
-			}
-			
-			if (debugLogging) {addLogEntry(" fullLocalPath = " ~ to!string(fullLocalPath), ["debug"]);}
-			
-			// Update calculatedPath
-			calculatedPath = fullLocalPath;
-		} else {
-			// not a remote shared folder
-			calculatedPath = initialCalculatedPath;
 		}
 		
 		// Display function processing time if configured to do so
@@ -6041,7 +6003,7 @@ class SyncEngine {
 		}
 		
 		// These are the details of the item we need to upload
-		string changedItemParentId = localItemDetails[0];
+		string changedItemDriveId = localItemDetails[0];
 		string changedItemId = localItemDetails[1];
 		string localFilePath = localItemDetails[2];
 		
@@ -6069,32 +6031,108 @@ class SyncEngine {
 		// Unfortunately, we cant store an array of Item's ... so we have to re-query the DB again - unavoidable extra processing here
 		// This is because the Item[] has no other functions to allow is to parallel process those elements, so we have to use a string array as input to this function
 		Item dbItem;
-		itemDB.selectById(changedItemParentId, changedItemId, dbItem);
+		itemDB.selectById(changedItemDriveId, changedItemId, dbItem);
 		
-		// Is this a remote target?
-		if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
-			// This is a remote file
-			targetDriveId = dbItem.remoteDriveId;
-			targetItemId = dbItem.remoteId;
-			// we are going to make the assumption here that as this is a OneDrive Business Shared File, that there is space available
-			spaceAvailableOnline = true;
+		// Was a valid DB response returned
+		if (!dbItem.driveId.empty) {
+			// Is this a remote driveId target based on the database response?
+			if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
+				// This is a remote file
+				targetDriveId = dbItem.remoteDriveId;
+				targetItemId = dbItem.remoteId;
+				// we are going to make the assumption here that as this is a OneDrive Business Shared File, that there is space available
+				spaceAvailableOnline = true;
+			} else {
+				// This is not a remote file
+				targetDriveId = dbItem.driveId;
+				targetItemId = dbItem.id;
+			}
 		} else {
-			// This is not a remote file
-			targetDriveId = dbItem.driveId;
-			targetItemId = dbItem.id;
+			// No valid DB response was provided
+			if (debugLogging) {
+				string logMessage = format("No valid DB response was provided when searching for '%s' and '%s'", changedItemDriveId, changedItemId);
+				addLogEntry(logMessage, ["debug"]);
+				
+				// Fetch the online data again for this file 
+				addLogEntry("Fetching latest online details for this item due to zero DB data available", ["debug"]);
+			}
+				
+			OneDriveApi checkFileOneDriveApiInstance;
+			JSONValue fileDetailsFromOneDrive;
+			
+			// Create a new API Instance for this thread and initialise it
+			checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
+			checkFileOneDriveApiInstance.initialise();
+
+			// Try and get the absolute latest object details from online to potentially build a DB record we can use
+			try {
+				fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsById(changedItemDriveId, changedItemId);
+			} catch (OneDriveException exception) {
+				// Display what the error is
+				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+			}
+			
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			checkFileOneDriveApiInstance.releaseCurlEngine();
+			checkFileOneDriveApiInstance = null;
+			// Perform Garbage Collection
+			GC.collect();
+			
+			// Turn 'fileDetailsFromOneDrive' into a DB item
+			if (fileDetailsFromOneDrive.type() == JSONType.object) {
+				// Yes
+				if (debugLogging) {addLogEntry("Creating DB item from online API response: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);}
+				dbItem = makeItem(fileDetailsFromOneDrive);
+			} else {
+				// No
+				addLogEntry("Unable to upload this modified file at this point in time: " ~ localFilePath);
+				return;
+			}
+		}
+		
+		// Are we in an --upload-only & --remove-source-files scenario?
+		// - In this scenario, and even more so in a --resync scenario when using these options, there is potentially 100% zero database entry for the modified file we are uploading
+		//   This will be in the logs when we are in this scenario:
+		//     Skipping adding to database as --upload-only & --remove-source-files configured
+		if ((uploadOnly) && (localDeleteAfterUpload)) {
+			// We are in the potential scenario where 'targetDriveId' and 'targetItemId' are still an empty value(s)
+			// Check targetDriveId
+			if (targetDriveId.empty) {
+				if (debugLogging) {
+					string logMessage = format("Updating 'targetDriveId' to '%s' due to --upload-only and --remove-source-files being used", changedItemDriveId);
+					addLogEntry(logMessage, ["debug"]);
+				}
+				// set the value
+				targetDriveId = changedItemDriveId;
+			}
+			// Check targetItemId	
+			if (targetItemId.empty) {
+				if (debugLogging) {
+					string logMessage = format("Updating 'targetItemId' to '%s' due to --upload-only and --remove-source-files being used", changedItemId);
+					addLogEntry(logMessage, ["debug"]);
+				}
+				// set the value
+				targetItemId = changedItemId;
+			}
 		}
 			
-		// Fetch the details from cachedOnlineDriveData
+		// Fetch the details from cachedOnlineDriveData if this is available
 		// - cachedOnlineDriveData.quotaRestricted;
 		// - cachedOnlineDriveData.quotaAvailable;
 		// - cachedOnlineDriveData.quotaRemaining;
 		DriveDetailsCache cachedOnlineDriveData;
+		
+		// Query the details using the correct 'targetDriveId' for this modified file to be uploaded
 		cachedOnlineDriveData = getDriveDetails(targetDriveId);
+		
+		// Configure 'remainingFreeSpace' based on the 'targetDriveId'
 		remainingFreeSpace = cachedOnlineDriveData.quotaRemaining;
 		
 		// Get the file size from the actual file
 		long thisFileSizeLocal = getSize(localFilePath);
-		// Get the file size from the DB data
+		
+		// Get the file size from the DB data, if DB data was returned, otherwise we have zero size value from the DB
 		long thisFileSizeFromDB;
 		if (!dbItem.size.empty) {
 			thisFileSizeFromDB = to!long(dbItem.size);
@@ -6108,9 +6146,9 @@ class SyncEngine {
 		
 		// Based on what we know, for this thread - can we safely upload this modified local file?
 		if (debugLogging) {
-			string estimatedMessage = format("This Thread Estimated Free Space Online (%s): ", targetDriveId);
+			string estimatedMessage = format("This Thread (Upload Changed File) Estimated Free Space Online (%s): ", targetDriveId);
 			addLogEntry(estimatedMessage ~ to!string(remainingFreeSpace), ["debug"]);
-			addLogEntry("This Thread Calculated Free Space Online Post Upload:    " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+			addLogEntry("This Thread (Upload Changed File) Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 		}
 		
 		// Is there quota available for the given drive where we are uploading to?
@@ -6265,6 +6303,12 @@ class SyncEngine {
 						}
 					}
 				}
+				
+				// Are we in an --upload-only & --remove-source-files scenario?
+				if ((uploadOnly) && (localDeleteAfterUpload)) {
+					// Perform the local file deletion
+					removeLocalFilePostUpload(localFilePath);
+				}
 			}
 		}
 		
@@ -6275,6 +6319,29 @@ class SyncEngine {
 		}
 	}
 	
+	// Remove the local file if using --upload-only & --remove-source-files scenario in a consistent manner
+	void removeLocalFilePostUpload(string localPathToRemove) {
+		// File has to exist before removal
+		if (exists(localPathToRemove)) {
+			// Log that we are deleting a local item
+			addLogEntry("Attempting removal of local file as --upload-only & --remove-source-files configured");
+			
+			// Are we in a --dry-run scenario?
+			if (!dryRun) {
+				// Not in a --dry-run scenario
+				if (debugLogging) {addLogEntry("Removing local file: " ~ localPathToRemove, ["debug"]);}
+				safeRemove(localPathToRemove);
+				addLogEntry("Removed local file:  " ~ localPathToRemove);
+			} else {
+				// --dry-run scenario
+				addLogEntry("Not removing local file as --dry-run configured");
+			}
+		} else {
+			// Log that the path to remove does not exist locally
+			addLogEntry("Removing local file not possible as local file does not exist");
+		}
+	}
+		
 	// Perform the upload of a locally modified file to OneDrive
 	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal) {
 		// Function Start Time
@@ -8064,9 +8131,9 @@ class SyncEngine {
 						
 						// Based on what we know, for this thread - can we safely upload this modified local file?
 						if (debugLogging) {
-							string estimatedMessage = format("This Thread Estimated Free Space Online (%s): ", parentItem.driveId);
+							string estimatedMessage = format("This Thread (Upload New File) Estimated Free Space Online (%s): ", parentItem.driveId);
 							addLogEntry(estimatedMessage ~ to!string(remainingFreeSpaceOnline), ["debug"]);
-							addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+							addLogEntry("This Thread (Upload New File) Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 						}
 			
 						// If 'personal' accounts, if driveId == defaultDriveId, then we will have data - appConfig.quotaAvailable will be updated
@@ -8531,15 +8598,9 @@ class SyncEngine {
 					
 					// Are we in an --upload-only & --remove-source-files scenario?
 					// Use actual config values as we are doing an upload session recovery
-					if (localDeleteAfterUpload) {
-						// Log that we are deleting a local item
-						addLogEntry("Removing local file as --upload-only & --remove-source-files configured");
-						// Are we in a --dry-run scenario?
-						if (!dryRun) {
-							// No --dry-run ... process local file delete
-							if (debugLogging) {addLogEntry("Removing local file: " ~ fileToUpload, ["debug"]);}
-							safeRemove(fileToUpload);
-						}
+					if ((uploadOnly) && (localDeleteAfterUpload)) {
+						// Perform the local file deletion
+						removeLocalFilePostUpload(fileToUpload);
 					}
 				} else {
 					// will be removed in different event!
@@ -11970,19 +12031,10 @@ class SyncEngine {
 				
 				// Are we in an --upload-only & --remove-source-files scenario?
 				// Use actual config values as we are doing an upload session recovery
-				if (localDeleteAfterUpload) {
-					// Log that we are deleting a local item
-					addLogEntry("Removing local file as --upload-only & --remove-source-files configured");
-					// are we in a --dry-run scenario?
-					if (!dryRun) {
-						// No --dry-run ... process local file delete
-						// Only perform the delete if we have a valid file path
-						if (exists(jsonItemToResume["localPath"].str)) {
-							// file exists
-							if (debugLogging) {addLogEntry("Removing local file: " ~ jsonItemToResume["localPath"].str, ["debug"]);}
-							safeRemove(jsonItemToResume["localPath"].str);
-						}
-					}
+				if ((uploadOnly) && (localDeleteAfterUpload)) {
+					// Perform the local file deletion
+					removeLocalFilePostUpload(jsonItemToResume["localPath"].str);
+					
 					// as file is removed, we have nothing to add to the local database
 					if (debugLogging) {addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);}
 				} else {
@@ -12325,7 +12377,7 @@ class SyncEngine {
 	}
 	
 	// Create a 'root' DB Tie Record for a Shared Folder from the JSON data
-	void createDatabaseRootTieRecordForOnlineSharedFolder(JSONValue onedriveJSONItem) {
+	void createDatabaseRootTieRecordForOnlineSharedFolder(JSONValue onedriveJSONItem, string relocatedFolderDriveId = null, string relocatedFolderParentId = null) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -12386,8 +12438,19 @@ class SyncEngine {
 			tieDBItem.mtime = SysTime(0);
 		}
 		
-		// ensure there is no parentId
+		// Ensure there is no parentId for this DB record
 		tieDBItem.parentId = null;
+		
+		// OneDrive Business supports relocating Shared Folders to other folders.
+		// This means, in our DB, we need this DB record to have the correct parentId of the parental folder, if this is relocated shared folder
+		// This is stored in the 'relocParentId' DB entry
+		// This 'relocatedFolderParentId' variable is only ever set if using OneDrive Business account types and the shared folder is located online in another folder
+		if ((!relocatedFolderDriveId.empty) && (!relocatedFolderParentId.empty)) {
+			// Ensure that we set the relocParentId to the provided relocatedFolderParentId record
+			if (debugLogging) {addLogEntry("Relocated Shared Folder references were provided - adding these to the 'root' DB Tie Record", ["debug"]);}
+			tieDBItem.relocDriveId = relocatedFolderDriveId;
+			tieDBItem.relocParentId = relocatedFolderParentId;
+		}
 		
 		// Issue #3115 - Validate driveId length
 		// What account type is this?
