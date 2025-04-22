@@ -11,7 +11,7 @@ RUN go install -ldflags "-s -w" github.com/tianon/gosu@${GOSU_VERSION}
 
 FROM fedora:${FEDORA_VERSION} AS builder-onedrive
 
-RUN dnf install -y ldc pkgconf libcurl-devel sqlite-devel git
+RUN dnf install -y ldc pkgconf libcurl-devel sqlite-devel git awk
 
 ENV PKG_CONFIG=/usr/bin/pkgconf
 
