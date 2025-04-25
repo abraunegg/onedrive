@@ -8063,6 +8063,7 @@ class SyncEngine {
 			// The input items are different .. how are they different?
 			if (toLower(localNameToCheck) == toLower(onlineName)) {
 				// Names differ only by case -> POSIX issue
+				if (debugLogging) {addLogEntry("performPosixTest: Names differ only by case -> POSIX issue", ["debug"]);}
 				// Local item name has a 'case-insensitive match' to an existing item on OneDrive
 				posixIssue = true;
 			}
