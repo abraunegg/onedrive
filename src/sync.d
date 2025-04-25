@@ -8362,6 +8362,9 @@ class SyncEngine {
 								// Perform Garbage Collection
 								GC.collect();
 								
+								// No 404 which means a file was found with the path we are trying to upload to
+								if (debugLogging) {addLogEntry("fileDetailsFromOneDrive JSON data after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);}
+																
 								// Portable Operating System Interface (POSIX) testing of JSON response from OneDrive API
 								if (hasName(fileDetailsFromOneDrive)) {
 									// Perform the POSIX evaluation test against the names
@@ -8375,9 +8378,6 @@ class SyncEngine {
 								// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
 								// and that it matches the POSIX filename of the local item we are trying to upload as a new file
 								if (verboseLogging) {addLogEntry("The file we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);}
-								
-								// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
-								if (debugLogging) {addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);}
 								
 								// Does the data from online match our local file that we are attempting to upload as a new file?
 								if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
