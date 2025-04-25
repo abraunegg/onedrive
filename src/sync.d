@@ -8058,11 +8058,14 @@ class SyncEngine {
 		// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
 		bool posixIssue = false;
 		
-		// Is the name different
+		// Check for a POSIX casing mismatch
 		if (localNameToCheck != onlineName) {
-			// POSIX Error
-			// Local item name has a 'case-insensitive match' to an existing item on OneDrive
-			posixIssue = true;
+			// The input items are different .. how are they different?
+			if (toLower(localNameToCheck) == toLower(onlineName)) {
+				// Names differ only by case -> POSIX issue
+				// Local item name has a 'case-insensitive match' to an existing item on OneDrive
+				posixIssue = true;
+			}
 		}
 		
 		// Display function processing time if configured to do so
