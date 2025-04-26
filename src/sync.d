@@ -8961,6 +8961,14 @@ class SyncEngine {
 				// Insert a new line as well, so that the below error is inserted on the console in the right location
 				if (verboseLogging) {addLogEntry("Fragment upload failed - received an exception response from OneDrive API", ["verbose"]);}
 				
+				// HTTP request returned status code 403 (Forbidden) - Access denied
+				// - There is no point here attempting a re-try
+				if (exception.httpStatusCode == 403) {
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+					uploadResponse = null;
+					return uploadResponse;
+				}
+				
 				// display what the error is
 				if (exception.httpStatusCode != 404) {
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
