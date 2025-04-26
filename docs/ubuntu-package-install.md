@@ -174,6 +174,7 @@ If required, review the table below based on your 'lsb_release' information to p
 | Ubuntu 23.10 / Mantic     | Use [Ubuntu 23.10](#distribution-ubuntu-2310) instructions below |
 | Ubuntu 24.04 / Noble      | Use [Ubuntu 24.04](#distribution-ubuntu-2404) instructions below |
 | Ubuntu 24.10 / Oracular   | Use [Ubuntu 24.10](#distribution-ubuntu-2410) instructions below |
+| Ubuntu 25.04 / Plucky Puffin | Use [Ubuntu 25.04](#distribution-ubuntu-2504) instructions below |
 
 > [!IMPORTANT]
 > If your Linux distribution and release is not in the table above, you have 2 options:
@@ -469,6 +470,33 @@ wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ub
 Add the OpenSuSE Build Service repository using the following command:
 ```text
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_24.10/ ./" | sudo tee /etc/apt/sources.list.d/onedrive.list
+```
+
+#### Step 3: Update your apt package cache
+Run: `sudo apt-get update`
+
+#### Step 4: Install 'onedrive'
+Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
+
+#### Step 5: Read 'Known Issues' with these packages
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
+
+### Distribution: Ubuntu 25.04
+The packages support the following platform architectures:
+| &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
+|:----:|:------:|:-----:|:-------:|
+|❌|✔|❌|✔|
+
+#### Step 1: Add the OpenSuSE Build Service repository release key
+Add the OpenSuSE Build Service repository release key using the following command:
+```text
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_25.04/Release.key | gpg --dearmor | sudo tee /usr/share/keyrings/obs-onedrive.gpg > /dev/null
+```
+
+#### Step 2: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
+```text
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_25.04/ ./" | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
 #### Step 3: Update your apt package cache
