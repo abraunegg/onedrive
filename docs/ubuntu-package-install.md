@@ -174,7 +174,7 @@ If required, review the table below based on your 'lsb_release' information to p
 | Ubuntu 23.10 / Mantic     | Use [Ubuntu 23.10](#distribution-ubuntu-2310) instructions below |
 | Ubuntu 24.04 / Noble      | Use [Ubuntu 24.04](#distribution-ubuntu-2404) instructions below |
 | Ubuntu 24.10 / Oracular   | Use [Ubuntu 24.10](#distribution-ubuntu-2410) instructions below |
-| Ubuntu 25.05 / Plucky Puffin | Use [Ubuntu 25.04](#distribution-ubuntu-2504) instructions below |
+| Ubuntu 25.04 / Plucky Puffin | Use [Ubuntu 25.04](#distribution-ubuntu-2504) instructions below |
 
 > [!IMPORTANT]
 > If your Linux distribution and release is not in the table above, you have 2 options:
