@@ -765,12 +765,18 @@ Patterns are case insensitive. `*` and `?` [wildcards characters](https://techne
 By default, the following files will be skipped:
 
 | Skip File Pattern | Meaning                    | Why this should be skipped |
-| ------------------|----------------------------|----------------------------|
+|:------------------|:---------------------------|:---------------------------|
 | `~*`              | Files that start with `~`  | Temporary or backup files. Typically auto-created by various programs during editing sessions. These are not intended to be saved permanently. Example: Emacs, Vim, and others create such files. |
 | `.~*`             | Files that start with `.~` | Hidden lock or temp files, especially from LibreOffice and OpenOffice. (E.g., `.~lock.MyFile.docx#`) These are only used to prevent multiple users editing the same file simultaneously. |
 | `*.tmp`           | Files ending in `.tmp`     | Generic temporary files created by applications like browsers, editors, installers. They represent intermediate data and are usually auto-deleted after a session. |
 | `*.swp`           | Files ending in `.swp`     | Vim (and vi) swap files. Created to protect against crash recovery during text editing. Should not be synced because they are transient. |
 | `*.partial`       | Files ending in `.partial` | Partially downloaded files. Common in browsers (like Firefox `.partial` download files), background downloaders and this client. Incomplete by nature. Syncing them causes broken files online. |
+
+The following suggestions to skip are not part of the default configuration, however this files could also be potentially skipped:
+
+| Skip File Pattern | Meaning                    | Why this should be skipped |
+|:------------------|:---------------------------|:---------------------------|
+| `*.bak`           | Files ending in `.bak`     | Backup files created by many text editors, IDEs, or applications. These are automatic backups made to preserve earlier versions of files before editing changes are saved. They are not intended for syncing — they are redundant copies of existing or previous files. |
 
 Files can be skipped in the following fashion:
 *   Specify a wildcard, eg: '*.txt' (skip all txt files)
