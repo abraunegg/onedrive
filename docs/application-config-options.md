@@ -576,7 +576,7 @@ _**CLI Option Use:**_ *None - this is a config file option only*
 > [!IMPORTANT]
 > The Microsoft OneDrive API for this capability is also very narrow:
 > | Account Type | Config Option is Supported |
-> |:-------------|:-----------------|
+> |:-------------|:----------------:|
 > | Personal     | ❌ |
 > | Business     | ✔ |
 > | SharePoint   | ✔ |
