@@ -392,6 +392,13 @@ final class Monitor {
 			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
 				// dont add a watch for this item
 				if (debugLogging) {addLogEntry("Skipping monitoring due to sync_list match: " ~ dirname, ["debug"]);}
+				
+				// However before we return, we need to test this path tree as a branch on this tree may be included by some other sync_list inclusion rule
+				if (isDir(dirname)) {
+					traverseDirectory(dirname);
+				}
+				
+				// For the original path, we return, no inotify watch added
 				return;
 			}
 		}
@@ -432,36 +439,41 @@ final class Monitor {
 		
 		// if this is a directory, recursively add this path
 		if (isDir(dirname)) {
-			// try and get all the directory entities for this path
-			try {
-				auto pathList = dirEntries(dirname, SpanMode.shallow, false);
-				foreach(DirEntry entry; pathList) {
-					if (entry.isDir) {
-						if (debugLogging) {addLogEntry("Calling addRecursive() for this directory: " ~ entry.name, ["debug"]);}
-						addRecursive(entry.name);
-					}
+			traverseDirectory(dirname);
+		}
+	}
+	
+	// Traverse directory to test if this should have an inotify watch added
+	private void traverseDirectory(string dirname) {
+		// Try and get all the directory entities for this path
+		try {
+			auto pathList = dirEntries(dirname, SpanMode.shallow, false);
+			foreach(DirEntry entry; pathList) {
+				if (entry.isDir) {
+					if (debugLogging) {addLogEntry("Calling addRecursive() for this directory: " ~ entry.name, ["debug"]);}
+					addRecursive(entry.name);
 				}
-			// catch any error which is generated
-			} catch (std.file.FileException e) {
-				// Standard filesystem error
+			}
+		// Catch any error which is generated
+		} catch (std.file.FileException e) {
+			// Standard filesystem error
+			displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+			return;
+		} catch (Exception e) {
+			// Issue #1154 handling
+			// Need to check for: Failed to stat file in error message
+			if (canFind(e.msg, "Failed to stat file")) {
+				// File system access issue
+				addLogEntry("ERROR: The local file system returned an error with the following message:");
+				addLogEntry("  Error Message: " ~ e.msg);
+				addLogEntry("ACCESS ERROR: Please check your UID and GID access to this file, as the permissions on this file is preventing this application to read it");
+				addLogEntry("\nFATAL: Forcing exiting application to avoid deleting data due to local file system access issues\n");
+				// Must force exit here, allow logging to be done
+				forceExit();
+			} else {
+				// some other error
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				return;
-			} catch (Exception e) {
-				// Issue #1154 handling
-				// Need to check for: Failed to stat file in error message
-				if (canFind(e.msg, "Failed to stat file")) {
-					// File system access issue
-					addLogEntry("ERROR: The local file system returned an error with the following message:");
-					addLogEntry("  Error Message: " ~ e.msg);
-					addLogEntry("ACCESS ERROR: Please check your UID and GID access to this file, as the permissions on this file is preventing this application to read it");
-					addLogEntry("\nFATAL: Forcing exiting application to avoid deleting data due to local file system access issues\n");
-					// Must force exit here, allow logging to be done
-					forceExit();
-				} else {
-					// some other error
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-					return;
-				}
 			}
 		}
 	}
