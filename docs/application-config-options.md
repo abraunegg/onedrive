@@ -768,7 +768,7 @@ By default, the following files will be skipped:
 | `*.swp`           | Files ending in `.swp`     | Vim (and vi) swap files. Created to protect against crash recovery during text editing. Should not be synced because they are transient. |
 | `*.partial`       | Files ending in `.partial` | Partially downloaded files. Common in browsers (like Firefox `.partial` download files), background downloaders and this client. Incomplete by nature. Syncing them causes broken files online. |
 
-The following suggested files are not included in the default configuration but could also be considered for skipping:
+The following suggested skip file patterns are not included in the default configuration but could also be considered for skipping:
 
 | Skip File Pattern | Meaning                    | Why this should be skipped |
 |:------------------|:---------------------------|:---------------------------|
