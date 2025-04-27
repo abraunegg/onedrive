@@ -1599,6 +1599,13 @@ class SyncEngine {
 				addLogEntry("Number of JSON items processed was: " ~ to!string(processedCount), ["debug"]);
 			}
 			
+			// Notification to user regarding number of objects received from OneDrive API
+			if (jsonItemsReceived >= 300000) {
+				// 'driveIdToQuery' should be the drive where the JSON responses came from
+				string objectsExceedLimitWarning = format("WARNING: The number of objects stored online in '%s' exceeds Microsoft OneDrive's recommended limit. This may cause unreliable application behaviour due to inconsistent or incomplete API responses. Immediate action is strongly advised to avoid data integrity issues.", driveIdToQuery);
+				addLogEntry(objectsExceedLimitWarning, ["info", "notify"]);
+			}
+			
 			// Free up memory and items processed as it is pointless now having this data around
 			jsonItemsToProcess = [];
 			
