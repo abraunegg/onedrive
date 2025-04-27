@@ -3,12 +3,14 @@ module config;
 
 // What does this module require to function?
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
+import std.array;
 import std.stdio;
 import std.process;
 import std.regex;
 import std.string;
+import std.algorithm;
 import std.algorithm.searching;
-import std.algorithm.sorting: sort;
+import std.algorithm.sorting;
 import std.file;
 import std.conv;
 import std.path;
@@ -968,8 +970,52 @@ class ApplicationConfig {
 				return false;
 			}
 		}
+		
+		// If we read in 'skip_file' from the 'config' file, this will be 'true'
+		if (configFileSkipFileReadIn) {
+			// The user added entries, are the application defaults included or were these discarded / discounted?
+			// Check for temporary and/or transient files to skip (application defaults)
+			checkForSkipFileDefaults();
+		}
+		
 		// Return that we were able to read in the config file and parse the options without issue
 		return true;
+	}
+	
+	// Perform a check on 'skip_file' configuration post reading from 'config' file
+	void checkForSkipFileDefaults() {
+		// Split both the default and user values
+		auto defaultEntries = defaultSkipFile.split('|').map!(a => a.strip).array;
+		auto userEntries = configFileSkipFile.split('|').map!(a => a.strip).array;
+
+		string[] missingDefaults;
+
+		// Check if all defaults exist in user config
+		foreach (defaultEntry; defaultEntries) {
+			if (!userEntries.canFind(defaultEntry)) {
+				missingDefaults ~= defaultEntry;
+			}
+		}
+
+		// Display warning message about missing default entries for temporary and/or transient files that should be skipped
+		if (!missingDefaults.empty) {
+			addLogEntry();
+			addLogEntry("WARNING: Your 'skip_file' configuration is missing important default entries. Temporary and/or transient files that would normally be skipped may now be included in syncing.", ["info", "notify"]);
+			addLogEntry();
+			if (verboseLogging) {
+				addLogEntry("By default, the following types of temporary and/or transient files are skipped:", ["verbose"]);
+				addLogEntry("  Files that start with '~' (Temporary or backup files that are not intended to be saved permanently)", ["verbose"]);
+				addLogEntry("  Files that start with '.~' (e.g., LibreOffice lock files)", ["verbose"]);
+				addLogEntry("  Files that end with '.tmp' (Generic temporary files created by applications like browsers, editors, installers)", ["verbose"]);
+				addLogEntry("  Files that end with '.swp' (Transient files created by editors such as vim and vi)", ["verbose"]);
+				addLogEntry("  Files that end with '.partial' (Partially downloaded files, incomplete by nature, should not be synced)", ["verbose"]);
+				addLogEntry();
+				addLogEntry("  Missing the following important 'skip_file' entries: " ~ missingDefaults.join(", "), ["verbose"]);
+				addLogEntry();
+				addLogEntry("Reference: https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md#skip_file", ["verbose"]);
+				addLogEntry();
+			}
+		}
 	}
 
 	// Update the application configuration based on CLI passed in parameters
