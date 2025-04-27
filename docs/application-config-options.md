@@ -775,7 +775,7 @@ The following suggested skip file patterns are not included in the default confi
 | `*.bak`           | Files ending in `.bak`     | Backup files created by many text editors, IDEs, or applications. These are automatic backups made to preserve earlier versions of files before editing changes are saved. They are not intended for syncing — they are redundant copies of existing or previous files. |
 
 > [!IMPORTANT]
-> If you define your own 'skip_file' configuration, the default settings listed above will be *overridden*. It is strongly recommended that you explicitly include the default 'skip_file' rules alongside your custom entries to ensure important files are still correctly skipped.
+> If you define your own 'skip_file' configuration, the default settings listed above will be *overridden*. It is strongly recommended that you explicitly include the default 'skip_file' rules alongside your custom entries to ensure temporary and/or transient files are still correctly skipped.
 
 _**Config Example:**_ 
 
