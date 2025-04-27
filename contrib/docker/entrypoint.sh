@@ -28,14 +28,14 @@ if [ "${ONEDRIVE_RUNAS_ROOT:=0}" == "1" ]; then
 	echo "# Running container as root due to environment variable override"
 	oduser='root'
 	odgroup='root'
-else 
+else
 	grep -qv root <( groups "${oduser}" ) || { echo 'ROOT level privileges prohibited!'; exit 1; }
 	echo "# Running container as user: ${oduser}"
 fi
 
 # Default parameters
 ARGS=(--confdir /onedrive/conf --syncdir /onedrive/data)
-echo "# Base Args: ${ARGS}"
+echo "# Base Args: ${ARGS[@]}"
 
 # Tell client to use Standalone Mode, based on an environment variable. Otherwise Monitor Mode is used.
 if [ "${ONEDRIVE_SYNC_ONCE:=0}" == "1" ]; then
