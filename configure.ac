@@ -4,6 +4,7 @@ dnl Licensed GPL v3 or later
 
 dnl How to make a release
 dnl - increase the version number in the AC_INIT call below
+dnl - change PACKAGE_DATE to 'Month YYYY' to ensure man page has the correct date
 dnl - run autoconf which generates configure
 dnl - commit the changed files (configure.ac, configure)
 dnl - tag the release
@@ -19,6 +20,9 @@ AC_ARG_VAR([DCFLAGS], [flags for D compiler])
 dnl necessary programs: install, pkg-config
 AC_PROG_INSTALL
 PKG_PROG_PKG_CONFIG
+
+PACKAGE_DATE="April 2025"
+AC_SUBST([PACKAGE_DATE])
 
 dnl Determine D compiler
 dnl we check for dmd, dmd2, and ldc2 in this order
@@ -180,14 +184,6 @@ AC_SUBST([VERSION_DCFLAG])
 AC_SUBST([LINKER_DCFLAG])
 AC_SUBST([OUTPUT_DCFLAG])
 AC_SUBST([WERROR_DCFLAG])
-
-dnl The package date is only used in the man page onedrive.1.in
-dnl we generate onedrive.1 from it during configure run, but we want
-dnl to have the same date, namely the one when the configure script
-dnl was generated from the configure.ac (i.e., on release time).
-dnl this uses a call to the underlying m4 engine to call an external cmd
-PACKAGE_DATE="m4_esyscmd([date "+%B %Y" | tr -d '\n'])" 
-AC_SUBST([PACKAGE_DATE])
 
 dnl Check for required modules: curl and sqlite at the moment
 PKG_CHECK_MODULES([curl],[libcurl])
