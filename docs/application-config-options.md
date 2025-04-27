@@ -758,10 +758,6 @@ _**Value Type:**_ String
 
 _**Default Value:**_ `~*|.~*|*.tmp|*.swp|*.partial`
 
-_**Config Example:**_ 
-
-Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
-
 By default, the following files will be skipped:
 
 | Skip File Pattern | Meaning                    | Why this should be skipped |
@@ -772,11 +768,18 @@ By default, the following files will be skipped:
 | `*.swp`           | Files ending in `.swp`     | Vim (and vi) swap files. Created to protect against crash recovery during text editing. Should not be synced because they are transient. |
 | `*.partial`       | Files ending in `.partial` | Partially downloaded files. Common in browsers (like Firefox `.partial` download files), background downloaders and this client. Incomplete by nature. Syncing them causes broken files online. |
 
-The following suggestions to skip are not part of the default configuration, however this files could also be potentially skipped:
+The following suggested files are not included in the default configuration but could also be considered for skipping:
 
 | Skip File Pattern | Meaning                    | Why this should be skipped |
 |:------------------|:---------------------------|:---------------------------|
 | `*.bak`           | Files ending in `.bak`     | Backup files created by many text editors, IDEs, or applications. These are automatic backups made to preserve earlier versions of files before editing changes are saved. They are not intended for syncing — they are redundant copies of existing or previous files. |
+
+> [!IMPORTANT]
+> If you define your own 'skip_file' configuration, the default settings listed above will be *overridden*. It is strongly recommended that you explicitly include the default 'skip_file' rules alongside your custom entries to ensure important files are still correctly skipped.
+
+_**Config Example:**_ 
+
+Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
 
 Files can be skipped in the following fashion:
 *   Specify a wildcard, eg: '*.txt' (skip all txt files)
@@ -803,10 +806,6 @@ This will be interpreted the same as:
 ```text
 skip_file = "~*|.~*|*.tmp|*.swp|*.partial|*.blah|never_sync.file|/Documents/keepass.kdbx"
 ```
-
-> [!IMPORTANT]
-> If you define your own 'skip_file' configuration, the default settings listed above will be *overridden*. It is strongly recommended that you explicitly include the default 'skip_file' rules alongside your custom entries to ensure important files are still correctly skipped.
-
 
 _**CLI Option Use:**_ `--skip-file '~*|.~*|*.tmp|*.swp|*.partial|*.blah|never_sync.file|/Documents/keepass.kdbx'`
 
