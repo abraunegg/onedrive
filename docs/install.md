@@ -83,7 +83,31 @@ For GUI notifications the following is also necessary:
 ```text
 sudo dnf install libnotify-devel
 ```
-
+### Dependencies: Fedora > Version 41
+Fedora > 41 uses dnf5 which removes some deprecated aliases, specifically 'groupinstall' in this instance.
+```text
+sudo dnf group install development-tools
+sudo dnf install libcurl-devel sqlite-devel
+```
+Before running the dmd install you need to check for the option 'use-keyboxd' in your gnupg common.conf file and comment it out while running the install.
+```text
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+Or you may get the following error:
+```text
+myuser@fedora:~$ curl -fsS https://dlang.org/install.sh | bash -s dmd
+Downloading https://dlang.org/d-keyring.gpg
+######################################################################## 100.0%
+gpg: Note: Specified keyrings are ignored due to option "use-keyboxd"
+gpg: Signature made Thu 06 Mar 2025 10:45:29 GMT
+gpg:                using RSA key F3F896F3274BBD9BBBA59058710592E7FB7AF6CA
+gpg: Can't check signature: No public key
+Invalid signature https://dlang.org/d-keyring.gpg.sig
+```
+For GUI notifications the following is also necessary:
+```text
+sudo dnf install libnotify-devel
+```
 ### Dependencies: FreeBSD
 ```text
 pkg install bash bash-completion gmake pkgconf autoconf automake logrotate libinotify git sqlite3 ldc
