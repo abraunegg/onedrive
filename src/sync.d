@@ -10951,8 +10951,10 @@ class SyncEngine {
 					uploadFileHash = uploadResponse["file"]["hashes"]["quickXorHash"].str;
 					localFileHash = computeQuickXorHash(localFilePath);
 				} else {
-					addLogEntry("Online file validation unable to be performed: input JSON whilst valid did not contain data which could be validated");
-					addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath);
+					if (verboseLogging) {
+						addLogEntry("Online file validation unable to be performed: input JSON whilst valid did not contain data which could be validated", ["verbose"]);
+						addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath, ["verbose"]);
+					}
 					return integrityValid;
 				}
 				
@@ -10993,13 +10995,16 @@ class SyncEngine {
 					addLogEntry("To disable the integrity checking of uploaded files use --disable-upload-validation");
 				}
 			} else {
-				addLogEntry("Online file validation unable to be performed: input JSON was invalid");
-				addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath);
+				if (verboseLogging) {
+					addLogEntry("Online file validation unable to be performed: input JSON whilst valid did not contain data which could be validated", ["verbose"]);
+					addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath, ["verbose"]);
+				}
 			}
 		} else {
 			// We are bypassing integrity checks due to --disable-upload-validation
 			if (debugLogging) {addLogEntry("Online file validation disabled due to --disable-upload-validation", ["debug"]);}
-			addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath, ["info", "notify"]);
+			// Skipping upload integrity check, do not notify the user via the GUI ... they have explicitly disabled upload validation
+			if (verboseLogging) {addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath, ["verbose"]);}
 		}
 		
 		// Display function processing time if configured to do so
