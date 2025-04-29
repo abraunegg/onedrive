@@ -37,6 +37,8 @@ avmkfdiitirnrenzljwc
 avx
 bak
 baus
+BBBA
+BBD
 bcdefghi
 beffdb
 bindir
@@ -175,6 +177,7 @@ journalctl
 jsvar
 kdbx
 keepass
+keyboxd
 kotlin
 lalen
 lbl
@@ -230,6 +233,7 @@ mswsock
 mtune
 mydir
 mynasau
+myuser
 myusername
 nadded
 nadjusted
