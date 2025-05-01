@@ -372,7 +372,7 @@ class ApplicationConfig {
 		//
 		// This is simply because they are looking at the timestamp and *not* if the content has actually changed .... a poor design on those editors
 		//
-		// This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the timestamp of the file
+		// This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the local timestamp of the file
 		// and Microsoft OneDrive should be respecting this timestamp as the timestamp to use|set when storing that file online
 		boolValues["force_session_upload"] = false;
 		

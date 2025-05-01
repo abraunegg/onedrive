@@ -76,6 +76,9 @@
 ## This setting controls the application HTTP protocol version, downgrading to HTTP/1.1 when enabled.
 #force_http_11 = "false"
 
+## This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the local timestamp of the file
+#force_session_upload = "false"
+
 ## This setting controls the application IP protocol used when communicating with Microsoft OneDrive.
 #ip_protocol_version = "0"
 
