@@ -300,67 +300,81 @@ class ApplicationConfig {
 		// Number of concurrent threads
 		longValues["threads"] = defaultConcurrentThreads; // Default is 8, user can increase to max of 16 or decrease
 		
-		// - Do we wish to upload only?
+		// Do we wish to upload only?
 		boolValues["upload_only"] = false;
-		// - Do we need to check for the .nomount file on the mount point?
+		// Do we need to check for the .nomount file on the mount point?
 		boolValues["check_nomount"] = false;
-		// - Do we need to check for the .nosync file anywhere?
+		// Do we need to check for the .nosync file anywhere?
 		boolValues["check_nosync"] = false;
-		// - Do we wish to download only?
+		// Do we wish to download only?
 		boolValues["download_only"] = false;
-		// - Do we disable notifications?
+		// Do we disable notifications?
 		boolValues["disable_notifications"] = false;
-		// - Do we bypass all the download validation? 
-		//   This is critically important not to disable, but because of SharePoint 'feature' can be highly desirable to enable
+		// Do we bypass all the download validation? 
+		// - This is critically important not to disable, but because of SharePoint 'feature' can be highly desirable to enable
 		boolValues["disable_download_validation"] = false;
-		// - Do we bypass all the upload validation? 
-		//   This is critically important not to disable, but because of SharePoint 'feature' can be highly desirable to enable
+		// Do we bypass all the upload validation? 
+		// - This is critically important not to disable, but because of SharePoint 'feature' can be highly desirable to enable
 		boolValues["disable_upload_validation"] = false;
-		// - Do we enable logging?
+		// Do we enable logging?
 		boolValues["enable_logging"] = false;
-		// - Do we force HTTP 1.1 for connections to the OneDrive API
-		//   By default we use the curl library default, which should be HTTP2 for most operations governed by the OneDrive API
+		// Do we force HTTP 1.1 for connections to the OneDrive API
+		// - By default we use the curl library default, which should be HTTP2 for most operations governed by the OneDrive API
 		boolValues["force_http_11"] = false;
-		// - Do we treat the local file system as the source of truth for our data?
+		// Do we treat the local file system as the source of truth for our data?
 		boolValues["local_first"] = false;
-		// - Do we ignore local file deletes, so that all files are retained online?
+		// Do we ignore local file deletes, so that all files are retained online?
 		boolValues["no_remote_delete"] = false;
-		// - Do we skip symbolic links?
+		// Do we skip symbolic links?
 		boolValues["skip_symlinks"] = false;
-		// - Do we enable debugging for all HTTPS flows. Critically important for debugging API issues.
+		// Do we enable debugging for all HTTPS flows. Critically important for debugging API issues.
 		boolValues["debug_https"] = false;
-		// - Do we skip .files and .folders?
+		// Do we skip .files and .folders?
 		boolValues["skip_dotfiles"] = false;
-		// - Do we perform a 'dry-run' with no local or remote changes actually being performed?
+		// Do we perform a 'dry-run' with no local or remote changes actually being performed?
 		boolValues["dry_run"] = false;
-		// - Do we sync all the files in the 'sync_dir' root?
+		// Do we sync all the files in the 'sync_dir' root?
 		boolValues["sync_root_files"] = false;
-		// - Do we delete source after successful transfer?
+		// Do we delete source after successful transfer?
 		boolValues["remove_source_files"] = false;
-		// - Do we perform strict matching for skip_dir?
+		// Do we perform strict matching for skip_dir?
 		boolValues["skip_dir_strict_match"] = false;
-		// - Do we perform a --resync?
+		// Do we perform a --resync?
 		boolValues["resync"] = false;
-		// - resync now needs to be acknowledged based on the 'risk' of using it
+		// 'resync' now needs to be acknowledged based on the 'risk' of using it
 		boolValues["resync_auth"] = false;
-		// - Ignore data safety checks and overwrite local data rather than preserve & rename
-		//   This is a config file option ONLY
+		// Ignore data safety checks and overwrite local data rather than preserve & rename
+		// - This is a config file option ONLY
 		boolValues["bypass_data_preservation"] = false;
-		// - Allow enable / disable of the syncing of OneDrive Business Shared items (files & folders) via configuration file
+		// Allow enable / disable of the syncing of OneDrive Business Shared items (files & folders) via configuration file
 		boolValues["sync_business_shared_items"] = false;
-		// - Log to application output running configuration values
+		// Log to application output running configuration values
 		boolValues["display_running_config"] = false;
-		// - Configure read-only authentication scope
+		// Configure read-only authentication scope
 		boolValues["read_only_auth_scope"] = false;
-		// - Flag to cleanup local files when using --download-only
+		// Flag to cleanup local files when using --download-only
 		boolValues["cleanup_local_files"] = false;
-		// - Perform a permanentDelete on deletion activities
+		// Perform a permanentDelete on deletion activities
 		boolValues["permanent_delete"] = false;
-		// - Controls how the application handles the Microsoft SharePoint 'feature' of modifying all PDF, MS Office & HTML files with added XML content post upload
-		//   There are 2 ways to solve this:
-		//   1. Download the modified file immediately after upload as per v2.4.x (default)
-		//   2. Create a new online version of the file, which then contributes to the users 'quota'
+		
+		// Controls how the application handles the Microsoft SharePoint 'feature' of modifying all PDF, MS Office & HTML files with added XML content post upload
+		// - There are 2 ways to solve this:
+		//     1. Download the modified file immediately after upload as per v2.4.x (default)
+		//     2. Create a new online version of the file, which then contributes to the users 'quota'
 		boolValues["create_new_file_version"] = false;
+		
+		// Some Linux editors (vi|vim|nvim|emacs|LibreOffice) use use a safe file-save strategy designed to avoid data corruption. As such, as part of this Process
+		// they 'track' the last modified timestamp of the 'new' file that they create on file save (regardless of new file, modified file)
+		// If *any* other application in the background then 'updates' this timestamp, these Linux editors complain saying that the file has changed:
+		//
+		// 		WARNING: The file has been changed since reading it!!!
+		//		Do you really want to write to it (y/n)?
+		//
+		// This is simply because they are looking at the timestamp and *not* if the content has actually changed .... a poor design on those editors
+		//
+		// This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the timestamp of the file
+		// and Microsoft OneDrive should be respecting this timestamp as the timestamp to use|set when storing that file online
+		boolValues["force_session_upload"] = false;
 		
 		// Webhook Feature Options
 		boolValues["webhook_enabled"] = false;
