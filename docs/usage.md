@@ -9,6 +9,7 @@ Before reading this document, please ensure you are running application version 
   - [Upgrading from the 'skilion' Client](#upgrading-from-the-skilion-client)
   - [Guidelines for Local File and Folder Naming in the Synchronisation Directory](#guidelines-for-local-file-and-folder-naming-in-the-synchronisation-directory)
   - [Support for Microsoft Azure Information Protected Files](#support-for-microsoft-azure-information-protected-files)
+  - [Compatibility with Editors and Applications Using Atomic Save Operations](#compatibility-with-editors-and-applications-using-atomic-save-operations)
   - [Compatibility with curl](#compatibility-with-curl)
 - [First Steps](#first-steps)
   - [Authorise the Application with Your Microsoft OneDrive Account](#authorise-the-application-with-your-microsoft-onedrive-account)
@@ -128,6 +129,75 @@ The above guidelines are essential for maintaining synchronisation integrity wit
 > If you chose to enable `--disable-download-validation` , the AIP files will download to your platform, however, if there are any other genuine download failures where the size and hash are different, these too will be retained locally meaning you may experience data integrity loss. This is due to the Microsoft Graph API lacking any capability to identify up-front that a file utilises AIP, thus zero capability to differentiate between AIP and non-AIP files for failure detection.
 > 
 > Please use the `--disable-download-validation` option with extreme caution and understand the risk if you enable it.
+
+### Compatibility with Editors and Applications Using Atomic Save Operations
+
+Many modern editors and applications—including `vi`, `vim`, `nvim`, `emacs`, `LibreOffice`, and others—use *atomic save* strategies to preserve data integrity when writing files. This section outlines how such operations interact with the `onedrive` client, what users can expect, and why certain side effects (such as editor warnings or perceived timestamp discrepancies) may occur.
+
+#### How Atomic Save Operations Work
+
+When these applications save a file, they typically follow this sequence:
+
+1. **Create a Temporary File**  
+   A new file is written with the updated content, often in the same directory as the original.
+
+2. **Flush to Disk**  
+   The temporary file is flushed to disk using `fsync()` or an equivalent method to ensure data safety.
+
+3. **Atomic Rename**  
+   The temporary file is renamed to the original filename using the `rename()` syscall.  
+   This is an atomic operation on Linux, meaning the original file is *replaced*, not modified.
+
+4. **Remove Lock or Swap Files**  
+   Auxiliary files used during editing (e.g., `.swp`, `.#filename`) are deleted.
+
+As a result, the saved file is **technically a new file** with a new inode and a new timestamp, even if the filename remains unchanged.
+
+#### How This Affects the OneDrive Client
+
+When the `onedrive` client observes such an atomic save operation via `inotify`, it detects:
+
+- The original file as *deleted*.
+- A new file (with the same name) as *created*.
+
+The client responds accordingly:
+
+- The "new" file is uploaded to Microsoft OneDrive.
+- After upload, Microsoft assigns its own *modification timestamp* to the file.
+- To ensure consistency between local and remote states, the client updates the local file’s timestamp to match the **exact time** stored in OneDrive.
+
+> [!IMPORTANT]
+> Microsoft OneDrive does **not support fractional-second precision** in file timestamps—only whole seconds. As a result, small discrepancies may occur if the local file system supports higher-resolution timestamps.
+
+This behaviour ensures accurate syncing and content integrity, but may lead to subtle side effects in timestamp-sensitive applications.
+
+#### Expected Side Effects
+
+- **Timestamp Alignment for Atomic Saves**  
+  Editors that rely on local file timestamps (rather than content checksums) previously issued warnings that a file had changed unexpectedly—typically because the `onedrive` client updated the modification time after upload.  
+  With recent improvements, the client now preserves the original modification timestamp if only fractional seconds differ, preventing unnecessary timestamp changes. As a result, editors such as `vi`, `vim`, `nvim`, `emacs`, and `LibreOffice` no longer trigger warnings when saving files using atomic operations.
+
+- **False Conflict Prompts (Collaborative Editing)**  
+  In collaborative editing scenarios—such as with LibreOffice or shared OneDrive folders—conflict prompts may still occur if another user or device modifies a file, resulting in a meaningful timestamp or content change.  
+  However, for local edits using atomic save methods, the client now avoids unnecessary timestamp updates, effectively eliminating false conflicts in those cases.
+
+#### Recommendation
+
+If you are using editors that rely on strict timestamp semantics and wish to minimise interference from the `onedrive` client:
+
+- Save your work, then pause or temporarily stop sync (`onedrive --monitor`).
+- Resume syncing when finished.
+- Alternatively, configure the client to ignore such files via the `skip_file` setting if they do not need to be synced.
+
+#### Summary
+
+The `onedrive` client is fully compatible with applications that use atomic save operations. Users should be aware that:
+
+- Atomic saves result in the file being treated as a new item.
+- Timestamps may be adjusted post-upload to match OneDrive's stored value.
+- In rare cases, timestamp-sensitive applications may display warnings or prompts.
+
+This behaviour is by design and ensures consistency and data integrity between your local filesystem and the OneDrive cloud.
 
 ### Compatibility with curl
 If your system uses curl < 7.47.0, curl will default to HTTP/1.1 for HTTPS operations, and the client will follow suit, using HTTP/1.1.
