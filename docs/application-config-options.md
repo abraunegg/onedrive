@@ -29,6 +29,7 @@ Before reading this document, please ensure you are running application version 
   - [dry_run](#dry_run)
   - [enable_logging](#enable_logging)
   - [force_http_11](#force_http_11)
+  - [force_session_upload](#force_session_upload)
   - [ip_protocol_version](#ip_protocol_version)
   - [local_first](#local_first)
   - [log_dir](#log_dir)
