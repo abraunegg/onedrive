@@ -175,7 +175,7 @@ This behaviour ensures accurate syncing and content integrity, but may lead to s
 
 - **Timestamp Alignment for Atomic Saves**  
   Editors that rely on local file timestamps (rather than content checksums) previously issued warnings that a file had changed unexpectedly—typically because the `onedrive` client updated the modification time after upload.  
-  With recent improvements, the client now preserves the original modification timestamp if only fractional seconds differ, preventing unnecessary timestamp changes. As a result, editors such as `vi`, `vim`, `nvim`, `emacs`, and `LibreOffice` no longer trigger warnings when saving files using atomic operations.
+  This client preserves the original modification timestamp if only fractional seconds differ, preventing unnecessary timestamp changes. As a result, editors such as `vi`, `vim`, `nvim`, `emacs`, and `LibreOffice` should not trigger warnings when saving files using atomic operations.
 
 - **False Conflict Prompts (Collaborative Editing)**  
   In collaborative editing scenarios—such as with LibreOffice or shared OneDrive folders—conflict prompts may still occur if another user or device modifies a file, resulting in a meaningful timestamp or content change.  

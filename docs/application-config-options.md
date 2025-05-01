@@ -404,6 +404,18 @@ _**Config Example:**_ `force_http_11 = "false"` or `force_http_11 = "true"`
 
 _**CLI Option Use:**_ `--force-http-11`
 
+
+### force_session_upload
+_**Description:**_ This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the local timestamp of the file.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `force_session_upload = "false"` or `force_session_upload = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
 ### ip_protocol_version
 _**Description:**_ This setting controls the application IP protocol that should be used when communicating with Microsoft OneDrive. The default is to use IPv4 and IPv6 networks for communicating to Microsoft OneDrive.
 
