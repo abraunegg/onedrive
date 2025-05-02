@@ -422,23 +422,14 @@ The following documents provide detailed guidance on installing, configuring, an
 * **[application-security.md](https://github.com/abraunegg/onedrive/blob/master/docs/application-security.md)**
   Details on security considerations and practices related to the OneDrive client.
 
-* **[build-rpm-howto.md](https://github.com/abraunegg/onedrive/blob/master/docs/build-rpm-howto.md)**
-  Guide on building RPM packages for the OneDrive client.
-
 * **[business-shared-items.md](https://github.com/abraunegg/onedrive/blob/master/docs/business-shared-items.md)**
   Instructions on syncing shared items in OneDrive for Business accounts.
 
 * **[client-architecture.md](https://github.com/abraunegg/onedrive/blob/master/docs/client-architecture.md)**
   Overview of the client's architecture and design principles.
 
-* **[contributing.md](https://github.com/abraunegg/onedrive/blob/master/docs/contributing.md)**
-  Guidelines for contributing to the OneDrive project.
-
 * **[docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/docker.md)**
   Instructions for running the OneDrive client within Docker containers.
-
-* **[install.md](https://github.com/abraunegg/onedrive/blob/master/docs/install.md)**
-  Installation instructions for various Linux distributions.
 
 * **[known-issues.md](https://github.com/abraunegg/onedrive/blob/master/docs/known-issues.md)**
   List of known issues and limitations of the OneDrive client.
@@ -449,14 +440,8 @@ The following documents provide detailed guidance on installing, configuring, an
 * **[podman.md](https://github.com/abraunegg/onedrive/blob/master/docs/podman.md)**
   Guide for running the OneDrive client using Podman containers.
 
-* **[privacy-policy.md](https://github.com/abraunegg/onedrive/blob/master/docs/privacy-policy.md)**
-  The privacy policy governing the use of the OneDrive client.
-
 * **[sharepoint-libraries.md](https://github.com/abraunegg/onedrive/blob/master/docs/sharepoint-libraries.md)**
   Instructions for syncing SharePoint document libraries.
-
-* **[terms-of-service.md](https://github.com/abraunegg/onedrive/blob/master/docs/terms-of-service.md)**
-  The terms of service for using the OneDrive client.
 
 * **[ubuntu-package-install.md](https://github.com/abraunegg/onedrive/blob/master/docs/ubuntu-package-install.md)**
   Specific instructions for installing the client on Ubuntu systems.
@@ -464,10 +449,9 @@ The following documents provide detailed guidance on installing, configuring, an
 * **[webhooks.md](https://github.com/abraunegg/onedrive/blob/master/docs/webhooks.md)**
   Information on configuring and using webhooks with the OneDrive client.
 
+Further documentation not listed above can be found here: https://github.com/abraunegg/onedrive/blob/master/docs/
 
 Please read these additional references to assist you with installing, configuring, and using the OneDrive Client for Linux.
-
-
 
 ### Increasing application logging level
 When running a sync (`--sync`) or using monitor mode (`--monitor`), it may be desirable to see additional information regarding the progress and operation of the client. For example, for a `--sync` command, this would be:
