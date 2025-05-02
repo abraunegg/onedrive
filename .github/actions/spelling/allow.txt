@@ -127,6 +127,7 @@ ffat
 FFFD
 fhandler
 flto
+fracsec
 fstack
 FState
 fullchain
@@ -151,6 +152,7 @@ gshared
 GVariant
 hideonindex
 hnsecs
+howto
 hskrieg
 htons
 idk

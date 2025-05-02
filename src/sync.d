@@ -2965,7 +2965,7 @@ class SyncEngine {
 					// updated by the local Operating System with the latest timestamp - as this is normal operation
 					// as the directory has been modified
 					// Set the timestamp, logging and error handling done within function
-					setPathTimestamp(dryRun, newItemPath, newDatabaseItem.mtime);
+					setLocalPathTimestamp(dryRun, newItemPath, newDatabaseItem.mtime);
 					
 					// Save the newDatabaseItem to the database
 					saveDatabaseItem(newDatabaseItem);
@@ -3277,7 +3277,7 @@ class SyncEngine {
 						// which is 'correct' .. but we need to report locally the online timestamp here as the move was made online
 						if (changedOneDriveItem.type == ItemType.file) {
 							// Set the timestamp, logging and error handling done within function
-							setPathTimestamp(dryRun, changedItemPath, changedOneDriveItem.mtime);
+							setLocalPathTimestamp(dryRun, changedItemPath, changedOneDriveItem.mtime);
 						}
 					} else {
 						// --dry-run situation - the actual rename did not occur - but we need to track like it did
@@ -3699,7 +3699,7 @@ class SyncEngine {
 								if (debugLogging) {addLogEntry("Downloaded file matches reported size and reported file hash", ["debug"]);}
 								
 								// Set the timestamp, logging and error handling done within function
-								setPathTimestamp(dryRun, newItemPath, itemModifiedTime);
+								setLocalPathTimestamp(dryRun, newItemPath, itemModifiedTime);
 							} else {
 								// Downloaded file does not match size or hash .. which is it?
 								bool downloadValueMismatch = false;
@@ -3777,7 +3777,7 @@ class SyncEngine {
 							
 							// Whilst the download integrity checks were disabled, we still have to set the correct timestamp on the file
 							// Set the timestamp, logging and error handling done within function
-							setPathTimestamp(dryRun, newItemPath, itemModifiedTime);
+							setLocalPathTimestamp(dryRun, newItemPath, itemModifiedTime);
 							
 							// Azure Information Protection (AIP) protected files potentially have missing data and/or inconsistent data
 							if (appConfig.accountType != "personal") {
@@ -4004,7 +4004,7 @@ class SyncEngine {
 								// The source of the out-of-date timestamp was the local item and needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
 								if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --resync", ["verbose"]);}
 								// Fix the timestamp, logging and error handling done within function
-								setPathTimestamp(dryRun, path, item.mtime);
+								setLocalPathTimestamp(dryRun, path, item.mtime);
 							} else {
 								// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
 								if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);}
@@ -4022,14 +4022,14 @@ class SyncEngine {
 							// --download-only is being used ... local file needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
 							if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);}
 							// Fix the timestamp, logging and error handling done within function
-							setPathTimestamp(dryRun, path, item.mtime);
+							setLocalPathTimestamp(dryRun, path, item.mtime);
 						}
 					} else if (!dryRun) {
 						// The source of the out-of-date timestamp was the local file and this needs to be corrected to avoid always generating a hash test if timestamp is different
 						if (verboseLogging) {addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally", ["verbose"]);}
 						
 						// Fix the timestamp, logging and error handling done within function
-						setPathTimestamp(dryRun, path, item.mtime);
+						setLocalPathTimestamp(dryRun, path, item.mtime);
 					}
 					
 					// Display function processing time if configured to do so
@@ -5042,14 +5042,14 @@ class SyncEngine {
 										if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online, however file is a OneDrive Business Shared File - correcting local timestamp", ["verbose"]);}
 										
 										// Set the timestamp, logging and error handling done within function
-										setPathTimestamp(dryRun, localFilePath, dbItem.mtime);
+										setLocalPathTimestamp(dryRun, localFilePath, dbItem.mtime);
 									}
 								}
 							} else {
 								// --download-only being used
 								if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online - correcting local timestamp due to --download-only being used to ensure local file matches timestamp online", ["verbose"]);}
 								// Set the timestamp, logging and error handling done within function
-								setPathTimestamp(dryRun, localFilePath, dbItem.mtime);
+								setLocalPathTimestamp(dryRun, localFilePath, dbItem.mtime);
 							}
 						}
 					} else {
@@ -6340,21 +6340,56 @@ class SyncEngine {
 				// Update the date / time of the file online to match the local item
 				// Get the local file last modified time
 				SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+				// Drop fractional seconds for upload timestamp modification as Microsoft OneDrive does not support fractional seconds
 				localModifiedTime.fracSecs = Duration.zero;
+				
 				// Get the latest eTag, and use that
 				string etagFromUploadResponse = uploadResponse["eTag"].str;
-				// Attempt to update the online date time stamp based on our local data
+				
+				// Attempt to update the online lastModifiedDateTime value based on our local timestamp data
 				if (appConfig.accountType == "personal") {
-					// Business | SharePoint we used a session to upload the data, thus, local timestamps are given when the session is created
-					uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);
+					// Personal Account Handling for Modified File Upload
+					//
+					// Did the upload integrity check pass or fail?
+					if (!uploadIntegrityPassed) {
+						// upload integrity check failed for the modified file
+						if (!appConfig.getValueBool("create_new_file_version")) {
+							// warn that file differences will exist online
+							// as this is a 'personal' account .. we have no idea / reason potentially, so do not download the 'online' file
+							addLogEntry("WARNING: The file uploaded to Microsoft OneDrive does not match your local version. Data loss may occur.");
+						} else {
+							// Create a new online version of the file by updating the online metadata
+							uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);
+						}
+					} else {
+						// Upload of the modified file passed integrity checks
+						// We need to make sure that the local file on disk has this timestamp from this JSON, otherwise on the next application run:
+						//   The last modified timestamp has changed however the file content has not changed
+						//   The local item has the same hash value as the item online - correcting timestamp online
+						// This then creates another version online which we do not want to do .. unless configured to do so
+						if (!appConfig.getValueBool("create_new_file_version")) {
+							// Create an applicable DB item from the upload JSON response
+							Item onlineItem;
+							onlineItem = makeItem(uploadResponse);
+							// Correct the local file timestamp to avoid creating a new version online
+							// Set the timestamp, logging and error handling done within function
+							setLocalPathTimestamp(dryRun, localFilePath, onlineItem.mtime);
+						} else {
+							// Create a new online version of the file by updating the metadata, which negates the need to download the file
+							uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);	
+						}
+					}
 				} else {
+					// Business | SharePoint Account Handling for Modified File Upload
+					//
 					// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 					// This means that the file which was uploaded, is potentially no longer the file we have locally
 					// There are 2 ways to solve this:
 					//   1. Download the modified file immediately after upload as per v2.4.x (default)
 					//   2. Create a new online version of the file, which then contributes to the users 'quota'
+					// Did the upload integrity check pass or fail?
 					if (!uploadIntegrityPassed) {
-						// upload integrity check failed
+						// upload integrity check failed for the modified file
 						if (!appConfig.getValueBool("create_new_file_version")) {
 							// are we in an --upload-only scenario
 							if(!uploadOnly){
@@ -6380,12 +6415,12 @@ class SyncEngine {
 						//   The local item has the same hash value as the item online - correcting timestamp online
 						// This then creates another version online which we do not want to do .. unless configured to do so
 						if (!appConfig.getValueBool("create_new_file_version")) {
-							// create an applicable item
+							// Create an applicable DB item from the upload JSON response
 							Item onlineItem;
 							onlineItem = makeItem(uploadResponse);
 							// Correct the local file timestamp to avoid creating a new version online
 							// Set the timestamp, logging and error handling done within function
-							setPathTimestamp(dryRun, localFilePath, onlineItem.mtime);
+							setLocalPathTimestamp(dryRun, localFilePath, onlineItem.mtime);
 						} else {
 							// Create a new online version of the file by updating the metadata, which negates the need to download the file
 							uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);	
@@ -6511,8 +6546,20 @@ class SyncEngine {
 			
 			// What upload method should be used?
 			if (thisFileSizeLocal <= sessionThresholdFileSize) {
+				// file size is below session threshold
 				useSimpleUpload = true;
 			}
+			
+			// Use Session Upload regardless
+			if (appConfig.getValueBool("force_session_upload")) {
+			
+				// forcing session upload
+				addLogEntry("FORCING SESSION UPLOAD (MODIFIED)");
+				
+				useSimpleUpload = false;
+			
+			}
+			
 		
 			// If the filesize is greater than zero , and we have valid 'latest' online data is the online file matching what we think is in the database?
 			if ((thisFileSizeLocal > 0) && (currentOnlineJSONData.type() == JSONType.object)) {
@@ -8539,8 +8586,20 @@ class SyncEngine {
 			// Not a dry-run situation
 			// Do we use simpleUpload or create an upload session?
 			bool useSimpleUpload = false;
+			
+			// What upload method should be used?
 			if (thisFileSize <= sessionThresholdFileSize) {
 				useSimpleUpload = true;
+			}
+			
+			// Use Session Upload regardless
+			if (appConfig.getValueBool("force_session_upload")) {
+			
+				// forcing session upload
+				addLogEntry("FORCING SESSION UPLOAD (NEWFILE)");
+				
+				useSimpleUpload = false;
+			
 			}
 			
 			// We can only upload zero size files via simpleFileUpload regardless of account type
