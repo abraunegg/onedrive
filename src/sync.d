@@ -6552,15 +6552,11 @@ class SyncEngine {
 			
 			// Use Session Upload regardless
 			if (appConfig.getValueBool("force_session_upload")) {
-			
-				// forcing session upload
-				addLogEntry("FORCING SESSION UPLOAD (MODIFIED)");
-				
+				// Forcing session upload
+				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (modified)", ["debug"]);}
 				useSimpleUpload = false;
-			
 			}
 			
-		
 			// If the filesize is greater than zero , and we have valid 'latest' online data is the online file matching what we think is in the database?
 			if ((thisFileSizeLocal > 0) && (currentOnlineJSONData.type() == JSONType.object)) {
 				// Issue #2626 | Case 2-1 
@@ -6968,6 +6964,27 @@ class SyncEngine {
 	
 	// Ensure we have a full list of unique paths to create online
 	void addPathToCreateOnline(string pathToAdd) {
+	
+		// Is this a valid path to add?
+		// The requested directory to create was not found on OneDrive - creating remote directory: ./.
+		// 		OneDrive generated an error when creating this path: ./.
+		// 		ERROR: Microsoft OneDrive API returned an error with the following message:
+		// 		  Error Message:       HTTP request returned status code 400 (Bad Request)
+		// 		  Error Reason:        Invalid request
+		// 		  Error Code:          invalidRequest
+		// 		  Error Timestamp:     2025-05-02T20:31:46
+		// 		  API Request ID:      23c2e2cd-6968-4a99-ac80-f9da786a18fd
+		// 		  Calling Function:    syncEngine.createDirectoryOnline()
+
+		// Is this a valid path to add?
+		if ((pathToAdd == ".")||(pathToAdd == "./.")) {
+			// matches paths we should not attempt to create online
+			if (debugLogging) {addLogEntry("attempted to add as path to create online - rejecting: " ~ pathToAdd, ["debug"]);}
+		
+			// We can never add or create online the OneDrive 'root'
+			return;
+		}
+	
 		// Only add unique paths
 		if (!pathsToCreateOnline.canFind(pathToAdd)) {
 			// Add this unique path to the created online
@@ -8594,12 +8611,9 @@ class SyncEngine {
 			
 			// Use Session Upload regardless
 			if (appConfig.getValueBool("force_session_upload")) {
-			
-				// forcing session upload
-				addLogEntry("FORCING SESSION UPLOAD (NEWFILE)");
-				
+				// Forcing session upload
+				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (newfile)", ["debug"]);}
 				useSimpleUpload = false;
-			
 			}
 			
 			// We can only upload zero size files via simpleFileUpload regardless of account type
