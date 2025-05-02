@@ -18,6 +18,7 @@ Before reading this document, please ensure you are running application version 
     - [Standalone Synchronisation Operational Mode (Standalone Mode)](#standalone-synchronisation-operational-mode-standalone-mode)
     - [Ongoing Synchronisation Operational Mode (Monitor Mode)](#ongoing-synchronisation-operational-mode-monitor-mode)
 - [Using the OneDrive Client for Linux to synchronise your data](#using-the-onedrive-client-for-linux-to-synchronise-your-data)
+  - [Client Documentation](#client-documentation)
   - [Increasing application logging level](#increasing-application-logging-level)
   - [Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive](#using-client-side-filtering-rules-to-determine-what-should-be-synced-with-microsoft-onedrive)
   - [Testing your configuration](#testing-your-configuration)
