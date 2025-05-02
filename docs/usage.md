@@ -187,7 +187,8 @@ If you are using editors that rely on strict timestamp semantics and wish to min
 
 - Save your work, then pause or temporarily stop sync (`onedrive --monitor`).
 - Resume syncing when finished.
-- Alternatively, configure the client to ignore such files via the `skip_file` setting if they do not need to be synced.
+- Configure the client to ignore such files via the `skip_file` setting if they do not need to be synced.
+- Configure the client to use 'session uploads' for all files via the `force_session_upload` setting. This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the actual local timestamp (without fractional seconds) of the file that Microsoft OneDrive should store.
 
 #### Summary
 
