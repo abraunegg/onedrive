@@ -1014,7 +1014,7 @@ There are two methods to achieve this:
 *   Employ 'skip_file' as part of your 'config' file to configure what files to skip
 *   Employ 'sync_list' to configure what files and directories to sync, and what should be excluded
 
-For further details please read the ['skip_file' config option documentation](https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md#skip_file).
+For further details please read the ['skip_file' config option documentation](https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md#skip_file)
 
 ### How to 'skip' directories from syncing?
 There are three methods available to 'skip' a directory from the sync process:
@@ -1025,7 +1025,7 @@ There are three methods available to 'skip' a directory from the sync process:
 > [!IMPORTANT]
 > Entries for 'skip_dir' are *relative* to your 'sync_dir' path.
 
-For further details please read the ['skip_dir' config option documentation](https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md#skip_dir).
+For further details please read the ['skip_dir' config option documentation](https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md#skip_dir)
 
 ### How to 'skip' .files and .folders from syncing?
 There are three methods to achieve this:
