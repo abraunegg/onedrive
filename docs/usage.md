@@ -133,7 +133,7 @@ The above guidelines are essential for maintaining synchronisation integrity wit
 
 ### Compatibility with Editors and Applications Using Atomic Save Operations
 
-Many modern editors and applications—including `vi`, `vim`, `nvim`, `emacs`, `LibreOffice`, and others—use *atomic save* strategies to preserve data integrity when writing files. This section outlines how such operations interact with the `onedrive` client, what users can expect, and why certain side effects (such as editor warnings or perceived timestamp discrepancies) may occur.
+Many modern editors and applications—including `vi`, `vim`, `nvim`, `emacs`, `LibreOffice`, `Obsidian` and others—use *atomic save* strategies to preserve data integrity when writing files. This section outlines how such operations interact with the `onedrive` client, what users can expect, and why certain side effects (such as editor warnings or perceived timestamp discrepancies) may occur.
 
 #### How Atomic Save Operations Work
 
@@ -176,7 +176,7 @@ This behaviour ensures accurate syncing and content integrity, but may lead to s
 
 - **Timestamp Alignment for Atomic Saves**  
   Editors that rely on local file timestamps (rather than content checksums) previously issued warnings that a file had changed unexpectedly—typically because the `onedrive` client updated the modification time after upload.  
-  This client preserves the original modification timestamp if only fractional seconds differ, preventing unnecessary timestamp changes. As a result, editors such as `vi`, `vim`, `nvim`, `emacs`, and `LibreOffice` should not trigger warnings when saving files using atomic operations.
+  This client preserves the original modification timestamp if only fractional seconds differ, preventing unnecessary timestamp changes. As a result, editors such as `vi`, `vim`, `nvim`, `emacs`, `LibreOffice` and `Obsidian` should not trigger warnings when saving files using atomic operations.
 
 - **False Conflict Prompts (Collaborative Editing)**  
   In collaborative editing scenarios—such as with LibreOffice or shared OneDrive folders—conflict prompts may still occur if another user or device modifies a file, resulting in a meaningful timestamp or content change.  
