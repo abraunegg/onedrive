@@ -175,8 +175,8 @@ This behaviour ensures accurate syncing and content integrity, but may lead to s
 #### Expected Side Effects
 
 - **Timestamp Alignment for Atomic Saves**  
-  Editors that rely on local file timestamps (rather than content checksums) previously issued warnings that a file had changed unexpectedly—typically because the `onedrive` client updated the modification time after upload.  
-  This client preserves the original modification timestamp if only fractional seconds differ, preventing unnecessary timestamp changes. As a result, editors such as `vi`, `vim`, `nvim`, `emacs`, `LibreOffice` and `Obsidian` should not trigger warnings when saving files using atomic operations.
+  Editors that rely on local file timestamps (rather than content checksums) can issue warnings that a file had changed unexpectedly—typically because the `onedrive` client potentially updated the modification time after upload.
+  This client attempts to preserve the original modification timestamp only if fractional seconds differ, preventing unnecessary local timestamp changes. As a result, editors such as `vi`, `vim`, `nvim`, `emacs`, `LibreOffice` and `Obsidian` should not trigger warnings when saving files using atomic operations.
 
 - **False Conflict Prompts (Collaborative Editing)**  
   In collaborative editing scenarios—such as with LibreOffice or shared OneDrive folders—conflict prompts may still occur if another user or device modifies a file, resulting in a meaningful timestamp or content change.  
@@ -188,7 +188,7 @@ If you are using editors that rely on strict timestamp semantics and wish to min
 
 - Save your work, then pause or temporarily stop sync (`onedrive --monitor`).
 - Resume syncing when finished.
-- Configure the client to ignore such files via the `skip_file` setting if they do not need to be synced.
+- Configure the client to ignore temporary files your editor uses via the `skip_file` setting if they do not need to be synced.
 - Configure the client to use 'session uploads' for all files via the `force_session_upload` setting. This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the actual local timestamp (without fractional seconds) of the file that Microsoft OneDrive should store.
 
 #### Summary

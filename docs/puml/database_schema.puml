@@ -19,11 +19,16 @@ class item {
     deltaLink: TEXT
     syncStatus: TEXT
     size: TEXT
+    relocDriveId: TEXT
+    relocParentId: TEXT
 }
 
 note right of item::driveId
   PRIMARY KEY (driveId, id)
-  FOREIGN KEY (driveId, parentId) REFERENCES item
+  FOREIGN KEY (driveId, parentId)
+  REFERENCES item (driveId, id)
+  ON DELETE CASCADE
+  ON UPDATE RESTRICT
 end note
 
 item --|> item : parentId
