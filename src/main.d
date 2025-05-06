@@ -1205,6 +1205,14 @@ int main(string[] cliArgs) {
 
 						if(filesystemMonitor.initialised) {
 							// If local monitor is on and is waiting (previous event was not from webhook)
+							
+							// Obsidian Editor has been written in such a way that it is constantly writing each and every keystroke to a file.
+							// Not only is this really bad application behaviour, for this client, this means the application is constantly writing to disk, thus attempting to upload file changes.
+							// Unfortunatly Obsidian on Linux does not provide a built-in way to disable atomic saves or switch to a backup-copy method via configuration.
+							if (appConfig.getValueBool("delay_inotify_processing")) {
+								Thread.sleep(dur!("seconds")(to!int(appConfig.getValueLong("inotify_delay"))));
+							}
+							
 							// start the worker and wait for event
 							if (!notificationReceived) {
 								filesystemMonitor.send(true);
