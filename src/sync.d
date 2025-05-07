@@ -6784,11 +6784,27 @@ class SyncEngine {
 			if ("remaining" in quota) {
 				// Issue #2806
 				// If this is a negative value, quota["remaining"].integer can potentially convert to a huge positive number. Convert a different way.
-				string tempQuotaRemainingOnlineString = to!string(quota["remaining"]);
-				long tempQuotaRemainingOnlineValue = to!long(tempQuotaRemainingOnlineString);
-			
-				// Update quotaRemainingOnline to use the converted value
-				quotaRemainingOnline = tempQuotaRemainingOnlineValue;
+				string tempQuotaRemainingOnlineString;
+				// is quota["remaining"] an integer type?
+				if (quota["remaining"].type() == JSONType.integer) {
+					// extract as integer and convert to string
+					tempQuotaRemainingOnlineString = to!string(quota["remaining"].integer);
+				} 
+				
+				// is quota["remaining"] an string type?
+				if (quota["remaining"].type() == JSONType.string) {
+					// extract as string
+					tempQuotaRemainingOnlineString = quota["remaining"].str;
+				}
+				
+				// Fallback
+				if (tempQuotaRemainingOnlineString.empty) {
+					// tempQuotaRemainingOnlineString was not set, set to zero as a string
+					tempQuotaRemainingOnlineString = "0";
+				}
+				
+				// Update quotaRemainingOnline to use the converted string value
+				quotaRemainingOnline = to!long(tempQuotaRemainingOnlineString);
 			
 				// Set the applicable 'quotaAvailable' value
 				quotaAvailable = quotaRemainingOnline > 0;
