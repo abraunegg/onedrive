@@ -11090,10 +11090,17 @@ class SyncEngine {
 				}
 			}
 		} else {
-			// We are bypassing integrity checks due to --disable-upload-validation
-			if (debugLogging) {addLogEntry("Online file validation disabled due to --disable-upload-validation", ["debug"]);}
 			// Skipping upload integrity check, do not notify the user via the GUI ... they have explicitly disabled upload validation
 			if (verboseLogging) {addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath, ["verbose"]);}
+			
+			// We are bypassing integrity checks due to --disable-upload-validation
+			if (debugLogging) {
+				addLogEntry("Online file validation disabled due to --disable-upload-validation", ["debug"]);
+				addLogEntry("- Assuming file integrity is OK and valid", ["debug"]);
+			}
+			
+			// Ensure we return 'true', but this is in a false sense, as we are skipping the integrity check, so we assume the file is good
+			integrityValid = true;
 		}
 		
 		// Display function processing time if configured to do so
