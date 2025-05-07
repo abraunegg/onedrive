@@ -10,6 +10,7 @@ Before reading this document, please ensure you are running application version 
   - [Guidelines for Local File and Folder Naming in the Synchronisation Directory](#guidelines-for-local-file-and-folder-naming-in-the-synchronisation-directory)
   - [Support for Microsoft Azure Information Protected Files](#support-for-microsoft-azure-information-protected-files)
   - [Compatibility with Editors and Applications Using Atomic Save Operations](#compatibility-with-editors-and-applications-using-atomic-save-operations)
+  - [Compatibility with Obsidian](#compatibility-with-obsidian)
   - [Compatibility with curl](#compatibility-with-curl)
 - [First Steps](#first-steps)
   - [Authorise the Application with Your Microsoft OneDrive Account](#authorise-the-application-with-your-microsoft-onedrive-account)
@@ -200,6 +201,48 @@ The `onedrive` client is fully compatible with applications that use atomic save
 - In rare cases, timestamp-sensitive applications may display warnings or prompts.
 
 This behaviour is by design and ensures consistency and data integrity between your local filesystem and the OneDrive cloud.
+
+### Compatibility with Obsidian
+Obsidian on Linux does not provide a built-in way to disable atomic saves or switch to a backup-copy method via configuration. The application is built on Electron and relies on the default save behaviour of its underlying libraries and editor components (such as CodeMirror), which typically perform *atomic writes* using the following process:
+
+1. A temporary file is created containing the updated content.
+2. That temporary file is flushed to disk.
+3. The temporary file is atomically renamed to replace the original file.
+
+This behaviour is intended to improve data integrity and crash resilience, but it results in high disk I/O — particularly in Obsidian, where auto-save is triggered nearly every keystroke.
+
+> [!IMPORTANT]
+> Obsidian provides no mechanism to change how this save behaviour operates. This is a serious design limitation and should be treated as a bug in the application. The excessive and unnecessary write operations can significantly reduce the lifespan of SSDs over time due to increased wear, leading to broader consequences for system reliability.
+
+#### How This Affects the OneDrive Client
+
+Because Obsidian is constantly writing files, running the OneDrive Client for Linux in `--monitor` mode causes the client to continually receive inotify events. This leads to constant re-uploading of files, regardless of whether meaningful content has changed.
+
+The consequences of this are:
+
+1. Continuous upload attempts to Microsoft OneDrive.
+2. Potential for repeated overwrites of online data.
+3. Excessive API usage, which may result in Microsoft throttling your access — subsequently affecting the client’s ability to synchronise files reliably.
+
+#### Recommendation
+
+If you use Obsidian, it is *strongly* recommended that you enable the following two configuration options in your OneDrive client `config` file:
+```
+force_session_upload = "true"
+delay_inotify_processing = "true"
+```
+These settings introduce a delay in processing local file change events, allowing the OneDrive client to batch or debounce Obsidian's frequent writes. By default, this delay is 5 seconds.
+
+To adjust this delay, you can add the following configuration option:
+```
+inotify_delay = "10"
+```
+This example sets the delay to 10 seconds.
+
+> [!CAUTION]
+> Increasing `inotify_delay` too aggressively may have unintended side effects. All file system events are queued and processed in order, so setting a very high delay could result in large backlogs or undesirable data synchronisation outcomes — particularly in cases of rapid file changes or deletions.
+>
+> Adjust this setting with extreme caution and test thoroughly to ensure it does not impact your workflow or data integrity.
 
 ### Compatibility with curl
 If your system uses curl < 7.47.0, curl will default to HTTP/1.1 for HTTPS operations, and the client will follow suit, using HTTP/1.1.
