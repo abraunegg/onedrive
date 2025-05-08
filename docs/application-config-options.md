@@ -441,7 +441,7 @@ _**Value Type:**_ Integer
 
 _**Default Value:**_ 5
 
-_**Maximum Value:**_ 16
+_**Maximum Value:**_ 15
 
 _**Config Example:**_ `inotify_delay = "10"`
 
