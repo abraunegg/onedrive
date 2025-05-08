@@ -447,6 +447,8 @@ _**Config Example:**_ `inotify_delay = "10"`
 
 _**CLI Option Use:**_ *None - this is a config file option only*
 
+> [!NOTE]
+> This option is only used if 'delay_inotify_processing' is enabled, otherwise this option is ignored.
 
 ### ip_protocol_version
 _**Description:**_ This setting controls the application IP protocol that should be used when communicating with Microsoft OneDrive. The default is to use IPv4 and IPv6 networks for communicating to Microsoft OneDrive.
