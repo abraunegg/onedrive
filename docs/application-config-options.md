@@ -435,7 +435,7 @@ _**CLI Option Use:**_ *None - this is a config file option only*
 
 
 ### inotify_delay
-_**Description:**_ This option specifies the number of seconds 'inotify' events are paused before they are processed by this client. This value is used to overcome aggresive write applications such as Obsidian which write each keystroke in an atomic manner to the local disk. Due to this atomic write, each 'save' causes the existing file to be deleted and replaced with a new file, which this client sees as multiple constant 'inotify' events.
+_**Description:**_ This option specifies the number of seconds 'inotify' events are paused before they are processed by this client. This value is used to overcome aggressive write applications such as Obsidian which write each keystroke in an atomic manner to the local disk. Due to this atomic write, each 'save' causes the existing file to be deleted and replaced with a new file, which this client sees as multiple constant 'inotify' events.
 
 _**Value Type:**_ Integer
 
