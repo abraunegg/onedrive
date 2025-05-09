@@ -17,6 +17,7 @@ Before reading this document, please ensure you are running application version 
   - [create_new_file_version](#create_new_file_version)
   - [data_timeout](#data_timeout)
   - [debug_https](#debug_https)
+  - [delay_inotify_processing](#delay_inotify_processing)
   - [disable_download_validation](#disable_download_validation)
   - [disable_notifications](#disable_notifications)
   - [disable_permission_set](#disable_permission_set)
@@ -30,6 +31,7 @@ Before reading this document, please ensure you are running application version 
   - [enable_logging](#enable_logging)
   - [force_http_11](#force_http_11)
   - [force_session_upload](#force_session_upload)
+  - [inotify_delay](#inotify_delay)
   - [ip_protocol_version](#ip_protocol_version)
   - [local_first](#local_first)
   - [log_dir](#log_dir)
@@ -253,6 +255,20 @@ _**CLI Option Use:**_ `--debug-https`
 > [!WARNING]
 > Whilst this option can be used at any time, it is advisable that you only use this option when advised as this will output your `Authorization: bearer` - which is your authentication token to Microsoft OneDrive.
 
+
+### delay_inotify_processing
+_**Description:**_ This setting controls whether 'inotify' events should be delayed or not. This option should only ever be enabled when attempting to reduce the impact of editors like Obsidian which constantly write change to disk in an atomic fashion.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `delay_inotify_processing = "false"` or `delay_inotify_processing = "true"`
+
+> [!NOTE]
+> If you enable this option you *must* also enable 'force_session_upload' to ensure that your data uploads are done in a manner that editors, like Obsidian expect.
+
+
 ### disable_download_validation
 _**Description:**_ This option determines whether the client will conduct integrity validation on files downloaded from Microsoft OneDrive. Sometimes, when downloading files, particularly from SharePoint, there is a discrepancy between the file size reported by the OneDrive API and the byte count received from the SharePoint HTTP Server for the same file. Enable this option to disable the integrity checks performed by this client.
 
@@ -416,6 +432,23 @@ _**Default Value:**_ False
 _**Config Example:**_ `force_session_upload = "false"` or `force_session_upload = "true"`
 
 _**CLI Option Use:**_ *None - this is a config file option only*
+
+
+### inotify_delay
+_**Description:**_ This option specifies the number of seconds 'inotify' events are paused before they are processed by this client. This value is used to overcome aggressive write applications such as Obsidian which write each keystroke in an atomic manner to the local disk. Due to this atomic write, each 'save' causes the existing file to be deleted and replaced with a new file, which this client sees as multiple constant 'inotify' events.
+
+_**Value Type:**_ Integer
+
+_**Default Value:**_ 5
+
+_**Maximum Value:**_ 15
+
+_**Config Example:**_ `inotify_delay = "10"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+> [!NOTE]
+> This option is only used if 'delay_inotify_processing' is enabled, otherwise this option is ignored.
 
 ### ip_protocol_version
 _**Description:**_ This setting controls the application IP protocol that should be used when communicating with Microsoft OneDrive. The default is to use IPv4 and IPv6 networks for communicating to Microsoft OneDrive.

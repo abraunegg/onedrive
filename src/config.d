@@ -133,8 +133,11 @@ class ApplicationConfig {
 	bool fullScanTrueUpRequired = false;
 	bool suppressLoggingOutput = false;
 	
-	// Number of concurrent threads when downloading and uploading data
+	// Default number of concurrent threads when downloading and uploading data
 	ulong defaultConcurrentThreads = 8;
+	
+	// Default number of seconds inotify actions will be delayed by
+	ulong defaultInotifyDelay = 5;
 		
 	// All application run-time paths are formulated from this as a set of defaults
 	// - What is the home path of the actual 'user' that is running the application
@@ -375,6 +378,13 @@ class ApplicationConfig {
 		// This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the local timestamp of the file
 		// and Microsoft OneDrive should be respecting this timestamp as the timestamp to use|set when storing that file online
 		boolValues["force_session_upload"] = false;
+		
+		// Obsidian Editor has been written in such a way that it is constantly writing each and every keystroke to a file.
+		// Not only is this really bad application behaviour, for this client, this means the application is constantly writing to disk, thus attempting to upload file changes.
+		// Unfortunately Obsidian on Linux does not provide a built-in way to disable atomic saves or switch to a backup-copy method via configuration.
+		// This flag tells the 'onedrive' inotify monitor to 'sleep' for this period of time, so that constant system writes are not creating instant data uploads
+		boolValues["delay_inotify_processing"] = false;
+		longValues["inotify_delay"] = defaultInotifyDelay; // default of 5 seconds
 		
 		// Webhook Feature Options
 		boolValues["webhook_enabled"] = false;
@@ -978,6 +988,13 @@ class ApplicationConfig {
 						tempValue = defaultConcurrentThreads;
 					}
 					setValueLong("threads", tempValue);
+				} else if (key == "inotify_delay") {
+					ulong tempValue = thisConfigValue;
+					if ((tempValue < 5)||(tempValue > 15)) {
+						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+						tempValue = defaultInotifyDelay;
+					}
+					setValueLong("inotify_delay", tempValue);
 				}
 			} else {
 				addLogEntry("Unknown key in config file: " ~ key);

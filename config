@@ -40,6 +40,9 @@
 ## This setting controls whether the curl library is configured to output additional data to assist with diagnosing HTTPS issues and problems.
 #debug_https = "false"
 
+## This setting controls whether 'inotify' events should be delayed or not.
+#delay_inotify_processing = "false"
+
 ## This option determines whether the client will conduct integrity validation on files downloaded from Microsoft OneDrive.
 #disable_download_validation = "false"
 
