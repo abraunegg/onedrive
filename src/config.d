@@ -97,6 +97,10 @@ class ApplicationConfig {
 	immutable string cnAuthEndpoint = "https://login.chinacloudapi.cn";
 	immutable string cnGraphEndpoint = "https://microsoftgraph.chinacloudapi.cn";
 	
+	// Entra ID SSO via Microsoft Identity Broker
+	// - Leverages https://github.com/siemens/linux-entra-sso
+	immutable string entraSSOProxyEndpoint = "http://localhost:8539";
+	
 	// Application Version
 	immutable string applicationVersion = "onedrive " ~ strip(import("version"));
 	
@@ -399,6 +403,9 @@ class ApplicationConfig {
 
 		// Diable setting the permissions for directories and files, using the inherited permissions
 		boolValues["disable_permission_set"] = false;
+		
+		// Use authentication via Entra ID SSO via Microsoft Identity Broker
+		boolValues["use_entra_sso"] = false;
 		
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
