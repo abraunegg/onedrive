@@ -236,6 +236,7 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 | 7.88.1       | Debian 12 (Bookworm) | 6,7,8,9,10,11,12,13 |
 | 8.2.1        | Alpine Linux 3.14 | 7,8,9,10,11,12,13 |
 | 8.5.0        | Alpine Linux 3.15, Ubuntu 24.04 LTS (Noble Numbat) | 8,9,10,11,12,13 |
+| 8.9.1        | Ubuntu 24.10 | 11,12,13 |
 | 8.10.0       | Alpine Linux 3.17 | 13 |
 
 > [!IMPORTANT]
