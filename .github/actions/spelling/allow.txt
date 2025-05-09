@@ -107,6 +107,7 @@ eis
 ele
 endinaness
 enduml
+entra
 Entra
 envp
 epfd
