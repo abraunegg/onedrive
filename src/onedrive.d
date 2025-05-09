@@ -82,6 +82,7 @@ class OneDriveApi {
 	string subscriptionUrl = "";
 	string tenantId = "";
 	string authScope = "";
+	string applicableAuthEndpoint = "";
 	const(char)[] refreshToken = "";
 	bool dryRun = false;
 	bool keepAlive = false;
@@ -93,6 +94,16 @@ class OneDriveApi {
 		this.response = null;
 		// Configure the major API Query URL's, based on using application configuration
 		// These however can be updated by config option 'azure_ad_endpoint', thus handled differently
+		
+		// Authentication Endpoint
+		// - If the client is configured to use Entra ID SSO via Microsoft Identity Broker, set the applicable auth URL in applicableAuthEndpoint
+		if (appConfig.getValueBool("use_entra_sso")) {
+			// The client is configured to use Entra ID SSO via Microsoft Identity Broker
+			applicableAuthEndpoint = appConfig.entraSSOProxyEndpoint;
+		} else {
+			// Use normal global default
+			applicableAuthEndpoint = appConfig.globalAuthEndpoint;
+		}
 		
 		// Drive Queries
 		driveUrl = appConfig.globalGraphEndpoint ~ "/v1.0/me/drive";
@@ -188,9 +199,9 @@ class OneDriveApi {
 					if (!appConfig.apiWasInitialised) addLogEntry("Configuring Global Azure AD Endpoints - Single Tenant Application");
 				}
 				// Authentication
-				authUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
-				redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
-				tokenUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
+				authUrl = applicableAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				redirectUrl = applicableAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				tokenUrl = applicableAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				break;
 			case "USL4":
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD for US Government Endpoints");
@@ -199,8 +210,8 @@ class OneDriveApi {
 				tokenUrl = appConfig.usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
-					if (debugLogging) {addLogEntry("USL4 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);}
-					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+					if (debugLogging) {addLogEntry("USL4 AD Endpoint but default application_id, redirectUrl needs to be aligned to applicableAuthEndpoint", ["debug"]);}
+					redirectUrl = applicableAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				} else {
 					// custom application_id
 					redirectUrl = appConfig.usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
@@ -227,8 +238,8 @@ class OneDriveApi {
 				tokenUrl = appConfig.usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
-					if (debugLogging) {addLogEntry("USL5 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);}
-					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+					if (debugLogging) {addLogEntry("USL5 AD Endpoint but default application_id, redirectUrl needs to be aligned to applicableAuthEndpoint", ["debug"]);}
+					redirectUrl = applicableAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				} else {
 					// custom application_id
 					redirectUrl = appConfig.usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
@@ -255,8 +266,8 @@ class OneDriveApi {
 				tokenUrl = appConfig.deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
-					if (debugLogging) {addLogEntry("DE AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);}
-					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+					if (debugLogging) {addLogEntry("DE AD Endpoint but default application_id, redirectUrl needs to be aligned to applicableAuthEndpoint", ["debug"]);}
+					redirectUrl = applicableAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				} else {
 					// custom application_id
 					redirectUrl = appConfig.deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
@@ -283,8 +294,8 @@ class OneDriveApi {
 				tokenUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
-					if (debugLogging) {addLogEntry("CN AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);}
-					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+					if (debugLogging) {addLogEntry("CN AD Endpoint but default application_id, redirectUrl needs to be aligned to applicableAuthEndpoint", ["debug"]);}
+					redirectUrl = applicableAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				} else {
 					// custom application_id
 					redirectUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
@@ -398,94 +409,101 @@ class OneDriveApi {
 
 	// Authenticate this client against Microsoft OneDrive API
 	bool authorise() {
-	
-		char[] response;
-		// What URL should be presented to the user to access
-		string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
-		// Configure automated authentication if --auth-files authUrl:responseUrl is being used
-		string authFilesString = appConfig.getValueString("auth_files");
-		string authResponseString = appConfig.getValueString("auth_response");
-	
-		if (!authResponseString.empty) {
-			// read the response from authResponseString
-			response = cast(char[]) authResponseString;
-		} else if (authFilesString != "") {
-			string[] authFiles = authFilesString.split(":");
-			string authUrl = authFiles[0];
-			string responseUrl = authFiles[1];
-			
-			try {
-				auto authUrlFile = File(authUrl, "w");
-				authUrlFile.write(url);
-				authUrlFile.close();
-			} catch (FileException exception) {
-				// There was a file system error
-				// display the error message
-				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
-				// Must force exit here, allow logging to be done
-				forceExit();
-			} catch (ErrnoException exception) {
-				// There was a file system error
-				// display the error message
-				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
-				// Must force exit here, allow logging to be done
-				forceExit();
-			}
-	
-			addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
-			
-			while (!exists(responseUrl)) {
-				Thread.sleep(dur!("msecs")(100));
-			}
-
-			// read response from provided from OneDrive
-			try {
-				response = cast(char[]) read(responseUrl);
-			} catch (OneDriveException exception) {
-				// exception generated
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-				return false;
-			}
-
-			// try to remove old files
-			try {
-				std.file.remove(authUrl);
-				std.file.remove(responseUrl);
-			} catch (FileException exception) {
-				addLogEntry("Cannot remove files " ~ authUrl ~ " " ~ responseUrl);
-				return false;
-			}
+		// How do we authenticate? Via the normal method or via Entra ID SSO via Microsoft Identity Broker
+		if (appConfig.getValueBool("use_entra_sso")) {
+			// The client is configured to use Entra ID SSO via Microsoft Identity Broker
+			acquireToken([]);
+			return true;
 		} else {
-			// Are we in a --dry-run scenario?
-			if (!appConfig.getValueBool("dry_run")) {
-				// No --dry-run is being used
-				addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
-				addLogEntry(url ~ "\n", ["consoleOnly"]);
-				addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
-				readln(response);
-				appConfig.applicationAuthorizeResponseUri = true;
-			} else {
-				// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
-				addLogEntry();
-				addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
-				addLogEntry();
-				addLogEntry("To authorise the application please use your original command without '--dry-run'.");
-				addLogEntry();
-				addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
-				addLogEntry();
-				forceExit();
-			}
-		}
+			// Normal authentication method
+			char[] response;
+			// What URL should be presented to the user to access
+			string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
+			// Configure automated authentication if --auth-files authUrl:responseUrl is being used
+			string authFilesString = appConfig.getValueString("auth_files");
+			string authResponseString = appConfig.getValueString("auth_response");
 		
-		// match the authorization code
-		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
-		if (c.empty) {
-			addLogEntry("An empty or invalid response uri was entered");
-			return false;
+			if (!authResponseString.empty) {
+				// read the response from authResponseString
+				response = cast(char[]) authResponseString;
+			} else if (authFilesString != "") {
+				string[] authFiles = authFilesString.split(":");
+				string authUrl = authFiles[0];
+				string responseUrl = authFiles[1];
+				
+				try {
+					auto authUrlFile = File(authUrl, "w");
+					authUrlFile.write(url);
+					authUrlFile.close();
+				} catch (FileException exception) {
+					// There was a file system error
+					// display the error message
+					displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+					// Must force exit here, allow logging to be done
+					forceExit();
+				} catch (ErrnoException exception) {
+					// There was a file system error
+					// display the error message
+					displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+					// Must force exit here, allow logging to be done
+					forceExit();
+				}
+		
+				addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
+				
+				while (!exists(responseUrl)) {
+					Thread.sleep(dur!("msecs")(100));
+				}
+
+				// read response from provided from OneDrive
+				try {
+					response = cast(char[]) read(responseUrl);
+				} catch (OneDriveException exception) {
+					// exception generated
+					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+					return false;
+				}
+
+				// try to remove old files
+				try {
+					std.file.remove(authUrl);
+					std.file.remove(responseUrl);
+				} catch (FileException exception) {
+					addLogEntry("Cannot remove files " ~ authUrl ~ " " ~ responseUrl);
+					return false;
+				}
+			} else {
+				// Are we in a --dry-run scenario?
+				if (!appConfig.getValueBool("dry_run")) {
+					// No --dry-run is being used
+					addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
+					addLogEntry(url ~ "\n", ["consoleOnly"]);
+					addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
+					readln(response);
+					appConfig.applicationAuthorizeResponseUri = true;
+				} else {
+					// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
+					addLogEntry();
+					addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
+					addLogEntry();
+					addLogEntry("To authorise the application please use your original command without '--dry-run'.");
+					addLogEntry();
+					addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
+					addLogEntry();
+					forceExit();
+				}
+			}
+			
+			// match the authorization code
+			auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
+			if (c.empty) {
+				addLogEntry("An empty or invalid response uri was entered");
+				return false;
+			}
+			c.popFront(); // skip the whole match
+			redeemToken(c.front);
+			return true;
 		}
-		c.popFront(); // skip the whole match
-		redeemToken(c.front);
-		return true;
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
