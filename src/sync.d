@@ -3051,22 +3051,42 @@ class SyncEngine {
 		// Using the onlineParentData JSON data make a DB record for this parent item so that it exists in the database
 		Item sharedFolderDatabaseTie;
 		
-		// What account type is this? This needs to be configured correctly so this can be queried correctly
-		if (appConfig.accountType == "personal") {
-			// OneDrive Personal JSON has this structure that we need to use
-			parentDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
-			parentObjectId = onedriveJSONItem["remoteItem"]["id"].str;
-		} else {
-			// OneDrive Business|Sharepoint JSON has this structure that we need to use
-			parentDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
-			parentObjectId = onedriveJSONItem["remoteItem"]["id"].str;
+		// A Shared Folder should have ["remoteItem"]["parentReference"] elements
+		bool remoteItemElementsExist = false;
+		
+		// Test that the required elements exist for Shared Folder DB entry creations to occur
+		if (isItemRemote(onedriveJSONItem)) {
+			// Required ["remoteItem"] element exists in the JSON data
+			if ((hasRemoteParentDriveId(onedriveJSONItem)) && (hasRemoteItemId(onedriveJSONItem))) {
+				// Required elements exist
+				remoteItemElementsExist = true;
+				// What account type is this? This needs to be configured correctly so this can be queried correctly
+				// - The setting of this is the 'same' for account types, but previously this was shown to need different data. Future code optimisation potentially here.
+				if (appConfig.accountType == "personal") {
+					// OneDrive Personal JSON has this structure that we need to use
+					parentDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
+					parentObjectId = onedriveJSONItem["remoteItem"]["id"].str;
+				} else {
+					// OneDrive Business|Sharepoint JSON has this structure that we need to use
+					parentDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
+					parentObjectId = onedriveJSONItem["remoteItem"]["id"].str;
+				}
+			}
 		}
 		
-		// Issue #3115 - Validate driveId length
+		// If the required elements do not exist, the Shared Folder DB elements cannot be created
+		if (!remoteItemElementsExist) {
+			// We cannot create the required entries in the database
+			if (debugLogging) {addLogEntry("Unable to create 'root' and 'Shared Folder' DB Tie Records in a consistent manner - required elements missing from provided JSON record" , ["debug"]);}
+			return;
+		}
+		
+		// Issue #3115 - Validate 'parentDriveId' length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
-			// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+			// Test if the 'parentDriveId' is not equal to appConfig.defaultDriveId
 			if (parentDriveId != appConfig.defaultDriveId) {
+				// Test 'parentDriveId' for length and validation - 15 character API bug
 				parentDriveId = testProvidedDriveIdForLengthIssue(parentDriveId);
 			}
 		}
