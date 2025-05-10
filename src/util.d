@@ -1128,6 +1128,19 @@ bool isItemRemote(const ref JSONValue item) {
 	return ("remoteItem" in item) != null;
 }
 
+// Check if ["remoteItem"]["parentReference"]["driveId"] exists
+bool hasRemoteParentDriveId(const ref JSONValue item) {
+    return ("remoteItem" in item) &&
+           ("parentReference" in item["remoteItem"]) &&
+           ("driveId" in item["remoteItem"]["parentReference"]);
+}
+
+// Check if ["remoteItem"]["id"] exists
+bool hasRemoteItemId(const ref JSONValue item) {
+    return ("remoteItem" in item) &&
+           ("id" in item["remoteItem"]);
+}
+
 bool isItemFile(const ref JSONValue item) {
 	return ("file" in item) != null;
 }
