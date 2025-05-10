@@ -2065,15 +2065,16 @@ class SyncEngine {
 					// Flag as unwanted
 					unwanted = true;	
 				} else {
+					// Format the OneDrive change into a consumable object for the database
+					remoteItem = makeItem(onedriveJSONItem);
+					
 					// Edge case as the parent (from another users OneDrive account) will never be in the database - potentially a shared object?
 					if (debugLogging) {
 						addLogEntry("The reported parentId is not in the database. This potentially is a shared folder as 'remoteItem.driveId' != 'appConfig.defaultDriveId'. Relevant Details: remoteItem.driveId (" ~ remoteItem.driveId ~ "), remoteItem.parentId (" ~ remoteItem.parentId ~ ")", ["debug"]);
 						addLogEntry("Potential Shared Object JSON: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 					}
 
-					// Format the OneDrive change into a consumable object for the database
-					remoteItem = makeItem(onedriveJSONItem);
-										
+					// What account type is this?					
 					if (appConfig.accountType == "personal") {
 						// Personal Account Handling
 						if (debugLogging) {addLogEntry("Handling a Personal Shared Item JSON object", ["debug"]);}
