@@ -245,6 +245,12 @@ int main(string[] cliArgs) {
 		}
 	}
 	
+	// Has the client been configured to use Entra ID SSO via Microsoft Identity Broker
+	if (appConfig.getValueBool("use_entra_sso")) {
+		// The client is configured to use Entra ID SSO via Microsoft Identity Broker
+		addLogEntry("Client is configured to use Entra ID SSO via Microsoft Identity Broker");
+	}
+	
 	// Are we performing some sort of 'no-sync' operation task?
 	noSyncTaskOperationRequested = appConfig.hasNoSyncOperationBeenRequested(); // returns true if we are
 	
