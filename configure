@@ -605,13 +605,13 @@ sqlite_LIBS
 sqlite_CFLAGS
 curl_LIBS
 curl_CFLAGS
-PACKAGE_DATE
 WERROR_DCFLAG
 OUTPUT_DCFLAG
 LINKER_DCFLAG
 VERSION_DCFLAG
 RELEASE_DCFLAGS
 DEBUG_DCFLAGS
+PACKAGE_DATE
 PKG_CONFIG_LIBDIR
 PKG_CONFIG_PATH
 PKG_CONFIG
@@ -2014,6 +2014,9 @@ $as_echo "no" >&6; }
 	fi
 fi
 
+PACKAGE_DATE="April 2025"
+
+
 for ac_prog in dmd ldmd2 ldc2 gdmd gdc
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
@@ -2059,9 +2062,9 @@ test -n "$DC" || DC="NOT_FOUND"
 
 DC_TYPE=
 case $(basename $DC) in
-        dmd|ldmd2|gdmd) DC_TYPE=dmd ;;
-        ldc2) DC_TYPE=ldc ;;
-        gdc) DC_TYPE=gdc ;;
+        *ldc2*) DC_TYPE=ldc ;;
+        *gdc*) DC_TYPE=gdc ;;
+        *dmd*) DC_TYPE=dmd ;;
         NOT_FOUND) as_fn_error 1 "Could not find any compatible D compiler" "$LINENO" 5
 esac
 
@@ -2132,7 +2135,7 @@ if test "$DO_VERSION_CHECK" = "1"; then :
 $as_echo_n "checking version of D compiler... " >&6; }
 # check for valid versions
 case $(basename $DC) in
-	ldmd2|ldc2)
+	*ldmd2*|*ldc2*)
 		# LDC - the LLVM D compiler (1.12.0): ...
 		VERSION=`$DC --version`
 		# remove  everything up to first (
@@ -2142,15 +2145,7 @@ case $(basename $DC) in
 		# now version should be something like L.M.N
 		MINVERSION=1.18.0
 		;;
-	dmd)
-		# DMD64 D Compiler v2.085.1\n...
-		VERSION=`$DC --version | tr '\n' ' '`
-		VERSION=${VERSION#*Compiler v}
-		VERSION=${VERSION%% *}
-		# now version should be something like L.M.N
-		MINVERSION=2.088.0
-		;;
-	gdmd|gdc)
+	*gdmd*|*gdc*)
 		# Both gdmd and gdc print the same version information
 		VERSION=`${DC} --version | head -n1`
 		# Some examples of output:
@@ -2164,6 +2159,14 @@ case $(basename $DC) in
 		# VERSION=VER DATE ...
 		VERSION=${VERSION%% *}
 		MINVERSION=15
+		;;
+	*dmd*)
+		# DMD64 D Compiler v2.085.1\n...
+		VERSION=`$DC --version | tr '\n' ' '`
+		VERSION=${VERSION#*Compiler v}
+		VERSION=${VERSION%% *}
+		# now version should be something like L.M.N
+		MINVERSION=2.088.0
 		;;
 esac
 
@@ -2214,9 +2217,6 @@ esac
 
 
 
-
-
-PACKAGE_DATE="April 2025"
 
 
 
