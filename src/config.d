@@ -410,6 +410,9 @@ class ApplicationConfig {
 		// Diable setting the permissions for directories and files, using the inherited permissions
 		boolValues["disable_permission_set"] = false;
 		
+		// Use authentication via Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
+		boolValues["use_intune_sso"] = false;
+		
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts

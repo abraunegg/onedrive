@@ -32,6 +32,7 @@ import itemdb;
 import clientSideFiltering;
 import monitor;
 import webhook;
+import intune;
 
 // What other constant variables do we require?
 const int EXIT_RESYNC_REQUIRED = 126;
@@ -199,6 +200,36 @@ int main(string[] cliArgs) {
 	// Are we doing a --sync or a --monitor operation? Both of these will be false if they are not set
 	if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
 		syncOrMonitorMissing = true; // --sync or --monitor is missing 
+	}
+	
+	// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
+	// This is ONLY possible on Linux, not FreeBSD or other platforms
+	version (linux) {
+		if (appConfig.getValueBool("use_intune_sso")) {
+			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
+			addLogEntry("Client has been configured to use Intune SSO via Microsoft Identity Broker dbus session");
+			
+			// We need to check that the available dbus is actually available
+			
+			if(check_intune_broker_available()) {
+			
+				addLogEntry("DBUS BROKER AVAILABLE");
+				
+				
+				addLogEntry("intune accounts: " ~ to!string(get_intune_accounts()));
+				
+				
+			} else {
+			
+				addLogEntry("DBUS BROKER NOT FOUND !!!!!!!!!!! DISABLING INTUNE SSO");
+				
+				appConfig.setValueBool("use_intune_sso" , false);
+			
+			}
+		}
+	} else {
+		// Ensure 'use_intune_sso' is disabled
+		appConfig.setValueBool("use_intune_sso" , false);
 	}
 	
 	// Has the user configured to use the 'Recycle Bin' locally, for any files that are deleted online?
