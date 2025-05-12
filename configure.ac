@@ -31,9 +31,9 @@ dnl Makefile so that we can adjust command line arguments
 AC_CHECK_PROGS([DC], [dmd ldmd2 ldc2 gdmd gdc], NOT_FOUND)
 DC_TYPE=
 case $(basename $DC) in
-        dmd|ldmd2|gdmd) DC_TYPE=dmd ;;
-        ldc2) DC_TYPE=ldc ;;
-        gdc) DC_TYPE=gdc ;;
+        *ldc2*) DC_TYPE=ldc ;;
+        *gdc*) DC_TYPE=gdc ;;
+        *dmd*) DC_TYPE=dmd ;;
         NOT_FOUND) AC_MSG_ERROR(Could not find any compatible D compiler, 1)
 esac
 
@@ -100,7 +100,7 @@ AS_IF([test "$DO_VERSION_CHECK" = "1"],
 AC_MSG_CHECKING([version of D compiler])
 # check for valid versions
 case $(basename $DC) in
-	ldmd2|ldc2)
+	*ldmd2*|*ldc2*)
 		# LDC - the LLVM D compiler (1.12.0): ...
 		VERSION=`$DC --version`
 		# remove  everything up to first (
@@ -110,15 +110,7 @@ case $(basename $DC) in
 		# now version should be something like L.M.N
 		MINVERSION=1.18.0
 		;;
-	dmd)
-		# DMD64 D Compiler v2.085.1\n...
-		VERSION=`$DC --version | tr '\n' ' '`
-		VERSION=${VERSION#*Compiler v}
-		VERSION=${VERSION%% *}
-		# now version should be something like L.M.N
-		MINVERSION=2.088.0
-		;;
-	gdmd|gdc)
+	*gdmd*|*gdc*)
 		# Both gdmd and gdc print the same version information
 		VERSION=`${DC} --version | head -n1`
 		# Some examples of output:
@@ -132,6 +124,14 @@ case $(basename $DC) in
 		# VERSION=VER DATE ...
 		VERSION=${VERSION%% *}
 		MINVERSION=15
+		;;
+	*dmd*)
+		# DMD64 D Compiler v2.085.1\n...
+		VERSION=`$DC --version | tr '\n' ' '`
+		VERSION=${VERSION#*Compiler v}
+		VERSION=${VERSION%% *}
+		# now version should be something like L.M.N
+		MINVERSION=2.088.0
 		;;
 esac
 
