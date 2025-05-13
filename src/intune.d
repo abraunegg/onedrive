@@ -8,9 +8,10 @@ import std.string : fromStringz, toStringz;
 import std.conv : to;
 import std.json : JSONValue, parseJSON, JSONType;
 import std.uuid : randomUUID;
+
+// What 'onedrive' modules do we import?
 import log;
 
-// C-level interface to libdbus-1
 extern(C):
 alias dbus_bool_t = int;
 
@@ -134,116 +135,100 @@ bool check_intune_broker_available() {
     return false;
 }
 
-// Retrieve the list of Intune accounts via the Microsoft Identity Broker D-Bus interface
-string[] get_intune_accounts() {
+// Initiate interactive authentication via D-Bus using the Microsoft Identity Broker
+string acquire_token_interactive() {
     DBusError err;
     dbus_error_init(&err);
 
-    addLogEntry("GOT HERE 1");
+    addLogEntry("Starting interactive authentication...");
 
     DBusConnection* conn = dbus_bus_get(DBusBusType.DBUS_BUS_SESSION, &err);
     if (dbus_error_is_set(&err) || conn is null) {
         dbus_error_free(&err);
-        return [];
+        return "";
     }
-
-    addLogEntry("GOT HERE 2");
-
-    DBusMessage* msg = dbus_message_new_method_call(
+	
+	DBusMessage* msg = dbus_message_new_method_call(
         "com.microsoft.identity.broker1",
         "/com/microsoft/identity/broker1",
-        "com.microsoft.identity.broker1",
-        "GetAccounts"
+        "com.microsoft.identity.Broker1",
+        "acquireTokenInteractively"
     );
 
-    addLogEntry("GOT HERE 3");
-
-    if (msg is null) return [];
+	if (msg is null) return "";
 
     string correlationId = randomUUID().toString();
 
     string requestJson = `{
-        "client_id": "d50ca740-c83f-4d1b-b616-12c519384f0c",
-        "redirect_uri": "urn:ietf:oob"
-    }`;
+	  "authParameters": {
+		"clientId": "d50ca740-c83f-4d1b-b616-12c519384f0c",
+		"redirectUri": "urn:ietf:oob",
+		"authority": "https://login.microsoftonline.com/common",
+		"requestedScopes": [
+		  "Files.ReadWrite",
+		  "Files.ReadWrite.All",
+		  "Sites.ReadWrite.All",
+		  "offline_access"
+		]
+	  }
+	}`;
 
-    addLogEntry("GOT HERE 4");
-
-    DBusMessageIter* args = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
+	DBusMessageIter* args = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
     if (!dbus_message_iter_init_append(msg, args)) {
         dbus_message_unref(msg);
         free(args);
-        return [];
+        return "";
     }
 
     const(char)* protocol = toStringz("0.0");
     const(char)* corrId = toStringz(correlationId);
     const(char)* reqJson = toStringz(requestJson);
-
-    if (!dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &protocol) ||
+	
+	if (!dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &protocol) ||
         !dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &corrId) ||
         !dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &reqJson)) {
         dbus_message_unref(msg);
         free(args);
-        return [];
+        return "";
     }
 
-    free(args);
-
-    addLogEntry("GOT HERE 5");
+	free(args);
 
     DBusMessage* reply = dbus_connection_send_with_reply_and_block(conn, msg, -1, &err);
     dbus_message_unref(msg);
-
-    addLogEntry("GOT HERE 6");
-
-    if (dbus_error_is_set(&err) || reply is null) {
+	
+	if (dbus_error_is_set(&err) || reply is null) {
         dbus_error_free(&err);
-        return [];
+        return "";
     }
-
-    addLogEntry("GOT HERE 7");
-
-    DBusMessageIter* iter = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
+	
+	DBusMessageIter* iter = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
     if (!dbus_message_iter_init(reply, iter)) {
         dbus_message_unref(reply);
         free(iter);
-        return [];
+        return "";
     }
-
-    addLogEntry("GOT HERE 8");
-
-    if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_STRING) {
+	
+	if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_STRING) {
         dbus_message_unref(reply);
         free(iter);
-        return [];
+        return "";
     }
-
-    char* responseStr;
+	
+	char* responseStr;
     dbus_message_iter_get_basic(iter, &responseStr);
     dbus_message_unref(reply);
     free(iter);
-
-    addLogEntry("GOT HERE 9");
-
-    string jsonResponse = fromStringz(responseStr).idup;
+	
+	string jsonResponse = fromStringz(responseStr).idup;
+	
+	addLogEntry("intune raw response: " ~ jsonResponse);
 
     JSONValue parsed = parseJSON(jsonResponse);
-    if (parsed.type != JSONType.object) return [];
-
-    addLogEntry("GOT HERE 10");
+    if (parsed.type != JSONType.object) return "";
 
     auto obj = parsed.object;
-    if (!("accounts" in obj) || obj["accounts"].type != JSONType.array) return [];
+    if (!("access_token" in obj)) return "";
 
-    string[] usernames;
-    foreach (account; obj["accounts"].array) {
-        if (account.type == JSONType.object && "username" in account.object) {
-            usernames ~= account.object["username"].str;
-        }
-    }
-
-    addLogEntry("GOT HERE 11");
-
-    return usernames;
+    return obj["access_token"].str;
 }
