@@ -216,7 +216,7 @@ int main(string[] cliArgs) {
 				addLogEntry("DBUS BROKER AVAILABLE");
 				
 				
-				addLogEntry("intune accounts: " ~ to!string(get_intune_accounts()));
+				addLogEntry("intune access token: " ~ to!string(acquire_token_interactive()));
 				
 				
 			} else {
