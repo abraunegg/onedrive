@@ -148,6 +148,8 @@ string acquire_token_interactive() {
         return "";
     }
 	
+	addLogEntry("GOT HERE 1");
+	
 	DBusMessage* msg = dbus_message_new_method_call(
         "com.microsoft.identity.broker1",
         "/com/microsoft/identity/broker1",
@@ -156,13 +158,15 @@ string acquire_token_interactive() {
     );
 
 	if (msg is null) return "";
+	
+	addLogEntry("GOT HERE 2");
 
     string correlationId = randomUUID().toString();
 
     string requestJson = `{
 	  "authParameters": {
-		"clientId": "d50ca740-c83f-4d1b-b616-12c519384f0c",
-		"redirectUri": "urn:ietf:oob",
+		"clientId": "22314271-0071-455d-8e04-cdf1ce807a06",
+		"redirectUri": "http://localhost",
 		"authority": "https://login.microsoftonline.com/common",
 		"requestedScopes": [
 		  "Files.ReadWrite",
@@ -179,6 +183,8 @@ string acquire_token_interactive() {
         free(args);
         return "";
     }
+	
+	addLogEntry("GOT HERE 3");
 
     const(char)* protocol = toStringz("0.0");
     const(char)* corrId = toStringz(correlationId);
@@ -191,6 +197,8 @@ string acquire_token_interactive() {
         free(args);
         return "";
     }
+	
+	addLogEntry("GOT HERE 4");
 
 	free(args);
 
@@ -202,6 +210,8 @@ string acquire_token_interactive() {
         return "";
     }
 	
+	addLogEntry("GOT HERE 5");
+	
 	DBusMessageIter* iter = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
     if (!dbus_message_iter_init(reply, iter)) {
         dbus_message_unref(reply);
@@ -209,11 +219,15 @@ string acquire_token_interactive() {
         return "";
     }
 	
+	addLogEntry("GOT HERE 6");
+	
 	if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_STRING) {
         dbus_message_unref(reply);
         free(iter);
         return "";
     }
+	
+	addLogEntry("GOT HERE 7");
 	
 	char* responseStr;
     dbus_message_iter_get_basic(iter, &responseStr);
@@ -226,9 +240,13 @@ string acquire_token_interactive() {
 
     JSONValue parsed = parseJSON(jsonResponse);
     if (parsed.type != JSONType.object) return "";
+	
+	addLogEntry("GOT HERE 8");
 
     auto obj = parsed.object;
     if (!("access_token" in obj)) return "";
+	
+	addLogEntry("GOT HERE 9");
 
     return obj["access_token"].str;
 }
