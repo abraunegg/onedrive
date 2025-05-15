@@ -9,6 +9,8 @@ Before reading this document, please ensure you are running application version 
   - [Upgrading from the 'skilion' Client](#upgrading-from-the-skilion-client)
   - [Guidelines for Local File and Folder Naming in the Synchronisation Directory](#guidelines-for-local-file-and-folder-naming-in-the-synchronisation-directory)
   - [Support for Microsoft Azure Information Protected Files](#support-for-microsoft-azure-information-protected-files)
+  - [Compatibility with Editors and Applications Using Atomic Save Operations](#compatibility-with-editors-and-applications-using-atomic-save-operations)
+  - [Compatibility with Obsidian](#compatibility-with-obsidian)
   - [Compatibility with curl](#compatibility-with-curl)
 - [First Steps](#first-steps)
   - [Authorise the Application with Your Microsoft OneDrive Account](#authorise-the-application-with-your-microsoft-onedrive-account)
@@ -17,6 +19,7 @@ Before reading this document, please ensure you are running application version 
     - [Standalone Synchronisation Operational Mode (Standalone Mode)](#standalone-synchronisation-operational-mode-standalone-mode)
     - [Ongoing Synchronisation Operational Mode (Monitor Mode)](#ongoing-synchronisation-operational-mode-monitor-mode)
 - [Using the OneDrive Client for Linux to synchronise your data](#using-the-onedrive-client-for-linux-to-synchronise-your-data)
+  - [Client Documentation](#client-documentation)
   - [Increasing application logging level](#increasing-application-logging-level)
   - [Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive](#using-client-side-filtering-rules-to-determine-what-should-be-synced-with-microsoft-onedrive)
   - [Testing your configuration](#testing-your-configuration)
@@ -30,6 +33,7 @@ Before reading this document, please ensure you are running application version 
   - [Enabling the Client Activity Log](#enabling-the-client-activity-log)
     - [Client Activity Log Example:](#client-activity-log-example)
     - [Client Activity Log Differences](#client-activity-log-differences)
+  - [Using a local Recycle Bin](#using-a-local-recycle-bin)
   - [GUI Notifications](#gui-notifications)
   - [Handling a Microsoft OneDrive Account Password Change](#handling-a-microsoft-onedrive-account-password-change)
   - [Determining the synchronisation result](#determining-the-synchronisation-result)
@@ -128,6 +132,118 @@ The above guidelines are essential for maintaining synchronisation integrity wit
 > 
 > Please use the `--disable-download-validation` option with extreme caution and understand the risk if you enable it.
 
+### Compatibility with Editors and Applications Using Atomic Save Operations
+
+Many modern editors and applications—including `vi`, `vim`, `nvim`, `emacs`, `LibreOffice`, `Obsidian` and others—use *atomic save* strategies to preserve data integrity when writing files. This section outlines how such operations interact with the `onedrive` client, what users can expect, and why certain side effects (such as editor warnings or perceived timestamp discrepancies) may occur.
+
+#### How Atomic Save Operations Work
+
+When these applications save a file, they typically follow this sequence:
+
+1. **Create a Temporary File**  
+   A new file is written with the updated content, often in the same directory as the original.
+
+2. **Flush to Disk**  
+   The temporary file is flushed to disk using `fsync()` or an equivalent method to ensure data safety.
+
+3. **Atomic Rename**  
+   The temporary file is renamed to the original filename using the `rename()` syscall.  
+   This is an atomic operation on Linux, meaning the original file is *replaced*, not modified.
+
+4. **Remove Lock or Swap Files**  
+   Auxiliary files used during editing (e.g., `.swp`, `.#filename`) are deleted.
+
+As a result, the saved file is **technically a new file** with a new inode and a new timestamp, even if the filename remains unchanged.
+
+#### How This Affects the OneDrive Client
+
+When the `onedrive` client observes such an atomic save operation via `inotify`, it detects:
+
+- The original file as *deleted*.
+- A new file (with the same name) as *created*.
+
+The client responds accordingly:
+
+- The "new" file is uploaded to Microsoft OneDrive.
+- After upload, Microsoft assigns its own *modification timestamp* to the file.
+- To ensure consistency between local and remote states, the client updates the local file’s timestamp to match the **exact time** stored in OneDrive.
+
+> [!IMPORTANT]
+> Microsoft OneDrive does **not support fractional-second precision** in file timestamps—only whole seconds. As a result, small discrepancies may occur if the local file system supports higher-resolution timestamps.
+
+This behaviour ensures accurate syncing and content integrity, but may lead to subtle side effects in timestamp-sensitive applications.
+
+#### Expected Side Effects
+
+- **Timestamp Alignment for Atomic Saves**  
+  Editors that rely on local file timestamps (rather than content checksums) can issue warnings that a file had changed unexpectedly—typically because the `onedrive` client potentially updated the modification time after upload.
+  This client attempts to preserve the original modification timestamp only if fractional seconds differ, preventing unnecessary local timestamp changes. As a result, editors such as `vi`, `vim`, `nvim`, `emacs`, `LibreOffice` and `Obsidian` should not trigger warnings when saving files using atomic operations.
+
+- **False Conflict Prompts (Collaborative Editing)**  
+  In collaborative editing scenarios—such as with LibreOffice or shared OneDrive folders—conflict prompts may still occur if another user or device modifies a file, resulting in a meaningful timestamp or content change.  
+  However, for local edits using atomic save methods, the client now avoids unnecessary timestamp updates, effectively eliminating false conflicts in those cases.
+
+#### Recommendation
+
+If you are using editors that rely on strict timestamp semantics and wish to minimise interference from the `onedrive` client:
+
+- Save your work, then pause or temporarily stop sync (`onedrive --monitor`).
+- Resume syncing when finished.
+- Configure the client to ignore temporary files your editor uses via the `skip_file` setting if they do not need to be synced.
+- Configure the client to use 'session uploads' for all files via the `force_session_upload` setting. This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the actual local timestamp (without fractional seconds) of the file that Microsoft OneDrive should store.
+
+#### Summary
+
+The `onedrive` client is fully compatible with applications that use atomic save operations. Users should be aware that:
+
+- Atomic saves result in the file being treated as a new item.
+- Timestamps may be adjusted post-upload to match OneDrive's stored value.
+- In rare cases, timestamp-sensitive applications may display warnings or prompts.
+
+This behaviour is by design and ensures consistency and data integrity between your local filesystem and the OneDrive cloud.
+
+### Compatibility with Obsidian
+Obsidian on Linux does not provide a built-in way to disable atomic saves or switch to a backup-copy method via configuration. The application is built on Electron and relies on the default save behaviour of its underlying libraries and editor components (such as CodeMirror), which typically perform *atomic writes* using the following process:
+
+1. A temporary file is created containing the updated content.
+2. That temporary file is flushed to disk.
+3. The temporary file is atomically renamed to replace the original file.
+
+This behaviour is intended to improve data integrity and crash resilience, but it results in high disk I/O — particularly in Obsidian, where auto-save is triggered nearly every keystroke.
+
+> [!IMPORTANT]
+> Obsidian provides no mechanism to change how this save behaviour operates. This is a serious design limitation and should be treated as a bug in the application. The excessive and unnecessary write operations can significantly reduce the lifespan of SSDs over time due to increased wear, leading to broader consequences for system reliability.
+
+#### How This Affects the OneDrive Client
+
+Because Obsidian is constantly writing files, running the OneDrive Client for Linux in `--monitor` mode causes the client to continually receive inotify events. This leads to constant re-uploading of files, regardless of whether meaningful content has changed.
+
+The consequences of this are:
+
+1. Continuous upload attempts to Microsoft OneDrive.
+2. Potential for repeated overwrites of online data.
+3. Excessive API usage, which may result in Microsoft throttling your access — subsequently affecting the client’s ability to synchronise files reliably.
+
+#### Recommendation
+
+If you use Obsidian, it is *strongly* recommended that you enable the following two configuration options in your OneDrive client `config` file:
+```
+force_session_upload = "true"
+delay_inotify_processing = "true"
+```
+These settings introduce a delay in processing local file change events, allowing the OneDrive client to batch or debounce Obsidian's frequent writes. By default, this delay is 5 seconds.
+
+To adjust this delay, you can add the following configuration option:
+```
+inotify_delay = "10"
+```
+This example sets the delay to 10 seconds.
+
+> [!CAUTION]
+> Increasing `inotify_delay` too aggressively may have unintended side effects. All file system events are queued and processed in order, so setting a very high delay could result in large backlogs or undesirable data synchronisation outcomes — particularly in cases of rapid file changes or deletions.
+>
+> Adjust this setting with extreme caution and test thoroughly to ensure it does not impact your workflow or data integrity.
+
 ### Compatibility with curl
 If your system uses curl < 7.47.0, curl will default to HTTP/1.1 for HTTPS operations, and the client will follow suit, using HTTP/1.1.
 
@@ -163,6 +279,7 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 | 7.88.1       | Debian 12 (Bookworm) | 6,7,8,9,10,11,12,13 |
 | 8.2.1        | Alpine Linux 3.14 | 7,8,9,10,11,12,13 |
 | 8.5.0        | Alpine Linux 3.15, Ubuntu 24.04 LTS (Noble Numbat) | 8,9,10,11,12,13 |
+| 8.9.1        | Ubuntu 24.10 (Oracular Oriole) | 11,12,13 |
 | 8.10.0       | Alpine Linux 3.17 | 13 |
 
 > [!IMPORTANT]
@@ -336,6 +453,50 @@ Once these values are changed, you will need to restart your client so that the 
 To make these changes permanent on your system, refer to your OS reference documentation.
 
 ## Using the OneDrive Client for Linux to synchronise your data
+
+### Client Documentation
+
+The following documents provide detailed guidance on installing, configuring, and using the OneDrive Client for Linux:
+
+* **[advanced-usage.md](https://github.com/abraunegg/onedrive/blob/master/docs/advanced-usage.md)**
+  Instructions for advanced configurations, including multiple account setups, Docker usage, dual-boot scenarios, and syncing to mounted directories.
+
+* **[application-config-options.md](https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md)**
+  Comprehensive list and explanation of all configuration file and command-line options available in the client.
+
+* **[application-security.md](https://github.com/abraunegg/onedrive/blob/master/docs/application-security.md)**
+  Details on security considerations and practices related to the OneDrive client.
+
+* **[business-shared-items.md](https://github.com/abraunegg/onedrive/blob/master/docs/business-shared-items.md)**
+  Instructions on syncing shared items in OneDrive for Business accounts.
+
+* **[client-architecture.md](https://github.com/abraunegg/onedrive/blob/master/docs/client-architecture.md)**
+  Overview of the client's architecture and design principles.
+
+* **[docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/docker.md)**
+  Instructions for running the OneDrive client within Docker containers.
+
+* **[known-issues.md](https://github.com/abraunegg/onedrive/blob/master/docs/known-issues.md)**
+  List of known issues and limitations of the OneDrive client.
+
+* **[national-cloud-deployments.md](https://github.com/abraunegg/onedrive/blob/master/docs/national-cloud-deployments.md)**
+  Information on deploying the client in national cloud environments.
+
+* **[podman.md](https://github.com/abraunegg/onedrive/blob/master/docs/podman.md)**
+  Guide for running the OneDrive client using Podman containers.
+
+* **[sharepoint-libraries.md](https://github.com/abraunegg/onedrive/blob/master/docs/sharepoint-libraries.md)**
+  Instructions for syncing SharePoint document libraries.
+
+* **[ubuntu-package-install.md](https://github.com/abraunegg/onedrive/blob/master/docs/ubuntu-package-install.md)**
+  Specific instructions for installing the client on Ubuntu systems.
+
+* **[webhooks.md](https://github.com/abraunegg/onedrive/blob/master/docs/webhooks.md)**
+  Information on configuring and using webhooks with the OneDrive client.
+
+Further documentation not listed above can be found here: https://github.com/abraunegg/onedrive/blob/master/docs/
+
+Please read these additional references to assist you with installing, configuring, and using the OneDrive Client for Linux.
 
 ### Increasing application logging level
 When running a sync (`--sync`) or using monitor mode (`--monitor`), it may be desirable to see additional information regarding the progress and operation of the client. For example, for a `--sync` command, this would be:
@@ -739,6 +900,31 @@ Using 'user' configuration path for application state data: /home/user/.config/o
 Using the following path to store the runtime application log: /var/log/onedrive
 ```
 
+### Using a local Recycle Bin
+By default, this application will process online deletions and directly delete the corresponding file or folder directly from your configured 'sync_dir'.
+
+In some cases, it may actually be desirable to move these files to your Linux user default 'Recycle Bin', so that you can manually delete the files at your own discretion.
+
+To enable this application functionality, add the following to your 'config' file:
+```
+use_recycle_bin = "true"
+```
+
+This capability is designed to be compatible with the [FreeDesktop.org Trash Specification](https://specifications.freedesktop.org/trash-spec/1.0/), ensuring interoperability with GUI-based desktop environments such as GNOME (GIO) and KDE (KIO). It follows the required structure by:
+* Moving deleted files and directories to `~/.local/share/Trash/files/`
+* Creating matching metadata files in `~/.local/share/Trash/info/` with the correct `.trashinfo` format, including the original absolute path and ISO 8601-formatted deletion timestamp
+* Resolving filename collisions using a `name.N.ext` pattern (e.g., `Document.2.docx`), consistent with GNOME and KDE behaviour.
+
+
+
+To specify an explicit 'Recycle Bin' directory, add the following to your 'config' file:
+```
+recycle_bin_path = "/path/to/desired/location/"
+```
+
+The same FreeDesktop.org Trash Specification will be used with this explicit 'Recycle Bin' directory.
+
+
 ### GUI Notifications
 To enable GUI notifications, you must compile the application with GUI Notification Support. Refer to [GUI Notification Support](install.md#gui-notification-support) for details. Once compiled, GUI notifications will work by default in the display manager session under the following conditions:
 
@@ -771,6 +957,11 @@ Additionally, GUI notifications can also be sent for the following activities:
 To enable these specific notifications, add the following to your 'config' file:
 ```
 notify_file_actions = "true"
+```
+
+To disable *all* GUI notifications, add the following to your 'config' file:
+```
+disable_notifications = "true"
 ```
 
 ### Handling a Microsoft OneDrive Account Password Change
@@ -867,11 +1058,18 @@ There are two methods to achieve this:
 *   Employ 'skip_file' as part of your 'config' file to configure what files to skip
 *   Employ 'sync_list' to configure what files and directories to sync, and what should be excluded
 
+For further details please read the ['skip_file' config option documentation](https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md#skip_file)
+
 ### How to 'skip' directories from syncing?
 There are three methods available to 'skip' a directory from the sync process:
 *   Employ 'skip_dir' as part of your 'config' file to configure what directories to skip
 *   Employ 'sync_list' to configure what files and directories to sync, and what should be excluded
 *   Employ 'check_nosync' as part of your 'config' file and a '.nosync' empty file within the directory to exclude to skip that directory
+
+> [!IMPORTANT]
+> Entries for 'skip_dir' are *relative* to your 'sync_dir' path.
+
+For further details please read the ['skip_dir' config option documentation](https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md#skip_dir)
 
 ### How to 'skip' .files and .folders from syncing?
 There are three methods to achieve this:

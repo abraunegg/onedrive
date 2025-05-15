@@ -40,6 +40,9 @@
 ## This setting controls whether the curl library is configured to output additional data to assist with diagnosing HTTPS issues and problems.
 #debug_https = "false"
 
+## This setting controls whether 'inotify' events should be delayed or not.
+#delay_inotify_processing = "false"
+
 ## This option determines whether the client will conduct integrity validation on files downloaded from Microsoft OneDrive.
 #disable_download_validation = "false"
 
@@ -75,6 +78,9 @@
 
 ## This setting controls the application HTTP protocol version, downgrading to HTTP/1.1 when enabled.
 #force_http_11 = "false"
+
+## This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the local timestamp of the file
+#force_session_upload = "false"
 
 ## This setting controls the application IP protocol used when communicating with Microsoft OneDrive.
 #ip_protocol_version = "0"
@@ -114,6 +120,9 @@
 
 ## This configuration option controls whether the client operates in read-only mode.
 #read_only_auth_scope = "false"
+
+## This configuration option allows you to specify the 'Recycle Bin' path for the application. This is only used if 'use_recycle_bin' is enabled.
+#recycle_bin_path = "/path/to/desired/location/"
 
 ## This option removes the local file after a successful upload to OneDrive.
 #remove_source_files = "false"
@@ -168,6 +177,9 @@
 
 ## Only upload changes to OneDrive, do not download from cloud.
 #upload_only = "false"
+
+## This configuration option controls the application function to move online deleted files to a 'Recycle Bin' on your system.
+#use_recycle_bin = "false"
 
 ## Custom User-Agent string for requests to OneDrive. If you change this, you will get throttled by the Microsoft Graph API. Change with caution.
 #user_agent = "ISV|abraunegg|OneDrive Client for Linux/vX.Y.Z-A-bcdefghi"

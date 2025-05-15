@@ -35,7 +35,10 @@ autoprocess
 autoupdate
 avmkfdiitirnrenzljwc
 avx
+bak
 baus
+BBBA
+BBD
 bcdefghi
 beffdb
 bindir
@@ -106,6 +109,7 @@ endinaness
 enduml
 envp
 epfd
+eselect
 estr
 eventfd
 evt
@@ -123,6 +127,7 @@ ffat
 FFFD
 fhandler
 flto
+fracsec
 fstack
 FState
 fullchain
@@ -147,6 +152,7 @@ gshared
 GVariant
 hideonindex
 hnsecs
+howto
 hskrieg
 htons
 idk
@@ -173,6 +179,7 @@ journalctl
 jsvar
 kdbx
 keepass
+keyboxd
 kotlin
 lalen
 lbl
@@ -228,6 +235,7 @@ mswsock
 mtune
 mydir
 mynasau
+myuser
 myusername
 nadded
 nadjusted
@@ -267,6 +275,7 @@ ofonedrive
 onbinarymessage
 onedrive
 onetoc
+onlydeps
 onmicrosoft
 ontextmessage
 opensuse
@@ -381,6 +390,7 @@ thnk
 tidx
 timerfd
 tlsv
+trashinfo
 Tting
 typecons
 uda

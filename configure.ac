@@ -4,6 +4,7 @@ dnl Licensed GPL v3 or later
 
 dnl How to make a release
 dnl - increase the version number in the AC_INIT call below
+dnl - change PACKAGE_DATE to 'Month YYYY' to ensure man page has the correct date
 dnl - run autoconf which generates configure
 dnl - commit the changed files (configure.ac, configure)
 dnl - tag the release
@@ -20,6 +21,9 @@ dnl necessary programs: install, pkg-config
 AC_PROG_INSTALL
 PKG_PROG_PKG_CONFIG
 
+PACKAGE_DATE="April 2025"
+AC_SUBST([PACKAGE_DATE])
+
 dnl Determine D compiler
 dnl we check for dmd, dmd2, and ldc2 in this order
 dnl furthermore, we set DC_TYPE to either dmd or ldc and export this into the
@@ -27,9 +31,9 @@ dnl Makefile so that we can adjust command line arguments
 AC_CHECK_PROGS([DC], [dmd ldmd2 ldc2 gdmd gdc], NOT_FOUND)
 DC_TYPE=
 case $(basename $DC) in
-        dmd|ldmd2|gdmd) DC_TYPE=dmd ;;
-        ldc2) DC_TYPE=ldc ;;
-        gdc) DC_TYPE=gdc ;;
+        *ldc2*) DC_TYPE=ldc ;;
+        *gdc*) DC_TYPE=gdc ;;
+        *dmd*) DC_TYPE=dmd ;;
         NOT_FOUND) AC_MSG_ERROR(Could not find any compatible D compiler, 1)
 esac
 
@@ -96,7 +100,7 @@ AS_IF([test "$DO_VERSION_CHECK" = "1"],
 AC_MSG_CHECKING([version of D compiler])
 # check for valid versions
 case $(basename $DC) in
-	ldmd2|ldc2)
+	*ldmd2*|*ldc2*)
 		# LDC - the LLVM D compiler (1.12.0): ...
 		VERSION=`$DC --version`
 		# remove  everything up to first (
@@ -106,15 +110,7 @@ case $(basename $DC) in
 		# now version should be something like L.M.N
 		MINVERSION=1.18.0
 		;;
-	dmd)
-		# DMD64 D Compiler v2.085.1\n...
-		VERSION=`$DC --version | tr '\n' ' '`
-		VERSION=${VERSION#*Compiler v}
-		VERSION=${VERSION%% *}
-		# now version should be something like L.M.N
-		MINVERSION=2.088.0
-		;;
-	gdmd|gdc)
+	*gdmd*|*gdc*)
 		# Both gdmd and gdc print the same version information
 		VERSION=`${DC} --version | head -n1`
 		# Some examples of output:
@@ -128,6 +124,14 @@ case $(basename $DC) in
 		# VERSION=VER DATE ...
 		VERSION=${VERSION%% *}
 		MINVERSION=15
+		;;
+	*dmd*)
+		# DMD64 D Compiler v2.085.1\n...
+		VERSION=`$DC --version | tr '\n' ' '`
+		VERSION=${VERSION#*Compiler v}
+		VERSION=${VERSION%% *}
+		# now version should be something like L.M.N
+		MINVERSION=2.088.0
 		;;
 esac
 
@@ -180,14 +184,6 @@ AC_SUBST([VERSION_DCFLAG])
 AC_SUBST([LINKER_DCFLAG])
 AC_SUBST([OUTPUT_DCFLAG])
 AC_SUBST([WERROR_DCFLAG])
-
-dnl The package date is only used in the man page onedrive.1.in
-dnl we generate onedrive.1 from it during configure run, but we want
-dnl to have the same date, namely the one when the configure script
-dnl was generated from the configure.ac (i.e., on release time).
-dnl this uses a call to the underlying m4 engine to call an external cmd
-PACKAGE_DATE="m4_esyscmd([date "+%B %Y" | tr -d '\n'])" 
-AC_SUBST([PACKAGE_DATE])
 
 dnl Check for required modules: curl and sqlite at the moment
 PKG_CHECK_MODULES([curl],[libcurl])

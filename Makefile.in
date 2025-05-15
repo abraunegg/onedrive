@@ -100,7 +100,7 @@ onedrive: $(SOURCES)
 	else \
 		echo $(version) > version ; \
 	fi
-	$(DC) -J. $(NOTIF_VERSIONS) $(DCFLAGS) $(addprefix $(LINKER_DCFLAG),$(all_libs)) $^ $(OUTPUT_DCFLAG)$@
+	$(DC) -J. $(NOTIF_VERSIONS) $(DCFLAGS) $^ $(addprefix $(LINKER_DCFLAG),$(all_libs)) $(OUTPUT_DCFLAG)$@
 
 install: all
 	mkdir -p $(DESTDIR)$(bindir)

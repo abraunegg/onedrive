@@ -3,12 +3,14 @@ module config;
 
 // What does this module require to function?
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
+import std.array;
 import std.stdio;
 import std.process;
 import std.regex;
 import std.string;
+import std.algorithm;
 import std.algorithm.searching;
-import std.algorithm.sorting: sort;
+import std.algorithm.sorting;
 import std.file;
 import std.conv;
 import std.path;
@@ -131,8 +133,11 @@ class ApplicationConfig {
 	bool fullScanTrueUpRequired = false;
 	bool suppressLoggingOutput = false;
 	
-	// Number of concurrent threads when downloading and uploading data
+	// Default number of concurrent threads when downloading and uploading data
 	ulong defaultConcurrentThreads = 8;
+	
+	// Default number of seconds inotify actions will be delayed by
+	ulong defaultInotifyDelay = 5;
 		
 	// All application run-time paths are formulated from this as a set of defaults
 	// - What is the home path of the actual 'user' that is running the application
@@ -179,6 +184,7 @@ class ApplicationConfig {
 	// Store items that come in from the 'config' file, otherwise these need to be set the defaults
 	private string configFileSyncDir = defaultSyncDir;
 	private string configFileSkipFile = ""; // Default for now, if post reading in any user configuration, if still empty, default will be used
+	private bool configFileSkipFileReadIn = false; // If we actually read in something from 'config' file, this gets set to true
 	private string configFileSkipDir = ""; // Default here is no directories are skipped
 	private string configFileDriveId = ""; // Default here is that no drive id is specified
 	private bool configFileSkipDotfiles = false;
@@ -198,6 +204,11 @@ class ApplicationConfig {
 	// GUI Notification Environment variables
 	bool xdg_exists = false;
 	bool dbus_exists = false;
+	
+	// Recycle Bin Configuration
+	// These paths are used by the application, if 'use_recycle_bin' is enabled
+	string recycleBinFilePath;
+	string recycleBinInfoPath;
 	
 	// Initialise the application configuration
 	bool initialise(string confdirOption, bool helpRequested) {
@@ -242,6 +253,12 @@ class ApplicationConfig {
 		// - name_dsc = file name descending
 		stringValues["transfer_order"] = "default";
 				
+		// Recycle Bin Configuration
+		// Enable|Disable feature
+		boolValues["use_recycle_bin"] = false;
+		// Recycle Bin Folder - empty string as a default
+		stringValues["recycle_bin_path"] = "";
+		
 		// - Store how many times was --verbose added
 		longValues["verbose"] = verbosityCount; 
 		// - The amount of time (seconds) between monitor sync loops
@@ -286,67 +303,88 @@ class ApplicationConfig {
 		// Number of concurrent threads
 		longValues["threads"] = defaultConcurrentThreads; // Default is 8, user can increase to max of 16 or decrease
 		
-		// - Do we wish to upload only?
+		// Do we wish to upload only?
 		boolValues["upload_only"] = false;
-		// - Do we need to check for the .nomount file on the mount point?
+		// Do we need to check for the .nomount file on the mount point?
 		boolValues["check_nomount"] = false;
-		// - Do we need to check for the .nosync file anywhere?
+		// Do we need to check for the .nosync file anywhere?
 		boolValues["check_nosync"] = false;
-		// - Do we wish to download only?
+		// Do we wish to download only?
 		boolValues["download_only"] = false;
-		// - Do we disable notifications?
+		// Do we disable notifications?
 		boolValues["disable_notifications"] = false;
-		// - Do we bypass all the download validation? 
-		//   This is critically important not to disable, but because of SharePoint 'feature' can be highly desirable to enable
+		// Do we bypass all the download validation? 
+		// - This is critically important not to disable, but because of SharePoint 'feature' can be highly desirable to enable
 		boolValues["disable_download_validation"] = false;
-		// - Do we bypass all the upload validation? 
-		//   This is critically important not to disable, but because of SharePoint 'feature' can be highly desirable to enable
+		// Do we bypass all the upload validation? 
+		// - This is critically important not to disable, but because of SharePoint 'feature' can be highly desirable to enable
 		boolValues["disable_upload_validation"] = false;
-		// - Do we enable logging?
+		// Do we enable logging?
 		boolValues["enable_logging"] = false;
-		// - Do we force HTTP 1.1 for connections to the OneDrive API
-		//   By default we use the curl library default, which should be HTTP2 for most operations governed by the OneDrive API
+		// Do we force HTTP 1.1 for connections to the OneDrive API
+		// - By default we use the curl library default, which should be HTTP2 for most operations governed by the OneDrive API
 		boolValues["force_http_11"] = false;
-		// - Do we treat the local file system as the source of truth for our data?
+		// Do we treat the local file system as the source of truth for our data?
 		boolValues["local_first"] = false;
-		// - Do we ignore local file deletes, so that all files are retained online?
+		// Do we ignore local file deletes, so that all files are retained online?
 		boolValues["no_remote_delete"] = false;
-		// - Do we skip symbolic links?
+		// Do we skip symbolic links?
 		boolValues["skip_symlinks"] = false;
-		// - Do we enable debugging for all HTTPS flows. Critically important for debugging API issues.
+		// Do we enable debugging for all HTTPS flows. Critically important for debugging API issues.
 		boolValues["debug_https"] = false;
-		// - Do we skip .files and .folders?
+		// Do we skip .files and .folders?
 		boolValues["skip_dotfiles"] = false;
-		// - Do we perform a 'dry-run' with no local or remote changes actually being performed?
+		// Do we perform a 'dry-run' with no local or remote changes actually being performed?
 		boolValues["dry_run"] = false;
-		// - Do we sync all the files in the 'sync_dir' root?
+		// Do we sync all the files in the 'sync_dir' root?
 		boolValues["sync_root_files"] = false;
-		// - Do we delete source after successful transfer?
+		// Do we delete source after successful transfer?
 		boolValues["remove_source_files"] = false;
-		// - Do we perform strict matching for skip_dir?
+		// Do we perform strict matching for skip_dir?
 		boolValues["skip_dir_strict_match"] = false;
-		// - Do we perform a --resync?
+		// Do we perform a --resync?
 		boolValues["resync"] = false;
-		// - resync now needs to be acknowledged based on the 'risk' of using it
+		// 'resync' now needs to be acknowledged based on the 'risk' of using it
 		boolValues["resync_auth"] = false;
-		// - Ignore data safety checks and overwrite local data rather than preserve & rename
-		//   This is a config file option ONLY
+		// Ignore data safety checks and overwrite local data rather than preserve & rename
+		// - This is a config file option ONLY
 		boolValues["bypass_data_preservation"] = false;
-		// - Allow enable / disable of the syncing of OneDrive Business Shared items (files & folders) via configuration file
+		// Allow enable / disable of the syncing of OneDrive Business Shared items (files & folders) via configuration file
 		boolValues["sync_business_shared_items"] = false;
-		// - Log to application output running configuration values
+		// Log to application output running configuration values
 		boolValues["display_running_config"] = false;
-		// - Configure read-only authentication scope
+		// Configure read-only authentication scope
 		boolValues["read_only_auth_scope"] = false;
-		// - Flag to cleanup local files when using --download-only
+		// Flag to cleanup local files when using --download-only
 		boolValues["cleanup_local_files"] = false;
-		// - Perform a permanentDelete on deletion activities
+		// Perform a permanentDelete on deletion activities
 		boolValues["permanent_delete"] = false;
-		// - Controls how the application handles the Microsoft SharePoint 'feature' of modifying all PDF, MS Office & HTML files with added XML content post upload
-		//   There are 2 ways to solve this:
-		//   1. Download the modified file immediately after upload as per v2.4.x (default)
-		//   2. Create a new online version of the file, which then contributes to the users 'quota'
+		
+		// Controls how the application handles the Microsoft SharePoint 'feature' of modifying all PDF, MS Office & HTML files with added XML content post upload
+		// - There are 2 ways to solve this:
+		//     1. Download the modified file immediately after upload as per v2.4.x (default)
+		//     2. Create a new online version of the file, which then contributes to the users 'quota'
 		boolValues["create_new_file_version"] = false;
+		
+		// Some Linux editors (vi|vim|nvim|emacs|LibreOffice) use use a safe file-save strategy designed to avoid data corruption. As such, as part of this Process
+		// they 'track' the last modified timestamp of the 'new' file that they create on file save (regardless of new file, modified file)
+		// If *any* other application in the background then 'updates' this timestamp, these Linux editors complain saying that the file has changed:
+		//
+		// 		WARNING: The file has been changed since reading it!!!
+		//		Do you really want to write to it (y/n)?
+		//
+		// This is simply because they are looking at the timestamp and *not* if the content has actually changed .... a poor design on those editors
+		//
+		// This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the local timestamp of the file
+		// and Microsoft OneDrive should be respecting this timestamp as the timestamp to use|set when storing that file online
+		boolValues["force_session_upload"] = false;
+		
+		// Obsidian Editor has been written in such a way that it is constantly writing each and every keystroke to a file.
+		// Not only is this really bad application behaviour, for this client, this means the application is constantly writing to disk, thus attempting to upload file changes.
+		// Unfortunately Obsidian on Linux does not provide a built-in way to disable atomic saves or switch to a backup-copy method via configuration.
+		// This flag tells the 'onedrive' inotify monitor to 'sleep' for this period of time, so that constant system writes are not creating instant data uploads
+		boolValues["delay_inotify_processing"] = false;
+		longValues["inotify_delay"] = defaultInotifyDelay; // default of 5 seconds
 		
 		// Webhook Feature Options
 		boolValues["webhook_enabled"] = false;
@@ -395,8 +433,15 @@ class ApplicationConfig {
 			}
 		}
 		
-		// outcome of setting defaultHomePath
+		// Outcome of setting 'defaultHomePath'
 		if (debugLogging) {addLogEntry("runtime_environment: Calculated defaultHomePath: " ~ defaultHomePath, ["debug"]);}
+		
+		// Configure the default path for the Recycle Bin
+		// Both GNOME and KDE use '~/.local/share/Trash/' as the default path
+		// ~/.local/share/Trash/
+		// ├── files/   # The actual trashed files
+		// └── info/    # .trashinfo metadata about each file (original path, deletion date)
+		setValueString("recycle_bin_path", defaultHomePath ~ "/.local/share/Trash/");
 		
 		// DEVELOPER OPTIONS
 		// display_memory = true | false
@@ -803,6 +848,8 @@ class ApplicationConfig {
 						forceExit();
 					}
 				} else if (key == "skip_file") {
+					// Flag this as true
+					configFileSkipFileReadIn = true;
 					// Handle multiple 'config' file entries of skip_file
 					if (configFileSkipFile.empty) {
 						// currently no entry exists
@@ -941,14 +988,65 @@ class ApplicationConfig {
 						tempValue = defaultConcurrentThreads;
 					}
 					setValueLong("threads", tempValue);
+				} else if (key == "inotify_delay") {
+					ulong tempValue = thisConfigValue;
+					if ((tempValue < 5)||(tempValue > 15)) {
+						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+						tempValue = defaultInotifyDelay;
+					}
+					setValueLong("inotify_delay", tempValue);
 				}
 			} else {
 				addLogEntry("Unknown key in config file: " ~ key);
 				return false;
 			}
 		}
+		
+		// If we read in 'skip_file' from the 'config' file, this will be 'true'
+		if (configFileSkipFileReadIn) {
+			// The user added entries, are the application defaults included or were these discarded / discounted?
+			// Check for temporary and/or transient files to skip (application defaults)
+			checkForSkipFileDefaults();
+		}
+		
 		// Return that we were able to read in the config file and parse the options without issue
 		return true;
+	}
+	
+	// Perform a check on 'skip_file' configuration post reading from 'config' file
+	void checkForSkipFileDefaults() {
+		// Split both the default and user values
+		auto defaultEntries = defaultSkipFile.split('|').map!(a => a.strip).array;
+		auto userEntries = configFileSkipFile.split('|').map!(a => a.strip).array;
+
+		string[] missingDefaults;
+
+		// Check if all defaults exist in user config
+		foreach (defaultEntry; defaultEntries) {
+			if (!userEntries.canFind(defaultEntry)) {
+				missingDefaults ~= defaultEntry;
+			}
+		}
+
+		// Display warning message about missing default entries for temporary and/or transient files that should be skipped
+		if (!missingDefaults.empty) {
+			addLogEntry();
+			addLogEntry("WARNING: Your 'skip_file' configuration is missing important default entries. Temporary and/or transient files that would normally be skipped may now be included in syncing.", ["info", "notify"]);
+			addLogEntry();
+			if (verboseLogging) {
+				addLogEntry("By default, the following types of temporary and/or transient files are skipped:", ["verbose"]);
+				addLogEntry("  Files that start with '~' (Temporary or backup files that are not intended to be saved permanently)", ["verbose"]);
+				addLogEntry("  Files that start with '.~' (e.g., LibreOffice lock files)", ["verbose"]);
+				addLogEntry("  Files that end with '.tmp' (Generic temporary files created by applications like browsers, editors, installers)", ["verbose"]);
+				addLogEntry("  Files that end with '.swp' (Transient files created by editors such as vim and vi)", ["verbose"]);
+				addLogEntry("  Files that end with '.partial' (Partially downloaded files, incomplete by nature, should not be synced)", ["verbose"]);
+				addLogEntry();
+				addLogEntry("  Missing the following important 'skip_file' entries: " ~ missingDefaults.join(", "), ["verbose"]);
+				addLogEntry();
+				addLogEntry("Reference: https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md#skip_file", ["verbose"]);
+				addLogEntry();
+			}
+		}
 	}
 
 	// Update the application configuration based on CLI passed in parameters
@@ -1154,8 +1252,8 @@ class ApplicationConfig {
 					"Specify the local directory used for synchronisation to OneDrive",
 					&stringValues["sync_dir_cli"],
 				"share-password",
-                                        "Require a password to access the shared link when used with --create-share-link <file>",
-                                        &stringValues["share_password"], 
+					"Require a password to access the shared link when used with --create-share-link <file>",
+					&stringValues["share_password"],
 				"sync|s",
 					"Perform a synchronisation with Microsoft OneDrive",
 					&boolValues["synchronize"],
@@ -1445,7 +1543,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'cleanup_local_files'          = " ~ to!string(getValueBool("cleanup_local_files")));
 		addLogEntry("Config option 'disable_permission_set'       = " ~ to!string(getValueBool("disable_permission_set")));
 		addLogEntry("Config option 'transfer_order'               = " ~ getValueString("transfer_order"));
-
+		
 		// data integrity
 		addLogEntry("Config option 'classify_as_big_delete'       = " ~ to!string(getValueLong("classify_as_big_delete")));
 		addLogEntry("Config option 'disable_upload_validation'    = " ~ to!string(getValueBool("disable_upload_validation")));
@@ -1484,6 +1582,10 @@ class ApplicationConfig {
 			addLogEntry("Compile time option --enable-notifications   = false");
 		}
 		
+		// Recycle Bin 
+		addLogEntry("Config option 'use_recycle_bin'              = " ~ to!string(getValueBool("use_recycle_bin")));
+		addLogEntry("Config option 'recycle_bin_path'             = " ~ getValueString("recycle_bin_path"));
+				
 		// Is sync_list configured and contains entries?
 		if (exists(syncListFilePath) && getSize(syncListFilePath) > 0) {
 			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
@@ -1750,8 +1852,8 @@ class ApplicationConfig {
 									skip_file_present = true;
 									// Handle multiple entries of skip_file
 									if (backupConfigFileSkipFile.empty) {
-										// currently no entry exists, include 'defaultSkipFile' entries
-										backupConfigFileSkipFile = defaultSkipFile ~ "|" ~ to!string(c.front.dup);
+										// currently no entry value exists
+										backupConfigFileSkipFile = to!string(c.front.dup);
 									} else {
 										// add to existing backupConfigFileSkipFile entry
 										backupConfigFileSkipFile = backupConfigFileSkipFile ~ "|" ~ to!string(c.front.dup);
@@ -1763,8 +1865,8 @@ class ApplicationConfig {
 									skip_dir_present = true;
 									// Handle multiple entries of skip_dir
 									if (backupConfigFileSkipDir.empty) {
-										// currently no entry exists
-										backupConfigFileSkipDir = c.front.dup;
+										// currently no entry value exists
+										backupConfigFileSkipDir = to!string(c.front.dup);
 									} else {
 										// add to existing backupConfigFileSkipDir entry
 										backupConfigFileSkipDir = backupConfigFileSkipDir ~ "|" ~ to!string(c.front.dup);
@@ -1792,17 +1894,32 @@ class ApplicationConfig {
 							}
 						}
 					}
+					
+					// Debug logging
+					if (debugLogging) {
+						addLogEntry("skip_file in actual config = " ~ to!string(configFileSkipFileReadIn), ["debug"]);
+						addLogEntry("skip_file in backup config = " ~ to!string(skip_file_present), ["debug"]);
+						addLogEntry("defaultSkipFile value = " ~ to!string(defaultSkipFile), ["debug"]);
+						addLogEntry("configFileSkipFile value = " ~ to!string(configFileSkipFile), ["debug"]);
+						addLogEntry("backupConfigFileSkipFile value = " ~ to!string(backupConfigFileSkipFile), ["debug"]);
+					}
 				
 					// skip_file can be specified multiple times
 					if (skip_file_present && backupConfigFileSkipFile != configFileSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
 					
+					// skip_file can also be an empty string, thus when removed, as an empty string, we are going back to application defaults
+					if (skip_file_present && backupConfigFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
+					
 					// skip_dir can be specified multiple times
 					if (skip_dir_present && backupConfigFileSkipDir != configFileSkipDir) logAndSetDifference("skip_dir" ~ configOptionModifiedMessage, 5);
 					
-					// Check for newly added configuration options
+					// Check for newly added configuration options to the 'config' file vs being present in the 'backup' config file
 					if (!drive_id_present && configFileDriveId != "") logAndSetDifference("drive_id newly added ... --resync needed", 2);
 					if (!sync_dir_present && configFileSyncDir != defaultSyncDir) logAndSetDifference("sync_dir newly added ... --resync needed", 3);
-					if (!skip_file_present && configFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file newly added ... --resync needed", 4);
+					if (configFileSkipFileReadIn) {
+						// We actually read a 'skip_file' configuration line from the 'config' file
+						if (!skip_file_present && configFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file newly added ... --resync needed", 4);
+					}
 					if (!skip_dir_present && configFileSkipDir != "") logAndSetDifference("skip_dir newly added ... --resync needed", 5);
 					if (!skip_dotfiles_present && configFileSkipDotfiles) logAndSetDifference("skip_dotfiles newly added ... --resync needed", 6);
 					if (!skip_symlinks_present && configFileSkipSymbolicLinks) logAndSetDifference("skip_symlinks newly added ... --resync needed", 7);
@@ -2544,6 +2661,21 @@ class ApplicationConfig {
 
 		// Return result
 		return variablesAvailable;
+	}
+	
+	// Set the Recycle Bin Paths
+	void setRecycleBinPaths() {
+		// Get the configured base path
+		string basePath = getValueString("recycle_bin_path");
+
+		// Ensure basePath ends with a single '/'
+		if (!basePath.endsWith("/")) {
+			basePath ~= "/";
+		}
+
+		// Append subdirectories based on the recycle bin path
+		recycleBinFilePath = basePath ~ "files/";
+		recycleBinInfoPath = basePath ~ "info/";
 	}
 }
 

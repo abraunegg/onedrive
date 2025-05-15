@@ -136,7 +136,15 @@ void safeRemove(const(char)[] path) {
 // Returns the SHA1 hash hex string of a file
 string computeSha1Hash(string path) {
 	SHA1 sha;
-	auto file = File(path, "rb");
+	File file;
+
+	try {
+		file = File(path, "rb");
+	} catch (ErrnoException e) {
+		// log that we could not generate a hash
+		addLogEntry("Failed to open file to compute SHA1 Hash: " ~ path ~ " - " ~ e.msg);
+	}
+	
 	scope(exit) file.close(); // Ensure file is closed post read
 	foreach (ubyte[] data; chunks(file, 4096)) {
 		sha.put(data);
@@ -150,7 +158,15 @@ string computeSha1Hash(string path) {
 // Returns the quickXorHash base64 string of a file
 string computeQuickXorHash(string path) {
 	QuickXor qxor;
-	auto file = File(path, "rb");
+	File file;
+
+	try {
+		file = File(path, "rb");
+	} catch (ErrnoException e) {
+		// log that we could not generate a hash
+		addLogEntry("Failed to open file to compute QuickXor Hash: " ~ path ~ " - " ~ e.msg);
+	}
+	
 	scope(exit) file.close(); // Ensure file is closed post read
 	foreach (ubyte[] data; chunks(file, 4096)) {
 		qxor.put(data);
@@ -164,7 +180,15 @@ string computeQuickXorHash(string path) {
 // Returns the SHA256 hex string of a file
 string computeSHA256Hash(string path) {
 	SHA256 sha256;
-    auto file = File(path, "rb");
+	File file;
+
+	try {
+		file = File(path, "rb");
+	} catch (ErrnoException e) {
+		// log that we could not generate a hash
+		addLogEntry("Failed to open file to compute SHA256 Hash: " ~ path ~ " - " ~ e.msg);
+	}
+	
 	scope(exit) file.close(); // Ensure file is closed post read
     foreach (ubyte[] data; chunks(file, 4096)) {
         sha256.put(data);
@@ -1104,6 +1128,19 @@ bool isItemRemote(const ref JSONValue item) {
 	return ("remoteItem" in item) != null;
 }
 
+// Check if ["remoteItem"]["parentReference"]["driveId"] exists
+bool hasRemoteParentDriveId(const ref JSONValue item) {
+    return ("remoteItem" in item) &&
+           ("parentReference" in item["remoteItem"]) &&
+           ("driveId" in item["remoteItem"]["parentReference"]);
+}
+
+// Check if ["remoteItem"]["id"] exists
+bool hasRemoteItemId(const ref JSONValue item) {
+    return ("remoteItem" in item) &&
+           ("id" in item["remoteItem"]);
+}
+
 bool isItemFile(const ref JSONValue item) {
 	return ("file" in item) != null;
 }
@@ -1568,7 +1605,8 @@ bool isBadCurlVersion(string curlVersion) {
 		"7.81.0", // Ubuntu 22.x
 		"7.88.1", // Debian 12
 		"8.2.1",  // Ubuntu 23.10
-		"8.5.0",  // Ubuntu 24.x
+		"8.5.0",  // Ubuntu 24.04
+		"8.9.1",  // Ubuntu 24.10
 		"8.10.0"  // Various - HTTP/2 bug which was fixed in 8.10.1
     ];
     
@@ -1633,27 +1671,85 @@ void checkOpenSSLVersion() {
 }
 
 // Set the timestamp of the provided path to ensure this is done in a consistent manner
-void setPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) {
+void setLocalPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) {
+	
+	SysTime updatedModificationTime;
+	bool makeTimestampChange = false;
+	
 	// Try and set the local path timestamp, catch filesystem error
 	try {
 		// Set the correct time on the requested inputPath
 		if (!dryRun) {
 			if (debugLogging) {
-				addLogEntry("Setting 'lastAccessTime' and 'lastModificationTime' properties for: " ~ inputPath ~ " to " ~ to!string(newTimeStamp), ["debug"]);
+				// Generate the initial log message
+				string logMessage = format("Setting 'lastAccessTime' and 'lastModificationTime' properties for: %s to %s if required", inputPath, to!string(newTimeStamp));
+				addLogEntry(logMessage, ["debug"]);
 			}
+			
+			// Obtain the existing timestamp values
+			SysTime existingAccessTime;
+			SysTime existingModificationTime;
+			getTimes(inputPath, existingAccessTime, existingModificationTime);
+			
+			if (debugLogging) {
+				addLogEntry("Existing timestamp values:", ["debug"]);
+				addLogEntry("  Access Time:      " ~ to!string(existingAccessTime), ["debug"]);
+				addLogEntry("  Modification Time:" ~ to!string(existingModificationTime), ["debug"]);
+			}
+			
+			// Compare the requested new modified timestamp to existing local modified timestamp
+			SysTime newTimeStampZeroFracSec = newTimeStamp;
+			SysTime existingTimeStampZeroFracSec = existingModificationTime;
+			newTimeStampZeroFracSec = newTimeStampZeroFracSec.toUTC();
+			existingTimeStampZeroFracSec = newTimeStampZeroFracSec.toUTC();
+			newTimeStampZeroFracSec.fracSecs = Duration.zero;
+			existingTimeStampZeroFracSec.fracSecs = Duration.zero;
+			
+			if (debugLogging) {
+				addLogEntry("Comparison timestamp values:", ["debug"]);
+				addLogEntry("  newTimeStampZeroFracSec = " ~ to!string(newTimeStampZeroFracSec), ["debug"]);
+				addLogEntry("  existingTimeStampZeroFracSec = " ~ to!string(existingTimeStampZeroFracSec), ["debug"]);
+			}
+			
+			// Perform the comparison of the fracsec truncated timestamps
+			if (newTimeStampZeroFracSec == existingTimeStampZeroFracSec) {
+				if (debugLogging) {addLogEntry("Fractional seconds only difference in modification time; preserving existing modification time", ["debug"]);}
+				updatedModificationTime = existingModificationTime;
+			} else {
+				if (debugLogging) {addLogEntry("New timestamp is different to existing timestamp; using new modification time", ["debug"]);}
+				updatedModificationTime = newTimeStamp;
+				makeTimestampChange = true;
+			}
+			
 			// Make the timestamp change for the path provided
 			try {
 				// Function detailed here: https://dlang.org/library/std/file/set_times.html
 				// 		setTimes(path, accessTime, modificationTime)
-				// We use the provided 'newTimeStamp' to set both:
-				//		accessTime			Time the file/folder was last accessed.
+				// We use the provided 'updatedModificationTime' to set modificationTime:
 				//		modificationTime	Time the file/folder was last modified.
-				if (debugLogging) {addLogEntry("Calling setTimes() for the given path", ["debug"]);}
-				setTimes(inputPath, newTimeStamp, newTimeStamp);
-				if (debugLogging) {addLogEntry("Timestamp updated for this path: " ~ inputPath, ["debug"]);}
+				// We use the existing 'existingAccessTime' to set accessTime:
+				//		accessTime			Time the file/folder was last accessed.
+				if (makeTimestampChange) {
+					// new timestamp is different
+					if (debugLogging) {addLogEntry("Calling setTimes() for the given path", ["debug"]);}
+					setTimes(inputPath, existingAccessTime, updatedModificationTime);
+					if (debugLogging) {addLogEntry("Timestamp updated for this path: " ~ inputPath, ["debug"]);}
+				} else {
+					if (debugLogging) {addLogEntry("No local timestamp change required", ["debug"]);}
+				}
 			} catch (FileException e) {
 				// display the error message
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+			}
+			
+			SysTime newAccessTime;
+			SysTime newModificationTime;
+			getTimes(inputPath, newAccessTime, newModificationTime);
+			
+			if (debugLogging) {
+				addLogEntry("Current timestamp values post any change (if required):", ["debug"]);
+				addLogEntry("  Access Time:      " ~ to!string(newAccessTime), ["debug"]);
+				addLogEntry("  Modification Time:" ~ to!string(newModificationTime), ["debug"]);
 			}
 		}
 	} catch (FileException e) {

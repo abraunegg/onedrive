@@ -17,6 +17,7 @@ Before reading this document, please ensure you are running application version 
   - [create_new_file_version](#create_new_file_version)
   - [data_timeout](#data_timeout)
   - [debug_https](#debug_https)
+  - [delay_inotify_processing](#delay_inotify_processing)
   - [disable_download_validation](#disable_download_validation)
   - [disable_notifications](#disable_notifications)
   - [disable_permission_set](#disable_permission_set)
@@ -29,6 +30,8 @@ Before reading this document, please ensure you are running application version 
   - [dry_run](#dry_run)
   - [enable_logging](#enable_logging)
   - [force_http_11](#force_http_11)
+  - [force_session_upload](#force_session_upload)
+  - [inotify_delay](#inotify_delay)
   - [ip_protocol_version](#ip_protocol_version)
   - [local_first](#local_first)
   - [log_dir](#log_dir)
@@ -42,6 +45,7 @@ Before reading this document, please ensure you are running application version 
   - [permanent_delete](#permanent_delete)
   - [rate_limit](#rate_limit)
   - [read_only_auth_scope](#read_only_auth_scope)
+  - [recycle_bin_path](#recycle_bin_path)
   - [remove_source_files](#remove_source_files)
   - [resync](#resync)
   - [resync_auth](#resync_auth)
@@ -60,6 +64,7 @@ Before reading this document, please ensure you are running application version 
   - [threads](#threads)
   - [transfer_order](#transfer_order)
   - [upload_only](#upload_only)
+  - [use_recycle_bin](#use_recycle_bin)
   - [user_agent](#user_agent)
   - [webhook_enabled](#webhook_enabled)
   - [webhook_expiration_interval](#webhook_expiration_interval)
@@ -250,6 +255,20 @@ _**CLI Option Use:**_ `--debug-https`
 > [!WARNING]
 > Whilst this option can be used at any time, it is advisable that you only use this option when advised as this will output your `Authorization: bearer` - which is your authentication token to Microsoft OneDrive.
 
+
+### delay_inotify_processing
+_**Description:**_ This setting controls whether 'inotify' events should be delayed or not. This option should only ever be enabled when attempting to reduce the impact of editors like Obsidian which constantly write change to disk in an atomic fashion.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `delay_inotify_processing = "false"` or `delay_inotify_processing = "true"`
+
+> [!NOTE]
+> If you enable this option you *must* also enable 'force_session_upload' to ensure that your data uploads are done in a manner that editors, like Obsidian expect.
+
+
 ### disable_download_validation
 _**Description:**_ This option determines whether the client will conduct integrity validation on files downloaded from Microsoft OneDrive. Sometimes, when downloading files, particularly from SharePoint, there is a discrepancy between the file size reported by the OneDrive API and the byte count received from the SharePoint HTTP Server for the same file. Enable this option to disable the integrity checks performed by this client.
 
@@ -401,6 +420,35 @@ _**Default Value:**_ False
 _**Config Example:**_ `force_http_11 = "false"` or `force_http_11 = "true"`
 
 _**CLI Option Use:**_ `--force-http-11`
+
+
+### force_session_upload
+_**Description:**_ This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the local timestamp of the file.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `force_session_upload = "false"` or `force_session_upload = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+
+### inotify_delay
+_**Description:**_ This option specifies the number of seconds 'inotify' events are paused before they are processed by this client. This value is used to overcome aggressive write applications such as Obsidian which write each keystroke in an atomic manner to the local disk. Due to this atomic write, each 'save' causes the existing file to be deleted and replaced with a new file, which this client sees as multiple constant 'inotify' events.
+
+_**Value Type:**_ Integer
+
+_**Default Value:**_ 5
+
+_**Maximum Value:**_ 15
+
+_**Config Example:**_ `inotify_delay = "10"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+> [!NOTE]
+> This option is only used if 'delay_inotify_processing' is enabled, otherwise this option is ignored.
 
 ### ip_protocol_version
 _**Description:**_ This setting controls the application IP protocol that should be used when communicating with Microsoft OneDrive. The default is to use IPv4 and IPv6 networks for communicating to Microsoft OneDrive.
@@ -574,7 +622,7 @@ _**CLI Option Use:**_ *None - this is a config file option only*
 > [!IMPORTANT]
 > The Microsoft OneDrive API for this capability is also very narrow:
 > | Account Type | Config Option is Supported |
-> |--------------|------------------|
+> |:-------------|:----------------:|
 > | Personal     | ❌ |
 > | Business     | ✔ |
 > | SharePoint   | ✔ |
@@ -623,6 +671,17 @@ _**Config Example:**_ `read_only_auth_scope = "false"` or `read_only_auth_scope 
 
 > [!IMPORTANT]
 > When using 'read_only_auth_scope' you also will need to remove your existing application access consent otherwise old authentication consent will be valid and will be used. This will mean the application will technically have the consent to upload data until you revoke this consent.
+
+### recycle_bin_path
+_**Description:**_ This configuration option allows you to specify the 'Recycle Bin' path for the application.
+
+_**Value Type:**_ String
+
+_**Default Value:**_ *None* however the application will use `~/.local/share/Trash` as the pre-defined default so that files will be placed in the correct location for your user profile.
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+_**Config Example:**_ `recycle_bin_path = "/path/to/desired/location/"`
 
 ### remove_source_files
 _**Description:**_ This configuration option controls whether the OneDrive Client for Linux removes the local file post successful transfer to Microsoft OneDrive.
@@ -745,14 +804,28 @@ _**Value Type:**_ String
 
 _**Default Value:**_ `~*|.~*|*.tmp|*.swp|*.partial`
 
+By default, the following files will be skipped:
+
+| Skip File Pattern | Meaning                    | Why this should be skipped |
+|:------------------|:---------------------------|:---------------------------|
+| `~*`              | Files that start with `~`  | Temporary or backup files. Typically auto-created by various programs during editing sessions. These are not intended to be saved permanently. Example: Emacs, Vim, and others create such files. |
+| `.~*`             | Files that start with `.~` | Hidden lock or temp files, especially from LibreOffice and OpenOffice. (E.g., `.~lock.MyFile.docx#`) These are only used to prevent multiple users editing the same file simultaneously. |
+| `*.tmp`           | Files ending in `.tmp`     | Generic temporary files created by applications like browsers, editors, installers. They represent intermediate data and are usually auto-deleted after a session. |
+| `*.swp`           | Files ending in `.swp`     | Vim (and vi) swap files. Created to protect against crash recovery during text editing. Should not be synced because they are transient. |
+| `*.partial`       | Files ending in `.partial` | Partially downloaded files. Common in browsers (like Firefox `.partial` download files), background downloaders and this client. Incomplete by nature. Syncing them causes broken files online. |
+
+The following suggested skip file patterns are not included in the default configuration but could also be considered for skipping:
+
+| Skip File Pattern | Meaning                    | Why this should be skipped |
+|:------------------|:---------------------------|:---------------------------|
+| `*.bak`           | Files ending in `.bak`     | Backup files created by many text editors, IDEs, or applications. These are automatic backups made to preserve earlier versions of files before editing changes are saved. They are not intended for syncing — they are redundant copies of existing or previous files. |
+
+> [!IMPORTANT]
+> If you define your own 'skip_file' configuration, the default settings listed above will be *overridden*. It is strongly recommended that you explicitly include the default 'skip_file' rules alongside your custom entries to ensure temporary and/or transient files are still correctly skipped.
+
 _**Config Example:**_ 
 
 Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
-
-By default, the following files will be skipped:
-*   Files that start with ~
-*   Files that start with .~ (like .~lock.* files generated by LibreOffice)
-*   Files that end in .tmp, .swp and .partial
 
 Files can be skipped in the following fashion:
 *   Specify a wildcard, eg: '*.txt' (skip all txt files)
@@ -768,17 +841,19 @@ skip_file = "~*|/Documents/OneNote*|/Documents/config.xlaunch|myfile.ext|/Docume
 
 The 'skip_file' option can be specified multiple times within your config file, for example:
 ```text
-skip_file = "~*|.~*|*.tmp|*.swp"
+# Defaults - always keep
+skip_file = "~*|.~*|*.tmp|*.swp|*.partial"
+# Custom 'skip_file' additions
 skip_file = "*.blah"
 skip_file = "never_sync.file"
 skip_file = "/Documents/keepass.kdbx"
 ```
 This will be interpreted the same as:
 ```text
-skip_file = "~*|.~*|*.tmp|*.swp|*.blah|never_sync.file|/Documents/keepass.kdbx"
+skip_file = "~*|.~*|*.tmp|*.swp|*.partial|*.blah|never_sync.file|/Documents/keepass.kdbx"
 ```
 
-_**CLI Option Use:**_ `--skip-file '~*|.~*|*.tmp|*.swp|*.blah|never_sync.file|/Documents/keepass.kdbx'`
+_**CLI Option Use:**_ `--skip-file '~*|.~*|*.tmp|*.swp|*.partial|*.blah|never_sync.file|/Documents/keepass.kdbx'`
 
 > [!NOTE]
 > This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. If using the config file and CLI option is used, the CLI option will *replace* the config file entries. After changing or modifying this option, you will be required to perform a resync.
@@ -941,6 +1016,17 @@ _**CLI Option Use:**_ `--upload-only`
 
 > [!IMPORTANT]
 > To ensure that data deleted locally remains accessible online, you can use the 'no_remote_delete' option. If you want to delete the data from your local storage after a successful upload to Microsoft OneDrive, you can use the 'remove_source_files' option.
+
+### use_recycle_bin
+_**Description:**_ This configuration option controls the application function to move online deleted files to a 'Recycle Bin' on your system. This allows you to review online deleted data manually before this is purged from your actual system.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `use_recycle_bin = "false"` or `use_recycle_bin = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
 
 ### user_agent
 _**Description:**_ This configuration option controls the 'User-Agent' request header that is presented to Microsoft Graph API when accessing the Microsoft OneDrive service. This string lets servers and network peers identify the application, operating system, vendor, and/or version of the application making the request. We recommend users not to tamper with this option unless strictly necessary.

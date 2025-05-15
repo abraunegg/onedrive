@@ -12,14 +12,14 @@ Only the current release version or greater is supported. Earlier versions are n
 |---------------------------------|----------------------------------------------------------------------------------------------------------|:---------------:|:----:|:------:|:-----:|:-------:|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Alpine Linux                    | [onedrive](https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge)                              |<a href="https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge"><img src="https://repology.org/badge/version-for-repo/alpine_edge/onedrive.svg?header=" alt="Alpine Linux Edge package" width="46" height="20"></a>|❌|✔|❌|✔ | |
 | Arch Linux<br><br>Manjaro Linux | [onedrive-abraunegg](https://aur.archlinux.org/packages/onedrive-abraunegg/)                             |<a href="https://aur.archlinux.org/packages/onedrive-abraunegg"><img src="https://repology.org/badge/version-for-repo/aur/onedrive-abraunegg.svg?header=" alt="AUR package" width="46" height="20"></a>|✔|✔|✔|✔ | Install via: `pamac build onedrive-abraunegg` from the Arch Linux User Repository (AUR)<br><br>**Note:** You must first install 'base-devel' as this is a pre-requisite for using the AUR<br><br>**Note:** If asked regarding a provider for 'd-runtime' and 'd-compiler', select 'liblphobos' and 'ldc'<br><br>**Note:** System must have at least 1GB of memory & 1GB swap space
-| CentOS 8                        | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_8/onedrive.svg?header=" alt="CentOS 8 package" width="46" height="20"></a>|❌|✔|❌|✔| **Note:** You must install the EPEL Repository first |
-| CentOS 9                        | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_9/onedrive.svg?header=" alt="CentOS 9 package" width="46" height="20"></a>|❌|✔|❌|✔| **Note:** You must install the EPEL Repository first |
+| CentOS 8                        | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_8/onedrive.svg?header=" alt="CentOS 8 package" width="46" height="20"></a>|❌|✔|❌|✔| **Note:** You must install the EPEL Repository first.<br><br>Install via `sudo dnf install onedrive` |
+| CentOS 9                        | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_9/onedrive.svg?header=" alt="CentOS 9 package" width="46" height="20"></a>|❌|✔|❌|✔| **Note:** You must install the EPEL Repository first.<br><br>Install via `sudo dnf install onedrive` |
 | Debian 11                       | [onedrive](https://packages.debian.org/bullseye/source/onedrive)                                         |<a href="https://packages.debian.org/bullseye/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_11/onedrive.svg?header=" alt="Debian 11 package" width="46" height="20"></a>|✔|✔|✔|✔| **Note:** Do not install from Debian Package Repositories as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Debian 11 that you install from OpenSuSE Build Service using the Debian Package Install [Instructions](ubuntu-package-install.md) |
 | Debian 12                       | [onedrive](https://packages.debian.org/bookworm/source/onedrive)                                         |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_12/onedrive.svg?header=" alt="Debian 12 package" width="46" height="20"></a>|✔|✔|✔|✔| **Note:** Do not install from Debian Package Repositories as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Debian 12 that you install from OpenSuSE Build Service using the Debian Package Install [Instructions](ubuntu-package-install.md) |
 | Debian Sid                      | [onedrive](https://packages.debian.org/sid/onedrive)                                                     |<a href="https://packages.debian.org/sid/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_unstable/onedrive.svg?header=" alt="Debian Sid package" width="46" height="20"></a>|✔|✔|✔|✔| |
-| Fedora                          | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/fedora_rawhide/onedrive.svg?header=" alt="Fedora Rawhide package" width="46" height="20"></a>|✔|✔|✔|✔| |
+| Fedora                          | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/fedora_rawhide/onedrive.svg?header=" alt="Fedora Rawhide package" width="46" height="20"></a>|✔|✔|✔|✔| Use package `onedrive` from the Fedora Package Repositories.<br><br>Install via `sudo dnf install onedrive` |
 | FreeBSD                         | [onedrive](https://www.freshports.org/net/onedrive)                                                      |<a href="https://www.freshports.org/net/onedrive"><img src="https://repology.org/badge/version-for-repo/freebsd/onedrive.svg?header=" alt="FreeBSD package" width="46" height="20"></a>|❌|✔|❌|❌| |
-| Gentoo                          | [onedrive](https://gpo.zugaina.org/net-misc/onedrive)                                                    | No API Available |✔|✔|❌|❌| |
+| Gentoo                          | [onedrive](https://gpo.zugaina.org/net-misc/onedrive)                                                    | No API Available |✔|✔|❌|❌| Install via: `emerge net-misc/onedrive` <br><br>**Note:** You must first enable the dlang overlay: `eselect repository enable dlang && emerge --sync dlang`|
 | Homebrew                        | [onedrive](https://formulae.brew.sh/formula/onedrive)                                                    |<a href="https://formulae.brew.sh/formula/onedrive"><img src="https://repology.org/badge/version-for-repo/homebrew/onedrive.svg?header=" alt="Homebrew package" width="46" height="20"></a> |❌|✔|❌|❌| |
 | Linux Mint 20.x                 | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Linux Mint Repositories as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Linux Mint that you install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
 | Linux Mint 21.x                 | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_22_04/onedrive.svg?header=" alt="Ubuntu 22.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Linux Mint Repositories as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Linux Mint that you install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
@@ -83,7 +83,31 @@ For GUI notifications the following is also necessary:
 ```text
 sudo dnf install libnotify-devel
 ```
-
+### Dependencies: Fedora > Version 41
+Fedora > 41 uses dnf5 which removes some deprecated aliases, specifically 'groupinstall' in this instance.
+```text
+sudo dnf group install development-tools
+sudo dnf install libcurl-devel sqlite-devel
+```
+Before running the dmd install you need to check for the option 'use-keyboxd' in your gnupg common.conf file and comment it out while running the install.
+```text
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+Or you may get the following error:
+```text
+myuser@fedora:~$ curl -fsS https://dlang.org/install.sh | bash -s dmd
+Downloading https://dlang.org/d-keyring.gpg
+######################################################################## 100.0%
+gpg: Note: Specified keyrings are ignored due to option "use-keyboxd"
+gpg: Signature made Thu 06 Mar 2025 10:45:29 GMT
+gpg:                using RSA key F3F896F3274BBD9BBBA59058710592E7FB7AF6CA
+gpg: Can't check signature: No public key
+Invalid signature https://dlang.org/d-keyring.gpg.sig
+```
+For GUI notifications the following is also necessary:
+```text
+sudo dnf install libnotify-devel
+```
 ### Dependencies: FreeBSD
 ```text
 pkg install bash bash-completion gmake pkgconf autoconf automake logrotate libinotify git sqlite3 ldc
@@ -96,16 +120,19 @@ pkg install libnotify
 > Install the required FreeBSD packages as 'root' unless you have installed 'sudo'
 
 ### Dependencies: Gentoo
+Enable the [dlang](https://wiki.gentoo.org/wiki/Dlang) overlay:
 ```text
-sudo emerge app-portage/layman
-sudo layman -a dlang
+sudo emerge app-eselect/eselect-repository
+sudo eselect repository enable dlang
+sudo emerge --sync dlang
 ```
-Add ebuild from contrib/gentoo to a local overlay to use.
 
-For GUI notifications the following is also necessary:
+Then, install the dependencies for the package:
 ```text
-sudo emerge x11-libs/libnotify
+sudo emerge --onlydeps net-misc/onedrive
 ```
+
+GUI notifications can be enabled with the `libnotify` `USE` flag (which is the default on desktop profiles).
 
 ### Dependencies: Ubuntu 16.x
 Ubuntu Linux 16.x LTS reached the end of its five-year LTS window on April 30th 2021 and is no longer supported.
