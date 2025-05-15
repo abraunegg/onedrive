@@ -4,10 +4,13 @@ module intune;
 // What does this module require to function?
 import core.stdc.string : strcmp;
 import core.stdc.stdlib : malloc, free;
+import core.thread : Thread;
+import core.time : dur;
 import std.string : fromStringz, toStringz;
 import std.conv : to;
 import std.json : JSONValue, parseJSON, JSONType;
 import std.uuid : randomUUID;
+import std.range : empty;
 
 // What 'onedrive' modules do we import?
 import log;
@@ -18,8 +21,8 @@ alias dbus_bool_t = int;
 struct DBusError {
     char* name;
     char* message;
-    uint dummy1, dummy2, dummy3, dummy4, dummy5, dummy6, dummy7, dummy8;
-    void* padding1;
+    uint[8] dummy;
+    void* padding;
 }
 
 struct DBusConnection;
@@ -28,225 +31,226 @@ struct DBusMessageIter;
 
 enum DBusBusType {
     DBUS_BUS_SESSION = 0,
-    DBUS_BUS_SYSTEM = 1,
-    DBUS_BUS_STARTER = 2
 }
 
 void dbus_error_init(DBusError* error);
 void dbus_error_free(DBusError* error);
 int dbus_error_is_set(DBusError* error);
-
 DBusConnection* dbus_bus_get(DBusBusType type, DBusError* error);
 dbus_bool_t dbus_bus_name_has_owner(DBusConnection* conn, const char* name, DBusError* error);
-
-DBusMessage* dbus_message_new_method_call(
-    const char* destination,
-    const char* path,
-    const char* iface,
-    const char* method
-);
-
-DBusMessage* dbus_connection_send_with_reply_and_block(
-    DBusConnection* conn,
-    DBusMessage* msg,
-    int timeout_milliseconds,
-    DBusError* error
-);
-
+DBusMessage* dbus_message_new_method_call(const char* dest, const char* path, const char* iface, const char* method);
+dbus_bool_t dbus_connection_send(DBusConnection* conn, DBusMessage* msg, void* client_serial);
+void dbus_connection_flush(DBusConnection* conn);
+DBusMessage* dbus_connection_send_with_reply_and_block(DBusConnection* conn, DBusMessage* msg, int timeout_ms, DBusError* error);
+void dbus_message_unref(DBusMessage* msg);
 dbus_bool_t dbus_message_iter_init_append(DBusMessage* msg, DBusMessageIter* iter);
 dbus_bool_t dbus_message_iter_append_basic(DBusMessageIter* iter, int type, const void* value);
-
-void dbus_message_unref(DBusMessage* msg);
 dbus_bool_t dbus_message_iter_init(DBusMessage* msg, DBusMessageIter* iter);
 dbus_bool_t dbus_message_iter_get_arg_type(DBusMessageIter* iter);
-void dbus_message_iter_recurse(DBusMessageIter* iter, DBusMessageIter* sub);
-void dbus_message_iter_next(DBusMessageIter* iter);
 void dbus_message_iter_get_basic(DBusMessageIter* iter, void* value);
 
 enum DBUS_TYPE_STRING = 115;
 enum DBUS_MESSAGE_ITER_SIZE = 128;
 
-// Check if the Microsoft Identity Broker D-Bus service is available on the session bus
 bool check_intune_broker_available() {
     DBusError err;
     dbus_error_init(&err);
-
     DBusConnection* conn = dbus_bus_get(DBusBusType.DBUS_BUS_SESSION, &err);
     if (dbus_error_is_set(&err)) {
         dbus_error_free(&err);
         return false;
     }
-
     if (conn is null) return false;
-
     dbus_bool_t hasOwner = dbus_bus_name_has_owner(conn, "com.microsoft.identity.broker1", &err);
     if (dbus_error_is_set(&err)) {
         dbus_error_free(&err);
         return false;
     }
+    return hasOwner != 0;
+}
 
-    if (hasOwner) return true;
-
-    DBusMessage* msg = dbus_message_new_method_call(
-        "org.freedesktop.DBus",
-        "/org/freedesktop/DBus",
-        "org.freedesktop.DBus",
-        "ListActivatableNames"
-    );
-    if (msg is null) return false;
-
-    DBusMessage* reply = dbus_connection_send_with_reply_and_block(conn, msg, -1, &err);
-    dbus_message_unref(msg);
-
-    if (dbus_error_is_set(&err) || reply is null) {
-        dbus_error_free(&err);
-        return false;
+bool wait_for_broker(int timeoutSeconds = 10) {
+    int waited = 0;
+    while (waited < timeoutSeconds) {
+        if (check_intune_broker_available()) return true;
+        Thread.sleep(dur!"seconds"(1));
+        waited++;
     }
-
-    DBusMessageIter* iter = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
-    DBusMessageIter* arrayIter = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
-
-    if (!dbus_message_iter_init(reply, iter)) {
-        dbus_message_unref(reply);
-        free(iter);
-        free(arrayIter);
-        return false;
-    }
-
-    dbus_message_iter_recurse(iter, arrayIter);
-
-    while (dbus_message_iter_get_arg_type(arrayIter)) {
-        char* name;
-        dbus_message_iter_get_basic(arrayIter, &name);
-
-        if (strcmp(name, "com.microsoft.identity.broker1") == 0) {
-            dbus_message_unref(reply);
-            free(iter);
-            free(arrayIter);
-            return true;
-        }
-
-        dbus_message_iter_next(arrayIter);
-    }
-
-    dbus_message_unref(reply);
-    free(iter);
-    free(arrayIter);
     return false;
 }
 
+string build_auth_request(string accountJson = "") {
+    string header = `{
+  "authParameters": {
+    "clientId": "22314271-0071-455d-8e04-cdf1ce807a06",
+    "redirectUri": "http://localhost",
+    "authority": "https://login.microsoftonline.com/common",
+    "requestedScopes": [
+      "Files.ReadWrite",
+      "Files.ReadWrite.All",
+      "Sites.ReadWrite.All",
+      "offline_access"
+    ]`;
+
+    string footer = `
+  }
+}`;
+
+    if (!accountJson.empty)
+        return header ~ `,"account": ` ~ accountJson ~ footer;
+    else
+        return header ~ footer;
+}
+
+struct AuthResult {
+    string token;
+    string accountJson;
+}
+
 // Initiate interactive authentication via D-Bus using the Microsoft Identity Broker
-string acquire_token_interactive() {
+AuthResult acquire_token_interactive() {
+    AuthResult result;
+    if (!wait_for_broker(10)) {
+        addLogEntry("Timed out waiting for Identity Broker to appear on D-Bus");
+        return result;
+    }
+
+    // Step 1: Call acquireTokenInteractively and capture account from result
     DBusError err;
     dbus_error_init(&err);
-
-    addLogEntry("Starting interactive authentication...");
-
     DBusConnection* conn = dbus_bus_get(DBusBusType.DBUS_BUS_SESSION, &err);
-    if (dbus_error_is_set(&err) || conn is null) {
-        dbus_error_free(&err);
-        return "";
-    }
-	
-	addLogEntry("GOT HERE 1");
-	
-	DBusMessage* msg = dbus_message_new_method_call(
+    if (dbus_error_is_set(&err) || conn is null) return result;
+
+    DBusMessage* msg = dbus_message_new_method_call(
         "com.microsoft.identity.broker1",
         "/com/microsoft/identity/broker1",
         "com.microsoft.identity.Broker1",
         "acquireTokenInteractively"
     );
-
-	if (msg is null) return "";
-	
-	addLogEntry("GOT HERE 2");
+    if (msg is null) return result;
 
     string correlationId = randomUUID().toString();
+    string requestJson = build_auth_request();
 
-    string requestJson = `{
-	  "authParameters": {
-		"clientId": "22314271-0071-455d-8e04-cdf1ce807a06",
-		"redirectUri": "http://localhost",
-		"authority": "https://login.microsoftonline.com/common",
-		"requestedScopes": [
-		  "Files.ReadWrite",
-		  "Files.ReadWrite.All",
-		  "Sites.ReadWrite.All",
-		  "offline_access"
-		]
-	  }
-	}`;
-
-	DBusMessageIter* args = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
+    DBusMessageIter* args = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
     if (!dbus_message_iter_init_append(msg, args)) {
-        dbus_message_unref(msg);
-        free(args);
-        return "";
+        dbus_message_unref(msg); free(args); return result;
     }
-	
-	addLogEntry("GOT HERE 3");
 
     const(char)* protocol = toStringz("0.0");
     const(char)* corrId = toStringz(correlationId);
     const(char)* reqJson = toStringz(requestJson);
-	
-	if (!dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &protocol) ||
-        !dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &corrId) ||
-        !dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &reqJson)) {
-        dbus_message_unref(msg);
-        free(args);
-        return "";
-    }
-	
-	addLogEntry("GOT HERE 4");
 
-	free(args);
+    dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &protocol);
+    dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &corrId);
+    dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &reqJson);
+    free(args);
 
-    DBusMessage* reply = dbus_connection_send_with_reply_and_block(conn, msg, -1, &err);
+    DBusMessage* reply = dbus_connection_send_with_reply_and_block(conn, msg, 60000, &err);
     dbus_message_unref(msg);
-	
-	if (dbus_error_is_set(&err) || reply is null) {
-        dbus_error_free(&err);
-        return "";
+
+    if (dbus_error_is_set(&err) || reply is null) {
+        addLogEntry("Interactive call failed");
+        return result;
     }
-	
-	addLogEntry("GOT HERE 5");
-	
-	DBusMessageIter* iter = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
+
+    DBusMessageIter* iter = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
     if (!dbus_message_iter_init(reply, iter)) {
-        dbus_message_unref(reply);
-        free(iter);
-        return "";
+        dbus_message_unref(reply); free(iter); return result;
     }
-	
-	addLogEntry("GOT HERE 6");
-	
-	if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_STRING) {
-        dbus_message_unref(reply);
-        free(iter);
-        return "";
-    }
-	
-	addLogEntry("GOT HERE 7");
-	
-	char* responseStr;
+
+    char* responseStr;
     dbus_message_iter_get_basic(iter, &responseStr);
-    dbus_message_unref(reply);
-    free(iter);
-	
-	string jsonResponse = fromStringz(responseStr).idup;
-	
-	addLogEntry("intune raw response: " ~ jsonResponse);
+    dbus_message_unref(reply); free(iter);
+
+    string jsonResponse = fromStringz(responseStr).idup;
+    if (debugLogging) {addLogEntry("Interactive raw response: " ~ jsonResponse, ["debug"]);}
+
+    JSONValue parsed = parseJSON(jsonResponse);
+    if (parsed.type != JSONType.object) return result;
+
+    auto obj = parsed.object;
+    if ("access_token" in obj) result.token = obj["access_token"].str;
+    if ("account" in obj) result.accountJson = obj["account"].toString();
+
+    return result;
+}
+
+// Perform silent authentication via D-Bus using the Microsoft Identity Broker
+string acquire_token_silently(string accountJson) {
+    DBusError err;
+    dbus_error_init(&err);
+    DBusConnection* conn = dbus_bus_get(DBusBusType.DBUS_BUS_SESSION, &err);
+    if (dbus_error_is_set(&err) || conn is null) return "";
+
+    DBusMessage* msg = dbus_message_new_method_call(
+        "com.microsoft.identity.broker1",
+        "/com/microsoft/identity/broker1",
+        "com.microsoft.identity.Broker1",
+        "acquireTokenSilently"
+    );
+    if (msg is null) return "";
+
+    string correlationId = randomUUID().toString();
+    string requestJson = build_auth_request(accountJson);
+
+    DBusMessageIter* args = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
+    if (!dbus_message_iter_init_append(msg, args)) {
+        dbus_message_unref(msg); free(args); return "";
+    }
+
+    const(char)* protocol = toStringz("0.0");
+    const(char)* corrId = toStringz(correlationId);
+    const(char)* reqJson = toStringz(requestJson);
+
+    dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &protocol);
+    dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &corrId);
+    dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &reqJson);
+    free(args);
+
+    DBusMessage* reply = dbus_connection_send_with_reply_and_block(conn, msg, 10000, &err);
+    dbus_message_unref(msg);
+    if (dbus_error_is_set(&err) || reply is null) return "";
+
+    DBusMessageIter* iter = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
+    if (!dbus_message_iter_init(reply, iter)) {
+        dbus_message_unref(reply); free(iter); return "";
+    }
+
+    char* responseStr;
+    dbus_message_iter_get_basic(iter, &responseStr);
+    dbus_message_unref(reply); free(iter);
+
+    string jsonResponse = fromStringz(responseStr).idup;
+    addLogEntry("Silent response: " ~ jsonResponse);
 
     JSONValue parsed = parseJSON(jsonResponse);
     if (parsed.type != JSONType.object) return "";
-	
-	addLogEntry("GOT HERE 8");
 
     auto obj = parsed.object;
     if (!("access_token" in obj)) return "";
-	
-	addLogEntry("GOT HERE 9");
-
     return obj["access_token"].str;
+}
+
+// Aquire token via D-Bus using the Microsoft Identity Broker 
+string full_acquire_token() {
+    AuthResult result = acquire_token_interactive();
+    if (!result.token.empty) return result.token;
+
+    if (!result.accountJson.empty) {
+        addLogEntry("Polling silently using retrieved account");
+        int waited = 0;
+        while (waited < 120) {
+            string token = acquire_token_silently(result.accountJson);
+            if (!token.empty) {
+                addLogEntry("Silent token acquired after " ~ to!string(waited) ~ " seconds");
+                return token;
+            }
+            Thread.sleep(dur!"seconds"(2));
+            waited += 2;
+        }
+    }
+
+    addLogEntry("Silent fallback failed. No token acquired.");
+    return "";
 }

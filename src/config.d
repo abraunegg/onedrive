@@ -50,6 +50,9 @@ class ApplicationConfig {
 	// Microsoft Requirements 
 	// - Default Application ID (abraunegg)
 	immutable string defaultApplicationId = "d50ca740-c83f-4d1b-b616-12c519384f0c";
+	// - Legacy v1.x Application ID (skilion)
+	immutable string skilionApplicationId = "22c49a0d-d21c-4792-aed1-8f163c982546";
+	
 	// - Microsoft User Agent ISV Tag
 	immutable string isvTag = "ISV";
 	// - Microsoft User Agent Company name
