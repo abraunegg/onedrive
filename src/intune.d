@@ -232,7 +232,7 @@ string acquire_token_silently(string accountJson) {
     return obj["access_token"].str;
 }
 
-// Aquire token via D-Bus using the Microsoft Identity Broker 
+// Acquire token via D-Bus using the Microsoft Identity Broker 
 JSONValue full_acquire_token() {
     AuthResult result = acquire_token_interactive();
 	if (!result.brokerTokenResponse.type().stringof.empty) return result.brokerTokenResponse;
