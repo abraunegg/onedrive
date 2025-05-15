@@ -103,8 +103,7 @@ string build_auth_request(string accountJson = "") {
 }
 
 struct AuthResult {
-    string token;
-    string accountJson;
+    JSONValue brokerTokenResponse;
 }
 
 // Initiate interactive authentication via D-Bus using the Microsoft Identity Broker
@@ -164,14 +163,15 @@ AuthResult acquire_token_interactive() {
     dbus_message_unref(reply); free(iter);
 
     string jsonResponse = fromStringz(responseStr).idup;
-    if (debugLogging) {addLogEntry("Interactive raw response: " ~ jsonResponse, ["debug"]);}
-
-    JSONValue parsed = parseJSON(jsonResponse);
+    if (debugLogging) {addLogEntry("Interactive raw response: " ~ to!string(jsonResponse), ["debug"]);}
+	
+	JSONValue parsed = parseJSON(jsonResponse);
     if (parsed.type != JSONType.object) return result;
-
-    auto obj = parsed.object;
-    if ("access_token" in obj) result.token = obj["access_token"].str;
-    if ("account" in obj) result.accountJson = obj["account"].toString();
+	
+	auto obj = parsed.object;
+	if ("brokerTokenResponse" in obj) {
+		result.brokerTokenResponse = obj["brokerTokenResponse"];
+	}
 
     return result;
 }
@@ -233,24 +233,27 @@ string acquire_token_silently(string accountJson) {
 }
 
 // Aquire token via D-Bus using the Microsoft Identity Broker 
-string full_acquire_token() {
+JSONValue full_acquire_token() {
     AuthResult result = acquire_token_interactive();
-    if (!result.token.empty) return result.token;
+	if (!result.brokerTokenResponse.type().stringof.empty) return result.brokerTokenResponse;
 
-    if (!result.accountJson.empty) {
-        addLogEntry("Polling silently using retrieved account");
-        int waited = 0;
-        while (waited < 120) {
-            string token = acquire_token_silently(result.accountJson);
-            if (!token.empty) {
-                addLogEntry("Silent token acquired after " ~ to!string(waited) ~ " seconds");
-                return token;
-            }
-            Thread.sleep(dur!"seconds"(2));
-            waited += 2;
-        }
-    }
+	// Optionally retry silently using `account`
+	if ("account" in result.brokerTokenResponse.object) {
+		string accountJson = result.brokerTokenResponse.object["account"].toString();
+		addLogEntry("Polling silently using retrieved account");
 
-    addLogEntry("Silent fallback failed. No token acquired.");
-    return "";
+		int waited = 0;
+		while (waited < 120) {
+			string silentToken = acquire_token_silently(accountJson);
+			if (!silentToken.empty) {
+				// Construct JSON manually from silent token (simplified)
+				return parseJSON(`{ "accessToken": "` ~ silentToken ~ `" }`);
+			}
+			Thread.sleep(dur!"seconds"(2));
+			waited += 2;
+		}
+	}
+
+	addLogEntry("Silent fallback failed. No token acquired.");
+	return JSONValue.init;
 }

@@ -29,6 +29,7 @@ import config;
 import log;
 import util;
 import curlEngine;
+import intune;
 
 // Define the 'OneDriveException' class
 class OneDriveException: Exception {
@@ -398,94 +399,119 @@ class OneDriveApi {
 
 	// Authenticate this client against Microsoft OneDrive API
 	bool authorise() {
-	
-		char[] response;
-		// What URL should be presented to the user to access
-		string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
-		// Configure automated authentication if --auth-files authUrl:responseUrl is being used
-		string authFilesString = appConfig.getValueString("auth_files");
-		string authResponseString = appConfig.getValueString("auth_response");
-	
-		if (!authResponseString.empty) {
-			// read the response from authResponseString
-			response = cast(char[]) authResponseString;
-		} else if (authFilesString != "") {
-			string[] authFiles = authFilesString.split(":");
-			string authUrl = authFiles[0];
-			string responseUrl = authFiles[1];
+		// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
+		if (appConfig.getValueBool("use_intune_sso")) {
+			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
+			auto intune_auth_result = acquire_token_interactive();
+			auto brokerJson = intune_auth_result.brokerTokenResponse;
 			
-			try {
-				auto authUrlFile = File(authUrl, "w");
-				authUrlFile.write(url);
-				authUrlFile.close();
-			} catch (FileException exception) {
-				// There was a file system error
-				// display the error message
-				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
-				// Must force exit here, allow logging to be done
-				forceExit();
-			} catch (ErrnoException exception) {
-				// There was a file system error
-				// display the error message
-				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
-				// Must force exit here, allow logging to be done
-				forceExit();
-			}
-	
-			addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
-			
-			while (!exists(responseUrl)) {
-				Thread.sleep(dur!("msecs")(100));
-			}
-
-			// read response from provided from OneDrive
-			try {
-				response = cast(char[]) read(responseUrl);
-			} catch (OneDriveException exception) {
-				// exception generated
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-				return false;
-			}
-
-			// try to remove old files
-			try {
-				std.file.remove(authUrl);
-				std.file.remove(responseUrl);
-			} catch (FileException exception) {
-				addLogEntry("Cannot remove files " ~ authUrl ~ " " ~ responseUrl);
-				return false;
-			}
-		} else {
-			// Are we in a --dry-run scenario?
-			if (!appConfig.getValueBool("dry_run")) {
-				// No --dry-run is being used
-				addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
-				addLogEntry(url ~ "\n", ["consoleOnly"]);
-				addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
-				readln(response);
-				appConfig.applicationAuthorizeResponseUri = true;
+			// Does the JSON data have the required authentication elements
+			if ((hasAccountData(brokerJson)) && (hasExpiresOn(brokerJson))) {
+				// Details exist
+				long expiresOnMs = brokerJson["expiresOn"].integer();
+				SysTime expiryTime = SysTime.fromUnixTime(cast(long)(expiresOnMs / 1000));
+				addLogEntry("Intune access token expires at: " ~ expiryTime.toISOExtString());
+				
+				
+				// STILL GOT WORK TO DO HERE !!
+				
+				
+				return true;
 			} else {
-				// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
-				addLogEntry();
-				addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
-				addLogEntry();
-				addLogEntry("To authorise the application please use your original command without '--dry-run'.");
-				addLogEntry();
-				addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
-				addLogEntry();
-				forceExit();
+				// no ...
+				return false;
 			}
-		}
+			
+		} else {
+			// Normal authentication method
+			char[] response;
+			// What URL should be presented to the user to access
+			string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
+			// Configure automated authentication if --auth-files authUrl:responseUrl is being used
+			string authFilesString = appConfig.getValueString("auth_files");
+			string authResponseString = appConfig.getValueString("auth_response");
 		
-		// match the authorization code
-		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
-		if (c.empty) {
-			addLogEntry("An empty or invalid response uri was entered");
-			return false;
+			if (!authResponseString.empty) {
+				// read the response from authResponseString
+				response = cast(char[]) authResponseString;
+			} else if (authFilesString != "") {
+				string[] authFiles = authFilesString.split(":");
+				string authUrl = authFiles[0];
+				string responseUrl = authFiles[1];
+				
+				try {
+					auto authUrlFile = File(authUrl, "w");
+					authUrlFile.write(url);
+					authUrlFile.close();
+				} catch (FileException exception) {
+					// There was a file system error
+					// display the error message
+					displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+					// Must force exit here, allow logging to be done
+					forceExit();
+				} catch (ErrnoException exception) {
+					// There was a file system error
+					// display the error message
+					displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+					// Must force exit here, allow logging to be done
+					forceExit();
+				}
+		
+				addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
+				
+				while (!exists(responseUrl)) {
+					Thread.sleep(dur!("msecs")(100));
+				}
+
+				// read response from provided from OneDrive
+				try {
+					response = cast(char[]) read(responseUrl);
+				} catch (OneDriveException exception) {
+					// exception generated
+					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+					return false;
+				}
+
+				// try to remove old files
+				try {
+					std.file.remove(authUrl);
+					std.file.remove(responseUrl);
+				} catch (FileException exception) {
+					addLogEntry("Cannot remove files " ~ authUrl ~ " " ~ responseUrl);
+					return false;
+				}
+			} else {
+				// Are we in a --dry-run scenario?
+				if (!appConfig.getValueBool("dry_run")) {
+					// No --dry-run is being used
+					addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
+					addLogEntry(url ~ "\n", ["consoleOnly"]);
+					addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
+					readln(response);
+					appConfig.applicationAuthorizeResponseUri = true;
+				} else {
+					// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
+					addLogEntry();
+					addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
+					addLogEntry();
+					addLogEntry("To authorise the application please use your original command without '--dry-run'.");
+					addLogEntry();
+					addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
+					addLogEntry();
+					forceExit();
+				}
+			}
+			
+			// match the authorization code
+			auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
+			if (c.empty) {
+				addLogEntry("An empty or invalid response uri was entered");
+				return false;
+			}
+			c.popFront(); // skip the whole match
+			redeemToken(c.front);
+			return true;
 		}
-		c.popFront(); // skip the whole match
-		redeemToken(c.front);
-		return true;
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
@@ -893,6 +919,11 @@ class OneDriveApi {
 		}
 
 		if (response.type() == JSONType.object) {
+		
+			// Debug this response
+			
+			addLogEntry("Manual Auth Response JSON = " ~ to!string(response));
+		
 			// Has the client been configured to use read_only_auth_scope
 			if (appConfig.getValueBool("read_only_auth_scope")) {
 				// read_only_auth_scope has been configured
@@ -931,8 +962,10 @@ class OneDriveApi {
 					}
 				}
 				
+				// Obtain the 'refresh_token' and its expiry
 				refreshToken = strip(response["refresh_token"].str);
 				appConfig.accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
+				
 				if (!dryRun) {
 					// Update the refreshToken in appConfig so that we can reuse it
 					if (appConfig.refreshToken.empty) {

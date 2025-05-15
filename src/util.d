@@ -1292,6 +1292,16 @@ bool hasLastModifiedByUserDisplayName(const ref JSONValue item) {
 	}
 }
 
+// Check Intune JSON response for 'account'
+bool hasAccountData(const ref JSONValue item) {
+	return ("account" in item) != null;
+}
+
+// Check Intune JSON response for 'expiresOn'
+bool hasExpiresOn(const ref JSONValue item) {
+	return ("expiresOn" in item) != null;
+}
+
 // Convert bytes to GB
 string byteToGibiByte(ulong bytes) {
     if (bytes == 0) {
