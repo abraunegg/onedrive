@@ -1292,6 +1292,11 @@ bool hasLastModifiedByUserDisplayName(const ref JSONValue item) {
 	}
 }
 
+// Check Intune JSON response for 'accessToken'
+bool hasAccessTokenData(const ref JSONValue item) {
+	return ("accessToken" in item) != null;
+}
+
 // Check Intune JSON response for 'account'
 bool hasAccountData(const ref JSONValue item) {
 	return ("account" in item) != null;

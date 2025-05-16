@@ -311,42 +311,57 @@ class OneDriveApi {
 		}
 		
 		// Has the application been authenticated?
-		if (!exists(appConfig.refreshTokenFilePath)) {
-			if (debugLogging) {addLogEntry("Application has no 'refresh_token' thus needs to be authenticated", ["debug"]);}
-			authorised = authorise();
-		} else {
-			// Try and read the value from the appConfig if it is set, rather than trying to read the value from disk
-			if (!appConfig.refreshToken.empty) {
-				if (debugLogging) {addLogEntry("Read token from appConfig", ["debug"]);}
-				refreshToken = strip(appConfig.refreshToken);
-				authorised = true;
-			} else {
-				// Try and read the file from disk
-				try {
-					refreshToken = strip(readText(appConfig.refreshTokenFilePath));
-					// is the refresh_token empty?
-					if (refreshToken.empty) {
-						addLogEntry("RefreshToken exists but is empty: " ~ appConfig.refreshTokenFilePath);
-						authorised = authorise();
-					} else {
-						// Existing token not empty
-						authorised = true;
-						// update appConfig.refreshToken
-						appConfig.refreshToken = refreshToken;
-					}
-				} catch (FileException exception) {
-					authorised = authorise();
-				} catch (std.utf.UTFException exception) {
-					// path contains characters which generate a UTF exception
-					addLogEntry("Cannot read refreshToken from: " ~ appConfig.refreshTokenFilePath);
-					addLogEntry("  Error Reason:" ~ exception.msg);
-					authorised = false;
-				}
-			}
+		// How do we authenticate - standard method or via Intune?
+		if (appConfig.getValueBool("use_intune_sso")) {
+			// Authenticate via Intune
 			
-			if (refreshToken.empty) {
-				// PROBLEM ... CODING TO DO ??????????
-				if (debugLogging) {addLogEntry("DEBUG: refreshToken is empty !!!!!!!!!!", ["debug"]);}
+			if (appConfig.accessToken.empty) {
+				// No authentication via intune yet
+				authorised = authorise();
+			} else {
+				
+				authorised = true;
+				
+			}
+		} else {
+			// Authenticate via standard method
+			if (!exists(appConfig.refreshTokenFilePath)) {
+				if (debugLogging) {addLogEntry("Application has no 'refresh_token' thus needs to be authenticated", ["debug"]);}
+				authorised = authorise();
+			} else {
+				// Try and read the value from the appConfig if it is set, rather than trying to read the value from disk
+				if (!appConfig.refreshToken.empty) {
+					if (debugLogging) {addLogEntry("Read token from appConfig", ["debug"]);}
+					refreshToken = strip(appConfig.refreshToken);
+					authorised = true;
+				} else {
+					// Try and read the file from disk
+					try {
+						refreshToken = strip(readText(appConfig.refreshTokenFilePath));
+						// is the refresh_token empty?
+						if (refreshToken.empty) {
+							addLogEntry("RefreshToken exists but is empty: " ~ appConfig.refreshTokenFilePath);
+							authorised = authorise();
+						} else {
+							// Existing token not empty
+							authorised = true;
+							// update appConfig.refreshToken
+							appConfig.refreshToken = refreshToken;
+						}
+					} catch (FileException exception) {
+						authorised = authorise();
+					} catch (std.utf.UTFException exception) {
+						// path contains characters which generate a UTF exception
+						addLogEntry("Cannot read refreshToken from: " ~ appConfig.refreshTokenFilePath);
+						addLogEntry("  Error Reason:" ~ exception.msg);
+						authorised = false;
+					}
+				}
+				
+				if (refreshToken.empty) {
+					// PROBLEM ... CODING TO DO ??????????
+					if (debugLogging) {addLogEntry("DEBUG: refreshToken is empty !!!!!!!!!!", ["debug"]);}
+				}
 			}
 		}
 		
@@ -403,25 +418,31 @@ class OneDriveApi {
 		if (appConfig.getValueBool("use_intune_sso")) {
 			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
 			auto intune_auth_result = acquire_token_interactive();
-			auto brokerJson = intune_auth_result.brokerTokenResponse;
+			JSONValue intuneBrokerJSONData = intune_auth_result.brokerTokenResponse;
 			
 			// Does the JSON data have the required authentication elements
-			if ((hasAccountData(brokerJson)) && (hasExpiresOn(brokerJson))) {
+			if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
 				// Details exist
-				long expiresOnMs = brokerJson["expiresOn"].integer();
-				SysTime expiryTime = SysTime.fromUnixTime(cast(long)(expiresOnMs / 1000));
-				addLogEntry("Intune access token expires at: " ~ expiryTime.toISOExtString());
+				long expiresOnMs = intuneBrokerJSONData["expiresOn"].integer();
 				
+				// Convert to SysTime 
+				SysTime expiryTime = SysTime.fromUnixTime(expiresOnMs / 1000);
+
+				// Store in appConfig (to match standard flow)
+				appConfig.accessTokenExpiration = expiryTime;
+				addLogEntry("Intune access token expires at: " ~ to!string(appConfig.accessTokenExpiration));
 				
-				// STILL GOT WORK TO DO HERE !!
+				// Configure the 'accessToken' based on Intune response
+				appConfig.accessToken = "bearer " ~ strip(intuneBrokerJSONData["accessToken"].str);
 				
+				// Do we print the current access token
+				debugOutputAccessToken();
 				
 				return true;
 			} else {
 				// no ...
 				return false;
 			}
-			
 		} else {
 			// Normal authentication method
 			char[] response;
@@ -502,7 +523,7 @@ class OneDriveApi {
 				}
 			}
 			
-			// match the authorization code
+			// match the authorisation code
 			auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
 			if (c.empty) {
 				addLogEntry("An empty or invalid response uri was entered");
@@ -511,6 +532,18 @@ class OneDriveApi {
 			c.popFront(); // skip the whole match
 			redeemToken(c.front);
 			return true;
+		}
+	}
+	
+	// Do we print the current access token
+	void debugOutputAccessToken() {
+		if (appConfig.verbosityCount > 1) {
+			if (appConfig.getValueBool("debug_https")) {
+				if (appConfig.getValueBool("print_token")) {
+					// This needs to be highly restricted in output .... 
+					if (debugLogging) {addLogEntry("CAUTION - KEEP THIS SAFE: Current access token: " ~ to!string(appConfig.accessToken), ["debug"]);}
+				}
+			}
 		}
 	}
 	
@@ -896,6 +929,8 @@ class OneDriveApi {
 	
 	private void acquireToken(char[] postData) {
 		JSONValue response;
+		
+		addLogEntry("Manual Auth postData = " ~ to!string(postData));
 
 		try {
 			response = post(tokenUrl, postData, null, true, "application/x-www-form-urlencoded");
@@ -953,18 +988,14 @@ class OneDriveApi {
 				appConfig.accessToken = "bearer " ~ strip(response["access_token"].str);
 				
 				// Do we print the current access token
-				if (appConfig.verbosityCount > 1) {
-					if (appConfig.getValueBool("debug_https")) {
-						if (appConfig.getValueBool("print_token")) {
-							// This needs to be highly restricted in output .... 
-							if (debugLogging) {addLogEntry("CAUTION - KEEP THIS SAFE: Current access token: " ~ to!string(appConfig.accessToken), ["debug"]);}
-						}
-					}
-				}
+				debugOutputAccessToken();
 				
 				// Obtain the 'refresh_token' and its expiry
 				refreshToken = strip(response["refresh_token"].str);
 				appConfig.accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
+				
+				
+				addLogEntry("appConfig.accessTokenExpiration = " ~ to!string(appConfig.accessTokenExpiration));
 				
 				if (!dryRun) {
 					// Update the refreshToken in appConfig so that we can reuse it
