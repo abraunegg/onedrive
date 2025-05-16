@@ -9023,6 +9023,7 @@ class SyncEngine {
 
 			// Calculate upload percentage
 			auto ratio = cast(double)(fragmentCount - 1) / expected_total_fragments;
+			// Convert the ratio to a percentage and format it to two decimal places
 			string percentage = leftJustify(format("%d%%", cast(int)(ratio * 100)), 5, ' ');
 			addLogEntry(uploadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 
