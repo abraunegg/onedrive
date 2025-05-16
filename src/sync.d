@@ -8982,22 +8982,26 @@ class SyncEngine {
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
-			
+
 		// Response for upload
 		JSONValue uploadResponse;
-	
+
 		// Session JSON needs to contain valid elements
 		// Get the offset details
 		long fragmentSize = 10 * 2^^20; // 10 MiB
 		size_t fragmentCount = 0;
 		long fragSize = 0;
+
+		// Extract current upload offset from session data
 		long offset = uploadSessionData["nextExpectedRanges"][0].str.splitter('-').front.to!long;
+
+		// Estimate total number of expected fragments
 		size_t expected_total_fragments = cast(size_t) ceil(double(thisFileSize) / double(fragmentSize));
 		long start_unix_time = Clock.currTime.toUnixTime();
 		int h, m, s;
 		string etaString;
 		string uploadLogEntry = "Uploading: " ~ uploadSessionData["localPath"].str ~ " ... ";
-		
+
 		// If we get a 404, create a new upload session and store it here
 		JSONValue newUploadSession;
 
@@ -9005,43 +9009,39 @@ class SyncEngine {
 		while (true) {
 			fragmentCount++;
 			if (debugLogging) {addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(expected_total_fragments), ["debug"]);}
-			
-			// What ETA string do we use?
-			auto eta = calc_eta((fragmentCount -1), expected_total_fragments, start_unix_time);
+
+			// Calculate ETA
+			auto eta = calc_eta((fragmentCount - 1), expected_total_fragments, start_unix_time);
 			if (eta == 0) {
 				// Initial calculation ... 
 				etaString = format!"|  ETA    --:--:--";
 			} else {
 				// we have at least an ETA provided
 				dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
-				etaString = format!"|  ETA    %02d:%02d:%02d"( h, m, s);
+				etaString = format!"|  ETA    %02d:%02d:%02d"(h, m, s);
 			}
-			
-			// Calculate this progress output
-			auto ratio = cast(double)(fragmentCount -1) / expected_total_fragments;
-			// Convert the ratio to a percentage and format it to two decimal places
+
+			// Calculate upload percentage
+			auto ratio = cast(double)(fragmentCount - 1) / expected_total_fragments;
 			string percentage = leftJustify(format("%d%%", cast(int)(ratio * 100)), 5, ' ');
 			addLogEntry(uploadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
-			
-			// What fragment size will be used?
+
+			// Determine actual fragment size
 			if (debugLogging) {addLogEntry("fragmentSize: " ~ to!string(fragmentSize) ~ " offset: " ~ to!string(offset) ~ " thisFileSize: " ~ to!string(thisFileSize), ["debug"]);}
 			fragSize = fragmentSize < thisFileSize - offset ? fragmentSize : thisFileSize - offset;
 			if (debugLogging) {addLogEntry("Using fragSize: " ~ to!string(fragSize), ["debug"]);}
-						
-			// fragSize must not be a negative value
+
+			// Guard against negative fragSize
 			if (fragSize < 0) {
-				// Session upload will fail
-				// not a JSON object - fragment upload failed
 				if (verboseLogging) {addLogEntry("File upload session failed - invalid calculation of fragment size", ["verbose"]);}
 				if (exists(threadUploadSessionFilePath)) {
 					remove(threadUploadSessionFilePath);
 				}
-				// set uploadResponse to null as error
 				uploadResponse = null;
 				return uploadResponse;
 			}
-			
-			// If the resume upload fails, we need to check for a return code here
+
+			// Upload this fragment
 			try {
 				uploadResponse = activeOneDriveApiInstance.uploadFragment(
 					uploadSessionData["uploadUrl"].str,
@@ -9051,66 +9051,61 @@ class SyncEngine {
 					thisFileSize
 				);
 			} catch (OneDriveException exception) {
-				// if a 100 uploadResponse is generated, continue
+				// HTTP 100: continue silently
 				if (exception.httpStatusCode == 100) {
 					continue;
 				}
-				
-				// There was an error uploadResponse from OneDrive when uploading the file fragment
+
+				// HTTP 404: recreate the session
 				if (exception.httpStatusCode == 404) {
-					// The upload session was not found .. ?? we just created it .. maybe the backend is still creating it ?
 					if (debugLogging) {addLogEntry("The upload session was not found .... re-create session");}
-					newUploadSession = createSessionForFileUpload(activeOneDriveApiInstance, uploadSessionData["localPath"].str, uploadSessionData["targetDriveId"].str, uploadSessionData["targetParentId"].str, baseName(uploadSessionData["localPath"].str), null, threadUploadSessionFilePath);
+					newUploadSession = createSessionForFileUpload(
+						activeOneDriveApiInstance,
+						uploadSessionData["localPath"].str,
+						uploadSessionData["targetDriveId"].str,
+						uploadSessionData["targetParentId"].str,
+						baseName(uploadSessionData["localPath"].str),
+						null,
+						threadUploadSessionFilePath
+					);
 				}
-				
-				// Issue https://github.com/abraunegg/onedrive/issues/2747
-				// if a 416 uploadResponse is generated, continue
+
+				// HTTP 416: continue silently
 				if (exception.httpStatusCode == 416) {
 					continue;
 				}
-				
-				// Handle transient errors:
+
+				// Display error and handle fatal or retry cases
 				//   408 - Request Time Out
 				//   429 - Too Many Requests
 				//   503 - Service Unavailable
 				//   504 - Gateway Timeout
-					
+				//	
 				// Insert a new line as well, so that the below error is inserted on the console in the right location
 				if (verboseLogging) {addLogEntry("Fragment upload failed - received an exception response from OneDrive API", ["verbose"]);}
-				
-				// HTTP request returned status code 403 (Forbidden) - Access denied
-				// - There is no point here attempting a re-try
 				if (exception.httpStatusCode == 403) {
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					uploadResponse = null;
 					return uploadResponse;
 				}
-				
-				// display what the error is
 				if (exception.httpStatusCode != 404) {
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
-				
-				// retry fragment upload in case error is transient
 				if (verboseLogging) {addLogEntry("Retrying fragment upload", ["verbose"]);}
-				
+
+				// Retry logic
 				try {
-					// retry
 					string effectiveRetryUploadURL;
 					string effectiveLocalPath;
-					
-					// If we re-created the session, use the new data on re-try
+
 					if ("uploadUrl" in newUploadSession) {
-						// get this from 'newUploadSession'
 						effectiveRetryUploadURL = newUploadSession["uploadUrl"].str;
 						effectiveLocalPath = newUploadSession["localPath"].str;
 					} else {
-						// get this from the original input
 						effectiveRetryUploadURL = uploadSessionData["uploadUrl"].str;
 						effectiveLocalPath = uploadSessionData["localPath"].str;
 					}
-					
-					// retry the fragment upload
+
 					uploadResponse = activeOneDriveApiInstance.uploadFragment(
 						effectiveRetryUploadURL,
 						effectiveLocalPath,
@@ -9119,71 +9114,67 @@ class SyncEngine {
 						thisFileSize
 					);
 				} catch (OneDriveException e) {
-					// OneDrive threw another error on retry
 					if (verboseLogging) {addLogEntry("Retry to upload fragment failed", ["verbose"]);}
-					// display what the error is
 					displayOneDriveErrorMessage(e.msg, thisFunctionName);
-					// set uploadResponse to null as the fragment upload was in error twice
 					uploadResponse = null;
+					return uploadResponse;
 				} catch (std.exception.ErrnoException e) {
-					// There was a file system error - display the error message
 					displayFileSystemErrorMessage(e.msg, thisFunctionName);
 					return uploadResponse;
 				}
 			} catch (ErrnoException e) {
-				// There was a file system error
-				// display the error message
 				displayFileSystemErrorMessage(e.msg, thisFunctionName);
 				uploadResponse = null;
 				return uploadResponse;
 			}
-			
-			// was the fragment uploaded without issue?
-			if (uploadResponse.type() == JSONType.object){
-				offset += fragmentSize;
-				if (offset >= thisFileSize) {
+
+			// Post-upload: verify and update session progress
+			if (uploadResponse.type() == JSONType.object) {
+				// Get new offset from updated server state
+				if ("nextExpectedRanges" in uploadResponse &&
+					uploadResponse["nextExpectedRanges"].type() == JSONType.array &&
+					!uploadResponse["nextExpectedRanges"].array.empty) {
+					offset = uploadResponse["nextExpectedRanges"].array[0].str.splitter('-').front.to!long;
+				} else {
+					// No more expected ranges, upload is complete
 					break;
 				}
-				// update the uploadSessionData details
+
+				// Update session tracking
 				uploadSessionData["expirationDateTime"] = uploadResponse["expirationDateTime"];
 				uploadSessionData["nextExpectedRanges"] = uploadResponse["nextExpectedRanges"];
 				saveSessionFile(threadUploadSessionFilePath, uploadSessionData);
 			} else {
-				// not a JSON object - fragment upload failed
 				if (verboseLogging) {addLogEntry("File upload session failed - invalid response from OneDrive API", ["verbose"]);}
-				
-				// cleanup session data
 				if (exists(threadUploadSessionFilePath)) {
 					remove(threadUploadSessionFilePath);
 				}
-				// set uploadResponse to null as error
 				uploadResponse = null;
 				return uploadResponse;
 			}
 		}
-		
-		// upload complete
+
+		// Upload complete
 		long end_unix_time = Clock.currTime.toUnixTime();
 		auto upload_duration = cast(int)(end_unix_time - start_unix_time);
 		dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
-		etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
+		etaString = format!"| DONE in %02d:%02d:%02d"(h, m, s);
 		addLogEntry(uploadLogEntry ~ "100% " ~ etaString, ["consoleOnly"]);
-		
-		// Remove session file if it exists		
+
+		// Cleanup session file
 		if (exists(threadUploadSessionFilePath)) {
 			remove(threadUploadSessionFilePath);
 		}
-		
-		// Display function processing time if configured to do so
+
+		// Display function processing time
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
-		
-		// Return the session upload response
+
+		// Return final upload result
 		return uploadResponse;
 	}
-	
+
 	// Delete an item on OneDrive
 	void uploadDeletedItem(Item itemToDelete, string path) {
 		// Function Start Time
