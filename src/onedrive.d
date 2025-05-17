@@ -314,14 +314,12 @@ class OneDriveApi {
 		// How do we authenticate - standard method or via Intune?
 		if (appConfig.getValueBool("use_intune_sso")) {
 			// Authenticate via Intune
-			
 			if (appConfig.accessToken.empty) {
 				// No authentication via intune yet
 				authorised = authorise();
 			} else {
-				
+				// We are already authenticated
 				authorised = true;
-				
 			}
 		} else {
 			// Authenticate via standard method
@@ -420,27 +418,35 @@ class OneDriveApi {
 			auto intune_auth_result = acquire_token_interactive();
 			JSONValue intuneBrokerJSONData = intune_auth_result.brokerTokenResponse;
 			
-			// Does the JSON data have the required authentication elements
-			if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
-				// Details exist
-				long expiresOnMs = intuneBrokerJSONData["expiresOn"].integer();
-				
-				// Convert to SysTime 
-				SysTime expiryTime = SysTime.fromUnixTime(expiresOnMs / 1000);
+			// Is the JSON data valid?
+			if ((intuneBrokerJSONData.type() == JSONType.object)) {
+			
+				// Does the JSON data have the required authentication elements
+				if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
+					// Details exist
+					long expiresOnMs = intuneBrokerJSONData["expiresOn"].integer();
+					
+					// Convert to SysTime 
+					SysTime expiryTime = SysTime.fromUnixTime(expiresOnMs / 1000);
 
-				// Store in appConfig (to match standard flow)
-				appConfig.accessTokenExpiration = expiryTime;
-				addLogEntry("Intune access token expires at: " ~ to!string(appConfig.accessTokenExpiration));
-				
-				// Configure the 'accessToken' based on Intune response
-				appConfig.accessToken = "bearer " ~ strip(intuneBrokerJSONData["accessToken"].str);
-				
-				// Do we print the current access token
-				debugOutputAccessToken();
-				
-				return true;
+					// Store in appConfig (to match standard flow)
+					appConfig.accessTokenExpiration = expiryTime;
+					addLogEntry("Intune access token expires at: " ~ to!string(appConfig.accessTokenExpiration));
+					
+					// Configure the 'accessToken' based on Intune response
+					appConfig.accessToken = "bearer " ~ strip(intuneBrokerJSONData["accessToken"].str);
+					
+					// Do we print the current access token
+					debugOutputAccessToken();
+					
+					// return that we are authenticated
+					return true;
+				} else {
+					// no ... expected values not available
+					return false;
+				}
 			} else {
-				// no ...
+				// Not a valid json
 				return false;
 			}
 		} else {
