@@ -29,6 +29,7 @@ import config;
 import log;
 import util;
 import curlEngine;
+import intune;
 
 // Define the 'OneDriveException' class
 class OneDriveException: Exception {
@@ -310,42 +311,55 @@ class OneDriveApi {
 		}
 		
 		// Has the application been authenticated?
-		if (!exists(appConfig.refreshTokenFilePath)) {
-			if (debugLogging) {addLogEntry("Application has no 'refresh_token' thus needs to be authenticated", ["debug"]);}
-			authorised = authorise();
-		} else {
-			// Try and read the value from the appConfig if it is set, rather than trying to read the value from disk
-			if (!appConfig.refreshToken.empty) {
-				if (debugLogging) {addLogEntry("Read token from appConfig", ["debug"]);}
-				refreshToken = strip(appConfig.refreshToken);
-				authorised = true;
+		// How do we authenticate - standard method or via Intune?
+		if (appConfig.getValueBool("use_intune_sso")) {
+			// Authenticate via Intune
+			if (appConfig.accessToken.empty) {
+				// No authentication via intune yet
+				authorised = authorise();
 			} else {
-				// Try and read the file from disk
-				try {
-					refreshToken = strip(readText(appConfig.refreshTokenFilePath));
-					// is the refresh_token empty?
-					if (refreshToken.empty) {
-						addLogEntry("RefreshToken exists but is empty: " ~ appConfig.refreshTokenFilePath);
-						authorised = authorise();
-					} else {
-						// Existing token not empty
-						authorised = true;
-						// update appConfig.refreshToken
-						appConfig.refreshToken = refreshToken;
-					}
-				} catch (FileException exception) {
-					authorised = authorise();
-				} catch (std.utf.UTFException exception) {
-					// path contains characters which generate a UTF exception
-					addLogEntry("Cannot read refreshToken from: " ~ appConfig.refreshTokenFilePath);
-					addLogEntry("  Error Reason:" ~ exception.msg);
-					authorised = false;
-				}
+				// We are already authenticated
+				authorised = true;
 			}
-			
-			if (refreshToken.empty) {
-				// PROBLEM ... CODING TO DO ??????????
-				if (debugLogging) {addLogEntry("DEBUG: refreshToken is empty !!!!!!!!!!", ["debug"]);}
+		} else {
+			// Authenticate via standard method
+			if (!exists(appConfig.refreshTokenFilePath)) {
+				if (debugLogging) {addLogEntry("Application has no 'refresh_token' thus needs to be authenticated", ["debug"]);}
+				authorised = authorise();
+			} else {
+				// Try and read the value from the appConfig if it is set, rather than trying to read the value from disk
+				if (!appConfig.refreshToken.empty) {
+					if (debugLogging) {addLogEntry("Read token from appConfig", ["debug"]);}
+					refreshToken = strip(appConfig.refreshToken);
+					authorised = true;
+				} else {
+					// Try and read the file from disk
+					try {
+						refreshToken = strip(readText(appConfig.refreshTokenFilePath));
+						// is the refresh_token empty?
+						if (refreshToken.empty) {
+							addLogEntry("RefreshToken exists but is empty: " ~ appConfig.refreshTokenFilePath);
+							authorised = authorise();
+						} else {
+							// Existing token not empty
+							authorised = true;
+							// update appConfig.refreshToken
+							appConfig.refreshToken = refreshToken;
+						}
+					} catch (FileException exception) {
+						authorised = authorise();
+					} catch (std.utf.UTFException exception) {
+						// path contains characters which generate a UTF exception
+						addLogEntry("Cannot read refreshToken from: " ~ appConfig.refreshTokenFilePath);
+						addLogEntry("  Error Reason:" ~ exception.msg);
+						authorised = false;
+					}
+				}
+				
+				if (refreshToken.empty) {
+					// PROBLEM ... CODING TO DO ??????????
+					if (debugLogging) {addLogEntry("DEBUG: refreshToken is empty !!!!!!!!!!", ["debug"]);}
+				}
 			}
 		}
 		
@@ -398,94 +412,145 @@ class OneDriveApi {
 
 	// Authenticate this client against Microsoft OneDrive API
 	bool authorise() {
-	
-		char[] response;
-		// What URL should be presented to the user to access
-		string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
-		// Configure automated authentication if --auth-files authUrl:responseUrl is being used
-		string authFilesString = appConfig.getValueString("auth_files");
-		string authResponseString = appConfig.getValueString("auth_response");
-	
-		if (!authResponseString.empty) {
-			// read the response from authResponseString
-			response = cast(char[]) authResponseString;
-		} else if (authFilesString != "") {
-			string[] authFiles = authFilesString.split(":");
-			string authUrl = authFiles[0];
-			string responseUrl = authFiles[1];
+		// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
+		if (appConfig.getValueBool("use_intune_sso")) {
+			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
+			auto intune_auth_result = acquire_token_interactive();
+			JSONValue intuneBrokerJSONData = intune_auth_result.brokerTokenResponse;
 			
-			try {
-				auto authUrlFile = File(authUrl, "w");
-				authUrlFile.write(url);
-				authUrlFile.close();
-			} catch (FileException exception) {
-				// There was a file system error
-				// display the error message
-				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
-				// Must force exit here, allow logging to be done
-				forceExit();
-			} catch (ErrnoException exception) {
-				// There was a file system error
-				// display the error message
-				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
-				// Must force exit here, allow logging to be done
-				forceExit();
-			}
-	
-			addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
+			// Is the JSON data valid?
+			if ((intuneBrokerJSONData.type() == JSONType.object)) {
 			
-			while (!exists(responseUrl)) {
-				Thread.sleep(dur!("msecs")(100));
-			}
+				// Does the JSON data have the required authentication elements
+				if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
+					// Details exist
+					long expiresOnMs = intuneBrokerJSONData["expiresOn"].integer();
+					
+					// Convert to SysTime 
+					SysTime expiryTime = SysTime.fromUnixTime(expiresOnMs / 1000);
 
-			// read response from provided from OneDrive
-			try {
-				response = cast(char[]) read(responseUrl);
-			} catch (OneDriveException exception) {
-				// exception generated
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-				return false;
-			}
-
-			// try to remove old files
-			try {
-				std.file.remove(authUrl);
-				std.file.remove(responseUrl);
-			} catch (FileException exception) {
-				addLogEntry("Cannot remove files " ~ authUrl ~ " " ~ responseUrl);
+					// Store in appConfig (to match standard flow)
+					appConfig.accessTokenExpiration = expiryTime;
+					addLogEntry("Intune access token expires at: " ~ to!string(appConfig.accessTokenExpiration));
+					
+					// Configure the 'accessToken' based on Intune response
+					appConfig.accessToken = "bearer " ~ strip(intuneBrokerJSONData["accessToken"].str);
+					
+					// Do we print the current access token
+					debugOutputAccessToken();
+					
+					// return that we are authenticated
+					return true;
+				} else {
+					// no ... expected values not available
+					return false;
+				}
+			} else {
+				// Not a valid json
 				return false;
 			}
 		} else {
-			// Are we in a --dry-run scenario?
-			if (!appConfig.getValueBool("dry_run")) {
-				// No --dry-run is being used
-				addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
-				addLogEntry(url ~ "\n", ["consoleOnly"]);
-				addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
-				readln(response);
-				appConfig.applicationAuthorizeResponseUri = true;
+			// Normal authentication method
+			char[] response;
+			// What URL should be presented to the user to access
+			string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
+			// Configure automated authentication if --auth-files authUrl:responseUrl is being used
+			string authFilesString = appConfig.getValueString("auth_files");
+			string authResponseString = appConfig.getValueString("auth_response");
+		
+			if (!authResponseString.empty) {
+				// read the response from authResponseString
+				response = cast(char[]) authResponseString;
+			} else if (authFilesString != "") {
+				string[] authFiles = authFilesString.split(":");
+				string authUrl = authFiles[0];
+				string responseUrl = authFiles[1];
+				
+				try {
+					auto authUrlFile = File(authUrl, "w");
+					authUrlFile.write(url);
+					authUrlFile.close();
+				} catch (FileException exception) {
+					// There was a file system error
+					// display the error message
+					displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+					// Must force exit here, allow logging to be done
+					forceExit();
+				} catch (ErrnoException exception) {
+					// There was a file system error
+					// display the error message
+					displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+					// Must force exit here, allow logging to be done
+					forceExit();
+				}
+		
+				addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
+				
+				while (!exists(responseUrl)) {
+					Thread.sleep(dur!("msecs")(100));
+				}
+
+				// read response from provided from OneDrive
+				try {
+					response = cast(char[]) read(responseUrl);
+				} catch (OneDriveException exception) {
+					// exception generated
+					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+					return false;
+				}
+
+				// try to remove old files
+				try {
+					std.file.remove(authUrl);
+					std.file.remove(responseUrl);
+				} catch (FileException exception) {
+					addLogEntry("Cannot remove files " ~ authUrl ~ " " ~ responseUrl);
+					return false;
+				}
 			} else {
-				// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
-				addLogEntry();
-				addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
-				addLogEntry();
-				addLogEntry("To authorise the application please use your original command without '--dry-run'.");
-				addLogEntry();
-				addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
-				addLogEntry();
-				forceExit();
+				// Are we in a --dry-run scenario?
+				if (!appConfig.getValueBool("dry_run")) {
+					// No --dry-run is being used
+					addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
+					addLogEntry(url ~ "\n", ["consoleOnly"]);
+					addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
+					readln(response);
+					appConfig.applicationAuthorizeResponseUri = true;
+				} else {
+					// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
+					addLogEntry();
+					addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
+					addLogEntry();
+					addLogEntry("To authorise the application please use your original command without '--dry-run'.");
+					addLogEntry();
+					addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
+					addLogEntry();
+					forceExit();
+				}
+			}
+			
+			// match the authorisation code
+			auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
+			if (c.empty) {
+				addLogEntry("An empty or invalid response uri was entered");
+				return false;
+			}
+			c.popFront(); // skip the whole match
+			redeemToken(c.front);
+			return true;
+		}
+	}
+	
+	// Do we print the current access token
+	void debugOutputAccessToken() {
+		if (appConfig.verbosityCount > 1) {
+			if (appConfig.getValueBool("debug_https")) {
+				if (appConfig.getValueBool("print_token")) {
+					// This needs to be highly restricted in output .... 
+					if (debugLogging) {addLogEntry("CAUTION - KEEP THIS SAFE: Current access token: " ~ to!string(appConfig.accessToken), ["debug"]);}
+				}
 			}
 		}
-		
-		// match the authorization code
-		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
-		if (c.empty) {
-			addLogEntry("An empty or invalid response uri was entered");
-			return false;
-		}
-		c.popFront(); // skip the whole match
-		redeemToken(c.front);
-		return true;
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
@@ -870,6 +935,8 @@ class OneDriveApi {
 	
 	private void acquireToken(char[] postData) {
 		JSONValue response;
+		
+		addLogEntry("Manual Auth postData = " ~ to!string(postData));
 
 		try {
 			response = post(tokenUrl, postData, null, true, "application/x-www-form-urlencoded");
@@ -893,6 +960,11 @@ class OneDriveApi {
 		}
 
 		if (response.type() == JSONType.object) {
+		
+			// Debug this response
+			
+			addLogEntry("Manual Auth Response JSON = " ~ to!string(response));
+		
 			// Has the client been configured to use read_only_auth_scope
 			if (appConfig.getValueBool("read_only_auth_scope")) {
 				// read_only_auth_scope has been configured
@@ -922,17 +994,15 @@ class OneDriveApi {
 				appConfig.accessToken = "bearer " ~ strip(response["access_token"].str);
 				
 				// Do we print the current access token
-				if (appConfig.verbosityCount > 1) {
-					if (appConfig.getValueBool("debug_https")) {
-						if (appConfig.getValueBool("print_token")) {
-							// This needs to be highly restricted in output .... 
-							if (debugLogging) {addLogEntry("CAUTION - KEEP THIS SAFE: Current access token: " ~ to!string(appConfig.accessToken), ["debug"]);}
-						}
-					}
-				}
+				debugOutputAccessToken();
 				
+				// Obtain the 'refresh_token' and its expiry
 				refreshToken = strip(response["refresh_token"].str);
 				appConfig.accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
+				
+				
+				addLogEntry("appConfig.accessTokenExpiration = " ~ to!string(appConfig.accessTokenExpiration));
+				
 				if (!dryRun) {
 					// Update the refreshToken in appConfig so that we can reuse it
 					if (appConfig.refreshToken.empty) {

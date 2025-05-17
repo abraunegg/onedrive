@@ -32,6 +32,7 @@ import itemdb;
 import clientSideFiltering;
 import monitor;
 import webhook;
+import intune;
 
 // What other constant variables do we require?
 const int EXIT_RESYNC_REQUIRED = 126;
@@ -199,6 +200,43 @@ int main(string[] cliArgs) {
 	// Are we doing a --sync or a --monitor operation? Both of these will be false if they are not set
 	if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
 		syncOrMonitorMissing = true; // --sync or --monitor is missing 
+	}
+	
+	// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
+	// This is ONLY possible on Linux, not FreeBSD or other platforms
+	version (linux) {
+		if (appConfig.getValueBool("use_intune_sso")) {
+			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
+			addLogEntry("Client has been configured to use Intune SSO via Microsoft Identity Broker dbus session - checking usage criteria");
+			// We need to check that the available dbus is actually available
+			if(check_intune_broker_available()) {
+				// OK ... Has the 'client_id' been updated?
+				// In 2023, Microsoft removed the ability to change any legacy application id configuration, thus, the required change to support Intune cannot be done
+				// to 'd50ca740-c83f-4d1b-b616-12c519384f0c' which is the defaultApplicationId
+				// Similarly, folk may also be using the old 'skilion' application id (why, who knows ...) however, that application id also cannot be updated with the required data
+				// We need to perform a check there that the client is using a different application identifier than the potential defaults
+				if ((appConfig.getValueString("application_id") == appConfig.defaultApplicationId) || (appConfig.getValueString("application_id") == appConfig.skilionApplicationId)) {
+					// Default application identifier is being used
+					addLogEntry();
+					addLogEntry("Default application identifier is still being used - disabling authentication via Intune SSO");
+					addLogEntry("Please read the documentation and create a new application registration within the Azure Portal: https://portal.azure.com");
+					addLogEntry();
+					appConfig.setValueBool("use_intune_sso" , false);
+				} else {
+					// Usage criteria met, will attempt to use Intune SSO via dbus
+					addLogEntry("Intune SSO via Microsoft Identity Broker dbus session usage criteria met - will attempt to authenticate via Intune");
+				}
+			} else {
+				// Microsoft Identity Broker dbus is not available
+				addLogEntry();
+				addLogEntry("Required Microsoft Identity Broker dbus capability not found - disabling authentication via Intune SSO");
+				addLogEntry();
+				appConfig.setValueBool("use_intune_sso" , false);
+			}
+		}
+	} else {
+		// Ensure 'use_intune_sso' is disabled
+		appConfig.setValueBool("use_intune_sso" , false);
 	}
 	
 	// Has the user configured to use the 'Recycle Bin' locally, for any files that are deleted online?

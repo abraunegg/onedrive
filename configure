@@ -595,6 +595,7 @@ bashcompdir
 COMPLETIONS
 dynamic_linker_LIBS
 bsd_inotify_LIBS
+linux_dbus_LIBS
 NOTIFICATIONS
 notify_LIBS
 notify_CFLAGS
@@ -2582,8 +2583,6 @@ case "$(uname -s)" in
 esac
 
 
-
-
 # Conditionally set dynamic_linker_LIBS based on the platform
 case "$(uname -s)" in
     Linux)
@@ -2593,6 +2592,18 @@ case "$(uname -s)" in
         dynamic_linker_LIBS=""
         ;;
 esac
+
+
+# Conditionally set linux_dbus_LIBS based on the platform
+case "$(uname -s)" in
+    Linux)
+        linux_dbus_LIBS="-ldbus-1"
+        ;;
+    *)
+        linux_dbus_LIBS=""
+        ;;
+esac
+
 
 
 

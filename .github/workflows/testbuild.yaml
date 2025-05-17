@@ -26,7 +26,7 @@ jobs:
       run: sudo apt install -y build-essential
       
     - name: Install build-dependencies
-      run: sudo apt install -y libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc
+      run: sudo apt install -y libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc libdbus-1-dev
 
     - name: Configure
       run: ./configure

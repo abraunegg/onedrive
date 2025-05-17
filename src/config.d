@@ -50,6 +50,9 @@ class ApplicationConfig {
 	// Microsoft Requirements 
 	// - Default Application ID (abraunegg)
 	immutable string defaultApplicationId = "d50ca740-c83f-4d1b-b616-12c519384f0c";
+	// - Legacy v1.x Application ID (skilion)
+	immutable string skilionApplicationId = "22c49a0d-d21c-4792-aed1-8f163c982546";
+	
 	// - Microsoft User Agent ISV Tag
 	immutable string isvTag = "ISV";
 	// - Microsoft User Agent Company name
@@ -409,6 +412,9 @@ class ApplicationConfig {
 
 		// Diable setting the permissions for directories and files, using the inherited permissions
 		boolValues["disable_permission_set"] = false;
+		
+		// Use authentication via Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
+		boolValues["use_intune_sso"] = false;
 		
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.

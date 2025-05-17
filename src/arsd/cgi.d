@@ -11049,7 +11049,7 @@ bool restObjectServeHandler(T, Presenter)(Cgi cgi, Presenter presenter, string u
 			// sure, it doesn't automatically work in subclasses... but I instantiate here anyway...
 
 			// automatic forms here for usable basic auto site from browser.
-			// even if the format is json, it could actually send out the links and formats, but really there i'ma be meh.
+			// even if the format is json, it could actually send out the links and formats
 			switch(cgi.request("_method", "GET")) {
 				case "GET":
 					static if(is(T : CollectionOf!(C), C)) {
