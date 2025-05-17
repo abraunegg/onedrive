@@ -177,11 +177,13 @@ AuthResult acquire_token_interactive() {
 }
 
 // Perform silent authentication via D-Bus using the Microsoft Identity Broker
-string acquire_token_silently(string accountJson) {
+AuthResult acquire_token_silently(string accountJson) {
+    AuthResult result;
+
     DBusError err;
     dbus_error_init(&err);
     DBusConnection* conn = dbus_bus_get(DBusBusType.DBUS_BUS_SESSION, &err);
-    if (dbus_error_is_set(&err) || conn is null) return "";
+    if (dbus_error_is_set(&err) || conn is null) return result;
 
     DBusMessage* msg = dbus_message_new_method_call(
         "com.microsoft.identity.broker1",
@@ -189,14 +191,16 @@ string acquire_token_silently(string accountJson) {
         "com.microsoft.identity.Broker1",
         "acquireTokenSilently"
     );
-    if (msg is null) return "";
+    if (msg is null) return result;
 
     string correlationId = randomUUID().toString();
     string requestJson = build_auth_request(accountJson);
 
     DBusMessageIter* args = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
     if (!dbus_message_iter_init_append(msg, args)) {
-        dbus_message_unref(msg); free(args); return "";
+        dbus_message_unref(msg);
+        free(args);
+        return result;
     }
 
     const(char)* protocol = toStringz("0.0");
@@ -210,50 +214,29 @@ string acquire_token_silently(string accountJson) {
 
     DBusMessage* reply = dbus_connection_send_with_reply_and_block(conn, msg, 10000, &err);
     dbus_message_unref(msg);
-    if (dbus_error_is_set(&err) || reply is null) return "";
+    if (dbus_error_is_set(&err) || reply is null) return result;
 
     DBusMessageIter* iter = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
     if (!dbus_message_iter_init(reply, iter)) {
-        dbus_message_unref(reply); free(iter); return "";
+        dbus_message_unref(reply);
+        free(iter);
+        return result;
     }
 
     char* responseStr;
     dbus_message_iter_get_basic(iter, &responseStr);
-    dbus_message_unref(reply); free(iter);
+    dbus_message_unref(reply);
+    free(iter);
 
     string jsonResponse = fromStringz(responseStr).idup;
     addLogEntry("Silent response: " ~ jsonResponse);
 
     JSONValue parsed = parseJSON(jsonResponse);
-    if (parsed.type != JSONType.object) return "";
+    if (parsed.type != JSONType.object) return result;
 
     auto obj = parsed.object;
-    if (!("access_token" in obj)) return "";
-    return obj["access_token"].str;
-}
+    if (!("brokerTokenResponse" in obj)) return result;
 
-// Acquire token via D-Bus using the Microsoft Identity Broker 
-JSONValue full_acquire_token() {
-    AuthResult result = acquire_token_interactive();
-	if (!result.brokerTokenResponse.type().stringof.empty) return result.brokerTokenResponse;
-
-	// Optionally retry silently using `account`
-	if ("account" in result.brokerTokenResponse.object) {
-		string accountJson = result.brokerTokenResponse.object["account"].toString();
-		addLogEntry("Polling silently using retrieved account");
-
-		int waited = 0;
-		while (waited < 120) {
-			string silentToken = acquire_token_silently(accountJson);
-			if (!silentToken.empty) {
-				// Construct JSON manually from silent token (simplified)
-				return parseJSON(`{ "accessToken": "` ~ silentToken ~ `" }`);
-			}
-			Thread.sleep(dur!"seconds"(2));
-			waited += 2;
-		}
-	}
-
-	addLogEntry("Silent fallback failed. No token acquired.");
-	return JSONValue.init;
+    result.brokerTokenResponse = obj["brokerTokenResponse"];
+    return result;
 }

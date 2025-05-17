@@ -122,6 +122,8 @@ class ApplicationConfig {
 	SysTime accessTokenExpiration;
 	// Store the 'session_upload.CRC32-HASH' file path
 	string uploadSessionFilePath = "";
+	// Store the Intune account information
+	string intuneAccountDetails;
 	
 	// API initialisation flags
 	bool apiWasInitialised = false;

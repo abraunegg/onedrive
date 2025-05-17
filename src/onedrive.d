@@ -415,17 +415,18 @@ class OneDriveApi {
 		// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
 		if (appConfig.getValueBool("use_intune_sso")) {
 			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
-			auto intune_auth_result = acquire_token_interactive();
-			JSONValue intuneBrokerJSONData = intune_auth_result.brokerTokenResponse;
+			auto intuneAuthResult = acquire_token_interactive();
+			JSONValue intuneBrokerJSONData = intuneAuthResult.brokerTokenResponse;
 			
 			// Is the JSON data valid?
 			if ((intuneBrokerJSONData.type() == JSONType.object)) {
-			
-				// Does the JSON data have the required authentication elements
+				// Does the JSON data have the required authentication elements:
+				// - accessToken
+				// - account
+				// - expiresOn
 				if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
 					// Details exist
 					long expiresOnMs = intuneBrokerJSONData["expiresOn"].integer();
-					
 					// Convert to SysTime 
 					SysTime expiryTime = SysTime.fromUnixTime(expiresOnMs / 1000);
 
@@ -439,14 +440,19 @@ class OneDriveApi {
 					// Do we print the current access token
 					debugOutputAccessToken();
 					
-					// return that we are authenticated
+					// In order to support silent renewal of the access token, when the access token expires, we must store the Intune account data
+					appConfig.intuneAccountDetails = to!string(intuneBrokerJSONData["account"]);
+					
+					// Return that we are authenticated
 					return true;
 				} else {
 					// no ... expected values not available
+					addLogEntry("Required JSON elements are not present in the Intune JSON response");
 					return false;
 				}
 			} else {
-				// Not a valid json
+				// Not a valid JSON response
+				addLogEntry("Invalid JSON Intune JSON response when attempting access authentication");
 				return false;
 			}
 		} else {
@@ -1046,20 +1052,60 @@ class OneDriveApi {
 		}
 	}
 	
-	private void newToken() {
+	private void generateNewAccessToken() {
 		if (debugLogging) {addLogEntry("Need to generate a new access token for Microsoft OneDrive", ["debug"]);}
-		auto postData = appender!(string)();
-		postData ~= "client_id=" ~ clientId;
-		postData ~= "&redirect_uri=" ~ redirectUrl;
-		postData ~= "&refresh_token=" ~ to!string(refreshToken);
-		postData ~= "&grant_type=refresh_token";
-		acquireToken(postData.data.dup);
+		// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
+		if (appConfig.getValueBool("use_intune_sso")) {
+			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
+			auto intuneAuthResult = acquire_token_silently(appConfig.intuneAccountDetails);
+			JSONValue intuneBrokerJSONData = intuneAuthResult.brokerTokenResponse;
+			// Is the JSON data valid?
+			if ((intuneBrokerJSONData.type() == JSONType.object)) {
+				// Does the JSON data have the required renewal elements:
+				// - accessToken
+				// - account
+				// - expiresOn
+				if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
+					// Details exist
+					long expiresOnMs = intuneBrokerJSONData["expiresOn"].integer();
+					// Convert to SysTime 
+					SysTime expiryTime = SysTime.fromUnixTime(expiresOnMs / 1000);
+
+					// Store in appConfig (to match standard flow)
+					appConfig.accessTokenExpiration = expiryTime;
+					addLogEntry("Intune access token expires at: " ~ to!string(appConfig.accessTokenExpiration));
+					
+					// Configure the 'accessToken' based on Intune response
+					appConfig.accessToken = "bearer " ~ strip(intuneBrokerJSONData["accessToken"].str);
+					
+					// Do we print the current access token
+					debugOutputAccessToken();
+					
+					// In order to support silent renewal of the access token, when the access token expires, we must store the Intune account data
+					appConfig.intuneAccountDetails = to!string(intuneBrokerJSONData["account"]);
+				} else {
+					// no ... expected values not available
+					addLogEntry("Required JSON elements are not present in the Intune JSON response");
+				}
+			} else {
+				// Not a valid JSON response
+				addLogEntry("Invalid JSON Intune JSON response when attempting access token renewal");
+			}
+		} else {
+			// Normal authentication method 
+			auto postData = appender!(string)();
+			postData ~= "client_id=" ~ clientId;
+			postData ~= "&redirect_uri=" ~ redirectUrl;
+			postData ~= "&refresh_token=" ~ to!string(refreshToken);
+			postData ~= "&grant_type=refresh_token";
+			acquireToken(postData.data.dup);
+		}
 	}
 	
 	private void checkAccessTokenExpired() {
 		if (Clock.currTime() >= appConfig.accessTokenExpiration) {
 			if (debugLogging) {addLogEntry("Microsoft OneDrive Access Token has expired. Must generate a new Microsoft OneDrive Access Token", ["debug"]);}
-			newToken();
+			generateNewAccessToken();
 		} else {
 			if (debugLogging) {addLogEntry("Existing Microsoft OneDrive Access Token Expires: " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);}
 		}
