@@ -124,6 +124,8 @@ class ApplicationConfig {
 	string uploadSessionFilePath = "";
 	// Store the Intune account information
 	string intuneAccountDetails;
+	// Store the Intune account information on disk for reuse
+	string intuneAccountDetailsFilePath = "";
 	
 	// API initialisation flags
 	bool apiWasInitialised = false;
@@ -541,6 +543,8 @@ class ApplicationConfig {
 		// Update application set variables based on configDirName
 		// - What is the full path for the 'refresh_token'
 		refreshTokenFilePath = buildNormalizedPath(buildPath(configDirName, "refresh_token"));
+		// - What is the full path for the 'intune_account'
+		intuneAccountDetailsFilePath = buildNormalizedPath(buildPath(configDirName, "intune_account"));
 		// - What is the full path for the 'delta_link'
 		deltaLinkFilePath = buildNormalizedPath(buildPath(configDirName, "delta_link"));
 		// - What is the full path for the 'items.sqlite3' - the database cache file
@@ -567,17 +571,18 @@ class ApplicationConfig {
 						
 		// Debug Output for application set variables based on configDirName
 		if (debugLogging) {
-			addLogEntry("refreshTokenFilePath =   " ~ refreshTokenFilePath, ["debug"]);
-			addLogEntry("deltaLinkFilePath =      " ~ deltaLinkFilePath, ["debug"]);
-			addLogEntry("databaseFilePath =       " ~ databaseFilePath, ["debug"]);
-			addLogEntry("databaseFilePathDryRun = " ~ databaseFilePathDryRun, ["debug"]);
-			addLogEntry("uploadSessionFilePath =  " ~ uploadSessionFilePath, ["debug"]);
-			addLogEntry("userConfigFilePath =     " ~ userConfigFilePath, ["debug"]);
-			addLogEntry("syncListFilePath =       " ~ syncListFilePath, ["debug"]);
-			addLogEntry("systemConfigFilePath =   " ~ systemConfigFilePath, ["debug"]);
-			addLogEntry("configBackupFile =       " ~ configBackupFile, ["debug"]);
-			addLogEntry("configHashFile =         " ~ configHashFile, ["debug"]);
-			addLogEntry("syncListHashFile =       " ~ syncListHashFile, ["debug"]);
+			addLogEntry("refreshTokenFilePath =         " ~ refreshTokenFilePath, ["debug"]);
+			addLogEntry("intuneAccountDetailsFilePath = " ~ intuneAccountDetailsFilePath, ["debug"]);
+			addLogEntry("deltaLinkFilePath =            " ~ deltaLinkFilePath, ["debug"]);
+			addLogEntry("databaseFilePath =             " ~ databaseFilePath, ["debug"]);
+			addLogEntry("databaseFilePathDryRun =       " ~ databaseFilePathDryRun, ["debug"]);
+			addLogEntry("uploadSessionFilePath =        " ~ uploadSessionFilePath, ["debug"]);
+			addLogEntry("userConfigFilePath =           " ~ userConfigFilePath, ["debug"]);
+			addLogEntry("syncListFilePath =             " ~ syncListFilePath, ["debug"]);
+			addLogEntry("systemConfigFilePath =         " ~ systemConfigFilePath, ["debug"]);
+			addLogEntry("configBackupFile =             " ~ configBackupFile, ["debug"]);
+			addLogEntry("configHashFile =               " ~ configHashFile, ["debug"]);
+			addLogEntry("syncListHashFile =             " ~ syncListHashFile, ["debug"]);
 		}
 		
 		// Configure the Hash and Backup File Permission Value
@@ -777,6 +782,13 @@ class ApplicationConfig {
 			configureRequiredFilePermissions();
 		}
 		return configuredFilePermissionMode;
+	}
+	
+	// Set file permissions for 'refresh_token' and 'intune_account' to 0600
+	int returnSecureFilePermission() {
+		string valueToConvert = to!string(defaultFilePermissionMode);
+		auto convertedValue = parse!long(valueToConvert, 8);
+		return to!int(convertedValue);
 	}
 	
 	// Load a configuration file from the provided filename

@@ -415,45 +415,82 @@ class OneDriveApi {
 		// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
 		if (appConfig.getValueBool("use_intune_sso")) {
 			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
-			auto intuneAuthResult = acquire_token_interactive();
-			JSONValue intuneBrokerJSONData = intuneAuthResult.brokerTokenResponse;
-			
-			// Is the JSON data valid?
-			if ((intuneBrokerJSONData.type() == JSONType.object)) {
-				// Does the JSON data have the required authentication elements:
-				// - accessToken
-				// - account
-				// - expiresOn
-				if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
-					// Details exist
-					long expiresOnMs = intuneBrokerJSONData["expiresOn"].integer();
-					// Convert to SysTime 
-					SysTime expiryTime = SysTime.fromUnixTime(expiresOnMs / 1000);
-
-					// Store in appConfig (to match standard flow)
-					appConfig.accessTokenExpiration = expiryTime;
-					addLogEntry("Intune access token expires at: " ~ to!string(appConfig.accessTokenExpiration));
-					
-					// Configure the 'accessToken' based on Intune response
-					appConfig.accessToken = "bearer " ~ strip(intuneBrokerJSONData["accessToken"].str);
-					
-					// Do we print the current access token
-					debugOutputAccessToken();
-					
-					// In order to support silent renewal of the access token, when the access token expires, we must store the Intune account data
-					appConfig.intuneAccountDetails = to!string(intuneBrokerJSONData["account"]);
-					
-					// Return that we are authenticated
-					return true;
+			// Do we have a saved account file?
+			if (!exists(appConfig.intuneAccountDetailsFilePath)) {
+				// No file exists locally
+				auto intuneAuthResult = acquire_token_interactive();
+				JSONValue intuneBrokerJSONData = intuneAuthResult.brokerTokenResponse;
+				
+				// Is the response JSON data valid?
+				if ((intuneBrokerJSONData.type() == JSONType.object)) {
+					// Does the JSON data have the required authentication elements:
+					// - accessToken
+					// - account
+					// - expiresOn
+					if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
+						// Details exist
+						processIntuneResponse(intuneBrokerJSONData);
+						// Return that we are authenticated
+						return true;
+					} else {
+						// no ... expected values not available
+						addLogEntry("Required JSON elements are not present in the Intune JSON response");
+						return false;
+					}
 				} else {
-					// no ... expected values not available
-					addLogEntry("Required JSON elements are not present in the Intune JSON response");
+					// Not a valid JSON response
+					addLogEntry("Invalid JSON Intune JSON response when attempting access authentication");
 					return false;
 				}
 			} else {
-				// Not a valid JSON response
-				addLogEntry("Invalid JSON Intune JSON response when attempting access authentication");
-				return false;
+				// The account information is available in a saved file. Read this file in and attempt a silent authentication
+				try {
+					appConfig.intuneAccountDetails = strip(readText(appConfig.intuneAccountDetailsFilePath));
+					
+					// Is the 'intune_account' empty?
+					if (appConfig.intuneAccountDetails.empty) {
+						addLogEntry("The 'intune_account' file exists but is empty: " ~ appConfig.intuneAccountDetailsFilePath);
+						// No .. remove the file and perform the interactive authentication
+						safeRemove(appConfig.intuneAccountDetailsFilePath);
+						// Attempt interactive authentication
+						authorise();
+						return true;
+					} else {
+						// We have loaded some Intune Account details, try and use them
+						auto intuneAuthResult = acquire_token_silently(appConfig.intuneAccountDetails);
+						JSONValue intuneBrokerJSONData = intuneAuthResult.brokerTokenResponse;
+						// Is the JSON data valid?
+						if ((intuneBrokerJSONData.type() == JSONType.object)) {
+							// Does the JSON data have the required authentication elements:
+							// - accessToken
+							// - account
+							// - expiresOn
+							if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
+								// Details exist
+								processIntuneResponse(intuneBrokerJSONData);
+								// Return that we are authenticated
+								return true;
+							} else {
+								// no ... expected values not available
+								addLogEntry("Required JSON elements are not present in the Intune JSON response");
+								return false;
+							}
+						} else {
+							// No .. remove the file and perform the interactive authentication
+							safeRemove(appConfig.intuneAccountDetailsFilePath);
+							// Attempt interactive authentication
+							authorise();
+							return true;
+						}
+					}
+				} catch (FileException exception) {
+					return false;
+				} catch (std.utf.UTFException exception) {
+					// path contains characters which generate a UTF exception
+					addLogEntry("Cannot read 'intune_account' file on disk from: " ~ appConfig.intuneAccountDetailsFilePath);
+					addLogEntry("  Error Reason:" ~ exception.msg);
+					return false;
+				}
 			}
 		} else {
 			// Normal authentication method
@@ -545,6 +582,42 @@ class OneDriveApi {
 			redeemToken(c.front);
 			return true;
 		}
+	}
+	
+	// Process Intune JSON response data
+	void processIntuneResponse(JSONValue intuneBrokerJSONData) {
+		// Use the provided JSON data and configure elements, save JSON data to disk for reuse
+		
+		long expiresOnMs = intuneBrokerJSONData["expiresOn"].integer();
+		// Convert to SysTime 
+		SysTime expiryTime = SysTime.fromUnixTime(expiresOnMs / 1000);
+
+		// Store in appConfig (to match standard flow)
+		appConfig.accessTokenExpiration = expiryTime;
+		addLogEntry("Intune access token expires at: " ~ to!string(appConfig.accessTokenExpiration));
+		
+		// Configure the 'accessToken' based on Intune response
+		appConfig.accessToken = "bearer " ~ strip(intuneBrokerJSONData["accessToken"].str);
+		
+		// Do we print the current access token
+		debugOutputAccessToken();
+		
+		// In order to support silent renewal of the access token, when the access token expires, we must store the Intune account data
+		appConfig.intuneAccountDetails = to!string(intuneBrokerJSONData["account"]);
+		
+		// try and update the 'intune_account' file on disk for reuse later
+		try {
+			if (debugLogging) {addLogEntry("Updating 'intune_account' on disk", ["debug"]);}
+			std.file.write(appConfig.intuneAccountDetailsFilePath, appConfig.intuneAccountDetails);
+			if (debugLogging) {addLogEntry("Setting file permissions for: " ~ appConfig.intuneAccountDetailsFilePath, ["debug"]);}
+			appConfig.intuneAccountDetailsFilePath.setAttributes(appConfig.returnSecureFilePermission());
+		} catch (FileException exception) {
+			// display the error message
+			displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+		}
+
+
+
 	}
 	
 	// Do we print the current access token
@@ -1024,12 +1097,12 @@ class OneDriveApi {
 						}
 					}
 					
-					// try and update the refresh_token file on disk
+					// try and update the 'refresh_token' file on disk
 					try {
-						if (debugLogging) {addLogEntry("Updating refreshToken on disk", ["debug"]);}
+						if (debugLogging) {addLogEntry("Updating 'refresh_token' on disk", ["debug"]);}
 						std.file.write(appConfig.refreshTokenFilePath, refreshToken);
 						if (debugLogging) {addLogEntry("Setting file permissions for: " ~ appConfig.refreshTokenFilePath, ["debug"]);}
-						appConfig.refreshTokenFilePath.setAttributes(appConfig.returnRequiredFilePermissions());
+						appConfig.refreshTokenFilePath.setAttributes(appConfig.returnSecureFilePermission());
 					} catch (FileException exception) {
 						// display the error message
 						displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
@@ -1067,22 +1140,7 @@ class OneDriveApi {
 				// - expiresOn
 				if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
 					// Details exist
-					long expiresOnMs = intuneBrokerJSONData["expiresOn"].integer();
-					// Convert to SysTime 
-					SysTime expiryTime = SysTime.fromUnixTime(expiresOnMs / 1000);
-
-					// Store in appConfig (to match standard flow)
-					appConfig.accessTokenExpiration = expiryTime;
-					addLogEntry("Intune access token expires at: " ~ to!string(appConfig.accessTokenExpiration));
-					
-					// Configure the 'accessToken' based on Intune response
-					appConfig.accessToken = "bearer " ~ strip(intuneBrokerJSONData["accessToken"].str);
-					
-					// Do we print the current access token
-					debugOutputAccessToken();
-					
-					// In order to support silent renewal of the access token, when the access token expires, we must store the Intune account data
-					appConfig.intuneAccountDetails = to!string(intuneBrokerJSONData["account"]);
+					processIntuneResponse(intuneBrokerJSONData);
 				} else {
 					// no ... expected values not available
 					addLogEntry("Required JSON elements are not present in the Intune JSON response");
