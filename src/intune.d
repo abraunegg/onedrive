@@ -180,20 +180,20 @@ AuthResult acquire_token_interactive() {
 AuthResult acquire_token_silently(string accountJson) {
     AuthResult result;
 
-    DBusError err;
+	DBusError err;
     dbus_error_init(&err);
     DBusConnection* conn = dbus_bus_get(DBusBusType.DBUS_BUS_SESSION, &err);
     if (dbus_error_is_set(&err) || conn is null) return result;
 
-    DBusMessage* msg = dbus_message_new_method_call(
+	DBusMessage* msg = dbus_message_new_method_call(
         "com.microsoft.identity.broker1",
         "/com/microsoft/identity/broker1",
         "com.microsoft.identity.Broker1",
         "acquireTokenSilently"
     );
     if (msg is null) return result;
-
-    string correlationId = randomUUID().toString();
+	
+	string correlationId = randomUUID().toString();
     string requestJson = build_auth_request(accountJson);
 
     DBusMessageIter* args = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
@@ -202,8 +202,8 @@ AuthResult acquire_token_silently(string accountJson) {
         free(args);
         return result;
     }
-
-    const(char)* protocol = toStringz("0.0");
+	
+	const(char)* protocol = toStringz("0.0");
     const(char)* corrId = toStringz(correlationId);
     const(char)* reqJson = toStringz(requestJson);
 
@@ -211,8 +211,8 @@ AuthResult acquire_token_silently(string accountJson) {
     dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &corrId);
     dbus_message_iter_append_basic(args, DBUS_TYPE_STRING, &reqJson);
     free(args);
-
-    DBusMessage* reply = dbus_connection_send_with_reply_and_block(conn, msg, 10000, &err);
+	
+	DBusMessage* reply = dbus_connection_send_with_reply_and_block(conn, msg, 10000, &err);
     dbus_message_unref(msg);
     if (dbus_error_is_set(&err) || reply is null) return result;
 
@@ -222,21 +222,21 @@ AuthResult acquire_token_silently(string accountJson) {
         free(iter);
         return result;
     }
-
-    char* responseStr;
+	
+	char* responseStr;
     dbus_message_iter_get_basic(iter, &responseStr);
     dbus_message_unref(reply);
     free(iter);
-
-    string jsonResponse = fromStringz(responseStr).idup;
+	
+	string jsonResponse = fromStringz(responseStr).idup;
     addLogEntry("Silent response: " ~ jsonResponse);
-
-    JSONValue parsed = parseJSON(jsonResponse);
+	
+	JSONValue parsed = parseJSON(jsonResponse);
     if (parsed.type != JSONType.object) return result;
-
-    auto obj = parsed.object;
+	
+	auto obj = parsed.object;
     if (!("brokerTokenResponse" in obj)) return result;
-
-    result.brokerTokenResponse = obj["brokerTokenResponse"];
+	
+	result.brokerTokenResponse = obj["brokerTokenResponse"];
     return result;
 }

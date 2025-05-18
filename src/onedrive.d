@@ -1102,6 +1102,7 @@ class OneDriveApi {
 		}
 	}
 	
+	// Check if the existing access token has expired, if it has, generate a new one
 	private void checkAccessTokenExpired() {
 		if (Clock.currTime() >= appConfig.accessTokenExpiration) {
 			if (debugLogging) {addLogEntry("Microsoft OneDrive Access Token has expired. Must generate a new Microsoft OneDrive Access Token", ["debug"]);}
