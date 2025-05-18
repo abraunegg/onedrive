@@ -229,7 +229,7 @@ AuthResult acquire_token_silently(string accountJson) {
     free(iter);
 	
 	string jsonResponse = fromStringz(responseStr).idup;
-    addLogEntry("Silent response: " ~ jsonResponse);
+    if (debugLogging) {addLogEntry("Silent raw response: " ~ to!string(jsonResponse), ["debug"]);}
 	
 	JSONValue parsed = parseJSON(jsonResponse);
     if (parsed.type != JSONType.object) return result;
