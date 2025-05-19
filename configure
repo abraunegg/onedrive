@@ -2479,12 +2479,12 @@ fi
 	# Put the nasty error message in config.log where it belongs
 	echo "$dbus_PKG_ERRORS" >&5
 
-	as_fn_error $? "dbus-1 development files not found. Please install dbus-1-dev (Debian) or dbus-devel (Red Hat)" "$LINENO" 5
+	as_fn_error $? "dbus-1 development files not found. Please install libdbus-1-dev (Debian) or dbus-devel (Red Hat)" "$LINENO" 5
 
 elif test $pkg_failed = untried; then
      	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
-	as_fn_error $? "dbus-1 development files not found. Please install dbus-1-dev (Debian) or dbus-devel (Red Hat)" "$LINENO" 5
+	as_fn_error $? "dbus-1 development files not found. Please install libdbus-1-dev (Debian) or dbus-devel (Red Hat)" "$LINENO" 5
 
 else
 	dbus_CFLAGS=$pkg_cv_dbus_CFLAGS
