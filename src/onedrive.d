@@ -615,9 +615,6 @@ class OneDriveApi {
 			// display the error message
 			displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
 		}
-
-
-
 	}
 	
 	// Do we print the current access token
@@ -1014,8 +1011,8 @@ class OneDriveApi {
 	
 	private void acquireToken(char[] postData) {
 		JSONValue response;
-		
-		addLogEntry("Manual Auth postData = " ~ to!string(postData));
+		// Debug this input
+		if (debugLogging) {addLogEntry("Manual Auth postData = " ~ to!string(postData), ["debug"]);}
 
 		try {
 			response = post(tokenUrl, postData, null, true, "application/x-www-form-urlencoded");
@@ -1039,10 +1036,8 @@ class OneDriveApi {
 		}
 
 		if (response.type() == JSONType.object) {
-		
 			// Debug this response
-			
-			addLogEntry("Manual Auth Response JSON = " ~ to!string(response));
+			if (debugLogging) {addLogEntry("Manual Auth Response JSON = " ~ to!string(response), ["debug"]);}
 		
 			// Has the client been configured to use read_only_auth_scope
 			if (appConfig.getValueBool("read_only_auth_scope")) {
@@ -1079,8 +1074,8 @@ class OneDriveApi {
 				refreshToken = strip(response["refresh_token"].str);
 				appConfig.accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
 				
-				
-				addLogEntry("appConfig.accessTokenExpiration = " ~ to!string(appConfig.accessTokenExpiration));
+				// Debug this response
+				if (debugLogging) {addLogEntry("appConfig.accessTokenExpiration = " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);}
 				
 				if (!dryRun) {
 					// Update the refreshToken in appConfig so that we can reuse it
