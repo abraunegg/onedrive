@@ -1143,11 +1143,11 @@ class OneDriveApi {
 					processIntuneResponse(intuneBrokerJSONData);
 				} else {
 					// no ... expected values not available
-					addLogEntry("Required JSON elements are not present in the Intune JSON response");
+					addLogEntry("Required Intune JSON elements are not present in the Intune JSON response");
 				}
 			} else {
 				// Not a valid JSON response
-				addLogEntry("Invalid JSON Intune JSON response when attempting access token renewal");
+				addLogEntry("Invalid Intune JSON response when attempting access token renewal");
 			}
 		} else {
 			// Normal authentication method 

@@ -475,7 +475,10 @@ int main(string[] cliArgs) {
 		if (debugLogging) {addLogEntry("--logout requested", ["debug"]);}
 		addLogEntry("Deleting the saved authentication status ...");
 		if (!dryRun) {
+			// Remove the 'refresh_token' file if present
 			safeRemove(appConfig.refreshTokenFilePath);
+			// Remove the 'intune_account' file if present
+			safeRemove(appConfig.intuneAccountDetailsFilePath);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
 			addLogEntry("DRY RUN: Not removing the saved authentication status");
@@ -489,7 +492,10 @@ int main(string[] cliArgs) {
 		if (debugLogging) {addLogEntry("--reauth requested", ["debug"]);}
 		addLogEntry("Deleting the saved authentication status ... re-authentication requested");
 		if (!dryRun) {
+			// Remove the 'refresh_token' file if present
 			safeRemove(appConfig.refreshTokenFilePath);
+			// Remove the 'intune_account' file if present
+			safeRemove(appConfig.intuneAccountDetailsFilePath);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
 			addLogEntry("DRY RUN: Not removing the saved authentication status");
