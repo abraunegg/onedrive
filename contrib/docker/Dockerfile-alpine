@@ -10,7 +10,7 @@ RUN go install -ldflags "-s -w" github.com/tianon/gosu@${GOSU_VERSION}
 
 FROM alpine:${ALPINE_VERSION} AS builder-onedrive
 
-RUN apk add --update --no-cache alpine-sdk gnupg xz curl-dev sqlite-dev binutils-gold autoconf automake ldc
+RUN apk add --update --no-cache alpine-sdk gnupg xz curl-dev sqlite-dev dbus-dev binutils-gold autoconf automake ldc
 
 COPY . /usr/src/onedrive
 WORKDIR /usr/src/onedrive

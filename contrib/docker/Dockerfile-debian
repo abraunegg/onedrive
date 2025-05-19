@@ -10,7 +10,7 @@ RUN apt-get clean \
  && apt-get update \
  && apt-get upgrade -y \
  && apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential curl ca-certificates libcurl4-openssl-dev libsqlite3-dev libxml2-dev pkg-config git ldc \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential curl ca-certificates libcurl4-openssl-dev libsqlite3-dev libxml2-dev dbus-1-dev pkg-config git ldc \
  # Install|update curl from backports
  && apt-get install -t bookworm-backports -y curl \
  && rm -rf /var/lib/apt/lists/*
