@@ -11,6 +11,7 @@ import std.conv : to;
 import std.json : JSONValue, parseJSON, JSONType;
 import std.uuid : randomUUID;
 import std.range : empty;
+import std.format : format;
 
 // What 'onedrive' modules do we import?
 import log;
@@ -79,18 +80,18 @@ bool wait_for_broker(int timeoutSeconds = 10) {
     return false;
 }
 
-string build_auth_request(string accountJson = "") {
-    string header = `{
+string build_auth_request(string accountJson = "", string clientId) {
+    string header = format(`{
   "authParameters": {
-    "clientId": "22314271-0071-455d-8e04-cdf1ce807a06",
-    "redirectUri": "http://localhost",
+    "clientId": "%s",
+    "redirectUri": "https://login.microsoftonline.com/common/oauth2/nativeclient",
     "authority": "https://login.microsoftonline.com/common",
     "requestedScopes": [
       "Files.ReadWrite",
       "Files.ReadWrite.All",
       "Sites.ReadWrite.All",
       "offline_access"
-    ]`;
+    ]`, clientId);
 
     string footer = `
   }
@@ -107,7 +108,7 @@ struct AuthResult {
 }
 
 // Initiate interactive authentication via D-Bus using the Microsoft Identity Broker
-AuthResult acquire_token_interactive() {
+AuthResult acquire_token_interactive(string clientId) {
     AuthResult result;
     if (!wait_for_broker(10)) {
         addLogEntry("Timed out waiting for Identity Broker to appear on D-Bus");
@@ -129,7 +130,8 @@ AuthResult acquire_token_interactive() {
     if (msg is null) return result;
 
     string correlationId = randomUUID().toString();
-    string requestJson = build_auth_request();
+	string accountJson = "";
+    string requestJson = build_auth_request(accountJson, clientId);
 
     DBusMessageIter* args = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
     if (!dbus_message_iter_init_append(msg, args)) {
@@ -177,7 +179,7 @@ AuthResult acquire_token_interactive() {
 }
 
 // Perform silent authentication via D-Bus using the Microsoft Identity Broker
-AuthResult acquire_token_silently(string accountJson) {
+AuthResult acquire_token_silently(string accountJson, string clientId) {
     AuthResult result;
 
 	DBusError err;
@@ -194,7 +196,7 @@ AuthResult acquire_token_silently(string accountJson) {
     if (msg is null) return result;
 	
 	string correlationId = randomUUID().toString();
-    string requestJson = build_auth_request(accountJson);
+    string requestJson = build_auth_request(accountJson, clientId);
 
     DBusMessageIter* args = cast(DBusMessageIter*) malloc(DBUS_MESSAGE_ITER_SIZE);
     if (!dbus_message_iter_init_append(msg, args)) {

@@ -418,7 +418,7 @@ class OneDriveApi {
 			// Do we have a saved account file?
 			if (!exists(appConfig.intuneAccountDetailsFilePath)) {
 				// No file exists locally
-				auto intuneAuthResult = acquire_token_interactive();
+				auto intuneAuthResult = acquire_token_interactive(appConfig.getValueString("application_id"));
 				JSONValue intuneBrokerJSONData = intuneAuthResult.brokerTokenResponse;
 				
 				// Is the response JSON data valid?
@@ -457,7 +457,7 @@ class OneDriveApi {
 						return true;
 					} else {
 						// We have loaded some Intune Account details, try and use them
-						auto intuneAuthResult = acquire_token_silently(appConfig.intuneAccountDetails);
+						auto intuneAuthResult = acquire_token_silently(appConfig.intuneAccountDetails, appConfig.getValueString("application_id"));
 						JSONValue intuneBrokerJSONData = intuneAuthResult.brokerTokenResponse;
 						// Is the JSON data valid?
 						if ((intuneBrokerJSONData.type() == JSONType.object)) {
@@ -1125,7 +1125,7 @@ class OneDriveApi {
 		// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
 		if (appConfig.getValueBool("use_intune_sso")) {
 			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
-			auto intuneAuthResult = acquire_token_silently(appConfig.intuneAccountDetails);
+			auto intuneAuthResult = acquire_token_silently(appConfig.intuneAccountDetails, appConfig.getValueString("application_id"));
 			JSONValue intuneBrokerJSONData = intuneAuthResult.brokerTokenResponse;
 			// Is the JSON data valid?
 			if ((intuneBrokerJSONData.type() == JSONType.object)) {
