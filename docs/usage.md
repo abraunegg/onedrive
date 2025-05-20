@@ -345,7 +345,7 @@ This client supports the following methods to authenticate the application with 
 * Supports interactive browser-based authentication using OAuth2 and a response URI
 * Supports seamless Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker D-Bus interface
 
-#### Interactive Authentication using OAuth2
+#### Interactive Authentication using OAuth2 and a response URI
 When you run the application for the first time, you'll be prompted to open a specific URL using your web browser, where you'll need to log in to your Microsoft Account and grant the application permission to access your files. After granting permission to the application, you'll be redirected to a blank page. Simply copy the URI from the blank page and paste it into the application.
 
 **Example:**

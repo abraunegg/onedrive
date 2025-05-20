@@ -178,6 +178,9 @@
 ## Only upload changes to OneDrive, do not download from cloud.
 #upload_only = "false"
 
+## Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker
+#use_intune_sso = "true"
+
 ## This configuration option controls the application function to move online deleted files to a 'Recycle Bin' on your system.
 #use_recycle_bin = "false"
 
