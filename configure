@@ -593,7 +593,6 @@ ZSH_COMPLETION_DIR
 BASH_COMPLETION_DIR
 bashcompdir
 COMPLETIONS
-linux_dbus_LIBS
 dynamic_linker_LIBS
 bsd_inotify_LIBS
 NOTIFICATIONS
@@ -602,6 +601,7 @@ notify_CFLAGS
 HAVE_SYSTEMD
 systemduserunitdir
 systemdsystemunitdir
+enable_dbus
 dbus_LIBS
 dbus_CFLAGS
 sqlite_LIBS
@@ -2421,6 +2421,14 @@ $as_echo "yes" >&6; }
 
 fi
 
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to enable dbus support" >&5
+$as_echo_n "checking whether to enable dbus support... " >&6; }
+case "$(uname -s)" in
+  Linux)
+    enable_dbus=yes
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes (on Linux)" >&5
+$as_echo "yes (on Linux)" >&6; }
+
 pkg_failed=no
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for dbus" >&5
 $as_echo_n "checking for dbus... " >&6; }
@@ -2496,6 +2504,17 @@ $as_echo "#define HAVE_DBUS 1" >>confdefs.h
 
 
 fi
+    ;;
+  *)
+    enable_dbus=no
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no (not on Linux)" >&5
+$as_echo "no (not on Linux)" >&6; }
+    ;;
+esac
+
+
+
+
 
 
 # Check whether --with-systemdsystemunitdir was given.
@@ -2686,20 +2705,6 @@ case "$(uname -s)" in
         ;;
     *)
         dynamic_linker_LIBS=""
-        ;;
-esac
-
-
-
-
-
-# Conditionally set linux_dbus_LIBS based on the platform
-case "$(uname -s)" in
-    Linux)
-        linux_dbus_LIBS="-ldbus-1"
-        ;;
-    *)
-        linux_dbus_LIBS=""
         ;;
 esac
 

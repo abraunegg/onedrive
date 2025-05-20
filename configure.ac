@@ -185,14 +185,30 @@ AC_SUBST([LINKER_DCFLAG])
 AC_SUBST([OUTPUT_DCFLAG])
 AC_SUBST([WERROR_DCFLAG])
 
-dnl Check for required modules: curl and sqlite at the moment
+dnl Check for required modules: curl, sqlite and dbus if required
 PKG_CHECK_MODULES([curl],[libcurl])
 PKG_CHECK_MODULES([sqlite],[sqlite3])
-PKG_CHECK_MODULES([dbus], [dbus-1 >= 1.0],
-  [AC_DEFINE([HAVE_DBUS], [1], [Define if you have dbus-1])]
-  ,
-  [AC_MSG_ERROR([dbus-1 development files not found. Please install libdbus-1-dev (Debian) or dbus-devel (Red Hat)])]
-)
+
+AC_MSG_CHECKING([whether to enable dbus support])
+case "$(uname -s)" in
+  Linux)
+    enable_dbus=yes
+    AC_MSG_RESULT([yes (on Linux)])
+    PKG_CHECK_MODULES([dbus], [dbus-1 >= 1.0],
+      [AC_DEFINE([HAVE_DBUS], [1], [Define if you have dbus-1])]
+      ,
+      [AC_MSG_ERROR([dbus-1 development files not found. Please install libdbus-1-dev (Debian) or dbus-devel (Red Hat)])]
+    )
+    ;;
+  *)
+    enable_dbus=no
+    AC_MSG_RESULT([no (not on Linux)])
+    ;;
+esac
+
+AC_SUBST([enable_dbus])
+
+
 
 dnl
 dnl systemd and unit file directories
@@ -308,22 +324,6 @@ case "$(uname -s)" in
 esac
 
 AC_SUBST([dynamic_linker_LIBS])
-
-
-dnl
-dnl dbus support
-
-# Conditionally set linux_dbus_LIBS based on the platform
-case "$(uname -s)" in
-    Linux)
-        linux_dbus_LIBS="-ldbus-1"
-        ;;
-    *)
-        linux_dbus_LIBS=""
-        ;;
-esac
-
-AC_SUBST([linux_dbus_LIBS])
 
 
 dnl
