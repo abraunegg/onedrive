@@ -209,7 +209,7 @@ int main(string[] cliArgs) {
 			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
 			addLogEntry("Client has been configured to use Intune SSO via Microsoft Identity Broker dbus session - checking usage criteria");
 			// We need to check that the available dbus is actually available
-			if(check_intune_broker_available()) {
+			if(wait_for_broker()) {
 				// Usage criteria met, will attempt to use Intune SSO via dbus
 				addLogEntry("Intune SSO via Microsoft Identity Broker dbus session usage criteria met - will attempt to authenticate via Intune");
 			} else {
