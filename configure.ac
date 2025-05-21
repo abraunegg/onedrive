@@ -197,7 +197,7 @@ case "$(uname -s)" in
     PKG_CHECK_MODULES([dbus], [dbus-1 >= 1.0],
       [AC_DEFINE([HAVE_DBUS], [1], [Define if you have dbus-1])]
       ,
-      [AC_MSG_ERROR([dbus-1 development files not found. Please install libdbus-1-dev (Debian) or dbus-devel (Red Hat)])]
+      [AC_MSG_ERROR([dbus-1 development files not found. Please install dbus-devel (Red Hat), libdbus-1-dev (Debian) or dbus (Arch | Manjaro)])]
     )
     ;;
   *)
