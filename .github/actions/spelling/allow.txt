@@ -27,6 +27,7 @@ artix
 ASCIIHTML
 ASpurious
 AThings
+attrnamespace
 aufxw
 aur
 autoclean
@@ -113,6 +114,7 @@ eselect
 estr
 eventfd
 evt
+extattr
 fasynchronous
 fbc
 fcf
