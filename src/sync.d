@@ -5028,8 +5028,10 @@ class SyncEngine {
 					
 					if (localModifiedTime != itemModifiedTime) {
 						// The modified dates are different
-						if (verboseLogging) {addLogEntry("Local file time discrepancy detected: " ~ localFilePath, ["verbose"]);}
-						if (debugLogging) {addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["debug"]);}
+						if (verboseLogging) {
+							addLogEntry("Local file time discrepancy detected: " ~ localFilePath, ["verbose"]);}
+							addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["verbose"]);
+						}
 						
 						// Test the file hash
 						if (!testFileHash(localFilePath, dbItem)) {
