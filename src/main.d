@@ -32,6 +32,7 @@ import itemdb;
 import clientSideFiltering;
 import monitor;
 import webhook;
+import intune;
 
 // What other constant variables do we require?
 const int EXIT_RESYNC_REQUIRED = 126;
@@ -199,6 +200,29 @@ int main(string[] cliArgs) {
 	// Are we doing a --sync or a --monitor operation? Both of these will be false if they are not set
 	if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
 		syncOrMonitorMissing = true; // --sync or --monitor is missing 
+	}
+	
+	// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
+	// This is ONLY possible on Linux, not FreeBSD or other platforms
+	version (linux) {
+		if (appConfig.getValueBool("use_intune_sso")) {
+			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
+			addLogEntry("Client has been configured to use Intune SSO via Microsoft Identity Broker dbus session - checking usage criteria");
+			// We need to check that the available dbus is actually available
+			if(wait_for_broker()) {
+				// Usage criteria met, will attempt to use Intune SSO via dbus
+				addLogEntry("Intune SSO via Microsoft Identity Broker dbus session usage criteria met - will attempt to authenticate via Intune");
+			} else {
+				// Microsoft Identity Broker dbus is not available
+				addLogEntry();
+				addLogEntry("Required Microsoft Identity Broker dbus capability not found - disabling authentication via Intune SSO");
+				addLogEntry();
+				appConfig.setValueBool("use_intune_sso" , false);
+			}
+		}
+	} else {
+		// Ensure 'use_intune_sso' is disabled
+		appConfig.setValueBool("use_intune_sso" , false);
 	}
 	
 	// Has the user configured to use the 'Recycle Bin' locally, for any files that are deleted online?
@@ -437,7 +461,10 @@ int main(string[] cliArgs) {
 		if (debugLogging) {addLogEntry("--logout requested", ["debug"]);}
 		addLogEntry("Deleting the saved authentication status ...");
 		if (!dryRun) {
+			// Remove the 'refresh_token' file if present
 			safeRemove(appConfig.refreshTokenFilePath);
+			// Remove the 'intune_account' file if present
+			safeRemove(appConfig.intuneAccountDetailsFilePath);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
 			addLogEntry("DRY RUN: Not removing the saved authentication status");
@@ -451,7 +478,10 @@ int main(string[] cliArgs) {
 		if (debugLogging) {addLogEntry("--reauth requested", ["debug"]);}
 		addLogEntry("Deleting the saved authentication status ... re-authentication requested");
 		if (!dryRun) {
+			// Remove the 'refresh_token' file if present
 			safeRemove(appConfig.refreshTokenFilePath);
+			// Remove the 'intune_account' file if present
+			safeRemove(appConfig.intuneAccountDetailsFilePath);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
 			addLogEntry("DRY RUN: Not removing the saved authentication status");

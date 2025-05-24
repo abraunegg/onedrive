@@ -64,6 +64,7 @@ Before reading this document, please ensure you are running application version 
   - [threads](#threads)
   - [transfer_order](#transfer_order)
   - [upload_only](#upload_only)
+  - [use_intune_sso](#use_intune_sso)
   - [use_recycle_bin](#use_recycle_bin)
   - [user_agent](#user_agent)
   - [webhook_enabled](#webhook_enabled)
@@ -1016,6 +1017,20 @@ _**CLI Option Use:**_ `--upload-only`
 
 > [!IMPORTANT]
 > To ensure that data deleted locally remains accessible online, you can use the 'no_remote_delete' option. If you want to delete the data from your local storage after a successful upload to Microsoft OneDrive, you can use the 'remove_source_files' option.
+
+### use_intune_sso
+_**Description:**_ Enable this option to authenticate using Intune Single Sign-On (SSO) via the Microsoft Identity Device Broker over D-Bus. This method is suitable for environments where the system is Intune-enrolled and allows seamless token retrieval without requiring browser interaction.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `use_intune_sso = "false"` or `use_intune_sso = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+> [!NOTE]
+> The installation and configuration of Intune for your platform is beyond the scope of this documentation.
 
 ### use_recycle_bin
 _**Description:**_ This configuration option controls the application function to move online deleted files to a 'Recycle Bin' on your system. This allows you to review online deleted data manually before this is purged from your actual system.
