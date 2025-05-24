@@ -3523,10 +3523,6 @@ class SyncEngine {
 		// Capture what time this download started
 		SysTime downloadStartTime = Clock.currTime();
 		
-		// Timestamp variables
-		SysTime itemModifiedTime;
-		string lastModifiedTimestamp;
-		
 		// Download item specifics
 		string downloadItemId = onedriveJSONItem["id"].str;
 		string downloadItemName = onedriveJSONItem["name"].str;
@@ -3682,6 +3678,8 @@ class SyncEngine {
 						
 						// Regardless of --disable-download-validation we still need to set the file timestamp correctly
 						// Get the mtime from the JSON data
+						SysTime itemModifiedTime;
+						string lastModifiedTimestamp;
 						if (isItemRemote(onedriveJSONItem)) {
 							// remote file item
 							lastModifiedTimestamp = strip(onedriveJSONItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
@@ -3869,9 +3867,6 @@ class SyncEngine {
 				
 				// As no download failure, calculate transfer metrics in a consistent manner
 				displayTransferMetrics(newItemPath, jsonFileSize, downloadStartTime, Clock.currTime());
-				
-				// Ensure that this file that has been downloaded now has the timestamp of the file online
-				setLocalPathTimestamp(dryRun, newItemPath, itemModifiedTime);
 				
 				// Save this item into the database
 				saveItem(onedriveJSONItem);
