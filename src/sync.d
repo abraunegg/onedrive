@@ -2854,10 +2854,21 @@ class SyncEngine {
 							addLogEntry("itemModifiedTime (OneDrive item): " ~ to!string(itemModifiedTime), ["debug"]);
 						}
 						
-						// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
-						// In case the renamed path is needed
-						string renamedPath;
-						safeBackup(newItemPath, dryRun, bypassDataPreservation, renamedPath);
+						// Is this the exact same file?
+						// Test the file hash
+						if (!testFileHash(newItemPath, newDatabaseItem)) {
+							// File on disk is different by hash / content
+							// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
+							// In case the renamed path is needed
+							string renamedPath;
+							safeBackup(newItemPath, dryRun, bypassDataPreservation, renamedPath);
+						} else {
+							// File on disk is the same by hash / content, but is a different timestamp
+							// The file contents have not changed, but the modified timestamp has
+							if (verboseLogging) {addLogEntry("The last modified timestamp online has changed however the local file content has not changed", ["verbose"]);}
+							// Update the local timestamp, logging and error handling done within function
+							setLocalPathTimestamp(dryRun, newItemPath, newDatabaseItem.mtime);
+						}
 					}
 					
 					// Are the timestamps equal?
@@ -5017,8 +5028,10 @@ class SyncEngine {
 					
 					if (localModifiedTime != itemModifiedTime) {
 						// The modified dates are different
-						if (verboseLogging) {addLogEntry("Local file time discrepancy detected: " ~ localFilePath, ["verbose"]);}
-						if (debugLogging) {addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["debug"]);}
+						if (verboseLogging) {
+							addLogEntry("Local file time discrepancy detected: " ~ localFilePath, ["verbose"]);
+							addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["verbose"]);
+						}
 						
 						// Test the file hash
 						if (!testFileHash(localFilePath, dbItem)) {
