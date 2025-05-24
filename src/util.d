@@ -133,70 +133,130 @@ void safeRemove(const(char)[] path) {
 	if (exists(path)) remove(path);
 }
 
-// Returns the SHA1 hash hex string of a file
+// Returns the SHA1 hash hex string of a file, or an empty string on failure
 string computeSha1Hash(string path) {
 	SHA1 sha;
 	File file;
+	bool fileOpened = false;
+	
+	scope(exit) {
+		if (fileOpened) {
+			file.close(); // Ensure file is closed on function exit
+		}
+	}
 
 	try {
 		file = File(path, "rb");
+		fileOpened = true;
+
+		// Read file in chunks and feed into the hash
+		foreach (ubyte[] data; chunks(file, 4096)) {
+			sha.put(data);
+		}
 	} catch (ErrnoException e) {
-		// log that we could not generate a hash
-		addLogEntry("Failed to open file to compute SHA1 Hash: " ~ path ~ " - " ~ e.msg);
+		addLogEntry("Failed to compute SHA1 Hash for file: " ~ path ~ " - " ~ e.msg);
+		return "";
+	} catch (Exception e) {
+		addLogEntry("Unexpected error while computing SHA1 Hash for file: " ~ path ~ " - " ~ e.msg);
+		return "";
 	}
-	
-	scope(exit) file.close(); // Ensure file is closed post read
-	foreach (ubyte[] data; chunks(file, 4096)) {
-		sha.put(data);
+
+	// Ensure file is closed if opened
+	if (fileOpened) {
+		try {
+			file.close();
+		} catch (Exception e) {
+			addLogEntry("Failed to close file after hashing: " ~ path ~ " - " ~ e.msg);
+		}
 	}
-	
-	// Store the hash in a local variable before converting to string
+
+	// Finish hashing and return hex result
 	auto hashResult = sha.finish();
-	return toHexString(hashResult).idup; // Convert the hash to a hex string
+	return toHexString(hashResult).idup;
 }
 
-// Returns the quickXorHash base64 string of a file
+// Returns the quickXorHash base64 string of a file, or an empty string on failure
 string computeQuickXorHash(string path) {
 	QuickXor qxor;
 	File file;
+	bool fileOpened = false;
+	
+	scope(exit) {
+		if (fileOpened) {
+			file.close(); // Ensure file is closed on function exit
+		}
+	}
 
 	try {
 		file = File(path, "rb");
+		fileOpened = true;
+
+		// Read file in chunks and feed into the hash
+		foreach (ubyte[] data; chunks(file, 4096)) {
+			qxor.put(data);
+		}
 	} catch (ErrnoException e) {
-		// log that we could not generate a hash
-		addLogEntry("Failed to open file to compute QuickXor Hash: " ~ path ~ " - " ~ e.msg);
+		addLogEntry("Failed to compute QuickXor Hash for file: " ~ path ~ " - " ~ e.msg);
+		return ""; // Return empty string on failure
+	} catch (Exception e) {
+		addLogEntry("Unexpected error while computing QuickXor Hash for file: " ~ path ~ " - " ~ e.msg);
+		return ""; // Return empty string on unexpected error
 	}
-	
-	scope(exit) file.close(); // Ensure file is closed post read
-	foreach (ubyte[] data; chunks(file, 4096)) {
-		qxor.put(data);
+
+	// Ensure file is closed if opened
+	if (fileOpened) {
+		try {
+			file.close();
+		} catch (Exception e) {
+			addLogEntry("Failed to close file after hashing: " ~ path ~ " - " ~ e.msg);
+		}
 	}
-	
-	// Store the hash in a local variable before converting to string
+
+	// Finish hashing and return base64 result
 	auto hashResult = qxor.finish();
-	return Base64.encode(hashResult).idup; // Convert the hash to a base64 string
+	return Base64.encode(hashResult).idup;
 }
 
-// Returns the SHA256 hex string of a file
+// Returns the SHA256 hash hex string of a file, or an empty string on failure
 string computeSHA256Hash(string path) {
 	SHA256 sha256;
 	File file;
+	bool fileOpened = false;
+	
+	scope(exit) {
+		if (fileOpened) {
+			file.close(); // Ensure file is closed on function exit
+		}
+	}
 
 	try {
 		file = File(path, "rb");
+		fileOpened = true;
+
+		// Read file in chunks and feed into the hash
+		foreach (ubyte[] data; chunks(file, 4096)) {
+			sha256.put(data);
+		}
 	} catch (ErrnoException e) {
-		// log that we could not generate a hash
-		addLogEntry("Failed to open file to compute SHA256 Hash: " ~ path ~ " - " ~ e.msg);
+		addLogEntry("Failed to compute SHA256 Hash for file: " ~ path ~ " - " ~ e.msg);
+		return "";
+	} catch (Exception e) {
+		addLogEntry("Unexpected error while computing SHA256 Hash for file: " ~ path ~ " - " ~ e.msg);
+		return "";
 	}
-	
-	scope(exit) file.close(); // Ensure file is closed post read
-    foreach (ubyte[] data; chunks(file, 4096)) {
-        sha256.put(data);
-    }
-	
-	// Store the hash in a local variable before converting to string
+
+	// Ensure file is closed if opened
+	if (fileOpened) {
+		try {
+			file.close();
+		} catch (Exception e) {
+			addLogEntry("Failed to close file after hashing: " ~ path ~ " - " ~ e.msg);
+		}
+	}
+
+	// Finish hashing and return hex result
 	auto hashResult = sha256.finish();
-	return toHexString(hashResult).idup; // Convert the hash to a hex string
+	return toHexString(hashResult).idup;
 }
 
 // Converts wildcards (*, ?) to regex
