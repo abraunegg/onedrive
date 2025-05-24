@@ -3918,32 +3918,34 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// This function will write the following xattr attributes based on the JSON data received from Microsoft onedrive
-		// - createdBy using the 'displayName' value
-		// - lastModifiedBy using the 'displayName' value
-		
-		string createdBy;
-		string lastModifiedBy;
-		
-		// Configure 'createdBy' from the JSON data
-		if (hasCreatedByUserDisplayName(onedriveJSONItem)) {
-			createdBy = onedriveJSONItem["createdBy"]["user"]["displayName"].str;
-		} else {
-			// required data not in JSON data
-			createdBy = "Unknown";
+		// We can only set xattr values when not performing a --dry-run operation
+		if (!dryRun) {
+			// This function will write the following xattr attributes based on the JSON data received from Microsoft onedrive
+			// - createdBy using the 'displayName' value
+			// - lastModifiedBy using the 'displayName' value
+			string createdBy;
+			string lastModifiedBy;
+			
+			// Configure 'createdBy' from the JSON data
+			if (hasCreatedByUserDisplayName(onedriveJSONItem)) {
+				createdBy = onedriveJSONItem["createdBy"]["user"]["displayName"].str;
+			} else {
+				// required data not in JSON data
+				createdBy = "Unknown";
+			}
+			
+			// Configure 'lastModifiedBy' from the JSON data
+			if (hasLastModifiedByUserDisplayName(onedriveJSONItem)) {
+				lastModifiedBy = onedriveJSONItem["lastModifiedBy"]["user"]["displayName"].str;
+			} else {
+				// required data not in JSON data
+				lastModifiedBy = "Unknown";
+			}
+			
+			// Set the xattr values
+			setXAttr(filePath, "user.onedrive.createdBy", createdBy);
+			setXAttr(filePath, "user.onedrive.lastModifiedBy", lastModifiedBy);
 		}
-		
-		// Configure 'lastModifiedBy' from the JSON data
-		if (hasLastModifiedByUserDisplayName(onedriveJSONItem)) {
-			lastModifiedBy = onedriveJSONItem["lastModifiedBy"]["user"]["displayName"].str;
-		} else {
-			// required data not in JSON data
-			lastModifiedBy = "Unknown";
-		}
-		
-		// Set the xattr values
-		setXAttr(filePath, "user.onedrive.createdBy", createdBy);
-		setXAttr(filePath, "user.onedrive.lastModifiedBy", lastModifiedBy);
 		
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
