@@ -1775,8 +1775,10 @@ void setLocalPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) 
 			// Compare the requested new modified timestamp to existing local modified timestamp
 			SysTime newTimeStampZeroFracSec = newTimeStamp;
 			SysTime existingTimeStampZeroFracSec = existingModificationTime;
+			// Convert timestamps to UTC
 			newTimeStampZeroFracSec = newTimeStampZeroFracSec.toUTC();
-			existingTimeStampZeroFracSec = newTimeStampZeroFracSec.toUTC();
+			existingTimeStampZeroFracSec = existingTimeStampZeroFracSec.toUTC();
+			// Drop fractional seconds on both
 			newTimeStampZeroFracSec.fracSecs = Duration.zero;
 			existingTimeStampZeroFracSec.fracSecs = Duration.zero;
 			
