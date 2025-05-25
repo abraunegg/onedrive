@@ -1,0 +1,32 @@
+@startuml
+title Default Sync Flow (Online is Source of Truth)
+
+start
+
+:Step 1 - Scan OneDrive (online);
+:Detect online changes:
+- New files or folders
+- Modified files
+- Deleted files;
+
+:Apply online changes to local:
+- Download new files or folders
+- Update modified files
+- Delete local files or folders;
+
+:Step 2 - Scan local files;
+:Detect local-only changes:
+- New files or folders
+- Modified files;
+
+:Upload local changes to OneDrive:
+- Upload new files or folders
+- Upload modified files;
+
+:Step 3 - Final reconciliation;
+:Rescan OneDrive to ensure:
+- Any last-minute online changes
+  are applied locally;
+
+stop
+@enduml

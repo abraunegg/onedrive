@@ -43,9 +43,14 @@ There are 2 main operational modes that the client can utilise:
 1. Standalone sync mode that performs a single sync action against Microsoft OneDrive. This method is used when you utilise `--sync`.
 2. Ongoing sync mode that continuously syncs your data with Microsoft OneDrive and utilises 'inotify' to watch for local system changes. This method is used when you utilise `--monitor`.
 
-By default, both modes consider all data stored online within Microsoft OneDrive as the 'source-of-truth' - that is, what is online, is the correct data (file version, file content, file timestamp, folder structure and so on). This consideration also matches how the Microsoft OneDrive Client for Windows operates.
+By default, both sync modes (`--sync` and `--monitor`)treat the data stored online in Microsoft OneDrive as the 'source-of-truth'. This means the client will first examine your OneDrive account for any changes (additions, modifications, deletions) and apply those changes to your local file system. After this, any local changes are uploaded, and finally, a second check ensures your local state matches the online state. This mirrors the behaviour of the Microsoft OneDrive Client for Windows.
 
-However, in standalone mode (`--sync`), you can *change* what reference the client will use as the 'source-of-truth' for your data by using the `--local-first` option so that the application will look at your local files *first* and consider your local files as your 'source-of-truth' to replicate that directory structure to Microsoft OneDrive.
+![Default Sync Flow Process](./puml/default_sync_flow.png)
+
+When using standalone mode (`--sync`) with the `--local-first` option, the sync flow is reversed. The client treats your local files as the 'source-of-truth'. Local changes are processed first and pushed to Microsoft OneDrive online. Only after local changes have been uploaded will the client check for any remote changes (this includes online additions, modifications and deletions) and apply those to your local system as needed, ensuring the final local state is consistent with that what is now online.
+
+![Local First Sync Flow Process](./puml/local_first_sync_process.png)
+
 
 > [!IMPORTANT]
 > Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
