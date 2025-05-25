@@ -829,11 +829,22 @@ class ApplicationConfig {
 
 			// Process other keys
 			if (key in boolValues) {
-				// Only accept "true" as true value.
-				setValueBool(key, c.front.dup == "true" ? true : false);
-				if (key == "skip_dotfiles") configFileSkipDotfiles = true;
-				if (key == "skip_symlinks") configFileSkipSymbolicLinks = true;
-				if (key == "sync_business_shared_items") configFileSyncBusinessSharedItems = true;
+				// Strip quotes and whitespace
+				string rawValue = to!string(c.front.dup);
+				// Evaluate rawValue
+				if (rawValue == "true") {
+					setValueBool(key, true);
+					// Additional config-specific flags for specific keys
+					if (key == "skip_dotfiles") configFileSkipDotfiles = true;
+					if (key == "skip_symlinks") configFileSkipSymbolicLinks = true;
+					if (key == "sync_business_shared_items") configFileSyncBusinessSharedItems = true;
+				} else if (rawValue == "false") {
+					setValueBool(key, false);
+				} else {
+					addLogEntry("Invalid boolean value for key in config file: " ~ key ~ " = " ~ to!string(c.front.dup));
+					addLogEntry("ERROR: Only 'true' or 'false' are accepted for this setting.");
+					forceExit();
+				}
 			} else if (key in stringValues) {
 				string value = c.front.dup;
 				setValueString(key, value);
