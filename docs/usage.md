@@ -743,11 +743,13 @@ The following are supported for pattern matching and exclusion rules:
 
 ### Performing a --resync
 If you alter any of the subsequent configuration items, you will be required to execute a `--resync` to make sure your client is syncing your data with the updated configuration:
+*   check_nosync
 *   drive_id
 *   sync_dir
 *   skip_file
 *   skip_dir
 *   skip_dotfiles
+*   skip_size
 *   skip_symlinks
 *   sync_business_shared_items
 *   Creating, Modifying or Deleting the 'sync_list' file
