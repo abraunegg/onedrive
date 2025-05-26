@@ -192,8 +192,10 @@ class ApplicationConfig {
 	private bool configFileSkipFileReadIn = false; // If we actually read in something from 'config' file, this gets set to true
 	private string configFileSkipDir = ""; // Default here is no directories are skipped
 	private string configFileDriveId = ""; // Default here is that no drive id is specified
+	private bool configFileCheckNoSync = false;
 	private bool configFileSkipDotfiles = false;
 	private bool configFileSkipSymbolicLinks = false;
+	private bool configFileSkipSize = false;
 	private bool configFileSyncBusinessSharedItems = false;
 	
 	// File permission values (set via initialise function)
@@ -853,6 +855,7 @@ class ApplicationConfig {
 				if (rawValue == "true") {
 					setValueBool(key, true);
 					// Additional config-specific flags for specific keys
+					if (key == "check_nosync") configFileCheckNoSync = true;
 					if (key == "skip_dotfiles") configFileSkipDotfiles = true;
 					if (key == "skip_symlinks") configFileSkipSymbolicLinks = true;
 					if (key == "sync_business_shared_items") configFileSyncBusinessSharedItems = true;
@@ -1024,6 +1027,16 @@ class ApplicationConfig {
 						tempValue = defaultInotifyDelay;
 					}
 					setValueLong("inotify_delay", tempValue);
+				} else if (key == "skip_size") {
+					// Flag this for triggering --resync requirement
+					configFileSkipSize = true;
+					ulong tempValue = thisConfigValue;
+					// If set, this must be greater than 0
+					if (tempValue <= 0) {
+						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+						tempValue = 0;
+					}
+					setValueLong("skip_size", tempValue);
 				}
 			} else {
 				addLogEntry("Unknown key in config file: " ~ key);
@@ -1777,7 +1790,7 @@ class ApplicationConfig {
 		bool resyncRequired = false;
 
 		// Consolidate the flags for different configuration changes
-		bool[9] configOptionsDifferent;
+		bool[11] configOptionsDifferent;
 
 		// Handle multiple entries of skip_file
 		string backupConfigFileSkipFile;
@@ -1811,19 +1824,23 @@ class ApplicationConfig {
 
 			if (exists(configBackupFile)) {
 				string[string] backupConfigStringValues;
+				backupConfigStringValues["check_nosync"] = "";
 				backupConfigStringValues["drive_id"] = "";
 				backupConfigStringValues["sync_dir"] = "";
 				backupConfigStringValues["skip_file"] = "";
 				backupConfigStringValues["skip_dir"] = "";
 				backupConfigStringValues["skip_dotfiles"] = "";
+				backupConfigStringValues["skip_size"] = "";
 				backupConfigStringValues["skip_symlinks"] = "";
 				backupConfigStringValues["sync_business_shared_items"] = "";
 
+				bool check_nosync_present = false;
 				bool drive_id_present = false;
 				bool sync_dir_present = false;
 				bool skip_file_present = false;
 				bool skip_dir_present = false;
 				bool skip_dotfiles_present = false;
+				bool skip_size_present = false;
 				bool skip_symlinks_present = false;
 				bool sync_business_shared_items_present = false;
 
@@ -1952,10 +1969,14 @@ class ApplicationConfig {
 						// We actually read a 'skip_file' configuration line from the 'config' file
 						if (!skip_file_present && configFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file newly added ... --resync needed", 4);
 					}
+					
+					// Other options
 					if (!skip_dir_present && configFileSkipDir != "") logAndSetDifference("skip_dir newly added ... --resync needed", 5);
 					if (!skip_dotfiles_present && configFileSkipDotfiles) logAndSetDifference("skip_dotfiles newly added ... --resync needed", 6);
 					if (!skip_symlinks_present && configFileSkipSymbolicLinks) logAndSetDifference("skip_symlinks newly added ... --resync needed", 7);
 					if (!sync_business_shared_items_present && configFileSyncBusinessSharedItems) logAndSetDifference("sync_business_shared_items newly added ... --resync needed", 8);
+					if (!check_nosync_present && configFileCheckNoSync) logAndSetDifference("check_nosync newly added ... --resync needed", 9);
+					if (!skip_size_present && configFileSkipSize) logAndSetDifference("skip_size newly added ... --resync needed", 10);
 				} else {
 					// failed to read backup config file
 					addLogEntry("WARNING: unable to read backup config, unable to validate if any changes made");
@@ -1971,6 +1992,8 @@ class ApplicationConfig {
 		//  --skip-dir ARG
 		//  --skip-dot-files
 		//  --skip-symlinks
+		//  --check-for-nosync
+		//  --skip-size ARG
 
 		// Check CLI options
 		if (exists(applicableConfigFilePath)) {
@@ -1990,6 +2013,8 @@ class ApplicationConfig {
 			if (configFileSkipDir != "" && configFileSkipDir != getValueString("skip_dir")) logAndSetDifference("skip_dir: CLI override of config file option, --resync needed", 5);
 			if (!configFileSkipDotfiles && getValueBool("skip_dotfiles")) logAndSetDifference("skip_dotfiles: CLI override of config file option, --resync needed", 6);
 			if (!configFileSkipSymbolicLinks && getValueBool("skip_symlinks")) logAndSetDifference("skip_symlinks: CLI override of config file option, --resync needed", 7);
+			if (!configFileCheckNoSync && getValueBool("check_nosync")) logAndSetDifference("check_nosync: CLI override of config file option, --resync needed", 9);
+			if (!configFileSkipSize && (getValueLong("skip_size") > 0)) logAndSetDifference("skip_size: CLI override of config file option, --resync needed", 10);
 		}
 
 		// Aggregate the result to determine if a resync is required
