@@ -465,6 +465,11 @@ class CurlEngine {
 		
 		http.perform();
 		
+		// close open file - avoids problems with renaming on GCS Buckets and other semi-POSIX systems
+		if (file.isOpen()){
+			file.close();
+		}
+		
 		// Rename downloaded file
 		rename(downloadFilename, originalFilename);
 
