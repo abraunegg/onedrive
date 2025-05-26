@@ -84,7 +84,7 @@ bool wait_for_broker(int timeoutSeconds = 10) {
     return false;
 }
 
-string build_auth_request(string accountJson = "", string clientId) {
+string build_auth_request(string accountJson = "", string clientId = "") {
     string header = format(`{
   "authParameters": {
     "clientId": "%s",
