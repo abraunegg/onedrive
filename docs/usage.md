@@ -1586,4 +1586,4 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
       Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>
 ```
 
-Refer to [application-config-options.md](application-config-options.md) for in-depth details on all application options.
+Refer to [application-config-options.md](application-config-options.md) for in-depth details on all application options. 
