@@ -22,7 +22,7 @@ NOTIFICATIONS = @NOTIFICATIONS@
 HAVE_SYSTEMD = @HAVE_SYSTEMD@
 systemduserunitdir = @systemduserunitdir@
 systemdsystemunitdir = @systemdsystemunitdir@
-all_libs = @curl_LIBS@ @sqlite_LIBS@ @notify_LIBS@ @bsd_inotify_LIBS@ @dynamic_linker_LIBS@
+all_libs = @curl_LIBS@ @sqlite_LIBS@ @dbus_LIBS@ @notify_LIBS@ @bsd_inotify_LIBS@ @dynamic_linker_LIBS@
 COMPLETIONS = @COMPLETIONS@
 BASH_COMPLETION_DIR = @BASH_COMPLETION_DIR@
 ZSH_COMPLETION_DIR = @ZSH_COMPLETION_DIR@
@@ -77,7 +77,8 @@ SOURCES = \
 	src/clientSideFiltering.d \
 	src/monitor.d \
 	src/arsd/cgi.d \
-	src/xattr.d
+	src/xattr.d \
+	src/intune.d
 
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d

@@ -157,6 +157,7 @@ hnsecs
 howto
 hskrieg
 htons
+ietf
 idk
 idlol
 idup
@@ -195,6 +196,7 @@ lgio
 lglib
 lgobject
 libcrypto
+libdbus
 libdir
 libexec
 libexecdir
@@ -280,6 +282,7 @@ onetoc
 onlydeps
 onmicrosoft
 ontextmessage
+oob
 opensuse
 overallocated
 pacman

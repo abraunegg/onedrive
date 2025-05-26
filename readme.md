@@ -14,21 +14,23 @@ Originally derived as a 'fork' from the [skilion](https://github.com/skilion/one
 This client represents a 100% re-imagining of the original work, addressing numerous notable bugs and issues while incorporating a significant array of new features. This client has been under active development since mid-2018.
 
 ## Features
-*   Compatible with OneDrive Personal, OneDrive for Business including accessing Microsoft SharePoint Libraries
-*   Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
-*   Caches sync state for efficiency
-*   Supports a dry-run option for safe configuration testing
-*   Validates file transfers to ensure data integrity
-*   Monitors local files in real-time using inotify
-*   Supports interrupted uploads for completion at a later time
-*   Capability to sync remote updates immediately via webhooks
-*   Enhanced synchronisation speed with multi-threaded file transfers
-*   Manages traffic bandwidth use with rate limiting
-*   Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
-*   Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany and Azure and Office 365 operated by VNET in China
-*   Supports sending desktop alerts using libnotify
-*   Protects against significant data loss on OneDrive after configuration changes
-*   Works with both single and multi-tenant applications
+* Compatible with OneDrive Personal and OneDrive for Business, including access to Microsoft SharePoint Libraries
+* Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
+* Supports single-tenant and multi-tenant applications
+* Supports Intune Single Sign-On (SSO) authentication via the Microsoft Identity Device Broker (D-Bus interface)
+* Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany, and Azure/Office 365 operated by VNET in China
+* Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
+* Protects against significant data loss on OneDrive after configuration changes
+* Supports a dry-run option for safe configuration testing
+* Validates file transfers to ensure data integrity
+* Caches sync state for efficiency
+* Monitors local files in real-time using inotify
+* Capability to sync remote updates immediately via webhooks
+* Supports interrupted uploads for completion at a later time
+* Enhanced synchronisation speed with multi-threaded file transfers
+* Manages traffic bandwidth use with rate limiting
+* Supports sending desktop alerts using libnotify
+
 
 ## What's missing
 *   Ability to encrypt/decrypt files on-the-fly when uploading/downloading files from OneDrive

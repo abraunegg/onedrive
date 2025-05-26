@@ -341,6 +341,11 @@ Once you've installed the application, you'll need to authorise it using your Mi
 
 Please be aware that some companies may require you to explicitly add this app to the [Microsoft MyApps portal](https://myapps.microsoft.com/). To add an approved app to your apps, click on the ellipsis in the top-right corner and select "Request new apps." On the next page, you can add this app. If it's not listed, you should make a request through your IT department.
 
+This client supports the following methods to authenticate the application with Microsoft OneDrive:
+* Supports interactive browser-based authentication using OAuth2 and a response URI
+* Supports seamless Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker D-Bus interface
+
+#### Interactive Authentication using OAuth2 and a response URI
 When you run the application for the first time, you'll be prompted to open a specific URL using your web browser, where you'll need to log in to your Microsoft Account and grant the application permission to access your files. After granting permission to the application, you'll be redirected to a blank page. Simply copy the URI from the blank page and paste it into the application.
 
 **Example:**
@@ -348,7 +353,7 @@ When you run the application for the first time, you'll be prompted to open a sp
 [user@hostname ~]$ onedrive
 Authorise this app by visiting:
 
-https://login.microsoftonline.com/common/oauth2/v2.0/authorise?client_id=22c49a0d-d21c-4792-aed1-8f163c982546&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
+https://login.microsoftonline.com/common/oauth2/v2.0/authorise?client_id=d50ca740-c83f-4d1b-b616-12c519384f0c&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
 
 Enter the response URI from your browser:  https://login.microsoftonline.com/common/oauth2/nativeclient?code=<redacted>
 
@@ -359,6 +364,22 @@ Please use 'onedrive --help' for further assistance on how to run this applicati
 
 > [!IMPORTANT]
 > Without additional input or configuration, the OneDrive Client for Linux will automatically adhere to default application settings during synchronisation processes with Microsoft OneDrive.
+
+#### Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker 
+To use this method of authentication, you must add the following configuration to your 'config' file:
+```
+use_intune_sso = "true"
+```
+The application will check to ensure that Intune is operational and that the required dbus elements are available. Should these be available, the following will be displayed:
+```
+...
+Client has been configured to use Intune SSO via Microsoft Identity Broker dbus session - checking usage criteria
+Intune SSO via Microsoft Identity Broker dbus session usage criteria met - will attempt to authenticate via Intune
+...
+```
+> [!NOTE]
+> The installation and configuration of Intune for your platform is beyond the scope of this documentation.
+
 
 ### Display Your Applicable Runtime Configuration
 To verify the configuration that the application will use, use the following command:
