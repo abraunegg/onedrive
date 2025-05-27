@@ -5,13 +5,18 @@
 [![Build Docker Images](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
 
-Introducing a free Microsoft OneDrive Client that seamlessly supports OneDrive Personal, OneDrive for Business, OneDrive for Office365, and SharePoint Libraries.
+A fully featured, free, and actively maintained Microsoft OneDrive client that seamlessly supports OneDrive Personal, OneDrive for Business, Microsoft 365 (formerly Office 365), and SharePoint document libraries.
 
-This robust and highly customisable client is compatible with all major Linux distributions and FreeBSD, and can also be deployed as a container using Docker or Podman. It offers both one-way and two-way synchronisation capabilities while ensuring a secure connection to Microsoft OneDrive services.
+Designed for maximum flexibility and reliability, this powerful and highly configurable client works across all major Linux distributions and FreeBSD. It can also be deployed in containerised environments using Docker or Podman. Supporting both one-way and two-way synchronisation modes, the client provides secure and efficient file syncing with Microsoft OneDrive services — tailored to suit both desktop and server environments.
 
-Originally derived as a 'fork' from the [skilion](https://github.com/skilion/onedrive) client, it's worth noting that the developer of the original client has explicitly stated they have no intention of maintaining or supporting their work ([reference](https://github.com/skilion/onedrive/issues/518#issuecomment-717604726)).
+This project originated as a fork of the skilion client in early 2018, after a number of proposed improvements and bug fixes — including [Pull Requests #82 and #314](https://github.com/skilion/onedrive/pulls?q=author%3Aabraunegg) — were not merged and development activity had largely stalled. While it’s unclear whether the original developer was unavailable or had stepped away from the project, bug reports and feature requests remained unanswered for extended periods. In 2020, the developer confirmed they had no intention of maintaining or supporting their work ([reference](https://github.com/skilion/onedrive/issues/518#issuecomment-717604726)).
 
-This client represents a 100% re-imagining of the original work, addressing numerous notable bugs and issues while incorporating a significant array of new features. This client has been under active development since mid-2018.
+The original [skilion repository](https://github.com/skilion/onedrive) was formally archived and made read-only on GitHub in December 2024. While still publicly accessible as a historical reference, an archived repository is no longer maintained, cannot accept contributions, and reflects a frozen snapshot of the codebase. The last code change was merged in November 2021; however, active development had slowed significantly well before then. As such, the skilion client should no longer be considered current or supported — particularly given the major API changes and evolving platform requirements since that time.
+
+Under the terms of the GNU General Public License (GPL), forking and continuing development of open source software is fully permitted — provided that derivative works retain the same license. This client complies with the original GPLv3 licensing, ensuring the same freedoms granted by the original project remain intact.
+
+Since forking, the client has evolved into a clean re-imagining of the original codebase, resolving long-standing bugs and adding extensive new functionality to better support both personal and enterprise use cases.
+
 
 ## Features
 * Compatible with OneDrive Personal and OneDrive for Business, including access to Microsoft SharePoint Libraries
