@@ -28,7 +28,7 @@ FROM fedora:${FEDORA_VERSION}
 RUN dnf clean all \
  && dnf -y update
 
-RUN dnf install -y libcurl sqlite ldc-libs \
+RUN dnf install -y libcurl sqlite ldc-libs dbus-libs \
  && dnf clean all \
  && mkdir -p /onedrive/conf /onedrive/data
 

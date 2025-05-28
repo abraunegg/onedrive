@@ -26,7 +26,7 @@ FROM alpine:${ALPINE_VERSION}
 RUN apk add --upgrade apk-tools \
  && apk upgrade --available
 
-RUN apk add --update --no-cache bash libcurl libgcc shadow sqlite-libs ldc-runtime  \
+RUN apk add --update --no-cache bash libcurl libgcc shadow sqlite-libs ldc-runtime dbus \
  && mkdir -p /onedrive/conf /onedrive/data
 
 COPY --from=builder-gosu /go/bin/gosu /usr/local/bin/
