@@ -3942,9 +3942,11 @@ class SyncEngine {
 				lastModifiedBy = "Unknown";
 			}
 			
-			// Set the xattr values
-			setXAttr(filePath, "user.onedrive.createdBy", createdBy);
-			setXAttr(filePath, "user.onedrive.lastModifiedBy", lastModifiedBy);
+			// Set the xattr values, file must exist to set these values
+			if (exists(filePath)) {
+				setXAttr(filePath, "user.onedrive.createdBy", createdBy);
+				setXAttr(filePath, "user.onedrive.lastModifiedBy", lastModifiedBy);
+			}
 		}
 		
 		// Display function processing time if configured to do so
