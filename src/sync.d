@@ -1718,7 +1718,23 @@ class SyncEngine {
 			processRootAndDeletedJSONItems(onedriveJSONItem, objectParentDriveId, handleItemAsRootObject, itemIsDeletedOnline, itemHasParentReferenceId);
 		} else {
 			// Do we need to update this RAW JSON from OneDrive?
-			if ( (objectParentDriveId != appConfig.defaultDriveId) && (appConfig.accountType == "business") && (appConfig.getValueBool("sync_business_shared_items")) ) {
+			
+			bool sharedFolderRenameCheck = false;
+			
+			// What account type is this?
+			if (appConfig.accountType == "personal") {
+				// flag this by default as we always sync personal shared folders by default
+				sharedFolderRenameCheck = true;
+			} else {
+				// business | DocumentLibrary
+				if (appConfig.getValueBool("sync_business_shared_items")) {
+					// flag this
+					sharedFolderRenameCheck = true;
+				}
+			}
+			
+			// Do we check if this JSON needs updating?
+			if ((objectParentDriveId != appConfig.defaultDriveId) && (sharedFolderRenameCheck)) {
 				// Potentially need to update this JSON data
 				if (debugLogging) {addLogEntry("Potentially need to update this source JSON .... need to check the database", ["debug"]);}
 				
@@ -2017,7 +2033,6 @@ class SyncEngine {
 					// - Shared Folders = ItemType.root with a name of 'root'
 					// - SharePoint Document Root = ItemType.root with a name of the actual shared folder
 					// - Relocatable Shared Folders where a user moves a Shared Folder Link to a sub folder elsewhere within their directory structure online
-					
 					if (databaseItem.type == ItemType.root) {
 						// 'root' database object
 						if (databaseItem.name == "root") {
@@ -2093,10 +2108,12 @@ class SyncEngine {
 						// Ensure that this item has no parent
 						if (debugLogging) {addLogEntry("Setting remoteItem.parentId of Personal Shared Item JSON object to be null", ["debug"]);}
 						remoteItem.parentId = null;
+						
 						// Add this record to the local database
 						if (debugLogging) {addLogEntry("Update/Insert local database with Personal Shared Item JSON object with remoteItem.parentId as null: " ~ to!string(remoteItem), ["debug"]);}
 						itemDB.upsert(remoteItem);
-						// Due to OneDrive API inconsistency, again with European Data Centres, as we have handled this JSON - flag as unwanted as processing is complete for this JSON item
+						
+						// Due to OneDrive API inconsistency with Personal Accounts, again with European Data Centres, as we have handled this JSON - flag as unwanted as processing is complete for this JSON item
 						unwanted = true;
 					} else {
 						// Business or SharePoint Account Handling
@@ -3158,12 +3175,12 @@ class SyncEngine {
 		createDatabaseRootTieRecordForOnlineSharedFolder(onlineParentData, relocatedFolderDriveId, relocatedFolderParentId);
 		
 		// Log that we are created the Shared Folder Tie record now
-		if (debugLogging) {addLogEntry("Creating the Shared Folder DB Tie Record that binds the 'root' record to the 'folder'" , ["debug"]);}
+		if (debugLogging) {addLogEntry("Creating the Shared Folder DB Tie Record that binds the 'root' record to the 'shared folder'" , ["debug"]);}
 		
 		// Make an item from the online JSON data
 		sharedFolderDatabaseTie = makeItem(onlineParentData);
 		// Ensure we use our online name, as we may have renamed the folder in our location
-		sharedFolderDatabaseTie.name = onedriveJSONItem["name"].str; // use this as the name .. this is the name of the folder online in our OneDrive account
+		sharedFolderDatabaseTie.name = onedriveJSONItem["name"].str; // use this as the name .. this is the name of the folder online in our OneDrive account, not the online parent name
 		
 		// Is sharedFolderDatabaseTie.driveId empty?
 		if (sharedFolderDatabaseTie.driveId.empty) {
@@ -10114,7 +10131,14 @@ class SyncEngine {
 			}
 			
 			// Add driveData JSON data to array
-			if (verboseLogging) {addLogEntry("Adding OneDrive folder details for processing", ["verbose"]);}
+			if (verboseLogging) {addLogEntry("Adding OneDrive parent folder details for processing", ["verbose"]);}
+			
+			// What 'driveData' are we adding?
+			if (debugLogging) {
+				addLogEntry("adding this 'driveData' to childrenData = " ~ to!string(driveData), ["debug"]);
+			}
+			
+			// add the responded 'driveData' to the childrenData to process later
 			childrenData ~= driveData;
 		} else {
 			// driveData is an invalid JSON object
@@ -12683,7 +12707,7 @@ class SyncEngine {
 		
 		// Creating|Updating a DB Tie
 		if (debugLogging) {
-			addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder: " ~ onedriveJSONItem["name"].str, ["debug"]);
+			addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder (Actual 'Shared With Me' Folder Name): " ~ onedriveJSONItem["name"].str, ["debug"]);
 			addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem), ["debug"]);
 		}
 
