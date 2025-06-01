@@ -836,8 +836,8 @@ int main(string[] cliArgs) {
 	checkForNoMountScenario();
 	
 	// Set the default thread pool value
-	defaultPoolThreads(to!int(appConfig.getValueLong("threads")));
-	
+	setDefaultApplicationThreads();
+		
 	// Is the sync engine initialised correctly?
 	if (appConfig.syncEngineWasInitialised) {
 		// Configure some initial variables
@@ -1317,6 +1317,26 @@ int main(string[] cliArgs) {
 	} else {
 		return EXIT_FAILURE;
 	}
+}
+
+// Set default application threads
+void setDefaultApplicationThreads() {
+	// Read in system values
+	int configuredThreads = to!int(appConfig.getValueLong("threads"));
+	int systemCPUs = totalCPUs;
+	
+	// Safety cap: never use more threads than logical cores
+	int threadsToUse = min(configuredThreads, systemCPUs);
+	
+	// Optional warning if config is too high
+	if (configuredThreads > systemCPUs) {
+		addLogEntry("WARNING: Configured 'threads = " ~ to!string(configuredThreads) ~ "' exceeds available CPU cores (" ~ to!string(systemCPUs) ~ "). Capping to 'threads' to " ~ to!string(systemCPUs) ~ ".");
+		// Update config option
+		appConfig.setValueLong("threads", to!long(systemCPUs));
+	}
+	
+	// Set the default threads
+	defaultPoolThreads(threadsToUse);
 }
 
 // Retrieves the maximum number of open files allowed by the system
