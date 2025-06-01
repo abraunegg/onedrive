@@ -1768,8 +1768,8 @@ void setLocalPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) 
 			
 			if (debugLogging) {
 				addLogEntry("Existing timestamp values:", ["debug"]);
-				addLogEntry("  Access Time:      " ~ to!string(existingAccessTime), ["debug"]);
-				addLogEntry("  Modification Time:" ~ to!string(existingModificationTime), ["debug"]);
+				addLogEntry("  Access Time:       " ~ to!string(existingAccessTime), ["debug"]);
+				addLogEntry("  Modification Time: " ~ to!string(existingModificationTime), ["debug"]);
 			}
 			
 			// Compare the requested new modified timestamp to existing local modified timestamp
@@ -1784,7 +1784,7 @@ void setLocalPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) 
 			
 			if (debugLogging) {
 				addLogEntry("Comparison timestamp values:", ["debug"]);
-				addLogEntry("  newTimeStampZeroFracSec = " ~ to!string(newTimeStampZeroFracSec), ["debug"]);
+				addLogEntry("  newTimeStampZeroFracSec =      " ~ to!string(newTimeStampZeroFracSec), ["debug"]);
 				addLogEntry("  existingTimeStampZeroFracSec = " ~ to!string(existingTimeStampZeroFracSec), ["debug"]);
 			}
 			
@@ -1825,8 +1825,8 @@ void setLocalPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) 
 			
 			if (debugLogging) {
 				addLogEntry("Current timestamp values post any change (if required):", ["debug"]);
-				addLogEntry("  Access Time:      " ~ to!string(newAccessTime), ["debug"]);
-				addLogEntry("  Modification Time:" ~ to!string(newModificationTime), ["debug"]);
+				addLogEntry("  Access Time:       " ~ to!string(newAccessTime), ["debug"]);
+				addLogEntry("  Modification Time: " ~ to!string(newModificationTime), ["debug"]);
 			}
 		}
 	} catch (FileException e) {
