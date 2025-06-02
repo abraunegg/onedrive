@@ -397,7 +397,7 @@ https://microsoft.com/devicelogin
 
 Enter the following code when prompted: ABCDEFGHI
 
-This code expires at: 2025-Jun-02 15:27:30.2262776
+This code expires at: 2025-Jun-02 15:27:30
 ```
 You will have ~15 minutes before the code expires.
 
@@ -420,7 +420,7 @@ You will have ~15 minutes before the code expires.
 > This occurs even if the code is entered immediately. Microsoft redirects the user to:
 >
 > ```
-> https://login.live.com/oauth20_remoteconnect.srf
+> https://login.live.com/ppsecure/post.srf?username=......
 > ```
 >
 > This behaviour confirms that Microsoft **blocks the `device_code` grant flow for MSA accounts** on unapproved apps.
