@@ -1031,7 +1031,7 @@ _**Config Example:**_ `use_device_auth = "false"` or `use_device_auth = "true"`
 _**CLI Option Use:**_ *None - this is a config file option only*
 
 > [!IMPORTANT]
-> This option is fully supported for Microsoft Entra ID (Work/School) accounts. For personal Microsoft accounts (e.g., Outlook.com), the client will automatically fall back to the interactive login flow if the device code flow is not supported. 
+> This option is fully supported for Microsoft Entra ID (Work/School) accounts. For personal Microsoft accounts (e.g., @outlook.com or @hotmail.com), this method of authentication is not supported. Please use the interactive interactive authentication method (default) to authenticate this application.
 
 ### use_intune_sso
 _**Description:**_ Enable this option to authenticate using Intune Single Sign-On (SSO) via the Microsoft Identity Device Broker over D-Bus. This method is suitable for environments where the system is Intune-enrolled and allows seamless token retrieval without requiring browser interaction.

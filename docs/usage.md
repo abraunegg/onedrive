@@ -425,19 +425,11 @@ You will have ~15 minutes before the code expires.
 >
 > This behaviour confirms that Microsoft **blocks the `device_code` grant flow for MSA accounts** on unapproved apps.
 >
-> **Fallback Handling:**  
-> The client automatically falls back to the interactive browser-based authentication flow, which works for all account types.
->
 > **Recommendation:**  
-> If using a personal Microsoft account, please complete authentication using the browser when prompted.  
-> Developers may request that Microsoft enable Device Code Flow for MSA accounts tied to this app:
+> If using a personal Microsoft account (e.g., @outlook.com or @hotmail.com), please complete authentication using the interactive authentication method detailed above.
 >
-> **Client ID:** `d50ca740-c83f-4d1b-b616-12c519384f0c`
->
+> **Further Reading:**  
 > 📚 [Microsoft Documentation — OAuth 2.0 device authorization grant](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code)
-
-
-
 
 ### Display Your Applicable Runtime Configuration
 To verify the configuration that the application will use, use the following command:
