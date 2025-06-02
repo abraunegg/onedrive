@@ -162,6 +162,7 @@ gshared
 GVariant
 hideonindex
 hnsecs
+hotmail
 howto
 hskrieg
 htons
