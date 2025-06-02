@@ -25,6 +25,7 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 * Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
 * Supports single-tenant and multi-tenant applications
 * Supports Intune Single Sign-On (SSO) authentication via the Microsoft Identity Device Broker (D-Bus interface)
+* Supports OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
 * Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany, and Azure/Office 365 operated by VNET in China
 * Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
 * Protects against significant data loss on OneDrive after configuration changes

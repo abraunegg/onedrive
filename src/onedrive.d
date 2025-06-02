@@ -536,6 +536,7 @@ class OneDriveApi {
 					long expiresIn = deviceAuthResponse["expires_in"].integer;
 					long pollInterval = deviceAuthResponse["interval"].integer;
 					SysTime expiresAt = Clock.currTime + dur!"seconds"(expiresIn);
+					expiresAt.fracSecs = Duration.zero;
 					
 					// Display the required items for the user to action
 					addLogEntry();
@@ -581,17 +582,29 @@ class OneDriveApi {
 									addLogEntry(format("[%02dm %02ds remaining] Still pending authorisation ...", minutes, seconds));
 								} else if (errorType == "authorization_declined") {
 									addLogEntry("Authorisation was declined by the user.");
-									forceExit();
+									// return false if we get to this point
+									// set 'use_device_auth' to false to fall back to interactive authentication flow
+									appConfig.setValueBool("use_device_auth" , false);
+									return false;
 								} else if (errorType == "expired_token") {
 									addLogEntry("Device code expired before authorisation was completed.");
-									forceExit();
+									// return false if we get to this point
+									// set 'use_device_auth' to false to fall back to interactive authentication flow
+									appConfig.setValueBool("use_device_auth" , false);
+									return false;
 								} else {
 									addLogEntry("Unhandled error during polling: " ~ errorType);
-									forceExit();
+									// return false if we get to this point
+									// set 'use_device_auth' to false to fall back to interactive authentication flow
+									appConfig.setValueBool("use_device_auth" , false);
+									return false;
 								}
 							} else {
 								addLogEntry("Unexpected error response from token polling.");
-								forceExit();
+								// return false if we get to this point
+								// set 'use_device_auth' to false to fall back to interactive authentication flow
+								appConfig.setValueBool("use_device_auth" , false);
+								return false;
 							}
 						}
 
