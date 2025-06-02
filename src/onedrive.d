@@ -32,24 +32,29 @@ import curlEngine;
 import intune;
 
 // Define the 'OneDriveException' class
-class OneDriveException: Exception {
+class OneDriveException : Exception {
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/errors
 	int httpStatusCode;
 	const CurlResponse response;
-	JSONValue error;
+	private JSONValue _error;
+
+	// Public property to access the JSON error
+	@property JSONValue error() const {
+		return _error;
+	}
 
 	this(int httpStatusCode, string reason, const CurlResponse response, string file = __FILE__, size_t line = __LINE__) {
 		this.httpStatusCode = httpStatusCode;
 		this.response = response;
-		this.error = response.json();
-		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(error, true));
+		this._error = response.json();
+		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(_error, true));
 		super(msg, file, line);
 	}
 
 	this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__) {
 		this.httpStatusCode = httpStatusCode;
 		this.response = null;
-		super(msg, file, line, null);
+		super(msg, file, line);
 	}
 }
 
@@ -71,6 +76,7 @@ class OneDriveApi {
 	string clientId = "";
 	string companyName = "";
 	string authUrl = "";
+	string deviceAuthUrl = "";
 	string redirectUrl = "";
 	string tokenUrl = "";
 	string driveUrl = "";
@@ -173,10 +179,18 @@ class OneDriveApi {
 		// Configure the authentication scope
 		if (appConfig.getValueBool("read_only_auth_scope")) {
 			// read-only authentication scopes has been requested
-			authScope = "&scope=Files.Read%20Files.Read.All%20Sites.Read.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
+			if (appConfig.getValueBool("use_device_auth")) {
+				authScope = "&scope=Files.Read%20Files.Read.All%20Sites.Read.All%20offline_access";
+			} else {
+				authScope = "&scope=Files.Read%20Files.Read.All%20Sites.Read.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
+			}
 		} else {
 			// read-write authentication scopes will be used (default)
-			authScope = "&scope=Files.ReadWrite%20Files.ReadWrite.All%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
+			if (appConfig.getValueBool("use_device_auth")) {
+				authScope = "&scope=Files.ReadWrite%20Files.ReadWrite.All%20Sites.ReadWrite.All%20offline_access";
+			} else {
+				authScope = "&scope=Files.ReadWrite%20Files.ReadWrite.All%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
+			}
 		}
 		
 		// Configure Azure AD endpoints if 'azure_ad_endpoint' is configured
@@ -190,6 +204,7 @@ class OneDriveApi {
 				}
 				// Authentication
 				authUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				deviceAuthUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/devicecode";
 				redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				tokenUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				break;
@@ -197,6 +212,7 @@ class OneDriveApi {
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD for US Government Endpoints");
 				// Authentication
 				authUrl = appConfig.usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				deviceAuthUrl = appConfig.usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/devicecode";
 				tokenUrl = appConfig.usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
@@ -225,6 +241,7 @@ class OneDriveApi {
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD for US Government Endpoints (DOD)");
 				// Authentication
 				authUrl = appConfig.usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				deviceAuthUrl = appConfig.usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/devicecode";
 				tokenUrl = appConfig.usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
@@ -253,6 +270,7 @@ class OneDriveApi {
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD Germany");
 				// Authentication
 				authUrl = appConfig.deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				deviceAuthUrl = appConfig.deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/devicecode";
 				tokenUrl = appConfig.deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
@@ -281,6 +299,7 @@ class OneDriveApi {
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring AD China operated by VNET");
 				// Authentication
 				authUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				deviceAuthUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/devicecode";
 				tokenUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
@@ -410,7 +429,7 @@ class OneDriveApi {
 		GC.collect();
 	}
 
-	// Authenticate this client against Microsoft OneDrive API
+	// Authenticate this client against Microsoft OneDrive API using one of the 3 authentication methods this client supports
 	bool authorise() {
 		// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
 		if (appConfig.getValueBool("use_intune_sso")) {
@@ -493,94 +512,207 @@ class OneDriveApi {
 				}
 			}
 		} else {
-			// Normal authentication method
-			char[] response;
-			// What URL should be presented to the user to access
-			string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
-			// Configure automated authentication if --auth-files authUrl:responseUrl is being used
-			string authFilesString = appConfig.getValueString("auth_files");
-			string authResponseString = appConfig.getValueString("auth_response");
-		
-			if (!authResponseString.empty) {
-				// read the response from authResponseString
-				response = cast(char[]) authResponseString;
-			} else if (authFilesString != "") {
-				string[] authFiles = authFilesString.split(":");
-				string authUrl = authFiles[0];
-				string responseUrl = authFiles[1];
+			// There are 2 options here for normal authentication flow
+			// 1. Use OAuth2 Device Authorisation Flow
+			// 2. Use OAuth2 Interactive Authorisation Flow (application default)
+			
+			if (appConfig.getValueBool("use_device_auth")) {
+				// Use OAuth2 Device Authorisation Flow
+				// * deviceAuthUrl: Should already be configured based on client configuration
+				// * tokenUrl: Should already be configured based on client configuration
+				// * authScope: Should already be configured with the correct auth scopes
+				string deviceAuthPostData = "client_id=" ~ clientId ~ authScope;
 				
-				try {
-					auto authUrlFile = File(authUrl, "w");
-					authUrlFile.write(url);
-					authUrlFile.close();
-				} catch (FileException exception) {
-					// There was a file system error
-					// display the error message
-					displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
-					// Must force exit here, allow logging to be done
-					forceExit();
-				} catch (ErrnoException exception) {
-					// There was a file system error
-					// display the error message
-					displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
-					// Must force exit here, allow logging to be done
-					forceExit();
-				}
-		
-				addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
+				// Initiating Device Code Request
+				JSONValue deviceAuthResponse = initiateDeviceAuthorisation(deviceAuthPostData);
 				
-				while (!exists(responseUrl)) {
-					Thread.sleep(dur!("msecs")(100));
-				}
+				// Was a valid JSON response provided?
+				if (deviceAuthResponse.type() == JSONType.object) {
+					// A valid JSON was returned
+					// Extract required values
+					string deviceCode = deviceAuthResponse["device_code"].str;
+					string deviceAuthUrl = deviceAuthResponse["verification_uri"].str;
+					string userCode = deviceAuthResponse["user_code"].str;
+					long expiresIn = deviceAuthResponse["expires_in"].integer;
+					long pollInterval = deviceAuthResponse["interval"].integer;
+					SysTime expiresAt = Clock.currTime + dur!"seconds"(expiresIn);
+					
+					// Display the required items for the user to action
+					addLogEntry();
+					addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
+					addLogEntry(deviceAuthUrl ~ "\n", ["consoleOnly"]);
+					addLogEntry("Enter the following code when prompted: " ~ userCode, ["consoleOnly"]);
+					addLogEntry();
+					addLogEntry("This code expires at: " ~ to!string(expiresAt), ["consoleOnly"]);
+					addLogEntry();
+					
+					// JSON value to store the poll response data
+					JSONValue deviceAuthPollResponse;
+					
+					// Construct the polling post submission data
+					string pollPostData = format(
+						"client_id=%s&grant_type=urn%%3Aietf%%3Aparams%%3Aoauth%%3Agrant-type%%3Adevice_code&device_code=%s",
+						clientId,
+						deviceCode
+					);
+					
+					// Poll Microsoft API for authentication to be performed, until the expiry of this device authentication request
+					while (Clock.currTime < expiresAt) {
+						// Try the post to poll if the authentication has been done
+						try {
+							deviceAuthPollResponse = post(tokenUrl, pollPostData, null, true, "application/x-www-form-urlencoded");
+							// No error ... break out of the loop so the returned data can be processed
+							break;
+						} catch (OneDriveException e) {
+							// Get the polling error JSON response
+							JSONValue errorResponse = e.error;
+							string errorType;
 
-				// read response from provided from OneDrive
-				try {
-					response = cast(char[]) read(responseUrl);
-				} catch (OneDriveException exception) {
-					// exception generated
-					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+							if ("error" in errorResponse) {
+								errorType = errorResponse["error"].str;
+
+								if (errorType == "authorization_pending") {
+									// Calculate remaining time
+									Duration timeRemaining = expiresAt - Clock.currTime;
+									long minutes = timeRemaining.total!"minutes"();
+									long seconds = timeRemaining.total!"seconds"() % 60;
+
+									// Log countdown and status
+									addLogEntry(format("[%02dm %02ds remaining] Still pending authorisation ...", minutes, seconds));
+								} else if (errorType == "authorization_declined") {
+									addLogEntry("Authorisation was declined by the user.");
+									forceExit();
+								} else if (errorType == "expired_token") {
+									addLogEntry("Device code expired before authorisation was completed.");
+									forceExit();
+								} else {
+									addLogEntry("Unhandled error during polling: " ~ errorType);
+									forceExit();
+								}
+							} else {
+								addLogEntry("Unexpected error response from token polling.");
+								forceExit();
+							}
+						}
+
+						// Sleep until next polling interval
+						Thread.sleep(dur!"seconds"(pollInterval));
+					}
+					
+					// Broken out of the polling loop
+					// Was a valid JSON response provided?
+					if (deviceAuthPollResponse.type() == JSONType.object) {
+						// is the required 'access_token' available?
+						if ("access_token" in deviceAuthPollResponse) {
+							// We got the applicable access token
+							addLogEntry("Access token acquired!");
+							// Process this JSON data
+							processAuthenticationJSON(deviceAuthPollResponse);
+							// Return that we are authorised
+							return true;
+						}
+					}
+					
+					// return false if we get to this point
+					// set 'use_device_auth' to false to fall back to interactive authentication flow
+					appConfig.setValueBool("use_device_auth" , false);
 					return false;
-				}
-
-				// try to remove old files
-				try {
-					std.file.remove(authUrl);
-					std.file.remove(responseUrl);
-				} catch (FileException exception) {
-					addLogEntry("Cannot remove files " ~ authUrl ~ " " ~ responseUrl);
+				} else {
+					// No valid JSON response was returned
+					// set 'use_device_auth' to false to fall back to interactive authentication flow
+					appConfig.setValueBool("use_device_auth" , false);
 					return false;
 				}
 			} else {
-				// Are we in a --dry-run scenario?
-				if (!appConfig.getValueBool("dry_run")) {
-					// No --dry-run is being used
-					addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
-					addLogEntry(url ~ "\n", ["consoleOnly"]);
-					addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
-					readln(response);
-					appConfig.applicationAuthorizeResponseUri = true;
-				} else {
-					// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
-					addLogEntry();
-					addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
-					addLogEntry();
-					addLogEntry("To authorise the application please use your original command without '--dry-run'.");
-					addLogEntry();
-					addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
-					addLogEntry();
-					forceExit();
-				}
-			}
+				// Use OAuth2 Interactive Authorisation Flow (application default)
+				char[] response;
+				// What URL should be presented to the user to access
+				string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
+				// Configure automated authentication if --auth-files authUrl:responseUrl is being used
+				string authFilesString = appConfig.getValueString("auth_files");
+				string authResponseString = appConfig.getValueString("auth_response");
 			
-			// match the authorisation code
-			auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
-			if (c.empty) {
-				addLogEntry("An empty or invalid response uri was entered");
-				return false;
+				if (!authResponseString.empty) {
+					// read the response from authResponseString
+					response = cast(char[]) authResponseString;
+				} else if (authFilesString != "") {
+					string[] authFiles = authFilesString.split(":");
+					string authUrl = authFiles[0];
+					string responseUrl = authFiles[1];
+					
+					try {
+						auto authUrlFile = File(authUrl, "w");
+						authUrlFile.write(url);
+						authUrlFile.close();
+					} catch (FileException exception) {
+						// There was a file system error
+						// display the error message
+						displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+						// Must force exit here, allow logging to be done
+						forceExit();
+					} catch (ErrnoException exception) {
+						// There was a file system error
+						// display the error message
+						displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+						// Must force exit here, allow logging to be done
+						forceExit();
+					}
+			
+					addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
+					
+					while (!exists(responseUrl)) {
+						Thread.sleep(dur!("msecs")(100));
+					}
+
+					// read response from provided from OneDrive
+					try {
+						response = cast(char[]) read(responseUrl);
+					} catch (OneDriveException exception) {
+						// exception generated
+						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+						return false;
+					}
+
+					// try to remove old files
+					try {
+						std.file.remove(authUrl);
+						std.file.remove(responseUrl);
+					} catch (FileException exception) {
+						addLogEntry("Cannot remove files " ~ authUrl ~ " " ~ responseUrl);
+						return false;
+					}
+				} else {
+					// Are we in a --dry-run scenario?
+					if (!appConfig.getValueBool("dry_run")) {
+						// No --dry-run is being used
+						addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
+						addLogEntry(url ~ "\n", ["consoleOnly"]);
+						addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
+						readln(response);
+						appConfig.applicationAuthorizeResponseUri = true;
+					} else {
+						// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
+						addLogEntry();
+						addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
+						addLogEntry();
+						addLogEntry("To authorise the application please use your original command without '--dry-run'.");
+						addLogEntry();
+						addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
+						addLogEntry();
+						forceExit();
+					}
+				}
+				
+				// match the authorisation code
+				auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
+				if (c.empty) {
+					addLogEntry("An empty or invalid response uri was entered");
+					return false;
+				}
+				c.popFront(); // skip the whole match
+				redeemToken(c.front);
+				return true;
 			}
-			c.popFront(); // skip the whole match
-			redeemToken(c.front);
-			return true;
 		}
 	}
 	
@@ -615,6 +747,12 @@ class OneDriveApi {
 			// display the error message
 			displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
 		}
+	}
+	
+	// Initiate OAuth2 Device Authorisation
+	JSONValue initiateDeviceAuthorisation(string deviceAuthPostData) {
+		// Device OAuth2 Device Authorisation requires a HTTP POST
+		return post(deviceAuthUrl, deviceAuthPostData, null, true, "application/x-www-form-urlencoded");
 	}
 	
 	// Do we print the current access token
@@ -1065,44 +1203,8 @@ class OneDriveApi {
 			}
 		
 			if ("access_token" in response) {
-				appConfig.accessToken = "bearer " ~ strip(response["access_token"].str);
-				
-				// Do we print the current access token
-				debugOutputAccessToken();
-				
-				// Obtain the 'refresh_token' and its expiry
-				refreshToken = strip(response["refresh_token"].str);
-				appConfig.accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
-				
-				// Debug this response
-				if (debugLogging) {addLogEntry("appConfig.accessTokenExpiration = " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);}
-				
-				if (!dryRun) {
-					// Update the refreshToken in appConfig so that we can reuse it
-					if (appConfig.refreshToken.empty) {
-						// The access token is empty
-						if (debugLogging) {addLogEntry("Updating appConfig.refreshToken with new refreshToken as appConfig.refreshToken is empty", ["debug"]);}
-						appConfig.refreshToken = refreshToken;
-					} else {
-						// Is the access token different?
-						if (appConfig.refreshToken != refreshToken) {
-							// Update the memory version
-							if (debugLogging) {addLogEntry("Updating appConfig.refreshToken with updated refreshToken", ["debug"]);}
-							appConfig.refreshToken = refreshToken;
-						}
-					}
-					
-					// try and update the 'refresh_token' file on disk
-					try {
-						if (debugLogging) {addLogEntry("Updating 'refresh_token' on disk", ["debug"]);}
-						std.file.write(appConfig.refreshTokenFilePath, refreshToken);
-						if (debugLogging) {addLogEntry("Setting file permissions for: " ~ appConfig.refreshTokenFilePath, ["debug"]);}
-						appConfig.refreshTokenFilePath.setAttributes(appConfig.returnSecureFilePermission());
-					} catch (FileException exception) {
-						// display the error message
-						displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
-					}
-				}
+				// Process the response JSON
+				processAuthenticationJSON(response);
 			} else {
 				// Release curl engine
 				releaseCurlEngine();
@@ -1117,6 +1219,49 @@ class OneDriveApi {
 			addLogEntry("Invalid response from the Microsoft Graph API. Unable to initialise OneDrive API instance.");
 			// Must force exit here, allow logging to be done
 			forceExit();
+		}
+	}
+		
+	// Process the authentication JSON
+	private void processAuthenticationJSON(JSONValue response) {
+		// Use 'access_token' and set in the application configuration
+		appConfig.accessToken = "bearer " ~ strip(response["access_token"].str);
+				
+		// Do we print the current access token
+		debugOutputAccessToken();
+		
+		// Obtain the 'refresh_token' and its expiry
+		refreshToken = strip(response["refresh_token"].str);
+		appConfig.accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
+		
+		// Debug this response
+		if (debugLogging) {addLogEntry("appConfig.accessTokenExpiration = " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);}
+		
+		if (!dryRun) {
+			// Update the refreshToken in appConfig so that we can reuse it
+			if (appConfig.refreshToken.empty) {
+				// The access token is empty
+				if (debugLogging) {addLogEntry("Updating appConfig.refreshToken with new refreshToken as appConfig.refreshToken is empty", ["debug"]);}
+				appConfig.refreshToken = refreshToken;
+			} else {
+				// Is the access token different?
+				if (appConfig.refreshToken != refreshToken) {
+					// Update the memory version
+					if (debugLogging) {addLogEntry("Updating appConfig.refreshToken with updated refreshToken", ["debug"]);}
+					appConfig.refreshToken = refreshToken;
+				}
+			}
+			
+			// try and update the 'refresh_token' file on disk
+			try {
+				if (debugLogging) {addLogEntry("Updating 'refresh_token' on disk", ["debug"]);}
+				std.file.write(appConfig.refreshTokenFilePath, refreshToken);
+				if (debugLogging) {addLogEntry("Setting file permissions for: " ~ appConfig.refreshTokenFilePath, ["debug"]);}
+				appConfig.refreshTokenFilePath.setAttributes(appConfig.returnSecureFilePermission());
+			} catch (FileException exception) {
+				// display the error message
+				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+			}
 		}
 	}
 	
