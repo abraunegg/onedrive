@@ -420,6 +420,9 @@ class ApplicationConfig {
 		// Use authentication via Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
 		boolValues["use_intune_sso"] = false;
 		
+		// Use authentication via OAuth2 Device Authorisation Flow
+		boolValues["use_device_auth"] = false;
+		
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -1557,6 +1560,7 @@ class ApplicationConfig {
 		
 		// authentication
 		addLogEntry("Config option 'use_intune_sso'               = " ~ to!string(getValueBool("use_intune_sso")));
+		addLogEntry("Config option 'use_device_auth'              = " ~ to!string(getValueBool("use_device_auth")));
 				
 		// logging and notifications
 		addLogEntry("Config option 'enable_logging'               = " ~ to!string(getValueBool("enable_logging")));

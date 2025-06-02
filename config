@@ -178,6 +178,9 @@
 ## Only upload changes to OneDrive, do not download from cloud.
 #upload_only = "false"
 
+## Authenticate using the Microsoft OAuth2 Device Authorisation Flow
+#use_device_auth = "true"
+
 ## Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker
 #use_intune_sso = "true"
 
