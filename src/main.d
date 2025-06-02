@@ -194,6 +194,9 @@ int main(string[] cliArgs) {
 	// Update the current runtime application configuration (default or 'config' file read in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
 	
+	// Set the default thread pool value based on configuration or maximum logical CPUs
+	setDefaultApplicationThreads();
+	
 	// If --debug-https has been used, set the applicable flag
 	debugHTTPSResponse = appConfig.getValueBool("debug_https"); // set __gshared bool debugHTTPSResponse in log.d now that we have read-in any CLI arguments
 	
@@ -835,9 +838,6 @@ int main(string[] cliArgs) {
 	// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file
 	checkForNoMountScenario();
 	
-	// Set the default thread pool value
-	setDefaultApplicationThreads();
-		
 	// Is the sync engine initialised correctly?
 	if (appConfig.syncEngineWasInitialised) {
 		// Configure some initial variables
