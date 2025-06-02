@@ -7,6 +7,7 @@ abraunegg
 accrights
 accrightslen
 adamdruppe
+ADand
 addrepo
 Adevice
 adr
@@ -114,6 +115,7 @@ eis
 ele
 endinaness
 enduml
+Entra
 envp
 epfd
 eselect
