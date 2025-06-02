@@ -50,6 +50,7 @@ class ApplicationConfig {
 	// Microsoft Requirements 
 	// - Default Application ID (abraunegg)
 	immutable string defaultApplicationId = "d50ca740-c83f-4d1b-b616-12c519384f0c";
+		
 	// - Microsoft User Agent ISV Tag
 	immutable string isvTag = "ISV";
 	// - Microsoft User Agent Company name
@@ -119,6 +120,10 @@ class ApplicationConfig {
 	SysTime accessTokenExpiration;
 	// Store the 'session_upload.CRC32-HASH' file path
 	string uploadSessionFilePath = "";
+	// Store the Intune account information
+	string intuneAccountDetails;
+	// Store the Intune account information on disk for reuse
+	string intuneAccountDetailsFilePath = "";
 	
 	// API initialisation flags
 	bool apiWasInitialised = false;
@@ -187,8 +192,10 @@ class ApplicationConfig {
 	private bool configFileSkipFileReadIn = false; // If we actually read in something from 'config' file, this gets set to true
 	private string configFileSkipDir = ""; // Default here is no directories are skipped
 	private string configFileDriveId = ""; // Default here is that no drive id is specified
+	private bool configFileCheckNoSync = false;
 	private bool configFileSkipDotfiles = false;
 	private bool configFileSkipSymbolicLinks = false;
+	private bool configFileSkipSize = false;
 	private bool configFileSyncBusinessSharedItems = false;
 	
 	// File permission values (set via initialise function)
@@ -410,6 +417,12 @@ class ApplicationConfig {
 		// Diable setting the permissions for directories and files, using the inherited permissions
 		boolValues["disable_permission_set"] = false;
 		
+		// Use authentication via Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
+		boolValues["use_intune_sso"] = false;
+		
+		// Use authentication via OAuth2 Device Authorisation Flow
+		boolValues["use_device_auth"] = false;
+		
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -533,6 +546,8 @@ class ApplicationConfig {
 		// Update application set variables based on configDirName
 		// - What is the full path for the 'refresh_token'
 		refreshTokenFilePath = buildNormalizedPath(buildPath(configDirName, "refresh_token"));
+		// - What is the full path for the 'intune_account'
+		intuneAccountDetailsFilePath = buildNormalizedPath(buildPath(configDirName, "intune_account"));
 		// - What is the full path for the 'delta_link'
 		deltaLinkFilePath = buildNormalizedPath(buildPath(configDirName, "delta_link"));
 		// - What is the full path for the 'items.sqlite3' - the database cache file
@@ -559,17 +574,18 @@ class ApplicationConfig {
 						
 		// Debug Output for application set variables based on configDirName
 		if (debugLogging) {
-			addLogEntry("refreshTokenFilePath =   " ~ refreshTokenFilePath, ["debug"]);
-			addLogEntry("deltaLinkFilePath =      " ~ deltaLinkFilePath, ["debug"]);
-			addLogEntry("databaseFilePath =       " ~ databaseFilePath, ["debug"]);
-			addLogEntry("databaseFilePathDryRun = " ~ databaseFilePathDryRun, ["debug"]);
-			addLogEntry("uploadSessionFilePath =  " ~ uploadSessionFilePath, ["debug"]);
-			addLogEntry("userConfigFilePath =     " ~ userConfigFilePath, ["debug"]);
-			addLogEntry("syncListFilePath =       " ~ syncListFilePath, ["debug"]);
-			addLogEntry("systemConfigFilePath =   " ~ systemConfigFilePath, ["debug"]);
-			addLogEntry("configBackupFile =       " ~ configBackupFile, ["debug"]);
-			addLogEntry("configHashFile =         " ~ configHashFile, ["debug"]);
-			addLogEntry("syncListHashFile =       " ~ syncListHashFile, ["debug"]);
+			addLogEntry("refreshTokenFilePath =         " ~ refreshTokenFilePath, ["debug"]);
+			addLogEntry("intuneAccountDetailsFilePath = " ~ intuneAccountDetailsFilePath, ["debug"]);
+			addLogEntry("deltaLinkFilePath =            " ~ deltaLinkFilePath, ["debug"]);
+			addLogEntry("databaseFilePath =             " ~ databaseFilePath, ["debug"]);
+			addLogEntry("databaseFilePathDryRun =       " ~ databaseFilePathDryRun, ["debug"]);
+			addLogEntry("uploadSessionFilePath =        " ~ uploadSessionFilePath, ["debug"]);
+			addLogEntry("userConfigFilePath =           " ~ userConfigFilePath, ["debug"]);
+			addLogEntry("syncListFilePath =             " ~ syncListFilePath, ["debug"]);
+			addLogEntry("systemConfigFilePath =         " ~ systemConfigFilePath, ["debug"]);
+			addLogEntry("configBackupFile =             " ~ configBackupFile, ["debug"]);
+			addLogEntry("configHashFile =               " ~ configHashFile, ["debug"]);
+			addLogEntry("syncListHashFile =             " ~ syncListHashFile, ["debug"]);
 		}
 		
 		// Configure the Hash and Backup File Permission Value
@@ -771,6 +787,13 @@ class ApplicationConfig {
 		return configuredFilePermissionMode;
 	}
 	
+	// Set file permissions for 'refresh_token' and 'intune_account' to 0600
+	int returnSecureFilePermission() {
+		string valueToConvert = to!string(defaultFilePermissionMode);
+		auto convertedValue = parse!long(valueToConvert, 8);
+		return to!int(convertedValue);
+	}
+	
 	// Load a configuration file from the provided filename
 	private bool loadConfigFile(string filename) {
 		try {
@@ -829,11 +852,23 @@ class ApplicationConfig {
 
 			// Process other keys
 			if (key in boolValues) {
-				// Only accept "true" as true value.
-				setValueBool(key, c.front.dup == "true" ? true : false);
-				if (key == "skip_dotfiles") configFileSkipDotfiles = true;
-				if (key == "skip_symlinks") configFileSkipSymbolicLinks = true;
-				if (key == "sync_business_shared_items") configFileSyncBusinessSharedItems = true;
+				// Strip quotes and whitespace
+				string rawValue = to!string(c.front.dup);
+				// Evaluate rawValue
+				if (rawValue == "true") {
+					setValueBool(key, true);
+					// Additional config-specific flags for specific keys
+					if (key == "check_nosync") configFileCheckNoSync = true;
+					if (key == "skip_dotfiles") configFileSkipDotfiles = true;
+					if (key == "skip_symlinks") configFileSkipSymbolicLinks = true;
+					if (key == "sync_business_shared_items") configFileSyncBusinessSharedItems = true;
+				} else if (rawValue == "false") {
+					setValueBool(key, false);
+				} else {
+					addLogEntry("Invalid boolean value for key in config file: " ~ key ~ " = " ~ to!string(c.front.dup));
+					addLogEntry("ERROR: Only 'true' or 'false' are accepted for this setting.");
+					forceExit();
+				}
 			} else if (key in stringValues) {
 				string value = c.front.dup;
 				setValueString(key, value);
@@ -995,6 +1030,16 @@ class ApplicationConfig {
 						tempValue = defaultInotifyDelay;
 					}
 					setValueLong("inotify_delay", tempValue);
+				} else if (key == "skip_size") {
+					// Flag this for triggering --resync requirement
+					configFileSkipSize = true;
+					ulong tempValue = thisConfigValue;
+					// If set, this must be greater than 0
+					if (tempValue <= 0) {
+						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+						tempValue = 0;
+					}
+					setValueLong("skip_size", tempValue);
 				}
 			} else {
 				addLogEntry("Unknown key in config file: " ~ key);
@@ -1513,6 +1558,10 @@ class ApplicationConfig {
 		// Config Options as per 'config' file
 		addLogEntry("Config option 'sync_dir'                     = " ~ getValueString("sync_dir"));
 		
+		// authentication
+		addLogEntry("Config option 'use_intune_sso'               = " ~ to!string(getValueBool("use_intune_sso")));
+		addLogEntry("Config option 'use_device_auth'              = " ~ to!string(getValueBool("use_device_auth")));
+				
 		// logging and notifications
 		addLogEntry("Config option 'enable_logging'               = " ~ to!string(getValueBool("enable_logging")));
 		addLogEntry("Config option 'log_dir'                      = " ~ getValueString("log_dir"));
@@ -1745,7 +1794,7 @@ class ApplicationConfig {
 		bool resyncRequired = false;
 
 		// Consolidate the flags for different configuration changes
-		bool[9] configOptionsDifferent;
+		bool[11] configOptionsDifferent;
 
 		// Handle multiple entries of skip_file
 		string backupConfigFileSkipFile;
@@ -1779,19 +1828,23 @@ class ApplicationConfig {
 
 			if (exists(configBackupFile)) {
 				string[string] backupConfigStringValues;
+				backupConfigStringValues["check_nosync"] = "";
 				backupConfigStringValues["drive_id"] = "";
 				backupConfigStringValues["sync_dir"] = "";
 				backupConfigStringValues["skip_file"] = "";
 				backupConfigStringValues["skip_dir"] = "";
 				backupConfigStringValues["skip_dotfiles"] = "";
+				backupConfigStringValues["skip_size"] = "";
 				backupConfigStringValues["skip_symlinks"] = "";
 				backupConfigStringValues["sync_business_shared_items"] = "";
 
+				bool check_nosync_present = false;
 				bool drive_id_present = false;
 				bool sync_dir_present = false;
 				bool skip_file_present = false;
 				bool skip_dir_present = false;
 				bool skip_dotfiles_present = false;
+				bool skip_size_present = false;
 				bool skip_symlinks_present = false;
 				bool sync_business_shared_items_present = false;
 
@@ -1920,10 +1973,14 @@ class ApplicationConfig {
 						// We actually read a 'skip_file' configuration line from the 'config' file
 						if (!skip_file_present && configFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file newly added ... --resync needed", 4);
 					}
+					
+					// Other options
 					if (!skip_dir_present && configFileSkipDir != "") logAndSetDifference("skip_dir newly added ... --resync needed", 5);
 					if (!skip_dotfiles_present && configFileSkipDotfiles) logAndSetDifference("skip_dotfiles newly added ... --resync needed", 6);
 					if (!skip_symlinks_present && configFileSkipSymbolicLinks) logAndSetDifference("skip_symlinks newly added ... --resync needed", 7);
 					if (!sync_business_shared_items_present && configFileSyncBusinessSharedItems) logAndSetDifference("sync_business_shared_items newly added ... --resync needed", 8);
+					if (!check_nosync_present && configFileCheckNoSync) logAndSetDifference("check_nosync newly added ... --resync needed", 9);
+					if (!skip_size_present && configFileSkipSize) logAndSetDifference("skip_size newly added ... --resync needed", 10);
 				} else {
 					// failed to read backup config file
 					addLogEntry("WARNING: unable to read backup config, unable to validate if any changes made");
@@ -1939,6 +1996,8 @@ class ApplicationConfig {
 		//  --skip-dir ARG
 		//  --skip-dot-files
 		//  --skip-symlinks
+		//  --check-for-nosync
+		//  --skip-size ARG
 
 		// Check CLI options
 		if (exists(applicableConfigFilePath)) {
@@ -1958,6 +2017,8 @@ class ApplicationConfig {
 			if (configFileSkipDir != "" && configFileSkipDir != getValueString("skip_dir")) logAndSetDifference("skip_dir: CLI override of config file option, --resync needed", 5);
 			if (!configFileSkipDotfiles && getValueBool("skip_dotfiles")) logAndSetDifference("skip_dotfiles: CLI override of config file option, --resync needed", 6);
 			if (!configFileSkipSymbolicLinks && getValueBool("skip_symlinks")) logAndSetDifference("skip_symlinks: CLI override of config file option, --resync needed", 7);
+			if (!configFileCheckNoSync && getValueBool("check_nosync")) logAndSetDifference("check_nosync: CLI override of config file option, --resync needed", 9);
+			if (!configFileSkipSize && (getValueLong("skip_size") > 0)) logAndSetDifference("skip_size: CLI override of config file option, --resync needed", 10);
 		}
 
 		// Aggregate the result to determine if a resync is required

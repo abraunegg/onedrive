@@ -64,6 +64,8 @@ Before reading this document, please ensure you are running application version 
   - [threads](#threads)
   - [transfer_order](#transfer_order)
   - [upload_only](#upload_only)
+  - [use_device_auth](#use_device_auth)
+  - [use_intune_sso](#use_intune_sso)
   - [use_recycle_bin](#use_recycle_bin)
   - [user_agent](#user_agent)
   - [webhook_enabled](#webhook_enabled)
@@ -1016,6 +1018,34 @@ _**CLI Option Use:**_ `--upload-only`
 
 > [!IMPORTANT]
 > To ensure that data deleted locally remains accessible online, you can use the 'no_remote_delete' option. If you want to delete the data from your local storage after a successful upload to Microsoft OneDrive, you can use the 'remove_source_files' option.
+
+### use_device_auth
+_**Description:**_ Enable this option to authenticate using the Microsoft OAuth2 Device Authorisation Flow (`device_code` grant). This flow allows the client to initiate a sign-in process without launching a web browser directly — ideal for headless systems or remote sessions. A short code and URL will be provided for the user to complete authentication via a separate browser-enabled device.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `use_device_auth = "false"` or `use_device_auth = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+> [!IMPORTANT]
+> This option is fully supported for Microsoft Entra ID (Work/School) accounts. For personal Microsoft accounts (e.g., @outlook.com or @hotmail.com), this method of authentication is not supported. Please use the interactive interactive authentication method (default) to authenticate this application.
+
+### use_intune_sso
+_**Description:**_ Enable this option to authenticate using Intune Single Sign-On (SSO) via the Microsoft Identity Device Broker over D-Bus. This method is suitable for environments where the system is Intune-enrolled and allows seamless token retrieval without requiring browser interaction.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `use_intune_sso = "false"` or `use_intune_sso = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+> [!NOTE]
+> The installation and configuration of Intune for your platform is beyond the scope of this documentation.
 
 ### use_recycle_bin
 _**Description:**_ This configuration option controls the application function to move online deleted files to a 'Recycle Bin' on your system. This allows you to review online deleted data manually before this is purged from your actual system.

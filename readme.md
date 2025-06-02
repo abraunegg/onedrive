@@ -5,30 +5,40 @@
 [![Build Docker Images](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
 
-Introducing a free Microsoft OneDrive Client that seamlessly supports OneDrive Personal, OneDrive for Business, OneDrive for Office365, and SharePoint Libraries.
+A fully featured, free, and actively maintained Microsoft OneDrive client that seamlessly supports OneDrive Personal, OneDrive for Business, Microsoft 365 (formerly Office 365), and SharePoint document libraries.
 
-This robust and highly customisable client is compatible with all major Linux distributions and FreeBSD, and can also be deployed as a container using Docker or Podman. It offers both one-way and two-way synchronisation capabilities while ensuring a secure connection to Microsoft OneDrive services.
+Designed for maximum flexibility and reliability, this powerful and highly configurable client works across all major Linux distributions and FreeBSD. It can also be deployed in containerised environments using Docker or Podman. Supporting both one-way and two-way synchronisation modes, the client provides secure and efficient file syncing with Microsoft OneDrive services — tailored to suit both desktop and server environments.
 
-Originally derived as a 'fork' from the [skilion](https://github.com/skilion/onedrive) client, it's worth noting that the developer of the original client has explicitly stated they have no intention of maintaining or supporting their work ([reference](https://github.com/skilion/onedrive/issues/518#issuecomment-717604726)).
 
-This client represents a 100% re-imagining of the original work, addressing numerous notable bugs and issues while incorporating a significant array of new features. This client has been under active development since mid-2018.
+## Project Background
+This project originated as a fork of the skilion client in early 2018, after a number of proposed improvements and bug fixes — including [Pull Requests #82 and #314](https://github.com/skilion/onedrive/pulls?q=author%3Aabraunegg) — were not merged and development activity of the skilion client had largely stalled. While it’s unclear whether the original developer was unavailable or had stepped away from the project - bug reports and feature requests remained unanswered for extended periods. In 2020, the developer confirmed they had no intention of maintaining or supporting their work ([reference](https://github.com/skilion/onedrive/issues/518#issuecomment-717604726)).
+
+The original [skilion repository](https://github.com/skilion/onedrive) was formally archived and made read-only on GitHub in December 2024. While still publicly accessible as a historical reference, an archived repository is no longer maintained, cannot accept contributions, and reflects a frozen snapshot of the codebase. The last code change to the skilion client was merged in November 2021; however, active development had slowed significantly well before then. As such, the skilion client should no longer be considered current or supported — particularly given the major API changes and evolving Microsoft OneDrive platform requirements since that time.
+
+Under the terms of the GNU General Public License (GPL), forking and continuing development of open source software is fully permitted — provided that derivative works retain the same license. This client complies with the original GPLv3 licensing, ensuring the same freedoms granted by the original project remain intact.
+
+Since forking in early 2018, this client has evolved into a clean re-imagining of the original codebase, resolving long-standing bugs and adding extensive new functionality to better support both personal and enterprise use cases to interact with Microsoft OneDrive from Linux and FreeBSD platforms.
+
 
 ## Features
-*   Compatible with OneDrive Personal, OneDrive for Business including accessing Microsoft SharePoint Libraries
-*   Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
-*   Caches sync state for efficiency
-*   Supports a dry-run option for safe configuration testing
-*   Validates file transfers to ensure data integrity
-*   Monitors local files in real-time using inotify
-*   Supports interrupted uploads for completion at a later time
-*   Capability to sync remote updates immediately via webhooks
-*   Enhanced synchronisation speed with multi-threaded file transfers
-*   Manages traffic bandwidth use with rate limiting
-*   Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
-*   Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany and Azure and Office 365 operated by VNET in China
-*   Supports sending desktop alerts using libnotify
-*   Protects against significant data loss on OneDrive after configuration changes
-*   Works with both single and multi-tenant applications
+* Compatible with OneDrive Personal and OneDrive for Business, including access to Microsoft SharePoint Libraries
+* Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
+* Supports single-tenant and multi-tenant applications
+* Supports Intune Single Sign-On (SSO) authentication via the Microsoft Identity Device Broker (D-Bus interface)
+* Supports OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
+* Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany, and Azure/Office 365 operated by VNET in China
+* Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
+* Protects against significant data loss on OneDrive after configuration changes
+* Supports a dry-run option for safe configuration testing
+* Validates file transfers to ensure data integrity
+* Caches sync state for efficiency
+* Monitors local files in real-time using inotify
+* Capability to sync remote updates immediately via webhooks
+* Supports interrupted uploads for completion at a later time
+* Enhanced synchronisation speed with multi-threaded file transfers
+* Manages traffic bandwidth use with rate limiting
+* Supports sending desktop alerts using libnotify
+
 
 ## What's missing
 *   Ability to encrypt/decrypt files on-the-fly when uploading/downloading files from OneDrive

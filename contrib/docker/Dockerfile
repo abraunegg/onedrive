@@ -11,7 +11,7 @@ RUN go install -ldflags "-s -w" github.com/tianon/gosu@${GOSU_VERSION}
 
 FROM fedora:${FEDORA_VERSION} AS builder-onedrive
 
-RUN dnf install -y ldc pkgconf libcurl-devel sqlite-devel git awk
+RUN dnf install -y ldc pkgconf libcurl-devel sqlite-devel dbus-devel git awk
 
 ENV PKG_CONFIG=/usr/bin/pkgconf
 
@@ -28,7 +28,7 @@ FROM fedora:${FEDORA_VERSION}
 RUN dnf clean all \
  && dnf -y update
 
-RUN dnf install -y libcurl sqlite ldc-libs \
+RUN dnf install -y libcurl sqlite ldc-libs dbus-libs \
  && dnf clean all \
  && mkdir -p /onedrive/conf /onedrive/data
 

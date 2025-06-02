@@ -1,0 +1,30 @@
+@startuml
+title Local-First Sync Flow (--local-first)
+
+start
+
+:Step 1 - Scan local files;
+:Detect local changes:
+- New files or folders
+- Modified files
+- Deleted files;
+
+:Apply local changes to OneDrive:
+- Upload new files or folders
+- Update modified files
+- Delete files or folders on OneDrive;
+
+:Step 2 - Scan OneDrive (online);
+:Detect online-only changes:
+- New files or folders
+- Modified files
+- Deleted files;
+
+:Apply online changes to local:
+- Download missing files or folders
+- Update outdated local files
+- Delete local files or folders
+  that were deleted online;
+
+stop
+@enduml

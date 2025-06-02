@@ -336,11 +336,18 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 > If you continue to use a curl/libcurl version with known HTTP/2 bugs you will experience application runtime issues such as randomly exiting for zero reason or incomplete download/upload of your data.
 
 ## First Steps
+
 ### Authorise the Application with Your Microsoft OneDrive Account
 Once you've installed the application, you'll need to authorise it using your Microsoft OneDrive Account. This can be done by simply running the application without any additional command switches.
 
 Please be aware that some companies may require you to explicitly add this app to the [Microsoft MyApps portal](https://myapps.microsoft.com/). To add an approved app to your apps, click on the ellipsis in the top-right corner and select "Request new apps." On the next page, you can add this app. If it's not listed, you should make a request through your IT department.
 
+This client supports the following methods to authenticate the application with Microsoft OneDrive:
+* Supports interactive browser-based authentication using OAuth2 and a response URI
+* Supports seamless Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker D-Bus interface
+* Supports OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
+
+#### Interactive Authentication using OAuth2 and a response URI
 When you run the application for the first time, you'll be prompted to open a specific URL using your web browser, where you'll need to log in to your Microsoft Account and grant the application permission to access your files. After granting permission to the application, you'll be redirected to a blank page. Simply copy the URI from the blank page and paste it into the application.
 
 **Example:**
@@ -348,7 +355,7 @@ When you run the application for the first time, you'll be prompted to open a sp
 [user@hostname ~]$ onedrive
 Authorise this app by visiting:
 
-https://login.microsoftonline.com/common/oauth2/v2.0/authorise?client_id=22c49a0d-d21c-4792-aed1-8f163c982546&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
+https://login.microsoftonline.com/common/oauth2/v2.0/authorise?client_id=d50ca740-c83f-4d1b-b616-12c519384f0c&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
 
 Enter the response URI from your browser:  https://login.microsoftonline.com/common/oauth2/nativeclient?code=<redacted>
 
@@ -359,6 +366,70 @@ Please use 'onedrive --help' for further assistance on how to run this applicati
 
 > [!IMPORTANT]
 > Without additional input or configuration, the OneDrive Client for Linux will automatically adhere to default application settings during synchronisation processes with Microsoft OneDrive.
+
+#### Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker 
+To use this method of authentication, you must add the following configuration to your 'config' file:
+```
+use_intune_sso = "true"
+```
+The application will check to ensure that Intune is operational and that the required dbus elements are available. Should these be available, the following will be displayed:
+```
+...
+Client has been configured to use Intune SSO via Microsoft Identity Broker dbus session - checking usage criteria
+Intune SSO via Microsoft Identity Broker dbus session usage criteria met - will attempt to authenticate via Intune
+...
+```
+> [!NOTE]
+> The installation and configuration of Intune for your platform is beyond the scope of this documentation.
+
+#### OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
+To use this method of authentication, you must add the following configuration to your 'config' file:
+```
+use_device_auth = "true"
+```
+You will be required to open a URL using a web browser, and enter the code that this application presents:
+```
+Configuring Global Azure AD Endpoints
+
+Authorise this application by visiting:
+
+https://microsoft.com/devicelogin
+
+Enter the following code when prompted: ABCDEFGHI
+
+This code expires at: 2025-Jun-02 15:27:30
+```
+You will have ~15 minutes before the code expires.
+
+> [!IMPORTANT]
+> #### Limitation: OAuth2 Device Authorization Flow and Personal Microsoft Accounts
+>
+> While the OneDrive Client for Linux fully supports OAuth2 Device Authorisation Flow (`device_code` grant) for **Microsoft Entra ID (Work/School)** accounts, **Microsoft currently does not allow this flow to be used with personal Microsoft accounts (MSA)** unless the application is explicitly authorised by Microsoft.
+>
+> **Application Configuration Summary:**
+>
+> - `signInAudience`: `AzureADandPersonalMicrosoftAccount`
+> - `allowPublicClient`: `true`
+> - Uses Microsoft Identity Platform v2.0 endpoints (`/devicecode`, `/token`, etc.)
+> - Microsoft Graph scopes properly defined
+>
+> Despite this correct configuration, users signing in with a personal Microsoft account will see the following error:
+>
+> > **"The code you entered has expired. Get a new code from the device you're trying to sign in to and try again."**
+>
+> This occurs even if the code is entered immediately. Microsoft redirects the user to:
+>
+> ```
+> https://login.live.com/ppsecure/post.srf?username=......
+> ```
+>
+> This behaviour confirms that Microsoft **blocks the `device_code` grant flow for MSA accounts** on unapproved apps.
+>
+> **Recommendation:**  
+> If using a personal Microsoft account (e.g., @outlook.com or @hotmail.com), please complete authentication using the interactive authentication method detailed above.
+>
+> **Further Reading:**  
+> 📚 [Microsoft Documentation — OAuth 2.0 device authorization grant](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code)
 
 ### Display Your Applicable Runtime Configuration
 To verify the configuration that the application will use, use the following command:
@@ -743,11 +814,13 @@ The following are supported for pattern matching and exclusion rules:
 
 ### Performing a --resync
 If you alter any of the subsequent configuration items, you will be required to execute a `--resync` to make sure your client is syncing your data with the updated configuration:
+*   check_nosync
 *   drive_id
 *   sync_dir
 *   skip_file
 *   skip_dir
 *   skip_dotfiles
+*   skip_size
 *   skip_symlinks
 *   sync_business_shared_items
 *   Creating, Modifying or Deleting the 'sync_list' file
@@ -1236,7 +1309,7 @@ journalctl --unit=onedrive -f
 #### OneDrive service running as a non-root user via systemd (All Linux Distributions)
 In some instances, it is preferable to run the OneDrive client as a service without the 'root' user. Follow the instructions below to configure the service for your regular user login.
 
-1. As the user who will run the service, launch the application in standalone mode, authorize it for use, and verify that synchronization is functioning as expected:
+1. As the user who will run the service, launch the application in standalone mode, authorise it for use, and verify that synchronisation is functioning as expected:
 ```text
 onedrive --sync --verbose
 ```
@@ -1563,4 +1636,4 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
       Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>
 ```
 
-Refer to [application-config-options.md](application-config-options.md) for in-depth details on all application options.
+Refer to [application-config-options.md](application-config-options.md) for in-depth details on all application options. 

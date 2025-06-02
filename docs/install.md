@@ -19,7 +19,7 @@ Only the current release version or greater is supported. Earlier versions are n
 | Debian Sid                      | [onedrive](https://packages.debian.org/sid/onedrive)                                                     |<a href="https://packages.debian.org/sid/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_unstable/onedrive.svg?header=" alt="Debian Sid package" width="46" height="20"></a>|✔|✔|✔|✔| |
 | Fedora                          | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/fedora_rawhide/onedrive.svg?header=" alt="Fedora Rawhide package" width="46" height="20"></a>|✔|✔|✔|✔| Use package `onedrive` from the Fedora Package Repositories.<br><br>Install via `sudo dnf install onedrive` |
 | FreeBSD                         | [onedrive](https://www.freshports.org/net/onedrive)                                                      |<a href="https://www.freshports.org/net/onedrive"><img src="https://repology.org/badge/version-for-repo/freebsd/onedrive.svg?header=" alt="FreeBSD package" width="46" height="20"></a>|❌|✔|❌|❌| |
-| Gentoo                          | [onedrive](https://gpo.zugaina.org/net-misc/onedrive)                                                    | No API Available |✔|✔|❌|❌| Install via: `emerge net-misc/onedrive` <br><br>**Note:** You must first enable the dlang overlay: `eselect repository enable dlang && emerge --sync dlang`|
+| Gentoo                          | [onedrive](https://packages.gentoo.org/packages/net-misc/onedrive)                                       |<a href="https://packages.gentoo.org/packages/net-misc/onedrive"><img src="https://repology.org/badge/version-for-repo/gentoo/onedrive.svg?header=" alt="Gentoo package" width="46" height="20"></a>|❌|✔|❌|❌| Install via: `emerge net-misc/onedrive`|
 | Homebrew                        | [onedrive](https://formulae.brew.sh/formula/onedrive)                                                    |<a href="https://formulae.brew.sh/formula/onedrive"><img src="https://repology.org/badge/version-for-repo/homebrew/onedrive.svg?header=" alt="Homebrew package" width="46" height="20"></a> |❌|✔|❌|❌| |
 | Linux Mint 20.x                 | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Linux Mint Repositories as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Linux Mint that you install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
 | Linux Mint 21.x                 | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_22_04/onedrive.svg?header=" alt="Ubuntu 22.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Linux Mint Repositories as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Linux Mint that you install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
@@ -60,7 +60,7 @@ As stated above, you will need at least GDC version 15. If your distribution's r
 
 ### Dependencies: Arch Linux & Manjaro Linux
 ```text
-sudo pacman -S git make pkg-config curl sqlite ldc
+sudo pacman -S git make pkg-config curl sqlite dbus ldc
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -76,7 +76,7 @@ CentOS 7.x and RHEL 7.x reached End of Life status on June 30th 2024 and is no l
 ### Dependencies: Fedora > Version 18 / CentOS 8.x / CentOS 9.x / RHEL 8.x / RHEL 9.x
 ```text
 sudo dnf groupinstall 'Development Tools'
-sudo dnf install libcurl-devel sqlite-devel
+sudo dnf install libcurl-devel sqlite-devel dbus-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:
@@ -87,7 +87,7 @@ sudo dnf install libnotify-devel
 Fedora > 41 uses dnf5 which removes some deprecated aliases, specifically 'groupinstall' in this instance.
 ```text
 sudo dnf group install development-tools
-sudo dnf install libcurl-devel sqlite-devel
+sudo dnf install libcurl-devel sqlite-devel dbus-devel
 ```
 Before running the dmd install you need to check for the option 'use-keyboxd' in your gnupg common.conf file and comment it out while running the install.
 ```text
@@ -120,14 +120,7 @@ pkg install libnotify
 > Install the required FreeBSD packages as 'root' unless you have installed 'sudo'
 
 ### Dependencies: Gentoo
-Enable the [dlang](https://wiki.gentoo.org/wiki/Dlang) overlay:
-```text
-sudo emerge app-eselect/eselect-repository
-sudo eselect repository enable dlang
-sudo emerge --sync dlang
-```
-
-Then, install the dependencies for the package:
+Install the dependencies for the package:
 ```text
 sudo emerge --onlydeps net-misc/onedrive
 ```
@@ -151,7 +144,7 @@ These dependencies are also applicable for all Ubuntu based distributions such a
 *   Peppermint OS
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:
@@ -173,7 +166,7 @@ These instructions were validated using:
 
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -184,7 +177,7 @@ sudo apt install libnotify-dev
 ```text
 sudo zypper addrepo https://download.opensuse.org/repositories/devel:languages:D/openSUSE_Leap_15.0/devel:languages:D.repo
 sudo zypper refresh
-sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static
+sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static dbus-1-devel
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -195,7 +188,7 @@ sudo zypper install libnotify-devel
 ```text
 sudo zypper addrepo https://download.opensuse.org/repositories/devel:languages:D/openSUSE_Leap_15.1/devel:languages:D.repo
 sudo zypper refresh
-sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static
+sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static dbus-1-devel
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -205,7 +198,7 @@ sudo zypper install libnotify-devel
 ### Dependencies: OpenSuSE Leap 15.2
 ```text
 sudo zypper refresh
-sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static
+sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static dbus-1-devel
 ```
 For GUI notifications the following is also necessary:
 ```text

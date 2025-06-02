@@ -21,7 +21,7 @@ dnl necessary programs: install, pkg-config
 AC_PROG_INSTALL
 PKG_PROG_PKG_CONFIG
 
-PACKAGE_DATE="April 2025"
+PACKAGE_DATE="May 2025"
 AC_SUBST([PACKAGE_DATE])
 
 dnl Determine D compiler
@@ -185,9 +185,30 @@ AC_SUBST([LINKER_DCFLAG])
 AC_SUBST([OUTPUT_DCFLAG])
 AC_SUBST([WERROR_DCFLAG])
 
-dnl Check for required modules: curl and sqlite at the moment
+dnl Check for required modules: curl, sqlite and dbus if required
 PKG_CHECK_MODULES([curl],[libcurl])
 PKG_CHECK_MODULES([sqlite],[sqlite3])
+
+AC_MSG_CHECKING([whether to enable dbus support])
+case "$(uname -s)" in
+  Linux)
+    enable_dbus=yes
+    AC_MSG_RESULT([yes (on Linux)])
+    PKG_CHECK_MODULES([dbus], [dbus-1 >= 1.0],
+      [AC_DEFINE([HAVE_DBUS], [1], [Define if you have dbus-1])]
+      ,
+      [AC_MSG_ERROR([dbus-1 development files not found. Please install dbus-devel (Red Hat), libdbus-1-dev (Debian) or dbus (Arch | Manjaro)])]
+    )
+    ;;
+  *)
+    enable_dbus=no
+    AC_MSG_RESULT([no (not on Linux)])
+    ;;
+esac
+
+AC_SUBST([enable_dbus])
+
+
 
 dnl
 dnl systemd and unit file directories
@@ -303,6 +324,7 @@ case "$(uname -s)" in
 esac
 
 AC_SUBST([dynamic_linker_LIBS])
+
 
 dnl
 dnl Completion support
