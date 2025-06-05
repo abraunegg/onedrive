@@ -2,6 +2,75 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.6 - 2025-06-05
+
+### Added
+*   Enhancement: Add gdc support to enable Gentoo compilation
+*   Enhancement: Add a notification to user regarding number of objects received from OneDrive API
+*   Enhancement: Update 'skip_file' documentation and option validation
+*   Enhancement: Add a new configuration option 'force_session_upload' to support editors and applications using atomic save operations
+*   Enhancement: Added 2 functions to check for the presence of required remoteItem elements to create a Shared Folder DB entries
+*   Implement Feature Request: Add local recycle bin or trash folder option
+*   Implement Feature Request: Add configurable upload delay to support Obsidian
+*   Implement Feature Request: Add validation of bools in config file 
+*   Implement Feature Request: Add native support for authentication via Intune dbus interface 
+*   Implement Feature Request: Implement OAuth2 Device Authorisation Flow 
+
+### Changed
+*   Change logging output level for JSON elements that contain URL encoding
+*   Change 'configure.ac' to use a static date value as Debian 'reproducible' build process forces a future date to rebuild any code to determine reproducibility
+
+### Fixed
+*   Fix Regression: Fixed regression in handling Microsoft OneNote package folders being created in error 
+*   Fix Regression: Fix OneNote file MimeType detection
+*   Fix Regression: Fix supporting Personal Shared Folders that have been renamed
+*   Fix Bug: Correct the logging output for 'skip_file' exclusions 
+*   Fix Bug: Validate raw JSON from Graph API for 15 character driveId API bug
+*   Fix Bug: Fix JSON exception on webhook subscription renewal due to 308 redirect
+*   Fix Bug: Update 'sync_list' line parsing to correctly escape characters for regex parsing
+*   Fix Bug: Fix that an empty folder or folder with Microsoft OneNote files are deleted online when content is shared from a SharePoint Library Document Root
+*   Fix Bug: Fix that empty 'skip_file' forces resync indefinitely
+*   Fix Bug: Fix that 'sync_list' rule segment|depth check fails in some scenarios and implement a better applicable mechanism check
+*   Fix Bug: Resolve crash when getpwuid() breaks when there is a glibc version mismatch
+*   Fix Bug: Resolve crash when opening file fails when computing file hash
+*   Fix Bug: Add check for invalid exclusion 'sync_list' exclusion rules
+*   Fix Bug: Fix uploading of modified files when using --upload-only & --remove-source-files
+*   Fix Bug: Fix local path calculation for Relocated OneDrive Business Shared Folders 
+*   Fix Bug: Fix 'sync_list' anywhere rule online directory creation
+*   Fix Bug: Fix online path creation to ensure parental path structure is created in a consistent manner
+*   Fix Bug: Fix handling of POSIX check for existing online items
+*   Fix Bug: Fix args printing in dockerfile entrypoint
+*   Fix Bug: Fix the testing of parental structure for 'sync_list' inclusion when adding inotify watches
+*   Fix Bug: Fix failure to handle API 403 response when file fragment upload fails
+*   Fix Bug: Fix application notification output to be consistent when skipping integrity checks
+*   Fix Bug: Fix how local timestamps are modified 
+*   Fix Bug: Fix how online remaining free space is calculated and consumed internally for free space tracking
+*   Fix Bug: Fix logic of determining if a file has valid integrity when using --disable-upload-validation
+*   Fix Bug: Format the OneDrive change into a consumable object for the database earlier to use values in application logging
+*   Fix Bug: Fix upload session offset handling to prevent desynchronisation on large files
+*   Fix Bug: Fix implementation of 'write_xattr_data' to support FreeBSD
+*   Fix Bug: Update hash functions to ensure file is closed if opened 
+*   Fix Bug: Dont blindly run safeBackup() if the online timestamp is newer 
+*   Fix Bug: Only set xattr values when not using --dry-run 
+*   Fix Bug: Fix UTC conversion for existing file timestamp post file download
+*   Fix Bug: Fix that 'check_nosync' and 'skip_size' configuration options when changed, were not triggering a --resync correctly
+*   Fix Bug: Ensure file is closed before renaming to improve compatibility with GCS buckets and network filesystems 
+*   Fix Bug: If a file fails to download, path fails to exist. Check path existence before setting xattr values
+
+### Updated
+*   Updated .gitignore to ignore files created during configure to be consistent with other files generated from .in templates
+*   Updated bash,fish and zsh completion files to align with application options
+*   Updated 'config' file to align to application options with applicable descriptions
+*   Updated testbuild runner
+*   Updated Fedora Docker OS version to Fedora 42
+*   Updated Ubuntu 24.10 curl version 8.9.1 to known bad curl versions and document the bugs associated with it
+*   Updated Makefile to pass libraries after source files in compiler invocation
+*   Updated 'configure.ac' to support more basename formats for DC
+*   Update how threads are set based on available CPUs 
+*   Update setLocalPathTimestamp logging output 
+*   Update when to perform thread check and set as early as possible 
+*   Updated documentation
+
 ## 2.5.5 - 2025-03-17
 
 ### Added
