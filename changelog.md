@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Fix Bug: Validate raw JSON from Graph API for 15 character driveId API bug
 *   Fix Bug: Fix JSON exception on webhook subscription renewal due to 308 redirect
 *   Fix Bug: Update 'sync_list' line parsing to correctly escape characters for regex parsing
-*   Fix Bug: Fix that an empty folder or folder with onenotes are deleted online when content is shared from a SharePoint Library Document Root
+*   Fix Bug: Fix that an empty folder or folder with Microsoft OneNote files are deleted online when content is shared from a SharePoint Library Document Root
 *   Fix Bug: Fix that empty 'skip_file' forces resync indefinitely
 *   Fix Bug: Fix that 'sync_list' rule segment|depth check fails in some scenarios and implement a better applicable mechanism check
 *   Fix Bug: Resolve crash when getpwuid() breaks when there is a glibc version mismatch

@@ -89,6 +89,7 @@ debian
 dechunk
 Deepin
 deimos
+desynchronisation
 devicecode
 devuan
 dhparams
@@ -399,6 +400,7 @@ systemduserunitdir
 tbh
 tdcockers
 templ
+testbuild
 Thh
 thnk
 tidx
