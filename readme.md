@@ -26,6 +26,7 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 * Supports single-tenant and multi-tenant applications
 * Supports Intune Single Sign-On (SSO) authentication via the Microsoft Identity Device Broker (D-Bus interface)
 * Supports OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
+* Supports the FreeDesktop.org Trash specification, allowing locally deleted files to be safely recoverable in case of accidental online deletion
 * Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany, and Azure/Office 365 operated by VNET in China
 * Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
 * Protects against significant data loss on OneDrive after configuration changes
