@@ -1555,7 +1555,6 @@ class OneDriveApi {
 		SysTime retryTime;
 		bool retrySuccess = false;
 		bool transientError = false;
-		bool sslVerifyPeerDisabled = false;
 		
 		while (!retrySuccess) {
 			// Reset thisBackOffInterval
@@ -1687,9 +1686,8 @@ class OneDriveApi {
 						//  https://stackoverflow.com/questions/45829588/brew-install-fails-curl77-error-setting-certificate-verify
 						//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
 						
-						string sslCertReadErrorMessage = "System SSL CA certificates are missing or unreadable by libcurl – please ensure the correct CA bundle is installed and is accessible.";
-						addLogEntry("ERROR: " ~ sslCertReadErrorMessage);
-						throw new OneDriveError(sslCertReadErrorMessage);
+						addLogEntry("Problem with reading the local SSL CA cert via libcurl - please repair your system SSL CA Certificates");
+						throw new OneDriveError("OneDrive operation encountered an issue with libcurl reading the local SSL CA Certificates");
 					} else {
 						// Was this a curl initialization error?
 						if (canFind(errorMessage, "Failed initialization on handle")) {
@@ -1811,30 +1809,6 @@ class OneDriveApi {
 				// display the error message
 				displayFileSystemErrorMessage(exception.msg, callingFunction);
 				throw new OneDriveException(0, "There was a file system error during OneDrive request: " ~ exception.msg, response);
-			
-			// A OneDriveError was thrown
-			} catch (OneDriveError exception) {
-				// Disk space error or SSL error caused a OneDriveError to be thrown
-				
-				/**
-				
-				DO NOT UNCOMMENT THIS CODE UNLESS TESTING FOR THIS ISSUE: System SSL CA certificates are missing or unreadable by libcurl
-				
-				// Disk space error or SSL error
-				if (getAvailableDiskSpace(".") == 0) {
-					// Must exit
-					forceExit();
-				} else {
-					// Catch the SSL error
-					addLogEntry("WARNING: Disabling SSL peer verification due to libcurl failing to access the system CA certificate bundle (CAfile missing, unreadable, or misconfigured).");
-					sslVerifyPeerDisabled = true;
-					curlEngine.setDisableSSLVerifyPeer();
-				}
-				
-				**/
-				
-				// Must exit
-				forceExit();
 			}
 
 			// Increment re-try counter
@@ -1885,11 +1859,6 @@ class OneDriveApi {
 				// Thread sleep
 				Thread.sleep(dur!"seconds"(thisBackOffInterval));
 			}
-		}
-		
-		// Reset SSL Peer Validation if it was disabled
-		if (sslVerifyPeerDisabled) {
-			curlEngine.setEnableSSLVerifyPeer();
 		}
 		
 		// Return the result

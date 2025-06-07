@@ -540,46 +540,6 @@ class CurlEngine {
 		// Return free memory to the OS
 		GC.minimize();
 	}
-	
-	// Disable SSL certificate peer verification for libcurl operations.
-	//
-	// This function disables the verification of the SSL peer's certificate
-	// by setting CURLOPT_SSL_VERIFYPEER to 0. This means that libcurl will
-	// accept any certificate presented by the server, regardless of whether
-	// it is signed by a trusted certificate authority.
-	//
-	// -------------------------------------------------------------------------------------
-	// WARNING: Disabling SSL peer verification introduces significant security risks:
-	// -------------------------------------------------------------------------------------
-	// - Man-in-the-Middle (MITM) attacks become trivially possible.
-	// - Malicious servers can impersonate trusted endpoints.
-	// - Confidential data (authentication tokens, file contents) can be intercepted.
-	// - Violates industry security standards and regulatory compliance requirements.
-	// - Should never be used in production environments or on untrusted networks.
-	//
-	// This option should only be enabled for internal testing, debugging self-signed
-	// certificates, or explicitly controlled environments with known risks.
-	//
-	// See also:
-	// https://curl.se/libcurl/c/CURLOPT_SSL_VERIFYPEER.html
-	void setDisableSSLVerifyPeer() {
-		// Emit a runtime warning if debug logging is enabled
-		if (debugLogging) {
-			addLogEntry("WARNING: SSL peer verification has been DISABLED!", ["debug"]);
-			addLogEntry("         This allows invalid or self-signed certificates to be accepted.", ["debug"]);
-			addLogEntry("         Use ONLY for testing. This severely weakens HTTPS security.", ["debug"]);
-		}
-
-		// Disable SSL certificate verification (DANGEROUS)
-		http.handle.set(CurlOption.ssl_verifypeer, 0);
-	}
-	
-	// Enable SSL Certificate Verification
-	void setEnableSSLVerifyPeer() {
-		// Enable SSL certificate verification
-		addLogEntry("Enabling SSL peer verification");
-		http.handle.set(CurlOption.ssl_verifypeer, 1);
-	}
 }
 
 // Methods to control obtaining and releasing a CurlEngine instance from the curlEnginePool
