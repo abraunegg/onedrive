@@ -1555,6 +1555,7 @@ class OneDriveApi {
 		SysTime retryTime;
 		bool retrySuccess = false;
 		bool transientError = false;
+		bool sslVerifyPeerDisabled = false;
 		
 		while (!retrySuccess) {
 			// Reset thisBackOffInterval
@@ -1809,6 +1810,19 @@ class OneDriveApi {
 				// display the error message
 				displayFileSystemErrorMessage(exception.msg, callingFunction);
 				throw new OneDriveException(0, "There was a file system error during OneDrive request: " ~ exception.msg, response);
+			
+			// A OneDriveError was thrown
+			} catch (OneDriveError exception) {
+				// Disk space error or SSL error
+				if (getAvailableDiskSpace(".") == 0) {
+					// Must exit
+					forceExit();
+				} else {
+					// Catch the SSL error
+					addLogEntry("Attempting a work around to disable SSL Peer Validation due to SSL is passing back a bad value due to 'stdio' compile time option");
+					sslVerifyPeerDisabled = true;
+					curlEngine.setDisableSSLVerifyPeer();
+				}
 			}
 
 			// Increment re-try counter
@@ -1859,6 +1873,11 @@ class OneDriveApi {
 				// Thread sleep
 				Thread.sleep(dur!"seconds"(thisBackOffInterval));
 			}
+		}
+		
+		// Reset SSL Peer Validation if it was disabled
+		if (sslVerifyPeerDisabled) {
+			curlEngine.setEnableSSLVerifyPeer();
 		}
 		
 		// Return the result
