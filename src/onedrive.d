@@ -515,6 +515,7 @@ class OneDriveApi {
 			// There are 2 options here for normal authentication flow
 			// 1. Use OAuth2 Device Authorisation Flow
 			// 2. Use OAuth2 Interactive Authorisation Flow (application default)
+			string authoriseApplicationRequest = "Please authorise this application by visiting the following URL:\n";
 			
 			if (appConfig.getValueBool("use_device_auth")) {
 				// Use OAuth2 Device Authorisation Flow
@@ -540,7 +541,7 @@ class OneDriveApi {
 					
 					// Display the required items for the user to action
 					addLogEntry();
-					addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
+					addLogEntry(authoriseApplicationRequest, ["consoleOnly"]);
 					addLogEntry(deviceAuthUrl ~ "\n", ["consoleOnly"]);
 					addLogEntry("Enter the following code when prompted: " ~ userCode, ["consoleOnly"]);
 					addLogEntry();
@@ -695,14 +696,21 @@ class OneDriveApi {
 						return false;
 					}
 				} else {
-					// Are we in a --dry-run scenario?
+					// If we are not running in --dry-run mode, prompt the user to authorise the application
 					if (!appConfig.getValueBool("dry_run")) {
-						// No --dry-run is being used
-						addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
+						// Notify the user of the next step: visit the URL to authorise the client
+						addLogEntry();
+						addLogEntry(authoriseApplicationRequest, ["consoleOnly"]);
 						addLogEntry(url ~ "\n", ["consoleOnly"]);
-						addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
+						
+						// Prompt the user to paste the full redirect URI (copied from the browser after login)
+						addLogEntry("After completing the authorisation in your browser, copy the full redirect URI (from the address bar) and paste it below.\n", ["consoleOnly"]);
+						addLogEntry("Paste redirect URI here: ", ["consoleOnlyNoNewLine"]);
+						
+						// Read the user's pasted response URI
 						readln(response);
-						appConfig.applicationAuthorizeResponseUri = true;
+						// Flag that a response URI has been received - at this point could be valid or invalid
+						appConfig.applicationAuthoriseResponseURIReceived = true;
 					} else {
 						// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
 						addLogEntry();
