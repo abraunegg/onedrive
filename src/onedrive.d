@@ -1687,8 +1687,9 @@ class OneDriveApi {
 						//  https://stackoverflow.com/questions/45829588/brew-install-fails-curl77-error-setting-certificate-verify
 						//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
 						
-						addLogEntry("Problem with reading the local SSL CA cert via libcurl - please repair your system SSL CA Certificates");
-						throw new OneDriveError("OneDrive operation encountered an issue with libcurl reading the local SSL CA Certificates");
+						string sslCertReadErrorMessage = "System SSL CA certificates are missing or unreadable by libcurl – please ensure the correct CA bundle is installed and is accessible.";
+						addLogEntry("ERROR: " ~ sslCertReadErrorMessage);
+						throw new OneDriveError(sslCertReadErrorMessage);
 					} else {
 						// Was this a curl initialization error?
 						if (canFind(errorMessage, "Failed initialization on handle")) {
@@ -1819,7 +1820,7 @@ class OneDriveApi {
 					forceExit();
 				} else {
 					// Catch the SSL error
-					addLogEntry("Attempting a work around to disable SSL Peer Validation due to SSL is passing back a bad value due to 'stdio' compile time option");
+					addLogEntry("Attempting a work around to disable SSL Peer Validation due to SSL passing back a bad value due to 'stdio' compile time option");
 					sslVerifyPeerDisabled = true;
 					curlEngine.setDisableSSLVerifyPeer();
 				}
