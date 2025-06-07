@@ -424,6 +424,7 @@ userns
 userpass
 usl
 valgrind
+verifypeer
 vti
 wal
 websockets

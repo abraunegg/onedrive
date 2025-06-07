@@ -1555,6 +1555,7 @@ class OneDriveApi {
 		SysTime retryTime;
 		bool retrySuccess = false;
 		bool transientError = false;
+		bool sslVerifyPeerDisabled = false;
 		
 		while (!retrySuccess) {
 			// Reset thisBackOffInterval
@@ -1686,8 +1687,9 @@ class OneDriveApi {
 						//  https://stackoverflow.com/questions/45829588/brew-install-fails-curl77-error-setting-certificate-verify
 						//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
 						
-						addLogEntry("Problem with reading the local SSL CA cert via libcurl - please repair your system SSL CA Certificates");
-						throw new OneDriveError("OneDrive operation encountered an issue with libcurl reading the local SSL CA Certificates");
+						string sslCertReadErrorMessage = "System SSL CA certificates are missing or unreadable by libcurl – please ensure the correct CA bundle is installed and is accessible.";
+						addLogEntry("ERROR: " ~ sslCertReadErrorMessage);
+						throw new OneDriveError(sslCertReadErrorMessage);
 					} else {
 						// Was this a curl initialization error?
 						if (canFind(errorMessage, "Failed initialization on handle")) {
@@ -1809,6 +1811,19 @@ class OneDriveApi {
 				// display the error message
 				displayFileSystemErrorMessage(exception.msg, callingFunction);
 				throw new OneDriveException(0, "There was a file system error during OneDrive request: " ~ exception.msg, response);
+			
+			// A OneDriveError was thrown
+			} catch (OneDriveError exception) {
+				// Disk space error or SSL error
+				if (getAvailableDiskSpace(".") == 0) {
+					// Must exit
+					forceExit();
+				} else {
+					// Catch the SSL error
+					addLogEntry("Attempting a work around to disable SSL Peer Validation due to SSL passing back a bad value due to 'stdio' compile time option");
+					sslVerifyPeerDisabled = true;
+					curlEngine.setDisableSSLVerifyPeer();
+				}
 			}
 
 			// Increment re-try counter
@@ -1859,6 +1874,11 @@ class OneDriveApi {
 				// Thread sleep
 				Thread.sleep(dur!"seconds"(thisBackOffInterval));
 			}
+		}
+		
+		// Reset SSL Peer Validation if it was disabled
+		if (sslVerifyPeerDisabled) {
+			curlEngine.setEnableSSLVerifyPeer();
 		}
 		
 		// Return the result
