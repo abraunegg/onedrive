@@ -1555,6 +1555,7 @@ class OneDriveApi {
 		SysTime retryTime;
 		bool retrySuccess = false;
 		bool transientError = false;
+		bool sslVerifyPeerDisabled = false;
 		
 		while (!retrySuccess) {
 			// Reset thisBackOffInterval
@@ -1814,6 +1815,24 @@ class OneDriveApi {
 			// A OneDriveError was thrown
 			} catch (OneDriveError exception) {
 				// Disk space error or SSL error caused a OneDriveError to be thrown
+				
+				/**
+				
+				DO NOT UNCOMMENT THIS CODE UNLESS TESTING FOR THIS ISSUE: System SSL CA certificates are missing or unreadable by libcurl
+				
+				// Disk space error or SSL error
+				if (getAvailableDiskSpace(".") == 0) {
+					// Must exit
+					forceExit();
+				} else {
+					// Catch the SSL error
+					addLogEntry("WARNING: Disabling SSL peer verification due to libcurl failing to access the system CA certificate bundle (CAfile missing, unreadable, or misconfigured).");
+					sslVerifyPeerDisabled = true;
+					curlEngine.setDisableSSLVerifyPeer();
+				}
+				
+				**/
+				
 				// Must exit
 				forceExit();
 			}
@@ -1866,6 +1885,11 @@ class OneDriveApi {
 				// Thread sleep
 				Thread.sleep(dur!"seconds"(thisBackOffInterval));
 			}
+		}
+		
+		// Reset SSL Peer Validation if it was disabled
+		if (sslVerifyPeerDisabled) {
+			curlEngine.setEnableSSLVerifyPeer();
 		}
 		
 		// Return the result
