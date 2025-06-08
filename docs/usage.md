@@ -381,7 +381,7 @@ user@hostname:~$
 
 ```
 
-**Process Illustrations:**
+**Interactive Authentication Process Illustrated:**
 ![copy_redirect_uri_to_application](./images/authorise_client_before_copy_with_arrow.png)
 
 ![copy_redirect_uri_to_application_done](./images/authorise_client_after_paste_hashed_out.png)
@@ -390,7 +390,6 @@ user@hostname:~$
 
 > [!IMPORTANT]
 > Without additional input or configuration, the OneDrive Client for Linux will automatically adhere to default application settings during synchronisation processes with Microsoft OneDrive.
-
 
 
 #### Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker 
