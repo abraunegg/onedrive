@@ -756,7 +756,7 @@ int main(string[] cliArgs) {
 				// If we get to this point, we have not performed a 'no-sync' task ..
 				
 				// Did we just authorise the client?
-				if (appConfig.applicationAuthorizeResponseUri) {
+				if (appConfig.applicationAuthoriseResponseURIReceived) {
 					// Authorisation activity
 					if (exists(appConfig.refreshTokenFilePath)) {
 						// OneDrive refresh token exists
