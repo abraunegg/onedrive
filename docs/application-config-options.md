@@ -965,7 +965,7 @@ _**CLI Option Use:**_ `--sync-root-files`
 > [!IMPORTANT]
 > Although it's not mandatory, it's recommended that after enabling this option, you perform a `--resync`. This ensures that any previously excluded content is now included in your sync process.
 
-### threads  
+### threads
 _**Description:**_ This configuration option controls the number of worker threads used for parallel upload and download operations when transferring files between your local system and Microsoft OneDrive. Each thread handles a discrete portion of the workload, improving performance when used appropriately.
 
 _**Value Type:**_ Integer
@@ -985,6 +985,14 @@ _**Config Example:**_ `threads = "16"`
 
 > [!WARNING]  
 > Increasing the thread count beyond the default will also result in higher **system resource utilisation**, particularly in terms of CPU load and local TCP port consumption. On lower-spec systems or in constrained environments, this may lead to **network saturation**, **unpredictable behaviour**, or **application crashes** due to resource exhaustion.
+
+> [!TIP]  
+> If the configured `threads` value (default or manual) exceeds the number of available CPU cores, the application will automatically adjust it downward and issue a warning similar to:  
+>  
+> `WARNING: Configured 'threads = 8' exceeds available CPU cores (CPU_COUNT). Capping 'threads' to CPU_COUNT.`
+>
+> This ensures stable operation even if the configuration is overly aggressive.
+
 
 ### transfer_order
 _**Description:**_ This configuration option controls the transfer order of files between your local system and Microsoft OneDrive.
