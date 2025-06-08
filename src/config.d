@@ -107,8 +107,8 @@ class ApplicationConfig {
 	// Logging verbosity count
 	long verbosityCount = 0;
 	
-	// Was the application just authorised - paste of response uri
-	bool applicationAuthorizeResponseUri = false;
+	// Was the application just authorised - paste of response URI
+	bool applicationAuthoriseResponseURIReceived = false;
 	
 	// Store the refreshToken for use within the application
 	const(char)[] refreshToken;

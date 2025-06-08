@@ -343,29 +343,54 @@ Once you've installed the application, you'll need to authorise it using your Mi
 Please be aware that some companies may require you to explicitly add this app to the [Microsoft MyApps portal](https://myapps.microsoft.com/). To add an approved app to your apps, click on the ellipsis in the top-right corner and select "Request new apps." On the next page, you can add this app. If it's not listed, you should make a request through your IT department.
 
 This client supports the following methods to authenticate the application with Microsoft OneDrive:
-* Supports interactive browser-based authentication using OAuth2 and a response URI
+* Supports interactive browser-based authentication using OAuth2 and a redirect URI
 * Supports seamless Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker D-Bus interface
 * Supports OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
 
-#### Interactive Authentication using OAuth2 and a response URI
-When you run the application for the first time, you'll be prompted to open a specific URL using your web browser, where you'll need to log in to your Microsoft Account and grant the application permission to access your files. After granting permission to the application, you'll be redirected to a blank page. Simply copy the URI from the blank page and paste it into the application.
+#### Interactive Authentication using OAuth2 and a redirect URI
+When you run the application for the first time, you'll be prompted to open a specific URL in your web browser. This URL takes you to the Microsoft login page, where you’ll sign in with your Microsoft Account and grant the application permission to access your files.
 
-**Example:**
+After granting permission, your browser will redirect you to a blank page. This is expected behaviour.
+
+At this point, copy the full redirect URI shown in your browser's address bar and paste it into the terminal where prompted.
+
+**Example Terminal Session:**
 ```text
-[user@hostname ~]$ onedrive
-Authorise this app by visiting:
+user@hostname:~$ onedrive
+D-Bus message bus daemon is available; GUI notifications are now enabled
+Using IPv4 and IPv6 (if configured) for all network operations
+Attempting to contact Microsoft OneDrive Login Service
+Successfully reached Microsoft OneDrive Login Service
+Configuring Global Azure AD Endpoints
 
-https://login.microsoftonline.com/common/oauth2/v2.0/authorise?client_id=d50ca740-c83f-4d1b-b616-12c519384f0c&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
+Please authorise this application by visiting the following URL:
 
-Enter the response URI from your browser:  https://login.microsoftonline.com/common/oauth2/nativeclient?code=<redacted>
+https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=d50ca740-c83f-4d1b-b616-12c519384f0c&scope=Files.ReadWrite%20Files.ReadWrite.All%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
 
-The application has been successfully authorised, but no additional command switches were provided.
+After completing the authorisation in your browser, copy the full redirect URI (from the address bar) and paste it below.
 
-Please use 'onedrive --help' for further assistance on how to run this application.
+Paste redirect URI here: https://login.microsoftonline.com/common/oauth2/nativeclient?code=<redacted>
+
+The application has been successfully authorised, but no extra command options have been specified.
+
+Please use 'onedrive --help' for further assistance in regards to running this application.
+
+user@hostname:~$ 
+
 ```
+
+**Interactive Authentication Process Illustrated:**
+![initial_auth_url_access_redacted](./images/initial_auth_url_access_redacted.png)
+
+![copy_redirect_uri_to_application](./images/authorise_client_before_copy_with_arrow.png)
+
+![copy_redirect_uri_to_application_done](./images/authorise_client_after_paste_hashed_out.png)
+
+![client_authorised](./images/authorise_client_now_authorised_hashed_out.png)
 
 > [!IMPORTANT]
 > Without additional input or configuration, the OneDrive Client for Linux will automatically adhere to default application settings during synchronisation processes with Microsoft OneDrive.
+
 
 #### Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker 
 To use this method of authentication, you must add the following configuration to your 'config' file:
