@@ -966,20 +966,15 @@ _**CLI Option Use:**_ `--sync-root-files`
 > Although it's not mandatory, it's recommended that after enabling this option, you perform a `--resync`. This ensures that any previously excluded content is now included in your sync process.
 
 ### threads  
-**Description:**  
-This configuration option controls the number of worker threads used for parallel upload and download operations when transferring files between your local system and Microsoft OneDrive. Each thread handles a discrete portion of the workload, improving performance when used appropriately.
+_**Description:**_ This configuration option controls the number of worker threads used for parallel upload and download operations when transferring files between your local system and Microsoft OneDrive. Each thread handles a discrete portion of the workload, improving performance when used appropriately.
 
-**Value Type:**  
-Integer
+_**Value Type:**_ Integer
 
-**Default Value:**  
-`8`
+_**Default Value:**_ `8`
 
-**Maximum Value:**  
-`16`
+_**Maximum Value:**_ `16`
 
-**Config Example:**  
-`threads = "16"`
+_**Config Example:**_ `threads = "16"`
 
 > [!NOTE]  
 > The default value of `8` threads is based on the average number of physical CPU cores found in consumer and workstation-grade Intel and AMD processors released from approximately 2012 through 2025. This includes laptops, desktops, and server-grade CPUs where 4–8 physical cores are typical.
