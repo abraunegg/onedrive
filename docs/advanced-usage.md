@@ -249,6 +249,17 @@ After unchecking the option and clicking "OK", the Windows OneDrive client shoul
 |---|---|
 | ![Uncheck-Personal](./images/personal-files-on-demand.png) | ![Uncheck-Business](./images/business-files-on-demand.png) |
 
+### Accessing Windows OneDrive Files from Linux (Dual-Boot Setup)
+When dual-booting between Windows and Linux, accessing OneDrive-synced folders stored on an NTFS partition can be problematic. This is primarily due to Microsoft OneDrive's use of reparse points when the Files On-Demand feature is enabled in Windows. These reparse points can render files inaccessible from Linux, even after disabling Files On-Demand, because the reparse metadata may persist.
+
+#### Solution: Use the ntfs-3g-onedrive Plugin
+The ['ntfs-3g-onedrive'](https://github.com/gbrielgustavo/ntfs-3g-onedrive) plugin is designed to address this issue. It modifies the behavior of the ntfs-3g driver to correctly handle OneDrive's reparse points, allowing you to access your OneDrive files from Linux.
+
+> [!IMPORTANT]
+> The configuration and installation of the 'ntfs-3g-onedrive' driver update on your platform is beyond the scope of this documentation and repository.
+>
+> For assistance please seek support via the ['ntfs-3g'](https://github.com/tuxera/ntfs-3g) GitHub project.
+
 ## Configuring the client for use when 'sync_dir' is a mounted directory
 In some environments, your setup might be that your configured 'sync_dir' is pointing to another mounted file system - a NFS|CIFS location, an external drive (USB stick, eSATA etc). As such, you configure your 'sync_dir' as follows:
 ```text
