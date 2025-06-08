@@ -350,7 +350,13 @@ This client supports the following methods to authenticate the application with 
 #### Interactive Authentication using OAuth2 and a redirect URI
 When you run the application for the first time, you'll be prompted to open a specific URL using your web browser, where you'll need to log in to your Microsoft Account and grant the application permission to access your files. After granting permission to the application, you'll be redirected to a blank page. Simply copy the URI from the blank page and paste it into the application.
 
-**Example:**
+When you run the application for the first time, you'll be prompted to open a specific URL in your web browser. This URL takes you to the Microsoft login page, where you’ll sign in with your Microsoft Account and grant the application permission to access your files.
+
+After granting permission, your browser will redirect you to a blank page. This is expected behaviour.
+
+At this point, copy the full redirect URI shown in your browser's address bar and paste it into the terminal where prompted.
+
+**Example Terminal Session:**
 ```text
 user@hostname:~$ onedrive
 D-Bus message bus daemon is available; GUI notifications are now enabled
@@ -374,20 +380,18 @@ Please use 'onedrive --help' for further assistance in regards to running this a
 user@hostname:~$ 
 
 ```
+
+**Process Illustrations:**
 ![copy_redirect_uri_to_application](./images/authorise_client_before_copy_with_arrow.png)
 
 ![copy_redirect_uri_to_application_done](./images/authorise_client_after_paste_hashed_out.png)
 
 ![client_authorised](./images/authorise_client_now_authorised_hashed_out.png)
 
-
-
-
-
-
-
 > [!IMPORTANT]
 > Without additional input or configuration, the OneDrive Client for Linux will automatically adhere to default application settings during synchronisation processes with Microsoft OneDrive.
+
+
 
 #### Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker 
 To use this method of authentication, you must add the following configuration to your 'config' file:
