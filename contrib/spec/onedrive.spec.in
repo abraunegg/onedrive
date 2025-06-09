@@ -24,8 +24,10 @@ BuildRoot:  %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires:  dmd >= 2.088.0
 BuildRequires:  sqlite-devel >= 3.7.15
 BuildRequires:  libcurl-devel
+BuildRequires:  dbus-devel
 Requires:       sqlite >= 3.7.15
 Requires:       libcurl
+Requires:       dbus
 
 %if 0%{?with_systemd}
 Requires(post):    systemd
