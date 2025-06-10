@@ -1,4 +1,29 @@
-# Determine based on distribution & version what options & packages to include
+# Platform-specific default compiler selection
+%if 0%{?fedora} || 0%{?rhel} || 0%{?centos}
+%global default_dcompiler ldc
+%else
+%global default_dcompiler dmd
+%endif
+
+# Allow manual override: rpmbuild --define 'dcompiler dmd'
+%{!?dcompiler: %global dcompiler %{default_dcompiler}}
+
+# Compiler version constraints
+%global dmd_minver 2.091.1
+%global ldc_minver 1.20.1
+
+# Conditional BuildRequires
+%if "%{dcompiler}" == "dmd"
+BuildRequires: dmd >= %{dmd_minver}
+%else
+%if "%{dcompiler}" == "ldc"
+BuildRequires: ldc >= %{ldc_minver}
+%else
+%error Unsupported D compiler selected: %{dcompiler}
+%endif
+%endif
+
+# Systemd logic
 %if 0%{?fedora} || 0%{?rhel} >= 7
 %global with_systemd      1
 %else
@@ -21,13 +46,12 @@ URL:        https://github.com/abraunegg/onedrive
 Source0:    v%{version}.tar.gz
 BuildRoot:  %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-BuildRequires:  dmd >= 2.088.0
-BuildRequires:  sqlite-devel >= 3.7.15
-BuildRequires:  libcurl-devel
-BuildRequires:  dbus-devel
-Requires:       sqlite >= 3.7.15
-Requires:       libcurl
-Requires:       dbus
+BuildRequires: sqlite-devel >= 3.7.15
+BuildRequires: libcurl-devel
+BuildRequires: dbus-devel
+Requires:     sqlite >= 3.7.15
+Requires:     libcurl
+Requires:     dbus
 
 %if 0%{?with_systemd}
 Requires(post):    systemd
@@ -43,36 +67,44 @@ Requires(postun):  initscripts
 %define debug_package %{nil}
 
 %description
-OneDrive Client for Linux
+Free client for Microsoft OneDrive on Linux. Supports personal, business, SharePoint, and shared folders. Built-in client-side filtering, delta sync, webhook support, and more.
 
 %prep
-
 %setup -q
-# This creates the directory %{_builddir}/%{name}-%{version}/
 
 %build
-# cd %{_builddir}/%{name}-%{version}
 %configure --enable-debug --enable-notifications
-make 
+make
 
 %install
 %make_install PREFIX="%{buildroot}"
 
+%if 0%{?with_systemd}
+%if 0%{?rhel_unitdir}
+# RHEL/CentOS: system unit only
+install -D -m 0644 contrib/systemd/onedrive.service %{buildroot}%{_unitdir}/onedrive.service
+install -D -m 0644 contrib/systemd/onedrive@.service %{buildroot}%{_unitdir}/onedrive@.service
+%else
+# Fedora: install both system and user units
+install -D -m 0644 contrib/systemd/onedrive@.service %{buildroot}%{_unitdir}/onedrive@.service
+install -D -m 0644 contrib/systemd/onedrive.service %{buildroot}%{_userunitdir}/onedrive.service
+%endif
+%endif
+
 %clean
 
 %files
-%doc readme.md LICENSE changelog.md
+%doc readme.md LICENSE changelog.md docs/*.md config
 %config %{_sysconfdir}/logrotate.d/onedrive
 %{_mandir}/man1/%{name}.1.gz
-%{_docdir}/%{name}
 %{_bindir}/%{name}
 %if 0%{?with_systemd}
 %if 0%{?rhel_unitdir}
 %{_unitdir}/%{name}.service
 %{_unitdir}/%{name}@.service
 %else
-%{_userunitdir}/%{name}.service
 %{_unitdir}/%{name}@.service
+%{_userunitdir}/%{name}.service
 %endif
 %else
 %{_bindir}/onedrive_service.sh
@@ -80,3 +112,198 @@ make
 %endif
 
 %changelog
+%changelog
+* Thu Jun 05 2025 - 2.5.6-1
+- Release v2.5.6 with new features, bug fixes, and enhancements
+
+* Mon Mar 17 2025 - 2.5.5-1
+- Release v2.5.5 with new features, bug fixes, and enhancements
+
+* Mon Feb 03 2025 - 2.5.4-1
+- Release v2.5.4 with new features, bug fixes, and enhancements
+
+* Sat Nov 16 2024 - 2.5.3-1
+- Release v2.5.3 with new features, bug fixes, and enhancements
+
+* Sun Sep 29 2024 - 2.5.2-1
+- Release v2.5.2 with new features, bug fixes, and enhancements
+
+* Fri Sep 27 2024 - 2.5.1-1
+- Release v2.5.1 with new features, bug fixes, and enhancements
+
+* Mon Sep 16 2024 - 2.5.0-1
+- Release v2.5.0 with new features, bug fixes, and enhancements
+
+* Wed Jun 21 2023 - 2.4.25-1
+- Release v2.4.25 with new features, bug fixes, and enhancements
+
+* Tue Jun 20 2023 - 2.4.24-1
+- Release v2.4.24 with new features, bug fixes, and enhancements
+
+* Fri Jan 06 2023 - 2.4.23-1
+- Release v2.4.23 with new features, bug fixes, and enhancements
+
+* Tue Dec 06 2022 - 2.4.22-1
+- Release v2.4.22 with new features, bug fixes, and enhancements
+
+* Tue Sep 27 2022 - 2.4.21-1
+- Release v2.4.21 with new features, bug fixes, and enhancements
+
+* Wed Jul 20 2022 - 2.4.20-1
+- Release v2.4.20 with new features, bug fixes, and enhancements
+
+* Wed Jun 15 2022 - 2.4.19-1
+- Release v2.4.19 with new features, bug fixes, and enhancements
+
+* Thu Jun 02 2022 - 2.4.18-1
+- Release v2.4.18 with new features, bug fixes, and enhancements
+
+* Sat Apr 30 2022 - 2.4.17-1
+- Release v2.4.17 with new features, bug fixes, and enhancements
+
+* Thu Mar 10 2022 - 2.4.16-1
+- Release v2.4.16 with new features, bug fixes, and enhancements
+
+* Fri Dec 31 2021 - 2.4.15-1
+- Release v2.4.15 with new features, bug fixes, and enhancements
+
+* Wed Nov 24 2021 - 2.4.14-1
+- Release v2.4.14 with new features, bug fixes, and enhancements
+
+* Sun Dec 27 2020 - 2.4.9-1
+- Release v2.4.9 with new features, bug fixes, and enhancements
+
+* Mon Nov 30 2020 - 2.4.8-1
+- Release v2.4.8 with new features, bug fixes, and enhancements
+
+* Mon Nov 09 2020 - 2.4.7-1
+- Release v2.4.7 with new features, bug fixes, and enhancements
+
+* Sun Oct 04 2020 - 2.4.6-1
+- Release v2.4.6 with new features, bug fixes, and enhancements
+
+* Thu Aug 13 2020 - 2.4.5-1
+- Release v2.4.5 with new features, bug fixes, and enhancements
+
+* Tue Aug 11 2020 - 2.4.4-1
+- Release v2.4.4 with new features, bug fixes, and enhancements
+
+* Mon Jun 29 2020 - 2.4.3-1
+- Release v2.4.3 with new features, bug fixes, and enhancements
+
+* Wed May 27 2020 - 2.4.2-1
+- Release v2.4.2 with new features, bug fixes, and enhancements
+
+* Sat May 02 2020 - 2.4.1-1
+- Release v2.4.1 with new features, bug fixes, and enhancements
+
+* Sun Mar 22 2020 - 2.4.0-1
+- Release v2.4.0 with new features, bug fixes, and enhancements
+
+* Tue Dec 31 2019 - 2.3.13-1
+- Release v2.3.13 with new features, bug fixes, and enhancements
+
+* Wed Dec 04 2019 - 2.3.12-1
+- Release v2.3.12 with new features, bug fixes, and enhancements
+
+* Tue Nov 05 2019 - 2.3.11-1
+- Release v2.3.11 with new features, bug fixes, and enhancements
+
+* Tue Oct 01 2019 - 2.3.10-1
+- Release v2.3.10 with new features, bug fixes, and enhancements
+
+* Sun Sep 01 2019 - 2.3.9-1
+- Release v2.3.9 with new features, bug fixes, and enhancements
+
+* Sun Aug 04 2019 - 2.3.8-1
+- Release v2.3.8 with new features, bug fixes, and enhancements
+
+* Wed Jul 03 2019 - 2.3.7-1
+- Release v2.3.7 with new features, bug fixes, and enhancements
+
+* Wed Jul 03 2019 - 2.3.6-1
+- Release v2.3.6 with new features, bug fixes, and enhancements
+
+* Wed Jun 19 2019 - 2.3.5-1
+- Release v2.3.5 with new features, bug fixes, and enhancements
+
+* Thu Jun 13 2019 - 2.3.4-1
+- Release v2.3.4 with new features, bug fixes, and enhancements
+
+* Tue Apr 16 2019 - 2.3.3-1
+- Release v2.3.3 with new features, bug fixes, and enhancements
+
+* Tue Apr 02 2019 - 2.3.2-1
+- Release v2.3.2 with new features, bug fixes, and enhancements
+
+* Tue Mar 26 2019 - 2.3.1-1
+- Release v2.3.1 with new features, bug fixes, and enhancements
+
+* Mon Mar 25 2019 - 2.3.0-1
+- Release v2.3.0 with new features, bug fixes, and enhancements
+
+* Tue Mar 12 2019 - 2.2.6-1
+- Release v2.2.6 with new features, bug fixes, and enhancements
+
+* Wed Jan 16 2019 - 2.2.5-1
+- Release v2.2.5 with new features, bug fixes, and enhancements
+
+* Fri Dec 28 2018 - 2.2.4-1
+- Release v2.2.4 with new features, bug fixes, and enhancements
+
+* Thu Dec 20 2018 - 2.2.3-1
+- Release v2.2.3 with new features, bug fixes, and enhancements
+
+* Thu Dec 20 2018 - 2.2.2-1
+- Release v2.2.2 with new features, bug fixes, and enhancements
+
+* Tue Dec 04 2018 - 2.2.1-1
+- Release v2.2.1 with new features, bug fixes, and enhancements
+
+* Sat Nov 24 2018 - 2.2.0-1
+- Release v2.2.0 with new features, bug fixes, and enhancements
+
+* Thu Nov 15 2018 - 2.1.6-1
+- Release v2.1.6 with new features, bug fixes, and enhancements
+
+* Sun Nov 11 2018 - 2.1.5-1
+- Release v2.1.5 with new features, bug fixes, and enhancements
+
+* Wed Oct 10 2018 - 2.1.4-1
+- Release v2.1.4 with new features, bug fixes, and enhancements
+
+* Thu Oct 04 2018 - 2.1.3-1
+- Release v2.1.3 with new features, bug fixes, and enhancements
+
+* Mon Aug 27 2018 - 2.1.2-1
+- Release v2.1.2 with new features, bug fixes, and enhancements
+
+* Tue Aug 14 2018 - 2.1.1-1
+- Release v2.1.1 with new features, bug fixes, and enhancements
+
+* Fri Aug 10 2018 - 2.1.0-1
+- Release v2.1.0 with new features, bug fixes, and enhancements
+
+* Wed Jul 18 2018 - 2.0.2-1
+- Release v2.0.2 with new features, bug fixes, and enhancements
+
+* Wed Jul 11 2018 - 2.0.1-1
+- Release v2.0.1 with new features, bug fixes, and enhancements
+
+* Tue Jul 10 2018 - 2.0.0-1
+- Release v2.0.0 with new features, bug fixes, and enhancements
+
+* Thu May 17 2018 - 1.1.2-1
+- Release v1.1.2 with new features, bug fixes, and enhancements
+
+* Sat Jan 20 2018 - 1.1.1-1
+- Release v1.1.1 with new features, bug fixes, and enhancements
+
+* Fri Jan 19 2018 - 1.1.0-1
+- Release v1.1.0 with new features, bug fixes, and enhancements
+
+* Tue Aug 01 2017 - 1.0.1-1
+- Release v1.0.1 with new features, bug fixes, and enhancements
+
+* Fri Jul 14 2017 - 1.0.0-1
+- Release v1.0.0 with new features, bug fixes, and enhancements
