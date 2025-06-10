@@ -41,7 +41,7 @@ Only the current release version or greater is supported. Earlier versions are n
 *   Install the [Digital Mars D Compiler (DMD)](https://dlang.org/download.html), [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc), or, at least version 15 of the [GNU D Compiler (GDC)](https://www.gdcproject.org/)
 
 > [!IMPORTANT]
-> To compile this application successfully, the minimum supported versions of each compiler are: DMD **2.088.0**, LDC **1.18.0**, and, GDC **15**. Ensuring compatibility and optimal performance necessitates the use of these specific versions or their more recent updates.
+> To compile this application successfully, the minimum supported versions of each compiler are: DMD **2.091.1**, LDC **1.20.1**, and, GDC **15**. Ensuring compatibility and optimal performance necessitates the use of these specific versions or their more recent updates.
 
 ### Example for installing DMD Compiler
 ```text
@@ -154,7 +154,7 @@ sudo apt install libnotify-dev
 
 ### Dependencies: Debian 11 and Raspbian (ARMHF) / Debian 12 / Raspbian / Ubuntu 22.x (ARM64)
 > [!CAUTION]
-> The minimum LDC compiler version required to compile this application is 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+> The minimum LDC compiler version required to compile this application is 1.20.1, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
 These instructions were validated using:
 *   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-armhf-lite) using Raspberry Pi 3B (revision 1.2)
@@ -216,14 +216,14 @@ sudo zypper install libnotify-devel
 ### Linux: Building the application using the DMD Reference Compiler
 Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per example below:
 ```text
-Run `source ~/dlang/dmd-2.088.0/activate` in your shell to use dmd-2.088.0.
+Run `source ~/dlang/dmd-2.091.1/activate` in your shell to use dmd-2.091.1.
 This will setup PATH, LIBRARY_PATH, LD_LIBRARY_PATH, DMD, DC, and PS1.
 Run `deactivate` later on to restore your environment.
 ```
 Without performing this step, the compilation process will fail.
 
 > [!NOTE]
-> Depending on your DMD version, substitute `2.088.0` above with your DMD version that is installed.
+> Depending on your DMD version, substitute `2.091.1` above with your DMD version that is installed.
 
 ```text
 git clone https://github.com/abraunegg/onedrive.git
@@ -292,7 +292,7 @@ as far as possible automatically, but can be overridden by passing
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### ARMHF Architecture (Raspbian) and ARM64 Architecture (Ubuntu 22.x / Debian 11 / Debian 12 / Raspbian)
 > [!CAUTION]
-> The minimum LDC compiler version required to compile this application is 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+> The minimum LDC compiler version required to compile this application is 1.20.1, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
 > [!IMPORTANT]
 > For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space. To verify your system's swap space availability, you can use the `swapon` command. Ensuring these requirements are met is vital for the application's compilation process.

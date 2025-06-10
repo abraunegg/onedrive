@@ -108,7 +108,7 @@ case $(basename $DC) in
 		# remove everything after ):
 		VERSION=${VERSION%%):*}
 		# now version should be something like L.M.N
-		MINVERSION=1.18.0
+		MINVERSION=1.20.1
 		;;
 	*gdmd*|*gdc*)
 		# Both gdmd and gdc print the same version information
@@ -131,7 +131,7 @@ case $(basename $DC) in
 		VERSION=${VERSION#*Compiler v}
 		VERSION=${VERSION%% *}
 		# now version should be something like L.M.N
-		MINVERSION=2.088.0
+		MINVERSION=2.091.1
 		;;
 esac
 
