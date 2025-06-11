@@ -232,6 +232,7 @@ final class ItemDatabase {
 	Database db;
 	string insertItemStmt;
 	string updateItemStmt;
+	string deleteOrphanItemStmt;
 	string selectItemByIdStmt;
 	string selectItemByRemoteIdStmt;
 	string selectItemByRemoteDriveIdStmt;
@@ -347,6 +348,10 @@ final class ItemDatabase {
 			UPDATE item
 			SET name = ?3, remoteName = ?4, type = ?5, eTag = ?6, cTag = ?7, mtime = ?8, parentId = ?9, quickXorHash = ?10, sha256Hash = ?11, remoteDriveId = ?12, remoteParentId = ?13, remoteId = ?14, remoteType = ?15, syncStatus = ?16, size = ?17, relocDriveId = ?18, relocParentId = ?19
 			WHERE driveId = ?1 AND id = ?2
+		";
+		deleteOrphanItemStmt = "
+			DELETE FROM item
+			WHERE driveId = ?1 AND parentId = ?9 AND name = ?3
 		";
 		selectItemByIdStmt = "
 			SELECT *
@@ -501,10 +506,12 @@ final class ItemDatabase {
 	void upsert(const ref Item item) {
 		synchronized(databaseLock) {
 			Statement selectStmt = db.prepare("SELECT COUNT(*) FROM item WHERE driveId = ? AND id = ?");
+			Statement selectParentalStmt = db.prepare("SELECT COUNT(*) FROM item WHERE driveId = ? AND parentId = ? AND name = ?");
 			Statement executionStmt = Statement.init;  // Initialise executionStmt to avoid uninitialised variable usage
 			
 			scope(exit) {
 				selectStmt.finalise();
+				selectParentalStmt.finalise();
 				executionStmt.finalise();
 			}
 			
@@ -514,9 +521,35 @@ final class ItemDatabase {
 				auto result = selectStmt.exec();
 				size_t count = result.front[0].to!size_t;
 				
+				// If the existing 'driveId' and 'id' are in the DB, then this is a record to update
 				if (count == 0) {
-					executionStmt = db.prepare(insertItemStmt);
+					// No existing record .... however
+					// - If the user has deleted and recreated the folder online with the same name, whilst we may have an existing entry, this will have the old 'id'
+					selectParentalStmt.bind(1, item.driveId);
+					selectParentalStmt.bind(2, item.parentId);
+					selectParentalStmt.bind(3, item.name);
+					auto orphanResult = selectParentalStmt.exec();
+					size_t orphanCount = orphanResult.front[0].to!size_t;
+					
+					if (orphanCount == 0) {
+						// Yes .. unique, no orphaned entry
+						executionStmt = db.prepare(insertItemStmt);
+					} else {
+						// Orphaned entry ... 
+						if (debugLogging) {addLogEntry("Orphaned DB Entry - must delete orphan entry", ["debug"]);}
+						auto deleteOrphan = db.prepare(deleteOrphanItemStmt);
+						deleteOrphan.bind(1, item.driveId);
+						deleteOrphan.bind(2, item.parentId);
+						deleteOrphan.bind(3, item.name);
+						deleteOrphan.exec();
+						if (debugLogging) {addLogEntry("Orphaned DB Entry Removed - must insert new entry", ["debug"]);}
+						
+						// Add new entry to avoid future orphan
+						executionStmt = db.prepare(insertItemStmt);
+						if (debugLogging) {addLogEntry("Orphaned DB Entry Replaced with new entry", ["debug"]);}
+					}
 				} else {
+					// Existing record
 					executionStmt = db.prepare(updateItemStmt);
 				}
 			
