@@ -516,43 +516,58 @@ final class ItemDatabase {
 			}
 			
 			try {
+				if (debugLogging) {
+					addLogEntry("Attempting upsert for item: id='" ~ item.id ~ "', parentId='" ~ item.parentId ~ "', name='" ~ item.name ~ "'", ["debug"]);
+				}
+				
 				selectStmt.bind(1, item.driveId);
 				selectStmt.bind(2, item.id);
 				auto result = selectStmt.exec();
 				size_t count = result.front[0].to!size_t;
 				
-				// If the existing 'driveId' and 'id' are in the DB, then this is a record to update
 				if (count == 0) {
-					// No existing record .... however
-					// - If the user has deleted and recreated the folder online with the same name, whilst we may have an existing entry, this will have the old 'id'
+					// Item with id not found, check for orphaned entry by parentId and name
 					selectParentalStmt.bind(1, item.driveId);
 					selectParentalStmt.bind(2, item.parentId);
 					selectParentalStmt.bind(3, item.name);
 					auto orphanResult = selectParentalStmt.exec();
 					size_t orphanCount = orphanResult.front[0].to!size_t;
-					
+
+					// Were orphans found?
 					if (orphanCount == 0) {
-						// Yes .. unique, no orphaned entry
+						// No match on name+parentId either — new insert
+						if (debugLogging) {
+							addLogEntry("Inserting new item: id='" ~ item.id ~ "', parentId='" ~ item.parentId ~ "', name='" ~ item.name ~ "'", ["debug"]);
+						}
 						executionStmt = db.prepare(insertItemStmt);
 					} else {
-						// Orphaned entry ... 
-						if (debugLogging) {addLogEntry("Orphaned DB Entry - must delete orphan entry", ["debug"]);}
+						// Orphans found
+						if (debugLogging) {
+							addLogEntry("Orphan lookup: count=" ~ to!string(orphanCount) ~ " for driveId='" ~ item.driveId ~ "', parentId='" ~ item.parentId ~ "', name='" ~ item.name ~ "'", ["debug"]);
+							addLogEntry("Orphaned DB Entry - deleting old entry for name='" ~ item.name ~ "' and parentId='" ~ item.parentId ~ "'", ["debug"]);
+						}
+					
+						// Orphan exists, delete it first
 						auto deleteOrphan = db.prepare(deleteOrphanItemStmt);
 						deleteOrphan.bind(1, item.driveId);
 						deleteOrphan.bind(2, item.parentId);
 						deleteOrphan.bind(3, item.name);
 						deleteOrphan.exec();
-						if (debugLogging) {addLogEntry("Orphaned DB Entry Removed - must insert new entry", ["debug"]);}
-						
-						// Add new entry to avoid future orphan
+						deleteOrphan.finalise();
+
+						if (debugLogging) {
+							addLogEntry("Deleted orphaned entry — now inserting new item: id='" ~ item.id ~ "', parentId='" ~ item.parentId ~ "', name='" ~ item.name ~ "'", ["debug"]);
+						}
 						executionStmt = db.prepare(insertItemStmt);
-						if (debugLogging) {addLogEntry("Orphaned DB Entry Replaced with new entry", ["debug"]);}
 					}
 				} else {
-					// Existing record
+					// Found by ID — perform update
+					if (debugLogging) {
+						addLogEntry("Updating existing DB record: id='" ~ item.id ~ "', parentId='" ~ item.parentId ~ "', name='" ~ item.name ~ "'", ["debug"]);
+					}
 					executionStmt = db.prepare(updateItemStmt);
 				}
-			
+
 				bindItem(item, executionStmt);
 				executionStmt.exec();
 			} catch (SqliteException exception) {
