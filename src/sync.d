@@ -95,8 +95,10 @@ class SyncEngine {
 	// Array of directory databaseItem.id to skip while applying the changes.
 	// These are the 'parent path' id's that are being excluded, so if the parent id is in here, the child needs to be skipped as well
 	RedBlackTree!string skippedItems = redBlackTree!string();
-	// Array of databaseItem.id to delete after the changes have been downloaded
-	string[2][] idsToDelete;
+	
+	// Array consisting of 'item.driveId', 'item.id' and 'item.parentId' values to delete after all the online changes have been downloaded
+	string[3][] idsToDelete;
+	
 	// Array of JSON items which are files or directories that are not 'root', skipped or to be deleted, that need to be processed
 	JSONValue[] jsonItemsToProcess;
 	// Array of JSON items which are files that are not 'root', skipped or to be deleted, that need to be downloaded
@@ -1928,7 +1930,8 @@ class SyncEngine {
 				if (isItemSynced(existingDatabaseItem, localPathToDelete, itemSource)) {
 					// Flag to delete
 					if (debugLogging) {addLogEntry("Flagging to delete item locally: " ~ to!string(onedriveJSONItem), ["debug"]);}
-					idsToDelete ~= [thisItemDriveId, thisItemId];
+					// Use the DB entries returned - add the driveId, itemId and parentId values  to the array
+					idsToDelete ~= [existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId];
 				} else {
 					// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
 					// In case the renamed path is needed
@@ -2194,7 +2197,8 @@ class SyncEngine {
 							}
 							// flag to delete local file as it now is no longer in sync with OneDrive
 							if (debugLogging) {addLogEntry("Flagging to delete item locally: ", ["debug"]);}
-							idsToDelete ~= [thisItemDriveId, thisItemId];
+							// Use the configured values - add the driveId, itemId and parentId values to the array
+							idsToDelete ~= [thisItemDriveId, thisItemId, thisItemParentId];
 						}
 					}	
 				}
@@ -2410,7 +2414,8 @@ class SyncEngine {
 							if (existingDBEntry) {
 								// flag to delete
 								if (verboseLogging) {addLogEntry("Flagging item for local delete as item exists in database: " ~ newItemPath, ["verbose"]);}
-								idsToDelete ~= [thisItemDriveId, thisItemId];
+								// Use the configured values - add the driveId, itemId and parentId values to the array
+								idsToDelete ~= [thisItemDriveId, thisItemId, thisItemParentId];
 							}
 						}
 					}
@@ -4413,7 +4418,7 @@ class SyncEngine {
 						if (pathItem.id == item.id) {
 							needsRemoval = true;
 						} else {
-							addLogEntry("Skipped due to id difference!");
+							addLogEntry("Skipping local path removal due to 'id' difference!");
 						}
 					} else {
 						// item has disappeared completely
@@ -4487,6 +4492,7 @@ class SyncEngine {
 					pathFakeDeletedArray ~= pathToAdd;
 				}
 				
+				// Local path removal
 				bool needsRemoval = false;
 				if (exists(path)) {
 					// path exists on the local system	
@@ -4496,7 +4502,7 @@ class SyncEngine {
 						if (pathItem.id == item.id) {
 							needsRemoval = true;
 						} else {
-							addLogEntry("Skipped due to id difference!");
+							addLogEntry("Skipping local path removal due to 'id' difference!");
 						}
 					} else {
 						// item has disappeared completely
@@ -4841,7 +4847,9 @@ class SyncEngine {
 							addLogEntry("Flagging to delete local item as it now is no longer in sync with OneDrive", ["debug"]);
 							addLogEntry("outOfSyncItem: " ~ to!string(outOfSyncItem), ["debug"]);
 						}
-						idsToDelete ~= [outOfSyncItem.driveId, outOfSyncItem.id];
+						
+						// Use the configured values - add the driveId, itemId and parentId values to the array
+						idsToDelete ~= [outOfSyncItem.driveId, outOfSyncItem.id, outOfSyncItem.parentId];
 						// delete items in idsToDelete
 						if (idsToDelete.length > 0) processDeleteItems();
 					}
