@@ -525,8 +525,10 @@ final class ItemDatabase {
 				auto result = selectStmt.exec();
 				size_t count = result.front[0].to!size_t;
 				
+				// If the existing 'driveId' and 'id' are in the DB, then this is a record to update
 				if (count == 0) {
 					// Item with id not found, check for orphaned entry by parentId and name
+					// - If the user has deleted and recreated the folder online with the same name, whilst we may have an existing entry, this will have the old 'id'
 					selectParentalStmt.bind(1, item.driveId);
 					selectParentalStmt.bind(2, item.parentId);
 					selectParentalStmt.bind(3, item.name);
