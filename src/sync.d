@@ -3222,10 +3222,10 @@ class SyncEngine {
 		if (appConfig.accountType == "personal") {
 			// Yes this is a personal account
 			if (debugLogging) {
-				addLogEntry("Updating Shared Folder DB Tie record entry with correct values as this is a 'root' object as it is a Personal Shared Folder Root Object" , ["debug"]);
-				addLogEntry(" sharedFolderDatabaseTie.type = ItemType.root", ["debug"]);
+				addLogEntry("Updating Shared Folder DB Tie record entry with correct type value as this as it is a Personal Shared Folder Object" , ["debug"]);
+				addLogEntry(" sharedFolderDatabaseTie.type = ItemType.dir", ["debug"]);
 			}
-			sharedFolderDatabaseTie.type = ItemType.root;
+			sharedFolderDatabaseTie.type = ItemType.dir;
 		}
 		
 		// Issue #3115 - Validate sharedFolderDatabaseTie.driveId length
@@ -7118,9 +7118,16 @@ class SyncEngine {
 		}
 		
 		// Now that all the paths have been rationalised and potential duplicate creation requests filtered out, create the paths online
+		if (debugLogging) {addLogEntry("uniquePathsToCreateOnline = " ~ to!string(uniquePathsToCreateOnline), ["debug"]);}
+		
+		// For each path in the array, attempt to create this online
 		foreach (onlinePathToCreate; uniquePathsToCreateOnline) {
-			// Create the path online
-			createDirectoryOnline(onlinePathToCreate);
+			try {
+				// Try and create the required path online
+				createDirectoryOnline(onlinePathToCreate);
+			} catch (Exception e) {
+				addLogEntry("ERROR: Failed to create directory online: " ~ onlinePathToCreate ~ " => " ~ e.msg);
+			}
 		}
 		
 		// Display function processing time if configured to do so
@@ -7924,6 +7931,8 @@ class SyncEngine {
 				if (verboseLogging) {addLogEntry("The requested directory to create was not found on OneDrive - creating remote directory: " ~ thisNewPathToCreate, ["verbose"]);}
 				
 				// Build up the online create directory request
+				string requiredDriveId;
+				string requiredParentItemId;
 				JSONValue createDirectoryOnlineAPIResponse;
 				JSONValue newDriveItem = [
 						"name": JSONValue(baseName(thisNewPathToCreate)),
@@ -7935,9 +7944,6 @@ class SyncEngine {
 				if (!dryRun) {
 					try {
 						// Attempt to create a new folder on the required driveId and parent item id
-						string requiredDriveId;
-						string requiredParentItemId;
-						
 						// Is the item a Remote Object (Shared Folder) ?
 						if (parentItem.type == ItemType.remote) {
 							// Yes .. Shared Folder
@@ -7965,9 +7971,16 @@ class SyncEngine {
 						addLogEntry("Successfully created the remote directory " ~ thisNewPathToCreate ~ " on Microsoft OneDrive");
 					} catch (OneDriveException exception) {
 						if (exception.httpStatusCode == 409) {
-							// OneDrive API returned a 404 (above) to say the directory did not exist
-							// but when we attempted to create it, OneDrive responded that it now already exists
+							// OneDrive API returned a 404 (far above) to say the directory did not exist
+							// but when we attempted to create it, OneDrive responded that it now already exists with a 409
 							if (verboseLogging) {addLogEntry("OneDrive reported that " ~ thisNewPathToCreate ~ " already exists .. OneDrive API race condition", ["verbose"]);}
+							
+							// Try to recover race condition by querying the parent's children for the folder we are trying to create
+							createDirectoryOnlineAPIResponse = resolveOnlineCreationRaceCondition(requiredDriveId, requiredParentItemId, thisNewPathToCreate);
+							
+							// Is the response a valid JSON object - validation checking done in saveItem
+							saveItem(createDirectoryOnlineAPIResponse);
+							
 							// Shutdown this API instance, as we will create API instances as required, when required
 							createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
 							// Free object and memory
@@ -8187,6 +8200,114 @@ class SyncEngine {
 			// generic error
 			return;
 		}
+	}
+	
+	// In the event that the online creation triggered a 404 then a 409 on creation attempt, this function explicitly is used to query that parent for the child being sought
+	// This should return a usable JSON response of the folder being sought
+	JSONValue resolveOnlineCreationRaceCondition(string requiredDriveId, string requiredParentItemId, string thisNewPathToCreate) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
+		// Create a new API Instance for this thread and initialise it
+		OneDriveApi raceConditionResolutionOneDriveApiInstance;
+		raceConditionResolutionOneDriveApiInstance = new OneDriveApi(appConfig);
+		raceConditionResolutionOneDriveApiInstance.initialise();
+		
+		// What is the folder we are seeking
+		string searchFolder = baseName(thisNewPathToCreate);
+		
+		// Where should we store the details of the online folder we are seeking?
+		JSONValue targetOnlineFolderDetails;
+		
+		// Required variables for listChildren to operate
+		JSONValue topLevelChildren;
+		string nextLink;
+		bool directoryFoundOnline = false;
+		
+		// To handle ^c events, we need this Code
+		while (true) {
+			// Check if exitHandlerTriggered is true
+			if (exitHandlerTriggered) {
+				// break out of the 'while (true)' loop
+				break;
+			}
+			
+			// Query this remote object for its children
+			topLevelChildren = raceConditionResolutionOneDriveApiInstance.listChildren(requiredDriveId, requiredParentItemId, nextLink);
+			
+			// Process each child that has been returned
+			foreach (child; topLevelChildren["value"].array) {
+				// We are specifically seeking a 'folder' object
+				if (isItemFolder(child)) {
+					// Is this the child folder we are looking for, and is a POSIX match?
+					// We know that Microsoft OneDrive is not POSIX aware, thus there cannot be 2 folders of the same name with different case sensitivity
+					if (child["name"].str == searchFolder) {
+						// EXACT MATCH including case sensitivity: Flag that we found the folder online
+						directoryFoundOnline = true;
+						// Use these details for raceCondition response
+						targetOnlineFolderDetails = child;
+						break;
+					} else {
+						string childAsLower = toLower(child["name"].str);
+						string thisFolderNameAsLower = toLower(searchFolder);
+						
+						try {
+							if (childAsLower == thisFolderNameAsLower) {	
+								// This is a POSIX 'case in-sensitive match' ..... 
+								// Local item name has a 'case-insensitive match' to an existing item on OneDrive
+								throw new PosixException(searchFolder, child["name"].str);
+							}
+						} catch (PosixException e) {
+							// Display POSIX error message
+							displayPosixErrorMessage(e.msg);
+							addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on Microsoft OneDrive online.");
+							addLogEntry("ERROR: To resolve, rename this local directory: " ~ thisNewPathToCreate);
+						}
+					}
+				}
+			}
+			
+			// That set of returned objects - did we find the folder?
+			if (directoryFoundOnline) {
+				// We found the folder, no need to continue searching nextLink data
+				break;
+			}
+			
+			// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
+			// to indicate more items are available and provide the request URL for the next page of items.
+			if ("@odata.nextLink" in topLevelChildren) {
+				// Update nextLink to next changeSet bundle
+				if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
+				nextLink = topLevelChildren["@odata.nextLink"].str;
+			} else break;
+			
+			// Sleep for a while to avoid busy-waiting
+			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
+		}
+		
+		// Shutdown this API instance, as we will create API instances as required, when required
+		raceConditionResolutionOneDriveApiInstance.releaseCurlEngine();
+		// Free object and memory
+		raceConditionResolutionOneDriveApiInstance = null;
+		// Perform Garbage Collection
+		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// Return the JSON with the folder details
+		return targetOnlineFolderDetails;
 	}
 	
 	// Test that the online name actually matches the requested local name
