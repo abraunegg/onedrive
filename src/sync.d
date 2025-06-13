@@ -5525,7 +5525,11 @@ class SyncEngine {
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
-			
+		
+		// Debug what JSON we are evaluating against Client Side Filtering Rules
+		if (debugLogging) {addLogEntry("Checking this JSON against Client Side Filtering Rules: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);}
+				
+		// Function flag
 		bool clientSideRuleExcludesPath = false;
 		
 		// Check the path against client side filtering rules
@@ -5783,6 +5787,9 @@ class SyncEngine {
 							selfBuiltPath = splitPaths[1];
 						}
 						
+						// Debug output what the self-built path currently is
+						if (debugLogging) {addLogEntry(" - selfBuiltPath currently calculated as: " ~ selfBuiltPath, ["debug"]);}
+						
 						// Issue #2731
 						// Get the remoteDriveId from JSON record
 						string remoteDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
@@ -5795,9 +5802,20 @@ class SyncEngine {
 							itemDB.selectByRemoteDriveId(remoteDriveId, remoteItem);
 							if (debugLogging) {addLogEntry("Query returned result (itemDB.selectByRemoteDriveId): " ~ to!string(remoteItem), ["debug"]);}
 							
+							// Shared Folders present a unique challenge to determine what path needs to be used, especially in a --resync scenario where there are near zero records available to use computeItemPath() 
 							// Update the path that will be used to check 'sync_list' with the 'name' of the remoteDriveId database record
-							selfBuiltPath = remoteItem.name ~ selfBuiltPath;
-							if (debugLogging) {addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath), ["debug"]);}
+							// Issue #3331
+							// Avoid duplicating the shared folder root name if already present
+							if (!selfBuiltPath.startsWith("/" ~ remoteItem.name ~ "/")) {
+								selfBuiltPath = remoteItem.name ~ selfBuiltPath;
+								if (debugLogging) {
+									addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath), ["debug"]);
+								}
+							} else {
+								if (debugLogging) {
+									addLogEntry("Shared Folder name already present in path; no update needed to selfBuiltPath", ["debug"]);
+								}
+							}
 						}
 						
 						// Issue #2740
@@ -10457,7 +10475,7 @@ class SyncEngine {
 					//   /Level 1/Level 2/Level 3/Child Shared Folder/some folder/another folder
 					// But 'Child Shared Folder' is what is shared, thus '/Level 1/Level 2/Level 3/' is a potential information leak if logged.
 					// Plus, the application output now shows accurately what is being shared - so that is a good thing.
-					if (verboseLogging) {addLogEntry("Adding " ~ to!string(count(thisLevelChildren["value"].array)) ~ " OneDrive items for processing from " ~ pathForLogging, ["verbose"]);}
+					if (verboseLogging) {addLogEntry("Adding " ~ to!string(count(thisLevelChildren["value"].array)) ~ " OneDrive JSON items for further processing from " ~ pathForLogging, ["verbose"]);}
 				}
 				foreach (child; thisLevelChildren["value"].array) {
 					// Check for any Client Side Filtering here ... we should skip querying the OneDrive API for 'folders' that we are going to just process and skip anyway.
