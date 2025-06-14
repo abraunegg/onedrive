@@ -317,6 +317,8 @@ final class ItemDatabase {
 			// Set the journal mode for databases associated with the current connection
 			// https://www.sqlite.org/pragma.html#pragma_journal_mode
 			db.exec("PRAGMA journal_mode = WAL;");
+			// Only checkpoint if WAL grows past a certain size
+			db.exec("PRAGMA wal_autocheckpoint = 1000;");
 			// Automatic indexing is enabled by default as of version 3.7.17
 			// https://www.sqlite.org/pragma.html#pragma_automatic_index 
 			// PRAGMA automatic_index = boolean;
@@ -1214,8 +1216,8 @@ final class ItemDatabase {
 					}
 				}
 				
-				// Ensure there are no pending operations by performing a checkpoint
-				db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+				// Ensure there are no pending operations by performing a PASSIVE checkpoint
+				db.exec("PRAGMA wal_checkpoint(PASSIVE);");
 				
 				// Prepare and execute VACUUM statement
 				Statement stmt = db.prepare("VACUUM;");
