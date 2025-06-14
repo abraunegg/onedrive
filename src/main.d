@@ -1177,7 +1177,7 @@ int main(string[] cliArgs) {
 						
 						// Write WAL and SHM data to file for this loop and release memory used by in-memory processing
 						if (debugLogging) {addLogEntry("Merge contents of WAL and SHM files into main database file", ["debug"]);}
-						itemDB.performCheckpoint("TRUNCATE");
+						itemDB.performCheckpoint("PASSIVE");
 					} else {
 						// Not online
 						addLogEntry("Microsoft OneDrive service is not reachable at this time. Will re-try on next sync attempt.");

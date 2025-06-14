@@ -36,6 +36,7 @@ AThings
 attrnamespace
 aufxw
 aur
+autocheckpoint
 autoclean
 automake
 autoprocess
