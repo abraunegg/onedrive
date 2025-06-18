@@ -98,7 +98,6 @@ class SyncEngine {
 	
 	// Array consisting of 'item.driveId', 'item.id' and 'item.parentId' values to delete after all the online changes have been downloaded
 	string[3][] idsToDelete;
-	
 	// Array of JSON items which are files or directories that are not 'root', skipped or to be deleted, that need to be processed
 	JSONValue[] jsonItemsToProcess;
 	// Array of JSON items which are files that are not 'root', skipped or to be deleted, that need to be downloaded
@@ -134,6 +133,8 @@ class SyncEngine {
 	DatabaseItemsToDeleteOnline[] databaseItemsToDeleteOnline;
 	// Array of parentId's that have been skipped via 'sync_list'
 	string[] syncListSkippedParentIds;
+	// Array of Microsoft OneNote Notebook Package ID's
+	string[] onenotePackageIdentifiers;
 		
 	// Flag that there were upload or download failures listed
 	bool syncFailures = false;
@@ -1657,6 +1658,7 @@ class SyncEngine {
 		bool itemNameExplicitMatchRoot = false;
 		bool itemIsRemoteItem = false;
 		string objectParentDriveId;
+		string objectParentId;
 		MonoTime jsonProcessingStartTime;
 		
 		// Debugging the processing start of the JSON item
@@ -1682,6 +1684,7 @@ class SyncEngine {
 			itemIdMatchesDefaultRootId = (thisItemId == appConfig.defaultRootId);
 			itemNameExplicitMatchRoot = (onedriveJSONItem["name"].str == "root");
 			objectParentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+			objectParentId = onedriveJSONItem["parentReference"]["id"].str;
 			itemIsRemoteItem  = isItemRemote(onedriveJSONItem);
 			
 			// Test is this is the OneDrive Users Root?
@@ -1779,6 +1782,12 @@ class SyncEngine {
 				// This JSON has this element
 				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook Package '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
 				discardDeltaJSONItem = true;
+				
+				// Add this 'id' to onenotePackageIdentifiers as a future 'catch all' for any objects inside this container
+				if (!onenotePackageIdentifiers.canFind(thisItemId)) {
+					onenotePackageIdentifiers ~= thisItemId;
+				}
+				
 			}
 			
 			// Microsoft OneDrive OneNote file objects will report as files but have 'application/msonenote' or 'application/octet-stream' as their mime type and will not have any hash entry
@@ -1803,6 +1812,62 @@ class SyncEngine {
 						discardDeltaJSONItem = true;
 					}
 				}
+				
+				// Add the Parent ID to onenotePackageIdentifiers
+				if (itemHasParentReferenceId) {
+					// Add this 'id' to onenotePackageIdentifiers as a future 'catch all' for any objects inside this container
+					if (!onenotePackageIdentifiers.canFind(objectParentId)) {
+						onenotePackageIdentifiers ~= objectParentId;
+					}
+				}
+			}
+			
+			// Microsoft OneDrive OneNote 'internal recycle bin' items are a 'folder' , with a 'size' but have a specific name 'OneNote_RecycleBin', for example:
+			//	{
+			//		....
+			//		"fileSystemInfo": {
+			//			"createdDateTime": "2025-03-10T17:11:15Z",
+			//			"lastModifiedDateTime": "2025-03-10T17:11:15Z"
+			//		},
+			//		"folder": {
+			//			"childCount": 2
+			//		},
+			//		"id": "XXXXX",
+			//		"lastModifiedBy": {
+			//			XXXXX
+			//		},
+			//		"name": "OneNote_RecycleBin",
+			//		"parentReference": {
+			//			"driveId": "abcde",
+			//			"driveType": "business",
+			//			"id": "abcde",
+			//			"name": "PARENT NAME - ONENOTE PACKAGE NAME",
+			//			"path": "/drives/path/to/parent",
+			//			"siteId": "XXXXX"
+			//		},
+			//		"size": 17468
+			//	}
+			// 
+			// The only way we can block this download is looking at the 'name' component
+			if (onedriveJSONItem["name"].str == "OneNote_RecycleBin") {
+				// Log that this will be skipped as this this is a Microsoft OneNote item and unsupported
+				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook RecycleBin '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+				discardDeltaJSONItem = true;
+				
+				// Add the Parent ID to onenotePackageIdentifiers
+				if (itemHasParentReferenceId) {
+					// Add this 'id' to onenotePackageIdentifiers as a future 'catch all' for any objects inside this container
+					if (!onenotePackageIdentifiers.canFind(objectParentId)) {
+						onenotePackageIdentifiers ~= objectParentId;
+					}
+				}
+			}
+			
+			// Microsoft OneDrive OneNote 'catch all'
+			if (onenotePackageIdentifiers.canFind(objectParentId)) {
+				// Log that this will be skipped as this this is a Microsoft OneNote item and unsupported
+				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook object '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+				discardDeltaJSONItem = true;
 			}
 			
 			// If we are not self-generating a /delta response, check this initial /delta JSON bundle item against the basic checks 
