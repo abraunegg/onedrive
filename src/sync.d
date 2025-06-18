@@ -7983,10 +7983,13 @@ class SyncEngine {
 					
 						// Create the new folder
 						createDirectoryOnlineAPIResponse = createDirectoryOnlineOneDriveApiInstance.createById(requiredDriveId, requiredParentItemId, newDriveItem);
-						// Is the response a valid JSON object - validation checking done in saveItem
-						saveItem(createDirectoryOnlineAPIResponse);
+						
 						// Log that the directory was created
 						addLogEntry("Successfully created the remote directory " ~ thisNewPathToCreate ~ " on Microsoft OneDrive");
+						
+						// Is the response a valid JSON object - validation checking done in saveItem, printing of the JSON object is done in saveItem()
+						saveItem(createDirectoryOnlineAPIResponse);
+						
 					} catch (OneDriveException exception) {
 						if (exception.httpStatusCode == 409) {
 							// OneDrive API returned a 404 (far above) to say the directory did not exist
@@ -7996,7 +7999,10 @@ class SyncEngine {
 							// Try to recover race condition by querying the parent's children for the folder we are trying to create
 							createDirectoryOnlineAPIResponse = resolveOnlineCreationRaceCondition(requiredDriveId, requiredParentItemId, thisNewPathToCreate);
 							
-							// Is the response a valid JSON object - validation checking done in saveItem
+							// Log that the directory details were obtained
+							addLogEntry("Successfully obtained the remote directory details " ~ thisNewPathToCreate ~ " from Microsoft OneDrive");
+							
+							// Is the response a valid JSON object - validation checking done in saveItem, printing of the JSON object is done in saveItem()
 							saveItem(createDirectoryOnlineAPIResponse);
 							
 							// Shutdown this API instance, as we will create API instances as required, when required
@@ -8759,7 +8765,7 @@ class SyncEngine {
 					if (canFind(posixViolationPaths, parentPath)) {
 						addLogEntry("ERROR: POSIX 'case-insensitive match' for the parent path which violates the Microsoft OneDrive API namespace convention.");
 					} else {
-						addLogEntry("ERROR: Parent path is not in the database or online.");
+						addLogEntry("ERROR: Parent path is not in the database or online: " ~ parentPath);
 					}
 					addLogEntry("ERROR: Unable to upload this file: " ~ fileToUpload);
 					uploadFailed = true;
