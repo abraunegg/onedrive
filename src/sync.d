@@ -1684,7 +1684,9 @@ class SyncEngine {
 			itemIdMatchesDefaultRootId = (thisItemId == appConfig.defaultRootId);
 			itemNameExplicitMatchRoot = (onedriveJSONItem["name"].str == "root");
 			objectParentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
-			objectParentId = onedriveJSONItem["parentReference"]["id"].str;
+			if (itemHasParentReferenceId) {
+				objectParentId = onedriveJSONItem["parentReference"]["id"].str;
+			}
 			itemIsRemoteItem  = isItemRemote(onedriveJSONItem);
 			
 			// Test is this is the OneDrive Users Root?
