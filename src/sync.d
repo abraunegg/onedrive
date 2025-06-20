@@ -1855,7 +1855,7 @@ class SyncEngine {
 			// The only way we can block this download is looking at the 'name' component
 			if (onedriveJSONItem["name"].str == "OneNote_RecycleBin") {
 				// Log that this will be skipped as this this is a Microsoft OneNote item and unsupported
-				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook RecycleBin '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook Recycle Bin '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
 				discardDeltaJSONItem = true;
 				
 				// Add the Parent ID to onenotePackageIdentifiers
