@@ -6449,12 +6449,16 @@ class SyncEngine {
 						//   The local item has the same hash value as the item online - correcting timestamp online
 						// This then creates another version online which we do not want to do .. unless configured to do so
 						if (!appConfig.getValueBool("create_new_file_version")) {
-							// Create an applicable DB item from the upload JSON response
-							Item onlineItem;
-							onlineItem = makeItem(uploadResponse);
-							// Correct the local file timestamp to avoid creating a new version online
-							// Set the timestamp, logging and error handling done within function
-							setLocalPathTimestamp(dryRun, localFilePath, onlineItem.mtime);
+							// Are we in an --upload-only scenario?
+							// In in an --upload-only scenario, it is pointless updating the local timestamp with that what is now online
+							if(!uploadOnly){
+								// Create an applicable DB item from the upload JSON response
+								Item onlineItem;
+								onlineItem = makeItem(uploadResponse);
+								// Correct the local file timestamp to avoid creating a new version online
+								// Set the local timestamp, logging and error handling done within function
+								setLocalPathTimestamp(dryRun, localFilePath, onlineItem.mtime);
+							}	
 						} else {
 							// Create a new online version of the file by updating the metadata, which negates the need to download the file
 							uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);	
@@ -6472,7 +6476,7 @@ class SyncEngine {
 					if (!uploadIntegrityPassed) {
 						// upload integrity check failed for the modified file
 						if (!appConfig.getValueBool("create_new_file_version")) {
-							// are we in an --upload-only scenario
+							// Are we in an --upload-only scenario?
 							if(!uploadOnly){
 								// Download the now online modified file
 								addLogEntry("WARNING: Microsoft OneDrive modified your uploaded file via its SharePoint 'enrichment' feature. To keep your local and online versions consistent, the altered file will now be downloaded.");
@@ -6496,12 +6500,16 @@ class SyncEngine {
 						//   The local item has the same hash value as the item online - correcting timestamp online
 						// This then creates another version online which we do not want to do .. unless configured to do so
 						if (!appConfig.getValueBool("create_new_file_version")) {
-							// Create an applicable DB item from the upload JSON response
-							Item onlineItem;
-							onlineItem = makeItem(uploadResponse);
-							// Correct the local file timestamp to avoid creating a new version online
-							// Set the timestamp, logging and error handling done within function
-							setLocalPathTimestamp(dryRun, localFilePath, onlineItem.mtime);
+							// Are we in an --upload-only scenario?
+							// In in an --upload-only scenario, it is pointless updating the local timestamp with that what is now online
+							if(!uploadOnly){
+								// Create an applicable DB item from the upload JSON response
+								Item onlineItem;
+								onlineItem = makeItem(uploadResponse);
+								// Correct the local file timestamp to avoid creating a new version online
+								// Set the timestamp, logging and error handling done within function
+								setLocalPathTimestamp(dryRun, localFilePath, onlineItem.mtime);
+							}
 						} else {
 							// Create a new online version of the file by updating the metadata, which negates the need to download the file
 							uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);	
