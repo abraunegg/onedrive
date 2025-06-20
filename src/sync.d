@@ -1869,10 +1869,12 @@ class SyncEngine {
 			}
 			
 			// Microsoft OneDrive OneNote 'catch all'
-			if (onenotePackageIdentifiers.canFind(objectParentId)) {
-				// Log that this will be skipped as this this is a Microsoft OneNote item and unsupported
-				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook object '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
-				discardDeltaJSONItem = true;
+			if (!discardDeltaJSONItem) {
+				if (onenotePackageIdentifiers.canFind(objectParentId)) {
+					// Log that this will be skipped as this this is a Microsoft OneNote item and unsupported
+					if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook object '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+					discardDeltaJSONItem = true;
+				}
 			}
 			
 			// If we are not self-generating a /delta response, check this initial /delta JSON bundle item against the basic checks 
