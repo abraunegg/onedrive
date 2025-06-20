@@ -591,14 +591,16 @@ class SyncEngine {
 		if ((defaultOneDriveDriveDetails.type() == JSONType.object) && (hasId(defaultOneDriveDriveDetails))) {
 			if (debugLogging) {addLogEntry("OneDrive Account Default Drive Details:      " ~ to!string(defaultOneDriveDriveDetails), ["debug"]);}
 			appConfig.accountType = defaultOneDriveDriveDetails["driveType"].str;
-			appConfig.defaultDriveId = defaultOneDriveDriveDetails["id"].str;
 			
 			// Issue #3115 - Validate driveId length
 			// What account type is this?
 			if (appConfig.accountType == "personal") {
 				// Test driveId length and validation
 				// Once checked and validated, we only need to check 'driveId' if it does not match exactly 'appConfig.defaultDriveId'
-				appConfig.defaultDriveId = testProvidedDriveIdForLengthIssue(appConfig.defaultDriveId);
+				appConfig.defaultDriveId = transformToLowerCase(testProvidedDriveIdForLengthIssue(defaultOneDriveDriveDetails["id"].str));
+			} else {
+				// Use 'defaultOneDriveDriveDetails' as is for all other account types
+				appConfig.defaultDriveId = defaultOneDriveDriveDetails["id"].str;
 			}
 			
 			// Make sure that appConfig.defaultDriveId is in our driveIDs array to use when checking if item is in database
@@ -1664,9 +1666,23 @@ class SyncEngine {
 			addLogEntry(debugLogBreakType1, ["debug"]);
 			jsonProcessingStartTime = MonoTime.currTime();
 			addLogEntry("Processing OneDrive Item " ~ to!string(changeCount) ~ " of " ~ to!string(nrChanges) ~ " from API Response Bundle " ~ to!string(responseBundleCount), ["debug"]);
-			addLogEntry("Raw JSON OneDrive Item: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 		}
 		
+		// Issue #3336 - Convert driveId to lowercase
+		if (appConfig.accountType == "personal") {
+			// We must massage this raw JSON record to force the onedriveJSONItem["parentReference"]["driveId"] to lowercase
+			if (hasParentReferenceDriveId(onedriveJSONItem)) {
+				// This JSON record has a driveId we now must manipulate to lowercase
+				string originalDriveIdValue = onedriveJSONItem["parentReference"]["driveId"].str;
+				onedriveJSONItem["parentReference"]["driveId"] = transformToLowerCase(originalDriveIdValue);
+			}
+		}
+		
+		// Debug output of the raw JSON item we are processing
+		if (debugLogging) {
+			addLogEntry("Raw JSON OneDrive Item: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
+		}
+				
 		// What is this item's id
 		thisItemId = onedriveJSONItem["id"].str;
 		
@@ -9756,6 +9772,17 @@ class SyncEngine {
 		
 		// jsonItem has to be a valid object
 		if (jsonItem.type() == JSONType.object) {
+		
+			// Issue #3336 - Convert driveId to lowercase
+			if (appConfig.accountType == "personal") {
+				// We must massage this raw JSON record to force the jsonItem["parentReference"]["driveId"] to lowercase
+				if (hasParentReferenceDriveId(jsonItem)) {
+					// This JSON record has a driveId we now must manipulate to lowercase
+					string originalDriveIdValue = jsonItem["parentReference"]["driveId"].str;
+					jsonItem["parentReference"]["driveId"] = transformToLowerCase(originalDriveIdValue);
+				}
+			}
+			
 			// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
 			if (hasId(jsonItem)) {
 				// Are we in a --upload-only & --remove-source-files scenario?
@@ -13724,8 +13751,9 @@ class SyncEngine {
 					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 				}
 				
-				// Return the new calculated value
-				return newEntry;
+				// Issue #3336 - Convert driveId to lowercase
+				// Return the new calculated value as lowercase
+				return transformToLowerCase(newEntry);
 			} else {
 				// Display function processing time if configured to do so
 				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -13733,8 +13761,9 @@ class SyncEngine {
 					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 				}
 			
-				// Return input value as-is
-				return objectParentDriveId;
+				// Issue #3336 - Convert driveId to lowercase
+				// Return input value as-is as lowercase
+				return transformToLowerCase(objectParentDriveId);
 			}
 		} else {
 			// Display function processing time if configured to do so
@@ -13743,9 +13772,39 @@ class SyncEngine {
 				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 			}
 		
-			// Return input value as-is
-			return objectParentDriveId;
+			// Issue #3336 - Convert driveId to lowercase
+			// Return input value as-is as lowercase
+			return transformToLowerCase(objectParentDriveId);
 		}
+	}
+	
+	// Transform OneDrive Personal driveId or parentReference driveId to lowercase
+	string transformToLowerCase(string objectParentDriveId) {
+		// Since 14 June 2025 (possibly earlier), the Microsoft Graph API has started returning inconsistent casing for driveId values across multiple OneDrive Personal API endpoints.
+		// https://github.com/OneDrive/onedrive-api-docs/issues/1902
+	
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
+		string transformedDriveIdValue;
+		transformedDriveIdValue = toLower(objectParentDriveId);
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// Return transformed value
+		return transformedDriveIdValue;
 	}
 	
 	// Calculate the transfer metrics for the file to aid in performance discussions when they are raised
