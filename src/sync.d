@@ -1787,6 +1787,7 @@ class SyncEngine {
 				
 				// Add this 'id' to onenotePackageIdentifiers as a future 'catch all' for any objects inside this container
 				if (!onenotePackageIdentifiers.canFind(thisItemId)) {
+					if (debugLogging) {addLogEntry("Adding 'thisItemId' to onenotePackageIdentifiers: " ~ to!string(thisItemId), ["debug"]);}
 					onenotePackageIdentifiers ~= thisItemId;
 				}
 				
@@ -1812,14 +1813,15 @@ class SyncEngine {
 						// Log that this will be skipped as this this is a Microsoft OneNote item and unsupported
 						if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook File '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
 						discardDeltaJSONItem = true;
-					}
-				}
-				
-				// Add the Parent ID to onenotePackageIdentifiers
-				if (itemHasParentReferenceId) {
-					// Add this 'id' to onenotePackageIdentifiers as a future 'catch all' for any objects inside this container
-					if (!onenotePackageIdentifiers.canFind(objectParentId)) {
-						onenotePackageIdentifiers ~= objectParentId;
+						
+						// Add the Parent ID to onenotePackageIdentifiers
+						if (itemHasParentReferenceId) {
+							// Add this 'id' to onenotePackageIdentifiers as a future 'catch all' for any objects inside this container
+							if (!onenotePackageIdentifiers.canFind(objectParentId)) {
+								if (debugLogging) {addLogEntry("Adding 'objectParentId' to onenotePackageIdentifiers: " ~ to!string(objectParentId), ["debug"]);}
+								onenotePackageIdentifiers ~= objectParentId;
+							}
+						}						
 					}
 				}
 			}
@@ -1860,6 +1862,7 @@ class SyncEngine {
 				if (itemHasParentReferenceId) {
 					// Add this 'id' to onenotePackageIdentifiers as a future 'catch all' for any objects inside this container
 					if (!onenotePackageIdentifiers.canFind(objectParentId)) {
+						if (debugLogging) {addLogEntry("Adding 'objectParentId' to onenotePackageIdentifiers: " ~ to!string(objectParentId), ["debug"]);}
 						onenotePackageIdentifiers ~= objectParentId;
 					}
 				}
