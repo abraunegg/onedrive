@@ -3911,11 +3911,25 @@ class SyncEngine {
 					writeXattrData(newItemPath, onedriveJSONItem);
 				}
 			} else {
-				// Output download failed
+				// Output to the user that the file download failed
 				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!", ["info", "notify"]);
+				
 				// Add the path to a list of items that failed to download
 				if (!canFind(fileDownloadFailures, newItemPath)) {
 					fileDownloadFailures ~= newItemPath; // Add newItemPath if it's not already present
+				}
+				
+				// Since the file download failed:
+				// - The file should not exist locally
+				// - The download identifiers should not exist in the local database
+				if (!exists(newItemPath)) {
+					// The local path does not exist
+					if (itemDB.idInLocalDatabase(downloadDriveId, downloadItemId)) {
+						// Since the path does not exist, but the driveId and itemId exists in the database, when we do the DB consistency check, we will think this file has been 'deleted'
+						// The driveId and itemId online exists in our database - it needs to be removed so this does not occur
+						addLogEntry("Removing existing DB record due to failed file download.");
+						itemDB.deleteById(downloadDriveId, downloadItemId);
+					}
 				}
 			}
 		}
