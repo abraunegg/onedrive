@@ -1573,6 +1573,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'skip_file'                    = " ~ getValueString("skip_file"));
 		addLogEntry("Config option 'skip_dotfiles'                = " ~ to!string(getValueBool("skip_dotfiles")));
 		addLogEntry("Config option 'skip_symlinks'                = " ~ to!string(getValueBool("skip_symlinks")));
+		addLogEntry("Config option 'skip_size'                    = " ~ to!string(getValueLong("skip_size")));
 		
 		// --monitor sync process options
 		addLogEntry("Config option 'monitor_interval'             = " ~ to!string(getValueLong("monitor_interval")));
@@ -1592,6 +1593,10 @@ class ApplicationConfig {
 		addLogEntry("Config option 'cleanup_local_files'          = " ~ to!string(getValueBool("cleanup_local_files")));
 		addLogEntry("Config option 'disable_permission_set'       = " ~ to!string(getValueBool("disable_permission_set")));
 		addLogEntry("Config option 'transfer_order'               = " ~ getValueString("transfer_order"));
+		addLogEntry("Config option 'delay_inotify_processing'     = " ~ to!string(getValueBool("delay_inotify_processing")));
+		addLogEntry("Config option 'inotify_delay'                = " ~ to!string(getValueLong("inotify_delay")));
+		addLogEntry("Config option 'display_transfer_metrics'     = " ~ to!string(getValueBool("display_transfer_metrics")));
+		addLogEntry("Config option 'force_session_upload'         = " ~ to!string(getValueBool("force_session_upload")));
 		
 		// data integrity
 		addLogEntry("Config option 'classify_as_big_delete'       = " ~ to!string(getValueLong("classify_as_big_delete")));
@@ -1605,6 +1610,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'space_reservation'            = " ~ to!string(getValueLong("space_reservation")));
 		addLogEntry("Config option 'permanent_delete'             = " ~ to!string(getValueBool("permanent_delete")));
 		addLogEntry("Config option 'write_xattr_data'             = " ~ to!string(getValueBool("write_xattr_data")));
+		addLogEntry("Config option 'create_new_file_version'      = " ~ to!string(getValueBool("create_new_file_version")));
 		
 		// curl operations
 		addLogEntry("Config option 'application_id'               = " ~ getValueString("application_id"));
