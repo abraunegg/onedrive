@@ -1322,18 +1322,14 @@ void setDefaultApplicationThreads() {
 	int configuredThreads = to!int(appConfig.getValueLong("threads"));
 	int systemCPUs = totalCPUs;
 	
-	// Safety cap: never use more threads than logical cores
-	int threadsToUse = min(configuredThreads, systemCPUs);
-	
-	// Optional warning if config is too high
+	// Warning if configuredThreads is too high
 	if (configuredThreads > systemCPUs) {
-		addLogEntry("WARNING: Configured 'threads = " ~ to!string(configuredThreads) ~ "' exceeds available CPU cores (" ~ to!string(systemCPUs) ~ "). Capping to 'threads' to " ~ to!string(systemCPUs) ~ ".");
-		// Update config option
-		appConfig.setValueLong("threads", to!long(systemCPUs));
+		addLogEntry("WARNING: Configured 'threads = " ~ to!string(configuredThreads) ~ "' exceeds available CPU cores (" ~ to!string(systemCPUs) ~ ").");
+		addLogEntry("         This may lead to reduced performance, CPU contention, and instability. For best results, set 'threads' no higher than the number of physical CPU cores.");
 	}
 	
-	// Set the default threads
-	defaultPoolThreads(threadsToUse);
+	// Set the default threads based on configured option
+	defaultPoolThreads(configuredThreads);
 }
 
 // Retrieves the maximum number of open files allowed by the system
