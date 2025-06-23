@@ -3693,6 +3693,7 @@ class SyncEngine {
 					}
 				
 					// If we get to this point, something was downloaded .. does it match what we expected?
+					// Does it still exist?
 					if (exists(newItemPath)) {
 						// When downloading some files from SharePoint, the OneDrive API reports one file size, 
 						// but the SharePoint HTTP Server sends a totally different byte count for the same file
@@ -3769,7 +3770,7 @@ class SyncEngine {
 									addLogEntry("ERROR: File download size mismatch. Increase logging verbosity to determine why.");
 								}
 								
-								// Hash Error
+								// Hash Error?
 								if (downloadedFileHash != onlineFileHash) {
 									// downloaded file hash does not match
 									downloadValueMismatch = true;
@@ -3866,6 +3867,7 @@ class SyncEngine {
 							}
 						}	// end of (!disableDownloadValidation)
 					} else {
+						// File does not exist locally
 						addLogEntry("ERROR: File failed to download. Increase logging verbosity to determine why.");
 						// Was this item previously in-sync with the local system?
 						// We previously searched for the file in the DB, we need to use that record
@@ -3878,6 +3880,14 @@ class SyncEngine {
 						
 						// Flag that the download failed
 						downloadFailed = true;
+					}
+					
+					// Download failure #3344 trigger
+					if (downloadItemName == "force_fail_3344.data") {
+						// Flag that the download failed
+						downloadFailed = true;
+						// Make sure this is deleted on the local filesystem
+						safeRemove(newItemPath);
 					}
 				}
 			}
