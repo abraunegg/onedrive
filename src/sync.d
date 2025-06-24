@@ -3881,14 +3881,6 @@ class SyncEngine {
 						// Flag that the download failed
 						downloadFailed = true;
 					}
-					
-					// Download failure #3344 trigger
-					if (downloadItemName == "force_fail_3344.data") {
-						// Flag that the download failed
-						downloadFailed = true;
-						// Make sure this is deleted on the local filesystem
-						safeRemove(newItemPath);
-					}
 				}
 			}
 			
