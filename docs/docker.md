@@ -68,6 +68,16 @@ Disabled
 
 If you are still experiencing permission issues despite disabling SELinux, please read https://www.redhat.com/sysadmin/container-permission-denied-errors
 
+#OR
+
+Set Selinux context on conf and data directories:
+```bash
+sudo chcon -Rt svirt_sandbox_file_t /home/onedrive/conf
+sudo chcon -Rt svirt_sandbox_file_t /home/onedrive/data
+```
+
+
+
 ### 4. Test 'docker' on your platform
 Ensure that 'docker' is running as a system service, and is enabled to be activated on system reboot:
 ```bash
