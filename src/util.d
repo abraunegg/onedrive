@@ -1682,7 +1682,10 @@ bool isBadCurlVersion(string curlVersion) {
 		"8.2.1",  // Ubuntu 23.10
 		"8.5.0",  // Ubuntu 24.04
 		"8.9.1",  // Ubuntu 24.10
-		"8.10.0"  // Various - HTTP/2 bug which was fixed in 8.10.1
+		"8.10.0",  // Various - HTTP/2 bug which was fixed in 8.10.1
+		"8.13.0",  // Has a SSL Certificate read issue fixed by 8.14.1
+		"8.13.1",  // Has a SSL Certificate read issue fixed by 8.14.1
+		"8.14.0",  // Has a SSL Certificate read issue fixed by 8.14.1
     ];
     
     // Check if the current version matches one of the supported versions
