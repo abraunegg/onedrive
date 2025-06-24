@@ -5878,6 +5878,8 @@ class SyncEngine {
 						// Debug output what the self-built path currently is
 						if (debugLogging) {addLogEntry(" - selfBuiltPath currently calculated as: " ~ selfBuiltPath, ["debug"]);}
 						
+						addLogEntry(" - selfBuiltPath currently calculated as: " ~ selfBuiltPath);
+						
 						// Issue #2731
 						// Get the remoteDriveId from JSON record
 						string remoteDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
@@ -5886,9 +5888,15 @@ class SyncEngine {
 							// Yes this JSON is from a Shared Folder
 							// Query the database for the 'remote' folder details from the database
 							if (debugLogging) {addLogEntry("Query database for this 'remoteDriveId' record: " ~ to!string(remoteDriveId), ["debug"]);}
+							
+							addLogEntry("Query database for this 'remoteDriveId' record: " ~ to!string(remoteDriveId));
+							
 							Item remoteItem;
 							itemDB.selectByRemoteDriveId(remoteDriveId, remoteItem);
 							if (debugLogging) {addLogEntry("Query returned result (itemDB.selectByRemoteDriveId): " ~ to!string(remoteItem), ["debug"]);}
+							
+							addLogEntry("Query returned result (itemDB.selectByRemoteDriveId): " ~ to!string(remoteItem));
+							
 							
 							// Shared Folders present a unique challenge to determine what path needs to be used, especially in a --resync scenario where there are near zero records available to use computeItemPath() 
 							// Update the path that will be used to check 'sync_list' with the 'name' of the remoteDriveId database record
@@ -5896,14 +5904,19 @@ class SyncEngine {
 							// Avoid duplicating the shared folder root name if already present
 							if (!selfBuiltPath.startsWith("/" ~ remoteItem.name ~ "/")) {
 								selfBuiltPath = remoteItem.name ~ selfBuiltPath;
-								if (debugLogging) {
-									addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath), ["debug"]);
-								}
+								if (debugLogging) {addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath), ["debug"]);}
+								
+								addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath));
+								
 							} else {
-								if (debugLogging) {
-									addLogEntry("Shared Folder name already present in path; no update needed to selfBuiltPath", ["debug"]);
-								}
+								if (debugLogging) {addLogEntry("Shared Folder name already present in path; no update needed to selfBuiltPath", ["debug"]);}
+								
+								addLogEntry("Shared Folder name already present in path; no update needed to selfBuiltPath");
+								
 							}
+							
+							addLogEntry(" - selfBuiltPath final calculated as: " ~ selfBuiltPath);
+							
 						}
 						
 						// Issue #2740
