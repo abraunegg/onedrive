@@ -1868,6 +1868,8 @@ class SyncEngine {
 				}
 			}
 			
+			/**
+			
 			// Microsoft OneDrive OneNote 'catch all'
 			if (!discardDeltaJSONItem) {
 				if (onenotePackageIdentifiers.canFind(objectParentId)) {
@@ -1876,6 +1878,8 @@ class SyncEngine {
 					discardDeltaJSONItem = true;
 				}
 			}
+			
+			**/
 			
 			// If we are not self-generating a /delta response, check this initial /delta JSON bundle item against the basic checks 
 			// of applicability against 'skip_file', 'skip_dir' and 'sync_list'
