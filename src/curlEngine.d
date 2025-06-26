@@ -212,6 +212,7 @@ class CurlEngine {
 	string internalThreadId;
 	SysTime releaseTimestamp;
 	ulong maxIdleTime;
+	private long resumeFromOffset = -1;
 	
     this() {
         http = HTTP();   // Directly initializes HTTP using its default constructor
@@ -446,10 +447,13 @@ class CurlEngine {
 
 	CurlResponse download(string originalFilename, string downloadFilename) {
 		setResponseHolder(null);
-		// open downloadFilename as write in binary mode
-		auto file = File(downloadFilename, "wb");
+		
+		// Open the file in append mode if resuming, else write mode
+		auto file = (resumeFromOffset > 0)
+			? File(downloadFilename, "ab") // append binary
+			: File(downloadFilename, "wb"); // write binary
 
-		// function scopes
+		// Function exit scope
 		scope(exit) {
 			cleanup();
 			if (file.isOpen()){
@@ -458,11 +462,19 @@ class CurlEngine {
 			}
 		}
 		
+		// Apply Range header if resuming
+		if (resumeFromOffset > 0) {
+			string rangeHeader = format("bytes=%d-", resumeFromOffset);
+			addRequestHeader("Range", rangeHeader);
+		}
+		
+		// Receive data
 		http.onReceive = (ubyte[] data) {
 			file.rawWrite(data);
 			return data.length;
 		};
 		
+		// Perform HTTP Operation
 		http.perform();
 		
 		// close open file - avoids problems with renaming on GCS Buckets and other semi-POSIX systems
@@ -473,6 +485,7 @@ class CurlEngine {
 		// Rename downloaded file
 		rename(downloadFilename, originalFilename);
 
+		// Update response and return response
 		response.update(&http);
 		return response;
 	}
@@ -579,6 +592,11 @@ class CurlEngine {
 		// Enable SSL certificate verification
 		addLogEntry("Enabling SSL peer verification");
 		http.handle.set(CurlOption.ssl_verifypeer, 1);
+	}
+	
+	// Set an applicable resumable offset point when downloading a file
+	void setDownloadResumeOffset(long offset) {
+		resumeFromOffset = offset;
 	}
 }
 
