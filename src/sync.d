@@ -9131,6 +9131,9 @@ class SyncEngine {
 				// Save this session
 				saveSessionFile(threadUploadSessionFilePath, uploadSession);
 			}
+			
+			// When does this upload URL expire?
+			displayUploadSessionExpiry(uploadSession);
 		} else {
 			// no valid session was created
 			if (verboseLogging) {addLogEntry("Creation of OneDrive API Upload Session failed.", ["verbose"]);}
@@ -9146,6 +9149,28 @@ class SyncEngine {
 		
 		// Return the JSON
 		return uploadSession;
+	}
+	
+	// Display upload session expiry time
+	void displayUploadSessionExpiry(JSONValue uploadSessionData) {
+		try {
+			// Step 1: Extract the ISO 8601 UTC string from the JSON
+			string utcExpiry = uploadSessionData["expirationDateTime"].str;
+
+			// Step 2: Convert ISO 8601 string to SysTime (assumes Zulu / UTC timezone)
+			SysTime expiryUTC = SysTime.fromISOExtString(utcExpiry);
+
+			// Step 3: Convert to local time
+			auto expiryLocal = expiryUTC.toLocalTime();
+
+			// Step 4: Print both UTC and Local times
+			if (debugLogging) {
+				addLogEntry("Upload session expires at (UTC):   " ~ to!string(expiryUTC), ["debug"]);
+				addLogEntry("Upload session expires at (Local): " ~ to!string(expiryLocal), ["debug"]);
+			}
+		} catch (Exception e) {
+			// nothing
+		}
 	}
 	
 	// Save the session upload data
@@ -9266,12 +9291,49 @@ class SyncEngine {
 				if (exception.httpStatusCode == 100) {
 					continue;
 				}
-
+				
+				// Issue https://github.com/abraunegg/onedrive/issues/3355
+				// - Big upload fails because of an expired access token
+				// - When an upload session is used, it is limited by Microsoft for 24 hours, thus, if uploads > 24 hours in duration, this will then fail at that mark
+				if (exception.httpStatusCode == 403 &&
+					(exception.msg.canFind("accessDenied") || exception.msg.canFind("You do not have authorization to access the file"))
+					) {
+					addLogEntry("Upload session has expired (403 - Access Denied). Attempting to create a new upload session due to session expiry.");
+					
+					// Detail expiry
+					string utcExpiry = uploadSessionData["expirationDateTime"].str;
+					SysTime expiryUTC = SysTime.fromISOExtString(utcExpiry);
+					auto expiryLocal = expiryUTC.toLocalTime();
+					addLogEntry("Existing upload session expired at (UTC):   " ~ to!string(expiryUTC));
+					addLogEntry("Existing upload session expired at (Local): " ~ to!string(expiryLocal));
+					
+					// Attempt creation of new sesssion
+					newUploadSession = createSessionForFileUpload(
+						activeOneDriveApiInstance,
+						uploadSessionData["localPath"].str,
+						uploadSessionData["targetDriveId"].str,
+						uploadSessionData["targetParentId"].str,
+						baseName(uploadSessionData["localPath"].str),
+						null,
+						threadUploadSessionFilePath
+					);
+					// Attempt retry with new session upload URL
+					continue;
+				}
+				
 				// There was an error uploadResponse from OneDrive when uploading the file fragment
 				if (exception.httpStatusCode == 404) {
-					// The upload session was not found .. ?? we just created it .. maybe the backend is still creating it ?
+					// The upload session was not found .. ?? we just created it .. maybe the backend is still creating it or failed to create it
 					if (debugLogging) {addLogEntry("The upload session was not found .... re-create session");}
-					newUploadSession = createSessionForFileUpload(activeOneDriveApiInstance, uploadSessionData["localPath"].str, uploadSessionData["targetDriveId"].str, uploadSessionData["targetParentId"].str, baseName(uploadSessionData["localPath"].str), null, threadUploadSessionFilePath);
+					newUploadSession = createSessionForFileUpload(
+						activeOneDriveApiInstance, 
+						uploadSessionData["localPath"].str, 
+						uploadSessionData["targetDriveId"].str, 
+						uploadSessionData["targetParentId"].str, 
+						baseName(uploadSessionData["localPath"].str), 
+						null, 
+						threadUploadSessionFilePath
+					);
 				}
 
 				// Issue https://github.com/abraunegg/onedrive/issues/2747
@@ -9303,24 +9365,30 @@ class SyncEngine {
 					string effectiveLocalPath;
 
 					// If we re-created the session, use the new data on re-try
-					if ("uploadUrl" in newUploadSession) {
-						// get this from 'newUploadSession'
-						effectiveRetryUploadURL = newUploadSession["uploadUrl"].str;
-						effectiveLocalPath = newUploadSession["localPath"].str;
-					} else {
-						// get this from the original input
-						effectiveRetryUploadURL = uploadSessionData["uploadUrl"].str;
-						effectiveLocalPath = uploadSessionData["localPath"].str;
-					}
+					if (newUploadSession.type() == JSONType.object) {
+						if ("uploadUrl" in newUploadSession) {
+							// get this from 'newUploadSession'
+							effectiveRetryUploadURL = newUploadSession["uploadUrl"].str;
+							effectiveLocalPath = newUploadSession["localPath"].str;
+						} else {
+							// get this from the original input
+							effectiveRetryUploadURL = uploadSessionData["uploadUrl"].str;
+							effectiveLocalPath = uploadSessionData["localPath"].str;
+						}
 
-					// retry the fragment upload
-					uploadResponse = activeOneDriveApiInstance.uploadFragment(
-						effectiveRetryUploadURL,
-						effectiveLocalPath,
-						offset,
-						fragSize,
-						thisFileSize
-					);
+						// retry the fragment upload
+						uploadResponse = activeOneDriveApiInstance.uploadFragment(
+							effectiveRetryUploadURL,
+							effectiveLocalPath,
+							offset,
+							fragSize,
+							thisFileSize
+						);
+					} else {
+						// newUploadSession not a JSON
+						uploadResponse = null;
+						return uploadResponse;
+					}
 				} catch (OneDriveException e) {
 					// OneDrive threw another error on retry
 					if (verboseLogging) {addLogEntry("Retry to upload fragment failed", ["verbose"]);}
