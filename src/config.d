@@ -288,6 +288,8 @@ class ApplicationConfig {
 		longValues["rate_limit"] = 0;
 		// - To ensure we do not fill up the load disk, how much disk space should be reserved by default
 		longValues["space_reservation"] = 50 * 2^^20; // 50 MB as Bytes
+		// - How large should our file fragments be when uploading as an 'upload session' ?
+		longValues["file_fragment_size"] = 10; // whole number, treated as MB, will be converted to bytes within performSessionFileUpload()
 		
 		// HTTPS & CURL Operation Settings
 		// - Maximum time an operation is allowed to take

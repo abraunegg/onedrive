@@ -9165,8 +9165,8 @@ class SyncEngine {
 
 			// Step 4: Print both UTC and Local times
 			if (debugLogging) {
-				addLogEntry("Upload session expires at (UTC):   " ~ to!string(expiryUTC), ["debug"]);
-				addLogEntry("Upload session expires at (Local): " ~ to!string(expiryLocal), ["debug"]);
+				addLogEntry("Upload session URL expires at (UTC):   " ~ to!string(expiryUTC), ["debug"]);
+				addLogEntry("Upload session URL expires at (Local): " ~ to!string(expiryLocal), ["debug"]);
 			}
 		} catch (Exception e) {
 			// nothing
@@ -9216,9 +9216,10 @@ class SyncEngine {
 		// Response for upload
 		JSONValue uploadResponse;
 
-		// Session JSON needs to contain valid elements
-		// Get the offset details
-		long fragmentSize = 10 * 2^^20; // 10 MiB
+		// Calculate File Fragment Size
+		long fragmentSize = appConfig.getValueLong("file_fragment_size") * 2^^20;
+		
+		// Set the fragment count and fragSize
 		size_t fragmentCount = 0;
 		long fragSize = 0;
 		
@@ -9234,9 +9235,10 @@ class SyncEngine {
 		
 		// If we get a 404, create a new upload session and store it here
 		JSONValue newUploadSession;
-
+		
 		// Start the session upload using the active API instance for this thread
 		while (true) {
+			// fragment upload
 			fragmentCount++;
 			if (debugLogging) {addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(expected_total_fragments), ["debug"]);}
 
@@ -9292,22 +9294,16 @@ class SyncEngine {
 					continue;
 				}
 				
-				// Issue https://github.com/abraunegg/onedrive/issues/3355
-				// - Big upload fails because of an expired access token
-				// - When an upload session is used, it is limited by Microsoft for 24 hours, thus, if uploads > 24 hours in duration, this will then fail at that mark
-				if (exception.httpStatusCode == 403 &&
-					(exception.msg.canFind("accessDenied") || exception.msg.canFind("You do not have authorization to access the file"))
-					) {
-					addLogEntry("Upload session has expired (403 - Access Denied). Attempting to create a new upload session due to session expiry.");
+				// Issue #3355: https://github.com/abraunegg/onedrive/issues/3355
+				if (exception.httpStatusCode == 403 && (exception.msg.canFind("accessDenied") || exception.msg.canFind("You do not have authorization to access the file"))) {
+					addLogEntry("ERROR: Upload session has expired (403 - Access Denied)");
+					addLogEntry("Probable Cause: The 'tempauth' token embedded in the upload URL has most likely expired.");
+					addLogEntry("                Microsoft issues this token when the upload session is first created. It cannot be refreshed, extended, or queried for its expiry time.");
+					addLogEntry("                The only way to infer its validity is by measuring the time from session creation to this 403 failure.");
+					addLogEntry("                The upload session URL itself may still appear active (based on expirationDateTime), but the upload URL is no longer usable once this 'tempauth' token expires.");
+					addLogEntry("                A new upload session will now be created. Upload will restart from the beginning using the new session URL and new 'tempauth' token.");
 					
-					// Detail expiry
-					string utcExpiry = uploadSessionData["expirationDateTime"].str;
-					SysTime expiryUTC = SysTime.fromISOExtString(utcExpiry);
-					auto expiryLocal = expiryUTC.toLocalTime();
-					addLogEntry("Existing upload session expired at (UTC):   " ~ to!string(expiryUTC));
-					addLogEntry("Existing upload session expired at (Local): " ~ to!string(expiryLocal));
-					
-					// Attempt creation of new sesssion
+					// Attempt creation of new upload session
 					newUploadSession = createSessionForFileUpload(
 						activeOneDriveApiInstance,
 						uploadSessionData["localPath"].str,
@@ -9317,7 +9313,8 @@ class SyncEngine {
 						null,
 						threadUploadSessionFilePath
 					);
-					// Attempt retry with new session upload URL
+					
+					// Attempt retry (which will start upload again from scratch) with new session upload URL
 					continue;
 				}
 				
@@ -9351,7 +9348,7 @@ class SyncEngine {
 				// Insert a new line as well, so that the below error is inserted on the console in the right location
 				if (verboseLogging) {addLogEntry("Fragment upload failed - received an exception response from OneDrive API", ["verbose"]);}
 
-				// display what the error is
+				// display what the error is if we have not already continued
 				if (exception.httpStatusCode != 404) {
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
@@ -9412,6 +9409,9 @@ class SyncEngine {
 
 			// was the fragment uploaded without issue?
 			if (uploadResponse.type() == JSONType.object) {
+				// Fragment uploaded
+				if (debugLogging) {addLogEntry("Fragment upload complete", ["debug"]);}
+				
 				// Use updated offset from response, not fixed increment
 				if ("nextExpectedRanges" in uploadResponse &&
 					uploadResponse["nextExpectedRanges"].type() == JSONType.array &&
@@ -9425,6 +9425,13 @@ class SyncEngine {
 				// update the uploadSessionData details
 				uploadSessionData["expirationDateTime"] = uploadResponse["expirationDateTime"];
 				uploadSessionData["nextExpectedRanges"] = uploadResponse["nextExpectedRanges"];
+				
+				// Log URL 'updated' expirationDateTime
+				if (debugLogging) {
+					addLogEntry("Upload URL expiration extended to: " ~ uploadResponse["expirationDateTime"].str, ["debug"]);
+				}
+				
+				// Save for reuse
 				saveSessionFile(threadUploadSessionFilePath, uploadSessionData);
 			} else {
 				// not a JSON object - fragment upload failed
