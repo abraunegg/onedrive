@@ -1057,7 +1057,6 @@ class ApplicationConfig {
 						addLogEntry("Invalid value for key in config file (too high) - using maximum safe value: " ~ key);
 						tempValue = 55;
 					}
-					
 					setValueLong("file_fragment_size", tempValue);
 				}
 			} else {
