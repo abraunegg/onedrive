@@ -1341,7 +1341,9 @@ class OneDriveApi {
 	}
 	
 	private void connect(HTTP.Method method, const(char)[] url, bool skipToken, CurlResponse response, string[string] requestHeaders=null) {
-		if (debugLogging) {addLogEntry("Request URL = " ~ to!string(url), ["debug"]);}
+		// If we are debug logging, output the URL being accessed and the HTTP method being used to access that URL
+		if (debugLogging) {addLogEntry("HTTP " ~ to!string(method) ~ " request to URL: " ~ to!string(url), ["debug"]);}
+		
 		// Check access token first in case the request is overridden
 		if (!skipToken) addAccessTokenHeader(&requestHeaders);
 		curlEngine.setResponseHolder(response);
