@@ -46,6 +46,8 @@ class ApplicationConfig {
 	immutable string defaultConfigDirName = "~/.config/onedrive";
 	// - Default 'OneDrive Business Shared Files' Folder Name
 	immutable string defaultBusinessSharedFilesDirectoryName = "Files Shared With Me";
+	// - Default file fragment size for uploads
+	immutable long defaultFileFragmentSize = 10;
 	
 	// Microsoft Requirements 
 	// - Default Application ID (abraunegg)
@@ -289,7 +291,7 @@ class ApplicationConfig {
 		// - To ensure we do not fill up the load disk, how much disk space should be reserved by default
 		longValues["space_reservation"] = 50 * 2^^20; // 50 MB as Bytes
 		// - How large should our file fragments be when uploading as an 'upload session' ?
-		longValues["file_fragment_size"] = 10; // whole number, treated as MB, will be converted to bytes within performSessionFileUpload()
+		longValues["file_fragment_size"] = defaultFileFragmentSize; // whole number, treated as MB, will be converted to bytes within performSessionFileUpload(). Default is 10.
 		
 		// HTTPS & CURL Operation Settings
 		// - Maximum time an operation is allowed to take
@@ -1042,6 +1044,21 @@ class ApplicationConfig {
 						tempValue = 0;
 					}
 					setValueLong("skip_size", tempValue);
+				} else if (key == "file_fragment_size") {
+					ulong tempValue = thisConfigValue;
+					// If set, this must be greater than the default, but also aligning to Microsoft upper limit of 60 MiB
+					// Enforce lower bound (must be greater than default)
+					if (tempValue <= defaultFileFragmentSize) {
+						addLogEntry("Invalid value for key in config file (too low) - using default value: " ~ key);
+						tempValue = defaultFileFragmentSize;
+					}
+					// Enforce upper bound (safe maximum)
+					else if (tempValue > 55) {
+						addLogEntry("Invalid value for key in config file (too high) - using maximum safe value: " ~ key);
+						tempValue = 55;
+					}
+					
+					setValueLong("file_fragment_size", tempValue);
 				}
 			} else {
 				addLogEntry("Unknown key in config file: " ~ key);
