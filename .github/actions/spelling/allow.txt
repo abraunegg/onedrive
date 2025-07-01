@@ -445,6 +445,7 @@ systemdsystemunitdir
 systemduserunitdir
 tbh
 tdcockers
+tempauth
 templ
 testbuild
 Thh

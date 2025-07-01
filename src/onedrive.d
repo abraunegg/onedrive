@@ -1004,8 +1004,7 @@ class OneDriveApi {
 		
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
 		if (debugLogging) {
-			addLogEntry("", ["debug"]); // Add an empty newline before log output
-			addLogEntry("contentRange: " ~ contentRange, ["debug"]);
+			addLogEntry("fragment contentRange: " ~ contentRange, ["debug"]);
 		}
 
 		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize);

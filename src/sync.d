@@ -9429,6 +9429,7 @@ class SyncEngine {
 				// Log URL 'updated' expirationDateTime
 				if (debugLogging) {
 					addLogEntry("Upload URL expiration extended to: " ~ uploadResponse["expirationDateTime"].str, ["debug"]);
+					addLogEntry("", ["debug"]); // Add new line as this fragment is complete
 				}
 				
 				// Save for reuse
