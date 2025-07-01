@@ -424,7 +424,7 @@ _**Maximum Value:**_ 55
 
 _**Config Example:**_ `file_fragment_size = "25"`
 
-_**CLI Option Use:**_ *None - this is a config file option only*
+_**CLI Option Use:**_ `--file-fragment-size = '25'`
 
 
 ### force_http_11

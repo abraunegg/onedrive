@@ -1048,7 +1048,7 @@ class ApplicationConfig {
 					ulong tempValue = thisConfigValue;
 					// If set, this must be greater than the default, but also aligning to Microsoft upper limit of 60 MiB
 					// Enforce lower bound (must be greater than default)
-					if (tempValue <= defaultFileFragmentSize) {
+					if (tempValue < defaultFileFragmentSize) {
 						addLogEntry("Invalid value for key in config file (too low) - using default value: " ~ key);
 						tempValue = defaultFileFragmentSize;
 					}
@@ -1156,25 +1156,25 @@ class ApplicationConfig {
 				std.getopt.config.bundling,
 				std.getopt.config.caseSensitive,
 				"auth-files",
-					"Perform authentication not via interactive dialog but via files read/writes to these files.",
+					"Perform authentication not via interactive dialog but via files read/writes to these files",
 					&stringValues["auth_files"],
 				"auth-response",
-					"Perform authentication not via interactive dialog but via providing the response url directly.",
+					"Perform authentication not via interactive dialog but via providing the response url directly",
 					&stringValues["auth_response"],
 				"check-for-nomount",
-					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync.",
+					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync",
 					&boolValues["check_nomount"],
 				"check-for-nosync",
-					"Check for the presence of .nosync in each directory. If found, skip directory from sync.",
+					"Check for the presence of .nosync in each directory. If found, skip directory from sync",
 					&boolValues["check_nosync"],
 				"classify-as-big-delete",
 					"Number of children in a path that is locally removed which will be classified as a 'big data delete'",
 					&longValues["classify_as_big_delete"],
 				"cleanup-local-files",
-					"Cleanup additional local files when using --download-only. This will remove local data.",
+					"Cleanup additional local files when using --download-only. This will remove local data",
 					&boolValues["cleanup_local_files"],	
 				"create-directory",
-					"Create a directory on OneDrive - no sync will be performed.",
+					"Create a directory on OneDrive - no sync will be performed",
 					&stringValues["create_directory"],
 				"create-share-link",
 					"Create a shareable link for an existing file on OneDrive",
@@ -1183,10 +1183,10 @@ class ApplicationConfig {
 					"Debug OneDrive HTTPS communication.",
 					&boolValues["debug_https"],
 				"destination-directory",
-					"Destination directory for renamed or move on OneDrive - no sync will be performed.",
+					"Destination directory for renamed or move on OneDrive - no sync will be performed",
 					&stringValues["destination_directory"],
 				"disable-notifications",
-					"Do not use desktop notifications in monitor mode.",
+					"Do not use desktop notifications in monitor mode",
 					&boolValues["disable_notifications"],
 				"disable-download-validation",
 					"Disable download validation when downloading from OneDrive",
@@ -1195,19 +1195,19 @@ class ApplicationConfig {
 					"Disable upload validation when uploading to OneDrive",
 					&boolValues["disable_upload_validation"],
 				"display-config",
-					"Display what options the client will use as currently configured - no sync will be performed.",
+					"Display what options the client will use as currently configured - no sync will be performed",
 					&boolValues["display_config"],
 				"display-running-config",
-					"Display what options the client has been configured to use on application startup.",
+					"Display what options the client has been configured to use on application startup",
 					&boolValues["display_running_config"],
 				"display-sync-status",
-					"Display the sync status of the client - no sync will be performed.",
+					"Display the sync status of the client - no sync will be performed",
 					&boolValues["display_sync_status"],
 				"display-quota",
-					"Display the quota status of the client - no sync will be performed.",
+					"Display the quota status of the client - no sync will be performed",
 					&boolValues["display_quota"],
 				"download-only",
-					"Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive.",
+					"Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive",
 					&boolValues["download_only"],
 				"dry-run",
 					"Perform a trial sync with no changes made",
@@ -1215,6 +1215,9 @@ class ApplicationConfig {
 				"enable-logging",
 					"Enable client activity to a separate log file",
 					&boolValues["enable_logging"],
+				"file-fragment-size",
+					"Specify the file fragment size for large file uploads (in MB)",
+					&longValues["file_fragment_size"],
 				"force-http-11",
 					"Force the use of HTTP 1.1 for all operations",
 					&boolValues["force_http_11"],
@@ -1240,10 +1243,10 @@ class ApplicationConfig {
 					"Sync OneDrive Business Shared Files to the local filesystem",
 					&boolValues["sync_business_shared_files"],
 				"local-first",
-					"Synchronize from the local directory source first, before downloading changes from OneDrive.",
+					"Synchronize from the local directory source first, before downloading changes from OneDrive",
 					&boolValues["local_first"],
 				"log-dir",
-					"Directory where logging output is saved to, needs to end with a slash.",
+					"Directory where logging output is saved to, needs to end with a slash",
 					&stringValues["log_dir"],
 				"logout",
 					"Logout the current user",
@@ -1255,7 +1258,7 @@ class ApplicationConfig {
 					"Keep monitoring for local and remote changes",
 					&boolValues["monitor"],
 				"monitor-interval",
-					"Number of seconds by which each sync operation is undertaken when idle under monitor mode.",
+					"Number of seconds by which each sync operation is undertaken when idle under monitor mode",
 					&longValues["monitor_interval"],
 				"monitor-fullscan-frequency",
 					"Number of sync runs before performing a full local scan of the synced directory",
@@ -1279,13 +1282,13 @@ class ApplicationConfig {
 					"Approve the use of performing a --resync action",
 					&boolValues["resync_auth"],
 				"remove-directory",
-					"Remove a directory on OneDrive - no sync will be performed.",
+					"Remove a directory on OneDrive - no sync will be performed",
 					&stringValues["remove_directory"],
 				"remove-source-files",
 					"Remove source file after successful transfer to OneDrive when using --upload-only",
 					&boolValues["remove_source_files"],
 				"single-directory",
-					"Specify a single local directory within the OneDrive root to sync.",
+					"Specify a single local directory within the OneDrive root to sync",
 					&stringValues["single_directory"],
 				"skip-dot-files",
 					"Skip dot files and folders from syncing",
@@ -1306,7 +1309,7 @@ class ApplicationConfig {
 					"Skip syncing of symlinks",
 					&boolValues["skip_symlinks"],
 				"source-directory",
-					"Source directory to rename or move on OneDrive - no sync will be performed.",
+					"Source directory to rename or move on OneDrive - no sync will be performed",
 					&stringValues["source_directory"],
 				"space-reservation",
 					"The amount of disk space to reserve (in MB) to avoid 100% disk space utilisation",
@@ -1324,10 +1327,10 @@ class ApplicationConfig {
 					"Perform a synchronisation with Microsoft OneDrive (DEPRECATED)",
 					&boolValues["synchronize"],
 				"sync-root-files",
-					"Sync all files in sync_dir root when using sync_list.",
+					"Sync all files in sync_dir root when using sync_list",
 					&boolValues["sync_root_files"],
 				"upload-only",
-					"Replicate the locally configured sync_dir state to OneDrive, by only uploading local changes to OneDrive. Do not download changes from OneDrive.",
+					"Replicate the locally configured sync_dir state to OneDrive, by only uploading local changes to OneDrive. Do not download changes from OneDrive",
 					&boolValues["upload_only"],
 				"confdir",
 					"Set the directory used to store the configuration files",
@@ -1343,7 +1346,7 @@ class ApplicationConfig {
 					&boolValues["with_editing_perms"]
 			);
 			
-			// Was --syncdir used?
+			// Was --syncdir specified?
 			if (!getValueString("sync_dir_cli").empty) {
 				// Build the line we need to update and/or write out
 				string newConfigOptionSyncDirLine = "sync_dir = \"" ~ getValueString("sync_dir_cli") ~ "\"";
@@ -1429,10 +1432,22 @@ class ApplicationConfig {
 				setValueString("sync_dir", getValueString("sync_dir_cli"));
 			}
 			
-			// was --monitor-interval used and now set to a value below minimum requirement?
+			// Was --monitor-interval specified and now set to a value below minimum requirement?
 			if (getValueLong("monitor_interval") < 300 ) {
 				addLogEntry("Invalid value for --monitor-interval - using default value: 300");
 				setValueLong("monitor_interval", 300);
+			}
+			
+			// Was --file-fragment-size specified and now set to a value below or above maximum?
+			// Enforce lower bound (must be greater than default) for 'file_fragment_size'
+			if (getValueLong("file_fragment_size") < defaultFileFragmentSize) {
+				addLogEntry("Invalid value for --file-fragment-size (too low) - using default value: " ~ to!string(defaultFileFragmentSize));
+				setValueLong("file_fragment_size", defaultFileFragmentSize);
+			}
+			// Enforce upper bound (safe maximum) for 'file_fragment_size'
+			if (getValueLong("file_fragment_size") > 55) {
+				addLogEntry("Invalid value for --file-fragment-size (too high) - using maximum safe value: 55");
+				setValueLong("file_fragment_size", 55);
 			}
 			
 			// Was --auth-files used?

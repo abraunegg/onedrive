@@ -290,6 +290,7 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 | <B>ONEDRIVE_SYNC_SHARED_FILES</B> | Controls "--sync-shared-files" option. Default is 0 | 1 |
 | <B>ONEDRIVE_RUNAS_ROOT</B> | Controls if the Docker container should be run as the 'root' user instead of 'onedrive' user. Default is 0 | 1 |
 | <B>ONEDRIVE_SYNC_ONCE</B> | Controls if the Docker container should be run in Standalone Mode. It will use Monitor Mode otherwise. Default is 0 | 1 |
+| <B>ONEDRIVE_FILE_FRAGMENT_SIZE</B> | Controls the fragment size when uploading large files to Microsoft OneDrive. The value specified is in MB. Default is 10, Limit is 55 | 25 |
 
 ### Environment Variables Usage Examples
 **Verbose Output:**
