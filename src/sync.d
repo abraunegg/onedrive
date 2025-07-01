@@ -9216,6 +9216,8 @@ class SyncEngine {
 		// Response for upload
 		JSONValue uploadResponse;
 
+		// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#upload-bytes-to-the-upload-session
+		// You can upload the entire file, or split the file into multiple byte ranges, as long as the maximum bytes in any given request is less than 60 MiB.
 		// Calculate File Fragment Size
 		long fragmentSize = appConfig.getValueLong("file_fragment_size") * 2^^20;
 		
@@ -9426,9 +9428,16 @@ class SyncEngine {
 				uploadSessionData["expirationDateTime"] = uploadResponse["expirationDateTime"];
 				uploadSessionData["nextExpectedRanges"] = uploadResponse["nextExpectedRanges"];
 				
-				// Log URL 'updated' expirationDateTime
+				// Log URL 'updated' expirationDateTime as 'UTC' and 'localTime'
 				if (debugLogging) {
-					addLogEntry("Upload URL expiration extended to: " ~ uploadResponse["expirationDateTime"].str, ["debug"]);
+					// Convert expiration time to localTime
+					string utcExpiry = uploadResponse["expirationDateTime"].str;
+					SysTime expiryUTC = SysTime.fromISOExtString(utcExpiry);
+					SysTime expiryLocal = expiryUTC.toLocalTime();
+				
+					// Display updated URL expiry as UTC and localTime
+					addLogEntry("Upload Session URL expiration extended to (UTC):   " ~ to!string(expiryUTC), ["debug"]);
+					addLogEntry("Upload Session URL expiration extended to (Local): " ~ to!string(expiryLocal), ["debug"]);
 					addLogEntry("", ["debug"]); // Add new line as this fragment is complete
 				}
 				
