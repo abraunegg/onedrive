@@ -9358,8 +9358,8 @@ class SyncEngine {
 				// retry fragment upload in case error is transient
 				if (verboseLogging) {addLogEntry("Retrying fragment upload", ["verbose"]);}
 
+				// Retry fragment upload logic
 				try {
-					// retry
 					string effectiveRetryUploadURL;
 					string effectiveLocalPath;
 
