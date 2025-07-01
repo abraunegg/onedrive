@@ -994,23 +994,24 @@ class OneDriveApi {
 		return post(url, item.toString(), requestHeaders);
 	}
 	
-	// https://dev.onedrive.com/items/upload_large_files.htm
+	// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#upload-bytes-to-the-upload-session
 	JSONValue uploadFragment(string uploadUrl, string filepath, long offset, long offsetSize, long fileSize) {
-		// open file as read-only in binary mode
-		
 		// If we upload a modified file, with the current known online eTag, this gets changed when the session is started - thus, the tail end of uploading
 		// a fragment fails with a 412 Precondition Failed and then a 416 Requested Range Not Satisfiable
 		// For the moment, comment out adding the If-Match header in createUploadSession, which then avoids this issue
-		
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
 		if (debugLogging) {
 			addLogEntry("fragment contentRange: " ~ contentRange, ["debug"]);
 		}
-
+		
+		// Before we submit this 'HTTP PUT' request, pre-emptively check token expiry to avoid future 401s during long uploads
+		checkAccessTokenExpired();
+		
+		// Perform the HTTP PUT action to upload the file fragment
 		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize);
 	}
 	
-	// https://dev.onedrive.com/items/upload_large_files.htm
+	// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#resuming-an-in-progress-upload
 	JSONValue requestUploadStatus(string uploadUrl) {
 		return get(uploadUrl, true);
 	}
@@ -1326,7 +1327,7 @@ class OneDriveApi {
 			if (debugLogging) {addLogEntry("Microsoft OneDrive Access Token has expired. Must generate a new Microsoft OneDrive Access Token", ["debug"]);}
 			generateNewAccessToken();
 		} else {
-			if (debugLogging) {addLogEntry("Existing Microsoft OneDrive Access Token Expires: " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);}
+			if (debugLogging) {addLogEntry("Existing Microsoft OneDrive Access Token Valid Until: " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);}
 		}
 	}
 	
