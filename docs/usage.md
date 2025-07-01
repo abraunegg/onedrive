@@ -269,6 +269,7 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 | 11 | SIGPIPE issue: Addressed a SIGPIPE leak that occurred in certain cases starting with version 8.9.1 | 8.10.0 |
 | 12 | HTTP/2 issue: Stopped offering ALPN `http/1.1` for `http2-prior-knowledge` to ensure proper protocol negotiation. | 8.10.0 |
 | 13 | HTTP/2 issue: Improved handling of end-of-stream (EOS) and blocked states to prevent unexpected behavior.| 8.11.0 |
+| 14 | OneDrive operation encountered an issue with libcurl reading the local SSL CA Certificates issue | 8.14.1 |
 
 #### Known curl versions with compatibility issues for this client
 | curl Version | distribution | curl bugs |
@@ -281,6 +282,9 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 | 8.5.0        | Alpine Linux 3.15, Ubuntu 24.04 LTS (Noble Numbat) | 8,9,10,11,12,13 |
 | 8.9.1        | Ubuntu 24.10 (Oracular Oriole) | 11,12,13 |
 | 8.10.0       | Alpine Linux 3.17 | 13 |
+| 8.13.0       | Various + Self Compiled | 14 |
+| 8.13.1       | Various + Self Compiled | 14 |
+| 8.14.0       | Various + Self Compiled | 14 |
 
 > [!IMPORTANT]
 > If your distribution provides one of these curl versions you must upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl. Refer to [curl releases](https://curl.se/docs/releases.html) for curl version information.

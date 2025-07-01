@@ -12828,7 +12828,7 @@ class SyncEngine {
 				break;
 			}
 		
-			// query top level children
+			// Try and query top level children
 			try {
 				thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink);
 			} catch (OneDriveException exception) {
@@ -12841,46 +12841,59 @@ class SyncEngine {
 					addLogEntry("nextLink:  " ~ nextLink, ["debug"]);
 				}
 				
-				// Default operation if not 408,429,503,504 errors
-				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
-				// Display what the error is
-				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+				// Handle the 404 error code - the parent item id was not found on the drive id specified
+				if (exception.httpStatusCode == 404) {
+					// Return an empty JSON item, as parent item could not be found, thus any child object will never be found
+					return onedriveJSONItem;
+				} else {
+					// Default operation if not 408,429,503,504 errors
+					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
+					// Display what the error is
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+				}
 			}
 			
-			// process thisLevelChildren response
-			foreach (child; thisLevelChildren["value"].array) {
-                // Only looking at files
-				if ((child["name"].str == searchName) && (("file" in child) != null)) {
-					// Found the matching file, return its JSON representation
-					// Operations in this thread are done / complete
-					
-					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
-					checkFileOneDriveApiInstance.releaseCurlEngine();
-					checkFileOneDriveApiInstance = null;
-					// Perform Garbage Collection
-					GC.collect();
-					
-					// Display function processing time if configured to do so
-					if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-						// Combine module name & running Function
-						displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			// 'thisLevelChildren' must be a valid JSON response to progress any further
+			if (thisLevelChildren.type() == JSONType.object) {
+				// Process thisLevelChildren response
+				foreach (child; thisLevelChildren["value"].array) {
+					// Only looking at files
+					if ((child["name"].str == searchName) && (("file" in child) != null)) {
+						// Found the matching file, return its JSON representation
+						// Operations in this thread are done / complete
+						
+						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+						checkFileOneDriveApiInstance.releaseCurlEngine();
+						checkFileOneDriveApiInstance = null;
+						// Perform Garbage Collection
+						GC.collect();
+						
+						// Display function processing time if configured to do so
+						if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+							// Combine module name & running Function
+							displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+						}
+						
+						// Return child as found item
+						return child;
 					}
-					
-					// Return child as found item
-                    return child;
-                }
-            }
-			
-			// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
-			// to indicate more items are available and provide the request URL for the next page of items.
-			if ("@odata.nextLink" in thisLevelChildren) {
-				// Update nextLink to next changeSet bundle
-				if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
-				nextLink = thisLevelChildren["@odata.nextLink"].str;
-			} else break;
-			
-			// Sleep for a while to avoid busy-waiting
-			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
+				}
+				
+				// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
+				// to indicate more items are available and provide the request URL for the next page of items.
+				if ("@odata.nextLink" in thisLevelChildren) {
+					// Update nextLink to next changeSet bundle
+					if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
+					nextLink = thisLevelChildren["@odata.nextLink"].str;
+				} else break;
+				
+				// Sleep for a while to avoid busy-waiting
+				Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
+			} else {
+				// API response was not a valid response
+				// Break out of the 'while (true)' loop
+				break;
+			}
 		}
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
