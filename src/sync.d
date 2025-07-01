@@ -3693,6 +3693,7 @@ class SyncEngine {
 					}
 				
 					// If we get to this point, something was downloaded .. does it match what we expected?
+					// Does it still exist?
 					if (exists(newItemPath)) {
 						// When downloading some files from SharePoint, the OneDrive API reports one file size, 
 						// but the SharePoint HTTP Server sends a totally different byte count for the same file
@@ -3769,7 +3770,7 @@ class SyncEngine {
 									addLogEntry("ERROR: File download size mismatch. Increase logging verbosity to determine why.");
 								}
 								
-								// Hash Error
+								// Hash Error?
 								if (downloadedFileHash != onlineFileHash) {
 									// downloaded file hash does not match
 									downloadValueMismatch = true;
@@ -3866,6 +3867,7 @@ class SyncEngine {
 							}
 						}	// end of (!disableDownloadValidation)
 					} else {
+						// File does not exist locally
 						addLogEntry("ERROR: File failed to download. Increase logging verbosity to determine why.");
 						// Was this item previously in-sync with the local system?
 						// We previously searched for the file in the DB, we need to use that record
@@ -3911,11 +3913,25 @@ class SyncEngine {
 					writeXattrData(newItemPath, onedriveJSONItem);
 				}
 			} else {
-				// Output download failed
+				// Output to the user that the file download failed
 				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!", ["info", "notify"]);
+				
 				// Add the path to a list of items that failed to download
 				if (!canFind(fileDownloadFailures, newItemPath)) {
 					fileDownloadFailures ~= newItemPath; // Add newItemPath if it's not already present
+				}
+				
+				// Since the file download failed:
+				// - The file should not exist locally
+				// - The download identifiers should not exist in the local database
+				if (!exists(newItemPath)) {
+					// The local path does not exist
+					if (itemDB.idInLocalDatabase(downloadDriveId, downloadItemId)) {
+						// Since the path does not exist, but the driveId and itemId exists in the database, when we do the DB consistency check, we will think this file has been 'deleted'
+						// The driveId and itemId online exists in our database - it needs to be removed so this does not occur
+						addLogEntry("Removing existing DB record due to failed file download.");
+						itemDB.deleteById(downloadDriveId, downloadItemId);
+					}
 				}
 			}
 		}
@@ -12701,7 +12717,7 @@ class SyncEngine {
 				break;
 			}
 		
-			// query top level children
+			// Try and query top level children
 			try {
 				thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink);
 			} catch (OneDriveException exception) {
@@ -12714,46 +12730,59 @@ class SyncEngine {
 					addLogEntry("nextLink:  " ~ nextLink, ["debug"]);
 				}
 				
-				// Default operation if not 408,429,503,504 errors
-				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
-				// Display what the error is
-				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+				// Handle the 404 error code - the parent item id was not found on the drive id specified
+				if (exception.httpStatusCode == 404) {
+					// Return an empty JSON item, as parent item could not be found, thus any child object will never be found
+					return onedriveJSONItem;
+				} else {
+					// Default operation if not 408,429,503,504 errors
+					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
+					// Display what the error is
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+				}
 			}
 			
-			// process thisLevelChildren response
-			foreach (child; thisLevelChildren["value"].array) {
-                // Only looking at files
-				if ((child["name"].str == searchName) && (("file" in child) != null)) {
-					// Found the matching file, return its JSON representation
-					// Operations in this thread are done / complete
-					
-					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
-					checkFileOneDriveApiInstance.releaseCurlEngine();
-					checkFileOneDriveApiInstance = null;
-					// Perform Garbage Collection
-					GC.collect();
-					
-					// Display function processing time if configured to do so
-					if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-						// Combine module name & running Function
-						displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			// 'thisLevelChildren' must be a valid JSON response to progress any further
+			if (thisLevelChildren.type() == JSONType.object) {
+				// Process thisLevelChildren response
+				foreach (child; thisLevelChildren["value"].array) {
+					// Only looking at files
+					if ((child["name"].str == searchName) && (("file" in child) != null)) {
+						// Found the matching file, return its JSON representation
+						// Operations in this thread are done / complete
+						
+						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+						checkFileOneDriveApiInstance.releaseCurlEngine();
+						checkFileOneDriveApiInstance = null;
+						// Perform Garbage Collection
+						GC.collect();
+						
+						// Display function processing time if configured to do so
+						if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+							// Combine module name & running Function
+							displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+						}
+						
+						// Return child as found item
+						return child;
 					}
-					
-					// Return child as found item
-                    return child;
-                }
-            }
-			
-			// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
-			// to indicate more items are available and provide the request URL for the next page of items.
-			if ("@odata.nextLink" in thisLevelChildren) {
-				// Update nextLink to next changeSet bundle
-				if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
-				nextLink = thisLevelChildren["@odata.nextLink"].str;
-			} else break;
-			
-			// Sleep for a while to avoid busy-waiting
-			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
+				}
+				
+				// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
+				// to indicate more items are available and provide the request URL for the next page of items.
+				if ("@odata.nextLink" in thisLevelChildren) {
+					// Update nextLink to next changeSet bundle
+					if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
+					nextLink = thisLevelChildren["@odata.nextLink"].str;
+				} else break;
+				
+				// Sleep for a while to avoid busy-waiting
+				Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
+			} else {
+				// API response was not a valid response
+				// Break out of the 'while (true)' loop
+				break;
+			}
 		}
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
