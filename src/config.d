@@ -1615,6 +1615,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'inotify_delay'                = " ~ to!string(getValueLong("inotify_delay")));
 		addLogEntry("Config option 'display_transfer_metrics'     = " ~ to!string(getValueBool("display_transfer_metrics")));
 		addLogEntry("Config option 'force_session_upload'         = " ~ to!string(getValueBool("force_session_upload")));
+		addLogEntry("Config option 'file_fragment_size'           = " ~ to!string(getValueLong("file_fragment_size")));
 		
 		// data integrity
 		addLogEntry("Config option 'classify_as_big_delete'       = " ~ to!string(getValueLong("classify_as_big_delete")));
