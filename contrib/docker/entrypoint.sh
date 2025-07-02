@@ -178,7 +178,7 @@ fi
 if [ -n "${ONEDRIVE_FILE_FRAGMENT_SIZE:=""}" ]; then
 	echo "# We are specifying the file fragment size for large file uploads (in MB)"
 	echo "# Adding --file-fragment-size ARG"
-	ARGS=(--file-fragment-size \"${ONEDRIVE_FILE_FRAGMENT_SIZE}\" ${ARGS[@]})
+	ARGS=(--file-fragment-size ${ONEDRIVE_FILE_FRAGMENT_SIZE} ${ARGS[@]})
 fi
 
 if [ ${#} -gt 0 ]; then

@@ -9223,6 +9223,7 @@ class SyncEngine {
 		long fragmentSize;
 		enum GIGABYTE = 1024L * 1024L * 1024L; // 1 GiB
 		enum CHUNK_SIZE = 327_680L; // 320 KiB
+		enum MAX_FRAGMENT_BYTES = 60L * 1_048_576L; // 60 MiB = 62,914,560 bytes
 		
 		if (thisFileSize > GIGABYTE) {
 			if (debugLogging) {
@@ -9235,8 +9236,13 @@ class SyncEngine {
 			baseSize = appConfig.getValueLong("file_fragment_size") * 2^^20;
 		}
 		
-		// Ensure 'fragmentSize' is a multiple of 327680 bytes
-		fragmentSize = (baseSize / CHUNK_SIZE) * CHUNK_SIZE;
+		// Ensure 'fragmentSize' is a multiple of 327680 bytes and < 60 MiB
+		if (baseSize >= MAX_FRAGMENT_BYTES) {
+			// Use the maximum valid size below 60 MiB, rounded down to nearest 320 KiB multiple
+			fragmentSize = ((MAX_FRAGMENT_BYTES - 1) / CHUNK_SIZE) * CHUNK_SIZE;
+		} else {
+			fragmentSize = (baseSize / CHUNK_SIZE) * CHUNK_SIZE;
+		}
 		
 		// Set the fragment count and fragSize
 		size_t fragmentCount = 0;

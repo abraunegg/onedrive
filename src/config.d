@@ -48,7 +48,7 @@ class ApplicationConfig {
 	immutable string defaultBusinessSharedFilesDirectoryName = "Files Shared With Me";
 	// - Default file fragment size for uploads
 	immutable long defaultFileFragmentSize = 10;
-	immutable long defaultMaxFileFragmentSize = 59;
+	immutable long defaultMaxFileFragmentSize = 60;
 	
 	// Microsoft Requirements 
 	// - Default Application ID (abraunegg)
