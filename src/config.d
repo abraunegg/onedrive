@@ -48,6 +48,7 @@ class ApplicationConfig {
 	immutable string defaultBusinessSharedFilesDirectoryName = "Files Shared With Me";
 	// - Default file fragment size for uploads
 	immutable long defaultFileFragmentSize = 10;
+	immutable long defaultMaxFileFragmentSize = 55;
 	
 	// Microsoft Requirements 
 	// - Default Application ID (abraunegg)
@@ -1053,9 +1054,9 @@ class ApplicationConfig {
 						tempValue = defaultFileFragmentSize;
 					}
 					// Enforce upper bound (safe maximum)
-					else if (tempValue > 55) {
+					else if (tempValue > defaultMaxFileFragmentSize) {
 						addLogEntry("Invalid value for key in config file (too high) - using maximum safe value: " ~ key);
-						tempValue = 55;
+						tempValue = defaultMaxFileFragmentSize;
 					}
 					setValueLong("file_fragment_size", tempValue);
 				}
@@ -1445,9 +1446,9 @@ class ApplicationConfig {
 				setValueLong("file_fragment_size", defaultFileFragmentSize);
 			}
 			// Enforce upper bound (safe maximum) for 'file_fragment_size'
-			if (getValueLong("file_fragment_size") > 55) {
-				addLogEntry("Invalid value for --file-fragment-size (too high) - using maximum safe value: 55");
-				setValueLong("file_fragment_size", 55);
+			if (getValueLong("file_fragment_size") > defaultMaxFileFragmentSize) {
+				addLogEntry("Invalid value for --file-fragment-size (too high) - using maximum safe value: " ~ to!string(defaultMaxFileFragmentSize));
+				setValueLong("file_fragment_size", defaultMaxFileFragmentSize);
 			}
 			
 			// Was --auth-files used?
