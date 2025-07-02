@@ -9218,17 +9218,25 @@ class SyncEngine {
 
 		// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#upload-bytes-to-the-upload-session
 		// You can upload the entire file, or split the file into multiple byte ranges, as long as the maximum bytes in any given request is less than 60 MiB.
-		// Calculate File Fragment Size
+		// Calculate File Fragment Size (must be valid multiple of 320 KiB)
+		long baseSize;
 		long fragmentSize;
-		enum GIGABYTE = 1024L * 1024L * 1024L;
+		enum GIGABYTE = 1024L * 1024L * 1024L; // 1 GiB
+		enum CHUNK_SIZE = 327_680L; // 320 KiB
+		
 		if (thisFileSize > GIGABYTE) {
 			if (debugLogging) {
 				addLogEntry("Large file detected (" ~ to!string(thisFileSize) ~ " bytes), automatically using max fragment size: " ~ to!string(appConfig.defaultMaxFileFragmentSize), ["debug"]);
 			}
-			fragmentSize = appConfig.defaultMaxFileFragmentSize * 2^^20;
+			// Calculate base size using max fragment size
+			baseSize = appConfig.defaultMaxFileFragmentSize * 2^^20;
 		} else {
-			fragmentSize = appConfig.getValueLong("file_fragment_size") * 2^^20;
+			// Calculate base size using configured fragment size
+			baseSize = appConfig.getValueLong("file_fragment_size") * 2^^20;
 		}
+		
+		// Ensure 'fragmentSize' is a multiple of 327680 bytes
+		fragmentSize = (baseSize / CHUNK_SIZE) * CHUNK_SIZE;
 		
 		// Set the fragment count and fragSize
 		size_t fragmentCount = 0;
