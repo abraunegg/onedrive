@@ -47,8 +47,8 @@ class ApplicationConfig {
 	// - Default 'OneDrive Business Shared Files' Folder Name
 	immutable string defaultBusinessSharedFilesDirectoryName = "Files Shared With Me";
 	// - Default file fragment size for uploads
-	immutable long defaultFileFragmentSize = 10;
-	immutable long defaultMaxFileFragmentSize = 60;
+	immutable long defaultFileFragmentSize = 10; // in MiB
+	immutable long defaultMaxFileFragmentSize = 60; // in MiB
 	
 	// Microsoft Requirements 
 	// - Default Application ID (abraunegg)
