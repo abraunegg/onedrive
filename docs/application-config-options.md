@@ -29,6 +29,7 @@ Before reading this document, please ensure you are running application version 
   - [drive_id](#drive_id)
   - [dry_run](#dry_run)
   - [enable_logging](#enable_logging)
+  - [file_fragment_size](#file_fragment_size)
   - [force_http_11](#force_http_11)
   - [force_session_upload](#force_session_upload)
   - [inotify_delay](#inotify_delay)
@@ -411,6 +412,20 @@ _**CLI Option Use:**_ `--enable-logging`
 
 > [!IMPORTANT]
 > Additional configuration is potentially required to configure the default log directory. Refer to the [Enabling the Client Activity Log](./usage.md#enabling-the-client-activity-log) section in usage.md for details
+
+### file_fragment_size
+_**Description:**_ This option controls the fragment size when uploading large files to Microsoft OneDrive. The value specified is in MB.
+
+_**Value Type:**_ Integer
+
+_**Default Value:**_ 10
+
+_**Maximum Value:**_ 60
+
+_**Config Example:**_ `file_fragment_size = "25"`
+
+_**CLI Option Use:**_ `--file-fragment-size = '25'`
+
 
 ### force_http_11
 _**Description:**_ This setting controls the application HTTP protocol version. By default, the application will use libcurl defaults for which HTTP protocol version will be used to interact with Microsoft OneDrive. Use this setting to downgrade libcurl to only use HTTP/1.1.
@@ -870,6 +885,10 @@ _**Default Value:**_ 0 (all files, regardless of size, are synced)
 _**Config Example:**_ `skip_size = "50"`
 
 _**CLI Option Use:**_ `--skip-size '50'`
+
+> [!NOTE]
+> This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
+
 
 ### skip_symlinks
 _**Description:**_ This configuration option controls whether the application will skip all symbolic links when performing sync operations. Microsoft OneDrive has no concept or understanding of symbolic links, and attempting to upload a symbolic link to Microsoft OneDrive generates a platform API error. All data (files and folders) that are uploaded to OneDrive must be whole files or actual directories.
