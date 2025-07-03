@@ -420,6 +420,8 @@ _**Value Type:**_ Integer
 
 _**Default Value:**_ 10
 
+_**Minimum Value:**_ 10
+
 _**Maximum Value:**_ 60
 
 _**Config Example:**_ `file_fragment_size = "25"`
