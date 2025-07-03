@@ -994,24 +994,24 @@ class OneDriveApi {
 		return post(url, item.toString(), requestHeaders);
 	}
 	
-	// https://dev.onedrive.com/items/upload_large_files.htm
+	// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#upload-bytes-to-the-upload-session
 	JSONValue uploadFragment(string uploadUrl, string filepath, long offset, long offsetSize, long fileSize) {
-		// open file as read-only in binary mode
-		
 		// If we upload a modified file, with the current known online eTag, this gets changed when the session is started - thus, the tail end of uploading
 		// a fragment fails with a 412 Precondition Failed and then a 416 Requested Range Not Satisfiable
 		// For the moment, comment out adding the If-Match header in createUploadSession, which then avoids this issue
-		
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
 		if (debugLogging) {
-			addLogEntry("", ["debug"]); // Add an empty newline before log output
-			addLogEntry("contentRange: " ~ contentRange, ["debug"]);
+			addLogEntry("fragment contentRange: " ~ contentRange, ["debug"]);
 		}
-
+		
+		// Before we submit this 'HTTP PUT' request, pre-emptively check token expiry to avoid future 401s during long uploads
+		checkAccessTokenExpired();
+		
+		// Perform the HTTP PUT action to upload the file fragment
 		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize);
 	}
 	
-	// https://dev.onedrive.com/items/upload_large_files.htm
+	// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#resuming-an-in-progress-upload
 	JSONValue requestUploadStatus(string uploadUrl) {
 		return get(uploadUrl, true);
 	}
@@ -1324,10 +1324,10 @@ class OneDriveApi {
 	// Check if the existing access token has expired, if it has, generate a new one
 	private void checkAccessTokenExpired() {
 		if (Clock.currTime() >= appConfig.accessTokenExpiration) {
-			if (debugLogging) {addLogEntry("Microsoft OneDrive Access Token has expired. Must generate a new Microsoft OneDrive Access Token", ["debug"]);}
+			if (debugLogging) {addLogEntry("Microsoft OneDrive OAuth2 Access Token has expired. Must generate a new Microsoft OneDrive OAuth2 Access Token", ["debug"]);}
 			generateNewAccessToken();
 		} else {
-			if (debugLogging) {addLogEntry("Existing Microsoft OneDrive Access Token Expires: " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);}
+			if (debugLogging) {addLogEntry("Microsoft OneDrive OAuth2 Access Token Valid Until (Local): " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);}
 		}
 	}
 	
@@ -1341,7 +1341,9 @@ class OneDriveApi {
 	}
 	
 	private void connect(HTTP.Method method, const(char)[] url, bool skipToken, CurlResponse response, string[string] requestHeaders=null) {
-		if (debugLogging) {addLogEntry("Request URL = " ~ to!string(url), ["debug"]);}
+		// If we are debug logging, output the URL being accessed and the HTTP method being used to access that URL
+		if (debugLogging) {addLogEntry("HTTP " ~ to!string(method) ~ " request to URL: " ~ to!string(url), ["debug"]);}
+		
 		// Check access token first in case the request is overridden
 		if (!skipToken) addAccessTokenHeader(&requestHeaders);
 		curlEngine.setResponseHolder(response);
