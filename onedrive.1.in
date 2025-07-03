@@ -205,6 +205,10 @@ Perform a trial sync with no changes made.
 Enable client activity to a separate log file.
 
 .TP
+\fB\-\-file-fragment-size\fR
+Specify the file fragment size for large file uploads (in MB).
+
+.TP
 \fB\-\-force\fR
 Force the deletion of data when a 'big delete' is detected.
 

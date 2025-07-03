@@ -9131,6 +9131,9 @@ class SyncEngine {
 				// Save this session
 				saveSessionFile(threadUploadSessionFilePath, uploadSession);
 			}
+			
+			// When does this upload URL expire?
+			displayUploadSessionExpiry(uploadSession);
 		} else {
 			// no valid session was created
 			if (verboseLogging) {addLogEntry("Creation of OneDrive API Upload Session failed.", ["verbose"]);}
@@ -9146,6 +9149,28 @@ class SyncEngine {
 		
 		// Return the JSON
 		return uploadSession;
+	}
+	
+	// Display upload session expiry time
+	void displayUploadSessionExpiry(JSONValue uploadSessionData) {
+		try {
+			// Step 1: Extract the ISO 8601 UTC string from the JSON
+			string utcExpiry = uploadSessionData["expirationDateTime"].str;
+
+			// Step 2: Convert ISO 8601 string to SysTime (assumes Zulu / UTC timezone)
+			SysTime expiryUTC = SysTime.fromISOExtString(utcExpiry);
+
+			// Step 3: Convert to local time
+			auto expiryLocal = expiryUTC.toLocalTime();
+
+			// Step 4: Print both UTC and Local times
+			if (debugLogging) {
+				addLogEntry("Upload session URL expires at (UTC):   " ~ to!string(expiryUTC), ["debug"]);
+				addLogEntry("Upload session URL expires at (Local): " ~ to!string(expiryLocal), ["debug"]);
+			}
+		} catch (Exception e) {
+			// nothing
+		}
 	}
 	
 	// Save the session upload data
@@ -9187,36 +9212,64 @@ class SyncEngine {
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
-
+			
 		// Response for upload
 		JSONValue uploadResponse;
 
-		// Session JSON needs to contain valid elements
-		// Get the offset details
-		long fragmentSize = 10 * 2^^20; // 10 MiB
+		// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#upload-bytes-to-the-upload-session
+		// You can upload the entire file, or split the file into multiple byte ranges, as long as the maximum bytes in any given request is less than 60 MiB.
+		// Calculate File Fragment Size (must be valid multiple of 320 KiB)
+		long baseSize;
+		long fragmentSize;
+		enum HUNDRED_MIB = 100L * 1024L * 1024L; // 100 MiB = 104,857,600 bytes
+		enum CHUNK_SIZE = 327_680L; // 320 KiB
+		enum MAX_FRAGMENT_BYTES = 60L * 1_048_576L; // 60 MiB = 62,914,560 bytes
+		
+		// If file is > 100 MiB then automatically use the larger fragment size
+		if (thisFileSize > HUNDRED_MIB) {
+			if (debugLogging) {
+				addLogEntry("Large file detected (" ~ to!string(thisFileSize) ~ " bytes), automatically using max fragment size: " ~ to!string(appConfig.defaultMaxFileFragmentSize), ["debug"]);
+			}
+			// Calculate base size using max fragment size
+			baseSize = appConfig.defaultMaxFileFragmentSize * 2^^20;
+		} else {
+			// Calculate base size using configured fragment size
+			baseSize = appConfig.getValueLong("file_fragment_size") * 2^^20;
+		}
+		
+		// Ensure 'fragmentSize' is a multiple of 327680 bytes and < 60 MiB
+		if (baseSize >= MAX_FRAGMENT_BYTES) {
+			// Use the maximum valid size below 60 MiB, rounded down to nearest 320 KiB multiple
+			fragmentSize = ((MAX_FRAGMENT_BYTES - 1) / CHUNK_SIZE) * CHUNK_SIZE;
+		} else {
+			fragmentSize = (baseSize / CHUNK_SIZE) * CHUNK_SIZE;
+		}
+		
+		// Set the fragment count and fragSize
 		size_t fragmentCount = 0;
 		long fragSize = 0;
-
+		
 		// Extract current upload offset from session data
 		long offset = uploadSessionData["nextExpectedRanges"][0].str.splitter('-').front.to!long;
-
+		
 		// Estimate total number of expected fragments
 		size_t expected_total_fragments = cast(size_t) ceil(double(thisFileSize) / double(fragmentSize));
 		long start_unix_time = Clock.currTime.toUnixTime();
 		int h, m, s;
 		string etaString;
 		string uploadLogEntry = "Uploading: " ~ uploadSessionData["localPath"].str ~ " ... ";
-
+		
 		// If we get a 404, create a new upload session and store it here
 		JSONValue newUploadSession;
-
+		
 		// Start the session upload using the active API instance for this thread
 		while (true) {
+			// fragment upload
 			fragmentCount++;
 			if (debugLogging) {addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(expected_total_fragments), ["debug"]);}
 
-			// Calculate ETA
-			auto eta = calc_eta((fragmentCount - 1), expected_total_fragments, start_unix_time);
+			// What ETA string do we use?
+			auto eta = calc_eta((fragmentCount -1), expected_total_fragments, start_unix_time);
 			if (eta == 0) {
 				// Initial calculation ... 
 				etaString = format!"|  ETA    --:--:--";
@@ -9226,28 +9279,33 @@ class SyncEngine {
 				etaString = format!"|  ETA    %02d:%02d:%02d"(h, m, s);
 			}
 
-			// Calculate upload percentage
+			// Calculate this progress output
 			auto ratio = cast(double)(fragmentCount - 1) / expected_total_fragments;
 			// Convert the ratio to a percentage and format it to two decimal places
 			string percentage = leftJustify(format("%d%%", cast(int)(ratio * 100)), 5, ' ');
 			addLogEntry(uploadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 
-			// Determine actual fragment size
+			// What fragment size will be used?
 			if (debugLogging) {addLogEntry("fragmentSize: " ~ to!string(fragmentSize) ~ " offset: " ~ to!string(offset) ~ " thisFileSize: " ~ to!string(thisFileSize), ["debug"]);}
+
 			fragSize = fragmentSize < thisFileSize - offset ? fragmentSize : thisFileSize - offset;
 			if (debugLogging) {addLogEntry("Using fragSize: " ~ to!string(fragSize), ["debug"]);}
 
-			// Guard against negative fragSize
+			// fragSize must not be a negative value
 			if (fragSize < 0) {
+				// Session upload will fail
+				// not a JSON object - fragment upload failed
 				if (verboseLogging) {addLogEntry("File upload session failed - invalid calculation of fragment size", ["verbose"]);}
+
 				if (exists(threadUploadSessionFilePath)) {
 					remove(threadUploadSessionFilePath);
 				}
+				// set uploadResponse to null as error
 				uploadResponse = null;
 				return uploadResponse;
 			}
 
-			// Upload this fragment
+			// If the resume upload fails, we need to check for a return code here
 			try {
 				uploadResponse = activeOneDriveApiInstance.uploadFragment(
 					uploadSessionData["uploadUrl"].str,
@@ -9257,14 +9315,21 @@ class SyncEngine {
 					thisFileSize
 				);
 			} catch (OneDriveException exception) {
-				// HTTP 100: continue silently
+				// if a 100 uploadResponse is generated, continue
 				if (exception.httpStatusCode == 100) {
 					continue;
 				}
-
-				// HTTP 404: recreate the session
-				if (exception.httpStatusCode == 404) {
-					if (debugLogging) {addLogEntry("The upload session was not found .... re-create session");}
+				
+				// Issue #3355: https://github.com/abraunegg/onedrive/issues/3355
+				if (exception.httpStatusCode == 403 && (exception.msg.canFind("accessDenied") || exception.msg.canFind("You do not have authorization to access the file"))) {
+					addLogEntry("ERROR: Upload session has expired (403 - Access Denied)");
+					addLogEntry("Probable Cause: The 'tempauth' token embedded in the upload URL has most likely expired.");
+					addLogEntry("                Microsoft issues this token when the upload session is first created. It cannot be refreshed, extended, or queried for its expiry time.");
+					addLogEntry("                The only way to infer its validity is by measuring the time from session creation to this 403 failure.");
+					addLogEntry("                The upload session URL itself may still appear active (based on expirationDateTime), but the upload URL is no longer usable once this 'tempauth' token expires.");
+					addLogEntry("                A new upload session will now be created. Upload will restart from the beginning using the new session URL and new 'tempauth' token.");
+					
+					// Attempt creation of new upload session
 					newUploadSession = createSessionForFileUpload(
 						activeOneDriveApiInstance,
 						uploadSessionData["localPath"].str,
@@ -9274,87 +9339,143 @@ class SyncEngine {
 						null,
 						threadUploadSessionFilePath
 					);
+					
+					// Attempt retry (which will start upload again from scratch) with new session upload URL
+					continue;
+				}
+				
+				// There was an error uploadResponse from OneDrive when uploading the file fragment
+				if (exception.httpStatusCode == 404) {
+					// The upload session was not found .. ?? we just created it .. maybe the backend is still creating it or failed to create it
+					if (debugLogging) {addLogEntry("The upload session was not found .... re-create session");}
+					newUploadSession = createSessionForFileUpload(
+						activeOneDriveApiInstance, 
+						uploadSessionData["localPath"].str, 
+						uploadSessionData["targetDriveId"].str, 
+						uploadSessionData["targetParentId"].str, 
+						baseName(uploadSessionData["localPath"].str), 
+						null, 
+						threadUploadSessionFilePath
+					);
 				}
 
-				// HTTP 416: continue silently
+				// Issue https://github.com/abraunegg/onedrive/issues/2747
+				// if a 416 uploadResponse is generated, continue
 				if (exception.httpStatusCode == 416) {
 					continue;
 				}
 
-				// Display error and handle fatal or retry cases
+				// Handle transient errors:
 				//   408 - Request Time Out
 				//   429 - Too Many Requests
 				//   503 - Service Unavailable
 				//   504 - Gateway Timeout
-				//	
+
 				// Insert a new line as well, so that the below error is inserted on the console in the right location
 				if (verboseLogging) {addLogEntry("Fragment upload failed - received an exception response from OneDrive API", ["verbose"]);}
-				if (exception.httpStatusCode == 403) {
-					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-					uploadResponse = null;
-					return uploadResponse;
-				}
+
+				// display what the error is if we have not already continued
 				if (exception.httpStatusCode != 404) {
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
+
+				// retry fragment upload in case error is transient
 				if (verboseLogging) {addLogEntry("Retrying fragment upload", ["verbose"]);}
 
-				// Retry logic
+				// Retry fragment upload logic
 				try {
 					string effectiveRetryUploadURL;
 					string effectiveLocalPath;
 
-					if ("uploadUrl" in newUploadSession) {
-						effectiveRetryUploadURL = newUploadSession["uploadUrl"].str;
-						effectiveLocalPath = newUploadSession["localPath"].str;
-					} else {
-						effectiveRetryUploadURL = uploadSessionData["uploadUrl"].str;
-						effectiveLocalPath = uploadSessionData["localPath"].str;
-					}
+					// If we re-created the session, use the new data on re-try
+					if (newUploadSession.type() == JSONType.object) {
+						if ("uploadUrl" in newUploadSession) {
+							// get this from 'newUploadSession'
+							effectiveRetryUploadURL = newUploadSession["uploadUrl"].str;
+							effectiveLocalPath = newUploadSession["localPath"].str;
+						} else {
+							// get this from the original input
+							effectiveRetryUploadURL = uploadSessionData["uploadUrl"].str;
+							effectiveLocalPath = uploadSessionData["localPath"].str;
+						}
 
-					uploadResponse = activeOneDriveApiInstance.uploadFragment(
-						effectiveRetryUploadURL,
-						effectiveLocalPath,
-						offset,
-						fragSize,
-						thisFileSize
-					);
+						// retry the fragment upload
+						uploadResponse = activeOneDriveApiInstance.uploadFragment(
+							effectiveRetryUploadURL,
+							effectiveLocalPath,
+							offset,
+							fragSize,
+							thisFileSize
+						);
+					} else {
+						// newUploadSession not a JSON
+						uploadResponse = null;
+						return uploadResponse;
+					}
 				} catch (OneDriveException e) {
+					// OneDrive threw another error on retry
 					if (verboseLogging) {addLogEntry("Retry to upload fragment failed", ["verbose"]);}
+					// display what the error is
 					displayOneDriveErrorMessage(e.msg, thisFunctionName);
+					// set uploadResponse to null as the fragment upload was in error twice
 					uploadResponse = null;
-					return uploadResponse;
+					
 				} catch (std.exception.ErrnoException e) {
+					// There was a file system error - display the error message
 					displayFileSystemErrorMessage(e.msg, thisFunctionName);
 					return uploadResponse;
 				}
 			} catch (ErrnoException e) {
+				// There was a file system error
+				// display the error message
 				displayFileSystemErrorMessage(e.msg, thisFunctionName);
 				uploadResponse = null;
 				return uploadResponse;
 			}
 
-			// Post-upload: verify and update session progress
+			// was the fragment uploaded without issue?
 			if (uploadResponse.type() == JSONType.object) {
-				// Get new offset from updated server state
+				// Fragment uploaded
+				if (debugLogging) {addLogEntry("Fragment upload complete", ["debug"]);}
+				
+				// Use updated offset from response, not fixed increment
 				if ("nextExpectedRanges" in uploadResponse &&
 					uploadResponse["nextExpectedRanges"].type() == JSONType.array &&
 					!uploadResponse["nextExpectedRanges"].array.empty) {
 					offset = uploadResponse["nextExpectedRanges"].array[0].str.splitter('-').front.to!long;
 				} else {
-					// No more expected ranges, upload is complete
+					// No nextExpectedRanges? Assume upload complete
 					break;
 				}
 
-				// Update session tracking
+				// update the uploadSessionData details
 				uploadSessionData["expirationDateTime"] = uploadResponse["expirationDateTime"];
 				uploadSessionData["nextExpectedRanges"] = uploadResponse["nextExpectedRanges"];
+				
+				// Log URL 'updated' expirationDateTime as 'UTC' and 'localTime'
+				if (debugLogging) {
+					// Convert expiration time to localTime
+					string utcExpiry = uploadResponse["expirationDateTime"].str;
+					SysTime expiryUTC = SysTime.fromISOExtString(utcExpiry);
+					SysTime expiryLocal = expiryUTC.toLocalTime();
+				
+					// Display updated URL expiry as UTC and localTime
+					addLogEntry("Upload Session URL expiration extended to (UTC):   " ~ to!string(expiryUTC), ["debug"]);
+					addLogEntry("Upload Session URL expiration extended to (Local): " ~ to!string(expiryLocal), ["debug"]);
+					addLogEntry("", ["debug"]); // Add new line as this fragment is complete
+				}
+				
+				// Save for reuse
 				saveSessionFile(threadUploadSessionFilePath, uploadSessionData);
 			} else {
+				// not a JSON object - fragment upload failed
 				if (verboseLogging) {addLogEntry("File upload session failed - invalid response from OneDrive API", ["verbose"]);}
+
+				// cleanup session data
 				if (exists(threadUploadSessionFilePath)) {
 					remove(threadUploadSessionFilePath);
 				}
+				// set uploadResponse to null as error
 				uploadResponse = null;
 				return uploadResponse;
 			}
@@ -9367,20 +9488,22 @@ class SyncEngine {
 		etaString = format!"| DONE in %02d:%02d:%02d"(h, m, s);
 		addLogEntry(uploadLogEntry ~ "100% " ~ etaString, ["consoleOnly"]);
 
-		// Cleanup session file
+		// Remove session file if it exists		
 		if (exists(threadUploadSessionFilePath)) {
 			remove(threadUploadSessionFilePath);
 		}
 
-		// Display function processing time
+		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 
-		// Return final upload result
+		// Return the session upload response
 		return uploadResponse;
 	}
 
+	
 	// Delete an item on OneDrive
 	void uploadDeletedItem(Item itemToDelete, string path) {
 		// Function Start Time
