@@ -426,6 +426,10 @@ _**Config Example:**_ `file_fragment_size = "25"`
 
 _**CLI Option Use:**_ `--file-fragment-size = '25'`
 
+> [!NOTE]
+> Microsoft OneDrive requires that the file fragment size be an exact multiple of 320 KiB. The default falue is an exact multiple of this required value. Additional exact multiple options are:
+> 15, 20, 25, 30, 35, 40, 45, 50, 55
+
 
 ### force_http_11
 _**Description:**_ This setting controls the application HTTP protocol version. By default, the application will use libcurl defaults for which HTTP protocol version will be used to interact with Microsoft OneDrive. Use this setting to downgrade libcurl to only use HTTP/1.1.
