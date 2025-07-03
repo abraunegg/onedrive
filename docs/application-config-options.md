@@ -427,7 +427,7 @@ _**Config Example:**_ `file_fragment_size = "25"`
 _**CLI Option Use:**_ `--file-fragment-size = '25'`
 
 > [!NOTE]
-> Microsoft OneDrive requires that the file fragment size be an exact multiple of 320 KiB. The default falue is an exact multiple of this required value. Additional exact multiple options are:
+> Microsoft OneDrive requires that the file fragment size be an exact multiple of 320 KiB. The default value is an exact multiple of this required value. Additional exact multiple options are:
 > 15, 20, 25, 30, 35, 40, 45, 50, 55
 
 
