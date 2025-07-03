@@ -9221,11 +9221,12 @@ class SyncEngine {
 		// Calculate File Fragment Size (must be valid multiple of 320 KiB)
 		long baseSize;
 		long fragmentSize;
-		enum GIGABYTE = 1024L * 1024L * 1024L; // 1 GiB
+		enum HUNDRED_MIB = 100L * 1024L * 1024L; // 100 MiB = 104,857,600 bytes
 		enum CHUNK_SIZE = 327_680L; // 320 KiB
 		enum MAX_FRAGMENT_BYTES = 60L * 1_048_576L; // 60 MiB = 62,914,560 bytes
 		
-		if (thisFileSize > GIGABYTE) {
+		// If file is > 100 MiB then automatically use the larger fragment size
+		if (thisFileSize > HUNDRED_MIB) {
 			if (debugLogging) {
 				addLogEntry("Large file detected (" ~ to!string(thisFileSize) ~ " bytes), automatically using max fragment size: " ~ to!string(appConfig.defaultMaxFileFragmentSize), ["debug"]);
 			}
