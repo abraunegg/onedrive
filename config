@@ -76,6 +76,9 @@
 ## This setting controls the application logging all actions to a separate file.
 #enable_logging = "false"
 
+## This setting controls the file fragment size when uploading large files to Microsoft OneDrive. 
+#file_fragment_size = "10"
+
 ## This setting controls the application HTTP protocol version, downgrading to HTTP/1.1 when enabled.
 #force_http_11 = "false"
 

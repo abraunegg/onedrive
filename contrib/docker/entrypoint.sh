@@ -174,6 +174,13 @@ if [ "${ONEDRIVE_SYNC_SHARED_FILES:=0}" == "1" ]; then
 	ARGS=(--sync-shared-files ${ARGS[@]})
 fi
 
+# Tell client to use a different value for file fragment size for large file uploads
+if [ -n "${ONEDRIVE_FILE_FRAGMENT_SIZE:=""}" ]; then
+	echo "# We are specifying the file fragment size for large file uploads (in MB)"
+	echo "# Adding --file-fragment-size ARG"
+	ARGS=(--file-fragment-size ${ONEDRIVE_FILE_FRAGMENT_SIZE} ${ARGS[@]})
+fi
+
 if [ ${#} -gt 0 ]; then
 	ARGS=("${@}")
 fi

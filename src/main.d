@@ -1463,8 +1463,19 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			// Cancel out any inotify events from downloading data
 			processInotifyEvents(false);
 		}
+		
+		// At this point, we have done a sync from:
+		// local  -> online
+		// online -> local
+		//
+		// Everything now should be 'in sync' and the database correctly populated with data
+		// If --resync was used, we need to unset this as sync.d performs certain queries depending on if 'resync' is set or not
+		if (appConfig.getValueBool("resync")) {
+			// unset 'resync' now that everything has been performed
+			appConfig.setValueBool("resync" , false);
+		}
 	} else {
-		// Normal sync
+		// Normal sync process
 		// Download data from OneDrive first
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
 		if (appConfig.getValueBool("monitor")) {
@@ -1505,10 +1516,22 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 				}
 			}
 		}
+		
+		// At this point, we have done a sync from:
+		// online -> local
+		// local  -> online (if not doing --download-only)
+		// online -> local (if not doing --download-only)
+		//
+		// Everything now should be 'in sync' and the database correctly populated with data
+		// If --resync was used, we need to unset this as sync.d performs certain queries depending on if 'resync' is set or not
+		if (appConfig.getValueBool("resync")) {
+			// unset 'resync' now that everything has been performed
+			appConfig.setValueBool("resync" , false);
+		}
 	}
 }
 
-// PRocess any inotify events
+// Process any inotify events
 void processInotifyEvents(bool updateFlag) {
 	// Attempt to process or cancel inotify events
 	// filesystemMonitor.update will throw this, thus needs to be caught
