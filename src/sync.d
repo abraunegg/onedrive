@@ -98,7 +98,6 @@ class SyncEngine {
 	
 	// Array consisting of 'item.driveId', 'item.id' and 'item.parentId' values to delete after all the online changes have been downloaded
 	string[3][] idsToDelete;
-	
 	// Array of JSON items which are files or directories that are not 'root', skipped or to be deleted, that need to be processed
 	JSONValue[] jsonItemsToProcess;
 	// Array of JSON items which are files that are not 'root', skipped or to be deleted, that need to be downloaded
@@ -134,6 +133,8 @@ class SyncEngine {
 	DatabaseItemsToDeleteOnline[] databaseItemsToDeleteOnline;
 	// Array of parentId's that have been skipped via 'sync_list'
 	string[] syncListSkippedParentIds;
+	// Array of Microsoft OneNote Notebook Package ID's
+	string[] onenotePackageIdentifiers;
 		
 	// Flag that there were upload or download failures listed
 	bool syncFailures = false;
@@ -1657,6 +1658,7 @@ class SyncEngine {
 		bool itemNameExplicitMatchRoot = false;
 		bool itemIsRemoteItem = false;
 		string objectParentDriveId;
+		string objectParentId;
 		MonoTime jsonProcessingStartTime;
 		
 		// Debugging the processing start of the JSON item
@@ -1682,6 +1684,9 @@ class SyncEngine {
 			itemIdMatchesDefaultRootId = (thisItemId == appConfig.defaultRootId);
 			itemNameExplicitMatchRoot = (onedriveJSONItem["name"].str == "root");
 			objectParentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+			if (itemHasParentReferenceId) {
+				objectParentId = onedriveJSONItem["parentReference"]["id"].str;
+			}
 			itemIsRemoteItem  = isItemRemote(onedriveJSONItem);
 			
 			// Test is this is the OneDrive Users Root?
@@ -1779,6 +1784,13 @@ class SyncEngine {
 				// This JSON has this element
 				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook Package '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
 				discardDeltaJSONItem = true;
+				
+				// Add this 'id' to onenotePackageIdentifiers as a future 'catch all' for any objects inside this container
+				if (!onenotePackageIdentifiers.canFind(thisItemId)) {
+					if (debugLogging) {addLogEntry("Adding 'thisItemId' to onenotePackageIdentifiers: " ~ to!string(thisItemId), ["debug"]);}
+					onenotePackageIdentifiers ~= thisItemId;
+				}
+				
 			}
 			
 			// Microsoft OneDrive OneNote file objects will report as files but have 'application/msonenote' or 'application/octet-stream' as their mime type and will not have any hash entry
@@ -1801,9 +1813,73 @@ class SyncEngine {
 						// Log that this will be skipped as this this is a Microsoft OneNote item and unsupported
 						if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook File '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
 						discardDeltaJSONItem = true;
+						
+						// Add the Parent ID to onenotePackageIdentifiers
+						if (itemHasParentReferenceId) {
+							// Add this 'id' to onenotePackageIdentifiers as a future 'catch all' for any objects inside this container
+							if (!onenotePackageIdentifiers.canFind(objectParentId)) {
+								if (debugLogging) {addLogEntry("Adding 'objectParentId' to onenotePackageIdentifiers: " ~ to!string(objectParentId), ["debug"]);}
+								onenotePackageIdentifiers ~= objectParentId;
+							}
+						}						
 					}
 				}
 			}
+			
+			// Microsoft OneDrive OneNote 'internal recycle bin' items are a 'folder' , with a 'size' but have a specific name 'OneNote_RecycleBin', for example:
+			//	{
+			//		....
+			//		"fileSystemInfo": {
+			//			"createdDateTime": "2025-03-10T17:11:15Z",
+			//			"lastModifiedDateTime": "2025-03-10T17:11:15Z"
+			//		},
+			//		"folder": {
+			//			"childCount": 2
+			//		},
+			//		"id": "XXXXX",
+			//		"lastModifiedBy": {
+			//			XXXXX
+			//		},
+			//		"name": "OneNote_RecycleBin",
+			//		"parentReference": {
+			//			"driveId": "abcde",
+			//			"driveType": "business",
+			//			"id": "abcde",
+			//			"name": "PARENT NAME - ONENOTE PACKAGE NAME",
+			//			"path": "/drives/path/to/parent",
+			//			"siteId": "XXXXX"
+			//		},
+			//		"size": 17468
+			//	}
+			// 
+			// The only way we can block this download is looking at the 'name' component
+			if (onedriveJSONItem["name"].str == "OneNote_RecycleBin") {
+				// Log that this will be skipped as this this is a Microsoft OneNote item and unsupported
+				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook Recycle Bin '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+				discardDeltaJSONItem = true;
+				
+				// Add the Parent ID to onenotePackageIdentifiers
+				if (itemHasParentReferenceId) {
+					// Add this 'id' to onenotePackageIdentifiers as a future 'catch all' for any objects inside this container
+					if (!onenotePackageIdentifiers.canFind(objectParentId)) {
+						if (debugLogging) {addLogEntry("Adding 'objectParentId' to onenotePackageIdentifiers: " ~ to!string(objectParentId), ["debug"]);}
+						onenotePackageIdentifiers ~= objectParentId;
+					}
+				}
+			}
+			
+			/**
+			
+			// Microsoft OneDrive OneNote 'catch all'
+			if (!discardDeltaJSONItem) {
+				if (onenotePackageIdentifiers.canFind(objectParentId)) {
+					// Log that this will be skipped as this this is a Microsoft OneNote item and unsupported
+					if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook object '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
+					discardDeltaJSONItem = true;
+				}
+			}
+			
+			**/
 			
 			// If we are not self-generating a /delta response, check this initial /delta JSON bundle item against the basic checks 
 			// of applicability against 'skip_file', 'skip_dir' and 'sync_list'
@@ -5806,6 +5882,8 @@ class SyncEngine {
 						// Debug output what the self-built path currently is
 						if (debugLogging) {addLogEntry(" - selfBuiltPath currently calculated as: " ~ selfBuiltPath, ["debug"]);}
 						
+						addLogEntry(" - selfBuiltPath currently calculated as: " ~ selfBuiltPath);
+						
 						// Issue #2731
 						// Get the remoteDriveId from JSON record
 						string remoteDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
@@ -5814,9 +5892,15 @@ class SyncEngine {
 							// Yes this JSON is from a Shared Folder
 							// Query the database for the 'remote' folder details from the database
 							if (debugLogging) {addLogEntry("Query database for this 'remoteDriveId' record: " ~ to!string(remoteDriveId), ["debug"]);}
+							
+							addLogEntry("Query database for this 'remoteDriveId' record: " ~ to!string(remoteDriveId));
+							
 							Item remoteItem;
 							itemDB.selectByRemoteDriveId(remoteDriveId, remoteItem);
 							if (debugLogging) {addLogEntry("Query returned result (itemDB.selectByRemoteDriveId): " ~ to!string(remoteItem), ["debug"]);}
+							
+							addLogEntry("Query returned result (itemDB.selectByRemoteDriveId): " ~ to!string(remoteItem));
+							
 							
 							// Shared Folders present a unique challenge to determine what path needs to be used, especially in a --resync scenario where there are near zero records available to use computeItemPath() 
 							// Update the path that will be used to check 'sync_list' with the 'name' of the remoteDriveId database record
@@ -5824,14 +5908,19 @@ class SyncEngine {
 							// Avoid duplicating the shared folder root name if already present
 							if (!selfBuiltPath.startsWith("/" ~ remoteItem.name ~ "/")) {
 								selfBuiltPath = remoteItem.name ~ selfBuiltPath;
-								if (debugLogging) {
-									addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath), ["debug"]);
-								}
+								if (debugLogging) {addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath), ["debug"]);}
+								
+								addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath));
+								
 							} else {
-								if (debugLogging) {
-									addLogEntry("Shared Folder name already present in path; no update needed to selfBuiltPath", ["debug"]);
-								}
+								if (debugLogging) {addLogEntry("Shared Folder name already present in path; no update needed to selfBuiltPath", ["debug"]);}
+								
+								addLogEntry("Shared Folder name already present in path; no update needed to selfBuiltPath");
+								
 							}
+							
+							addLogEntry(" - selfBuiltPath final calculated as: " ~ selfBuiltPath);
+							
 						}
 						
 						// Issue #2740
@@ -9221,22 +9310,12 @@ class SyncEngine {
 		// Calculate File Fragment Size (must be valid multiple of 320 KiB)
 		long baseSize;
 		long fragmentSize;
-		enum HUNDRED_MIB = 100L * 1024L * 1024L; // 100 MiB = 104,857,600 bytes
 		enum CHUNK_SIZE = 327_680L; // 320 KiB
 		enum MAX_FRAGMENT_BYTES = 60L * 1_048_576L; // 60 MiB = 62,914,560 bytes
 		
-		// If file is > 100 MiB then automatically use the larger fragment size
-		if (thisFileSize > HUNDRED_MIB) {
-			if (debugLogging) {
-				addLogEntry("Large file detected (" ~ to!string(thisFileSize) ~ " bytes), automatically using max fragment size: " ~ to!string(appConfig.defaultMaxFileFragmentSize), ["debug"]);
-			}
-			// Calculate base size using max fragment size
-			baseSize = appConfig.defaultMaxFileFragmentSize * 2^^20;
-		} else {
-			// Calculate base size using configured fragment size
-			baseSize = appConfig.getValueLong("file_fragment_size") * 2^^20;
-		}
-		
+		// Calculate base size using configured fragment size
+		baseSize = appConfig.getValueLong("file_fragment_size") * 2^^20;
+				
 		// Ensure 'fragmentSize' is a multiple of 327680 bytes and < 60 MiB
 		if (baseSize >= MAX_FRAGMENT_BYTES) {
 			// Use the maximum valid size below 60 MiB, rounded down to nearest 320 KiB multiple
