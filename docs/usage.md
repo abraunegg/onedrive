@@ -599,17 +599,40 @@ Further documentation not listed above can be found here: https://github.com/abr
 Please read these additional references to assist you with installing, configuring, and using the OneDrive Client for Linux.
 
 ### Increasing application logging level
-When running a sync (`--sync`) or using monitor mode (`--monitor`), it may be desirable to see additional information regarding the progress and operation of the client. For example, for a `--sync` command, this would be:
+When running a sync (`--sync`) or using monitor mode (`--monitor`), it may be desirable to see additional information regarding the progress and operation of the client. 
+
+The client supports four levels of logging output:
+
+#### 1. Normal (default)
+Only essential information is shown — suitable for standard usage without additional output.
+
+#### 2. Verbose 
+Enables general status and progress information. Use:
 ```text
 onedrive --sync --verbose
+
 ```
-Furthermore, for simplicity, this can be simplified to the following:
-```
+or its short form:
+```text
 onedrive -s -v
 ```
 
+#### 3. Debug Logging
+Enables detailed internal logging useful for diagnosing issues. This is activated by specifying the `--verbose` flag twice:
+```text
+onedrive --sync --verbose --verbose
+```
+
+#### 4. HTTPS Debug Logging
+Enables full debug logging including HTTPS request/response information. This is typically only needed for advanced debugging of API or network issues. Activate with:
+```text
+onedrive --sync --verbose --verbose --debug-https
+```
+
 > [!IMPORTANT]
-> Adding `--verbose` twice will enable debug logging output. This is generally required when raising a bug report or needing to understand a problem.
+> When raising a bug report or attempting to understand unexpected behaviour, it is recommended to enable debug logging using `--verbose --verbose`.
+>
+> Only use `--debug-https` if explicitly requested or required, as it may expose sensitive information in logs.
 
 ### Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive
 Client Side Filtering in the context of the OneDrive Client for Linux refers to user-configured rules that determine what files and directories the client should upload or download from Microsoft OneDrive. These rules are crucial for optimising synchronisation, especially when dealing with large numbers of files or specific file types. The OneDrive Client for Linux offers several configuration options to facilitate this:
