@@ -592,14 +592,16 @@ class SyncEngine {
 		if ((defaultOneDriveDriveDetails.type() == JSONType.object) && (hasId(defaultOneDriveDriveDetails))) {
 			if (debugLogging) {addLogEntry("OneDrive Account Default Drive Details:      " ~ to!string(defaultOneDriveDriveDetails), ["debug"]);}
 			appConfig.accountType = defaultOneDriveDriveDetails["driveType"].str;
-			appConfig.defaultDriveId = defaultOneDriveDriveDetails["id"].str;
 			
 			// Issue #3115 - Validate driveId length
 			// What account type is this?
 			if (appConfig.accountType == "personal") {
 				// Test driveId length and validation
 				// Once checked and validated, we only need to check 'driveId' if it does not match exactly 'appConfig.defaultDriveId'
-				appConfig.defaultDriveId = testProvidedDriveIdForLengthIssue(appConfig.defaultDriveId);
+				appConfig.defaultDriveId = transformToLowerCase(testProvidedDriveIdForLengthIssue(defaultOneDriveDriveDetails["id"].str));
+			} else {
+				// Use 'defaultOneDriveDriveDetails' as is for all other account types
+				appConfig.defaultDriveId = defaultOneDriveDriveDetails["id"].str;
 			}
 			
 			// Make sure that appConfig.defaultDriveId is in our driveIDs array to use when checking if item is in database
@@ -1098,6 +1100,9 @@ class SyncEngine {
 					// Issue #3115 - Validate driveId length
 					// What account type is this?
 					if (appConfig.accountType == "personal") {
+						// Issue #3336 - Convert driveId to lowercase before any test
+						searchItem.driveId = transformToLowerCase(searchItem.driveId);
+						
 						// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
 						if (searchItem.driveId != appConfig.defaultDriveId) {
 							searchItem.driveId = testProvidedDriveIdForLengthIssue(searchItem.driveId);
@@ -1358,6 +1363,9 @@ class SyncEngine {
 					// Issue #3115 - Validate driveId length
 					// What account type is this?
 					if (appConfig.accountType == "personal") {
+						// Issue #3336 - Convert driveId to lowercase before any test
+						driveIdToQuery = transformToLowerCase(driveIdToQuery);
+						
 						// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
 						if (driveIdToQuery != appConfig.defaultDriveId) {
 							driveIdToQuery = testProvidedDriveIdForLengthIssue(driveIdToQuery);
@@ -1666,9 +1674,23 @@ class SyncEngine {
 			addLogEntry(debugLogBreakType1, ["debug"]);
 			jsonProcessingStartTime = MonoTime.currTime();
 			addLogEntry("Processing OneDrive Item " ~ to!string(changeCount) ~ " of " ~ to!string(nrChanges) ~ " from API Response Bundle " ~ to!string(responseBundleCount), ["debug"]);
-			addLogEntry("Raw JSON OneDrive Item: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 		}
 		
+		// Issue #3336 - Convert driveId to lowercase
+		if (appConfig.accountType == "personal") {
+			// We must massage this raw JSON record to force the onedriveJSONItem["parentReference"]["driveId"] to lowercase
+			if (hasParentReferenceDriveId(onedriveJSONItem)) {
+				// This JSON record has a driveId we now must manipulate to lowercase
+				string originalDriveIdValue = onedriveJSONItem["parentReference"]["driveId"].str;
+				onedriveJSONItem["parentReference"]["driveId"] = transformToLowerCase(originalDriveIdValue);
+			}
+		}
+		
+		// Debug output of the raw JSON item we are processing
+		if (debugLogging) {
+			addLogEntry("Raw JSON OneDrive Item: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
+		}
+				
 		// What is this item's id
 		thisItemId = onedriveJSONItem["id"].str;
 		
@@ -1738,6 +1760,11 @@ class SyncEngine {
 					// flag this
 					sharedFolderRenameCheck = true;
 				}
+			}
+			
+			// Issue #3336 - Convert driveId to lowercase before any test
+			if (appConfig.accountType == "personal") {
+				objectParentDriveId = transformToLowerCase(objectParentDriveId);
 			}
 			
 			// Do we check if this JSON needs updating?
@@ -2079,6 +2106,11 @@ class SyncEngine {
 			// Configure the remoteItem - so if it is used, it can be utilised later
 			Item remoteItem;
 			
+			// Issue #3336 - Convert driveId to lowercase before any test
+			if (appConfig.accountType == "personal") {
+				thisItemDriveId = transformToLowerCase(thisItemDriveId);
+			}
+			
 			// Check the database for an existing entry for this JSON item
 			bool existingDBEntry = itemDB.selectById(thisItemDriveId, thisItemId, existingDatabaseItem);
 			
@@ -2142,6 +2174,11 @@ class SyncEngine {
 			} else {
 				// Parent not in the database
 				// Is the parent a 'folder' from another user? ie - is this a 'shared folder' that has been shared with us?
+				
+				// Issue #3336 - Convert driveId to lowercase before any test
+				if (appConfig.accountType == "personal") {
+					thisItemDriveId = transformToLowerCase(thisItemDriveId);
+				}
 				
 				// Lets determine why?
 				if (thisItemDriveId == appConfig.defaultDriveId) {
@@ -3193,6 +3230,9 @@ class SyncEngine {
 		// Issue #3115 - Validate 'parentDriveId' length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
+			// Issue #3336 - Convert driveId to lowercase before any test
+			parentDriveId = transformToLowerCase(parentDriveId);
+			
 			// Test if the 'parentDriveId' is not equal to appConfig.defaultDriveId
 			if (parentDriveId != appConfig.defaultDriveId) {
 				// Test 'parentDriveId' for length and validation - 15 character API bug
@@ -3307,6 +3347,9 @@ class SyncEngine {
 		// Issue #3115 - Validate sharedFolderDatabaseTie.driveId length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
+			// Issue #3336 - Convert driveId to lowercase before any test
+			sharedFolderDatabaseTie.driveId = transformToLowerCase(sharedFolderDatabaseTie.driveId);
+			
 			// Test sharedFolderDatabaseTie.driveId length and validation if the sharedFolderDatabaseTie.driveId we are testing is not equal to appConfig.defaultDriveId
 			if (sharedFolderDatabaseTie.driveId != appConfig.defaultDriveId) {
 				sharedFolderDatabaseTie.driveId = testProvidedDriveIdForLengthIssue(sharedFolderDatabaseTie.driveId);
@@ -5887,6 +5930,12 @@ class SyncEngine {
 						// Issue #2731
 						// Get the remoteDriveId from JSON record
 						string remoteDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+						
+						// Issue #3336 - Convert driveId to lowercase before any test
+						if (appConfig.accountType == "personal") {
+							remoteDriveId = transformToLowerCase(remoteDriveId);
+						}
+						
 						// Is this potentially a shared folder? This is the only reliable way to determine this ...
 						if (remoteDriveId != appConfig.defaultDriveId) {
 							// Yes this JSON is from a Shared Folder
@@ -7974,6 +8023,9 @@ class SyncEngine {
 			// Issue #3115 - Validate driveId length
 			// What account type is this?
 			if (appConfig.accountType == "personal") {
+				// Issue #3336 - Convert driveId to lowercase before any test
+				queryItem.driveId = transformToLowerCase(queryItem.driveId);
+				
 				// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
 				if (queryItem.driveId != appConfig.defaultDriveId) {
 					queryItem.driveId = testProvidedDriveIdForLengthIssue(queryItem.driveId);
@@ -8096,10 +8148,13 @@ class SyncEngine {
 					
 						// Create the new folder
 						createDirectoryOnlineAPIResponse = createDirectoryOnlineOneDriveApiInstance.createById(requiredDriveId, requiredParentItemId, newDriveItem);
-						// Is the response a valid JSON object - validation checking done in saveItem
-						saveItem(createDirectoryOnlineAPIResponse);
+						
 						// Log that the directory was created
 						addLogEntry("Successfully created the remote directory " ~ thisNewPathToCreate ~ " on Microsoft OneDrive");
+						
+						// Is the response a valid JSON object - validation checking done in saveItem, printing of the JSON object is done in saveItem()
+						saveItem(createDirectoryOnlineAPIResponse);
+						
 					} catch (OneDriveException exception) {
 						if (exception.httpStatusCode == 409) {
 							// OneDrive API returned a 404 (far above) to say the directory did not exist
@@ -8109,7 +8164,10 @@ class SyncEngine {
 							// Try to recover race condition by querying the parent's children for the folder we are trying to create
 							createDirectoryOnlineAPIResponse = resolveOnlineCreationRaceCondition(requiredDriveId, requiredParentItemId, thisNewPathToCreate);
 							
-							// Is the response a valid JSON object - validation checking done in saveItem
+							// Log that the directory details were obtained
+							addLogEntry("Successfully obtained the remote directory details " ~ thisNewPathToCreate ~ " from Microsoft OneDrive");
+							
+							// Is the response a valid JSON object - validation checking done in saveItem, printing of the JSON object is done in saveItem()
 							saveItem(createDirectoryOnlineAPIResponse);
 							
 							// Shutdown this API instance, as we will create API instances as required, when required
@@ -8706,6 +8764,11 @@ class SyncEngine {
 						
 						// Is quota being restricted?
 						if (cachedOnlineDriveData.quotaRestricted) {
+							// Issue #3336 - Convert driveId to lowercase before any test
+							if (appConfig.accountType == "personal") {
+								parentItem.driveId = transformToLowerCase(parentItem.driveId);
+							}
+							
 							// If the upload target drive is not our drive id, then it is a shared folder .. we need to print a space warning message
 							if (parentItem.driveId != appConfig.defaultDriveId) {
 								// Different message depending on account type
@@ -8743,6 +8806,11 @@ class SyncEngine {
 								// Create a new API Instance for this thread and initialise it
 								checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
 								checkFileOneDriveApiInstance.initialise();
+								
+								// Issue #3336 - Convert driveId to lowercase before any test
+								if (appConfig.accountType == "personal") {
+									parentItem.driveId = transformToLowerCase(parentItem.driveId);
+								}
 
 								if (parentItem.driveId == appConfig.defaultDriveId) {
 									// getPathDetailsByDriveId is only reliable when the driveId is our driveId
@@ -8872,7 +8940,7 @@ class SyncEngine {
 					if (canFind(posixViolationPaths, parentPath)) {
 						addLogEntry("ERROR: POSIX 'case-insensitive match' for the parent path which violates the Microsoft OneDrive API namespace convention.");
 					} else {
-						addLogEntry("ERROR: Parent path is not in the database or online.");
+						addLogEntry("ERROR: Parent path is not in the database or online: " ~ parentPath);
 					}
 					addLogEntry("ERROR: Unable to upload this file: " ~ fileToUpload);
 					uploadFailed = true;
@@ -9673,6 +9741,12 @@ class SyncEngine {
 					// Is this a 'personal' account type or is this a Business Account with Sync Business Shared Items enabled?
 					if ((appConfig.accountType == "personal") || businessSharingEnabled) {
 						// Personal account type or syncing Business Shared Items is enabled
+						
+						// Issue #3336 - Convert driveId to lowercase before any test
+						if (appConfig.accountType == "personal") {
+							itemToDelete.driveId = transformToLowerCase(itemToDelete.driveId);
+						}
+						
 						// Is the 'drive' where this is to be deleted on 'our' drive or is this a remote 'drive' ?
 						if (itemToDelete.driveId != appConfig.defaultDriveId) {
 							// The item to delete is on a remote drive ... this must be handled in a specific way
@@ -9968,6 +10042,17 @@ class SyncEngine {
 		
 		// jsonItem has to be a valid object
 		if (jsonItem.type() == JSONType.object) {
+		
+			// Issue #3336 - Convert driveId to lowercase
+			if (appConfig.accountType == "personal") {
+				// We must massage this raw JSON record to force the jsonItem["parentReference"]["driveId"] to lowercase
+				if (hasParentReferenceDriveId(jsonItem)) {
+					// This JSON record has a driveId we now must manipulate to lowercase
+					string originalDriveIdValue = jsonItem["parentReference"]["driveId"].str;
+					jsonItem["parentReference"]["driveId"] = transformToLowerCase(originalDriveIdValue);
+				}
+			}
+			
 			// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
 			if (hasId(jsonItem)) {
 				// Are we in a --upload-only & --remove-source-files scenario?
@@ -10001,14 +10086,18 @@ class SyncEngine {
 								addLogEntry(logMessage, ["debug"]);
 							}
 							item.driveId = jsonItem["parentReference"]["driveId"].str;
+						
+						}
+						
+						// Issue #3115 - Validate driveId length
+						// What account type is this?
+						if (appConfig.accountType == "personal") {
+							// Issue #3336 - Convert driveId to lowercase before any test
+							item.driveId = transformToLowerCase(item.driveId);
 							
-							// Issue #3115 - Validate driveId length
-							// What account type is this?
-							if (appConfig.accountType == "personal") {
-								// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
-								if (item.driveId != appConfig.defaultDriveId) {
-									item.driveId = testProvidedDriveIdForLengthIssue(item.driveId);
-								}
+							// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+							if (item.driveId != appConfig.defaultDriveId) {
+								item.driveId = testProvidedDriveIdForLengthIssue(item.driveId);
 							}
 						}
 						
@@ -10023,6 +10112,9 @@ class SyncEngine {
 					// Issue #3115 - Validate driveId length
 					// What account type is this?
 					if (appConfig.accountType == "personal") {
+						// Issue #3336 - Convert driveId to lowercase before any test
+						item.driveId = transformToLowerCase(item.driveId);
+						
 						// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
 						if (item.driveId != appConfig.defaultDriveId) {
 							item.driveId = testProvidedDriveIdForLengthIssue(item.driveId);
@@ -10080,6 +10172,9 @@ class SyncEngine {
 		if (appConfig.accountType == "personal") {
 			// Is this a 'remote' DB record
 			if (newDatabaseItem.type == ItemType.remote) {
+				// Issue #3336 - Convert driveId to lowercase before any test
+				newDatabaseItem.remoteDriveId = transformToLowerCase(newDatabaseItem.remoteDriveId);
+			
 				// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
 				if (newDatabaseItem.remoteDriveId != appConfig.defaultDriveId) {
 					// Issue #3136, #3139 #3143
@@ -10414,6 +10509,9 @@ class SyncEngine {
 		// Issue #3072 - Validate searchItem.driveId length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
+			// Issue #3336 - Convert driveId to lowercase before any test
+			searchItem.driveId = transformToLowerCase(searchItem.driveId);
+		
 			// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
 			if (searchItem.driveId != appConfig.defaultDriveId) {
 				searchItem.driveId = testProvidedDriveIdForLengthIssue(searchItem.driveId);
@@ -10664,6 +10762,9 @@ class SyncEngine {
 		// Issue #3115 - Validate driveId length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
+			// Issue #3336 - Convert driveId to lowercase before any test
+			driveId = transformToLowerCase(driveId);
+		
 			// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
 			if (driveId != appConfig.defaultDriveId) {
 				driveId = testProvidedDriveIdForLengthIssue(driveId);
@@ -10889,6 +10990,11 @@ class SyncEngine {
 				// Ensure we have a valid driveId to search here
 				if (parentDetails.driveId.empty) {
 					parentDetails.driveId = appConfig.defaultDriveId;
+				}
+				
+				// Issue #3336 - Convert driveId to lowercase before any test
+				if (appConfig.accountType == "personal") {
+					parentDetails.driveId = transformToLowerCase(parentDetails.driveId);
 				}
 				
 				// If the prior JSON 'getPathDetailsAPIResponse' is on this account driveId .. then continue to use getPathDetails
@@ -12798,6 +12904,11 @@ class SyncEngine {
 		string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 		string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
 		
+		// Issue #3336 - Convert driveId to lowercase before any test
+		if (appConfig.accountType == "personal") {
+			thisItemDriveId = transformToLowerCase(thisItemDriveId);
+		}
+		
 		if (thisItemDriveId == appConfig.defaultDriveId) {
 			// As this is on our driveId, use the path details as is
 			parentPath = onedriveJSONItem["parentReference"]["path"].str;
@@ -13028,6 +13139,9 @@ class SyncEngine {
 		// Do the flags get updated?
 		if (quotaRemaining <= 0) {
 			if (appConfig.accountType == "personal"){
+				// Issue #3336 - Convert driveId to lowercase before any test
+				driveId = transformToLowerCase(driveId);
+			
 				if (driveId == appConfig.defaultDriveId) {
 					// zero space available on our drive
 					addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
@@ -13157,6 +13271,9 @@ class SyncEngine {
 		// Issue #3115 - Validate driveId length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
+			// Issue #3336 - Convert driveId to lowercase before any test
+			tieDBItem.driveId = transformToLowerCase(tieDBItem.driveId);
+			
 			// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
 			if (tieDBItem.driveId != appConfig.defaultDriveId) {
 				tieDBItem.driveId = testProvidedDriveIdForLengthIssue(tieDBItem.driveId);
@@ -13949,8 +14066,9 @@ class SyncEngine {
 					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 				}
 				
-				// Return the new calculated value
-				return newEntry;
+				// Issue #3336 - Convert driveId to lowercase
+				// Return the new calculated value as lowercase
+				return transformToLowerCase(newEntry);
 			} else {
 				// Display function processing time if configured to do so
 				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -13958,8 +14076,9 @@ class SyncEngine {
 					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 				}
 			
-				// Return input value as-is
-				return objectParentDriveId;
+				// Issue #3336 - Convert driveId to lowercase
+				// Return input value as-is as lowercase
+				return transformToLowerCase(objectParentDriveId);
 			}
 		} else {
 			// Display function processing time if configured to do so
@@ -13968,9 +14087,39 @@ class SyncEngine {
 				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 			}
 		
-			// Return input value as-is
-			return objectParentDriveId;
+			// Issue #3336 - Convert driveId to lowercase
+			// Return input value as-is as lowercase
+			return transformToLowerCase(objectParentDriveId);
 		}
+	}
+	
+	// Transform OneDrive Personal driveId or parentReference driveId to lowercase
+	string transformToLowerCase(string objectParentDriveId) {
+		// Since 14 June 2025 (possibly earlier), the Microsoft Graph API has started returning inconsistent casing for driveId values across multiple OneDrive Personal API endpoints.
+		// https://github.com/OneDrive/onedrive-api-docs/issues/1902
+	
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
+		string transformedDriveIdValue;
+		transformedDriveIdValue = toLower(objectParentDriveId);
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// Return transformed value
+		return transformedDriveIdValue;
 	}
 	
 	// Calculate the transfer metrics for the file to aid in performance discussions when they are raised

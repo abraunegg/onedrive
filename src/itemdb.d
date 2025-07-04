@@ -227,7 +227,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 
 final class ItemDatabase {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 17;
+	immutable int itemDatabaseVersion = 18;
 
 	Database db;
 	string insertItemStmt;
