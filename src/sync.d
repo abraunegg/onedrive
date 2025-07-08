@@ -2022,7 +2022,7 @@ class SyncEngine {
 			}
 		} else {
 			// Change is to delete an item
-			if (debugLogging) {addLogEntry("Handing a OneDrive Deleted Item", ["debug"]);}
+			if (debugLogging) {addLogEntry("Handing a OneDrive Online Deleted Item", ["debug"]);}
 			if (existingDBEntry) {
 				// Is the item to delete locally actually in sync with OneDrive currently?
 				// What is the source of this item data?
@@ -2032,7 +2032,7 @@ class SyncEngine {
 				string localPathToDelete = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
 				if (isItemSynced(existingDatabaseItem, localPathToDelete, itemSource)) {
 					// Flag to delete
-					if (debugLogging) {addLogEntry("Flagging to delete item locally: " ~ to!string(onedriveJSONItem), ["debug"]);}
+					if (debugLogging) {addLogEntry("Flagging to delete item locally due to online deletion event: " ~ to!string(onedriveJSONItem), ["debug"]);}
 					// Use the DB entries returned - add the driveId, itemId and parentId values  to the array
 					idsToDelete ~= [existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId];
 				} else {
@@ -2299,7 +2299,7 @@ class SyncEngine {
 						
 						if (("name" in onedriveJSONItem["parentReference"]) != null) {
 							
-							// How is this out of scope?
+							// How is this item now out of scope?
 							// is sync_list configured
 							if (syncListConfigured) {
 								// sync_list configured and in use
@@ -2309,7 +2309,7 @@ class SyncEngine {
 								}
 							}
 							// flag to delete local file as it now is no longer in sync with OneDrive
-							if (debugLogging) {addLogEntry("Flagging to delete item locally: ", ["debug"]);}
+							if (verboseLogging) {addLogEntry("Flagging to delete item locally as this is now an unwanted item (parental exclusion) and the item currently exists in the local database: ", ["verbose"]);}
 							// Use the configured values - add the driveId, itemId and parentId values to the array
 							idsToDelete ~= [thisItemDriveId, thisItemId, thisItemParentId];
 						}
@@ -2520,13 +2520,13 @@ class SyncEngine {
 							// This is a file in the logical root
 							unwanted = false;
 						} else {
-							// path is unwanted
+							// path is unwanted - excluded by 'sync_list'
 							unwanted = true;
 							if (verboseLogging) {addLogEntry("Skipping path - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
 							// flagging to skip this item now, but does this exist in the DB thus needs to be removed / deleted?
 							if (existingDBEntry) {
 								// flag to delete
-								if (verboseLogging) {addLogEntry("Flagging item for local delete as item exists in database: " ~ newItemPath, ["verbose"]);}
+								if (verboseLogging) {addLogEntry("Flagging to delete item locally as this is now an unwanted item (sync_list exclusion) and the item currently exists in the local database: ", ["verbose"]);}
 								// Use the configured values - add the driveId, itemId and parentId values to the array
 								idsToDelete ~= [thisItemDriveId, thisItemId, thisItemParentId];
 							}
