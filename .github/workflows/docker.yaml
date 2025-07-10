@@ -6,9 +6,9 @@ on:
     tags: [ 'v*' ]
   pull_request:
     # Comment these out to force a test build on a PR
-    branches:
-      - master
-    types: [closed]
+    #branches:
+    #  - master
+    #types: [closed]
 
 env:
   DOCKER_HUB_SLUG: driveone/onedrive
@@ -37,7 +37,7 @@ jobs:
 
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
@@ -55,16 +55,16 @@ jobs:
           flavor: ${{ matrix.flavor }}
           main-flavor: ${{ matrix.flavor == 'debian' }}
 
-      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-qemu-action@v3
         with:
           image: tonistiigi/binfmt:latest
           platforms: all
         if: matrix.platforms != 'linux/amd64'
 
-      - uses: docker/setup-buildx-action@v2
+      - uses: docker/setup-buildx-action@v3
 
       - name: Cache Docker layers
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ matrix.flavor }}-${{ github.sha }}
@@ -72,14 +72,14 @@ jobs:
             ${{ runner.os }}-buildx-${{ matrix.flavor }}
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         if: github.event_name != 'pull_request'
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
       - name: Build and Push to Docker
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
