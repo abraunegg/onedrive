@@ -6173,51 +6173,57 @@ class SyncEngine {
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
 				
-				// Does this JSON match the root name of a shared folder we may be trying to match?
-				if (sharedFolderDeltaGeneration) {
-					if (currentSharedFolderName == onlinePathData["name"].str) {
-						if (debugLogging) {addLogEntry("createLocalPathStructure parent matches the current shared folder name, creating applicable shared folder database records", ["debug"]);}
-						// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
-						createRequiredSharedFolderDatabaseRecords(onlinePathData);
+				// There needs to be a valid JSON to process
+				if (onlinePathData.type() == JSONType.object) {
+					// Does this JSON match the root name of a shared folder we may be trying to match?
+					if (sharedFolderDeltaGeneration) {
+						if (currentSharedFolderName == onlinePathData["name"].str) {
+							if (debugLogging) {addLogEntry("createLocalPathStructure parent matches the current shared folder name, creating applicable shared folder database records", ["debug"]);}
+							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
+							createRequiredSharedFolderDatabaseRecords(onlinePathData);
+						}
+					} 
+					
+					// Configure the grandparent items
+					string grandparentItemDriveId;
+					string grandparentItemParentId;
+					grandparentItemDriveId = onlinePathData["parentReference"]["driveId"].str;
+					
+					// OneDrive Personal JSON responses are in-consistent with not having 'id' available
+					if (hasParentReferenceId(onlinePathData)) {
+						// Use the parent reference id
+						grandparentItemParentId = onlinePathData["parentReference"]["id"].str;
+					} else {
+						// Testing evidence shows that for Personal accounts, use the 'id' itself
+						grandparentItemParentId = onlinePathData["id"].str;
 					}
-				} 
-				
-				// Configure the grandparent items
-				string grandparentItemDriveId;
-				string grandparentItemParentId;
-				grandparentItemDriveId = onlinePathData["parentReference"]["driveId"].str;
-				
-				// OneDrive Personal JSON responses are in-consistent with not having 'id' available
-				if (hasParentReferenceId(onlinePathData)) {
-					// Use the parent reference id
-					grandparentItemParentId = onlinePathData["parentReference"]["id"].str;
+					
+					// Is this item's grandparent data in the database?
+					if (!itemDB.idInLocalDatabase(grandparentItemDriveId, grandparentItemParentId)) {
+						// grandparent needs to be added
+						createLocalPathStructure(onlinePathData, dirName(newLocalParentalPath));
+					}
+					
+					// If this is --dry-run
+					if (dryRun) {
+						// we dont create the directory, but we need to track that we 'faked it'
+						idsFaked ~= [grandparentItemDriveId, grandparentItemParentId];
+					}
+					
+					// Does the parental path exist locally?
+					if (!exists(newLocalParentalPath)) {
+						// the required path does not exist locally - logging is done in handleLocalDirectoryCreation
+						// create a db item record for the online data
+						Item newDatabaseItem = makeItem(onlinePathData);
+						// create the path locally, save the data to the database post path creation
+						handleLocalDirectoryCreation(newDatabaseItem, newLocalParentalPath, onlinePathData);
+					} else {
+						// parent path exists locally, save the data to the database
+						saveItem(onlinePathData);
+					}
 				} else {
-					// Testing evidence shows that for Personal accounts, use the 'id' itself
-					grandparentItemParentId = onlinePathData["id"].str;
-				}
-				
-				// Is this item's grandparent data in the database?
-				if (!itemDB.idInLocalDatabase(grandparentItemDriveId, grandparentItemParentId)) {
-					// grandparent needs to be added
-					createLocalPathStructure(onlinePathData, dirName(newLocalParentalPath));
-				}
-				
-				// If this is --dry-run
-				if (dryRun) {
-					// we dont create the directory, but we need to track that we 'faked it'
-					idsFaked ~= [grandparentItemDriveId, grandparentItemParentId];
-				}
-				
-				// Does the parental path exist locally?
-				if (!exists(newLocalParentalPath)) {
-					// the required path does not exist locally - logging is done in handleLocalDirectoryCreation
-					// create a db item record for the online data
-					Item newDatabaseItem = makeItem(onlinePathData);
-					// create the path locally, save the data to the database post path creation
-					handleLocalDirectoryCreation(newDatabaseItem, newLocalParentalPath, onlinePathData);
-				} else {
-					// parent path exists locally, save the data to the database
-					saveItem(onlinePathData);
+					// No valid JSON was responded with - unable to create local path structure
+					addLogEntry("Unable to create the local path structure as the Microsoft OneDrive API returned an invalid response");
 				}
 			} else {
 				if (debugLogging) {addLogEntry("createLocalPathStructure parent is in the database", ["debug"]);}
