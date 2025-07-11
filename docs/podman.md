@@ -3,14 +3,14 @@ This client can be run as a Podman container, with 3 available container base op
 
 | Container Base | Docker Tag  | Description                                                    | i686 | x86_64 | ARMHF | AARCH64 |
 |----------------|-------------|----------------------------------------------------------------|:------:|:------:|:-----:|:-------:|
-| Alpine Linux   | edge-alpine | Podman container based on Alpine 3.20 using 'master'           |❌|✔|❌|✔|
-| Alpine Linux   | alpine      | Podman container based on Alpine 3.20 using latest release     |❌|✔|❌|✔|
+| Alpine Linux   | edge-alpine | Podman container based on Alpine 3.21 using 'master'           |❌|✔|❌|✔|
+| Alpine Linux   | alpine      | Podman container based on Alpine 3.21 using latest release     |❌|✔|❌|✔|
 | Debian         | debian      | Podman container based on Debian Stable using latest release   |✔|✔|✔|✔|
 | Debian         | edge        | Podman container based on Debian Stable using 'master'         |✔|✔|✔|✔|
 | Debian         | edge-debian | Podman container based on Debian Stable using 'master'         |✔|✔|✔|✔|
 | Debian         | latest      | Podman container based on Debian Stable using latest release   |✔|✔|✔|✔|
-| Fedora         | edge-fedora | Podman container based on Fedora 40 using 'master'             |❌|✔|❌|✔|
-| Fedora         | fedora      | Podman container based on Fedora 40 using latest release       |❌|✔|❌|✔|
+| Fedora         | edge-fedora | Podman container based on Fedora 42 using 'master'             |❌|✔|❌|✔|
+| Fedora         | fedora      | Podman container based on Fedora 42 using latest release       |❌|✔|❌|✔|
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 

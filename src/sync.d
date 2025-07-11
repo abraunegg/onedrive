@@ -5925,8 +5925,6 @@ class SyncEngine {
 						// Debug output what the self-built path currently is
 						if (debugLogging) {addLogEntry(" - selfBuiltPath currently calculated as: " ~ selfBuiltPath, ["debug"]);}
 						
-						addLogEntry(" - selfBuiltPath currently calculated as: " ~ selfBuiltPath);
-						
 						// Issue #2731
 						// Get the remoteDriveId from JSON record
 						string remoteDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
@@ -5942,14 +5940,9 @@ class SyncEngine {
 							// Query the database for the 'remote' folder details from the database
 							if (debugLogging) {addLogEntry("Query database for this 'remoteDriveId' record: " ~ to!string(remoteDriveId), ["debug"]);}
 							
-							addLogEntry("Query database for this 'remoteDriveId' record: " ~ to!string(remoteDriveId));
-							
 							Item remoteItem;
 							itemDB.selectByRemoteDriveId(remoteDriveId, remoteItem);
 							if (debugLogging) {addLogEntry("Query returned result (itemDB.selectByRemoteDriveId): " ~ to!string(remoteItem), ["debug"]);}
-							
-							addLogEntry("Query returned result (itemDB.selectByRemoteDriveId): " ~ to!string(remoteItem));
-							
 							
 							// Shared Folders present a unique challenge to determine what path needs to be used, especially in a --resync scenario where there are near zero records available to use computeItemPath() 
 							// Update the path that will be used to check 'sync_list' with the 'name' of the remoteDriveId database record
@@ -5958,18 +5951,9 @@ class SyncEngine {
 							if (!selfBuiltPath.startsWith("/" ~ remoteItem.name ~ "/")) {
 								selfBuiltPath = remoteItem.name ~ selfBuiltPath;
 								if (debugLogging) {addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath), ["debug"]);}
-								
-								addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath));
-								
 							} else {
-								if (debugLogging) {addLogEntry("Shared Folder name already present in path; no update needed to selfBuiltPath", ["debug"]);}
-								
-								addLogEntry("Shared Folder name already present in path; no update needed to selfBuiltPath");
-								
+								if (debugLogging) {addLogEntry("Shared Folder name already present in path; no update needed to selfBuiltPath", ["debug"]);}	
 							}
-							
-							addLogEntry(" - selfBuiltPath final calculated as: " ~ selfBuiltPath);
-							
 						}
 						
 						// Issue #2740
@@ -6189,51 +6173,57 @@ class SyncEngine {
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
 				
-				// Does this JSON match the root name of a shared folder we may be trying to match?
-				if (sharedFolderDeltaGeneration) {
-					if (currentSharedFolderName == onlinePathData["name"].str) {
-						if (debugLogging) {addLogEntry("createLocalPathStructure parent matches the current shared folder name, creating applicable shared folder database records", ["debug"]);}
-						// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
-						createRequiredSharedFolderDatabaseRecords(onlinePathData);
+				// There needs to be a valid JSON to process
+				if (onlinePathData.type() == JSONType.object) {
+					// Does this JSON match the root name of a shared folder we may be trying to match?
+					if (sharedFolderDeltaGeneration) {
+						if (currentSharedFolderName == onlinePathData["name"].str) {
+							if (debugLogging) {addLogEntry("createLocalPathStructure parent matches the current shared folder name, creating applicable shared folder database records", ["debug"]);}
+							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
+							createRequiredSharedFolderDatabaseRecords(onlinePathData);
+						}
+					} 
+					
+					// Configure the grandparent items
+					string grandparentItemDriveId;
+					string grandparentItemParentId;
+					grandparentItemDriveId = onlinePathData["parentReference"]["driveId"].str;
+					
+					// OneDrive Personal JSON responses are in-consistent with not having 'id' available
+					if (hasParentReferenceId(onlinePathData)) {
+						// Use the parent reference id
+						grandparentItemParentId = onlinePathData["parentReference"]["id"].str;
+					} else {
+						// Testing evidence shows that for Personal accounts, use the 'id' itself
+						grandparentItemParentId = onlinePathData["id"].str;
 					}
-				} 
-				
-				// Configure the grandparent items
-				string grandparentItemDriveId;
-				string grandparentItemParentId;
-				grandparentItemDriveId = onlinePathData["parentReference"]["driveId"].str;
-				
-				// OneDrive Personal JSON responses are in-consistent with not having 'id' available
-				if (hasParentReferenceId(onlinePathData)) {
-					// Use the parent reference id
-					grandparentItemParentId = onlinePathData["parentReference"]["id"].str;
+					
+					// Is this item's grandparent data in the database?
+					if (!itemDB.idInLocalDatabase(grandparentItemDriveId, grandparentItemParentId)) {
+						// grandparent needs to be added
+						createLocalPathStructure(onlinePathData, dirName(newLocalParentalPath));
+					}
+					
+					// If this is --dry-run
+					if (dryRun) {
+						// we dont create the directory, but we need to track that we 'faked it'
+						idsFaked ~= [grandparentItemDriveId, grandparentItemParentId];
+					}
+					
+					// Does the parental path exist locally?
+					if (!exists(newLocalParentalPath)) {
+						// the required path does not exist locally - logging is done in handleLocalDirectoryCreation
+						// create a db item record for the online data
+						Item newDatabaseItem = makeItem(onlinePathData);
+						// create the path locally, save the data to the database post path creation
+						handleLocalDirectoryCreation(newDatabaseItem, newLocalParentalPath, onlinePathData);
+					} else {
+						// parent path exists locally, save the data to the database
+						saveItem(onlinePathData);
+					}
 				} else {
-					// Testing evidence shows that for Personal accounts, use the 'id' itself
-					grandparentItemParentId = onlinePathData["id"].str;
-				}
-				
-				// Is this item's grandparent data in the database?
-				if (!itemDB.idInLocalDatabase(grandparentItemDriveId, grandparentItemParentId)) {
-					// grandparent needs to be added
-					createLocalPathStructure(onlinePathData, dirName(newLocalParentalPath));
-				}
-				
-				// If this is --dry-run
-				if (dryRun) {
-					// we dont create the directory, but we need to track that we 'faked it'
-					idsFaked ~= [onlinePathData["parentReference"]["driveId"].str, onlinePathData["parentReference"]["id"].str];
-				}
-				
-				// Does the parental path exist locally?
-				if (!exists(newLocalParentalPath)) {
-					// the required path does not exist locally - logging is done in handleLocalDirectoryCreation
-					// create a db item record for the online data
-					Item newDatabaseItem = makeItem(onlinePathData);
-					// create the path locally, save the data to the database post path creation
-					handleLocalDirectoryCreation(newDatabaseItem, newLocalParentalPath, onlinePathData);
-				} else {
-					// parent path exists locally, save the data to the database
-					saveItem(onlinePathData);
+					// No valid JSON was responded with - unable to create local path structure
+					addLogEntry("Unable to create the local path structure as the Microsoft OneDrive API returned an invalid response");
 				}
 			} else {
 				if (debugLogging) {addLogEntry("createLocalPathStructure parent is in the database", ["debug"]);}
