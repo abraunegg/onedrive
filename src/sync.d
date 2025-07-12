@@ -7677,29 +7677,58 @@ class SyncEngine {
 						// Was this path excluded by the 'sync_list' exclusion process
 						if (syncListDirExcluded) {
 							// yes .. this parent path was excluded by the 'sync_list' ... we need to scan this path for potential new data that may be included
-							if (verboseLogging) {addLogEntry("Bypassing 'sync_list' exclusion to scan directory for potential new data that may be included", ["verbose"]);}
-					
-							// try and go through the excluded directory path
-							try {
-								auto directoryEntries = dirEntries(path, SpanMode.shallow, false);
-								foreach (DirEntry entry; directoryEntries) {
-									string thisPath = entry.name;
-									scanPathForNewData(thisPath);
+							bool parentalInclusionSyncListRule = selectiveSync.isSyncListPrefixMatch(path);
+							bool syncListAnywhereRulesExist = selectiveSync.syncListAnywhereRulesExist();
+							bool mustTraversePath = false;
+							
+							if ((parentalInclusionSyncListRule) || (syncListAnywhereRulesExist)) {
+								mustTraversePath = true;
+							}
+							
+							// Log what we are testing
+							if (debugLogging) {
+								addLogEntry("Local path was excluded by 'sync_list' but is this in anyway included in a specific 'inclusion' rule?", ["debug"]);
+								// Is this path in the 'sync_list' inclusion path array?
+								addLogEntry("Testing path against the specific 'sync_list' inclusion rules: " ~ path, ["debug"]);
+								addLogEntry("Should we traverse this local path to scan for new data: " ~ to!string(mustTraversePath), ["debug"]);
+								addLogEntry(" - parentalInclusionSyncListRule: " ~ to!string(parentalInclusionSyncListRule), ["debug"]);
+								addLogEntry(" - syncListAnywhereRulesExist:    " ~ to!string(syncListAnywhereRulesExist), ["debug"]);
+							}
+							
+							// Was traversal of this excluded path triggered?
+							if (mustTraversePath) {
+								// We must traverse this path .. 
+								if (verboseLogging) {
+									// Why ...
+									if (syncListAnywhereRulesExist) {
+										addLogEntry("Bypassing 'sync_list' exclusion to scan directory for potential new data that may be included due to 'sync_list' anywhere rule existence", ["verbose"]);
+									} else {
+										addLogEntry("Bypassing 'sync_list' exclusion to scan directory for potential new data that may be included", ["verbose"]);
+									}
 								}
-								// Clear directoryEntries
-								object.destroy(directoryEntries);
-							} catch (FileException e) {
-								// display the error message
-								displayFileSystemErrorMessage(e.msg, thisFunctionName);
-								
-								// Display function processing time if configured to do so
-								if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-									// Combine module name & running Function
-									displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+							
+								// Try and go through the excluded directory path
+								try {
+									auto directoryEntries = dirEntries(path, SpanMode.shallow, false);
+									foreach (DirEntry entry; directoryEntries) {
+										string thisPath = entry.name;
+										scanPathForNewData(thisPath);
+									}
+									// Clear directoryEntries
+									object.destroy(directoryEntries);
+								} catch (FileException e) {
+									// display the error message
+									displayFileSystemErrorMessage(e.msg, thisFunctionName);
+									
+									// Display function processing time if configured to do so
+									if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+										// Combine module name & running Function
+										displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+									}
+									
+									// return as there was an error
+									return;
 								}
-								
-								// return as there was an error
-								return;
 							}
 						}
 					}
