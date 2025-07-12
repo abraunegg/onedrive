@@ -20,7 +20,8 @@ class ClientSideFiltering {
 	// Class variables
 	ApplicationConfig appConfig;
 	string[] syncListRules;
-	string[] syncListIncludePathsOnly;
+	string[] syncListIncludePathsOnly; // These are 'include' rules that start with a '/'
+	string[] syncListAnywherePathOnly; // These are 'include' rules that do not start with a '/', thus are to be searched anywhere for inclusion
 	Regex!char fileMask;
 	Regex!char directoryMask;
 	bool skipDirStrictMatch = false;
@@ -92,6 +93,7 @@ class ClientSideFiltering {
 	void shutdown() {
 		syncListRules = null;
 		syncListIncludePathsOnly = null;
+		syncListAnywherePathOnly = null;
 		fileMask = regex("");
 		directoryMask = regex("");
 	}
@@ -157,9 +159,16 @@ class ClientSideFiltering {
 			auto normalisedRulePath = buildNormalizedPath(cleanLine);
 			syncListRules ~= normalisedRulePath;
 
-			// Only add the normailised rule to the specific include list if not an exclude rule
+			// Only add the normalised rule to the specific include list if not an exclude rule
 			if (cleanLine[0] != '!' && cleanLine[0] != '-') {
+				// All include rules get added here
 				syncListIncludePathsOnly ~= normalisedRulePath;
+				
+				// Special case for searching local disk for new data added 'somewhere'
+				if (cleanLine[0] != '/') {
+					// Rule is an 'anywhere' rule within the 'sync_list'
+					syncListAnywherePathOnly ~= normalisedRulePath;
+				}
 			}
 		}
 		
@@ -823,5 +832,17 @@ class ClientSideFiltering {
 		}
 
 		return false;
+	}
+	
+	// Do any 'anywhere' sync_list' rules exist for inclusion?
+	bool syncListAnywhereRulesExist() {
+		// Count the entries in syncListAnywherePathOnly
+		auto anywhereRuleCount = count(syncListAnywherePathOnly);
+		
+		if (anywhereRuleCount > 0) {
+			return true;
+		} else {
+			return false;
+		}
 	}
 }
