@@ -519,7 +519,7 @@ final class ItemDatabase {
 			
 			try {
 				if (debugLogging) {
-					addLogEntry("Attempting upsert for item: id='" ~ item.id ~ "', parentId='" ~ item.parentId ~ "', name='" ~ item.name ~ "'", ["debug"]);
+					addLogEntry("Attempting upsert for item: driveId='" ~ item.driveId ~ "', id='" ~ item.id ~ "', parentId='" ~ item.parentId ~ "', name='" ~ item.name ~ "'", ["debug"]);
 				}
 				
 				selectStmt.bind(1, item.driveId);
@@ -541,7 +541,7 @@ final class ItemDatabase {
 					if (orphanCount == 0) {
 						// No match on name+parentId either — new insert
 						if (debugLogging) {
-							addLogEntry("Inserting new item: id='" ~ item.id ~ "', parentId='" ~ item.parentId ~ "', name='" ~ item.name ~ "'", ["debug"]);
+							addLogEntry("Inserting new item: driveId='" ~ item.driveId ~ "', id='" ~ item.id ~ "', parentId='" ~ item.parentId ~ "', name='" ~ item.name ~ "'", ["debug"]);
 						}
 						executionStmt = db.prepare(insertItemStmt);
 					} else {
