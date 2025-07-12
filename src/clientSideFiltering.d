@@ -98,6 +98,7 @@ class ClientSideFiltering {
 
 	// Load sync_list file if it exists
 	void loadSyncList(string filepath) {
+		// open file as read only
 		auto file = File(filepath, "r");
 		auto range = file.byLine();
 
@@ -128,6 +129,7 @@ class ClientSideFiltering {
 				addLogEntry();
 				addLogEntry(errorMessage, ["info", "notify"]);
 				addLogEntry();
+				// do not add this rule
 				continue;
 			}
 
@@ -137,6 +139,7 @@ class ClientSideFiltering {
 				addLogEntry();
 				addLogEntry(errorMessage, ["info", "notify"]);
 				addLogEntry();
+				// do not add this rule
 				continue;
 			}
 
@@ -146,13 +149,15 @@ class ClientSideFiltering {
 				addLogEntry();
 				addLogEntry(errorMessage, ["info", "notify"]);
 				addLogEntry();
+				// do not add this rule
+				continue;
 			}
 
-			// Normalise and store
+			// Normalise the 'sync_list' rule and store
 			auto normalisedRulePath = buildNormalizedPath(cleanLine);
 			syncListRules ~= normalisedRulePath;
 
-			// Only add to include list if not an exclude rule
+			// Only add the normailised rule to the specific include list if not an exclude rule
 			if (cleanLine[0] != '!' && cleanLine[0] != '-') {
 				syncListIncludePathsOnly ~= normalisedRulePath;
 			}
