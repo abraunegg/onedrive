@@ -7677,29 +7677,42 @@ class SyncEngine {
 						// Was this path excluded by the 'sync_list' exclusion process
 						if (syncListDirExcluded) {
 							// yes .. this parent path was excluded by the 'sync_list' ... we need to scan this path for potential new data that may be included
-							if (verboseLogging) {addLogEntry("Bypassing 'sync_list' exclusion to scan directory for potential new data that may be included", ["verbose"]);}
-					
-							// try and go through the excluded directory path
-							try {
-								auto directoryEntries = dirEntries(path, SpanMode.shallow, false);
-								foreach (DirEntry entry; directoryEntries) {
-									string thisPath = entry.name;
-									scanPathForNewData(thisPath);
+							bool parentalInclusionSyncListRule = selectiveSync.isSyncListPrefixMatch(path);
+							// Log what we are testing
+							if (debugLogging) {
+								addLogEntry("Local path was excluded by 'sync_list' but is this in anyway included in a specific 'inclusion' rule?", ["debug"]);
+								// Is this path in the 'sync_list' inclusion path array?
+								addLogEntry("Testing path against the specific 'sync_list' inclusion rules: " ~ path, ["debug"]);
+								addLogEntry("Should we traverse this local path to scan for new data: " ~ to!string(parentalInclusionSyncListRule), ["debug"]);
+							}
+							
+							// Is this path part of a path that is specifically included?
+							if (parentalInclusionSyncListRule) {
+								// The current path we are testing is a parental match to a specific 'sync_list' include rule
+								if (verboseLogging) {addLogEntry("Bypassing 'sync_list' exclusion to scan directory for potential new data that may be included", ["verbose"]);}
+							
+								// try and go through the excluded directory path
+								try {
+									auto directoryEntries = dirEntries(path, SpanMode.shallow, false);
+									foreach (DirEntry entry; directoryEntries) {
+										string thisPath = entry.name;
+										scanPathForNewData(thisPath);
+									}
+									// Clear directoryEntries
+									object.destroy(directoryEntries);
+								} catch (FileException e) {
+									// display the error message
+									displayFileSystemErrorMessage(e.msg, thisFunctionName);
+									
+									// Display function processing time if configured to do so
+									if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+										// Combine module name & running Function
+										displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+									}
+									
+									// return as there was an error
+									return;
 								}
-								// Clear directoryEntries
-								object.destroy(directoryEntries);
-							} catch (FileException e) {
-								// display the error message
-								displayFileSystemErrorMessage(e.msg, thisFunctionName);
-								
-								// Display function processing time if configured to do so
-								if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-									// Combine module name & running Function
-									displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
-								}
-								
-								// return as there was an error
-								return;
 							}
 						}
 					}

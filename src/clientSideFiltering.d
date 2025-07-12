@@ -20,6 +20,7 @@ class ClientSideFiltering {
 	// Class variables
 	ApplicationConfig appConfig;
 	string[] syncListRules;
+	string[] syncListIncludePathsOnly;
 	Regex!char fileMask;
 	Regex!char directoryMask;
 	bool skipDirStrictMatch = false;
@@ -90,60 +91,77 @@ class ClientSideFiltering {
 	// Shutdown components
 	void shutdown() {
 		syncListRules = null;
+		syncListIncludePathsOnly = null;
 		fileMask = regex("");
 		directoryMask = regex("");
 	}
-	
+
 	// Load sync_list file if it exists
 	void loadSyncList(string filepath) {
-		// open file as read only
 		auto file = File(filepath, "r");
 		auto range = file.byLine();
+
+		scope(exit) {
+			file.close();
+			object.destroy(file);
+			object.destroy(range);
+		}
+
+		scope(failure) {
+			file.close();
+			object.destroy(file);
+			object.destroy(range);
+		}
+
 		foreach (line; range) {
+			auto cleanLine = strip(line);
+
 			// Skip any line that is empty or just contains whitespace
-			if (line.strip.length == 0) continue;
-			
+			if (cleanLine.length == 0) continue;
+
 			// Skip comments in file
-			if (line[0] == ';' || line[0] == '#') continue;
-			
-			// Is this an 'exclude' all rule because documentation has not been read correctly?
-			if ((strip(line) == "!/*") || (strip(line) == "!/")) {
-				// yes ...
-				string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(strip(line)) ~ "' detected. Please read the 'sync_list' documentation.";
+			if (cleanLine[0] == ';' || cleanLine[0] == '#') continue;
+
+			// Invalid exclusion rule patterns
+			if (cleanLine == "!/*" || cleanLine == "!/" || cleanLine == "-/*" || cleanLine == "-/") {
+				string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(cleanLine) ~ "' detected. Please read the 'sync_list' documentation.";
 				addLogEntry();
 				addLogEntry(errorMessage, ["info", "notify"]);
 				addLogEntry();
-				// do not add this rule
 				continue;
 			}
-			
-			// Is the rule a legacy 'include all root files' lazy rule?
-			if ((strip(line) == "/*") || (strip(line) == "/")) {
-				// yes ...
-				string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(strip(line)) ~ "' detected. Please use 'sync_root_files = \"true\"' or --sync-root-files option to sync files in the root path.";
+
+			// Legacy include root rule
+			if (cleanLine == "/*" || cleanLine == "/") {
+				string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(cleanLine) ~ "' detected. Please use 'sync_root_files = \"true\"' or --sync-root-files option to sync files in the root path.";
 				addLogEntry();
 				addLogEntry(errorMessage, ["info", "notify"]);
 				addLogEntry();
-				// do not add this rule
-			} else {
-				// Ensure that 'sync_list' rules do not start with the sequence './'
-				if ((line[0] == '.') && (line[1] == '/')) {
-					// Display warning about 'sync_list' rule composition
-					string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(strip(line)) ~ "' detected. Rule should not start with './' - please fix your 'sync_list' rule.";
-					addLogEntry();
-					addLogEntry(errorMessage, ["info", "notify"]);
-					addLogEntry();
-					// this broken rule will be added, but will not work right until the user fixes it ... user action required
-				}
-				
-				// add rule to list of rules
-				syncListRules ~= buildNormalizedPath(line);
+				continue;
+			}
+
+			// './' rule warning
+			if ((cleanLine.length > 1) && (cleanLine[0] == '.') && (cleanLine[1] == '/')) {
+				string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(cleanLine) ~ "' detected. Rule should not start with './' - please fix your 'sync_list' rule.";
+				addLogEntry();
+				addLogEntry(errorMessage, ["info", "notify"]);
+				addLogEntry();
+			}
+
+			// Normalise and store
+			auto normalisedRulePath = buildNormalizedPath(cleanLine);
+			syncListRules ~= normalisedRulePath;
+
+			// Only add to include list if not an exclude rule
+			if (cleanLine[0] != '!' && cleanLine[0] != '-') {
+				syncListIncludePathsOnly ~= normalisedRulePath;
 			}
 		}
-		// Close reading the 'sync_list' file
+		
+		// Close the file post reading it
 		file.close();
 	}
-	
+
 	// return true or false based on if we have loaded any valid sync_list rules
 	bool validSyncListRules() {
 		// If empty, will return true
@@ -444,6 +462,22 @@ class ClientSideFiltering {
 					} else {
 						// No parental path segment match
 						if (debugLogging) {addLogEntry("No parental path match with 'sync_list' rule entry - exact path matching not possible", ["debug"]);}
+					}
+				}
+				
+				// What 'rule' type are we currently testing?
+				if (!thisIsAnExcludeRule) {
+					// Is the path a parental path match to an include 'sync_list' rule?
+					if (isSyncListPrefixMatch(path)) {
+						// PARENTAL PATH MATCH
+						if (debugLogging) {
+							addLogEntry("Parental path match with 'sync_list' rule entry (syncListIncludePathsOnly)", ["debug"]);
+							addLogEntry("Evaluation against 'sync_list' rule result: parental path match (syncListIncludePathsOnly)", ["debug"]);
+						}
+						// final result
+						finalResult = false;
+						// parental path match, break and search rules no more given include rule match
+						break;
 					}
 				}
 			}
@@ -755,5 +789,34 @@ class ClientSideFiltering {
 
 		// Compare the first segments only
 		return equal(ruleSegments[0], inputSegments[0]);
+	}
+	
+	// Test the path for prefix matching an include sync_list rule
+	bool isSyncListPrefixMatch(string inputPath) {
+		// Ensure inputPath ends with a '/' if not root, to avoid false positives
+		string inputPrefix = inputPath.endsWith("/") ? inputPath : inputPath ~ "/";
+
+		foreach (entry; syncListIncludePathsOnly) {
+			string normalisedEntry = entry;
+			
+			// If rule ends in '/*', treat it as if the '/*' is not there
+			if (normalisedEntry.endsWith("/*")) {
+				normalisedEntry = normalisedEntry[0 .. $ - 2]; // remove '/*' for this rule comparison
+			}
+
+			// Ensure trailing '/' for safe prefix match
+			string entryWithSlash = normalisedEntry.endsWith("/") ? normalisedEntry : normalisedEntry ~ "/";
+
+			// Match input as being equal to or under the rule path, or rule path being under the input path
+			if (entryWithSlash.startsWith(inputPrefix) || inputPrefix.startsWith(entryWithSlash)) {
+				// Debug the exact 'sync_list' inclusion rule this matched
+				if (debugLogging) {
+					addLogEntry("Matched 'sync_list' Inclusion Rule: " ~ to!string(entry), ["debug"]);
+				}
+				return true;
+			}
+		}
+
+		return false;
 	}
 }
