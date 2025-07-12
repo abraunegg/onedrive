@@ -10160,18 +10160,22 @@ class SyncEngine {
 		// Issue #3115 - Personal Account Shared Folder
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
+			// Issue #3336 - Convert driveId to lowercase for the DB record
+			string actualOnlineDriveId = testProvidedDriveIdForLengthIssue(fetchRealOnlineDriveIdentifier(newDatabaseItem.driveId));
+			newDatabaseItem.driveId = actualOnlineDriveId;
+			
 			// Is this a 'remote' DB record
 			if (newDatabaseItem.type == ItemType.remote) {
-				// Issue #3336 - Convert driveId to lowercase before any test
+				// Issue #3336 - Convert remoteDriveId to lowercase before any test
 				newDatabaseItem.remoteDriveId = transformToLowerCase(newDatabaseItem.remoteDriveId);
 			
-				// Test driveId length and validation if the driveId we are testing is not equal to appConfig.defaultDriveId
+				// Test remoteDriveId length and validation if the remoteDriveId we are testing is not equal to appConfig.defaultDriveId
 				if (newDatabaseItem.remoteDriveId != appConfig.defaultDriveId) {
 					// Issue #3136, #3139 #3143
 					// Fetch the actual online record for this item
-					// This returns the actual OneDrive Personal driveId value and is 15 character checked
-					string actualOnlineDriveId = testProvidedDriveIdForLengthIssue(fetchRealOnlineDriveIdentifier(newDatabaseItem.remoteDriveId));
-					newDatabaseItem.remoteDriveId = actualOnlineDriveId;
+					// This returns the actual OneDrive Personal remoteDriveId value and is 15 character checked
+					string actualOnlineRemoteDriveId = testProvidedDriveIdForLengthIssue(fetchRealOnlineDriveIdentifier(newDatabaseItem.remoteDriveId));
+					newDatabaseItem.remoteDriveId = actualOnlineRemoteDriveId;
 				}
 			}
 		}
