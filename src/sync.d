@@ -7678,10 +7678,10 @@ class SyncEngine {
 						if (syncListDirExcluded) {
 							// yes .. this parent path was excluded by the 'sync_list' ... we need to scan this path for potential new data that may be included
 							bool parentalInclusionSyncListRule = selectiveSync.isSyncListPrefixMatch(path);
-							bool syncListAnywhereRulesExist = selectiveSync.syncListAnywhereRulesExist();
+							bool syncListAnywhereInclusionRulesExist = selectiveSync.syncListAnywhereInclusionRulesExist();
 							bool mustTraversePath = false;
 							
-							if ((parentalInclusionSyncListRule) || (syncListAnywhereRulesExist)) {
+							if ((parentalInclusionSyncListRule) || (syncListAnywhereInclusionRulesExist)) {
 								mustTraversePath = true;
 							}
 							
@@ -7692,7 +7692,7 @@ class SyncEngine {
 								addLogEntry("Testing path against the specific 'sync_list' inclusion rules: " ~ path, ["debug"]);
 								addLogEntry("Should we traverse this local path to scan for new data: " ~ to!string(mustTraversePath), ["debug"]);
 								addLogEntry(" - parentalInclusionSyncListRule: " ~ to!string(parentalInclusionSyncListRule), ["debug"]);
-								addLogEntry(" - syncListAnywhereRulesExist:    " ~ to!string(syncListAnywhereRulesExist), ["debug"]);
+								addLogEntry(" - syncListAnywhereInclusionRulesExist:    " ~ to!string(syncListAnywhereInclusionRulesExist), ["debug"]);
 							}
 							
 							// Was traversal of this excluded path triggered?
@@ -7700,7 +7700,7 @@ class SyncEngine {
 								// We must traverse this path .. 
 								if (verboseLogging) {
 									// Why ...
-									if (syncListAnywhereRulesExist) {
+									if (syncListAnywhereInclusionRulesExist) {
 										addLogEntry("Bypassing 'sync_list' exclusion to scan directory for potential new data that may be included due to 'sync_list' anywhere rule existence", ["verbose"]);
 									} else {
 										addLogEntry("Bypassing 'sync_list' exclusion to scan directory for potential new data that may be included", ["verbose"]);

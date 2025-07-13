@@ -211,10 +211,16 @@ class ClientSideFiltering {
 		return skipDotfiles;
 	}
 	
-	// Match against sync_list only
+	// Match against 'sync_list' only
 	bool isPathExcludedViaSyncList(string path) {
-		// Debug output that we are performing a 'sync_list' inclusion / exclusion test
-		return isPathExcluded(path);
+		// Are there 'sync_list' rules to processs?
+		if (count(syncListRules) > 0) {
+			// Perform 'sync_list' rule testing on the given path
+			return isPathExcluded(path);
+		} else {
+			// There are no valid 'sync_list' rules that were loaded
+			return false; // not exluded by 'sync_list'
+		}
 	}
 	
 	// config file skip_dir parameter
@@ -825,7 +831,7 @@ class ClientSideFiltering {
 			if (entryWithSlash.startsWith(inputPrefix) || inputPrefix.startsWith(entryWithSlash)) {
 				// Debug the exact 'sync_list' inclusion rule this matched
 				if (debugLogging) {
-					addLogEntry("Matched 'sync_list' Inclusion Rule: " ~ to!string(entry), ["debug"]);
+					addLogEntry("Parental path matched 'sync_list' Inclusion Rule: " ~ to!string(entry), ["debug"]);
 				}
 				return true;
 			}
@@ -835,7 +841,7 @@ class ClientSideFiltering {
 	}
 	
 	// Do any 'anywhere' sync_list' rules exist for inclusion?
-	bool syncListAnywhereRulesExist() {
+	bool syncListAnywhereInclusionRulesExist() {
 		// Count the entries in syncListAnywherePathOnly
 		auto anywhereRuleCount = count(syncListAnywherePathOnly);
 		
