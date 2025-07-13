@@ -213,13 +213,13 @@ class ClientSideFiltering {
 	
 	// Match against 'sync_list' only
 	bool isPathExcludedViaSyncList(string path) {
-		// Are there 'sync_list' rules to processs?
+		// Are there 'sync_list' rules to process?
 		if (count(syncListRules) > 0) {
 			// Perform 'sync_list' rule testing on the given path
 			return isPathExcluded(path);
 		} else {
 			// There are no valid 'sync_list' rules that were loaded
-			return false; // not exluded by 'sync_list'
+			return false; // not excluded by 'sync_list'
 		}
 	}
 	
