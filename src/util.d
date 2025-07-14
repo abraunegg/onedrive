@@ -1569,12 +1569,12 @@ int calc_eta(size_t counter, size_t iterations, long start_time) {
 // Use the ETA value and return a formatted string in a consistent manner
 string formatETA(int eta) {
 	// How do we format the ETA string. Guard against zero and negative values
-    if (eta <= 0) {
-        return "|  ETA    --:--:--";
-    }
-    int h, m, s;
-    dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
-    return format!"|  ETA    %02d:%02d:%02d"(h, m, s);
+	if (eta <= 0) {
+		return "|  ETA    --:--:--";
+	}
+	int h, m, s;
+	dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
+	return format!"|  ETA    %02d:%02d:%02d"(h, m, s);
 }
 
 // Force Exit due to failure
