@@ -9371,6 +9371,15 @@ class SyncEngine {
 		enum CHUNK_SIZE = 327_680L; // 320 KiB
 		enum MAX_FRAGMENT_BYTES = 60L * 1_048_576L; // 60 MiB = 62,914,560 bytes
 		
+		// Time sensitive and ETA string items
+		SysTime currentTime = Clock.currTime();
+		long start_unix_time = currentTime.toUnixTime();
+		int h, m, s;
+		string etaString;
+		
+		// Upload string template
+		string uploadLogEntry = "Uploading: " ~ uploadSessionData["localPath"].str ~ " ... ";
+		
 		// Calculate base size using configured fragment size
 		baseSize = appConfig.getValueLong("file_fragment_size") * 2^^20;
 				
@@ -9391,10 +9400,6 @@ class SyncEngine {
 		
 		// Estimate total number of expected fragments
 		size_t expected_total_fragments = cast(size_t) ceil(double(thisFileSize) / double(fragmentSize));
-		long start_unix_time = Clock.currTime.toUnixTime();
-		int h, m, s;
-		string etaString;
-		string uploadLogEntry = "Uploading: " ~ uploadSessionData["localPath"].str ~ " ... ";
 		
 		// If we get a 404, create a new upload session and store it here
 		JSONValue newUploadSession;
@@ -9405,17 +9410,9 @@ class SyncEngine {
 			fragmentCount++;
 			if (debugLogging) {addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(expected_total_fragments), ["debug"]);}
 
-			// What ETA string do we use?
-			auto eta = calc_eta((fragmentCount -1), expected_total_fragments, start_unix_time);
-			if (eta == 0) {
-				// Initial calculation ... 
-				etaString = format!"|  ETA    --:--:--";
-			} else {
-				// we have at least an ETA provided
-				dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
-				etaString = format!"|  ETA    %02d:%02d:%02d"(h, m, s);
-			}
-
+			// Generate ETA time output
+			etaString = formatETA(calc_eta((fragmentCount -1), expected_total_fragments, start_unix_time));
+			
 			// Calculate this progress output
 			auto ratio = cast(double)(fragmentCount - 1) / expected_total_fragments;
 			// Convert the ratio to a percentage and format it to two decimal places

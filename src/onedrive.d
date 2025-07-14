@@ -1383,7 +1383,10 @@ class OneDriveApi {
 			if (fileSize >= thresholdFileSize){
 				// Download Progress variables
 				size_t expected_total_segments = 20;
-				ulong start_unix_time = Clock.currTime.toUnixTime();
+				
+				// Time sensitive and ETA string items
+				SysTime currentTime = Clock.currTime();
+				long start_unix_time = currentTime.toUnixTime();
 				int h, m, s;
 				string etaString;
 				bool barInit = false;
@@ -1425,10 +1428,10 @@ class OneDriveApi {
 						if (appConfig.getValueLong("rate_limit") > 0) {
 							// User configured rate limit
 							// How much data should be in each segment to qualify for 5%
-							ulong dataPerSegment = to!ulong(floor(double(dltotal)/expected_total_segments));
+							size_t dataPerSegment = cast(size_t)(floor(double(dltotal)/expected_total_segments));
 							// How much data received do we need to validate against
-							ulong thisSegmentData = dataPerSegment * segmentCount;
-							ulong nextSegmentData = dataPerSegment * (segmentCount + 1);
+							size_t thisSegmentData = dataPerSegment * segmentCount;
+							size_t nextSegmentData = dataPerSegment * (segmentCount + 1);
 							
 							// Has the data that has been received in a 5% window that we need to increment the progress bar at
 							if ((dlnow > thisSegmentData) && (dlnow < nextSegmentData) && (previousProgressPercent != currentDLPercent) || (dlnow == dltotal)) {
@@ -1440,15 +1443,16 @@ class OneDriveApi {
 									// Not 100% yet
 									// Calculate the output
 									segmentCount++;
-									auto eta = calc_eta(segmentCount, expected_total_segments, start_unix_time);
-									dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
-									etaString = format!"|  ETA    %02d:%02d:%02d"( h, m, s);
+									// Generate ETA time output
+									etaString = formatETA(calc_eta(segmentCount, expected_total_segments, start_unix_time));
+									// Calculate percentage
 									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
 									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 								} else {
 									// 100% done
-									ulong end_unix_time = Clock.currTime.toUnixTime();
-									auto upload_duration = cast(int)(end_unix_time - start_unix_time);
+									SysTime endTime = Clock.currTime();
+									long end_unix_time = endTime.toUnixTime();
+									int upload_duration = cast(int)(end_unix_time - start_unix_time);
 									dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
 									etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
 									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
@@ -1472,15 +1476,16 @@ class OneDriveApi {
 									// Not 100% yet
 									// Calculate the output
 									segmentCount++;
-									auto eta = calc_eta(segmentCount, expected_total_segments, start_unix_time);
-									dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
-									etaString = format!"|  ETA    %02d:%02d:%02d"( h, m, s);
+									// Generate ETA time output
+									etaString = formatETA(calc_eta(segmentCount, expected_total_segments, start_unix_time));
+									// Calculate percentage
 									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
 									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 								} else {
 									// 100% done
-									ulong end_unix_time = Clock.currTime.toUnixTime();
-									auto upload_duration = cast(int)(end_unix_time - start_unix_time);
+									SysTime endTime = Clock.currTime();
+									long end_unix_time = endTime.toUnixTime();
+									int upload_duration = cast(int)(end_unix_time - start_unix_time);
 									dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
 									etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
 									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
