@@ -1509,47 +1509,72 @@ string getUserName() {
 }
 
 // Calculate the ETA for when a 'large file' will be completed (upload & download operations)
-int calc_eta(size_t counter, size_t iterations, ulong start_time) {
-    if (counter == 0) {
-        return 0; // Avoid division by zero
-    }
+int calc_eta(size_t counter, size_t iterations, long start_time) {
+	if (counter == 0) {
+		return 0; // Avoid division by zero
+	}
+	
+	// Get the current time as a Unix timestamp (seconds since the epoch, January 1, 1970, 00:00:00 UTC)
+	SysTime currentTime = Clock.currTime();
+	long current_time = currentTime.toUnixTime();
 
-    double ratio = cast(double) counter / iterations;
-    auto current_time = Clock.currTime.toUnixTime();
-    ulong duration = (current_time - start_time);
+	// 'start_time' must be less than 'current_time' otherwise ETA will have negative values
+	if (start_time > current_time) {
+		if (debugLogging) {
+			addLogEntry("Warning: start_time is in the future. Cannot calculate ETA.", ["debug"]);
+		}
+		return 0;
+	}
+	
+	// Calculate duration
+	long duration = (current_time - start_time);
 
-    // Segments left to download
-    auto segments_remaining = (iterations > counter) ? (iterations - counter) : 0;
-    
-    // Calculate the average time per iteration so far
-    double avg_time_per_iteration = cast(double) duration / counter;
+	// Calculate the ratio we are at
+	double ratio = cast(double) counter / iterations;
 
-    // Debug output for the ETA calculation
+	// Calculate segments left to download
+	auto segments_remaining = (iterations > counter) ? (iterations - counter) : 0;
+
+	// Calculate the average time per iteration so far
+	double avg_time_per_iteration = cast(double) duration / counter;
+
+	// Debug output for the ETA calculation
 	if (debugLogging) {
-		addLogEntry("counter: " ~ to!string(counter), ["debug"]);
-		addLogEntry("iterations: " ~ to!string(iterations), ["debug"]);
-		addLogEntry("segments_remaining: " ~ to!string(segments_remaining), ["debug"]);
-		addLogEntry("ratio: " ~ format("%.2f", ratio), ["debug"]);
-		addLogEntry("start_time:   " ~ to!string(start_time), ["debug"]);
-		addLogEntry("current_time: " ~ to!string(current_time), ["debug"]);
-		addLogEntry("duration: " ~ to!string(duration), ["debug"]);
+		addLogEntry("counter:                " ~ to!string(counter), ["debug"]);
+		addLogEntry("iterations:             " ~ to!string(iterations), ["debug"]);
+		addLogEntry("segments_remaining:     " ~ to!string(segments_remaining), ["debug"]);
+		addLogEntry("ratio:                  " ~ format("%.2f", ratio), ["debug"]);
+		addLogEntry("start_time:             " ~ to!string(start_time), ["debug"]);
+		addLogEntry("current_time:           " ~ to!string(current_time), ["debug"]);
+		addLogEntry("duration:               " ~ to!string(duration), ["debug"]);
 		addLogEntry("avg_time_per_iteration: " ~ format("%.2f", avg_time_per_iteration), ["debug"]);
 	}
 	
 	// Return the ETA or duration
     if (counter != iterations) {
-        auto eta_sec = avg_time_per_iteration * segments_remaining;
+		auto eta_sec = avg_time_per_iteration * segments_remaining;
 		// ETA Debug
 		if (debugLogging) {
-			addLogEntry("eta_sec: " ~ to!string(eta_sec), ["debug"]);
-			addLogEntry("estimated_total_time: " ~ to!string(avg_time_per_iteration * iterations), ["debug"]);
+			addLogEntry("eta_sec:                " ~ to!string(eta_sec), ["debug"]);
+			addLogEntry("estimated_total_time:   " ~ to!string(avg_time_per_iteration * iterations), ["debug"]);
 		}
 		// Return ETA
-        return eta_sec > 0 ? cast(int) ceil(eta_sec) : 0;
-    } else {
+		return eta_sec > 0 ? cast(int) ceil(eta_sec) : 0;
+	} else {
 		// Return the average time per iteration for the last iteration
-        return cast(int) ceil(avg_time_per_iteration); 
+		return cast(int) ceil(avg_time_per_iteration); 
     }
+}
+
+// Use the ETA value and return a formatted string in a consistent manner
+string formatETA(int eta) {
+	// How do we format the ETA string. Guard against zero and negative values
+	if (eta <= 0) {
+		return "|  ETA    --:--:--";
+	}
+	int h, m, s;
+	dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
+	return format!"|  ETA    %02d:%02d:%02d"(h, m, s);
 }
 
 // Force Exit due to failure
