@@ -10798,7 +10798,7 @@ class SyncEngine {
 				break;
 			}
 			
-			// query this level children
+			// Query this level children
 			try {
 				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
 			} catch (OneDriveException exception) {
@@ -10811,6 +10811,14 @@ class SyncEngine {
 				if (!appConfig.suppressLoggingOutput) {
 					addProcessingDotEntry();
 				}
+			}
+			
+			// Was a paging token error detected? 
+			if ((thisLevelChildren.type() == JSONType.string) && (thisLevelChildren.str == "INVALID_PAGING_TOKEN")) {
+				// Invalid paging token: failed to parse integer value from token
+				if (debugLogging) addLogEntry("Upstream detected invalid paging token – clearing nextLink and retrying", ["debug"]);
+				nextLink = null;
+				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
 			}
 			
 			// Was a valid JSON response for 'thisLevelChildren' provided?
@@ -10930,6 +10938,17 @@ class SyncEngine {
 			// Display what the error is
 			displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 			
+			// With the error displayed, testing of PR #3381 for #3375 generated this error:
+			//	Error Message:       HTTP request returned status code 400 (Bad Request)
+			//	Error Reason:        Invalid paging token: failed to parse integer value from token.
+			if ((exception.httpStatusCode == 400) && (exception.msg.canFind("Invalid paging token")))  {
+				// Log and return a known marker that bypasses JSONType.object check
+				if (debugLogging) addLogEntry("Detected invalid paging token – signaling upstream", ["debug"]);
+				return JSONValue("INVALID_PAGING_TOKEN");
+			}
+			
+			// Generic failure
+			return thisLevelChildren;
 		}
 				
 		// Display function processing time if configured to do so
