@@ -5683,6 +5683,11 @@ class SyncEngine {
 		string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
 		string thisItemName = onedriveJSONItem["name"].str;
 		
+		// Issue #3336 - Convert thisItemDriveId to lowercase before any test
+		if (appConfig.accountType == "personal") {
+			thisItemDriveId = transformToLowerCase(thisItemDriveId);
+		}
+		
 		// Is this parent is in the database
 		bool parentInDatabase = false;
 		
