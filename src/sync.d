@@ -1895,19 +1895,6 @@ class SyncEngine {
 				}
 			}
 			
-			/**
-			
-			// Microsoft OneDrive OneNote 'catch all'
-			if (!discardDeltaJSONItem) {
-				if (onenotePackageIdentifiers.canFind(objectParentId)) {
-					// Log that this will be skipped as this this is a Microsoft OneNote item and unsupported
-					if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook object '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
-					discardDeltaJSONItem = true;
-				}
-			}
-			
-			**/
-			
 			// If we are not self-generating a /delta response, check this initial /delta JSON bundle item against the basic checks 
 			// of applicability against 'skip_file', 'skip_dir' and 'sync_list'
 			// We only do this if we did not generate a /delta response, as generateDeltaResponse() performs the checkJSONAgainstClientSideFiltering()
@@ -5906,7 +5893,7 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("Parent path details are in DB", ["debug"]);}
 					newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
 				} else {
-					// parent is not in the database .. we need to compute it .. why ????
+					// Parent is not in the database .. we need to compute it .. why ????
 					if (appConfig.getValueBool("resync")) {
 						if (debugLogging) {addLogEntry("Parent NOT in DB .. we need to manually compute this path due to --resync being used", ["debug"]);}
 					} else {
@@ -6033,11 +6020,12 @@ class SyncEngine {
 							}
 						}
 						
-						// If this is a 'add shortcut to onedrive' link, we need to actually scan this path, so add this we need to pass this JSON
+						// Is this is a 'add shortcut to onedrive' link?
 						if (isItemRemote(onedriveJSONItem)) {
-							if (verboseLogging) {addLogEntry("Including shared folder shortcut for further analysis: " ~ newItemPath, ["verbose"]);}
-							// reset this flag
-							clientSideRuleExcludesPath = false;
+							// Detail we are skipping this JSON data from online
+							if (verboseLogging) {addLogEntry("Skipping Shared Folder Link - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
+							// Add this folder id to the elements we have already detailed we are skipping, so we do no output this again
+							syncListSkippedParentIds ~= thisItemId;
 						}
 					}
 				} else {
@@ -6064,6 +6052,12 @@ class SyncEngine {
 					} else {
 						// Directory included due to 'sync_list' match
 						if (verboseLogging) {addLogEntry("Including path - included by sync_list config: " ~ newItemPath, ["verbose"]);}
+						
+						// So that this path is in the DB, we need to add onedriveJSONItem to the DB so that this record can be used to build paths if required
+						if (parentInDatabase) {
+							// Save this JSON now
+							saveItem(onedriveJSONItem);
+						}
 					}
 				}
 			}
@@ -10713,6 +10707,32 @@ class SyncEngine {
 							foreach (grandChild; grandChildrenData.array) {
 								// add the grandchild to the array
 								childrenData ~= grandChild;
+							}
+						}
+					}
+					
+					// As we are generating a /delta response we need to check if this 'child' JSON is a 'remoteItem' and then handle appropriatly
+					// Is this a remote folder JSON ?
+					if (isItemRemote(child)) {
+						// Check account type
+						if (appConfig.accountType == "personal") {
+							// The folder is a remote item ... OneDrive Personal Shared Folder
+							if (debugLogging) {addLogEntry("The JSON data indicates this is most likely a OneDrive Personal Shared Folder Link added by 'Add shortcut to My files'", ["debug"]);}
+							// It is a 'remote' JSON item denoting a potential shared folder
+							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
+							createRequiredSharedFolderDatabaseRecords(child);
+						}
+					
+						if (appConfig.accountType == "business") {
+							// The folder is a remote item ... OneDrive Business Shared Folder
+							if (debugLogging) {addLogEntry("The JSON data indicates this is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);}
+							
+							// Is Shared Business Folder Syncing actually enabled?
+							if (appConfig.getValueBool("sync_business_shared_items")) {
+								// Shared Business Folder Syncing IS enabled
+								// It is a 'remote' JSON item denoting a potential shared folder
+								// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
+								createRequiredSharedFolderDatabaseRecords(child);
 							}
 						}
 					}
