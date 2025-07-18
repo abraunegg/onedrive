@@ -10711,7 +10711,7 @@ class SyncEngine {
 						}
 					}
 					
-					// As we are generating a /delta response we need to check if this 'child' JSON is a 'remoteItem' and then handle appropriatly
+					// As we are generating a /delta response we need to check if this 'child' JSON is a 'remoteItem' and then handle appropriately
 					// Is this a remote folder JSON ?
 					if (isItemRemote(child)) {
 						// Check account type
