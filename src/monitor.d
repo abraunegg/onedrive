@@ -388,17 +388,23 @@ final class Monitor {
 					return;
 				}
 			}
-			// is the path excluded by sync_list?
+			// Is the path excluded by sync_list?
 			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
 				// dont add a watch for this item
-				if (debugLogging) {addLogEntry("Skipping monitoring due to sync_list match: " ~ dirname, ["debug"]);}
+				if (debugLogging) {addLogEntry("Skipping monitoring parent path due to sync_list exclusion: " ~ dirname, ["debug"]);}
 				
-				// However before we return, we need to test this path tree as a branch on this tree may be included by some other sync_list inclusion rule
+				// However before we return, we need to test this path tree as a branch on this tree may be included by an anywhere exclusion rule. Do 'anywhere' inclusion rules exist?
 				if (isDir(dirname)) {
-					traverseDirectory(dirname);
+					// Do any 'sync_list' anywhere inclusion rules exist?
+					if (selectiveSync.syncListAnywhereInclusionRulesExist()) {
+						// Yes ..
+						if (debugLogging) {addLogEntry("Bypassing 'sync_list' exclusion to test if children should be monitored due to 'sync_list' anywhere rule existence", ["debug"]);}
+						// Traverse this directory
+						traverseDirectory(dirname);
+					}
 				}
 				
-				// For the original path, we return, no inotify watch added
+				// For the original path, we return, no inotify watch was added
 				return;
 			}
 		}
