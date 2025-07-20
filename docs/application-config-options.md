@@ -991,7 +991,7 @@ _**CLI Option Use:**_ `--sync-root-files`
 > Although it's not mandatory, it's recommended that after enabling this option, you perform a `--resync`. This ensures that any previously excluded content is now included in your sync process.
 
 ### threads
-_**Description:**_ This configuration option controls the number of worker threads used for parallel upload and download operations when transferring files between your local system and Microsoft OneDrive. Each thread handles a discrete portion of the workload, improving performance when used appropriately.
+_**Description:**_ This configuration option controls the number of worker threads used for parallel upload and download operations when transferring files between your local system and Microsoft OneDrive. Each thread handles a discrete portion of the workload, improving performance when used appropriately. All non-transfer operations, such as folder listings (`/children`), delta queries (`/delta`), and metadata requests are processed serially on a single thread.
 
 _**Value Type:**_ Integer
 
@@ -1006,12 +1006,15 @@ _**Config Example:**_ `threads = "16"`
 > 
 > In extensive testing, configuring the application with more than `16` threads — regardless of available physical CPU cores — frequently caused the Microsoft OneDrive service to become blocked due to excessive API request volume.
 
-> [!IMPORTANT]
-> For optimal performance and application stability, the number of threads should not exceed the number of **physical CPU cores** available to the system. Setting the thread count too high can result in **CPU contention**, increased **context switching**, and **reduced throughput** due to over-scheduling.  
-> If running inside a container or virtual machine, ensure that the container/VM has sufficient allocated CPU cores before increasing this setting.
+> [!NOTE]
+> The threads setting only affects file transfer operations. All API operations outside of upload/download operations are single-threaded.
+>
+> This option allows the alignment to Microsoft’s [Graph API guidance](https://learn.microsoft.com/en-us/graph/throttling) which recommends limiting concurrent requests to 5–10. The default of `8` provides a safe and performant baseline.
 
-> [!WARNING]
-> Increasing the thread count beyond the default or available physical CPU cores will also result in higher **system resource utilisation**, particularly in terms of CPU load and local TCP port consumption. On lower-spec systems or in constrained environments, this may lead to **network saturation**, **unpredictable behaviour**, or **application crashes** due to resource exhaustion.
+> [!IMPORTANT]
+> For optimal performance and application stability, the number of threads should not exceed the number of **physical CPU cores** available to the system. Setting the thread count too high can result in **CPU contention**, increased **context switching**, and **reduced throughput** due to over-scheduling.
+>
+> If running inside a container or virtual machine, ensure that the container/VM has sufficient allocated CPU cores before increasing this setting.
 
 > [!IMPORTANT]
 > If the configured `threads` value (default or manual) exceeds the number of available CPU cores, the application will issue a warning similar to the following:
@@ -1022,6 +1025,22 @@ _**Config Example:**_ `threads = "16"`
 > ```
 >
 > If this warning message appears during application startup, you **must** review and adjust your threads setting to match the number of physical CPU cores on your system to avoid degraded performance or instability.
+
+> [!IMPORTANT]
+> The application fully implements Microsoft’s throttling requirements for handling 429 and 503 response codes by:
+> * Handles 429 and 503 responses using exponential backoff
+> * Respects Retry-After headers provided by the API for the required back off period
+> * Limits concurrency to the recommended limits
+> 
+> If you receive this application output:
+>```
+>Handling a Microsoft Graph API HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: AbCdEfGhIjKlMnOp
+>```
+> Reduce your configured 'threads' value or raise a support ticket with Microsoft
+
+
+> [!WARNING]
+> Increasing or keeping the thread count beyond the default or available physical CPU cores will also result in higher **system resource utilisation**, particularly in terms of CPU load and local TCP port consumption. On lower-spec systems or in constrained environments, this may lead to **network saturation**, **unpredictable behaviour**, **increase in throttling behaviour by Microsoft** or **application crashes** due to resource exhaustion.
 
 
 ### transfer_order
