@@ -991,7 +991,7 @@ _**CLI Option Use:**_ `--sync-root-files`
 > Although it's not mandatory, it's recommended that after enabling this option, you perform a `--resync`. This ensures that any previously excluded content is now included in your sync process.
 
 ### threads
-_**Description:**_ This configuration option controls the number of worker threads used for parallel upload and download operations when transferring files between your local system and Microsoft OneDrive. Each thread handles a discrete portion of the workload, improving performance when used appropriately. All non-transfer operations, such as folder listings (/children), delta queries (/delta), and metadata requests are processed serially on a single thread.
+_**Description:**_ This configuration option controls the number of worker threads used for parallel upload and download operations when transferring files between your local system and Microsoft OneDrive. Each thread handles a discrete portion of the workload, improving performance when used appropriately. All non-transfer operations, such as folder listings (`/children`), delta queries (`/delta`), and metadata requests are processed serially on a single thread.
 
 _**Value Type:**_ Integer
 
@@ -1009,10 +1009,11 @@ _**Config Example:**_ `threads = "16"`
 > [!NOTE]
 > The threads setting only affects file transfer operations. All API operations outside of upload/download operations are single-threaded.
 >
-> This option alows the alignment to Microsoft’s [Graph API guidance](https://learn.microsoft.com/en-us/graph/throttling) which recommends limiting concurrent requests to 5–10. The default of 8 provides a safe and performant baseline.
+> This option allows the alignment to Microsoft’s [Graph API guidance](https://learn.microsoft.com/en-us/graph/throttling) which recommends limiting concurrent requests to 5–10. The default of `8` provides a safe and performant baseline.
 
 > [!IMPORTANT]
-> For optimal performance and application stability, the number of threads should not exceed the number of **physical CPU cores** available to the system. Setting the thread count too high can result in **CPU contention**, increased **context switching**, and **reduced throughput** due to over-scheduling.  
+> For optimal performance and application stability, the number of threads should not exceed the number of **physical CPU cores** available to the system. Setting the thread count too high can result in **CPU contention**, increased **context switching**, and **reduced throughput** due to over-scheduling.
+>
 > If running inside a container or virtual machine, ensure that the container/VM has sufficient allocated CPU cores before increasing this setting.
 
 > [!IMPORTANT]
