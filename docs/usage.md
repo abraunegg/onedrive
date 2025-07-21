@@ -344,7 +344,7 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 ### Authorise the Application with Your Microsoft OneDrive Account
 Once you've installed the application, you'll need to authorise it using your Microsoft OneDrive Account. This can be done by simply running the application without any additional command switches.
 
-Please be aware that some companies may require you to explicitly add this app to the [Microsoft MyApps portal](https://myapps.microsoft.com/). To add an approved app to your apps, click on the ellipsis in the top-right corner and select "Request new apps." On the next page, you can add this app. If it's not listed, you should make a request through your IT department.
+Please be aware that some organisations may require you to explicitly add this app to the [Microsoft MyApps portal](https://myapps.microsoft.com/). To add an approved app to your apps, click on the ellipsis in the top-right corner and select "Request new apps." On the next page, you can add this app. If it's not listed, you should make a request through your IT department.
 
 This client supports the following methods to authenticate the application with Microsoft OneDrive:
 * Supports interactive browser-based authentication using OAuth2 and a redirect URI
@@ -442,7 +442,7 @@ You will have ~15 minutes before the code expires.
 > - Uses Microsoft Identity Platform v2.0 endpoints (`/devicecode`, `/token`, etc.)
 > - Microsoft Graph scopes properly defined
 >
-> Despite this correct configuration, users signing in with a personal Microsoft account will see the following error:
+> Despite this correct configuration, users signing in with a Personal Microsoft OneDrive account will see the following error:
 >
 > > **"The code you entered has expired. Get a new code from the device you're trying to sign in to and try again."**
 >
@@ -452,10 +452,10 @@ You will have ~15 minutes before the code expires.
 > https://login.live.com/ppsecure/post.srf?username=......
 > ```
 >
-> This behaviour confirms that Microsoft **blocks the `device_code` grant flow for MSA accounts** on unapproved apps.
+> This behaviour confirms that Microsoft **blocks the `device_code` grant flow for MSA accounts** on unapproved (by Microsoft) applications.
 >
 > **Recommendation:**  
-> If using a personal Microsoft account (e.g., @outlook.com or @hotmail.com), please complete authentication using the interactive authentication method detailed above.
+> If using a Personal Microsoft OneDrive account (e.g., @outlook.com or @hotmail.com), please complete authentication using the interactive authentication method detailed above.
 >
 > **Further Reading:**  
 > 📚 [Microsoft Documentation — OAuth 2.0 device authorization grant](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code)
