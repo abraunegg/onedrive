@@ -1385,7 +1385,7 @@ class OneDriveApi {
 		string originalFilename = filename;
 		string downloadFilename = filename ~ ".partial";
 		
-		// To support resumable downloads, configure the resumeable file path
+		// To support resumable downloads, configure the 'resumable data' file path
 		string threadResumeDownloadFilePath = appConfig.resumeDownloadFilePath ~ "." ~ generateAlphanumericString();
 		
 		// Create a JSONValue with download state so 
