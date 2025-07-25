@@ -3628,7 +3628,7 @@ class SyncEngine {
 	}
 	
 	// Perform the actual download of an object from OneDrive
-	void downloadFileItem(JSONValue onedriveJSONItem, bool ignoreDataPreservationCheck = false) {
+	void downloadFileItem(JSONValue onedriveJSONItem, bool ignoreDataPreservationCheck = false, long resumeOffset = 0) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -3647,6 +3647,9 @@ class SyncEngine {
 		long jsonFileSize = 0;
 		Item databaseItem;
 		bool fileFoundInDB = false;
+		
+		// Create a JSONValue to store the online hash for resumable file checking
+		JSONValue onlineHash;
 		
 		// Capture what time this download started
 		SysTime downloadStartTime = Clock.currTime();
@@ -3685,6 +3688,10 @@ class SyncEngine {
 					if (onedriveJSONItem["file"]["hashes"]["quickXorHash"].str != "") {
 						OneDriveFileXORHash = onedriveJSONItem["file"]["hashes"]["quickXorHash"].str;
 					}
+					// Assign to JSONValue as object for resumable file checking
+					onlineHash = JSONValue([
+						"quickXorHash": JSONValue(OneDriveFileXORHash)
+					]);
 				} else {
 					// Fallback: Check for SHA256Hash
 					if (hasSHA256Hash(onedriveJSONItem)) {
@@ -3692,11 +3699,19 @@ class SyncEngine {
 						if (onedriveJSONItem["file"]["hashes"]["sha256Hash"].str != "") {
 							OneDriveFileSHA256Hash = onedriveJSONItem["file"]["hashes"]["sha256Hash"].str;
 						}
+						// Assign to JSONValue as object for resumable file checking
+						onlineHash = JSONValue([
+							"sha256Hash": JSONValue(OneDriveFileSHA256Hash)
+						]);
 					}
 				}
 			} else {
 				// file hash data missing
-				if (debugLogging) {addLogEntry("ERROR: onedriveJSONItem['file']['hashes'] is missing - unable to compare file hash after download", ["debug"]);}
+				if (debugLogging) {addLogEntry("ERROR: onedriveJSONItem['file']['hashes'] is missing - unable to compare file hash after download to verify integrity of the downloaded file", ["debug"]);}
+				// Assign to JSONValue as object for resumable file checking
+				onlineHash = JSONValue([
+							"hashMissing": JSONValue("none")
+						]);
 			}
 		
 			// Does the file already exist in the path locally?
@@ -3764,7 +3779,7 @@ class SyncEngine {
 						}
 						
 						// Perform the download
-						downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize);
+						downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, resumeOffset, onlineHash);
 						
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						downloadFileOneDriveApiInstance.releaseCurlEngine();
@@ -3773,7 +3788,7 @@ class SyncEngine {
 						GC.collect();
 						
 					} catch (OneDriveException exception) {
-						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize); generated a OneDriveException", ["debug"]);}
+						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, resumeOffset, onlineHash); generated a OneDriveException", ["debug"]);}
 						
 						// HTTP request returned status code 403
 						if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
@@ -9725,7 +9740,7 @@ class SyncEngine {
 						// Additional application logging
 						addLogEntry("ERROR: The total number of items being deleted is: " ~ to!string(itemsToDelete));
 						addLogEntry("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
-						addLogEntry("ERROR: Optionally, perform a --resync to reset your local synchronisation state");
+						
 						// Must exit here to preserve data on online , allow logging to be done
 						forceExit();
 					}

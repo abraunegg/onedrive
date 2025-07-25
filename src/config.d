@@ -121,8 +121,10 @@ class ApplicationConfig {
 	string refreshTokenFilePath = "";
 	// Store the accessTokenExpiration for use within the application
 	SysTime accessTokenExpiration;
-	// Store the 'session_upload.CRC32-HASH' file path
+	// Store the 'session_upload.UNIQUE_STRING' file path
 	string uploadSessionFilePath = "";
+	// Store the 'resume_download.UNIQUE_STRING' file path
+	string resumeDownloadFilePath = "";
 	// Store the Intune account information
 	string intuneAccountDetails;
 	// Store the Intune account information on disk for reuse
@@ -561,6 +563,8 @@ class ApplicationConfig {
 		databaseFilePathDryRun = buildNormalizedPath(buildPath(configDirName, "items-dryrun.sqlite3"));
 		// - What is the full path for the 'resume_upload'
 		uploadSessionFilePath = buildNormalizedPath(buildPath(configDirName, "session_upload"));
+		// - What is the full path for the resume 'resume_download' file
+		resumeDownloadFilePath = buildNormalizedPath(buildPath(configDirName, "resume_download"));
 		// - What is the full path for the 'sync_list' file
 		syncListFilePath = buildNormalizedPath(buildPath(configDirName, "sync_list"));
 		// - What is the full path for the 'config' - the user file to configure the application
