@@ -3785,7 +3785,7 @@ class SyncEngine {
 						}
 						
 						// Perform the download with any applicable set offset
-						downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, resumeOffset, onlineHash);
+						downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset);
 						
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						downloadFileOneDriveApiInstance.releaseCurlEngine();
@@ -3794,7 +3794,7 @@ class SyncEngine {
 						GC.collect();
 						
 					} catch (OneDriveException exception) {
-						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, resumeOffset, onlineHash); generated a OneDriveException", ["debug"]);}
+						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset); generated a OneDriveException", ["debug"]);}
 						
 						// HTTP request returned status code 403
 						if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
@@ -12694,6 +12694,11 @@ class SyncEngine {
 			
 			// For this set of items, perform a DB PASSIVE checkpoint
 			itemDB.performCheckpoint("PASSIVE");
+		}
+		
+		// Cleanup all 'resume_download' files
+		foreach (resumeDownloadFile; interruptedDownloadFiles) {
+			safeRemove(resumeDownloadFile);
 		}
 		
 		// Display function processing time if configured to do so
