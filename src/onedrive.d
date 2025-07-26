@@ -1088,10 +1088,12 @@ class OneDriveApi {
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
-	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize, long resumeOffset = 0, JSONValue onlineHash) {
+	void downloadById(const(char)[] driveId, const(char)[] itemId, string saveToPath, long fileSize, long resumeOffset = 0, JSONValue onlineHash) {
 		// We pass through to 'downloadFile()'
 		// - resumeOffset
 		// - onlineHash
+		// - driveId
+		// - itemId
 		
 		scope(failure) {
 			if (exists(saveToPath)) {
@@ -1129,10 +1131,10 @@ class OneDriveApi {
 		}
 
 		// Create the URL to download the file
-		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content?AVOverride=1";
+		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ itemId ~ "/content?AVOverride=1";
 		
 		// Download file using the URL created above
-		downloadFile(url, saveToPath, fileSize, resumeOffset, onlineHash);
+		downloadFile(driveId, itemId, url, saveToPath, fileSize, resumeOffset, onlineHash);
 		
 		// Does downloaded file now exist locally?
 		if (exists(saveToPath)) {
@@ -1377,7 +1379,7 @@ class OneDriveApi {
 	}
 	
 	// Download a file based on the URL request
-	private void downloadFile(const(char)[] url, string filename, long fileSize, long resumeOffset = 0, JSONValue onlineHash, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+	private void downloadFile(const(char)[] driveId, const(char)[] itemId, const(char)[] url, string filename, long fileSize, long resumeOffset = 0, JSONValue onlineHash, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
 		
@@ -1388,9 +1390,10 @@ class OneDriveApi {
 		// To support resumable downloads, configure the 'resumable data' file path
 		string threadResumeDownloadFilePath = appConfig.resumeDownloadFilePath ~ "." ~ generateAlphanumericString();
 		
-		// Create a JSONValue with download state so 
+		// Create a JSONValue with download state so this can be used when resuming, to evaluate if the online file has changed, and if we are able to resume in a safe manner
 		JSONValue resumeDownloadData = JSONValue([
-				"url": JSONValue(to!string(url)),
+				"driveId": JSONValue(to!string(driveId)),
+				"itemId": JSONValue(to!string(itemId)),
 				"onlineHash": onlineHash,
 				"originalFilename": JSONValue(originalFilename),
 				"downloadFilename": JSONValue(downloadFilename),

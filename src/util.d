@@ -1367,6 +1367,35 @@ bool hasExpiresOn(const ref JSONValue item) {
 	return ("expiresOn" in item) != null;
 }
 
+// Resumable Download checks
+bool hasDriveId(const ref JSONValue item) {
+	return ("driveId" in item) != null;
+}
+
+bool hasItemId(const ref JSONValue item) {
+	return ("itemId" in item) != null;
+}
+
+bool hasDownloadFilename(const ref JSONValue item) {
+	return ("downloadFilename" in item) != null;
+}
+
+bool hasResumeOffset(const ref JSONValue item) {
+	return ("resumeOffset" in item) != null;
+}
+
+bool hasOnlineHash(const ref JSONValue item) {
+	return ("onlineHash" in item) != null;
+}
+
+bool hasQuickXorHashResume(const ref JSONValue item) {
+	return ("quickXorHash" in item["onlineHash"]) != null;
+}
+
+bool hasSHA256HashResume(const ref JSONValue item) {
+	return ("sha256Hash" in item["onlineHash"]) != null;
+}
+
 // Convert bytes to GB
 string byteToGibiByte(ulong bytes) {
     if (bytes == 0) {

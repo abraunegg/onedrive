@@ -125,8 +125,12 @@ class SyncEngine {
 	string[] businessSharedFoldersOnlineToSkip;
 	// List of interrupted uploads session files that need to be resumed
 	string[] interruptedUploadsSessionFiles;
+	// List of interrupted downloads that need to be resumed
+	string[] interruptedDownloadFiles;
 	// List of validated interrupted uploads session JSON items to resume
 	JSONValue[] jsonItemsToResumeUpload;
+	// List of validated interrupted download JSON items to resume
+	JSONValue[] jsonItemsToResumeDownload;
 	// This list of local paths that need to be created online
 	string[] pathsToCreateOnline;
 	// Array of items from the database that have been deleted locally, that needs to be deleted online
@@ -1020,6 +1024,7 @@ class SyncEngine {
 		jsonItemsToProcess = [];
 		fileJSONItemsToDownload = [];
 		jsonItemsToResumeUpload = [];
+		jsonItemsToResumeDownload = [];
 		
 		// String Arrays
 		fileDownloadFailures = [];
@@ -1030,6 +1035,7 @@ class SyncEngine {
 		posixViolationPaths = [];
 		businessSharedFoldersOnlineToSkip = [];
 		interruptedUploadsSessionFiles = [];
+		interruptedDownloadFiles = [];
 		pathsToCreateOnline = [];
 		databaseItemsToDeleteOnline = [];
 		
@@ -3616,7 +3622,7 @@ class SyncEngine {
 		
 		// This function received an array of JSON items to download, the number of elements based on appConfig.getValueLong("threads")
 		foreach (i, onedriveJSONItem; processPool.parallel(array)) {
-			// Take each JSON item and 
+			// Take each JSON item and download it
 			downloadFileItem(onedriveJSONItem);
 		}
 		
@@ -3778,7 +3784,7 @@ class SyncEngine {
 							downloadDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
 						}
 						
-						// Perform the download
+						// Perform the download with any applicable set offset
 						downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, resumeOffset, onlineHash);
 						
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -4415,6 +4421,11 @@ class SyncEngine {
 		// static declare this for this function
 		static import core.exception;
 		string calculatedPath;
+		
+		// Issue #3336 - Convert thisDriveId to lowercase before any test
+		if (appConfig.accountType == "personal") {
+			thisDriveId = transformToLowerCase(thisDriveId);
+		}
 		
 		// What driveID and itemID we trying to calculate the path for
 		if (debugLogging) {
@@ -10403,7 +10414,6 @@ class SyncEngine {
 		return outputDriveId;
 	}
 	
-	
 	// Print the fileDownloadFailures and fileUploadFailures arrays if they are not empty
 	void displaySyncFailures() {
 		// Function Start Time
@@ -12495,7 +12505,6 @@ class SyncEngine {
 		}
 		
 		// Count all 'session_upload' files in appConfig.configDirName
-		//interruptedUploadsCount = count(dirEntries(appConfig.configDirName, "session_upload.*", SpanMode.shallow));
 		interruptedUploadsCount = count(interruptedUploadsSessionFiles);
 		if (interruptedUploadsCount != 0) {
 			interruptedUploads = true;
@@ -12509,6 +12518,46 @@ class SyncEngine {
 		
 		// return if there are interrupted uploads to process
 		return interruptedUploads;
+	}
+	
+	// Query the system for resume_download.* files
+	bool checkForResumableDownloads() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
+		bool resumableDownloads = false;
+		long resumableDownloadsCount;
+		
+		// Scan the filesystem for the files we are interested in, build up interruptedDownloadFiles array
+		foreach (resumeDownloadFile; dirEntries(appConfig.configDirName, "resume_download.*", SpanMode.shallow)) {
+			// calculate the full path
+			string tempPath = buildNormalizedPath(buildPath(appConfig.configDirName, resumeDownloadFile));
+			// add to array
+			interruptedDownloadFiles ~= [tempPath];
+		}
+		
+		// Count all 'resume_download' files in appConfig.configDirName
+		resumableDownloadsCount = count(interruptedDownloadFiles);
+		if (resumableDownloadsCount != 0) {
+			resumableDownloads = true;
+		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// return if there are interrupted uploads to process
+		return resumableDownloads;
 	}
 	
 	// Clear any session_upload.* files
@@ -12545,7 +12594,7 @@ class SyncEngine {
 	}
 	
 	// Process interrupted 'session_upload' files
-	void processForInterruptedSessionUploads() {
+	void processInterruptedSessionUploads() {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -12600,7 +12649,61 @@ class SyncEngine {
 		}
 	}
 	
-	// A resume session upload file need to be valid to be used
+	// Process 'resumable download' files that were found
+	void processResumableDownloadFiles() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
+		// For each 'resume_download' file that has been found, process the data to ensure it is still valid
+		foreach (resumeDownloadFile; interruptedDownloadFiles) {
+			// What 'resumable data' are we trying to resume
+			if (verboseLogging) {addLogEntry("Attempting to resume file download using this 'resumable data' file: " ~ resumeDownloadFile, ["verbose"]);}
+			// Does this pass validation?
+			if (!validateResumableDownloadFileData(resumeDownloadFile)) {
+				// Remove 'resume_download' file as it is invalid
+				if (verboseLogging) {addLogEntry("Resume file download verification failed - cleaning up resumable download data file: " ~ resumeDownloadFile, ["verbose"]);}
+				// Cleanup 'resume_download' file
+				if (exists(resumeDownloadFile)) {
+					if (!dryRun) {
+						remove(resumeDownloadFile);
+					}
+				}
+			}
+		}
+		
+		// At this point we should have an array of JSON items to resume downloading
+		if (count(jsonItemsToResumeDownload) > 0) {
+			// There are valid items to resume download
+			// Lets deal with all the JSON items that need to be resumed for download in a batch process
+			size_t batchSize = to!int(appConfig.getValueLong("threads"));
+			long batchCount = (jsonItemsToResumeDownload.length + batchSize - 1) / batchSize;
+			long batchesProcessed = 0;
+			
+			foreach (chunk; jsonItemsToResumeDownload.chunks(batchSize)) {
+				// send an array containing 'appConfig.getValueLong("threads")' JSON items to resume download
+				resumeDownloadsInParallel(chunk);
+			}
+			
+			// For this set of items, perform a DB PASSIVE checkpoint
+			itemDB.performCheckpoint("PASSIVE");
+		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+	}
+	
+	// A resume session upload file needs to be valid to be used
 	// This function validates this data
 	bool validateUploadSessionFileData(string sessionFilePath) {
 		// Function Start Time
@@ -12858,7 +12961,256 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 		
-		// return session file is invalid
+		// return session file is valid
+		return true;
+	}
+	
+	// A 'resumable download' file needs to be valid to be used
+	bool validateResumableDownloadFileData(string resumeDownloadFile) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// Function variables
+		JSONValue resumeDownloadFileData;
+		JSONValue latestOnlineFileDetails;
+		OneDriveApi validateResumableDownloadFileDataApiInstance;
+		string driveId;
+		string itemId;
+		string existingHash;
+		string downloadFilename;
+		long resumeOffset;
+		string OneDriveFileXORHash;
+		string OneDriveFileSHA256Hash;
+		
+		// Try and read the text from the 'resumable download' file as a JSON array
+		try {
+			if (getSize(resumeDownloadFile) > 0) {
+				// There is data to read in
+				resumeDownloadFileData = readText(resumeDownloadFile).parseJSON();
+			} else {
+				// No data to read in - invalid file
+				if (debugLogging) {addLogEntry("SESSION-RESUME: Invalid JSON file: " ~ resumeDownloadFile, ["debug"]);}
+				
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+				
+				// Return 'resumable download' file is invalid
+				return false;
+			}
+		} catch (JSONException e) {
+			if (debugLogging) {addLogEntry("SESSION-RESUME: Invalid JSON data in: " ~ resumeDownloadFile, ["debug"]);}
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			
+			// Return 'resumable download' file is invalid
+			return false;
+		}
+		
+		// What needs to be checked?
+		// - JSON has 'downloadFilename' - critical to check the online state
+		// - JSON has 'driveId' - critical to check the online state
+		// - JSON has 'itemId'  - critical to check the online state
+		// - JSON has 'resumeOffset' - critical to check the online state
+		// - JSON has 'onlineHash' with an applicable hash value - critical to check the online state
+		
+		if (!hasDownloadFilename(resumeDownloadFileData)) {
+			// no downloadFilename present - file invalid
+			if (verboseLogging) {addLogEntry("The 'resumable download' file contains invalid data: Missing 'downloadFilename'", ["verbose"]);}
+			// Return 'resumable download' file is invalid
+			return false;
+		} else {
+			// Configure search variables
+			downloadFilename = resumeDownloadFileData["downloadFilename"].str;
+			// Does the file specified by 'downloadFilename' exist on disk?
+			if (!exists(downloadFilename)) {
+				// File that is supposed to contain our resumable 
+				if (verboseLogging) {addLogEntry("The 'resumable download' file no longer exists on your local disk: " ~ downloadFilename, ["verbose"]);}
+				// Return 'resumable download' file is invalid
+				return false;
+			}
+		}
+		
+		// If we get to this point 'downloadFilename' has a file name and the file exists on disk.
+		// If any of the other validations fail, we can remove the file
+		
+		if (!hasDriveId(resumeDownloadFileData)) {
+			// no driveId present - file invalid
+			if (verboseLogging) {addLogEntry("The 'resumable download' file contains invalid data: Missing 'driveId'", ["verbose"]);}
+			// Remove local file
+			safeRemove(downloadFilename);
+			// Return 'resumable download' file is invalid
+			return false;
+		} else {
+			// Configure search variables
+			driveId = resumeDownloadFileData["driveId"].str;
+		}
+		
+		if (!hasItemId(resumeDownloadFileData)) {
+			// no itemId present - file invalid
+			if (verboseLogging) {addLogEntry("The 'resumable download' file contains invalid data: Missing 'itemId'", ["verbose"]);}
+			// Remove local file
+			safeRemove(downloadFilename);
+			// Return 'resumable download' file is invalid
+			return false;
+		} else {
+			// Configure search variables
+			itemId = resumeDownloadFileData["itemId"].str;
+		}
+		
+		if (!hasResumeOffset(resumeDownloadFileData)) {
+			// no resumeOffset present - file invalid
+			if (verboseLogging) {addLogEntry("The 'resumable download' file contains invalid data: Missing 'resumeOffset'", ["verbose"]);}
+			// Remove local file
+			safeRemove(downloadFilename);
+			// Return 'resumable download' file is invalid
+			return false;
+		} else {
+			// we have a resumeOffset value
+			resumeOffset = to!long(resumeDownloadFileData["resumeOffset"].str);
+			// We need to check 'resumeOffset' against the 'downloadFilename' on-disk size
+			long onDiskSize = getSize(downloadFilename);
+			
+			if (resumeOffset != onDiskSize) {
+				// The size of the offset location does not equal the size on disk .. if we resume that file, the file will be corrupt
+				string logMessage = format("The 'resumable download' file on disk is a different size to the resumable offset: %s vs %s", to!string(resumeOffset), to!string(onDiskSize));
+				if (verboseLogging) {addLogEntry(logMessage, ["verbose"]);}
+				// Remove local file
+				safeRemove(downloadFilename);
+				// Return 'resumable download' file is invalid
+				return false;
+			}
+		}
+		
+		if (!hasOnlineHash(resumeDownloadFileData)) {
+			// no onlineHash present - file invalid
+			if (verboseLogging) {addLogEntry("The 'resumable download' file contains invalid data: Missing 'onlineHash'", ["verbose"]);}
+			// Remove local file
+			safeRemove(downloadFilename);
+			// Return 'resumable download' file is invalid
+			return false;
+		} else {
+			// Configure hash variable from the resume data
+			// QuickXorHash Check
+			if (hasQuickXorHashResume(resumeDownloadFileData)) {
+				// We have a quickXorHash value
+				existingHash = resumeDownloadFileData["onlineHash"]["quickXorHash"].str;
+			} else {
+				// Fallback: Check for SHA256Hash
+				if (hasSHA256HashResume(resumeDownloadFileData)) {
+					// We have a sha256Hash value
+					existingHash = resumeDownloadFileData["onlineHash"]["sha256Hash"].str;
+				}
+			}
+			
+			// At this point if we do not have a existingHash value, its a fail
+			if (existingHash.empty) {
+				if (verboseLogging) {addLogEntry("The 'resumable download' file contains invalid data: Missing 'onlineHash' value", ["verbose"]);}
+				// Remove local file
+				safeRemove(downloadFilename);
+				// Return 'resumable download' file is invalid
+				return false;
+			}
+		}
+				
+		// At this point we have elements in the 'resumable download' JSON data that will allow is to check if the online file has been modified - if it has, resuming the download is pointless
+		try {
+			// Create a new OneDrive API instance
+			validateResumableDownloadFileDataApiInstance = new OneDriveApi(appConfig);
+			validateResumableDownloadFileDataApiInstance.initialise();
+	
+			// Request latest file details
+			latestOnlineFileDetails = validateResumableDownloadFileDataApiInstance.getPathDetailsById(driveId, itemId);
+			
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			validateResumableDownloadFileDataApiInstance.releaseCurlEngine();
+			validateResumableDownloadFileDataApiInstance = null;
+			// Perform Garbage Collection
+			GC.collect();
+			
+			// no error .. potentially all still valid
+		} catch (OneDriveException e) {
+			// handle any onedrive error response as invalid
+			
+			
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			validateResumableDownloadFileDataApiInstance.releaseCurlEngine();
+			validateResumableDownloadFileDataApiInstance = null;
+			// Perform Garbage Collection
+			GC.collect();
+			
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			
+			// Return 'resumable download' file is invalid
+			return false;
+		}
+		
+		// Configure the hashes from the online data for comparison
+		if (hasHashes(latestOnlineFileDetails)) {
+			// File details returned hash details
+			// QuickXorHash
+			if (hasQuickXorHash(latestOnlineFileDetails)) {
+				// Use the provided quickXorHash as reported by OneDrive
+				if (latestOnlineFileDetails["file"]["hashes"]["quickXorHash"].str != "") {
+					OneDriveFileXORHash = latestOnlineFileDetails["file"]["hashes"]["quickXorHash"].str;
+				}
+			} else {
+				// Fallback: Check for SHA256Hash
+				if (hasSHA256Hash(latestOnlineFileDetails)) {
+					// Use the provided sha256Hash as reported by OneDrive
+					if (latestOnlineFileDetails["file"]["hashes"]["sha256Hash"].str != "") {
+						OneDriveFileSHA256Hash = latestOnlineFileDetails["file"]["hashes"]["sha256Hash"].str;
+					}
+				}
+			}
+		}
+		
+		// Last check - has the online file changed since we attempted to do the download that we are trying to resume?
+		// Test 'existingHash' against the potential 2 online hashes for a match
+		// As we dont know what type of hash 'existingHash' is, we have to test it against the 2 known online types
+		bool hashesMatch = (existingHash == OneDriveFileXORHash) || (existingHash == OneDriveFileSHA256Hash);
+		
+		// Do the hashes match?
+		if (!hashesMatch) {
+			// Hashes do not match
+			if (verboseLogging) {addLogEntry("The 'online file' has changed in content since the download was last attempted. Aborting this resumable download attempt.", ["verbose"]);}
+			// Remove local file
+			safeRemove(downloadFilename);
+			// Return 'resumable download' file is invalid
+			return false;	
+		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+		
+		// Augment 'latestOnlineFileDetails' with our resume point
+		latestOnlineFileDetails["resumeOffset"] = JSONValue(to!string(resumeOffset));
+		
+		// Add latestOnlineFileDetails to jsonItemsToResumeDownload as it is now valid
+		jsonItemsToResumeDownload ~= latestOnlineFileDetails;
+		
+		// Return 'resumable download' file is valid
 		return true;
 	}
 	
@@ -12924,6 +13276,38 @@ class SyncEngine {
 			}
 		}
 		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+	}
+	
+		// Resume all resumable downloads in parallel
+	void resumeDownloadsInParallel(JSONValue[] array) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		// This function received an array of JSON items to resume download, the number of elements based on appConfig.getValueLong("threads")
+		foreach (i, jsonItemToResume; processPool.parallel(array)) {
+			// Take each JSON item and resume download using the JSON data
+			
+			// Extract the 'offset' from the JSON data
+			long resumeOffset;
+			resumeOffset = to!long(jsonItemToResume["resumeOffset"].str);
+			
+			// Take each JSON item and download it using the offset
+			downloadFileItem(jsonItemToResume, false, resumeOffset);
+		}
+	
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
