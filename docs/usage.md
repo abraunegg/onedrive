@@ -1132,15 +1132,15 @@ A resumable transfer is a process that:
 
 #### When Does It Occur?
 Resumable transfers are automatically engaged when:
-*   The application is not started with --resync.
+*   The application is not started with `--resync`.
 *   Interrupted downloads exist with associated metadata saved to disk.
 *   Interrupted uploads using session-based transfers are pending resumption.
 
 > [!IMPORTANT]
-> If a --resync operation is being performed, all resumable transfer metadata is purged to ensure a clean and consistent resynchronisation state.
+> If a `--resync` operation is being performed, all resumable transfer metadata is purged to ensure a clean and consistent resynchronisation state.
 
 #### How It Works Internally
-*   **Downloads:** Partial download state is stored as a JSON metadata file, including the online hash, download URL, and byte offset. The file itself is saved with a .partial suffix. When detected, this metadata is parsed and the download resumes using HTTP range headers.
+*   **Downloads:** Partial download state is stored as a JSON metadata file, including the online hash, download URL, and byte offset. The file itself is saved with a `.partial` suffix. When detected, this metadata is parsed and the download resumes using HTTP range headers.
 *   **Uploads:** Session uploads use OneDrive Upload Sessions. If interrupted, the session URL and transfer state are persisted. On restart, the client attempts to resume the upload using the remaining byte ranges.
 
 #### Benefits of Resumable Transfers

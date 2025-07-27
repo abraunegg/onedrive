@@ -842,7 +842,7 @@ int main(string[] cliArgs) {
 		string localPath = ".";
 		string remotePath = "/";
 		
-		// If not performing a --resync, check if there are interupted downloads and/or uploads that need to be completed
+		// If not performing a --resync, check if there are interrupted downloads and/or uploads that need to be completed
 		if (!appConfig.getValueBool("resync")) {
 			// Check if there are any downloads that need to be resumed
 			if (syncEngineInstance.checkForResumableDownloads) {
