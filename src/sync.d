@@ -12593,6 +12593,45 @@ class SyncEngine {
 		}
 	}
 	
+	// Clear any resume_download.* files
+	void clearInterruptedDownloads() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
+		// Scan the filesystem for the files we are interested in, build up interruptedDownloadFiles array
+		foreach (resumeDownloadFile; dirEntries(appConfig.configDirName, "resume_download.*", SpanMode.shallow)) {
+			// calculate the full path
+			string tempPath = buildNormalizedPath(buildPath(appConfig.configDirName, resumeDownloadFile));
+			
+			
+			JSONValue resumeFileData = readText(tempPath).parseJSON();
+			addLogEntry("Removing interrupted download file due to --resync for: " ~ resumeFileData["originalFilename"].str, ["info"]);
+			string resumeFilename = resumeFileData["downloadFilename"].str;
+			
+			// Process removal
+			if (!dryRun) {
+				// remove the .partial file
+				safeRemove(resumeFilename);
+				// remove the resume_download. file
+				safeRemove(tempPath);
+			}
+		}
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+	}
+	
 	// Process interrupted 'session_upload' files
 	void processInterruptedSessionUploads() {
 		// Function Start Time
@@ -13288,7 +13327,7 @@ class SyncEngine {
 		}
 	}
 	
-		// Resume all resumable downloads in parallel
+	// Resume all resumable downloads in parallel
 	void resumeDownloadsInParallel(JSONValue[] array) {
 		// Function Start Time
 		SysTime functionStartTime;

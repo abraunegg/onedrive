@@ -37,6 +37,7 @@ Before reading this document, please ensure you are running application version 
   - [GUI Notifications](#gui-notifications)
   - [Handling a Microsoft OneDrive Account Password Change](#handling-a-microsoft-onedrive-account-password-change)
   - [Determining the synchronisation result](#determining-the-synchronisation-result)
+  - [Resumable Transfers](#resumable-transfers)
 - [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
   - [How to change the default configuration of the client?](#how-to-change-the-default-configuration-of-the-client)
   - [How to change where my data from Microsoft OneDrive is stored?](#how-to-change-where-my-data-from-microsoft-onedrive-is-stored)
@@ -1119,6 +1120,47 @@ A file list of failed upload or download items will also be listed to allow you 
 In order to fix the upload or download failures, you may need to:
 *   Review the application output to determine what happened
 *   Re-try your command utilising a resync to ensure your system is correctly synced with your Microsoft OneDrive Account
+
+### Resumable Transfers
+The OneDrive Client for Linux supports resumable transfers for both uploads and downloads. This capability enhances the reliability and robustness of file transfers by allowing interrupted operations to continue from the last successful point, instead of restarting from the beginning. This is especially important in environments with unstable network connections or during large file transfers.
+
+#### What Are Resumable Transfers?
+A resumable transfer is a process that:
+*   Detects when a file upload or download was interrupted due to a network error, system shutdown, or other external factors.
+*   Saves the current state of the transfer, including offsets, temporary filenames, and online session metadata.
+*   Upon application restart, automatically detects these incomplete operations and resumes them from where they left off.
+
+#### When Does It Occur?
+Resumable transfers are automatically engaged when:
+*   The application is not started with --resync.
+*   Interrupted downloads exist with associated metadata saved to disk.
+*   Interrupted uploads using session-based transfers are pending resumption.
+
+> [!IMPORTANT]
+> If a --resync operation is being performed, all resumable transfer metadata is purged to ensure a clean and consistent resynchronisation state.
+
+#### How It Works Internally
+*   **Downloads:** Partial download state is stored as a JSON metadata file, including the online hash, download URL, and byte offset. The file itself is saved with a .partial suffix. When detected, this metadata is parsed and the download resumes using HTTP range headers.
+*   **Uploads:** Session uploads use OneDrive Upload Sessions. If interrupted, the session URL and transfer state are persisted. On restart, the client attempts to resume the upload using the remaining byte ranges.
+
+#### Benefits of Resumable Transfers
+*   Saves bandwidth by avoiding full re-transfer of large files.
+*   Improves reliability in poor network conditions.
+*   Increases performance and reduces recovery time after unexpected shutdowns.
+
+#### Considerations
+Resumable state is only preserved if the client exits gracefully or the system preserves temporary files across sessions.
+
+If `--resync` is used, all resumable data is discarded intentionally.
+
+#### Recommendations
+*   Avoid using `--resync` unless explicitly required.
+*   Enable logging (`--enable-logging`) to help diagnose resumable transfer behaviour.
+*   For environments where network interruptions are common, ensure that the system does not clean temporary or cache files between reboots.
+
+> [!NOTE] 
+> Resumable transfer support is built-in and requires no special configuration. It is automatically applied during both standalone and monitor operational modes when applicable.
+
 
 ## Frequently Asked Configuration Questions
 

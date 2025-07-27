@@ -31,6 +31,7 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 * Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
 * Protects against significant data loss on OneDrive after configuration changes
 * Supports a dry-run option for safe configuration testing
+* Supports interruption-tolerant uploads and downloads by resuming file transfers from the point of failure, ensuring data integrity and efficiency
 * Validates file transfers to ensure data integrity
 * Caches sync state for efficiency
 * Monitors local files in real-time using inotify
