@@ -274,6 +274,7 @@ memtest
 microsoftonline
 mkbuilddir
 mno
+mnt
 mountpoint
 mozram
 msghdr
