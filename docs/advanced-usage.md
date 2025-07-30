@@ -297,7 +297,7 @@ These settings instruct the client to:
 #### How the `.nosync` file works
 1. The `.nosync` file is placed on the local filesystem, in the exact directory that will later be covered by the mounted volume.
 2. Once the external device is mounted, that directory (and the `.nosync` file) becomes hidden by the mount.
-3. If the mount disappears or fails, the `.nosync file` becomes visible again.
+3. If the mount disappears or fails, the `.nosync` file becomes visible again.
 4. The OneDrive client detects this and stops syncing, preventing accidental deletions due to the mount being unavailable.
 
 #### Scenario 1: 'sync_dir' points directly to a mounted path
