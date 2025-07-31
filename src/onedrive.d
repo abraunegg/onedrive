@@ -1088,7 +1088,13 @@ class OneDriveApi {
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
-	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize) {
+	void downloadById(const(char)[] driveId, const(char)[] itemId, string saveToPath, long fileSize, JSONValue onlineHash, long resumeOffset = 0) {
+		// We pass through to 'downloadFile()'
+		// - resumeOffset
+		// - onlineHash
+		// - driveId
+		// - itemId
+		
 		scope(failure) {
 			if (exists(saveToPath)) {
 				// try and remove the file, catch error
@@ -1101,22 +1107,22 @@ class OneDriveApi {
 			}
 		}
 
-		// Create the required local directory
-		string newPath = dirName(saveToPath);
+		// Create the required local parental path structure if this does not exist
+		string parentalPath = dirName(saveToPath);
 
-		// Does the path exist locally?
-		if (!exists(newPath)) {
+		// Does the parental path exist locally?
+		if (!exists(parentalPath)) {
 			try {
-				if (debugLogging) {addLogEntry("Requested local path does not exist, creating directory structure: " ~ newPath, ["debug"]);}
-				mkdirRecurse(newPath);
+				if (debugLogging) {addLogEntry("Requested local parental path does not exist, creating directory structure: " ~ parentalPath, ["debug"]);}
+				mkdirRecurse(parentalPath);
 				// Has the user disabled the setting of filesystem permissions?
 				if (!appConfig.getValueBool("disable_permission_set")) {
 					// Configure the applicable permissions for the folder
-					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newPath, ["debug"]);}
-					newPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ parentalPath, ["debug"]);}
+					parentalPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
 				} else {
 					// Use inherited permissions
-					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ newPath, ["debug"]);}
+					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ parentalPath, ["debug"]);}
 				}
 			} catch (FileException exception) {
 				// display the error message
@@ -1124,10 +1130,13 @@ class OneDriveApi {
 			}
 		}
 
-		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content?AVOverride=1";
-		// Download file
-		downloadFile(url, saveToPath, fileSize);
-		// Does path exist?
+		// Create the URL to download the file
+		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ itemId ~ "/content?AVOverride=1";
+		
+		// Download file using the URL created above
+		downloadFile(driveId, itemId, url, saveToPath, fileSize, onlineHash, resumeOffset);
+		
+		// Does downloaded file now exist locally?
 		if (exists(saveToPath)) {
 			// Has the user disabled the setting of filesystem permissions?
 			if (!appConfig.getValueBool("disable_permission_set")) {
@@ -1136,7 +1145,7 @@ class OneDriveApi {
 				saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
 			} else {
 				// Use inherited permissions
-				if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ newPath, ["debug"]);}
+				if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ saveToPath, ["debug"]);}
 			}
 		}
 	}
@@ -1369,18 +1378,40 @@ class OneDriveApi {
 		}, validateJSONResponse, callingFunction, lineno);
 	}
 	
-	private void downloadFile(const(char)[] url, string filename, long fileSize, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+	// Download a file based on the URL request
+	private void downloadFile(const(char)[] driveId, const(char)[] itemId, const(char)[] url, string filename, long fileSize, JSONValue onlineHash, long resumeOffset = 0, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
 		
 		// To support marking of partially-downloaded files, 
 		string originalFilename = filename;
 		string downloadFilename = filename ~ ".partial";
+		
+		// To support resumable downloads, configure the 'resumable data' file path
+		string threadResumeDownloadFilePath = appConfig.resumeDownloadFilePath ~ "." ~ generateAlphanumericString();
+		
+		// Create a JSONValue with download state so this can be used when resuming, to evaluate if the online file has changed, and if we are able to resume in a safe manner
+		JSONValue resumeDownloadData = JSONValue([
+				"driveId": JSONValue(to!string(driveId)),
+				"itemId": JSONValue(to!string(itemId)),
+				"onlineHash": onlineHash,
+				"originalFilename": JSONValue(originalFilename),
+				"downloadFilename": JSONValue(downloadFilename),
+				"resumeOffset": JSONValue(to!string(resumeOffset))
+		]);
+		
+		// Validate the JSON response
 		bool validateJSONResponse = false;
+				
 		oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.get, url, false, response);
 
 			if (fileSize >= thresholdFileSize){
+				// If we have a resumable offset to use, set this as the offset to use
+				if (resumeOffset > 0) {
+					curlEngine.setDownloadResumeOffset(resumeOffset);
+				}
+			
 				// Download Progress variables
 				size_t expected_total_segments = 20;
 				
@@ -1496,6 +1527,15 @@ class OneDriveApi {
 								previousProgressPercent = currentDLPercent;
 							}
 						}
+						
+						// Has 'dlnow' changed?
+						if (dlnow > to!long(resumeDownloadData["resumeOffset"].str)) {
+							// Update resumeOffset for this progress event with the latest 'dlnow' value
+							resumeDownloadData["resumeOffset"] = JSONValue(to!string(dlnow));
+					
+							// Save resumable download data - this needs to be saved on every onProgress event that is processed
+							saveResumeDownloadFile(threadResumeDownloadFilePath, resumeDownloadData);
+						}
 					} else {
 						if ((currentDLPercent == 0) && (!barInit)) {
 							// Calculate the output
@@ -1506,14 +1546,34 @@ class OneDriveApi {
 							barInit = true;
 						}
 					}
+					
+					// return
 					return 0;
 				};
 			} else {
-				// No progress bar
+				// No progress bar, no resumable download
 			}
+
+			// Capture the result of the download action
+			auto result = curlEngine.download(originalFilename, downloadFilename);
 			
-			return curlEngine.download(originalFilename, downloadFilename);
+			// Safe remove 'threadResumeDownloadFilePath' as if we get to this point, the file has been download successfully
+			safeRemove(threadResumeDownloadFilePath);
+
+			// Return the applicable result
+			return result;
 		}, validateJSONResponse, callingFunction, lineno);
+	}
+	
+	// Save the resume download data
+	private void saveResumeDownloadFile(string threadResumeDownloadFilePath, JSONValue resumeDownloadData) {
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		try {
+			std.file.write(threadResumeDownloadFilePath, resumeDownloadData.toString());
+		} catch (FileException e) {
+			// display the error message
+			displayFileSystemErrorMessage(e.msg, thisFunctionName);
+		}
 	}
 
 	private JSONValue get(string url, bool skipToken = false, string[string] requestHeaders=null, string callingFunction=__FUNCTION__, int lineno=__LINE__) {

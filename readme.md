@@ -11,7 +11,7 @@ Designed for maximum flexibility and reliability, this powerful and highly confi
 
 
 ## Project Background
-This project originated as a fork of the skilion client in early 2018, after a number of proposed improvements and bug fixes — including [Pull Requests #82 and #314](https://github.com/skilion/onedrive/pulls?q=author%3Aabraunegg) — were not merged and development activity of the skilion client had largely stalled. While it’s unclear whether the original developer was unavailable or had stepped away from the project - bug reports and feature requests remained unanswered for extended periods. In 2020, the developer confirmed they had no intention of maintaining or supporting their work ([reference](https://github.com/skilion/onedrive/issues/518#issuecomment-717604726)).
+This project originated as a fork of the skilion client in early 2018, after a number of proposed improvements and bug fixes — including [Pull Requests #82 and #314](https://github.com/skilion/onedrive/pulls?q=author%3Aabraunegg) — were not merged and development activity of the skilion client had largely stalled. While it’s unclear whether the original developer was unavailable or had stepped away from the project - bug reports and feature requests remained unanswered for extended periods. In 2020, the original developer (skilion) confirmed they had no intention of maintaining or supporting their work ([reference](https://github.com/skilion/onedrive/issues/518#issuecomment-717604726)).
 
 The original [skilion repository](https://github.com/skilion/onedrive) was formally archived and made read-only on GitHub in December 2024. While still publicly accessible as a historical reference, an archived repository is no longer maintained, cannot accept contributions, and reflects a frozen snapshot of the codebase. The last code change to the skilion client was merged in November 2021; however, active development had slowed significantly well before then. As such, the skilion client should no longer be considered current or supported — particularly given the major API changes and evolving Microsoft OneDrive platform requirements since that time.
 
@@ -31,6 +31,7 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 * Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
 * Protects against significant data loss on OneDrive after configuration changes
 * Supports a dry-run option for safe configuration testing
+* Supports interruption-tolerant uploads and downloads by resuming file transfers from the point of failure, ensuring data integrity and efficiency
 * Validates file transfers to ensure data integrity
 * Caches sync state for efficiency
 * Monitors local files in real-time using inotify

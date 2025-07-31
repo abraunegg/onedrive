@@ -842,17 +842,28 @@ int main(string[] cliArgs) {
 		string localPath = ".";
 		string remotePath = "/";
 		
-		// If not performing a --resync , interrupted upload session(s)		
+		// If not performing a --resync, check if there are interrupted downloads and/or uploads that need to be completed
 		if (!appConfig.getValueBool("resync")) {
+			// Check if there are any downloads that need to be resumed
+			if (syncEngineInstance.checkForResumableDownloads) {
+				// Need to re-process the the 'resumable data' to resume the download
+				addLogEntry("There are interrupted downloads that need to be resumed ...");
+				// Process the resumable download files
+				syncEngineInstance.processResumableDownloadFiles();
+			}
+			
 			// Check if there are interrupted upload session(s)
 			if (syncEngineInstance.checkForInterruptedSessionUploads) {
 				// Need to re-process the session upload files to resume the failed session uploads
 				addLogEntry("There are interrupted session uploads that need to be resumed ...");
 				// Process the session upload files
-				syncEngineInstance.processForInterruptedSessionUploads();
+				syncEngineInstance.processInterruptedSessionUploads();
 			}
 		} else {
-			// Clean up any upload session files due to --resync being used
+			// Clean up any downloads that were due to be resumed, but will not be resumed due to --resync being used
+			syncEngineInstance.clearInterruptedDownloads();
+			
+			// Clean up any uploads that were due to be resumed, but will not be resumed due to --resync being used
 			syncEngineInstance.clearInterruptedSessionUploads();
 		}
 		
