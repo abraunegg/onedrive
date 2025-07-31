@@ -282,15 +282,96 @@ There are a few options here which you can configure in your 'config' file to as
 By default, this uses a value of 1000 files|folders. An undesirable unmount if you have more than 1000 files, this default level will prevent the client from executing the online delete. Modify this value up or down as desired
 
 ### check_nomount & check_nosync
-These two options are really the right safe guards to use.
 
-In your 'mount point', *before* you mount your external folder|device, create empty `.nosync` file, so that this is the *only* file present in the mount location before you mount your data to your mount point. When you mount your data, this '.nosync' file will not be visible, but, if the device you are mounting goes away - this '.nosync' file is the only file visible.
+When configuring the OneDrive client to use a directory on a mounted volume (e.g., external disk, USB device, network share), it is essential to guard against accidental sync deletion if the mount point becomes unavailable.
 
-Next, in your 'config' file, configure the following options: `check_nomount = "true"` and `check_nosync = "true"`
+If a mount is lost or not yet available at the time of sync, the 'sync_dir' may appear empty, leading the client to delete the corresponding online content. To safely prevent this, enable the following configuration options:
+```
+check_nomount = "true"
+check_nosync  = "true"
+```
+These settings instruct the client to:
+* Check for the presence of a `.nosync` file in the 'sync_dir' before syncing
+* Halt syncing immediately if the file is detected, assuming the mount has failed or not available
 
-What this will do is tell the client, if at *any* point you see this file - stop syncing - thus, protecting your online data from being deleted by the mounted device being suddenly unavailable.
+#### How the `.nosync` file works
+1. The `.nosync` file is placed on the local filesystem, in the exact directory that will later be covered by the mounted volume.
+2. Once the external device is mounted, that directory (and the `.nosync` file) becomes hidden by the mount.
+3. If the mount disappears or fails, the `.nosync` file becomes visible again.
+4. The OneDrive client detects this and stops syncing, preventing accidental deletions due to the mount being unavailable.
 
-After making this sort of change - test with `--dry-run` so you can see the impacts of your mount point being unavailable, and how the client is now reacting. Once you are happy with how the system will react, restart your sync processes.
+#### Scenario 1: 'sync_dir' points directly to a mounted path
+```
+sync_dir = "/mnt/external/path/to/users/data/location/OneDrive"
+check_nomount = "true"
+check_nosync  = "true"
+```
+
+**Step 1:** Before mounting the device, prepare the `.nosync` file
+```
+sudo mkdir -p /mnt/external/path/to/users/data/location/OneDrive
+sudo touch /mnt/external/path/to/users/data/location/OneDrive/.nosync
+```
+
+**Step 2:** Test the 'onedrive' Client
+```
+onedrive -s
+```
+with the output
+```
+...
+Configuring Global Azure AD Endpoints
+ERROR: .nosync file found in directory mount point. Aborting application startup process to safeguard data.
+Attempting to perform a database vacuum to optimise database
+...
+```
+
+**Step 3:** Mount your device (e.g., via systemd, fstab, or manually)
+```
+sudo mount /dev/sdX1 /mnt/external
+```
+
+**Result:**
+The OneDrive client will now treat `/mnt/external/path/to/users/data/location/OneDrive` as the sync_dir. If the mount is ever lost, the `.nosync` file becomes visible again, and syncing is halted. 
+
+#### Scenario 2: 'sync_dir' is a symbolic link to a mounted directory
+```
+sync_dir = "~/OneDrive"
+check_nomount = "true"
+check_nosync  = "true"
+```
+and
+```
+$ ls -l ~/OneDrive
+lrwxrwxrwx 1 user user 29 Jul 25 14:44 OneDrive -> /mnt/external/path/to/users/data/location/OneDrive
+```
+
+**Step 1:** Before mounting the device, prepare the `.nosync` file
+```
+sudo mkdir -p /mnt/external/path/to/users/data/location/OneDrive
+sudo touch /mnt/external/path/to/users/data/location/OneDrive/.nosync
+```
+
+**Step 2:** Test the 'onedrive' Client
+```
+onedrive -s
+```
+with the output
+```
+...
+Configuring Global Azure AD Endpoints
+ERROR: .nosync file found in directory mount point. Aborting application startup process to safeguard data.
+Attempting to perform a database vacuum to optimise database
+...
+```
+
+**Step 3:** Mount your device (e.g., via systemd, fstab, or manually)
+```
+sudo mount /dev/sdX1 /mnt/external
+```
+
+**Result:**
+Your symlinked `~/OneDrive` path will now point into the mounted filesystem. If the mount goes missing, the `.nosync` file reappears via the symlink, and the client halts syncing automatically.
 
 
 ## Upload data from the local ~/OneDrive folder to a specific location on OneDrive
