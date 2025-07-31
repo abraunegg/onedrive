@@ -1,13 +1,21 @@
 ARG DEBIAN_VERSION=bookworm
 FROM debian:${DEBIAN_VERSION} AS builder-onedrive
 
-# Enable backports, pin them and install build tools
-RUN echo "deb http://deb.debian.org/debian bookworm-backports main" > /etc/apt/sources.list.d/backports.list \
- && echo -e "Package: *\nPin: release a=bookworm-backports\nPin-Priority: 500" > /etc/apt/preferences.d/backports \
+# Enable backports and install build tools
+RUN echo "deb http://deb.debian.org/debian ${DEBIAN_VERSION}-backports main" > /etc/apt/sources.list.d/backports.list \
  && apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      build-essential curl ca-certificates libcurl4-openssl-dev libsqlite3-dev libxml2-dev libdbus-1-dev pkg-config git ldc \
- && apt-get install -t bookworm-backports -y curl \
+      build-essential \
+      curl \
+      ca-certificates \
+      libcurl4-openssl-dev \
+      libsqlite3-dev \
+      libxml2-dev \
+      libdbus-1-dev \
+      pkg-config \
+      git \
+      ldc \
+ && apt-get install -t ${DEBIAN_VERSION}-backports -y curl \
  && rm -rf /var/lib/apt/lists/*
 
 COPY . /usr/src/onedrive
@@ -20,27 +28,30 @@ RUN ./configure --enable-debug \
 
 FROM debian:${DEBIAN_VERSION}-slim
 
-# Add backports and pin as before
-RUN echo "deb http://deb.debian.org/debian bookworm-backports main" > /etc/apt/sources.list.d/backports.list \
- && echo -e "Package: *\nPin: release a=bookworm-backports\nPin-Priority: 500" > /etc/apt/preferences.d/backports \
+# Enable backports and install runtime dependencies
+RUN echo "deb http://deb.debian.org/debian ${DEBIAN_VERSION}-backports main" > /etc/apt/sources.list.d/backports.list \
  && apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      libsqlite3-0 ca-certificates libphobos2-ldc-shared100 libdbus-1-3 curl libcurl4 \
+      libsqlite3-0 \
+      ca-certificates \
+      libphobos2-ldc-shared100 \
+      libdbus-1-3 \
+ && apt-get install -t ${DEBIAN_VERSION}-backports -y curl libcurl4 \
  && rm -rf /var/lib/apt/lists/*
 
-# Install trusted upstream gosu v1.17 (built against Go 1.18.2)
+# Install gosu v1.17 from trusted upstream source (built against Go 1.18.2)
 RUN set -eux; \
     arch="$(dpkg --print-architecture)"; \
-    url="https://github.com/tianon/gosu/releases/download/1.17/gosu-${arch}"; \
-    curl -fsSL "$url" -o /usr/local/bin/gosu; \
-    curl -fsSL "$url.asc" -o gosu.asc; \
+    curl -fsSL "https://github.com/tianon/gosu/releases/download/1.17/gosu-${arch}" -o /usr/local/bin/gosu; \
+    curl -fsSL "https://github.com/tianon/gosu/releases/download/1.17/gosu-${arch}.asc" -o gosu.asc; \
+    export GNUPGHOME="$(mktemp -d)"; \
     gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \
-    gpg --batch --verify gosu.asc gosu; \
+    gpg --batch --verify gosu.asc /usr/local/bin/gosu; \
+    rm -rf "$GNUPGHOME" gosu.asc; \
     chmod +x /usr/local/bin/gosu; \
-    gosu nobody true; \
-    rm -f gosu.asc
+    gosu nobody true
 
-# Fix SSL certs for armhf and create dirs
+# Fix SSL certs (needed for armhf) and create dirs
 RUN /usr/bin/c_rehash \
  && mkdir -p /onedrive/conf /onedrive/data
 
