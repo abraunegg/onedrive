@@ -1396,6 +1396,12 @@ bool hasSHA256HashResume(const ref JSONValue item) {
 	return ("sha256Hash" in item["onlineHash"]) != null;
 }
 
+// Test if a path is the equivalent of root '.'
+bool isRootEquivalent(string inputPath) {
+	auto normalisedPath = buildNormalizedPath(inputPath);
+	return normalisedPath == "." || normalisedPath == "";
+}
+
 // Convert bytes to GB
 string byteToGibiByte(ulong bytes) {
     if (bytes == 0) {

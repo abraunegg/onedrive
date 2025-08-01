@@ -7907,7 +7907,20 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// Log what we are doing
+		// Is this a valid path to create?
+		// We need to avoid this sort of error:
+		//
+		//		OneDrive generated an error when creating this path: .
+
+		//		ERROR: Microsoft OneDrive API returned an error with the following message:
+		//		  Error Message:       HTTP request returned status code 400 (Bad Request)
+		//		  Error Reason:        Invalid request
+		//		  Error Code:          invalidRequest
+		//		  Error Timestamp:     2025-08-01T21:08:26
+		//		  API Request ID:      dca77bd6-1e9a-432a-bc6c-1c6b5380745d
+		if (isRootEquivalent(thisNewPathToCreate)) return;
+		
+		// Log what path we are attempting to create online
 		if (verboseLogging) {addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate, ["verbose"]);}
 		
 		// Function variables
