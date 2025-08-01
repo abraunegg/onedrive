@@ -10,8 +10,7 @@ RUN apt-get clean \
  && apt-get update \
  && apt-get upgrade -y \
  && apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      build-essential curl ca-certificates libcurl4-openssl-dev libsqlite3-dev libxml2-dev libdbus-1-dev pkg-config git ldc \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential curl ca-certificates libcurl4-openssl-dev libsqlite3-dev libxml2-dev libdbus-1-dev pkg-config git ldc \
  # Install|update curl from backports
  && apt-get install -t bookworm-backports -y curl \
  && rm -rf /var/lib/apt/lists/*
@@ -19,20 +18,19 @@ RUN apt-get clean \
 COPY . /usr/src/onedrive
 WORKDIR /usr/src/onedrive
 
-RUN ./configure --enable-debug \
+RUN ./configure --enable-debug\
  && make clean \
  && make \
  && make install
 
 FROM debian:${DEBIAN_VERSION}-slim
 
-# Add backports repository and update
+# Add backports repository and update after DEBIAN_FRONTEND installation
 RUN apt-get clean \
  && echo "deb http://deb.debian.org/debian bookworm-backports main" > /etc/apt/sources.list.d/debian-12-backports.list \
  && apt-get update \
  && apt-get upgrade -y \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      libsqlite3-0 ca-certificates libphobos2-ldc-shared100 libdbus-1-3 \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsqlite3-0 ca-certificates libphobos2-ldc-shared100 libdbus-1-3 \
  # Install|update curl and libcurl4 from backports
  && apt-get install -t bookworm-backports -y curl libcurl4 \
  && rm -rf /var/lib/apt/lists/* \
@@ -46,10 +44,6 @@ RUN set -eux; \
     curl -fsSL -o /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/1.17/gosu-${arch}"; \
     chmod +x /usr/local/bin/gosu; \
     gosu nobody true
-
-# Fix SSL certs (needed for armhf) and create dirs
-RUN /usr/bin/c_rehash \
- && mkdir -p /onedrive/conf /onedrive/data
 
 COPY --from=builder-onedrive /usr/local/bin/onedrive /usr/local/bin/
 
