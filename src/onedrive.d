@@ -1559,6 +1559,9 @@ class OneDriveApi {
 			
 			// Safe remove 'threadResumeDownloadFilePath' as if we get to this point, the file has been download successfully
 			safeRemove(threadResumeDownloadFilePath);
+			
+			// Reset this curlEngine offset value now that the file has been downloaded successfully
+			curlEngine.resetDownloadResumeOffset();
 
 			// Return the applicable result
 			return result;
