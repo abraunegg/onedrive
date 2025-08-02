@@ -365,87 +365,95 @@ final class Monitor {
 			if (verboseLogging) {addLogEntry("Not adding non-existing/disappeared directory: " ~ dirname, ["verbose"]);}
 			return;
 		}
-
-		// Skip the monitoring of any user filtered items
-		if (dirname != ".") {
-			// Is the directory name a match to a skip_dir entry?
-			// The path that needs to be checked needs to include the '/'
-			// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
-			if (isDir(dirname)) {
-				if (selectiveSync.isDirNameExcluded(dirname.strip('.'))) {
-					// dont add a watch for this item
-					if (debugLogging) {addLogEntry("Skipping monitoring due to skip_dir match: " ~ dirname, ["debug"]);}
-					return;
-				}
-			}
-			if (isFile(dirname)) {
-				// Is the filename a match to a skip_file entry?
+		
+		// Issue #3404: If the file is a very short lived file, and exists when the above test is done, but then is removed shortly thereafter, we need to catch this as a filesystem exception
+		try {
+			// Skip the monitoring of any user filtered items
+			if (dirname != ".") {
+				// Is the directory name a match to a skip_dir entry?
 				// The path that needs to be checked needs to include the '/'
-				// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
-				if (selectiveSync.isFileNameExcluded(dirname.strip('.'))) {
-					// dont add a watch for this item
-					if (debugLogging) {addLogEntry("Skipping monitoring due to skip_file match: " ~ dirname, ["debug"]);}
-					return;
-				}
-			}
-			// Is the path excluded by sync_list?
-			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
-				// dont add a watch for this item
-				if (debugLogging) {addLogEntry("Skipping monitoring parent path due to sync_list exclusion: " ~ dirname, ["debug"]);}
-				
-				// However before we return, we need to test this path tree as a branch on this tree may be included by an anywhere exclusion rule. Do 'anywhere' inclusion rules exist?
+				// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
 				if (isDir(dirname)) {
-					// Do any 'sync_list' anywhere inclusion rules exist?
-					if (selectiveSync.syncListAnywhereInclusionRulesExist()) {
-						// Yes ..
-						if (debugLogging) {addLogEntry("Bypassing 'sync_list' exclusion to test if children should be monitored due to 'sync_list' anywhere rule existence", ["debug"]);}
-						// Traverse this directory
-						traverseDirectory(dirname);
+					if (selectiveSync.isDirNameExcluded(dirname.strip('.'))) {
+						// dont add a watch for this item
+						if (debugLogging) {addLogEntry("Skipping monitoring due to skip_dir match: " ~ dirname, ["debug"]);}
+						return;
 					}
 				}
-				
-				// For the original path, we return, no inotify watch was added
-				return;
+				if (isFile(dirname)) {
+					// Is the filename a match to a skip_file entry?
+					// The path that needs to be checked needs to include the '/'
+					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
+					if (selectiveSync.isFileNameExcluded(dirname.strip('.'))) {
+						// dont add a watch for this item
+						if (debugLogging) {addLogEntry("Skipping monitoring due to skip_file match: " ~ dirname, ["debug"]);}
+						return;
+					}
+				}
+				// Is the path excluded by sync_list?
+				if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
+					// dont add a watch for this item
+					if (debugLogging) {addLogEntry("Skipping monitoring parent path due to sync_list exclusion: " ~ dirname, ["debug"]);}
+					
+					// However before we return, we need to test this path tree as a branch on this tree may be included by an anywhere exclusion rule. Do 'anywhere' inclusion rules exist?
+					if (isDir(dirname)) {
+						// Do any 'sync_list' anywhere inclusion rules exist?
+						if (selectiveSync.syncListAnywhereInclusionRulesExist()) {
+							// Yes ..
+							if (debugLogging) {addLogEntry("Bypassing 'sync_list' exclusion to test if children should be monitored due to 'sync_list' anywhere rule existence", ["debug"]);}
+							// Traverse this directory
+							traverseDirectory(dirname);
+						}
+					}
+					
+					// For the original path, we return, no inotify watch was added
+					return;
+				}
 			}
-		}
-		
-		// skip symlinks if configured
-		if (isSymlink(dirname)) {
-			// if config says so we skip all symlinked items
-			if (skip_symlinks) {
-				// dont add a watch for this directory
-				return;
+			
+			// skip symlinks if configured
+			if (isSymlink(dirname)) {
+				// if config says so we skip all symlinked items
+				if (skip_symlinks) {
+					// dont add a watch for this directory
+					return;
+				}
 			}
-		}
-		
-		// Do we need to check for .nosync? Only if check_nosync is true
-		if (check_nosync) {
-			if (exists(buildNormalizedPath(dirname) ~ "/.nosync")) {
-				if (verboseLogging) {addLogEntry("Skipping watching path - .nosync found & --check-for-nosync enabled: " ~ buildNormalizedPath(dirname), ["verbose"]);}
-				return;
+			
+			// Do we need to check for .nosync? Only if check_nosync is true
+			if (check_nosync) {
+				if (exists(buildNormalizedPath(dirname) ~ "/.nosync")) {
+					if (verboseLogging) {addLogEntry("Skipping watching path - .nosync found & --check-for-nosync enabled: " ~ buildNormalizedPath(dirname), ["verbose"]);}
+					return;
+				}
 			}
-		}
 
-		if (isDir(dirname)) {
-			// This is a directory			
-			// is the path excluded if skip_dotfiles configured and path is a .folder?
-			if ((selectiveSync.getSkipDotfiles()) && (isDotFile(dirname))) {
-				// dont add a watch for this directory
-				return;
+			if (isDir(dirname)) {
+				// This is a directory			
+				// is the path excluded if skip_dotfiles configured and path is a .folder?
+				if ((selectiveSync.getSkipDotfiles()) && (isDotFile(dirname))) {
+					// dont add a watch for this directory
+					return;
+				}
 			}
-		}
-		
-		// passed all potential exclusions
-		// add inotify watch for this path / directory / file
-		if (debugLogging) {addLogEntry("Calling worker.addInotifyWatch() for this dirname: " ~ dirname, ["debug"]);}
-		int wd = worker.addInotifyWatch(dirname);
-		if (wd > 0) {
-			wdToDirName[wd] = buildNormalizedPath(dirname) ~ "/";
-		}
-		
-		// if this is a directory, recursively add this path
-		if (isDir(dirname)) {
-			traverseDirectory(dirname);
+			
+			// passed all potential exclusions
+			// add inotify watch for this path / directory / file
+			if (debugLogging) {addLogEntry("Calling worker.addInotifyWatch() for this dirname: " ~ dirname, ["debug"]);}
+			int wd = worker.addInotifyWatch(dirname);
+			if (wd > 0) {
+				wdToDirName[wd] = buildNormalizedPath(dirname) ~ "/";
+			}
+			
+			// if this is a directory, recursively add this path
+			if (isDir(dirname)) {
+				traverseDirectory(dirname);
+			}
+		// Catch any FileException error which is generated
+		} catch (std.file.FileException e) {
+			// Standard filesystem error
+			displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+			return;
 		}
 	}
 	
@@ -460,7 +468,7 @@ final class Monitor {
 					addRecursive(entry.name);
 				}
 			}
-		// Catch any error which is generated
+		// Catch any FileException error which is generated
 		} catch (std.file.FileException e) {
 			// Standard filesystem error
 			displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
