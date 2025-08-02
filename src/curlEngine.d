@@ -598,6 +598,11 @@ class CurlEngine {
 	void setDownloadResumeOffset(long offset) {
 		resumeFromOffset = offset;
 	}
+	
+	// reset resumable offset point to negative value
+	void resetDownloadResumeOffset() {
+		resumeFromOffset = -1;
+	}
 }
 
 // Methods to control obtaining and releasing a CurlEngine instance from the curlEnginePool
