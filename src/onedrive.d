@@ -2030,8 +2030,9 @@ class OneDriveApi {
 	
 	// Calculates the delay for exponential backoff
 	private int calculateBackoff(int retryAttempts, int baseInterval, int maxInterval) {
-		int backoffTime = min(pow(2, retryAttempts) * baseInterval, maxInterval);
-		return backoffTime;
+		int cappedAttempts = min(retryAttempts, 10); // Prevent exponent overflow
+		int backoff = baseInterval * (1 << cappedAttempts);
+		return min(backoff, maxInterval);
 	}
 	
 	// Configure libcurl to perform a fresh connection
