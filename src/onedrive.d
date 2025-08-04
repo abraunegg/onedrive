@@ -1794,7 +1794,7 @@ class OneDriveApi {
 								thisBackOffInterval = calculateBackoff(retryAttempts, baseBackoffInterval, maxBackoffInterval);
 								if (thisBackOffInterval <= 0) {
 									thisBackOffInterval = 1;
-									addLogEntry("WARNING: Enforcing minimum backoff interval of 1 second – unclassified CurlException may be present");
+									addLogEntry("WARNING: Enforcing minimum backoff interval of 1 second – unclassified CurlException");
 								}
 							}
 						}
