@@ -1714,7 +1714,7 @@ class OneDriveApi {
 				
 				// Detail the curl exception, debug output only
 				if (debugLogging) {
-					addLogEntry("Handling a specific Curl exception:", ["debug"]);
+					addLogEntry("Handling a curl exception:", ["debug"]);
 					addLogEntry(to!string(response), ["debug"]);
 				}
 				
@@ -1727,17 +1727,26 @@ class OneDriveApi {
 				setFreshConnectOption();
 
 				// What is contained in the curl error message?
-				if (canFind(errorMessage, "Couldn't connect to server on handle") || canFind(errorMessage, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
+				// Handle the following:
+				// - Couldn't connect to server on handle
+				// - Could not connect to server on handle (changed noticed in curl 8.14.1, possibly done earlier ...)
+				// - Couldn't resolve host name on handle
+				// - Could not resolve host name on handle (changed noticed in curl 8.14.1, possibly done earlier ...)
+				// - Timeout was reached on handle
+				if (canFind(errorMessage, "connect to server on handle") || canFind(errorMessage, "resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
 					// Connectivity to Microsoft OneDrive was lost
 					addLogEntry("Internet connectivity to Microsoft OneDrive service has been interrupted .. re-trying in the background");
 					
 					// What caused the initial curl exception?
-					if (canFind(errorMessage, "Couldn't resolve host name on handle")) {
+					// - DNS resolution issue
+					if (canFind(errorMessage, "resolve host name on handle")) {
 						if (debugLogging) {addLogEntry("Unable to resolve server - DNS access blocked?", ["debug"]);}
 					}
-					if (canFind(errorMessage, "Couldn't connect to server on handle")) {
+					// - connection issue
+					if (canFind(errorMessage, "connect to server on handle")) {
 						if (debugLogging) {addLogEntry("Unable to connect to server - HTTPS access blocked?", ["debug"]);}
 					}
+					// - timeout issue
 					if (canFind(errorMessage, "Timeout was reached on handle")) {
 						// Common cause is libcurl trying IPv6 DNS resolution when there are only IPv4 DNS servers available
 						if (verboseLogging) {
@@ -1777,11 +1786,21 @@ class OneDriveApi {
 								throw new OneDriveError("Zero disk space detected");
 							}
 						} else {
-							// Unknown error
+							// Unknown curl error
 							displayGeneralErrorMessage(exception, callingFunction, lineno);
+							
+							// Fallback: Ensure retry interval is enforced in case of unknown CurlException
+							if (thisBackOffInterval == 0) {
+								thisBackOffInterval = calculateBackoff(retryAttempts, baseBackoffInterval, maxBackoffInterval);
+								if (thisBackOffInterval <= 0) {
+									thisBackOffInterval = 1;
+									addLogEntry("WARNING: Enforcing minimum backoff interval of 1 second – unclassified CurlException may be present");
+								}
+							}
 						}
 					}
 				}
+				
 			// A OneDrive API exception was thrown
 			} catch (OneDriveException exception) {
 				// https://developer.overdrive.com/docs/reference-guide
