@@ -2112,54 +2112,46 @@ class SyncEngine {
 			
 			// Calculate the local path of this JSON item, but we can only do this if the parent is in the database
 			if (parentInDatabase) {
-				// Use the original method of calculation for Personal Accounts
-				if (appConfig.accountType == "personal") {
-					// Personal Accounts
-					// Compute the full local path for an item based on its position within the OneDrive hierarchy
-					newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-				} else {
-					// Business Accounts
-					// Compute the full local path for an item based on its position within the OneDrive hierarchy
-					// This also accounts for Shared Folders in our account root, plus Shared Folders in a folder (relocated shared folders)
-					computedItemPath = computeItemPath(thisItemDriveId, thisItemParentId);
-					
-					// Is 'thisItemParentId' in the DB as a 'root' object?
-					Item databaseItem;
-					
-					// Is this a remote drive?
-					if (thisItemDriveId != appConfig.defaultDriveId) {
-						// query the database for the actual thisItemParentId record
-						itemDB.selectById(thisItemDriveId, thisItemParentId, databaseItem);
-					}
-					
-					// Calculate newItemPath to
-					// This needs to factor in:
-					// - Shared Folders = ItemType.root with a name of 'root'
-					// - SharePoint Document Root = ItemType.root with a name of the actual shared folder
-					// - Relocatable Shared Folders where a user moves a Shared Folder Link to a sub folder elsewhere within their directory structure online
-					if (databaseItem.type == ItemType.root) {
-						// 'root' database object
-						if (databaseItem.name == "root") {
-							// OneDrive Business Shared Folder 'root' shortcut link
+				// Compute the full local path for an item based on its position within the OneDrive hierarchy
+				// This also accounts for Shared Folders in our account root, plus Shared Folders in a folder (relocated shared folders)
+				computedItemPath = computeItemPath(thisItemDriveId, thisItemParentId);
+				
+				// Is 'thisItemParentId' in the DB as a 'root' object?
+				Item databaseItem;
+				
+				// Is this a remote drive?
+				if (thisItemDriveId != appConfig.defaultDriveId) {
+					// query the database for the actual thisItemParentId record
+					itemDB.selectById(thisItemDriveId, thisItemParentId, databaseItem);
+				}
+				
+				// Calculate newItemPath to
+				// This needs to factor in:
+				// - Shared Folders = ItemType.root with a name of 'root'
+				// - SharePoint Document Root = ItemType.root with a name of the actual shared folder
+				// - Relocatable Shared Folders where a user moves a Shared Folder Link to a sub folder elsewhere within their directory structure online
+				if (databaseItem.type == ItemType.root) {
+					// 'root' database object
+					if (databaseItem.name == "root") {
+						// OneDrive Business Shared Folder 'root' shortcut link
+						// If the record type is now a root record, we dont want to add the name to itself
+						newItemPath = computedItemPath;
+					} else {
+						// OneDrive Business SharePoint Document 'root' shortcut link
+						if (databaseItem.name == thisItemName) {
 							// If the record type is now a root record, we dont want to add the name to itself
 							newItemPath = computedItemPath;
 						} else {
-							// OneDrive Business SharePoint Document 'root' shortcut link
-							if (databaseItem.name == thisItemName) {
-								// If the record type is now a root record, we dont want to add the name to itself
-								newItemPath = computedItemPath;
-							} else {
-								// add the item name to the computed path
-								newItemPath = computedItemPath ~ "/" ~ thisItemName;
-							}
+							// add the item name to the computed path
+							newItemPath = computedItemPath ~ "/" ~ thisItemName;
 						}
-						
-						// Set this for later use
-						rootSharedFolder = true;
-					} else {
-						// Add the item name to the computed path
-						newItemPath = computedItemPath ~ "/" ~ thisItemName;
 					}
+					
+					// Set this for later use
+					rootSharedFolder = true;
+				} else {
+					// Add the item name to the computed path
+					newItemPath = computedItemPath ~ "/" ~ thisItemName;
 				}
 				
 				// debug logging of what was calculated
@@ -2872,22 +2864,20 @@ class SyncEngine {
 					string relocatedFolderDriveId;
 					string relocatedFolderParentId;
 					
-					// Is this a relocated Shared Folder? OneDrive Business supports the relocation of Shared Folder links to other folders
-					if (appConfig.accountType != "personal") {
-						// Is this parentId equal to our defaultRootId .. if not it is highly likely that this Shared Folder is in a sub folder in our online folder structure
-						if (newDatabaseItem.parentId != appConfig.defaultRootId) {
-							// The parentId is not our defaultRootId .. most likely a relocated shared folder
-							if (debugLogging) {
-								addLogEntry("The folder path for this Shared Folder is not our account root, thus is a relocated Shared Folder item. We must pass in the correct parent details for this Shared Folder 'root' object" , ["debug"]);
-								// What are we setting
-								addLogEntry("Setting relocatedFolderDriveId to:  " ~ newDatabaseItem.driveId);
-								addLogEntry("Setting relocatedFolderParentId to: " ~ newDatabaseItem.parentId);
-							}
-							
-							// Configure the relocated folders data
-							relocatedFolderDriveId = newDatabaseItem.driveId;
-							relocatedFolderParentId = newDatabaseItem.parentId;
+					// Is this a relocated Shared Folder? OneDrive Personal and Business supports the relocation of Shared Folder links to other folders
+					// Is this parentId equal to our defaultRootId .. if not it is highly likely that this Shared Folder is in a sub folder in our online folder structure
+					if (newDatabaseItem.parentId != appConfig.defaultRootId) {
+						// The parentId is not our defaultRootId .. most likely a relocated shared folder
+						if (debugLogging) {
+							addLogEntry("The folder path for this Shared Folder is not our account root, thus is a relocated Shared Folder item. We must pass in the correct parent details for this Shared Folder 'root' object" , ["debug"]);
+							// What are we setting
+							addLogEntry("Setting relocatedFolderDriveId to:  " ~ newDatabaseItem.driveId);
+							addLogEntry("Setting relocatedFolderParentId to: " ~ newDatabaseItem.parentId);
 						}
+						
+						// Configure the relocated folders data
+						relocatedFolderDriveId = newDatabaseItem.driveId;
+						relocatedFolderParentId = newDatabaseItem.parentId;
 					}
 					
 					// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
@@ -3130,24 +3120,22 @@ class SyncEngine {
 				string relocatedFolderDriveId;
 				string relocatedFolderParentId;
 				
-				// Is this a relocated Shared Folder? OneDrive Business supports the relocation of Shared Folder links to other folders
-				if (appConfig.accountType != "personal") {
-					// Is this parentId equal to our defaultRootId .. if not it is highly likely that this Shared Folder is in a sub folder in our online folder structure
-					if (newDatabaseItem.parentId != appConfig.defaultRootId) {
-						// The parentId is not our defaultRootId .. most likely a relocated shared folder
-						if (debugLogging) {
-							addLogEntry("The folder path for this Shared Folder is not our account root, thus is a relocated Shared Folder item. We must pass in the correct parent details for this Shared Folder 'root' object" , ["debug"]);
-							// What are we setting
-							addLogEntry("Setting relocatedFolderDriveId to:  " ~ newDatabaseItem.driveId);
-							addLogEntry("Setting relocatedFolderParentId to: " ~ newDatabaseItem.parentId);
-						}
-						
-						// Configure the relocated folders data
-						relocatedFolderDriveId = newDatabaseItem.driveId;
-						relocatedFolderParentId = newDatabaseItem.parentId;
+				// Is this a relocated Shared Folder? OneDrive Personal and Business supports the relocation of Shared Folder links to other folders
+				// Is this parentId equal to our defaultRootId .. if not it is highly likely that this Shared Folder is in a sub folder in our online folder structure
+				if (newDatabaseItem.parentId != appConfig.defaultRootId) {
+					// The parentId is not our defaultRootId .. most likely a relocated shared folder
+					if (debugLogging) {
+						addLogEntry("The folder path for this Shared Folder is not our account root, thus is a relocated Shared Folder item. We must pass in the correct parent details for this Shared Folder 'root' object" , ["debug"]);
+						// What are we setting
+						addLogEntry("Setting relocatedFolderDriveId to:  " ~ newDatabaseItem.driveId);
+						addLogEntry("Setting relocatedFolderParentId to: " ~ newDatabaseItem.parentId);
 					}
+					
+					// Configure the relocated folders data
+					relocatedFolderDriveId = newDatabaseItem.driveId;
+					relocatedFolderParentId = newDatabaseItem.parentId;
 				}
-				
+			
 				// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 				// We pass in the JSON element so we can create the right records + if this is a relocated shared folder, give the local parental record identifier
 				createRequiredSharedFolderDatabaseRecords(onedriveJSONItem, relocatedFolderDriveId, relocatedFolderParentId);
@@ -13780,7 +13768,7 @@ class SyncEngine {
 		// Ensure there is no parentId for this DB record
 		tieDBItem.parentId = null;
 		
-		// OneDrive Business supports relocating Shared Folders to other folders.
+		// OneDrive Personal and Business supports relocating Shared Folders to other folders.
 		// This means, in our DB, we need this DB record to have the correct parentId of the parental folder, if this is relocated shared folder
 		// This is stored in the 'relocParentId' DB entry
 		// This 'relocatedFolderParentId' variable is only ever set if using OneDrive Business account types and the shared folder is located online in another folder
