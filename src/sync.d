@@ -4419,7 +4419,7 @@ class SyncEngine {
 		if (debugLogging) {
 			string initialComputeLogMessage = format("Attempting to calculate local filesystem path for '%s' and '%s'", thisDriveId, thisItemId);
 			addLogEntry(initialComputeLogMessage, ["debug"]);
-			}
+		}
 		
 		// Perform the original calculation of the path using the values provided
 		try {
