@@ -968,7 +968,12 @@ final class ItemDatabase {
 			string driveId = driveIdInput.idup;
 			string id = itemIdInput.idup;
 			Item item;
-			
+
+			// Remember the highest non-root node we saw in this drive
+			string anchorCandidateDriveId;
+			string anchorCandidateItemId;
+
+			// DB Statements
 			auto s = db.prepare("SELECT * FROM item WHERE driveId = ?1 AND id = ?2");
 			auto s2 = db.prepare("SELECT driveId, id FROM item WHERE remoteDriveId = ?1 AND remoteId = ?2");
 
@@ -976,7 +981,8 @@ final class ItemDatabase {
 				s.finalise(); // Ensure that the prepared statement is finalised after execution.
 				s2.finalise(); // Ensure that the prepared statement is finalised after execution.
 			}
-
+			
+			// Attempt to compute the path based on the elements provided
 			try {
 				while (true) {
 					s.bind(1, driveId);
@@ -986,38 +992,51 @@ final class ItemDatabase {
 					if (!r.empty) {
 						item = buildItem(r);
 
-						// Skip only if name == "root" AND item.type == ItemType.root
-						bool skipAppend = (item.name == "root") && (item.type == ItemType.root);
+						// Track the highest non-root row we encounter
+						if (item.type != ItemType.root) {
+							anchorCandidateDriveId = driveId;
+							anchorCandidateItemId  = item.id;
+						}
 
+						// Build path (your existing behaviour)
+						const bool skipAppend = (item.name == "root") && (item.type == ItemType.root);
 						if (!skipAppend) {
 							if (item.type == ItemType.remote) {
-								ptrdiff_t idx = indexOf(path, '/');
-								path = idx >= 0 ? item.name ~ path[idx .. $] : item.name;
+								// replace first segment with remote name
+								auto idx = indexOf(path, '/');
+								path = (idx >= 0) ? item.name ~ path[idx .. $] : item.name;
 							} else {
 								path = path.length ? item.name ~ "/" ~ path : item.name;
 							}
 						}
 
-						// Move up one level
+						// Move up one level (within the same drive)
 						id = item.parentId;
 
-						// Check for relocation
+						// Check for relocation and handle the relocation
 						if (item.type == ItemType.root && item.relocDriveId !is null && item.relocParentId !is null) {
 							driveId = item.relocDriveId;
 							id = item.relocParentId;
 						}
 					} else {
-						// Handle remote-to-dir link
+						// We fell off the top (id == null). Try to jump to the anchor (mount point).
 						if (id == null) {
-							s2.bind(1, item.driveId);
-							s2.bind(2, item.id);
-							auto r2 = s2.exec();
-
-							if (r2.empty) {
-								break;
+							// Use the top-most NON-ROOT we saw, not the root we just processed
+							if (anchorCandidateItemId.length) {
+								s2.bind(1, anchorCandidateDriveId);  // remoteDriveId
+								s2.bind(2, anchorCandidateItemId);   // remoteId (top-most folder)
+								auto r2 = s2.exec();
+								if (r2.empty) {
+									break; // no anchor -> done
+								} else {
+									// Jump into the drive that contains the remote mount point
+									driveId = r2.front[0].dup;
+									id      = r2.front[1].dup;
+									// loop continues; next iteration will fetch the 'remote' row
+								}
 							} else {
-								driveId = r2.front[0].dup;
-								id = r2.front[1].dup;
+								// no candidate (single item or broken tree)
+								break;
 							}
 						} else {
 							// broken database tree
