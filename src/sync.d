@@ -13731,8 +13731,6 @@ class SyncEngine {
 			addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem), ["debug"]);
 		}
 		
-		addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder (Actual 'Shared With Me' Folder Name): ");
-
 		// New DB Tie Item to detail the 'root' of the Shared Folder
 		Item tieDBItem;
 		string lastModifiedTimestamp;
