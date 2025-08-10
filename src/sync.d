@@ -2630,30 +2630,21 @@ class SyncEngine {
 					string existingItemPath = computeItemPath(queryDriveID, queryParentID) ~ "/" ~ existingDatabaseItem.name;
 					if (debugLogging) {addLogEntry("existingItemPath calculated full path is: " ~ existingItemPath, ["debug"]);}
 					
-					addLogEntry("applyPotentiallyChangedItem()");
-					
 					// Attempt to apply this changed item
 					applyPotentiallyChangedItem(existingDatabaseItem, existingItemPath, newDatabaseItem, newItemPath, onedriveJSONItem);
+					
+					// Is this JSON object a 'remote' item?
+					if(isItemRemote(onedriveJSONItem)) {
+						// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
+						createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
+					}
 				} else {
 					// Action this JSON item as a new item as we have no DB record of it
 					// The actual item may actually exist locally already, meaning that just the database is out-of-date or missing the data due to --resync
 					// But we also cannot compute the newItemPath as the parental objects may not exist as well
 					if (debugLogging) {addLogEntry("OneDrive JSON item is potentially a new local item", ["debug"]);}
-					
-					
-					addLogEntry("applyPotentiallyNewLocalItem()");
-					
-					
 					// Attempt to apply this potentially new item
 					applyPotentiallyNewLocalItem(newDatabaseItem, onedriveJSONItem, newItemPath);
-				}
-				
-				// POTENTIALLY HERE ...
-				
-				if(isItemRemote(onedriveJSONItem)) {
-				
-					addLogEntry("JSON ITEM IS A REMOTE OBJECT 1");
-				
 				}
 			}
 			
@@ -6090,16 +6081,6 @@ class SyncEngine {
 							// Save this JSON now
 							saveItem(onedriveJSONItem);
 						}
-						
-						// POTENTIALLY CHECK HERE ??
-						
-						if(isItemRemote(onedriveJSONItem)) {
-				
-							addLogEntry("JSON ITEM IS A REMOTE OBJECT 2");
-						
-						}
-						
-						
 					}
 				}
 			}
