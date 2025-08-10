@@ -998,7 +998,7 @@ final class ItemDatabase {
 							anchorCandidateItemId  = item.id;
 						}
 
-						// Build path (your existing behaviour)
+						// Build path: Skip only if name == "root" AND item.type == ItemType.root
 						const bool skipAppend = (item.name == "root") && (item.type == ItemType.root);
 						if (!skipAppend) {
 							if (item.type == ItemType.remote) {
