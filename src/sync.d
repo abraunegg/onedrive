@@ -1614,6 +1614,10 @@ class SyncEngine {
 			if (debugLogging) {
 				addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
 				addLogEntry("Number of JSON items processed was: " ~ to!string(processedCount), ["debug"]);
+				addLogEntry("", ["debug"]);
+				string jsonProcessingCompleteLineEntry = format("Processing of JSON items from driveId %s and itemId %s is complete", driveIdToQuery, itemIdToQuery);
+				addLogEntry(jsonProcessingCompleteLineEntry, ["debug"]);
+				addLogEntry("", ["debug"]);
 			}
 			
 			// Notification to user regarding number of objects received from OneDrive API
@@ -1706,7 +1710,7 @@ class SyncEngine {
 			// This is not a deleted item
 			if (debugLogging) {addLogEntry("This item is not a OneDrive online deletion change", ["debug"]);}
 			
-			// Only calculate this once
+			// Only calculate these elements once
 			itemIsRoot = isItemRoot(onedriveJSONItem);
 			itemHasParentReferenceId = hasParentReferenceId(onedriveJSONItem);
 			itemIdMatchesDefaultRootId = (thisItemId == appConfig.defaultRootId);
@@ -2626,6 +2630,8 @@ class SyncEngine {
 					string existingItemPath = computeItemPath(queryDriveID, queryParentID) ~ "/" ~ existingDatabaseItem.name;
 					if (debugLogging) {addLogEntry("existingItemPath calculated full path is: " ~ existingItemPath, ["debug"]);}
 					
+					addLogEntry("applyPotentiallyChangedItem()");
+					
 					// Attempt to apply this changed item
 					applyPotentiallyChangedItem(existingDatabaseItem, existingItemPath, newDatabaseItem, newItemPath, onedriveJSONItem);
 				} else {
@@ -2634,8 +2640,20 @@ class SyncEngine {
 					// But we also cannot compute the newItemPath as the parental objects may not exist as well
 					if (debugLogging) {addLogEntry("OneDrive JSON item is potentially a new local item", ["debug"]);}
 					
+					
+					addLogEntry("applyPotentiallyNewLocalItem()");
+					
+					
 					// Attempt to apply this potentially new item
 					applyPotentiallyNewLocalItem(newDatabaseItem, onedriveJSONItem, newItemPath);
+				}
+				
+				// POTENTIALLY HERE ...
+				
+				if(isItemRemote(onedriveJSONItem)) {
+				
+					addLogEntry("JSON ITEM IS A REMOTE OBJECT 1");
+				
 				}
 			}
 			
@@ -6072,6 +6090,16 @@ class SyncEngine {
 							// Save this JSON now
 							saveItem(onedriveJSONItem);
 						}
+						
+						// POTENTIALLY CHECK HERE ??
+						
+						if(isItemRemote(onedriveJSONItem)) {
+				
+							addLogEntry("JSON ITEM IS A REMOTE OBJECT 2");
+						
+						}
+						
+						
 					}
 				}
 			}
@@ -10654,7 +10682,7 @@ class SyncEngine {
 			
 			// What 'driveData' are we adding?
 			if (debugLogging) {
-				addLogEntry("adding this 'driveData' to childrenData = " ~ to!string(driveData), ["debug"]);
+				addLogEntry("Adding this 'driveData' to childrenData = " ~ to!string(driveData), ["debug"]);
 			}
 			
 			// add the responded 'driveData' to the childrenData to process later
@@ -13721,6 +13749,8 @@ class SyncEngine {
 			addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder (Actual 'Shared With Me' Folder Name): " ~ onedriveJSONItem["name"].str, ["debug"]);
 			addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem), ["debug"]);
 		}
+		
+		addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder (Actual 'Shared With Me' Folder Name): ");
 
 		// New DB Tie Item to detail the 'root' of the Shared Folder
 		Item tieDBItem;
