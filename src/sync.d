@@ -1614,6 +1614,10 @@ class SyncEngine {
 			if (debugLogging) {
 				addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
 				addLogEntry("Number of JSON items processed was: " ~ to!string(processedCount), ["debug"]);
+				addLogEntry("", ["debug"]);
+				string jsonProcessingCompleteLineEntry = format("Processing of JSON items from driveId %s and itemId %s is complete", driveIdToQuery, itemIdToQuery);
+				addLogEntry(jsonProcessingCompleteLineEntry, ["debug"]);
+				addLogEntry("", ["debug"]);
 			}
 			
 			// Notification to user regarding number of objects received from OneDrive API
@@ -1706,7 +1710,7 @@ class SyncEngine {
 			// This is not a deleted item
 			if (debugLogging) {addLogEntry("This item is not a OneDrive online deletion change", ["debug"]);}
 			
-			// Only calculate this once
+			// Only calculate these elements once
 			itemIsRoot = isItemRoot(onedriveJSONItem);
 			itemHasParentReferenceId = hasParentReferenceId(onedriveJSONItem);
 			itemIdMatchesDefaultRootId = (thisItemId == appConfig.defaultRootId);
@@ -2628,12 +2632,17 @@ class SyncEngine {
 					
 					// Attempt to apply this changed item
 					applyPotentiallyChangedItem(existingDatabaseItem, existingItemPath, newDatabaseItem, newItemPath, onedriveJSONItem);
+					
+					// Is this JSON object a 'remote' item?
+					if(isItemRemote(onedriveJSONItem)) {
+						// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
+						createRequiredSharedFolderDatabaseRecords(onedriveJSONItem);
+					}
 				} else {
 					// Action this JSON item as a new item as we have no DB record of it
 					// The actual item may actually exist locally already, meaning that just the database is out-of-date or missing the data due to --resync
 					// But we also cannot compute the newItemPath as the parental objects may not exist as well
 					if (debugLogging) {addLogEntry("OneDrive JSON item is potentially a new local item", ["debug"]);}
-					
 					// Attempt to apply this potentially new item
 					applyPotentiallyNewLocalItem(newDatabaseItem, onedriveJSONItem, newItemPath);
 				}
@@ -4419,7 +4428,7 @@ class SyncEngine {
 		if (debugLogging) {
 			string initialComputeLogMessage = format("Attempting to calculate local filesystem path for '%s' and '%s'", thisDriveId, thisItemId);
 			addLogEntry(initialComputeLogMessage, ["debug"]);
-			}
+		}
 		
 		// Perform the original calculation of the path using the values provided
 		try {
@@ -10654,7 +10663,7 @@ class SyncEngine {
 			
 			// What 'driveData' are we adding?
 			if (debugLogging) {
-				addLogEntry("adding this 'driveData' to childrenData = " ~ to!string(driveData), ["debug"]);
+				addLogEntry("Adding this 'driveData' to childrenData = " ~ to!string(driveData), ["debug"]);
 			}
 			
 			// add the responded 'driveData' to the childrenData to process later
