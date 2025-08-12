@@ -156,10 +156,11 @@ If required, review the table below based on your 'lsb_release' information to p
 | Linux Mint 22.x           | Use [Ubuntu 24.04](#distribution-ubuntu-2404) instructions below |
 | Linux Mint Debian Edition (LMDE) 5 / Elsie | Use [Debian 11](#distribution-debian-11) instructions below |
 | Linux Mint Debian Edition (LMDE) 6 / Faye  | Use [Debian 12](#distribution-debian-12) instructions below |
-| Debian 9                  | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to Debian 12 |
-| Debian 10                 | You must build from source or upgrade your Operating System to Debian 12 |
+| Debian 9                  | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to Debian 13 |
+| Debian 10                 | You must build from source or upgrade your Operating System to Debian 13 |
 | Debian 11                 | Use [Debian 11](#distribution-debian-11) instructions below |
 | Debian 12                 | Use [Debian 12](#distribution-debian-12) instructions below |
+| Debian 13                 | Use [Debian 13](#distribution-debian-13) instructions below |
 | Debian Sid                | Refer to https://packages.debian.org/sid/onedrive for assistance |
 | Raspbian GNU/Linux 10     | You must build from source or upgrade your Operating System to Raspbian GNU/Linux 12 |
 | Raspbian GNU/Linux 11     | Use [Debian 11](#distribution-debian-11) instructions below |
@@ -227,6 +228,33 @@ wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ub
 Add the OpenSuSE Build Service repository using the following command:
 ```text
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_12/ ./" | sudo tee /etc/apt/sources.list.d/onedrive.list
+```
+
+#### Step 3: Update your apt package cache
+Run: `sudo apt-get update`
+
+#### Step 4: Install 'onedrive'
+Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
+
+#### Step 5: Read 'Known Issues' with these packages
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
+
+### Distribution: Debian 13
+The packages support the following platform architectures:
+| &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
+|:----:|:------:|:-----:|:-------:|
+|✔|✔|✔|✔|
+
+#### Step 1: Add the OpenSuSE Build Service repository release key
+Add the OpenSuSE Build Service repository release key using the following command:
+```text
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_13/Release.key | gpg --dearmor | sudo tee /usr/share/keyrings/obs-onedrive.gpg > /dev/null
+```
+
+#### Step 2: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
+```text
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_13/ ./" | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
 #### Step 3: Update your apt package cache

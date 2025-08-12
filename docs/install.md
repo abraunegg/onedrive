@@ -16,6 +16,7 @@ Only the current release version or greater is supported. Earlier versions are n
 | CentOS 9                        | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_9/onedrive.svg?header=" alt="CentOS 9 package" width="46" height="20"></a>|❌|✔|❌|✔| **Note:** You must install the EPEL Repository first.<br><br>Install via `sudo dnf install onedrive` |
 | Debian 11                       | [onedrive](https://packages.debian.org/bullseye/source/onedrive)                                         |<a href="https://packages.debian.org/bullseye/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_11/onedrive.svg?header=" alt="Debian 11 package" width="46" height="20"></a>|✔|✔|✔|✔| **Note:** Do not install from Debian Package Repositories as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Debian 11 that you install from OpenSuSE Build Service using the Debian Package Install [Instructions](ubuntu-package-install.md) |
 | Debian 12                       | [onedrive](https://packages.debian.org/bookworm/source/onedrive)                                         |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_12/onedrive.svg?header=" alt="Debian 12 package" width="46" height="20"></a>|✔|✔|✔|✔| **Note:** Do not install from Debian Package Repositories as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Debian 12 that you install from OpenSuSE Build Service using the Debian Package Install [Instructions](ubuntu-package-install.md) |
+| Debian 13                       | [onedrive](https://packages.debian.org/trixie/source/onedrive)                                           |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_13/onedrive.svg?header=" alt="Debian 13 package" width="46" height="20"></a>|✔|✔|✔|✔| **Note:** Do not install from Debian Package Repositories as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Debian 13 that you install from OpenSuSE Build Service using the Debian Package Install [Instructions](ubuntu-package-install.md) |
 | Debian Sid                      | [onedrive](https://packages.debian.org/sid/onedrive)                                                     |<a href="https://packages.debian.org/sid/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_unstable/onedrive.svg?header=" alt="Debian Sid package" width="46" height="20"></a>|✔|✔|✔|✔| |
 | Fedora                          | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/fedora_rawhide/onedrive.svg?header=" alt="Fedora Rawhide package" width="46" height="20"></a>|✔|✔|✔|✔| Use package `onedrive` from the Fedora Package Repositories.<br><br>Install via `sudo dnf install onedrive` |
 | FreeBSD                         | [onedrive](https://www.freshports.org/net/onedrive)                                                      |<a href="https://www.freshports.org/net/onedrive"><img src="https://repology.org/badge/version-for-repo/freebsd/onedrive.svg?header=" alt="FreeBSD package" width="46" height="20"></a>|❌|✔|❌|❌| |
@@ -136,7 +137,7 @@ Ubuntu Linux 18.x LTS reached the end of its five-year LTS window on May 31th 20
 ### Dependencies: Debian 9
 Debian 9 reached the end of its five-year support window on June 30th 2022 and is no longer supported.
 
-### Dependencies: Debian 10 -> Debian 12 / Ubuntu 20.x -> Ubuntu 24.x - x86_64
+### Dependencies: Debian 10 -> Debian 13 / Ubuntu 20.x -> Ubuntu 24.x - x86_64
 These dependencies are also applicable for all Ubuntu based distributions such as:
 *   Lubuntu
 *   Linux Mint
@@ -152,7 +153,7 @@ For GUI notifications the following is also necessary:
 sudo apt install libnotify-dev
 ```
 
-### Dependencies: Debian 11 and Raspbian (ARMHF) / Debian 12 / Raspbian / Ubuntu 22.x (ARM64)
+### Dependencies: Debian 11 and Raspbian (ARMHF) / Debian 12 / Debian 13 / Raspbian / Ubuntu 22.x (ARM64)
 > [!CAUTION]
 > The minimum LDC compiler version required to compile this application is 1.20.1, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
