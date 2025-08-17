@@ -156,7 +156,7 @@ class OneDriveApi {
 				appConfig.curlSupportsWebSockets = websocketSupport;
 				appConfig.websocketsSupportCheckDone = true;
 				
-				// Notify user if cURL vesion is too old to support websockets
+				// Notify user if cURL version is too old to support websockets
 				if (!websocketSupport) {
 					addLogEntry();
 					addLogEntry("WARNING: Your libcurl is too old for WebSocket support. Please upgrade to libcurl 7.86.0 or newer.");
