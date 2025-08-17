@@ -144,6 +144,10 @@ class ApplicationConfig {
 	bool fullScanTrueUpRequired = false;
 	bool suppressLoggingOutput = false;
 	
+	// WebSocket Operations
+	bool curlSupportsWebSockets = false;
+	bool websocketsSupportCheckDone = false;
+	
 	// Default number of concurrent threads when downloading and uploading data
 	ulong defaultConcurrentThreads = 8;
 	

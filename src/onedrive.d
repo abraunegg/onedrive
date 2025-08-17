@@ -144,6 +144,26 @@ class OneDriveApi {
 		if (curlEngine is null) {
 			curlEngine = getCurlInstance();
 			curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"), appConfig.getValueLong("max_curl_idle"), keepAlive);
+		
+			// WebSocket capability available in OS cURL version
+			if (!appConfig.websocketsSupportCheckDone) {
+				// Check the underlying cURL capability to support websockets
+				if (debugLogging) {addLogEntry("Checking cURL Websocket support ...", ["debug"]);}
+				bool websocketSupport = curlSupportsWebSockets();
+				if (debugLogging) {addLogEntry("Checked cURL Websocket support = " ~ to!string(websocketSupport), ["debug"]);}
+				
+				// Update appConfig flags
+				appConfig.curlSupportsWebSockets = websocketSupport;
+				appConfig.websocketsSupportCheckDone = true;
+				
+				// Notify user if cURL vesion is too old to support websockets
+				if (!websocketSupport) {
+					addLogEntry();
+					addLogEntry("WARNING: Your libcurl is too old for WebSocket support. Please upgrade to libcurl 7.86.0 or newer.");
+					addLogEntry("         The near real-time processing of online changes cannot be enabled on your system.");
+					addLogEntry();
+				}
+			}
 		}
 
 		// Authorised value to return
