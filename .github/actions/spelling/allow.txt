@@ -61,6 +61,7 @@ builddir
 buildfiles
 buildroot
 bytecompile
+bytesleft
 cancelfd
 CApath
 cattr
@@ -105,6 +106,8 @@ DHAO
 dhparams
 dirmask
 dlang
+dlclose
+dlfcn
 dlnow
 dltotal
 dmd
@@ -212,6 +215,7 @@ kotlin
 krb
 lalen
 lbl
+Lcode
 lcurl
 ldbus
 ldc
@@ -340,6 +344,7 @@ parentid
 passoff
 pastebin
 pfa
+PFN
 phlibi
 phobos
 pidx
