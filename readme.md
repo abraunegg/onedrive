@@ -69,22 +69,24 @@ If you are using an older version, you must upgrade to the current release or ne
 ## Basic Troubleshooting Steps
 If you are encountering any issue running the application please follow these steps first:
 1.  Check the version of the application using `onedrive --version` and ensure that you are running the latest [release](https://github.com/abraunegg/onedrive/releases). If you are already using the latest release and are still experiencing an issue, you must manually build the client from 'master' to ensure you are running the latest code, which will include fixes for bugs found since the last release that may be impacting you.
-2.  Configure the application to only use IPv4 network connectivity, and then retest. 
-3.  Configure the application to only use HTTP/1.1. operations with IPv4 network connectivity, and then retest.
-4.  If the above points do not resolve your issue, upgrade your 'curl' version to the latest available by the curl developers. Refer to https://curl.se/docs/releases.html for details.
+2.  Run the client in verbose mode (`--verbose`) to give you greater clarity on any issue you are facing.
+3.  Configure the application to only use IPv4 network connectivity, and then retest.
+4.  Configure the application to only use HTTP/1.1. operations with IPv4 network connectivity, and then retest.
+5.  If the above points do not resolve your issue, upgrade your 'curl' and 'libcurl' versions to the latest available by the curl developers. Refer to https://curl.se/docs/releases.html for details.
 
 ## Reporting an Issue or Bug
 > [!IMPORTANT]
 > Please ensure that issues reported as bugs are indeed software bugs. For installation problems, distribution package/version issues, or package dependency concerns, please start a [Discussion](https://github.com/abraunegg/onedrive/discussions) instead of filing a bug report.
 
-If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
+If you encounter any bugs you can report them here on GitHub. Before filing an issue be sure to:
 
-1. Follow the Basic Troubleshooting Steps
-2.  Fill in a new bug report using the [issue template](https://github.com/abraunegg/onedrive/issues/new?template=bug_report.md) after following the Basic Troubleshooting Steps. Fill in *all* the details as this helps re-create your environment to replicate your issue.
-3.  Generate a debug log for support using the following [process](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support)
+1.  Follow the Basic Troubleshooting Steps
+2.  Search [Open](https://github.com/abraunegg/onedrive/issues) and [Closed](https://github.com/abraunegg/onedrive/issues?q=is%3Aissue%20state%3Aclosed) Issues for a similar a similar problem. Has this already been resolved?
+3.  Fill in a new bug report using the [issue template](https://github.com/abraunegg/onedrive/issues/new?template=bug_report.md) after following the Basic Troubleshooting Steps. Fill in *all* the details as this helps re-create your environment to replicate your issue.
+4.  Generate a debug log for support using the following [process](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support)
     *   If you are in *any* way concerned regarding the sensitivity of the data contained with in the verbose debug log file, create a new OneDrive account, configure the client to use that, use *dummy* data to simulate your environment and then replicate your original issue
     *   If you are still concerned, provide an NDA or confidentiality document to sign
-4.  Upload the debug log to [pastebin](https://pastebin.com/) or archive and email to support@mynas.com.au
+5.  Upload the debug log to [pastebin](https://pastebin.com/) or archive and email to support@mynas.com.au
     *   If you are concerned regarding the sensitivity of your debug data, encrypt + password protect the archive file and provide the decryption password via an out-of-band (OOB) mechanism. Email support@mynas.com.au for an OOB method for the password to be sent.
     *   If you are still concerned, provide an NDA or confidentiality document to sign
 
