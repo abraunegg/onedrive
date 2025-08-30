@@ -944,6 +944,22 @@ int main(string[] cliArgs) {
 			// Update the flag given we are running with --monitor
 			performFileSystemMonitoring = true;
 		
+			// If 'webhooks' are enabled, this is going to conflict with 'websockets' if the OS cURL library supports websockets
+			if (appConfig.getValueBool("webhook_enabled") && appConfig.curlSupportsWebSockets) {
+				// We have to disable 'websocket' support
+				addLogEntry();
+				addLogEntry("WARNING: Websocket support has been disabled because webhooks are already configured to monitor Microsoft Graph API changes.");
+				addLogEntry("         Only one API notification method can be active at a time.");
+				addLogEntry();
+				// Set the flag that this will not be used
+				appConfig.curlSupportsWebSockets = false;
+			} else {
+				// Double check scenario, this time 'false' checking 'webhook_enabled'
+				if ((!appConfig.getValueBool("webhook_enabled")) && (appConfig.curlSupportsWebSockets)) {
+					addLogEntry("Enabling websocket support to monitor Microsoft Graph API changes in near real-time.");
+				}
+			}
+			
 			// What are the current values for the platform we are running on
 			string maxOpenFiles = strip(getMaxOpenFiles());
 			// What is the currently configured maximum inotify watches that can be used
@@ -1330,8 +1346,10 @@ void setDefaultApplicationThreads() {
 	
 	// Warning if configuredThreads is too high
 	if (configuredThreads > systemCPUs) {
+		addLogEntry();
 		addLogEntry("WARNING: Configured 'threads = " ~ to!string(configuredThreads) ~ "' exceeds available CPU cores (" ~ to!string(systemCPUs) ~ ").");
 		addLogEntry("         This may lead to reduced performance, CPU contention, and instability. For best results, set 'threads' no higher than the number of physical CPU cores.");
+		addLogEntry();
 	}
 	
 	// Set the default threads based on configured option

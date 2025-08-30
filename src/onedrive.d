@@ -156,12 +156,15 @@ class OneDriveApi {
 				appConfig.curlSupportsWebSockets = websocketSupport;
 				appConfig.websocketsSupportCheckDone = true;
 				
-				// Notify user if cURL version is too old to support websockets
-				if (!websocketSupport) {
-					addLogEntry();
-					addLogEntry("WARNING: Your libcurl is too old for WebSocket support. Please upgrade to libcurl 7.86.0 or newer.");
-					addLogEntry("         The near real-time processing of online changes cannot be enabled on your system.");
-					addLogEntry();
+				// Notify user if cURL version is too old to support websockets, but only if we are in --monitor mode, as this is where this is used
+				// Are we doing a --monitor operation?
+				if (appConfig.getValueBool("monitor")) {
+					if (!websocketSupport) {
+						addLogEntry();
+						addLogEntry("WARNING: Your libcurl is too old for WebSocket support. Please upgrade to libcurl 7.86.0 or newer.");
+						addLogEntry("         The near real-time processing of online changes cannot be enabled on your system.");
+						addLogEntry();
+					}
 				}
 			}
 		}
