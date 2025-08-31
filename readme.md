@@ -126,13 +126,25 @@ If you encounter a bug, you can report it on GitHub. Before opening a new issue 
    - **If you require an NDA**, attach your NDA or confidentiality agreement to your email. It will be reviewed and signed prior to exchanging sensitive data.
 
 
-### Include in your report (strongly recommended)
-- `onedrive --version` output and **distribution/OS** details.  
-- `curl --version` (shows libcurl/OpenSSL/HTTP features).  
-- Relevant **configuration** details. 
-- Exact **commands** used and **steps to reproduce**.  
-- A concise **problem description** and what you expected to happen.  
-- Any relevant **network constraints** (IPv4-only, proxies, corporate firewalls, etc.).
+### What to include in your bug report
+When raising a new bug report, please ensure you provide **all details requested in the issue template**, including:
+
+- A clear description of the problem and how to reproduce it  
+- Your operating system and installation method  
+- OneDrive account type and client version  
+- Application configuration and cURL version  
+- Sync directory location, system mount points, and partition types  
+- A full debug log, shared securely as described above  
+
+Providing complete and accurate information greatly improves the ability to reproduce, diagnose, and resolve your issue.
+
+> [!IMPORTANT]
+> By submitting a bug report, you are expected to:
+> - Remain responsive to questions, clarifications, or additional information requests
+> - Validate and confirm fixes in your own environment when a pull request (PR) addressing your issue is raised
+
+> [!IMPORTANT]
+> Bug reports that are **incomplete or missing required details may be closed without investigation**
 
 
 ## Known issues
