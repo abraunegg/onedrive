@@ -110,9 +110,9 @@ If you encounter a bug, you can report it on GitHub. Before opening a new issue 
    Open a new bug report using the [issue template](https://github.com/abraunegg/onedrive/issues/new?template=bug_report.md) and fill in **all fields**. Complete detail helps us reproduce your environment and replicate the issue.
 
 4. **Generate a debug log**  
-   Follow this [process](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support) to create a verbose debug log.
+   Follow this [process](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support) to create a debug log.
 
-   - If you are concerned about sensitive data in the verbose debug log, you may:
+   - If you are concerned about personal or business sensitive data in the debug log, you may:
      - Create a new OneDrive account, configure the client to use it, use **dummy** data to simulate your environment, and reproduce the issue; or
      - Provide an NDA or confidentiality agreement for signature prior to sharing sensitive logs.
 
@@ -127,7 +127,7 @@ If you encounter a bug, you can report it on GitHub. Before opening a new issue 
 
 
 ### What to include in your bug report
-When raising a new bug report, please ensure you provide **all details requested in the issue template**, including:
+When raising a new bug report, please include **all details requested in the issue template**, such as:
 
 - A clear description of the problem and how to reproduce it  
 - Your operating system and installation method  
@@ -136,15 +136,16 @@ When raising a new bug report, please ensure you provide **all details requested
 - Sync directory location, system mount points, and partition types  
 - A full debug log, shared securely as described above  
 
-Providing complete and accurate information greatly improves the ability to reproduce, diagnose, and resolve your issue.
+Providing complete information makes it much easier to understand, reproduce, and resolve your issue quickly.  
 
-> [!IMPORTANT]
-> By submitting a bug report, you are expected to:
-> - Remain responsive to questions, clarifications, or additional information requests
-> - Validate and confirm fixes in your own environment when a pull request (PR) addressing your issue is raised
+> [!NOTE]  
+> Submitting a bug report starts a collaboration. To help us help you, please:  
+> - Stay available to answer questions or provide clarifications if needed  
+> - Test and confirm fixes in your own environment when a pull request (PR) is created for your issue  
 
-> [!IMPORTANT]
-> Bug reports that are **incomplete or missing required details may be closed without investigation**
+> [!TIP]  
+> Reports with missing details are much harder to investigate. Sharing as much as you can up front gives the best chance of a fast and accurate fix.
+
 
 
 ## Known issues
