@@ -1858,3 +1858,50 @@ void displayFunctionProcessingTime(string functionName, SysTime functionStartTim
 	string processingTime = format("[%s] Application Function '%s' Processing Time = %.4f Seconds", strip(logKey), strip(functionName), functionDurationAsSeconds);
 	addLogEntry(processingTime);
 }
+
+// Convert the Graph notificationUrl into a socket.io WS endpoint:
+//  https://host/...?...  ->  wss://host/socket.io/?EIO=4&transport=websocket&...
+string toSocketIoWsUrl(string notificationUrl) {
+    import std.algorithm.searching : countUntil;
+
+    // Find scheme separator
+    auto iScheme = notificationUrl.countUntil("://");
+    if (iScheme == notificationUrl.length)
+        return notificationUrl; // fallback
+
+    auto scheme = notificationUrl[0 .. iScheme];
+    auto rest   = notificationUrl[iScheme + 3 .. $]; // skip "://"
+
+    // Split authority (host[:port]) from path/query
+    auto iSlash = rest.countUntil("/");
+    auto iQmark = rest.countUntil("?");
+    size_t cut = rest.length;
+    if (iSlash != rest.length && iQmark != rest.length)
+        cut = (iSlash < iQmark) ? iSlash : iQmark;
+    else if (iSlash != rest.length)
+        cut = iSlash;
+    else if (iQmark != rest.length)
+        cut = iQmark;
+
+    auto authority = rest[0 .. cut];
+
+    // Extract original query string (if any)
+    string query;
+    auto q = notificationUrl.countUntil("?");
+    if (q != notificationUrl.length)
+        query = notificationUrl[q + 1 .. $];
+
+    // Map scheme
+    string wsScheme;
+    if (scheme == "https") wsScheme = "wss";
+    else if (scheme == "http") wsScheme = "ws";
+    else wsScheme = scheme; // already ws/wss
+
+    // Build new URL
+    string result = wsScheme ~ "://" ~ authority ~ "/socket.io/?EIO=4&transport=websocket";
+    if (!query.empty)
+        result ~= "&" ~ query;
+
+    return result;
+}
+

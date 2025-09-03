@@ -14743,4 +14743,68 @@ class SyncEngine {
 		// Return sanitised JSON string for logging output
 		return sanitisedJSONString;
 	}
+	
+	// Obtain the Websocket Notification URL
+	void obtainWebSocketNotificationURL() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		string websocketURL;
+		
+		// Create a new API Instance for this thread and initialise it
+		OneDriveApi queryWebsocketURLApiInstance;
+		queryWebsocketURLApiInstance = new OneDriveApi(appConfig);
+		queryWebsocketURLApiInstance.initialise();
+		
+		// Try and query Websocket Notification URL
+		try {
+			JSONValue endpointResponse = queryWebsocketURLApiInstance.obtainWebSocketNotificationURL();
+			
+			// Was a valid JSON response provided?
+			if (endpointResponse.type() == JSONType.object) {
+				// Store the JSON in the configuration for reuse
+				appConfig.websocketEndpointResponse = to!string(endpointResponse);
+				
+				// Build the actual WS URL
+				websocketURL = toSocketIoWsUrl(endpointResponse["notificationUrl"].str);
+				
+				addLogEntry();
+				addLogEntry(websocketURL);
+				addLogEntry();
+				
+				if (!websocketURL.empty) {
+					// Store the websocket notification URL
+					appConfig.websocketNotificationUrl = websocketURL;
+					// Set flag
+					appConfig.websocketNotificationUrlAvailable = true;
+				}
+			}
+			
+		} catch (OneDriveException exception) {
+			// An error, regardless of what it is ... not good
+			// Display what the error is
+			// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+			displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+		}
+		
+		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+		queryWebsocketURLApiInstance.releaseCurlEngine();
+		queryWebsocketURLApiInstance = null;
+		// Perform Garbage Collection
+		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+	}
 }

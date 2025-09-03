@@ -956,7 +956,17 @@ int main(string[] cliArgs) {
 			} else {
 				// Double check scenario, this time 'false' checking 'webhook_enabled'
 				if ((!appConfig.getValueBool("webhook_enabled")) && (appConfig.curlSupportsWebSockets)) {
-					addLogEntry("Enabling websocket support to monitor Microsoft Graph API changes in near real-time.");
+					addLogEntry("Attempting to enable websocket support to monitor Microsoft Graph API changes in near real-time.");
+				}
+				
+				// Obtain the Websocket Notification URL from the API endpoint
+				syncEngineInstance.obtainWebSocketNotificationURL();
+				
+				// Were we able to correctly obtain the endpoint response and build the socket.io WS endpoint
+				if (appConfig.websocketNotificationUrlAvailable) {
+					addLogEntry("Enabled websocket support to monitor Microsoft Graph API changes in near real-time.");
+				} else {
+					addLogEntry("ERROR: Unable to configure websocket support to monitor Microsoft Graph API changes in near real-time.");
 				}
 			}
 			

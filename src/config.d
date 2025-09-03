@@ -146,7 +146,10 @@ class ApplicationConfig {
 	
 	// WebSocket Operations
 	bool curlSupportsWebSockets = false;
-	bool websocketsSupportCheckDone = false;
+	bool websocketSupportCheckDone = false;
+	bool websocketNotificationUrlAvailable = false;
+	string websocketEndpointResponse;
+	string websocketNotificationUrl;
 	
 	// Default number of concurrent threads when downloading and uploading data
 	ulong defaultConcurrentThreads = 8;
