@@ -14776,16 +14776,25 @@ class SyncEngine {
 				// Build the actual WS URL
 				websocketURL = toSocketIoWsUrl(endpointResponse["notificationUrl"].str);
 				
-				addLogEntry();
-				addLogEntry(websocketURL);
-				addLogEntry();
-				
+				// Extract and store the expiry
+				appConfig.websocketUrlExpiry = endpointResponse["expirationDateTime"].str;
+								
+				// Do we have a value WSS:// URL
 				if (!websocketURL.empty) {
 					// Store the websocket notification URL
 					appConfig.websocketNotificationUrl = websocketURL;
 					// Set flag
 					appConfig.websocketNotificationUrlAvailable = true;
-				}
+				
+				
+					// DEBUGGING .. REMOVE LATER
+					addLogEntry();
+					addLogEntry(websocketURL);
+					addLogEntry("Expiry: " ~ appConfig.websocketUrlExpiry);
+					addLogEntry();
+				
+				
+				}	
 			}
 			
 		} catch (OneDriveException exception) {

@@ -17,6 +17,7 @@ import core.sys.posix.signal;
 import core.stdc.stdlib : getenv;
 import core.stdc.string : strcmp;
 import core.sys.posix.dlfcn : dlopen, dlsym, dlclose, RTLD_NOW; // Posix elements
+import std.exception : enforce;     // for enforce(...)
 
 // What other modules that we have created do we need to import?
 import log;
@@ -27,13 +28,7 @@ __gshared CurlEngine[] curlEnginePool; // __gshared is used to declare a variabl
 
 // WebSocket elements
 enum CURL_WS_MIN_NUM = 0x075600; // 7.86.0 (version which WebSocket support was added to cURL)
-// Flags (mirror curl/curl.h)
-enum CURLWS_TEXT   = 0x01u;
-enum CURLWS_BINARY = 0x02u;
-enum CURLWS_CONT   = 0x10u;
-enum CURLWS_CLOSE  = 0x20u;
-enum CURLWS_PING   = 0x40u;
-enum CURLWS_PONG   = 0x80u;
+
 
 extern (C) void sigpipeHandler(int signum) {
 	// Custom handler to ignore SIGPIPE signals
@@ -49,11 +44,23 @@ extern(C) struct curl_ws_frame {
 	size_t bytesleft;
 }
 
+// Minimal WebSocket client using libcurl WS APIs
+private extern(C) nothrow {
+    CURL* curl_easy_init();
+    void  curl_easy_cleanup(CURL* handle);
+    CURLcode curl_easy_setopt(CURL* curl, int option, ...);
+    CURLcode curl_easy_perform(CURL* curl);
+}
+
 // WebSocket alias
 alias PFN_curl_ws_recv =
 	extern(C) CURLcode function(CURL*, void*, size_t, size_t*, const curl_ws_frame**);
 alias PFN_curl_ws_send =
 	extern(C) CURLcode function(CURL*, const void*, size_t, size_t*, long /*curl_off_t*/, uint);
+
+extern(C) struct curl_slist { char* data; curl_slist* next; }
+extern(C) curl_slist* curl_slist_append(curl_slist* list, const char* string);
+extern(C) void curl_slist_free_all(curl_slist* list);
 
 private __gshared {
 	void*                 _curlLib;
@@ -679,6 +686,152 @@ class CurlEngine {
 	void resetDownloadResumeOffset() {
 		resumeFromOffset = -1;
 	}
+}
+
+// Minimal libcurl WebSocket client using the dynamically-resolved WS APIs.
+// - Requires curlSupportsWebSockets() == true at runtime
+// - URL must be ws:// or wss:// (e.g., socket.io Engine.IO endpoint)
+final class CurlWebSocket {
+    // Curl easy options (scoped to this class)
+    enum CURLOPT_URL             = 10002;
+    enum CURLOPT_HTTPHEADER      = 10023;
+    enum CURLOPT_CONNECTTIMEOUT  = 78;
+    enum CURLOPT_TIMEOUT         = 13;
+    enum CURLOPT_SSL_VERIFYPEER  = 64;
+    enum CURLOPT_SSL_VERIFYHOST  = 81; // set to 2 to actually verify hostname
+    enum CURLOPT_USERAGENT       = 10018;
+    enum CURLOPT_NOSIGNAL        = 99; // avoid signals in threaded use
+
+    // WebSocket send/recv flags (match libcurl's curl/curl.h)
+    enum CURLWS_TEXT   = 0x01u;
+    enum CURLWS_BINARY = 0x02u;
+    enum CURLWS_CONT   = 0x10u;
+    enum CURLWS_CLOSE  = 0x20u;
+    enum CURLWS_PING   = 0x40u;
+    enum CURLWS_PONG   = 0x80u;
+
+    // Return codes
+    enum CURLE_OK = cast(CURLcode)0; // success
+
+    private CURL*       _h;
+    private bool        _connected;
+    private curl_slist* _headers;
+
+    this() {
+        _h = curl_easy_init();
+        if (_h is null) {
+            throw new Exception("curl_easy_init failed for WebSocket");
+        }
+        _connected = false;
+        _headers = null;
+        // Avoid SIGPIPE in worker threads
+        curl_easy_setopt(_h, CURLOPT_NOSIGNAL, 1);
+    }
+
+    ~this() {
+        close();
+        if (_h !is null) {
+            curl_easy_cleanup(_h);
+            _h = null;
+        }
+    }
+
+    void setTimeouts(int connectSeconds, int overallSeconds) {
+        if (_h is null) return;
+        curl_easy_setopt(_h, CURLOPT_CONNECTTIMEOUT, connectSeconds);
+        curl_easy_setopt(_h, CURLOPT_TIMEOUT, overallSeconds);
+    }
+
+    void setSslVerify(bool verifyPeer, bool verifyHost) {
+        if (_h is null) return;
+        curl_easy_setopt(_h, CURLOPT_SSL_VERIFYPEER, verifyPeer ? 1 : 0);
+        curl_easy_setopt(_h, CURLOPT_SSL_VERIFYHOST, verifyHost ? 2 : 0);
+    }
+
+    void setUserAgent(string ua) {
+        if (_h is null) return;
+        curl_easy_setopt(_h, CURLOPT_USERAGENT, cast(char*) ua.ptr);
+    }
+
+    void addHeader(string headerLine) {
+        _headers = curl_slist_append(_headers, headerLine.ptr);
+    }
+
+    CURLcode connect(string wsUrl) {
+        enforce(curlSupportsWebSockets(),
+            "WebSocket not supported: libcurl < 7.86.0 or symbols not present");
+
+        curl_easy_setopt(_h, CURLOPT_URL, cast(char*) wsUrl.ptr);
+        if (_headers !is null) curl_easy_setopt(_h, CURLOPT_HTTPHEADER, _headers);
+
+        auto rc = curl_easy_perform(_h);
+        _connected = (rc == CURLE_OK);
+        return rc;
+    }
+
+    @property bool isConnected() const { return _connected; }
+
+    // Receive a full (possibly fragmented) message as text.
+    string recvText() {
+        enforce(curlSupportsWebSockets(),
+            "WebSocket not supported: libcurl < 7.86.0 or symbols not present");
+
+        import std.array : appender;
+
+        auto acc = appender!string();
+        for (;;) {
+            ubyte[64 * 1024] buf;
+            size_t n = 0;
+            const curl_ws_frame* meta = null;
+
+            auto rc = p_curl_ws_recv(_h, buf.ptr, buf.length, &n, &meta);
+            if (rc != CURLE_OK || n == 0 || meta is null) {
+                _connected = false;
+                return "";
+            }
+
+            if ((meta.flags & CURLWS_PING) != 0) {
+                size_t sent;
+                p_curl_ws_send(_h, null, 0, &sent, 0L, CURLWS_PONG);
+                continue;
+            }
+            if ((meta.flags & CURLWS_PONG) != 0) {
+                continue;
+            }
+            if ((meta.flags & CURLWS_CLOSE) != 0) {
+                _connected = false;
+                return "";
+            }
+
+            acc.put(cast(string) buf[0 .. n]);
+
+            const bool hasMore = (meta.bytesleft != 0) || ((meta.flags & CURLWS_CONT) != 0);
+            if (!hasMore) {
+                return acc.data.idup;
+            }
+        }
+    }
+
+    CURLcode sendText(scope const(char)[] s) {
+        enforce(curlSupportsWebSockets(),
+            "WebSocket not supported: libcurl < 7.86.0 or symbols not present");
+        size_t sent = 0;
+        return p_curl_ws_send(_h, s.ptr, s.length, &sent, cast(long) s.length, CURLWS_TEXT);
+    }
+
+    void close() {
+        if (_h !is null && _connected) {
+            size_t sent;
+            if (p_curl_ws_send !is null) {
+                p_curl_ws_send(_h, null, 0, &sent, 0L, CURLWS_CLOSE);
+            }
+        }
+        if (_headers !is null) {
+            curl_slist_free_all(_headers);
+            _headers = null;
+        }
+        _connected = false;
+    }
 }
 
 // Methods to control obtaining and releasing a CurlEngine instance from the curlEnginePool

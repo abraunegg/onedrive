@@ -150,6 +150,7 @@ class ApplicationConfig {
 	bool websocketNotificationUrlAvailable = false;
 	string websocketEndpointResponse;
 	string websocketNotificationUrl;
+	string websocketUrlExpiry;
 	
 	// Default number of concurrent threads when downloading and uploading data
 	ulong defaultConcurrentThreads = 8;
