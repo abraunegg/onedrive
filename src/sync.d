@@ -14785,15 +14785,6 @@ class SyncEngine {
 					appConfig.websocketNotificationUrl = websocketURL;
 					// Set flag
 					appConfig.websocketNotificationUrlAvailable = true;
-				
-				
-					// DEBUGGING .. REMOVE LATER
-					addLogEntry();
-					addLogEntry(websocketURL);
-					addLogEntry("Expiry: " ~ appConfig.websocketUrlExpiry);
-					addLogEntry();
-				
-				
 				}	
 			}
 			

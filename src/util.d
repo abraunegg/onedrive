@@ -1904,4 +1904,3 @@ string toSocketIoWsUrl(string notificationUrl) {
 
     return result;
 }
-
