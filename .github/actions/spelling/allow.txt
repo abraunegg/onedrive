@@ -429,6 +429,7 @@ signo
 sigpipe
 skilion
 skinparam
+slist
 Sockaddrs
 somevar
 sooooo
