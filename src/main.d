@@ -33,6 +33,7 @@ import clientSideFiltering;
 import monitor;
 import webhook;
 import intune;
+import socketio;
 
 // What other constant variables do we require?
 const int EXIT_RESYNC_REQUIRED = 126;
@@ -44,6 +45,7 @@ SyncEngine syncEngineInstance;
 ItemDatabase itemDB;
 ClientSideFiltering selectiveSync;
 Monitor filesystemMonitor;
+OneDriveSocketIo oneDriveSocketIo;
 
 // Class variables
 // Flag for performing a synchronised shutdown
@@ -964,7 +966,14 @@ int main(string[] cliArgs) {
 				
 				// Were we able to correctly obtain the endpoint response and build the socket.io WS endpoint
 				if (appConfig.websocketNotificationUrlAvailable) {
-					addLogEntry("Enabled websocket support to monitor Microsoft Graph API changes in near real-time.");
+					// URL is available
+					
+					if (oneDriveSocketIo is null) {
+						oneDriveSocketIo = new OneDriveSocketIo(thisTid, appConfig);
+						oneDriveSocketIo.start();
+					}
+					
+					// Logging of websocket being enabled is moved to socketio.d
 				} else {
 					addLogEntry("ERROR: Unable to configure websocket support to monitor Microsoft Graph API changes in near real-time.");
 				}
@@ -1107,6 +1116,25 @@ int main(string[] cliArgs) {
 						oneDriveWebhook.serve();
 					} else {
 						oneDriveWebhook.createOrRenewSubscription();
+					}
+				} else {
+					// Websocket support is enabled by default, but only if the version of libcurl supports it
+					if (appConfig.curlSupportsWebSockets) {
+						// Do we need to renew the notification URL?
+						auto renewEarly = dur!"seconds"(120);
+						if (appConfig.websocketNotificationUrlAvailable && appConfig.websocketUrlExpiry.length) {
+							auto expiry = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
+							auto now    = Clock.currTime(UTC());
+							if (expiry - now <= renewEarly) {
+								try {
+									// Obtain the Websocket Notification URL from the API endpoint
+									syncEngineInstance.obtainWebSocketNotificationURL();
+									if (debugLogging) addLogEntry("Refreshed WebSocket notification URL prior to expiry", ["debug"]);
+								} catch (Exception e) {
+									if (debugLogging) addLogEntry("Failed to refresh WebSocket notification URL: "~e.msg, ["debug"]);
+								}
+							}
+						}
 					}
 				}
 				
@@ -1278,18 +1306,30 @@ int main(string[] cliArgs) {
 							}
 						}
 						
+						// Processing of online changes in near real-time .. update sleep time
 						if(webhookEnabled) {
-							// if onedrive webhook is enabled
-							// update sleep time based on renew interval
+							// If onedrive webhook is enabled
+							// Update sleep time based on renew interval
 							Duration nextWebhookCheckDuration = oneDriveWebhook.getNextExpirationCheckDuration();
 							if (nextWebhookCheckDuration < sleepTime) {
 								sleepTime = nextWebhookCheckDuration;
-								if (debugLogging) {addLogEntry("Update sleeping time to " ~ to!string(sleepTime), ["debug"]);}
+								if (debugLogging) {addLogEntry("Update sleeping time (based on webhook next expiration check) to " ~ to!string(sleepTime), ["debug"]);}
 							}
 							// Webhook Notification reset to false for this loop
 							notificationReceived = false;
+						} else {
+							// Websocket support is enabled by default, but only if the version of libcurl supports it
+							if (appConfig.curlSupportsWebSockets) {
+								// Update sleep time based on renew interval
+								Duration nextWebsocketCheckDuration = oneDriveSocketIo.getNextExpirationCheckDuration();
+								if (nextWebsocketCheckDuration < sleepTime) {
+									sleepTime = nextWebsocketCheckDuration;
+									if (debugLogging) {addLogEntry("Update sleeping time (based on websocket next expiration check) to " ~ to!string(sleepTime), ["debug"]);}
+								}
+							}
 						}
 						
+						// Process signals from 'webhook' or 'websockets'
 						int res = 1;
 						// Process incoming notifications if any.
 						auto signalExists = receiveTimeout(sleepTime, (int msg) {res = msg;},(ulong _) {notificationReceived = true;});
@@ -1773,6 +1813,8 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			if (debugLogging) {addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);}
 			// Shutdown the OneDrive Webhook instance
 			shutdownOneDriveWebhook();
+			// Shutdown the OneDrive WebSocket instance
+			shutdownOneDriveSocketIo();
 			// Shutdown any local filesystem monitoring
 			shutdownFilesystemMonitor();
 			// Shutdown the sync engine
@@ -1804,6 +1846,16 @@ void shutdownOneDriveWebhook() {
         object.destroy(oneDriveWebhook);
         oneDriveWebhook = null;
 		if (debugLogging) {addLogEntry("Shutdown of OneDrive Webhook instance is complete", ["debug"]);}
+    }
+}
+
+void shutdownOneDriveSocketIo() {
+    if (oneDriveSocketIo !is null) {
+        if (debugLogging) addLogEntry("Shutting down OneDrive WebSocket instance", ["debug"]);
+        oneDriveSocketIo.stop();
+        object.destroy(oneDriveSocketIo);
+        oneDriveSocketIo = null;
+        if (debugLogging) addLogEntry("Shutdown of OneDrive WebSocket instance complete", ["debug"]);
     }
 }
 

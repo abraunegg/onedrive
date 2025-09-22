@@ -1904,45 +1904,66 @@ void displayFunctionProcessingTime(string functionName, SysTime functionStartTim
 // Convert the Graph notificationUrl into a socket.io WS endpoint:
 //  https://host/...?...  ->  wss://host/socket.io/?EIO=4&transport=websocket&...
 string toSocketIoWsUrl(string notificationUrl) {
-    import std.algorithm.searching : countUntil;
 
-    // Find scheme separator
+	// DEBUG REMOVE LATER
+	addLogEntry("Input URL to toSocketIoWsUrl: " ~ notificationUrl);
+
+
+    // ---- scheme ----
     auto iScheme = notificationUrl.countUntil("://");
-    if (iScheme == notificationUrl.length)
-        return notificationUrl; // fallback
-
+    if (iScheme == notificationUrl.length) return notificationUrl; // fallback (malformed input)
     auto scheme = notificationUrl[0 .. iScheme];
-    auto rest   = notificationUrl[iScheme + 3 .. $]; // skip "://"
+    auto rest   = notificationUrl[iScheme + 3 .. $]; // after "://"
 
-    // Split authority (host[:port]) from path/query
+    // ---- authority + path+query ----
+    // authority ends at first '/' or '?' (whichever comes first)
     auto iSlash = rest.countUntil("/");
     auto iQmark = rest.countUntil("?");
-    size_t cut = rest.length;
-    if (iSlash != rest.length && iQmark != rest.length)
-        cut = (iSlash < iQmark) ? iSlash : iQmark;
-    else if (iSlash != rest.length)
-        cut = iSlash;
-    else if (iQmark != rest.length)
+    size_t cut;
+    if (iSlash == rest.length && iQmark == rest.length) {
+        cut = rest.length;
+    } else if (iSlash == rest.length) {
         cut = iQmark;
-
+    } else if (iQmark == rest.length) {
+        cut = iSlash;
+    } else {
+        cut = (iSlash < iQmark) ? iSlash : iQmark;
+    }
     auto authority = rest[0 .. cut];
+    auto pathQuery = rest[cut .. $]; // may be "", starts with "/" or "?"
 
-    // Extract original query string (if any)
+    // ---- extract original query (ignore original path; we force /socket.io/) ----
     string query;
-    auto q = notificationUrl.countUntil("?");
-    if (q != notificationUrl.length)
-        query = notificationUrl[q + 1 .. $];
+    auto iq = pathQuery.countUntil("?");
+    if (iq != pathQuery.length) {
+        query = pathQuery[iq + 1 .. $]; // after '?'
+    } else {
+        query = "";
+    }
 
-    // Map scheme
-    string wsScheme;
-    if (scheme == "https") wsScheme = "wss";
-    else if (scheme == "http") wsScheme = "ws";
-    else wsScheme = scheme; // already ws/wss
+    // ---- scheme map ----
+    string wsScheme = (scheme == "https") ? "wss" : (scheme == "http" ? "ws" : scheme);
 
-    // Build new URL
-    string result = wsScheme ~ "://" ~ authority ~ "/socket.io/?EIO=4&transport=websocket";
-    if (!query.empty)
-        result ~= "&" ~ query;
+    // ---- keep all original params EXCEPT EIO and transport; we’ll set them explicitly ----
+    string[] kept;
+    if (query.length) {
+        foreach (p; query.split("&")) {
+            if (p.length == 0) continue;
+            if (p.startsWith("EIO=")) continue;
+            if (p.startsWith("transport=")) continue;
+            kept ~= p;
+        }
+    }
 
-    return result;
+    // ---- final query: required first, then preserved params ----
+    string finalQuery = "EIO=4&transport=websocket";
+    if (kept.length) finalQuery ~= "&" ~ kept.join("&");
+
+	string resultURL = wsScheme ~ "://" ~ authority ~ "/socket.io/?" ~ finalQuery;
+	
+	addLogEntry("Output URL from toSocketIoWsUrl: " ~ resultURL);
+	
+
+    // ---- build final URL ----
+    return resultURL;
 }
