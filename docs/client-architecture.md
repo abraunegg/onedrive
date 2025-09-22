@@ -47,10 +47,16 @@ By default, both sync modes (`--sync` and `--monitor`)treat the data stored onli
 
 ![Default Sync Flow Process](./puml/default_sync_flow.png)
 
-When using standalone mode (`--sync`) with the `--local-first` option, the sync flow is reversed. The client treats your local files as the 'source-of-truth'. Local changes are processed first and pushed to Microsoft OneDrive online. Only after local changes have been uploaded will the client check for any remote changes (this includes online additions, modifications and deletions) and apply those to your local system as needed, ensuring the final local state is consistent with that what is now online.
+When using the client with the `--local-first` option, the sync flow is reversed. The client treats your local files as the 'source-of-truth'. Local changes are processed first and pushed to Microsoft OneDrive online. Only after local changes have been uploaded will the client check for any remote changes (this includes online additions, modifications and deletions) and apply those to your local system as needed, ensuring the final local state is consistent with that what is now online.
 
 ![Local First Sync Flow Process](./puml/local_first_sync_process.png)
 
+> [!IMPORTANT]
+> When using `--sync --local-first`, a locally deleted file will only be deleted online if it was already in sync with its online counterpart.
+> * If the file was never synced, the client cannot know that the corresponding online file should be removed. In this case, the online file may be downloaded again
+> * Using `--resync` makes this behaviour more likely because it wipes all local knowledge of what was previously synced, so local deletions will not be recognised
+>
+> When using `--monitor --local-first`, file system watches (via inotify) will detect local deletions. This event will automatically trigger removal of the online file, and if exists and matches the local data, the file online will be removed.
 
 > [!IMPORTANT]
 > Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
