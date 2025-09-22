@@ -54,66 +54,108 @@ shared static this() {
 	deviceName = Socket.hostName;
 }
 
-// Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario
+// Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario.
+// If the path already ends with "-<deviceName>-safeBackup-####", the counter is incremented
+// instead of appending another "-<deviceName>-safeBackup-".
 void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, out string renamedPath) {
-	// Do we actually perform a safe backup?
-	// Has the user configured to IGNORE local data protection rules?
-	if (bypassDataPreservation) {
-		// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
-		addLogEntry("WARNING: Local Data Protection has been disabled - not renaming local file. You may experience data loss on this file: " ~ to!string(path), ["info", "notify"]);
-	} else {
-		// configure variables
-		auto ext = extension(path);
-		auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ "-safeBackup-";
-		int n = 1;
-	
-		// Limit to 1000 iterations .. 1000 file backups
-		while (exists(newPath ~ format("%04d", n) ~ ext) && n < 1000) {
-			n++;
-		}
-
-		// Check if unique file name was found
-		if (exists(newPath ~ format("%04d", n) ~ ext)) {
-			// On the 1000th backup of this file, this should be triggered
-			addLogEntry("Failed to backup " ~ to!string(path) ~ ": Unique file name could not be found after 1000 attempts", ["error"]);
-			return; // Exit function as a unique file name could not be found
-		}
-
-		// Configure the new name with zero-padded counter
-		newPath ~= format("%04d", n) ~ ext;
-
-		// Log that we are performing the backup by renaming the file
+    // Is the input path a folder|directory? These should never be renamed
+	if (isDir(path)) {
 		if (verboseLogging) {
-			addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["verbose"]);
+			addLogEntry("Renaming request of local directory is being ignored: " ~ to!string(path), ["verbose"]);
 		}
-
-		if (!dryRun) {
-			// Not a --dry-run scenario - do the file rename
-			//
-			// There are 2 options to rename a file
-			// rename() - https://dlang.org/library/std/file/rename.html
-			// std.file.copy() - https://dlang.org/library/std/file/copy.html
-			//
-			// rename:
-			//   It is not possible to rename a file across different mount points or drives. On POSIX, the operation is atomic. That means, if to already exists there will be no time period during the operation where to is missing.
-			//
-			// std.file.copy
-			//   Copy file from to file to. File timestamps are preserved. File attributes are preserved, if preserve equals Yes.preserveAttributes
-			//
-			// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
-			try {
-				rename(path, newPath);
-				renamedPath = to!string(newPath);
-			} catch (Exception e) {
-				// Handle exceptions, e.g., log error
-				addLogEntry("Renaming of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
-			}
-		} else {
-			if (debugLogging) {
-				addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);
-			}
-		}
+		return;
 	}
+	
+	// Ensure this is currently null
+	renamedPath = null;
+	
+	// Has the user configured to IGNORE local data protection rules?
+    if (bypassDataPreservation) {
+        addLogEntry("WARNING: Local Data Protection has been disabled - not renaming local file. You may experience data loss on this file: " ~ to!string(path), ["info", "notify"]);
+        return;
+    }
+	
+	// Convert once for convenience
+    const string spath = to!string(path);
+    const string ext   = extension(spath);
+
+    // Compute stem without extension (handles no-extension case too)
+    const size_t stemLen = spath.length >= ext.length ? spath.length - ext.length : spath.length;
+    string stem = spath[0 .. stemLen];
+
+    // Tag used for our safe backups
+    string tag = "-" ~ deviceName ~ "-safeBackup-";
+
+    // Detect if already a tagged safeBackup on THIS device; if so, bump the 4-digit counter
+    int startN = 1;
+    string baseStem = stem;
+
+    if (stem.length >= tag.length + 4) {
+        // Slice out last 4 chars and the tag position
+        auto last4   = stem[$ - 4 .. $];
+        auto tagSpan = stem[$ - (tag.length + 4) .. $ - 4];
+
+        bool fourDigits = true;
+        foreach (c; last4) {
+            if (!c.isDigit) { fourDigits = false; break; }
+        }
+
+        if (fourDigits && tagSpan == tag) {
+            // Already a backup from this device — bump the counter
+            startN   = to!int(last4) + 1;
+            baseStem = stem[0 .. $ - (tag.length + 4)];
+        }
+    }
+
+    // Find the first available name, capped at 1000 attempts
+    int n = startN;
+    string candidate;
+
+    while (n <= 1000) {
+        candidate = baseStem ~ tag ~ format("%04d", n) ~ ext;
+        if (!exists(candidate)) break;
+        ++n;
+    }
+
+    // If we exhausted our attempts, fail out
+    if (n > 1000) {
+        addLogEntry("Failed to backup " ~ spath ~ ": Unique file name could not be found after 1000 attempts", ["error"]);
+        return;
+    }
+
+    // Log intent
+    if (verboseLogging) {
+        addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ spath ~ " -> " ~ candidate, ["verbose"]);
+    }
+
+    // Perform (or simulate) the rename
+    if (!dryRun) {
+	
+		// Not a --dry-run scenario - attempt the file rename
+		//
+		// There are 2 options to rename a file
+		// rename() - https://dlang.org/library/std/file/rename.html
+		// std.file.copy() - https://dlang.org/library/std/file/copy.html
+		//
+		// rename:
+		//   It is not possible to rename a file across different mount points or drives. On POSIX, the operation is atomic. That means, if to already exists there will be no time period during the operation where to is missing.
+		//
+		// std.file.copy
+		//   Copy file from to file to. File timestamps are preserved. File attributes are preserved, if preserve equals Yes.preserveAttributes
+		//
+		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
+		
+        try {
+            rename(spath, candidate); // POSIX atomic on same mount
+            renamedPath = candidate;
+        } catch (Exception e) {
+            addLogEntry("Renaming of local file failed for " ~ spath ~ ": " ~ e.msg, ["error"]);
+        }
+    } else {
+        if (debugLogging) {
+            addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ spath ~ " -> " ~ candidate, ["debug"]);
+        }
+    }
 }
 
 // Rename the given item, and only performs the function if not in a --dry-run scenario

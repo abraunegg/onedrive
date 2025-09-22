@@ -1,6 +1,6 @@
 # -*-Dockerfile-*-
 
-ARG DEBIAN_VERSION=stable
+ARG DEBIAN_VERSION=bookworm
 
 FROM debian:${DEBIAN_VERSION} AS builder-onedrive
 
