@@ -2,6 +2,58 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.7 - 2025-09-23
+
+### Added
+*   Implement Feature Request: Show GUI notification when sync suspends due to 'large delete' threshold (#3388)
+*   Implement Feature Request: Implement resumable downloads (#3354)
+
+### Changed
+*   Removed the auto configuration of using a larger fragment size (#3370)
+*   Removed the OpenSSL Test (#3420)
+
+### Fixed
+*   Fix Bug: Catch unhandled OneDriveError exception due to libcurl failing to access the system CA certificate bundle (#3322)
+*   Fix Bug: 'items-dryrun.sqlite3' gets erroneously created when running a 'no sync' operation (#3325)
+*   Fix Bug: Handle online folder deletion|creation with same name that causes 'id' to change (#3332)
+*   Fix Bug: Reduce I/O pressure on SQLite DB Operations (#3334)
+*   Fix Bug: Handle a 409 online folder creation response with a re-query of the API (#3335)
+*   Fix Bug: Fix systemd issue with ExecStartPre statement to be more OS independent (#3348)
+*   Fix Bug: When using --upload-only do not try and update the local file timestamp post upload (#3349)
+*   Fix Bug: Add missing 'config' options to --display-config (#3353)
+*   Fix Bug: Fix that a failed file download can lead to online deletion (#3351)
+*   Fix Bug: Update searchDriveItemForFile() to handle specific 404 response when file cannot be found (#3365)
+*   Fix Bug: Fix that resync state remains true post first successful full sync (#3368)
+*   Fix Bug: Fix that long running big upload (250GB+) fails because of an expired access token (#3361)
+*   Fix Bug: Handle inconsistent OneDrive Personal driveId casing across multiple Microsoft Graph API Endpoints (#3347)
+*   Fix Bug: Update Microsoft OneNote handling for 'OneNote_RecycleBin' objects (#3350)
+*   Fix Bug: Handle invalid JSON response when querying parental details (#3379)
+*   Fix Bug: Fix foreign key issue when performing a --resync due to a missed conversion of driveId to lowercase values and path is covered by 'sync_list' entries (#3383)
+*   Fix Bug: Ensure 'sync_list' inclusion rules are correctly evaluated (#3381)
+*   Fix Bug: Fix issue of trying to create the root folder online (#3403)
+*   Fix Bug: Fix resumable downloads so that the curl engine offset point is reset post successful download (#3406)
+*   Fix Bug: Fix application crash when a file is created and deleted quickly (#3405)
+*   Fix Bug: Fix the support of relocated shared folders for OneDrive Personal (#3411)
+*   Fix Bug: Fix infinite loop after a failed network connection due to changed curl messaging (#3412)
+*   Fix Bug: Fix computePath() to track the parental path anchor when a Shared Folder is relocated with a deeper path (#3417)
+*   Fix Bug: Fix SharePoint Shared Library DB Tie creation (#3419)
+*   Fix Bug: Update safeBackup() function to ensure that the 'safeBackup' path addition is only added once (#3445)
+
+### Updated
+*   Updated OAuth2 Interactive Authorisation Flow prompts to remove any ambiguity on what actions a user needs to take (#3323)
+*   Updated onedrive.spec.in to correct missing dependencies (#3329)
+*   Updated minimum compiler version details (#3330)
+*   Updated documentation and function for how 'threads' is used (#3352)
+*   Updated logging output for upsert() function (#3333)
+*   Updated curl 8.13.x and 8.14.0 to known bad curl versions (#3356)
+*   Updated logging output when processing online deletion events (#3373)
+*   Updated logging output and use of grandparent identifiers when using --dry-run (#3377)
+*   Updated GitHub Action versions for building Docker containers (#3378)
+*   Updated how the ETA values are calculated to avoid negative values (#3386)
+*   Updated Debian Dockerfile to use upstream gosu (#3402)
+*   Updated Debian Dockerfile to use 'bookworm' (#3402)
+
+
 ## 2.5.6 - 2025-06-05
 
 ### Added
