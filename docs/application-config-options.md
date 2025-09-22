@@ -113,7 +113,7 @@ Before reading this document, please ensure you are running application version 
 ## Configuration File Options
 
 ### application_id
-_**Description:**_ This is the config option for application id that used to identify itself to Microsoft OneDrive. In some circumstances, it may be desirable to use your own application id. To do this, you must register a new application with Microsoft Azure via	https://portal.azure.com/, then use your new application id with this config option.
+_**Description:**_ This is the config option for application id that used to identify itself to Microsoft OneDrive. In some circumstances, it may be desirable to use your own application id. To do this, you must register a new application with Microsoft Azure via	https://portal.azure.com/, then use your new application id with this config option. You can find instructions for configuring your own app registration in [national-cloud-deployments.md](national-cloud-deployments.md) even if you don't necessarily configure it for a national cloud environment.
 
 _**Value Type:**_ String
 
