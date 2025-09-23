@@ -170,6 +170,7 @@ GKXPN
 gmake
 gmodule
 GObject
+gosu
 gpg
 GPLv
 GPOs
