@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Fix Bug: Fix infinite loop after a failed network connection due to changed curl messaging (#3412)
 *   Fix Bug: Fix computePath() to track the parental path anchor when a Shared Folder is relocated with a deeper path (#3417)
 *   Fix Bug: Fix SharePoint Shared Library DB Tie creation (#3419)
-*   Fix Bug: Update safeBackup() function to ensure that the 'safeBackup' path addition is only added once (#3445)
+*   Fix Bug: Update safeBackup() function to ensure that the 'safeBackup' path addition is only added once and ignore directories (#3445)
 
 ### Updated
 *   Updated OAuth2 Interactive Authorisation Flow prompts to remove any ambiguity on what actions a user needs to take (#3323)
@@ -52,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Updated how the ETA values are calculated to avoid negative values (#3386)
 *   Updated Debian Dockerfile to use upstream gosu (#3402)
 *   Updated Debian Dockerfile to use 'bookworm' (#3402)
+*   Updated documentation
 
 
 ## 2.5.6 - 2025-06-05
