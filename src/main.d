@@ -950,7 +950,7 @@ int main(string[] cliArgs) {
 			if (appConfig.getValueBool("webhook_enabled") && appConfig.curlSupportsWebSockets) {
 				// We have to disable 'websocket' support
 				addLogEntry();
-				addLogEntry("WARNING: Websocket support has been disabled because webhooks are already configured to monitor Microsoft Graph API changes.");
+				addLogEntry("WARNING: WebSocket support has been disabled because Webhooks are already configured to monitor Microsoft Graph API changes.");
 				addLogEntry("         Only one API notification method can be active at a time.");
 				addLogEntry();
 				// Set the flag that this will not be used
@@ -958,24 +958,23 @@ int main(string[] cliArgs) {
 			} else {
 				// Double check scenario, this time 'false' checking 'webhook_enabled'
 				if ((!appConfig.getValueBool("webhook_enabled")) && (appConfig.curlSupportsWebSockets)) {
-					addLogEntry("Attempting to enable websocket support to monitor Microsoft Graph API changes in near real-time.");
-				}
-				
-				// Obtain the Websocket Notification URL from the API endpoint
-				syncEngineInstance.obtainWebSocketNotificationURL();
-				
-				// Were we able to correctly obtain the endpoint response and build the socket.io WS endpoint
-				if (appConfig.websocketNotificationUrlAvailable) {
-					// URL is available
+					addLogEntry("Attempting to enable WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 					
-					if (oneDriveSocketIo is null) {
-						oneDriveSocketIo = new OneDriveSocketIo(thisTid, appConfig);
-						oneDriveSocketIo.start();
+					// Obtain the WebSocket Notification URL from the API endpoint
+					syncEngineInstance.obtainWebSocketNotificationURL();
+					
+					// Were we able to correctly obtain the endpoint response and build the socket.io WS endpoint
+					if (appConfig.websocketNotificationUrlAvailable) {
+						// URL is available
+						if (oneDriveSocketIo is null) {
+							oneDriveSocketIo = new OneDriveSocketIo(thisTid, appConfig);
+							oneDriveSocketIo.start();
+						}
+						
+					// Logging of WebSocket being enabled is moved to socketio.d
+					} else {
+						addLogEntry("ERROR: Unable to configure WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 					}
-					
-					// Logging of websocket being enabled is moved to socketio.d
-				} else {
-					addLogEntry("ERROR: Unable to configure websocket support to monitor Microsoft Graph API changes in near real-time.");
 				}
 			}
 			
@@ -1118,7 +1117,7 @@ int main(string[] cliArgs) {
 						oneDriveWebhook.createOrRenewSubscription();
 					}
 				} else {
-					// Websocket support is enabled by default, but only if the version of libcurl supports it
+					// WebSocket support is enabled by default, but only if the version of libcurl supports it
 					if (appConfig.curlSupportsWebSockets) {
 						// Do we need to renew the notification URL?
 						auto renewEarly = dur!"seconds"(120);
@@ -1127,7 +1126,7 @@ int main(string[] cliArgs) {
 							auto now    = Clock.currTime(UTC());
 							if (expiry - now <= renewEarly) {
 								try {
-									// Obtain the Websocket Notification URL from the API endpoint
+									// Obtain the WebSocket Notification URL from the API endpoint
 									syncEngineInstance.obtainWebSocketNotificationURL();
 									if (debugLogging) addLogEntry("Refreshed WebSocket notification URL prior to expiry", ["debug"]);
 								} catch (Exception e) {
@@ -1318,13 +1317,13 @@ int main(string[] cliArgs) {
 							// Webhook Notification reset to false for this loop
 							notificationReceived = false;
 						} else {
-							// Websocket support is enabled by default, but only if the version of libcurl supports it
+							// WebSocket support is enabled by default, but only if the version of libcurl supports it
 							if (appConfig.curlSupportsWebSockets) {
 								// Update sleep time based on renew interval
 								Duration nextWebsocketCheckDuration = oneDriveSocketIo.getNextExpirationCheckDuration();
 								if (nextWebsocketCheckDuration < sleepTime) {
 									sleepTime = nextWebsocketCheckDuration;
-									if (debugLogging) {addLogEntry("Update sleeping time (based on websocket next expiration check) to " ~ to!string(sleepTime), ["debug"]);}
+									if (debugLogging) {addLogEntry("Update sleeping time (based on WebSocket next expiration check) to " ~ to!string(sleepTime), ["debug"]);}
 								}
 							}
 						}

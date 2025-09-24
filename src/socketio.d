@@ -36,7 +36,7 @@ private string redactWsUrl(string url)
     return url[0 .. i + 6] ~ "****" ~ url[j .. $];
 }
 
-// Check if URL has basic Engine.IO v4 websocket params
+// Check if URL has basic Engine.IO v4 WebSocket params
 private bool looksLikeEioWs(string url)
 {
     auto hasEio = (url.indexOf("EIO=4") >= 0) || (url.indexOf("eio=4") >= 0);
@@ -84,7 +84,7 @@ public:
         stopRequested = false;
         started = true;
         spawn(&run, cast(shared) this);
-        addLogEntry("Enabled websocket support to monitor Microsoft Graph API changes in near real-time.");
+        addLogEntry("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
     }
 
     void stop()
@@ -146,10 +146,10 @@ private:
             const string wsUrl = baseUrl;
             addLogEntry("WS: connecting to " ~ redactWsUrl(wsUrl));
 
-            // Quick sanity: does it look like an Engine.IO v4 websocket URL?
+            // Quick sanity: does it look like an Engine.IO v4 WebSocket URL?
             if (!looksLikeEioWs(wsUrl))
             {
-                addLogEntry("WS WARN: URL does not look like Engine.IO v4 websocket (missing EIO=4 and/or transport=websocket)");
+                addLogEntry("WS WARN: URL does not look like Engine.IO v4 WebSocket (missing EIO=4 and/or transport=websocket)");
             }
 
             auto ws = new CurlWebSocket();

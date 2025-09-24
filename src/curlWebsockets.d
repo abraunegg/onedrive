@@ -529,7 +529,7 @@ public:
             string cookieLine = "Cookie: io=" ~ sid ~ "\r\n";
 
             if (!websocketUpgradeSameSocket(wsPQ, cookieLine)) {
-                logCurlWebsocketOutput("connect: websocket upgrade failed");
+                logCurlWebsocketOutput("connect: WebSocket upgrade failed");
                 return -1;
             }
 
@@ -548,7 +548,7 @@ public:
             cast(void)sendText("40");
 
             // **NEW (surgical): kick the ping cycle** — some servers expect the client
-            // to send a ping on the websocket transport post-upgrade before they start
+            // to send a ping on the WebSocket transport post-upgrade before they start
             // their own cadence.
             cast(void)sendText("2");
 
