@@ -56,6 +56,7 @@ bools
 bpozdena
 brp
 btw
+buflen
 bugzilla
 builddir
 buildfiles
@@ -75,6 +76,7 @@ checkinterval
 chkconfig
 chpst
 classinfo
+clen
 cloexec
 Cloudflare
 cmptr
@@ -125,6 +127,7 @@ drwxrwxr
 dryrun
 DTime
 Dynu
+EIOv
 eis
 ele
 endinaness
@@ -299,6 +302,7 @@ nativeclient
 nbd
 nbytes
 ncache
+nconnection
 ndata
 netinet
 nev
@@ -324,6 +328,7 @@ nrecords
 ntfs
 nto
 nuntil
+nupgrade
 nupload
 nvia
 objectsx
@@ -344,6 +349,7 @@ pamac
 parentid
 passoff
 pastebin
+permessage
 pfa
 PFN
 phlibi
@@ -363,6 +369,7 @@ preinit
 preun
 privkey
 Privs
+prt
 prueba
 prw
 Pseudoblocking
@@ -371,6 +378,7 @@ puml
 Pwy
 qewrqwerwqer
 Qmark
+qpos
 QWords
 qxor
 raf
@@ -432,9 +440,11 @@ skilion
 skinparam
 slist
 Sockaddrs
+socketio
 somevar
 sooooo
 specpart
+SSLVERSION
 startuml
 statm
 stdc
@@ -466,6 +476,7 @@ tkx
 tlsv
 trashinfo
 Tting
+tval
 typecons
 uda
 udas
