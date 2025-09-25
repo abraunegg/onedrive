@@ -8,6 +8,7 @@ import std.concurrency : Tid, spawn, send;
 import core.time       : Duration, dur;
 import std.datetime    : SysTime, Clock, UTC;
 import std.conv        : to;
+import std.string      : indexOf;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -136,16 +137,31 @@ private:
             return;
         }
 
-        // Open default namespace: send "40"
+        
+		
+		// Open default namespace: send "40"
 		logSocketIOOutput("Sending Socket.IO connect (40) to default namespace");
         if (ws.sendText("40") != 0) {
             logSocketIOOutput("Failed to send 40 (open namespace)");
             return;
-        }
-		logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/'");
+        } else {
+			logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/'");
+		}
 		
-		bool firstPingLogged = false;
-		bool firstPongLogged = false;
+		
+		
+		// Open 'notifications' namespace: send "40"
+		logSocketIOOutput("Sending Socket.IO connect (40) to '/notifications' namespace");
+		if (ws.sendText("40/notifications") != 0) {
+			logSocketIOOutput("Failed to send 40 for '/notifications' namespace");
+			// Not fatal; continue with default ns
+		} else {
+			logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/notifications'");
+		}
+		
+		
+		
+		
 
         // Main loop with SysTime-based timing (no MonoTime import)
         SysTime nextPing = Clock.currTime(UTC()) + dur!"msecs"(self.pingIntervalMs);
@@ -203,8 +219,11 @@ private:
 				string newWsUrl = toSocketIoWsUrl(self.currentNotifUrl);
 				// Establish a fresh connection and handshakes
 				ws = new CurlWebSocket();
-				ws.setUserAgent("onedrive-linux/socketio");
+				
+				// Use application configuration values
+				ws.setUserAgent(self.appConfig.getValueString("user_agent"));
 				ws.setTimeouts(10000, 15000);
+				
 				auto rc2 = ws.connect(newWsUrl);
 				if (rc2 != 0) {
 					logSocketIOOutput("reconnect failed");
@@ -215,48 +234,82 @@ private:
 					logSocketIOOutput("Engine.IO open after reconnect failed");
 					break;
 				}
-				logSocketIOOutput("sending Socket.IO connect (40) to default namespace");
+				
+				
+				// Open default namespace: send "40"
+				logSocketIOOutput("Sending Socket.IO connect (40) to default namespace");
 				if (ws.sendText("40") != 0) {
-					logSocketIOOutput("failed to send 40 (open namespace) after reconnect");
-					break;
+					logSocketIOOutput("Failed to send 40 (open namespace)");
+					return;
+				} else {
+					logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/'");
 				}
+			
+				
+				// Open 'notifications' namespace: send "40"
+				logSocketIOOutput("Sending Socket.IO connect (40) to '/notifications' namespace");
+				if (ws.sendText("40/notifications") != 0) {
+					logSocketIOOutput("Failed to send 40 for '/notifications' namespace");
+					// Not fatal; continue with default ns
+				} else {
+					logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/notifications'");
+				}
+				
+				
 				// reset state flags
 				self.namespaceOpened = false; // will be set true on ack
 				// continue loop; we'll read until we get the "40" ack again
 			}
 
-			// Receive
+			// Receive Message
             auto msg = ws.recvText();
             if (msg.length == 0) {
                 Thread.sleep(dur!"msecs"(20));
                 continue;
             }
 
-            // Engine.IO / Socket.IO parsing without startsWith()
+            // Engine.IO / Socket.IO parsing
 			if (msg.length > 0 && msg[0] == '2') {
 				// Server ping -> immediate pong
 				if (ws.sendText("3") != 0) {
 					logSocketIOOutput("Failed sending Engine.IO pong '3'");
 					break;
+				} else {
+					// Log we sent the pong response
+					logSocketIOOutput("Engine.IO ping received, → pong sent");
 				}
-				// Optional: log once or sparsely
-				logSocketIOOutput("Engine.IO ping received, → pong sent");
 				continue;
 			}
 			
-			
-			
-            if (msg.length > 0 && msg[0] == '3') {
-                // Engine.IO pong
-				if (!firstPongLogged) { logSocketIOOutput("Received Engine.IO pong"); firstPongLogged = true; }
+			if (msg.length > 0 && msg[0] == '3') {
                 continue;
-            } else if (msg.length > 1 && msg[0] == '4' && msg[1] == '2') { // Received a '42' code
-                handleSocketIoEvent(msg);
+            } else if (msg.length > 1 && msg[0] == '4' && msg[1] == '2') { // Received a '42' code message
+				// Log what we received
+				logSocketIOOutput("Received 42 msg = " ~ to!string(msg));
+				handleSocketIoEvent(msg);
                 continue;
-            } else if (msg.length > 1 && msg[0] == '4' && msg[1] == '0') { // Received a '40' code
+            } else if (msg.length > 1 && msg[0] == '4' && msg[1] == '0') { // Received a '40' code message
+				// Log what we received
+				logSocketIOOutput("Received 40 msg = " ~ to!string(msg));
+				
+				// 40 msg = 40{"sid":"4VAo3HLIrYAbX8bfAv6E"}                - default namespace
+				// 40 msg = 40/notifications,{"sid":"og7z93E5_F4JKlHTAv6F"} - notification namespace
+				
+				// Parse the namespace string until end or comma (no comma on '40')
+				size_t i = 3;
+				while (i < msg.length && msg[i] != ',') i++;
+				auto ns = msg[3 .. i];
+				
+				if (ns == "notifications") {
+					logSocketIOOutput("Namespace '/notifications' opened; listening for Socket.IO events");	
+				} else {
+					logSocketIOOutput("Namespace '/' opened; listening for Socket.IO events");
+				}
+                
+				// Set flag
 				self.namespaceOpened = true;
-				logSocketIOOutput("Namespace '/' opened; listening for Socket.IO 'notification' events");
-                continue;
+				continue;
+				
             } else if (msg.length > 1 && msg[0] == '4' && msg[1] == '1') { // Received a '41' code
                 logSocketIOOutput("got 41 (disconnect)");
                 break;
@@ -266,6 +319,8 @@ private:
             } else {
                 logSocketIOOutput("rx: " ~ msg);
             }
+			
+			
         }
 		
 		// After the loop
@@ -280,6 +335,9 @@ private:
     static string toSocketIoWsUrl(string notificationUrl) {
         // input:  https://host/notifications?token=...&applicationId=...
         // output: wss://host/socket.io/?EIO=4&transport=websocket&token=...&applicationId=...
+		
+		logSocketIOOutput("toSocketIoWsUrl input: " ~ notificationUrl);
+		
         size_t schemePos = notificationUrl.length;
         {
             auto pos = cast(ptrdiff_t) -1;
@@ -316,10 +374,13 @@ private:
 
         string outUrl = "wss://" ~ host ~ "/socket.io/?EIO=4&transport=websocket";
         if (query.length > 0) outUrl ~= "&" ~ query;
-        return outUrl;
+        
+		logSocketIOOutput("toSocketIoWsUrl output: " ~ outUrl);
+		
+		return outUrl;
     }
 
-    static bool awaitEngineOpen(curlWebsockets.CurlWebSocket ws, OneDriveSocketIo self) {
+	static bool awaitEngineOpen(curlWebsockets.CurlWebSocket ws, OneDriveSocketIo self) {
         SysTime deadline = Clock.currTime(UTC()) + dur!"seconds"(10);
         for (;;) {
             if (Clock.currTime(UTC()) >= deadline) return false;

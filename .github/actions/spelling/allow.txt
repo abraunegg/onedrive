@@ -181,8 +181,10 @@ grecord
 groupinstall
 gshared
 GVariant
+hdrs
 hideonindex
 hnsecs
+hostport
 hotmail
 howto
 hskrieg
@@ -343,6 +345,7 @@ onmicrosoft
 ontextmessage
 oob
 opensuse
+outp
 overallocated
 pacman
 pamac
@@ -420,6 +423,7 @@ rwxr
 sargs
 sbindir
 scgi
+scl
 sdlang
 semanage
 sendfd
@@ -431,6 +435,7 @@ sfn
 sharedstatedir
 sharepoint
 shortnames
+sidx
 sigaction
 sigchldhandler
 sigemptyset
@@ -494,6 +499,7 @@ userpass
 usl
 valgrind
 verifypeer
+vsid
 vti
 wal
 websockets
