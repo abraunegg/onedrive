@@ -292,8 +292,8 @@ private:
 				// Log what we received
 				logSocketIOOutput("Received 40 msg = " ~ to!string(msg));
 				
-				// 40 msg = 40{"sid":"4VAo3HLIrYAbX8bfAv6E"}                - default namespace
-				// 40 msg = 40/notifications,{"sid":"og7z93E5_F4JKlHTAv6F"} - notification namespace
+				// 40 msg = 40{"sid":"sid_value"}                - default namespace
+				// 40 msg = 40/notifications,{"sid":"sid_value"} - notification namespace
 				
 				// Parse the namespace string until end or comma (no comma on '40')
 				size_t i = 3;
