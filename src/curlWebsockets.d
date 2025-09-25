@@ -1,784 +1,507 @@
+// What is this module called?
 module curlWebsockets;
 
-// Manual RFC6455 + Engine.IO v4 over libcurl CONNECT_ONLY
-// DMD 2.103.0; stock Phobos only; no libcurl WS API.
-// Allowed curl functions only: curl_easy_init/cleanup/setopt/perform/send/recv, curl_slist_append/free_all.
-//
-// Required API by project:
-// class CurlWebSocket {
-//   this(); ~this();
-//   void setTimeouts(int,int);
-//   void setUserAgent(string);
-//   void setSslVerify(bool,bool); // no-op
-//   bool isConnected();
-//   int  connect(string wsUrl);   // expects socket.io EIO=4-capable URL (notifications-derived)
-//   int  sendText(string);
-//   string recvText();
-// }
-//
-// All logging goes via addLogEntry; local helper wraps it as “WS: …”.
-
-import std.array                 : Appender;
-import std.conv                  : to;
+// What does this module require to function?
 import std.exception             : collectException;
-import std.format                : format;
-import std.random                : Random, unpredictableSeed, uniform;
-import std.string                : indexOf, strip, toLower, split, startsWith, replace, toStringz;
-import std.utf                   : byCodeUnit;
-import std.algorithm.searching   : countUntil;
-import std.datetime              : Clock, UTC;
-import std.digest.sha            : SHA1;
-import std.base64                : Base64;
 
-import core.time                 : dur;
-import core.thread               : Thread;
+// What other modules that we have created do we need to import?
+import log;
 
-import log; // addLogEntry(string)
-
-// ========== libcurl minimal decls ==========
-extern(C) {
-
-struct CURL { }
-struct curl_slist { char* data; curl_slist* next; }
-
-enum CURLE_OK = 0;
-enum CURLE_AGAIN = 81;
-
-enum CURLOPTTYPE_LONG          = 0;
-enum CURLOPTTYPE_OBJECTPOINT   = 10000;
-enum CURLOPTTYPE_FUNCTIONPOINT = 20000;
-enum CURLOPTTYPE_OFF_T         = 30000;
-
-enum CURLOPT_URL               = CURLOPTTYPE_OBJECTPOINT + 2;
-enum CURLOPT_USERAGENT         = CURLOPTTYPE_OBJECTPOINT + 18;
-enum CURLOPT_HTTPHEADER        = CURLOPTTYPE_OBJECTPOINT + 23;
-enum CURLOPT_WRITEFUNCTION     = CURLOPTTYPE_FUNCTIONPOINT + 11;
-enum CURLOPT_WRITEDATA         = CURLOPTTYPE_OBJECTPOINT + 1;
-enum CURLOPT_HEADER            = CURLOPTTYPE_LONG + 42;
-enum CURLOPT_CONNECT_ONLY      = CURLOPTTYPE_LONG + 141;
-enum CURLOPT_TIMEOUT_MS        = CURLOPTTYPE_LONG + 155;
-enum CURLOPT_CONNECTTIMEOUT_MS = CURLOPTTYPE_LONG + 156;
-enum CURLOPT_FRESH_CONNECT     = CURLOPTTYPE_LONG + 74;
-enum CURLOPT_FORBID_REUSE      = CURLOPTTYPE_LONG + 75;
-enum CURLOPT_VERBOSE           = CURLOPTTYPE_LONG + 41;
-
-enum CURLOPT_HEADERFUNCTION    = CURLOPTTYPE_FUNCTIONPOINT + 79;
-enum CURLOPT_HEADERDATA        = CURLOPTTYPE_OBJECTPOINT   + 29;
-
-enum CURLOPT_IPRESOLVE         = CURLOPTTYPE_LONG + 113;
-enum CURL_IPRESOLVE_V4         = 1;
-
-enum CURLOPT_TCP_NODELAY       = CURLOPTTYPE_LONG + 121;
-enum CURLOPT_NOSIGNAL          = CURLOPTTYPE_LONG + 99;
-
-enum CURLOPT_HTTP_VERSION      = CURLOPTTYPE_LONG + 84;
-enum CURL_HTTP_VERSION_1_1     = 2;
-
-enum CURLOPT_SSLVERSION        = CURLOPTTYPE_LONG + 32;
-enum CURL_SSLVERSION_TLSv1_2   = 6;
-
-enum CURLOPT_SSL_ENABLE_ALPN   = CURLOPTTYPE_LONG + 272;
-enum CURLOPT_SSL_ENABLE_NPN    = CURLOPTTYPE_LONG + 274;
-
-CURL* curl_easy_init();
-void  curl_easy_cleanup(CURL*);
-int   curl_easy_setopt(CURL*, int option, ...);
-int   curl_easy_perform(CURL*);
-
-int   curl_easy_send(CURL*, const(void)* buffer, size_t buflen, size_t* n);
-int   curl_easy_recv(CURL*, void* buffer, size_t buflen, size_t* n);
-
-curl_slist* curl_slist_append(curl_slist*, const(char)*);
-void        curl_slist_free_all(curl_slist*);
-}
-
-// ========== logging shim ==========
+// ========== Logging Shim ==========
 private void logCurlWebsocketOutput(string s) {
     collectException(addLogEntry("WS: " ~ s));
 }
-private void sleepMs(int ms) { Thread.sleep(dur!"msecs"(ms)); }
 
-// ========== URL parsing (no std.uri) ==========
-private struct ParsedUrl {
-    string scheme; // ws|wss
+/******************************************************************************
+ * Minimal RFC6455 WebSocket client over libcurl (CONNECT_ONLY).
+ ******************************************************************************/
+
+// functions/types only; no constants pulled from etc.c.curl
+import etc.c.curl : CURL, CURLcode, curl_easy_cleanup, curl_easy_getinfo,
+    curl_easy_init, curl_easy_perform, curl_easy_recv, curl_easy_reset,
+    curl_easy_send, curl_easy_setopt, curl_global_cleanup, curl_global_init;
+
+import core.stdc.string : memcpy, memmove;
+import core.time        : MonoTime, dur;
+import std.array        : Appender, appender;
+import std.base64       : Base64;
+import std.meta         : AliasSeq;
+import std.random       : Random, unpredictableSeed, uniform;
+import std.range        : empty;
+import std.string       : indexOf, startsWith, toLower, toStringz;
+
+private struct WsFrame {
+    ubyte fin;
+    ubyte opcode;
+    bool  masked;
+    ulong payloadLen;
+    ubyte[4] maskKey;
+    ubyte[] payload;
+}
+
+final class CurlWebSocket {
+
+private:
+    // ---- libcurl constants defined locally (per your requirement) ----
+    enum long CURL_GLOBAL_DEFAULT       = 3;     // CURL_GLOBAL_ALL
+    enum int  CURLOPT_URL               = 10002;
+    enum int  CURLOPT_FOLLOWLOCATION    = 52;
+    enum int  CURLOPT_NOSIGNAL          = 99;
+    enum int  CURLOPT_USERAGENT         = 10018;
+    enum int  CURLOPT_SSL_VERIFYPEER    = 64;
+    enum int  CURLOPT_SSL_VERIFYHOST    = 81;
+    enum int  CURLOPT_CONNECT_ONLY      = 141;
+    enum int  CURLOPT_TIMEOUT_MS        = 155;
+    enum int  CURLOPT_CONNECTTIMEOUT_MS = 156;
+    enum int  CURLOPT_VERBOSE           = 41;
+
+    CURL*  curl = null;
+    bool   websocketConnected = false;
+    int    connectTimeoutMs   = 10000;
+    int    ioTimeoutMs        = 15000;
+    string userAgent          = ""; // We will import the User Agent from appConfig via socketio.d
+
+    string scheme;
     string host;
-    ushort port;
-    string pathAndQuery; // includes leading '/'
-}
-
-private ParsedUrl parseWsUrl(string u) {
-    ParsedUrl p;
-    if (u.length < 5) throw new Exception("URL too short");
-    auto low = u.toLower();
-
-    if (low.startsWith("wss://")) { p.scheme = "wss"; }
-    else if (low.startsWith("ws://")) { p.scheme = "ws"; }
-    else throw new Exception("URL must start with ws:// or wss://");
-
-    size_t off = (p.scheme == "wss") ? 6 : 5;
-
-    // host[:port][/...]
-    ptrdiff_t slashRel = (u.length > off) ? u[off .. $].countUntil('/') : -1;
-    ptrdiff_t slashAbs = (slashRel < 0) ? -1 : (off + slashRel);
-
+    int    port;
     string hostPort;
-    if (slashAbs < 0) {
-        hostPort = u[off .. $];
-        p.pathAndQuery = "/";
-    } else {
-        hostPort = u[off .. cast(size_t)slashAbs];
-        p.pathAndQuery = u[cast(size_t)slashAbs .. $];
-        if (p.pathAndQuery.length == 0) p.pathAndQuery = "/";
-    }
+    string pathQuery;
 
-    auto colon = hostPort.indexOf(":");
-    if (colon < 0) {
-        p.host = hostPort;
-        p.port = (p.scheme == "wss") ? 443 : 80;
-    } else {
-        p.host = hostPort[0 .. cast(size_t)colon];
-        auto ps = hostPort[cast(size_t)(colon + 1) .. $];
-        ushort prt = 0;
-        foreach (ch; ps.byCodeUnit) {
-            if (ch < '0' || ch > '9') throw new Exception("invalid port");
-            prt = cast(ushort)(prt * 10 + (ch - '0'));
-        }
-        if (prt == 0) throw new Exception("invalid port");
-        p.port = prt;
-    }
+    ubyte[] recvBuf;
+    Random rng;
 
-    return p;
-}
-
-// ========== small utils ==========
-
-private ubyte[] randomBytes(size_t n) {
-    static bool seeded = false;
-    static Random rng;
-    if (!seeded) { rng = Random(unpredictableSeed); seeded = true; }
-    auto buf = new ubyte[](n);
-    foreach (i; 0 .. n) buf[i] = uniform!ubyte(rng);
-    return buf;
-}
-
-// minimal Base64 via Phobos (standard alphabet)
-private string b64(const(ubyte)[] data) {
-    return cast(string)Base64.encode(data).idup;
-}
-
-private string sha1b64(string s) {
-    auto sha = SHA1();
-    sha.put(cast(const(ubyte)[])s);
-    auto dig = sha.finish();
-    return cast(string)Base64.encode(dig[]).idup;
-}
-
-// masking per RFC6455
-private void maskPayload(ubyte[] buf, ubyte[4] key) {
-    foreach (i; 0 .. buf.length) buf[i] ^= key[i & 3];
-}
-
-// recv buffer with small scratch
-private struct RecvBuf {
-    private ubyte[] buf;
-    private ubyte[] scratch;
-    CURL* handle;
-
-    void clear() { buf.length = 0; }
-
-    bool ensure(size_t need, int timeoutMs = 250) {
-        if (buf.length >= need) return true;
-
-        if (scratch.length == 0) {
-            logCurlWebsocketOutput("RecvBuf.ensureScratch: allocated scratch=4096");
-            scratch = new ubyte[4096]; // allocate a real 4KB buffer
-        }
-
-        size_t loops = 0;
-        auto start = Clock.currTime(UTC());
-        for (;;) {
-            if (buf.length >= need) return true;
-
-            size_t n = 0;
-            auto rc = curl_easy_recv(handle, scratch.ptr, scratch.length, &n);
-            if (rc == CURLE_OK) {
-                if (n > 0) {
-                    auto old = buf.length;
-                    buf.length = old + n;
-                    foreach (i; 0 .. n) buf[old + i] = scratch[i];
-                }
-            } else if (rc == CURLE_AGAIN) {
-                // spin until timeout
-            } else {
-                // treat as no progress
-            }
-
-            ++loops;
-            auto elapsed = (Clock.currTime(UTC()) - start).total!"msecs";
-            if (buf.length >= need) return true;
-            if (elapsed >= timeoutMs) {
-                logCurlWebsocketOutput(format("RecvBuf.ensure: timeout after %sms (AGAIN), have=%s need=%s -> return false",
-                               elapsed, buf.length, need));
-                return false;
-            }
-            if ((loops % 20) == 0) {
-                logCurlWebsocketOutput(format("RecvBuf.ensure: CURLE_AGAIN loops=%s elapsed=%sms have=%s need=%s",
-                    loops, elapsed, buf.length, need));
-            }
-            sleepMs(5);
-        }
-    }
-
-    ubyte[] take(size_t n) {
-        auto have = buf.length;
-        size_t m = (n > have) ? have : n;
-        auto chunk = new ubyte[](m);
-        foreach (i; 0 .. m) chunk[i] = buf[i];
-        auto remain = have - m;
-        foreach (i; 0 .. remain) buf[i] = buf[m + i];
-        buf.length = remain;
-        return chunk;
-    }
-
-    ubyte[] takeAll() { return take(buf.length); }
-}
-
-// ========== simple HTTP helpers over CONNECT_ONLY ==========
-private struct HttpResp {
-    int statusCode;
-    string headers;   // raw headers (without the terminating CRLFCRLF)
-    ubyte[] body;     // body bytes
-}
-
-private string normalizeQueryKeepExtras(string q, bool toPolling) {
-    // remove any existing eio/transport/sid, then add the desired ones
-    auto items = q.split("&");
-    Appender!string qb;
-    bool first = true;
-    foreach (it; items) {
-        auto kv = it.split("=");
-        if (kv.length == 0) continue;
-        auto k = kv[0].toLower().strip();
-        if (k == "eio" || k == "transport" || k == "sid") continue;
-        if (!first) qb.put("&"); first = false;
-        qb.put(it);
-    }
-    auto suffix = toPolling ? "EIO=4&transport=polling" : "EIO=4&transport=websocket";
-    if (!first) qb.put("&");
-    qb.put(suffix);
-    return qb.data;
-}
-
-private int findContentLength(string headers) {
-    auto low = headers.toLower();
-    auto k = "content-length:";
-    auto p = low.indexOf(k);
-    if (p < 0) return -1;
-    size_t i = cast(size_t)(p + k.length);
-    while (i < low.length && (low[i] == ' ' || low[i] == '\t')) ++i;
-    int v = 0;
-    bool any = false;
-    while (i < low.length) {
-        auto ch = low[i];
-        if (ch < '0' || ch > '9') break;
-        v = v * 10 + (ch - '0');
-        any = true;
-        ++i;
-    }
-    return any ? v : -1;
-}
-
-private HttpResp httpGetOnSocket(CURL* h, ref RecvBuf rb, string hostHeader, string pathQuery, string cookieLine, string userAgent, int readTimeoutMs) {
-    // Build GET
-    string req =
-        format("GET %s HTTP/1.1\r\n", pathQuery) ~
-        format("Host: %s\r\n", hostHeader) ~
-        format("User-Agent: %s\r\n", userAgent) ~
-        "Accept: */*\r\n" ~
-        "Connection: keep-alive\r\n" ~
-        "Origin: https://graph.microsoft.com\r\n" ~
-        (cookieLine.length ? cookieLine : "") ~
-        "\r\n";
-
-    logCurlWebsocketOutput("EIO open via same socket: sending " ~ pathQuery);
-    logCurlWebsocketOutput("EIO open: request line = " ~ format("GET %s HTTP/1.1", pathQuery));
-
-    // send all
-    size_t off = 0;
-    auto bytes = cast(const(ubyte)[])req;
-    while (off < bytes.length) {
-        size_t n = 0;
-        auto rc = curl_easy_send(h, bytes.ptr + off, bytes.length - off, &n);
-        if (rc == CURLE_OK) {
-            off += n;
-        } else if (rc == CURLE_AGAIN) {
-            sleepMs(5);
-        } else {
-            logCurlWebsocketOutput("send failed during httpGetOnSocket");
-            return HttpResp.init;
-        }
-    }
-    logCurlWebsocketOutput(format("send: wrote %s bytes, total=%s/%s", bytes.length, bytes.length, bytes.length));
-
-    // read headers (may overread some bytes from body; capture leftovers)
-    Appender!(ubyte[]) ab;
-    auto start = Clock.currTime(UTC());
-    for (;;) {
-        if (!rb.ensure(1, 250)) {
-            auto elapsed = (Clock.currTime(UTC()) - start).total!"msecs";
-            if (elapsed >= readTimeoutMs) {
-                logCurlWebsocketOutput("HTTP: header read timeout");
-                return HttpResp.init;
-            }
-            continue;
-        }
-        auto chunk = rb.takeAll();
-        if (chunk.length) ab.put(chunk);
-        string s = cast(string)ab.data;
-        auto p = s.indexOf("\r\n\r\n");
-        if (p >= 0) {
-            auto statusEnd = s.indexOf("\r\n");
-            auto statusLine = (statusEnd > 0) ? s[0 .. cast(size_t)statusEnd] : s;
-            auto headersOnly = s[cast(size_t)(statusEnd + 2) .. cast(size_t)p];
-            logCurlWebsocketOutput(format("HTTP: header block length=%s", (statusEnd >= 0 ? statusEnd : 0)));
-
-            // status code
-            int statusCode = 0;
-            auto sp = statusLine.split(" ");
-            if (sp.length >= 2) { try { statusCode = sp[1].strip().to!int; } catch(Exception) {} }
-
-            // content length
-            int clen = findContentLength(headersOnly);
-            if (clen < 0) clen = 0;
-
-            // leftover (start of body)
-            size_t headerLen = cast(size_t)(p + 4);
-            auto all = ab.data;
-            size_t leftoverLen = (all.length > headerLen) ? (all.length - headerLen) : 0;
-
-            ubyte[] body = new ubyte[](cast(size_t)clen);
-            // copy leftovers
-            size_t have = (leftoverLen > cast(size_t)clen) ? cast(size_t)clen : leftoverLen;
-            foreach (i; 0 .. have) body[i] = all[headerLen + i];
-
-            // need more?
-            size_t pos = have;
-            while (pos < cast(size_t)clen) {
-                if (!rb.ensure(1, 250)) {
-                    auto e2 = (Clock.currTime(UTC()) - start).total!"msecs";
-                    if (e2 >= readTimeoutMs) {
-                        logCurlWebsocketOutput("HTTP: body read timeout");
-                        return HttpResp.init;
-                    }
-                    continue;
-                }
-                auto more = rb.take(cast(size_t)clen - pos);
-                foreach (i; 0 .. more.length) body[pos + i] = more[i];
-                pos += more.length;
-            }
-
-            logCurlWebsocketOutput(format("HTTP: body read %s bytes", body.length));
-            return HttpResp(statusCode, headersOnly, body);
-        }
-    }
-}
-
-// ========== RFC6455 helpers ==========
-private string wsAcceptForKey(string secKeyB64) {
-    enum GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-    return sha1b64(secKeyB64 ~ GUID);
-}
-
-// ========== class ==========
-class CurlWebSocket {
 public:
     this() {
-        httpHostHeader = "";
-        userAgent = "onedrive-websocket";
-        connectTimeoutMs = 10000;
-        totalTimeoutMs = 60 * 60 * 1000; // 1 hour default
-        connected = false;
-        h = null;
-        rb.handle = null;
+        websocketConnected = false;
+        logCurlWebsocketOutput("New instance of a CurlWebSocket object accessing libcurl for HTTP operations");
+        curl_global_init(CURL_GLOBAL_DEFAULT);
+        curl = curl_easy_init();
+        rng = Random(unpredictableSeed);
     }
 
     ~this() {
-        if (h !is null) curl_easy_cleanup(h);
-        h = null;
-        connected = false;
+	
+		logCurlWebsocketOutput("Destroyed instance of a CurlWebSocket object accessing libcurl for HTTP operations");
+	
+        if (curl !is null) {
+            curl_easy_cleanup(curl);
+            curl = null;
+        }
+        curl_global_cleanup();
+        websocketConnected = false;
     }
 
-    void setTimeouts(int connectSeconds, int totalMillis) {
-        connectTimeoutMs = (connectSeconds <= 0) ? 10000 : connectSeconds * 1000;
-        totalTimeoutMs   = (totalMillis   <  0) ? 0 : totalMillis;
-        logCurlWebsocketOutput(format("Timeouts set: connect=%sms total=%sms", connectTimeoutMs, totalTimeoutMs));
+    bool isConnected() {
+        return websocketConnected;
     }
 
-    void setUserAgent(string ua) { if (ua.length) userAgent = ua; }
-    void setSslVerify(bool, bool) { /* no-op */ }
-    bool isConnected() { return connected; }
+    void setTimeouts(int connectMs, int rwMs) {
+        connectTimeoutMs = connectMs;
+        ioTimeoutMs = rwMs;
+    }
 
-    // Allow both `ws.CURLE_OK` and `ws.CURLE_OK()` in existing code.
-    @property int CURLE_OK() { return 0; }
-
-    enum ubyte WS_TEXT  = 0x1;
-    enum ubyte WS_PING  = 0x9;
-    enum ubyte WS_PONG  = 0xA;
-    enum ubyte WS_CLOSE = 0x8;
+    void setUserAgent(string ua) {
+        import std.range : empty;
+        if (!ua.empty) userAgent = ua;
+    }
 
     int connect(string wsUrl) {
-        logCurlWebsocketOutput("connect() begin");
-        try {
-            pu = parseWsUrl(wsUrl);
-            logCurlWebsocketOutput(format("Parsed URL ok: scheme=%s host=%s port=%s path=%s", pu.scheme, pu.host, pu.port, pu.pathAndQuery));
-
-            const bool isSecure = (pu.scheme == "wss");
-            const bool omitPort = (isSecure && pu.port == 443) || (!isSecure && pu.port == 80);
-            httpHostHeader = omitPort ? pu.host : format("%s:%s", pu.host, pu.port);
-            baseHttpUrl = isSecure ? format("https://%s/", httpHostHeader) : format("http://%s/", httpHostHeader);
-            logCurlWebsocketOutput("curl URL = " ~ baseHttpUrl);
-
-            if (h is null) {
-                h = curl_easy_init();
-                if (h is null) { logCurlWebsocketOutput("curl_easy_init failed"); return -1; }
-                rb.handle = h;
-            } else {
-                rb.handle = h;
-            }
-            rb.clear();
-
-            // TCP/TLS connect
-            if (curl_easy_setopt(h, CURLOPT_URL, cast(void*)baseHttpUrl.toStringz()) != CURLE_OK) { logCurlWebsocketOutput("setopt URL failed"); return -1; }
-            cast(void)curl_easy_setopt(h, CURLOPT_HTTP_VERSION, cast(long)CURL_HTTP_VERSION_1_1);
-            cast(void)curl_easy_setopt(h, CURLOPT_SSL_ENABLE_ALPN, cast(long)0);
-            cast(void)curl_easy_setopt(h, CURLOPT_SSL_ENABLE_NPN,  cast(long)0);
-            cast(void)curl_easy_setopt(h, CURLOPT_IPRESOLVE, cast(long)CURL_IPRESOLVE_V4);
-            cast(void)curl_easy_setopt(h, CURLOPT_SSLVERSION, cast(long)CURL_SSLVERSION_TLSv1_2);
-            cast(void)curl_easy_setopt(h, CURLOPT_TCP_NODELAY, cast(long)1);
-            cast(void)curl_easy_setopt(h, CURLOPT_NOSIGNAL, cast(long)1);
-            cast(void)curl_easy_setopt(h, CURLOPT_VERBOSE, cast(long)0);
-            cast(void)curl_easy_setopt(h, CURLOPT_CONNECTTIMEOUT_MS, cast(long)connectTimeoutMs);
-            cast(void)curl_easy_setopt(h, CURLOPT_TIMEOUT_MS,        cast(long)totalTimeoutMs);
-            cast(void)curl_easy_setopt(h, CURLOPT_USERAGENT, cast(void*)userAgent.toStringz());
-            cast(void)curl_easy_setopt(h, CURLOPT_CONNECT_ONLY, cast(long)1);
-
-            logCurlWebsocketOutput("calling curl_easy_perform (CONNECT_ONLY) …");
-            auto rc = curl_easy_perform(h);
-            if (rc != CURLE_OK) {
-                logCurlWebsocketOutput("connect: perform failed rc=" ~ to!string(rc));
-                return rc;
-            }
-            logCurlWebsocketOutput("underlying TCP/TLS connected");
-
-            // ------------ 1) Engine.IO open via polling ------------
-            string pathQ = pu.pathAndQuery;
-            auto qpos = pathQ.indexOf("?");
-            if (qpos >= 0) {
-                auto parts = pathQ.split("?");
-                pathQ = parts[0] ~ "?" ~ normalizeQueryKeepExtras(parts[1], true);
-            } else {
-                pathQ = pathQ ~ "?EIO=4&transport=polling";
-            }
-            // add probe timestamp t=...
-            auto tval = to!string(Clock.currTime(UTC()).stdTime);
-            pathQ = pathQ ~ (pathQ.indexOf("?") >= 0 ? "&" : "?") ~ "t=" ~ tval;
-
-            auto respOpen = httpGetOnSocket(h, rb, pu.host, pathQ, "", userAgent, 60000);
-            if (respOpen.statusCode < 200 || respOpen.statusCode >= 300) {
-                logCurlWebsocketOutput("EIO open: bad status " ~ to!string(respOpen.statusCode));
-                return -1;
-            }
-
-            // Extract sid from body text
-            string bodyStr = cast(string)respOpen.body;
-            auto brace = bodyStr.indexOf("{");
-            string sid = "";
-            if (brace >= 0) {
-                auto tail = bodyStr[cast(size_t)brace .. $];
-                auto key = "\"sid\":\"";
-                auto p = tail.indexOf(key);
-                if (p >= 0) {
-                    size_t i = cast(size_t)(p + key.length);
-                    Appender!string sidApp;
-                    while (i < tail.length) {
-                        auto ch = tail[i];
-                        if (ch == '"') break;
-                        sidApp.put(ch);
-                        ++i;
-                    }
-                    sid = sidApp.data;
-                }
-            }
-            logCurlWebsocketOutput("EIO open: " ~ (sid.length ? ("sid=" ~ sid) : "sid not found"));
-            if (sid.length == 0) return -1;
-
-            // ------------ 2) WebSocket upgrade with sid ------------
-            string wsPQ;
-            {
-                auto pq = pu.pathAndQuery;
-                auto qp = pq.indexOf("?");
-                if (qp >= 0) {
-                    auto parts = pq.split("?");
-                    auto nq = normalizeQueryKeepExtras(parts[1], false);
-                    wsPQ = parts[0] ~ "?" ~ nq ~ "&sid=" ~ sid;
-                } else {
-                    wsPQ = pq ~ "?EIO=4&transport=websocket&sid=" ~ sid;
-                }
-            }
-            // Always send Cookie: io=<sid>
-            string cookieLine = "Cookie: io=" ~ sid ~ "\r\n";
-
-            if (!websocketUpgradeSameSocket(wsPQ, cookieLine)) {
-                logCurlWebsocketOutput("connect: WebSocket upgrade failed");
-                return -1;
-            }
-
-            // ------------ 3) Engine.IO WS probe/upgrade ------------
-            // send "2probe"
-            cast(void)sendText("2probe");
-            // wait for "3probe"
-            if (!waitForTextExact("3probe", 10000)) {
-                logCurlWebsocketOutput("probe: did not receive 3probe");
-                return -1;
-            }
-            // send "5" (upgrade)
-            cast(void)sendText("5");
-
-            // send Socket.IO namespace connect now
-            cast(void)sendText("40");
-
-            // **NEW (surgical): kick the ping cycle** — some servers expect the client
-            // to send a ping on the WebSocket transport post-upgrade before they start
-            // their own cadence.
-            cast(void)sendText("2");
-
-            connected = true;
-            return 0;
-        } catch (Exception ex) {
-            logCurlWebsocketOutput("connect() exception: " ~ ex.msg);
+        if (curl is null) {
+            logCurlWebsocketOutput("curl handle not initialised");
             return -1;
         }
-    }
 
-    int sendText(string s) {
-        return sendFrame(WS_TEXT, cast(const(ubyte)[])s);
-    }
+        ParsedUrl p = parseWsUrl(wsUrl);
+        if (!p.ok) {
+            logCurlWebsocketOutput("Invalid WebSocket URL: " ~ wsUrl);
+            return -2;
+        }
+        scheme    = p.scheme;
+        host      = p.host;
+        port      = p.port;
+        hostPort  = p.hostPort;
+        pathQuery = p.pathQuery;
 
-    string recvText() {
-        auto fr = readFrame();
-        if (fr.rc != 0 || fr.opcode != WS_TEXT) return "";
-        auto chars = new char[](fr.payload.length);
-        foreach (i; 0 .. fr.payload.length) chars[i] = cast(char)fr.payload[i];
-        return cast(string)chars;
-    }
+        string connectUrl = (scheme == "wss" ? "https://" : "http://") ~ hostPort ~ pathQuery;
 
-private:
-    CURL*  h;
-    bool   connected;
-    string userAgent;
-    string httpHostHeader; // includes :port if non-default
-    string baseHttpUrl;    // https://host[:port]/
-    ParsedUrl pu;
+        curl_easy_reset(curl);
+        curl_easy_setopt(curl, cast(int)CURLOPT_VERBOSE,            0L);
+        curl_easy_setopt(curl, cast(int)CURLOPT_NOSIGNAL,           1L);
+        curl_easy_setopt(curl, cast(int)CURLOPT_FOLLOWLOCATION,     1L);
+        curl_easy_setopt(curl, cast(int)CURLOPT_USERAGENT,          userAgent.toStringz);   // NUL-terminated
+        curl_easy_setopt(curl, cast(int)CURLOPT_CONNECTTIMEOUT_MS,  cast(long)connectTimeoutMs);
+        curl_easy_setopt(curl, cast(int)CURLOPT_TIMEOUT_MS,         cast(long)ioTimeoutMs);
+        curl_easy_setopt(curl, cast(int)CURLOPT_SSL_VERIFYPEER,     1L);
+        curl_easy_setopt(curl, cast(int)CURLOPT_SSL_VERIFYHOST,     2L);
+        curl_easy_setopt(curl, cast(int)CURLOPT_CONNECT_ONLY,       1L);
+        curl_easy_setopt(curl, cast(int)CURLOPT_URL,                connectUrl.toStringz);  // NUL-terminated
 
-    int connectTimeoutMs;
-    int totalTimeoutMs;
-
-    RecvBuf rb;
-
-    private bool websocketUpgradeSameSocket(string pathQueryWs, string cookieLine) {
-        auto secKey = b64(randomBytes(16));
-
-        rb.clear();
-
-        string req =
-            format("GET %s HTTP/1.1\r\n", pathQueryWs) ~
-            format("Host: %s\r\n", httpHostHeader) ~
-            "Upgrade: websocket\r\n" ~
-            "Connection: Upgrade\r\n" ~
-            format("Sec-WebSocket-Key: %s\r\n", secKey) ~
-            "Sec-WebSocket-Version: 13\r\n" ~
-            "Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r\n" ~
-            "Origin: https://graph.microsoft.com\r\n" ~
-            "Pragma: no-cache\r\n" ~
-            "Cache-Control: no-cache\r\n" ~
-            format("User-Agent: %s\r\n", userAgent) ~
-            cookieLine ~
-            "\r\n";
-
-        logCurlWebsocketOutput(format("sending WS upgrade (%s bytes) …", req.length));
-        if (sendAll(cast(const(ubyte)[])req) != 0) {
-            logCurlWebsocketOutput("WS upgrade: send failed");
-            return false;
+        auto rc = curl_easy_perform(curl);
+        if (rc != 0) {
+            logCurlWebsocketOutput("curl connect failed");
+            return -3;
         }
 
-        // Read headers
-        Appender!(ubyte[]) ab;
-        auto start = Clock.currTime(UTC());
-        for (;;) {
-            if (!rb.ensure(1, 250)) {
-                auto elapsed = (Clock.currTime(UTC()) - start).total!"msecs";
-                if (elapsed >= 60000) {
-                    logCurlWebsocketOutput("HTTP: header read timeout");
-                    return false;
+        auto req = buildUpgradeRequest();
+        if (sendAll(req) != 0) {
+            logCurlWebsocketOutput("Failed sending HTTP upgrade request");
+            return -4;
+        }
+
+        // Read headers until CRLFCRLF, with deadline (don’t treat 0-bytes as EOF).
+        string hdrs;
+        enum maxHdr = 16 * 1024;
+        auto deadline = MonoTime.currTime + dur!"seconds"(10);
+        {
+            ubyte[4096] tmp;
+            size_t total;
+            for (;;) {
+                int got = recvSome(tmp[]);
+                if (got < 0) {
+                    logCurlWebsocketOutput("Failed receiving HTTP upgrade response");
+                    return -5;
                 }
-                continue;
-            }
-            auto chunk = rb.takeAll();
-            if (chunk.length) ab.put(chunk);
-            string s = cast(string)ab.data;
-            auto p = s.indexOf("\r\n\r\n");
-            if (p >= 0) {
-                auto statusEnd = s.indexOf("\r\n");
-                if (statusEnd < 0) { logCurlWebsocketOutput("WS upgrade: bad status line"); return false; }
-                auto status = s[0 .. cast(size_t)statusEnd];
-                auto headersOnly = s[cast(size_t)(statusEnd + 2) .. cast(size_t)p];
-                logCurlWebsocketOutput("WS upgrade: status " ~ status);
-
-                auto low = headersOnly.toLower();
-                bool hasUpgrade = low.startsWith("upgrade: websocket") || (low.indexOf("\r\nupgrade: websocket") >= 0);
-                bool hasConn    = low.startsWith("connection: upgrade") || (low.indexOf("\r\nconnection: upgrade") >= 0);
-                bool has101     = (status.indexOf(" 101 ") >= 0);
-
-                // Validate Sec-WebSocket-Accept too
-                string acceptGot = "";
-                {
-                    auto k = "sec-websocket-accept:";
-                    auto pos = low.indexOf(k);
-                    if (pos >= 0) {
-                        pos += k.length;
-                        while (pos < low.length && (low[pos] == ' ' || low[pos] == '\t')) ++pos;
-                        auto end = low.indexOf("\r\n", pos);
-                        if (end < 0) end = low.length;
-                        acceptGot = headersOnly[cast(size_t)pos .. cast(size_t)end].strip();
+                if (got == 0) {
+                    if (MonoTime.currTime >= deadline) {
+                        logCurlWebsocketOutput("Timeout waiting for HTTP upgrade response");
+                        return -6;
                     }
+                    continue;
                 }
-                auto acceptExpect = wsAcceptForKey(secKey);
-                if (!(has101 && hasUpgrade && hasConn && acceptGot == acceptExpect)) {
-                    logCurlWebsocketOutput("WS upgrade: header validation failed");
-                    logCurlWebsocketOutput("Headers:\n" ~ headersOnly);
-                    return false;
+                hdrs ~= cast(const(char)[]) tmp[0 .. cast(size_t)got];
+                total += cast(size_t)got;
+                auto pos = hdrs.indexOf("\r\n\r\n");
+                if (pos >= 0) {
+                    auto remain = hdrs[(cast(size_t)pos + 4) .. hdrs.length];
+                    if (remain.length > 0) {
+                        auto ru = cast(const(ubyte)[]) remain;
+                        size_t old = recvBuf.length;
+                        recvBuf.length = old + ru.length;
+                        memcpy(recvBuf.ptr + old, ru.ptr, ru.length);
+                    }
+                    hdrs = hdrs[0 .. cast(size_t)pos];
+                    break;
                 }
-                logCurlWebsocketOutput("WS upgrade: complete");
-
-                rb.clear();
-                return true;
+                if (total > maxHdr) {
+                    logCurlWebsocketOutput("HTTP upgrade headers too large");
+                    return -7;
+                }
             }
         }
-    }
 
-    private bool waitForTextExact(string expected, int timeoutMs) {
-        auto start = Clock.currTime(UTC());
-        for (;;) {
-            if ((Clock.currTime(UTC()) - start).total!"msecs" >= timeoutMs) return false;
-            auto s = recvText();
-            if (s.length == 0) { Thread.sleep(dur!"msecs"(10)); continue; }
-            if (s == expected) return true;
-        }
-    }
-
-    private int sendAll(const(ubyte)[] data) {
-        size_t off = 0;
-        while (off < data.length) {
-            size_t n = 0;
-            auto rc = curl_easy_send(h, data.ptr + off, data.length - off, &n);
-            if (rc == CURLE_OK) {
-                off += n;
-            } else if (rc == CURLE_AGAIN) {
-                sleepMs(5);
-            } else {
-                logCurlWebsocketOutput("sendAll: curl_easy_send error rc=" ~ to!string(rc));
-                return -1;
+        {
+            auto firstLineEnd = hdrs.indexOf("\r\n");
+            string statusLine = firstLineEnd > 0 ? hdrs[0 .. cast(size_t)firstLineEnd] : hdrs;
+            if (statusLine.indexOf("101") < 0) {
+                logCurlWebsocketOutput("HTTP upgrade failed; status line: " ~ statusLine);
+                return -8;
+            }
+            auto low = hdrs.toLower();
+            if (low.indexOf("upgrade: websocket") < 0 || low.indexOf("connection: upgrade") < 0) {
+                logCurlWebsocketOutput("HTTP upgrade missing expected headers");
+                return -9;
             }
         }
-        logCurlWebsocketOutput(format("send: wrote %s bytes, total=%s/%s", data.length, data.length, data.length));
+		
+		// Log that protocol switch confirmed, upgraded to RFC6455
+		logCurlWebsocketOutput("HTTP 101 Switching Protocols confirmed; upgraded to RFC6455");
+
+        websocketConnected = true;
         return 0;
     }
 
-    private struct FrameResult {
-        int    rc;      // 0 ok
-        ubyte  opcode;
-        ubyte[] payload;
+    
+	int close(ushort code = 1000, string reason = "") {
+		if (!websocketConnected) return 0;
+
+		// Build close payload: 2 bytes status code (network order) + optional reason
+		ubyte[] pay;
+		pay.length = 2 + reason.length;
+		pay[0] = cast(ubyte)((code >> 8) & 0xFF);
+		pay[1] = cast(ubyte)(code & 0xFF);
+		foreach (i; 0 .. reason.length) pay[2 + i] = cast(ubyte)reason[i];
+
+		auto frame = encodeFrame(0x8, pay); // opcode 0x8 = Close
+		auto rc = sendAll(frame);
+		// Even if sending fails, cleanup below so we don’t leak.
+		collectException(logCurlWebsocketOutput("sending RFC6455 Close (code=" ~ intToString10(code) ~ ")"));
+		// Clean up curl handle
+		if (curl !is null) {
+			curl_easy_cleanup(curl);
+			curl = null;
+		}
+		websocketConnected = false;
+		return rc;
+	}
+	
+	
+	
+	int sendText(string payload) {
+        if (!websocketConnected) return -1;
+        auto frame = encodeFrame(0x1, cast(const(ubyte)[])payload);
+        return sendAll(frame);
     }
 
-    private FrameResult readFrame() {
-        FrameResult fr; fr.rc = -1;
+    string recvText() {
+        if (!websocketConnected) return "";
 
-        if (!rb.ensure(2)) return fr;
-        auto h2 = rb.take(2);
-        if (h2 is null || h2.length < 2) return fr;
+        for (;;) {
+            auto f = tryParseFrame();
+            if (f.opcode == 0xFF) {
+                ubyte[4096] tmp;
+                int got = recvSome(tmp[]);
+                if (got <= 0) return "";
+                size_t old = recvBuf.length;
+                recvBuf.length = old + cast(size_t)got;
+                memcpy(recvBuf.ptr + old, tmp.ptr, cast(size_t)got);
+                continue;
+            }
 
-        ubyte b0 = h2[0];
-        ubyte b1 = h2[1];
-        fr.opcode = cast(ubyte)(b0 & 0x0F);
+            if (f.opcode == 0x1) {
+                return cast(string) f.payload;
+            } else if (f.opcode == 0x9) {
+                auto pong = encodeFrame(0xA, f.payload);
+                auto _ = sendAll(pong);
+                continue;
+            } else if (f.opcode == 0xA) {
+                continue;
+            } else if (f.opcode == 0x8) {
+                websocketConnected = false;
+                return "";
+            } else {
+                continue;
+            }
+        }
+    }
+
+private:
+    struct ParsedUrl {
+        bool   ok;
+        string scheme;
+        string host;
+        int    port;
+        string hostPort;
+        string pathQuery;
+    }
+
+    static int parsePortDec(string s) {
+        if (s.length == 0) return 0;
+        int v = 0;
+        foreach (ch; s) {
+            if (ch < '0' || ch > '9') return 0;
+            v = v * 10 + (cast(int)ch - cast(int)'0');
+            if (v > 65535) return 0;
+        }
+        return v;
+    }
+
+    static string intToString10(int x) {
+        char[12] buf;
+        size_t i = buf.length;
+        bool neg = false;
+        uint ux;
+        if (x < 0) { neg = true; ux = cast(uint)(-cast(long)x); }
+        else { ux = cast(uint)(x); }
+        do {
+            auto d = cast(int)(ux % 10);
+            ux /= 10;
+            i -= 1;
+            buf[i] = cast(char)('0' + d);
+        } while (ux != 0);
+        if (neg) { i -= 1; buf[i] = '-'; }
+        return (buf[i .. $]).idup;
+    }
+
+    ParsedUrl parseWsUrl(string u) {
+        ParsedUrl p;
+        p.ok = false;
+        auto sidx = u.indexOf("://");
+        if (sidx <= 0) return p;
+        string sc   = u[0 .. cast(size_t)sidx];
+        string rest = u[(cast(size_t)sidx + 3) .. u.length];
+        auto scl = sc.toLower();
+        if (scl == "ws")  p.scheme = "ws";
+        else if (scl == "wss") p.scheme = "wss";
+        else return p;
+
+        auto slash = rest.indexOf("/");
+        string hostport;
+        if (slash < 0) {
+            hostport = rest;
+            p.pathQuery = "/";
+        } else {
+            hostport = rest[0 .. cast(size_t)slash];
+            p.pathQuery = rest[cast(size_t)slash .. rest.length];
+        }
+
+        auto col = hostport.indexOf(":");
+        if (col >= 0) {
+            p.host = hostport[0 .. cast(size_t)col];
+            string ps = hostport[(cast(size_t)col + 1) .. hostport.length];
+
+            int prt = parsePortDec(ps);
+            if (prt == 0) return p;
+
+            p.port = prt;
+            p.hostPort = p.host ~ ":" ~ intToString10(p.port);
+        } else {
+            p.host = hostport;
+            p.port = (p.scheme == "wss") ? 443 : 80;
+            p.hostPort = p.host;
+        }
+
+        if (p.pathQuery.length == 0 || p.pathQuery[0] != '/') p.pathQuery = "/" ~ p.pathQuery;
+
+        p.ok = true;
+        return p;
+    }
+
+    string buildUpgradeRequest() {
+        // Sec-WebSocket-Key: random 16 bytes, base64
+        ubyte[16] keyBytes;
+        foreach (i; 0 .. 16) keyBytes[i] = cast(ubyte) uniform(0, 256, rng);
+        auto keyB64 = Base64.encode(keyBytes[]);
+
+        // Origin header (some proxies expect it)
+        string origin = (scheme == "wss" ? "https://" : "http://") ~ host;
+
+        string req  = "GET " ~ pathQuery ~ " HTTP/1.1\r\n";
+        req ~= "Host: " ~ hostPort ~ "\r\n";
+        req ~= "User-Agent: " ~ userAgent ~ "\r\n";
+        req ~= "Upgrade: websocket\r\n";
+        req ~= "Connection: Upgrade\r\n";
+        req ~= "Sec-WebSocket-Version: 13\r\n";
+        req ~= "Sec-WebSocket-Key: " ~ keyB64 ~ "\r\n";
+        req ~= "Origin: " ~ origin ~ "\r\n";
+        req ~= "\r\n";
+        return req;
+    }
+
+    int sendAll(const(char)[] data) {
+        size_t sent = 0;
+        while (sent < data.length) {
+            size_t now = 0;
+            auto rc = curl_easy_send(curl, cast(void*)(data.ptr + sent), data.length - sent, &now);
+            if (rc != 0 && now == 0) return -1;
+            sent += now;
+        }
+        return 0;
+    }
+
+    int sendAll(const(ubyte)[] data) {
+        size_t sent = 0;
+        while (sent < data.length) {
+            size_t now = 0;
+            auto rc = curl_easy_send(curl, cast(void*)(data.ptr + sent), data.length - sent, &now);
+            if (rc != 0 && now == 0) return -1;
+            sent += now;
+        }
+        return 0;
+    }
+
+    int recvSome(ubyte[] buf) {
+        size_t got = 0;
+        auto rc = curl_easy_recv(curl, cast(void*)buf.ptr, buf.length, &got);
+        if (rc != 0) return 0; // treat EAGAIN etc. as "no bytes now"
+        return cast(int)got;
+    }
+
+    ubyte[] encodeFrame(ubyte opcode, const(ubyte)[] payload) {
+        Appender!(ubyte[]) outp = appender!(ubyte[])();
+        outp.reserve(2 + 4 + payload.length + 8);
+
+        ubyte b0 = cast(ubyte)(0x80 | (opcode & 0x0F)); // FIN=1
+        outp.put(b0);
+
+        ubyte maskBit = 0x80;
+        ulong len = cast(ulong)payload.length;
+
+        if (len <= 125) {
+            outp.put(cast(ubyte)(maskBit | cast(ubyte)len));
+        } else if (len <= 0xFFFF) {
+            outp.put(cast(ubyte)(maskBit | 126));
+            outp.put(cast(ubyte)((len >> 8) & 0xFF));
+            outp.put(cast(ubyte)(len & 0xFF));
+        } else {
+            outp.put(cast(ubyte)(maskBit | 127));
+            foreach (shift; AliasSeq!(56, 48, 40, 32, 24, 16, 8, 0)) {
+                outp.put(cast(ubyte)((len >> shift) & 0xFF));
+            }
+        }
+
+        ubyte[4] key;
+        foreach (i; 0 .. 4) key[i] = cast(ubyte) uniform(0, 256, rng);
+        outp.put(key[]);
+
+        auto masked = new ubyte[payload.length];
+        foreach (i; 0 .. payload.length) masked[i] = payload[i] ^ key[i % 4];
+        outp.put(masked[]);
+
+        return outp.data;
+    }
+
+    WsFrame tryParseFrame() {
+        WsFrame f;
+        f.opcode = 0xFF;
+
+        if (recvBuf.length < 2) return f;
+
+        size_t i = 0;
+        ubyte b0 = recvBuf[i]; i += 1;
+        ubyte b1 = recvBuf[i]; i += 1;
+
+        bool fin = (b0 & 0x80) != 0;
+        ubyte opcode = cast(ubyte)(b0 & 0x0F);
         bool masked = (b1 & 0x80) != 0;
-        size_t len = (b1 & 0x7F);
+        ulong len = cast(ulong)(b1 & 0x7F);
 
         if (len == 126) {
-            if (!rb.ensure(2)) return fr;
-            auto ext = rb.take(2);
-            if (ext is null || ext.length < 2) return fr;
-            len = (cast(size_t)ext[0] << 8) | ext[1];
+            if (recvBuf.length < i + 2) return f;
+            len = (cast(ulong)recvBuf[i] << 8) | cast(ulong)recvBuf[i + 1];
+            i += 2;
         } else if (len == 127) {
-            if (!rb.ensure(8)) return fr;
-            auto ext = rb.take(8);
-            if (ext is null || ext.length < 8) return fr;
-            size_t L = 0;
-            foreach (idx, shift; [56,48,40,32,24,16,8,0]) {
-                L |= (cast(size_t)ext[idx] << shift);
+            if (recvBuf.length < i + 8) return f;
+            len = 0;
+            foreach (shift; AliasSeq!(56, 48, 40, 32, 24, 16, 8, 0)) {
+                len |= (cast(ulong)recvBuf[i] << shift);
+                i += 1;
             }
-            len = L;
         }
 
-        ubyte[4] maskKey;
+        ubyte[4] key;
         if (masked) {
-            if (!rb.ensure(4)) return fr;
-            auto mk = rb.take(4);
-            foreach (i; 0 .. 4) maskKey[i] = mk[i];
+            if (recvBuf.length < i + 4) return f;
+            foreach (k; 0 .. 4) key[k] = recvBuf[i + k];
+            i += 4;
         }
 
-        if (!rb.ensure(len)) return fr;
-        auto pay = rb.take(len);
-        fr.payload = new ubyte[](pay.length);
-        foreach (i; 0 .. pay.length) fr.payload[i] = pay[i];
+        if (recvBuf.length < i + cast(size_t)len) return f;
 
+        auto start = i;
+        auto end   = i + cast(size_t)len;
+        auto raw   = recvBuf[start .. end];
+
+        ubyte[] data;
         if (masked) {
-            maskPayload(fr.payload, maskKey);
-        }
-
-        // Auto-handle WS control frames at this layer
-        if (fr.opcode == WS_PING) { cast(void)sendFrame(WS_PONG, fr.payload); return readFrame(); }
-        if (fr.opcode == WS_PONG) { return readFrame(); }
-        if (fr.opcode == WS_CLOSE){ connected = false; return fr; }
-
-        fr.rc = 0;
-        return fr;
-    }
-
-    int sendFrame(ubyte opcode, const(ubyte)[] payload) {
-        Appender!(ubyte[]) wb;
-        wb.put(cast(ubyte)(0x80 | opcode)); // FIN + opcode
-
-        size_t len = payload.length;
-        if (len < 126) {
-            wb.put(cast(ubyte)(0x80 | cast(ubyte)len));
-        } else if (len <= 0xFFFF) {
-            wb.put(cast(ubyte)(0x80 | 126));
-            wb.put(cast(ubyte)((len >> 8) & 0xFF));
-            wb.put(cast(ubyte)(len & 0xFF));
+            data = new ubyte[raw.length];
+            foreach (idx; 0 .. raw.length) data[idx] = raw[idx] ^ key[idx % 4];
         } else {
-            wb.put(cast(ubyte)(0x80 | 127));
-            foreach (shift; [56,48,40,32,24,16,8,0]) wb.put(cast(ubyte)((len >> shift) & 0xFF));
+            data = raw.dup;
         }
 
-        auto maskKeyArr = randomBytes(4);
-        ubyte[4] maskKey = [ maskKeyArr[0], maskKeyArr[1], maskKeyArr[2], maskKeyArr[3] ];
-        foreach (i; 0 .. 4) wb.put(maskKey[i]);
+        auto consumed  = end;
+        auto remainLen = recvBuf.length - consumed;
+        if (remainLen > 0) {
+            memmove(recvBuf.ptr, recvBuf.ptr + consumed, remainLen);
+        }
+        recvBuf.length = remainLen;
 
-        ubyte[] masked = new ubyte[](payload.length);
-        foreach (i; 0 .. payload.length) masked[i] = payload[i];
-        maskPayload(masked, maskKey);
-
-        wb.put(masked[]);
-        return sendAll(wb.data);
+        f.fin        = fin ? 1 : 0;
+        f.opcode     = opcode;
+        f.masked     = masked;
+        f.payloadLen = len;
+        f.maskKey    = key;
+        f.payload    = data;
+        return f;
     }
 }

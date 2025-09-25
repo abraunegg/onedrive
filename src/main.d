@@ -1130,7 +1130,7 @@ int main(string[] cliArgs) {
 									syncEngineInstance.obtainWebSocketNotificationURL();
 									if (debugLogging) addLogEntry("Refreshed WebSocket notification URL prior to expiry", ["debug"]);
 								} catch (Exception e) {
-									if (debugLogging) addLogEntry("Failed to refresh WebSocket notification URL: "~e.msg, ["debug"]);
+									if (debugLogging) addLogEntry("Failed to refresh WebSocket notification URL: " ~ e.msg, ["debug"]);
 								}
 							}
 						}
