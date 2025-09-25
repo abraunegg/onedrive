@@ -1130,6 +1130,7 @@ class OneDriveApi {
 	
 	// Obtain the Websocket Notification URL
 	JSONValue obtainWebSocketNotificationURL() {
+		addLogEntry("Request a Socket.IO Subscription Endpoint: " ~ websocketEndpoint);
 		return get(websocketEndpoint);
 	}
 	
