@@ -1354,9 +1354,9 @@ int main(string[] cliArgs) {
 									signalCount++;
 								} else {
 									if (webhookEnabled) {
-										addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signal(s) from the Webhook");
+										addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signal(s) from the Microsoft Graph API Webhook Endpoint");
 									} else {
-										addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signal(s) from the WebSocket");
+										addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signal(s) from the Microsoft Graph API WebSocket Endpoint");
 									}
 									oneDriveOnlineCallback();
 									break;
@@ -1479,8 +1479,12 @@ void oneDriveOnlineCallback() {
 		processInotifyEvents(true);
 	}
 
-	// Download data from OneDrive last
-	syncEngineInstance.syncOneDriveAccountToLocalDisk();
+	// Sync any online change down to the local disk
+	// If we are doing --upload-only however .. we need to 'ignore' online change
+	if (!appConfig.getValueBool("upload_only")) {
+		// We are not doing an --upload-only scenario .. sync online change --> local
+		syncEngineInstance.syncOneDriveAccountToLocalDisk();
+	}
 	if (appConfig.getValueBool("monitor")) {
 		// Handle inotify events
 		processInotifyEvents(true);
