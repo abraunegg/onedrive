@@ -9,6 +9,7 @@ import core.time       : Duration, dur;
 import std.datetime    : SysTime, Clock, UTC;
 import std.conv        : to;
 import std.string      : indexOf;
+import std.json        : JSONValue, JSONType, parseJSON;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -286,7 +287,7 @@ private:
             } else if (msg.length > 1 && msg[0] == '4' && msg[1] == '2') { // Received a '42' code message
 				// Log what we received
 				logSocketIOOutput("Received 42 msg = " ~ to!string(msg));
-				handleSocketIoEvent(msg);
+				handleSocketIoEvent(msg, self);
                 continue;
             } else if (msg.length > 1 && msg[0] == '4' && msg[1] == '0') { // Received a '40' code message
 				// Log what we received
@@ -441,34 +442,71 @@ private:
         }
 
         // Log that we have opened a connection and have a valid SID
-		
 		logSocketIOOutput("Engine open; sid=" ~ self.engineSid ~ " pingInterval=" ~ self.pingIntervalMs.to!string ~ "ms" ~ " pingTimeout="  ~ self.pingTimeoutMs.to!string  ~ "ms");
-		
-        return true;
+		return true;
     }
 
-    static void handleSocketIoEvent(string msg) {
-        // "42" + JSON array, e.g. 42["notification", {...}]
-        if (msg.length < 3) return;
-        auto jsonArr = msg[2 .. msg.length];
+    static void handleSocketIoEvent(string msg, OneDriveSocketIo self) {
+		// Accept both: 42[...]
+		// and:         42/<namespace>,[...]
+		size_t i = 2;
+		string ns = "/";
 
-        import std.json : JSONValue, parseJSON, JSONType;
+		// Optional namespace: 42/notifications,[...]
+		if (i < msg.length && msg[i] == '/') {
+			size_t j = i + 1;
+			while (j < msg.length && msg[j] != ',') j++;
+			if (j >= msg.length) {
+				logSocketIOOutput("42 frame (malformed namespace): " ~ msg);
+				return;
+			}
+			ns = msg[(i + 1) .. j];
+			i = j + 1; // payload starts after comma
+		}
 
-        JSONValue j;
-        auto err = collectException(j = parseJSON(jsonArr));
-        if (err !is null) return;
-        if (j.type != JSONType.array) return;
-        if (j.array.length == 0) return;
+		if (i >= msg.length || msg[i] != '[') {
+			logSocketIOOutput("42 frame (unexpected payload start): ns='/" ~ ns ~ "' raw=" ~ msg);
+			return;
+		}
 
-        string eventName;
-        auto err2 = collectException(eventName = j.array[0].str);
-        if (err2 !is null) return;
+		JSONValue arr;
+		auto ex = collectException(arr = parseJSON(msg[i .. $]));
+		if (ex !is null || arr.type != JSONType.array || arr.array.length == 0) {
+			logSocketIOOutput("42 frame (unparsed): ns='/" ~ ns ~ "' raw=" ~ msg);
+			return;
+		}
 
-        if (eventName == "notification") {
-            string payload = (j.array.length > 1) ? j.array[1].toString() : "{}";
-            logSocketIOOutput("notification event -> " ~ payload);
-        } else {
-            logSocketIOOutput("event '" ~ eventName ~ "'");
-        }
-    }
+		auto evNameVal = arr.array[0];
+		if (evNameVal.type != JSONType.string) {
+			logSocketIOOutput("42 frame (no string event name): ns='/" ~ ns ~ "' raw=" ~ msg);
+			return;
+		}
+		string evName = evNameVal.str;
+
+		// 2nd element may be a JSON string containing the real JSON
+		string dataText = "null";
+		if (arr.array.length > 1) {
+			auto d = arr.array[1];
+			if (d.type == JSONType.string) {
+				JSONValue inner;
+				auto ex2 = collectException(inner = parseJSON(d.str));
+				if (ex2 is null) {
+					dataText = inner.toString(); // normalized JSON
+				} else {
+					dataText = d.str;           // raw string if not JSON
+				}
+			} else {
+				dataText = d.toString();
+			}
+		}
+
+		if (evName == "notification") {
+			logSocketIOOutput("notification event (ns='/" ~ ns ~ "') -> " ~ dataText);
+			// *** Signal main exactly like webhook does ***
+			collectException(send(self.parentTid, cast(ulong)1));
+		} else {
+			// Visibility in case the service uses other event names
+			logSocketIOOutput("event '" ~ evName ~ "' (ns='/" ~ ns ~ "') -> " ~ dataText);
+		}
+	}
 }

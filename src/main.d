@@ -1103,7 +1103,7 @@ int main(string[] cliArgs) {
 					processInotifyEvents(true);
 				}
 				
-				// Webhook Notification Handling
+				// WebSocket and Webhook Notification Handling
 				bool notificationReceived = false;
 				
 				// Check for notifications pushed from Microsoft to the webhook
@@ -1287,9 +1287,9 @@ int main(string[] cliArgs) {
 					auto sleepTime = nextCheckTime - currentTime;
 					if (debugLogging) {addLogEntry("Sleep for " ~ to!string(sleepTime), ["debug"]);}
 					
-					if(filesystemMonitor.initialised || webhookEnabled) {
+					if (filesystemMonitor.initialised || webhookEnabled) {
 
-						if(filesystemMonitor.initialised) {
+						if (filesystemMonitor.initialised) {
 							// If local monitor is on and is waiting (previous event was not from webhook)
 							
 							// Obsidian Editor has been written in such a way that it is constantly writing each and every keystroke to a file.
@@ -1306,7 +1306,7 @@ int main(string[] cliArgs) {
 						}
 						
 						// Processing of online changes in near real-time .. update sleep time
-						if(webhookEnabled) {
+						if (webhookEnabled) {
 							// If onedrive webhook is enabled
 							// Update sleep time based on renew interval
 							Duration nextWebhookCheckDuration = oneDriveWebhook.getNextExpirationCheckDuration();
@@ -1328,7 +1328,7 @@ int main(string[] cliArgs) {
 							}
 						}
 						
-						// Process signals from 'webhook' or 'websockets'
+						// Process signals from 'WebSockets' or 'Webhook' source
 						int res = 1;
 						// Process incoming notifications if any.
 						auto signalExists = receiveTimeout(sleepTime, (int msg) {res = msg;},(ulong _) {notificationReceived = true;});
@@ -1353,8 +1353,12 @@ int main(string[] cliArgs) {
 								if (signalExists) {
 									signalCount++;
 								} else {
-									addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signals from the webhook");
-									oneDriveWebhookCallback();
+									if (webhookEnabled) {
+										addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signal(s) from the Webhook");
+									} else {
+										addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signal(s) from the WebSocket");
+									}
+									oneDriveOnlineCallback();
 									break;
 								}
 							}
@@ -1467,8 +1471,8 @@ void printMissingOperationalSwitchesError() {
 	addLogEntry();
 }
 
-// Function used for webhook callbacks to perform specific activities
-void oneDriveWebhookCallback() {
+// Function used for WebSocket or Webhook callbacks to perform specific activities
+void oneDriveOnlineCallback() {
 	// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
 	if (!appConfig.getValueBool("download_only")) {
 		// Handle inotify events
