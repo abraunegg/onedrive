@@ -46,7 +46,7 @@ DCFLAGS += $(RELEASE_DCFLAGS)
 endif
 
 ifeq ($(NOTIFICATIONS),yes)
-NOTIF_VERSIONS = $(addprefix $(VERSION_DCFLAG)=,NoPragma NoGdk Notifications)
+GUI_NOTIFICATIONS = $(addprefix $(VERSION_DCFLAG)=,NoPragma NoGdk Notifications)
 endif
 
 system_unit_files = contrib/systemd/onedrive@.service
@@ -78,7 +78,9 @@ SOURCES = \
 	src/monitor.d \
 	src/arsd/cgi.d \
 	src/xattr.d \
-	src/intune.d
+	src/intune.d \
+	src/socketio.d \
+	src/curlWebsockets.d
 
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
@@ -101,7 +103,7 @@ onedrive: $(SOURCES)
 	else \
 		echo $(version) > version ; \
 	fi
-	$(DC) -J. $(NOTIF_VERSIONS) $(DCFLAGS) $^ $(addprefix $(LINKER_DCFLAG),$(all_libs)) $(OUTPUT_DCFLAG)$@
+	$(DC) -J. $(GUI_NOTIFICATIONS) $(DCFLAGS) $^ $(addprefix $(LINKER_DCFLAG),$(all_libs)) $(OUTPUT_DCFLAG)$@
 
 install: all
 	mkdir -p $(DESTDIR)$(bindir)

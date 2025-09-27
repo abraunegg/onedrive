@@ -13,17 +13,91 @@ import std.stdio;
 import std.range;
 import core.memory;
 import core.sys.posix.signal;
+// Required for WebSocket Support
+import core.stdc.stdlib : getenv;
+import core.stdc.string : strcmp;
+import core.sys.posix.dlfcn : dlopen, dlsym, dlclose, RTLD_NOW; // Posix elements
+import std.exception : enforce;     // for enforce(...)
 
 // What other modules that we have created do we need to import?
 import log;
 import util;
 
-// Shared pool of CurlEngine instances accessible across all threads
-__gshared CurlEngine[] curlEnginePool; // __gshared is used to declare a variable that is shared across all threads
+// WebSocket check elements
+enum CURL_WS_MIN_NUM = 0x075600; // 7.86.0 (version which WebSocket support was added to cURL)
 
 extern (C) void sigpipeHandler(int signum) {
 	// Custom handler to ignore SIGPIPE signals
 	addLogEntry("ERROR: Handling a cURL SIGPIPE signal despite CURLOPT_NOSIGNAL being set (cURL Operational Bug) ...");
+}
+
+// Function pointer types matching libcurl WebSocket (WS) API
+extern(C) struct curl_ws_frame {
+	uint age;
+	uint flags;
+	size_t len;
+	size_t offset;
+	size_t bytesleft;
+}
+
+// WebSocket alias
+alias PFN_curl_ws_recv =
+	extern(C) CURLcode function(CURL*, void*, size_t, size_t*, const curl_ws_frame**);
+alias PFN_curl_ws_send =
+	extern(C) CURLcode function(CURL*, const void*, size_t, size_t*, long /*curl_off_t*/, uint);
+
+extern(C) struct curl_slist { char* data; curl_slist* next; }
+extern(C) curl_slist* curl_slist_append(curl_slist* list, const char* string);
+extern(C) void curl_slist_free_all(curl_slist* list);
+
+// Shared pool of CurlEngine instances accessible across all threads
+__gshared CurlEngine[] curlEnginePool; // __gshared is used to declare a variable that is shared across all threads
+
+private __gshared {
+	void*                 _curlLib;
+	PFN_curl_ws_recv      p_curl_ws_recv;
+	PFN_curl_ws_send      p_curl_ws_send;
+	bool                  _wsSymbolsReady;
+	uint                  _wsProbeOnce; // 0=not run, 1=success, 2=fail
+}
+
+private void* loadCurlLib() {
+	// Respect LD_LIBRARY_PATH etc.
+	auto h = dlopen("libcurl.so.4", RTLD_NOW);
+	if (h is null) h = dlopen("libcurl.so", RTLD_NOW);
+	return h;
+}
+
+private void* findSymbol(const(char)* name) {
+	return dlsym(_curlLib, name);
+}
+
+private bool probeCurlWsSymbols() {
+	if (_wsProbeOnce == 1) return _wsSymbolsReady;
+	if (_wsProbeOnce == 2) return false;
+
+	// 1) libcurl version check
+	auto vi = curl_version_info(CURLVERSION_NOW);
+	if (vi is null || vi.version_num < CURL_WS_MIN_NUM) {
+		_wsProbeOnce = 2; _wsSymbolsReady = false; return false;
+	}
+
+	// 2) load libcurl and resolve symbols
+	_curlLib = loadCurlLib();
+	if (_curlLib is null) {
+		_wsProbeOnce = 2; _wsSymbolsReady = false; return false;
+	}
+
+	p_curl_ws_recv = cast(PFN_curl_ws_recv) findSymbol("curl_ws_recv");
+	p_curl_ws_send = cast(PFN_curl_ws_send) findSymbol("curl_ws_send");
+
+	_wsSymbolsReady = (p_curl_ws_recv !is null) && (p_curl_ws_send !is null);
+	_wsProbeOnce = _wsSymbolsReady ? 1 : 2;
+	return _wsSymbolsReady;
+}
+
+bool curlSupportsWebSockets() {
+	return probeCurlWsSymbols();
 }
 
 class CurlResponse {
