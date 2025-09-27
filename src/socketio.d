@@ -23,8 +23,8 @@ private void logSocketIOOutput(string s) {
 }
 
 final class OneDriveSocketIo {
-	private Tid                parentTid;
-    private ApplicationConfig  appConfig;
+	private Tid parentTid;
+    private ApplicationConfig appConfig;
 	private bool started = false;
 	private Duration renewEarly = dur!"seconds"(120);
 	private string engineSid;
@@ -34,36 +34,36 @@ final class OneDriveSocketIo {
 	
 
     // Worker / state
-    private shared bool pleaseStop = false;
+    private Tid workerTid;
+	private shared bool pleaseStop = false;
     private long  pingIntervalMs = 25000;
     private long  pingTimeoutMs  = 60000;
     private bool  namespaceOpened = false;
+	private CurlWebSocket ws;
 
 public:
 	this(Tid parentTid, ApplicationConfig appConfig) {
         this.parentTid = parentTid;
         this.appConfig = appConfig;
-		
     }
 	
 	~this(){
-	
-		logSocketIOOutput("Destroying OneDriveSocketIo");
-	
+		logSocketIOOutput("Destroying OneDriveSocketIo Instance");
+		collectException(ws.close(1000, "client stop"));
+		logSocketIOOutput("Should have closed curl instance");
+		object.destroy(ws); // call destructor
+		ws = null;
+		logSocketIOOutput("Should have destroyed curl instance");
 	}
 
 	void start() {
         if (started) return;
-
-        // Use existing shim
-        //logSocketIOOutput("Value from appConfig.websocketEndpointResponse = " ~ appConfig.websocketEndpointResponse);
-        //logSocketIOOutput("Value from appConfig.websocketNotificationUrl  = " ~ appConfig.websocketNotificationUrl);
-        //logSocketIOOutput("Value from appConfig.websocketUrlExpiry        = " ~ appConfig.websocketUrlExpiry);
-		
+		// Get current WebSocket Notification URL
 		currentNotifUrl = appConfig.websocketNotificationUrl;
-
+		
+		// Set Flag
 		started = true;
-		spawn(&run, cast(shared) this);
+		workerTid = spawn(&run, cast(shared) this);
 		logSocketIOOutput("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 	}
 
@@ -71,9 +71,7 @@ public:
         if (!started) return;
         pleaseStop = true; // worker loop is cooperative
         started = false;
-		
-		logSocketIOOutput("Disabled WebSocket monitoring of Microsoft Graph API changes.");
-		
+		logSocketIOOutput("Flagged to stop WebSocket monitoring of Microsoft Graph API changes.");
 	}
 
 	Duration getNextExpirationCheckDuration() {
@@ -97,22 +95,11 @@ private:
 	static void run(shared OneDriveSocketIo _this) {
 		
 		logSocketIOOutput("run() entered");
-
-		auto self = cast(OneDriveSocketIo) _this;
-
-		CurlWebSocket ws = new CurlWebSocket();
 		
-		scope(exit) {
-			// make shutdown explicit and visible
-			logSocketIOOutput("leaving run() function");
-			if (ws !is null) {
-				object.destroy(ws);     // call destructor deterministically
-				ws = null;
-			}
-			logSocketIOOutput("Disabled WebSocket monitoring of Microsoft Graph API changes.");
-		}
-
-        // Build Socket.IO WS URL from notificationUrl:
+		auto self = cast(OneDriveSocketIo) _this;
+		self.ws = new CurlWebSocket();
+		
+		// Build Socket.IO WS URL from notificationUrl:
         string notif = self.appConfig.websocketNotificationUrl;
         if (notif.length == 0) {
             logSocketIOOutput("no notificationUrl available");
@@ -121,60 +108,48 @@ private:
         string wsUrl = toSocketIoWsUrl(notif);
 
         // Use application configuration values
-		ws.setUserAgent(self.appConfig.getValueString("user_agent"));
-        ws.setTimeouts(10000, 15000);
+		self.ws.setUserAgent(self.appConfig.getValueString("user_agent"));
+        self.ws.setTimeouts(10000, 15000);
 		
 		logSocketIOOutput("Connecting to " ~ wsUrl);
 
-        auto rc = ws.connect(wsUrl);
+        auto rc = self.ws.connect(wsUrl);
         if (rc != 0) {
-            logSocketIOOutput("ws.connect failed");
+            logSocketIOOutput("self.ws.connect failed");
             return;
         }
 
-        // Engine.IO handshake: wait for '0{json}'
-        if (!awaitEngineOpen(ws, self)) {
-            logSocketIOOutput("Engine.IO open handshake failed");
+        // Socket.IO handshake: wait for '0{json}'
+        if (!awaitEngineOpen(self.ws, self)) {
+            logSocketIOOutput("Socket.IO open handshake failed");
             return;
         }
 
-        
-		
-		// Open default namespace: send "40"
+        // Open default namespace: send "40"
 		logSocketIOOutput("Sending Socket.IO connect (40) to default namespace");
-        if (ws.sendText("40") != 0) {
+        if (self.ws.sendText("40") != 0) {
             logSocketIOOutput("Failed to send 40 (open namespace)");
             return;
         } else {
 			logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/'");
 		}
 		
-		
-		
 		// Open 'notifications' namespace: send "40"
 		logSocketIOOutput("Sending Socket.IO connect (40) to '/notifications' namespace");
-		if (ws.sendText("40/notifications") != 0) {
+		if (self.ws.sendText("40/notifications") != 0) {
 			logSocketIOOutput("Failed to send 40 for '/notifications' namespace");
 			// Not fatal; continue with default ns
 		} else {
 			logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/notifications'");
 		}
 		
-		
-		
-		
-
-        // Main loop with SysTime-based timing (no MonoTime import)
+		// Main loop with SysTime-based timing (no MonoTime import)
         SysTime nextPing = Clock.currTime(UTC()) + dur!"msecs"(self.pingIntervalMs);
 		
         for (;;) {
+			// Watch for termination
 			if (self.pleaseStop) {
-				logSocketIOOutput("stop requested; shutting down");
-				
-				// graceful RFC6455 close (implemented below in CurlWebSocket)
-				collectException(ws.close(1000, "client stop"));
-				object.destroy(ws);
-				
+				logSocketIOOutput("Stop requested; shutting down run() loop");
 				break;
 			}
 
@@ -192,8 +167,7 @@ private:
 				}
 			}
 
-            
-			// renewal window check (emit once)
+            // Renewal window check (emit once)
 			if (!self.renewRequested && self.appConfig.websocketUrlExpiry.length > 0) {
 				SysTime expiry;
 				auto e = collectException(expiry = SysTime.fromISOExtString(self.appConfig.websocketUrlExpiry));
@@ -210,36 +184,36 @@ private:
 				}
 			}
 			
-			// reconnect to a new endpoint if main updated appConfig.websocketNotificationUrl
+			// Reconnect to a new endpoint if main updated appConfig.websocketNotificationUrl
 			if (self.appConfig.websocketNotificationUrl.length > 0 && self.appConfig.websocketNotificationUrl != self.currentNotifUrl) {
 				logSocketIOOutput("Detected new notificationUrl; reconnecting");
 				// Graceful close current connection
-				collectException(ws.close(1000, "reconnect"));
+				collectException(self.ws.close(1000, "reconnect"));
 				// Update cache and rebuild WS URL
 				self.currentNotifUrl = self.appConfig.websocketNotificationUrl;
 				string newWsUrl = toSocketIoWsUrl(self.currentNotifUrl);
 				// Establish a fresh connection and handshakes
-				ws = new CurlWebSocket();
+				self.ws = new CurlWebSocket();
 				
 				// Use application configuration values
-				ws.setUserAgent(self.appConfig.getValueString("user_agent"));
-				ws.setTimeouts(10000, 15000);
+				self.ws.setUserAgent(self.appConfig.getValueString("user_agent"));
+				self.ws.setTimeouts(10000, 15000);
 				
-				auto rc2 = ws.connect(newWsUrl);
+				auto rc2 = self.ws.connect(newWsUrl);
 				if (rc2 != 0) {
 					logSocketIOOutput("reconnect failed");
 					break;
 				}
-				// Expect a fresh Engine.IO open ("0{...}")
-				if (!awaitEngineOpen(ws, self)) {
-					logSocketIOOutput("Engine.IO open after reconnect failed");
+				// Expect a fresh Socket.IO open ("0{...}")
+				if (!awaitEngineOpen(self.ws, self)) {
+					logSocketIOOutput("Socket.IO open after reconnect failed");
 					break;
 				}
 				
 				
 				// Open default namespace: send "40"
 				logSocketIOOutput("Sending Socket.IO connect (40) to default namespace");
-				if (ws.sendText("40") != 0) {
+				if (self.ws.sendText("40") != 0) {
 					logSocketIOOutput("Failed to send 40 (open namespace)");
 					return;
 				} else {
@@ -249,7 +223,7 @@ private:
 				
 				// Open 'notifications' namespace: send "40"
 				logSocketIOOutput("Sending Socket.IO connect (40) to '/notifications' namespace");
-				if (ws.sendText("40/notifications") != 0) {
+				if (self.ws.sendText("40/notifications") != 0) {
 					logSocketIOOutput("Failed to send 40 for '/notifications' namespace");
 					// Not fatal; continue with default ns
 				} else {
@@ -263,21 +237,21 @@ private:
 			}
 
 			// Receive Message
-            auto msg = ws.recvText();
+            auto msg = self.ws.recvText();
             if (msg.length == 0) {
                 Thread.sleep(dur!"msecs"(20));
                 continue;
             }
 
-            // Engine.IO / Socket.IO parsing
+            // Socket.IO parsing
 			if (msg.length > 0 && msg[0] == '2') {
 				// Server ping -> immediate pong
-				if (ws.sendText("3") != 0) {
-					logSocketIOOutput("Failed sending Engine.IO pong '3'");
+				if (self.ws.sendText("3") != 0) {
+					logSocketIOOutput("Failed sending Socket.IO pong '3'");
 					break;
 				} else {
 					// Log we sent the pong response
-					logSocketIOOutput("Engine.IO ping received, → pong sent");
+					logSocketIOOutput("Socket.IO ping received, → pong sent");
 				}
 				continue;
 			}
@@ -320,15 +294,7 @@ private:
             } else {
                 logSocketIOOutput("rx: " ~ msg);
             }
-			
-			
         }
-		
-		// After the loop
-		collectException(ws.close(1000, "normal closure"));
-		object.destroy(ws);
-		logSocketIOOutput("left run() loop");
-		
 	}
 
     // --- Helpers ---
@@ -413,7 +379,7 @@ private:
         JSONValue j;
         auto err = collectException(j = parseJSON(jsonPart));
         if (err !is null) {
-            logSocketIOOutput("failed to parse Engine.IO open JSON");
+            logSocketIOOutput("failed to parse Socket.IO open JSON");
             return false;
         }
 

@@ -73,22 +73,24 @@ private:
 public:
     this() {
         websocketConnected = false;
-        logCurlWebsocketOutput("New instance of a CurlWebSocket object accessing libcurl for HTTP operations");
         curl_global_init(CURL_GLOBAL_DEFAULT);
         curl = curl_easy_init();
         rng = Random(unpredictableSeed);
+		logCurlWebsocketOutput("Created a new instance of a CurlWebSocket object accessing libcurl for HTTP operations");
     }
 
     ~this() {
-	
-		logCurlWebsocketOutput("Destroyed instance of a CurlWebSocket object accessing libcurl for HTTP operations");
-	
-        if (curl !is null) {
+		if (curl !is null) {
             curl_easy_cleanup(curl);
-            curl = null;
         }
         curl_global_cleanup();
         websocketConnected = false;
+		
+		object.destroy(curl);
+		logCurlWebsocketOutput("Destroyed 'curl' object");
+		curl = null;
+		
+		logCurlWebsocketOutput("Destroyed instance of a CurlWebSocket object accessing libcurl for HTTP operations");
     }
 
     bool isConnected() {
@@ -210,9 +212,13 @@ public:
         return 0;
     }
 
-    
-	int close(ushort code = 1000, string reason = "") {
+    int close(ushort code = 1000, string reason = "") {
+	
+		logCurlWebsocketOutput("Running curlWebsocket close()");
+	
 		if (!websocketConnected) return 0;
+		
+		logCurlWebsocketOutput("Running curlWebsocket close() - websocketConnected = true");
 
 		// Build close payload: 2 bytes status code (network order) + optional reason
 		ubyte[] pay;
@@ -224,7 +230,7 @@ public:
 		auto frame = encodeFrame(0x8, pay); // opcode 0x8 = Close
 		auto rc = sendAll(frame);
 		// Even if sending fails, cleanup below so we don’t leak.
-		collectException(logCurlWebsocketOutput("sending RFC6455 Close (code=" ~ intToString10(code) ~ ")"));
+		collectException(logCurlWebsocketOutput("Sending RFC6455 Close (code=" ~ intToString10(code) ~ ")"));
 		// Clean up curl handle
 		if (curl !is null) {
 			curl_easy_cleanup(curl);
