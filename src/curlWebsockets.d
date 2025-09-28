@@ -26,7 +26,9 @@ import log;
 
 // ========== Logging Shim ==========
 private void logCurlWebsocketOutput(string s) {
-	collectException(addLogEntry("WEBSOCKET: " ~ s));
+	if (debugLogging) {
+		collectException(addLogEntry("WEBSOCKET: " ~ s, ["debug"]));
+	}
 }
 
 private struct WsFrame {
@@ -54,18 +56,19 @@ private:
 	enum int  CURLOPT_CONNECTTIMEOUT_MS = 156;
 	enum int  CURLOPT_VERBOSE           = 41;
 
-	CURL*  curl = null;
-	bool   websocketConnected = false;
-	int    connectTimeoutMs   = 10000;
-	int    ioTimeoutMs        = 15000;
-	string userAgent          = "";
-	string scheme;
-	string host;
-	int    port;
-	string hostPort;
-	string pathQuery;
+	CURL*   curl = null;
+	bool    websocketConnected = false;
+	int     connectTimeoutMs   = 10000;
+	int     ioTimeoutMs        = 15000;
+	string  userAgent          = "";
+	bool    httpsDebug         = false;
+	string  scheme;
+	string  host;
+	int     port;
+	string  hostPort;
+	string  pathQuery;
 	ubyte[] recvBuf;
-	Random rng;
+	Random  rng;
 
 public:
 	this() {
@@ -101,6 +104,10 @@ public:
 		if (!ua.empty) userAgent = ua;
 	}
 
+	void setHTTPSDebug(bool httpsDebug) {
+		httpsDebug = httpsDebug;
+	}
+
 	int connect(string wsUrl) {
 		if (curl is null) {
 			logCurlWebsocketOutput("libcurl handle not initialised");
@@ -121,7 +128,7 @@ public:
 		string connectUrl = (scheme == "wss" ? "https://" : "http://") ~ hostPort ~ pathQuery;
 
 		curl_easy_reset(curl);
-		curl_easy_setopt(curl, cast(int)CURLOPT_VERBOSE,            0L);
+		
 		curl_easy_setopt(curl, cast(int)CURLOPT_NOSIGNAL,           1L);
 		curl_easy_setopt(curl, cast(int)CURLOPT_FOLLOWLOCATION,     1L);
 		curl_easy_setopt(curl, cast(int)CURLOPT_USERAGENT,          userAgent.toStringz);   // NUL-terminated
@@ -131,6 +138,15 @@ public:
 		curl_easy_setopt(curl, cast(int)CURLOPT_SSL_VERIFYHOST,     2L);
 		curl_easy_setopt(curl, cast(int)CURLOPT_CONNECT_ONLY,       1L);
 		curl_easy_setopt(curl, cast(int)CURLOPT_URL,                connectUrl.toStringz);  // NUL-terminated
+		
+		// Do we enable HTTPS Debugging?
+		if (httpsDebug) {
+			// Enable curl verbosity
+			curl_easy_setopt(curl, cast(int)CURLOPT_VERBOSE,        1L);
+		} else {
+			// Disable curl verbosity
+			curl_easy_setopt(curl, cast(int)CURLOPT_VERBOSE,        0L);
+		}
 
 		auto rc = curl_easy_perform(curl);
 		if (rc != 0) {
