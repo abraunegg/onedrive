@@ -370,7 +370,7 @@ private:
 		}
 	}
 
-	// Parse Socet.IO response
+	// Parse Socket.IO response
 	static bool parseEngineOpenFromPacket(string packet, OneDriveSocketIo self) {
 		// packet = "0{...json...}"
 		if (packet.length < 2) return false;
