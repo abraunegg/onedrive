@@ -50,10 +50,10 @@ public:
 	~this(){
 		logSocketIOOutput("Destroying OneDriveSocketIo Instance");
 		collectException(ws.close(1000, "client stop"));
-		logSocketIOOutput("Should have closed curl instance");
+		logSocketIOOutput("Closed libcurl RFC6455 WebSocket client cleanly");
 		object.destroy(ws); // call destructor
 		ws = null;
-		logSocketIOOutput("Should have destroyed curl instance");
+		logSocketIOOutput("Destroyed libcurl RFC6455 WebSocket client cleanly");
 	}
 
 	void start() {
@@ -110,7 +110,9 @@ private:
         // Use application configuration values
 		self.ws.setUserAgent(self.appConfig.getValueString("user_agent"));
         self.ws.setTimeouts(10000, 15000);
+		self.ws.setHTTPSDebug(self.appConfig.getValueBool("debug_https"));
 		
+		// Log what we are connecting to
 		logSocketIOOutput("Connecting to " ~ wsUrl);
 
         auto rc = self.ws.connect(wsUrl);
@@ -198,6 +200,7 @@ private:
 				// Use application configuration values
 				self.ws.setUserAgent(self.appConfig.getValueString("user_agent"));
 				self.ws.setTimeouts(10000, 15000);
+				self.ws.setHTTPSDebug(self.appConfig.getValueBool("debug_https"));
 				
 				auto rc2 = self.ws.connect(newWsUrl);
 				if (rc2 != 0) {
