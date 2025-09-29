@@ -6452,12 +6452,22 @@ class SyncEngine {
 				targetItemId = changedItemId;
 			}
 		}
-			
+		
 		// Fetch the details from cachedOnlineDriveData if this is available
 		// - cachedOnlineDriveData.quotaRestricted;
 		// - cachedOnlineDriveData.quotaAvailable;
 		// - cachedOnlineDriveData.quotaRemaining;
 		DriveDetailsCache cachedOnlineDriveData;
+		
+		// Make sure that parentItem.driveId is in our driveIDs array to use when checking if item is in database
+		// Keep the DriveDetailsCache array with unique entries only
+		if (!canFindDriveId(targetDriveId, cachedOnlineDriveData)) {
+			// Add this driveId to the drive cache, which then also sets for the defaultDriveId:
+			// - quotaRestricted;
+			// - quotaAvailable;
+			// - quotaRemaining;
+			addOrUpdateOneDriveOnlineDetails(targetDriveId);
+		} 
 		
 		// Query the details using the correct 'targetDriveId' for this modified file to be uploaded
 		cachedOnlineDriveData = getDriveDetails(targetDriveId);

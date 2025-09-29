@@ -2498,6 +2498,12 @@ class ApplicationConfig {
 			}
 		}
 		
+		// 'use_intune_sso' and 'use_device_auth' cannot be used together
+		if ((getValueBool("use_intune_sso")) && (getValueBool("use_device_auth"))) {
+			addLogEntry("ERROR: 'use_intune_sso' and 'use_device_auth' cannot be used together");
+			operationalConflictDetected = true;
+		}
+				
 		// Return bool value indicating if we have an operational conflict
 		return operationalConflictDetected;
 	}
