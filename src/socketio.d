@@ -19,33 +19,32 @@ import curlWebsockets;
 
 // ========== Logging Shim ==========
 private void logSocketIOOutput(string s) {
-    collectException(addLogEntry("SOCKETIO: " ~ s));
+	collectException(addLogEntry("SOCKETIO: " ~ s));
 }
 
 final class OneDriveSocketIo {
 	private Tid parentTid;
-    private ApplicationConfig appConfig;
+	private ApplicationConfig appConfig;
 	private bool started = false;
 	private Duration renewEarly = dur!"seconds"(120);
 	private string engineSid;
 	private bool expiryWarned = false;
 	private bool renewRequested = false;
 	private string currentNotifUrl;
-	
 
-    // Worker / state
-    private Tid workerTid;
+	// Worker / state
+	private Tid workerTid;
 	private shared bool pleaseStop = false;
-    private long  pingIntervalMs = 25000;
-    private long  pingTimeoutMs  = 60000;
-    private bool  namespaceOpened = false;
+	private long  pingIntervalMs = 25000;
+	private long  pingTimeoutMs  = 60000;
+	private bool  namespaceOpened = false;
 	private CurlWebSocket ws;
 
 public:
 	this(Tid parentTid, ApplicationConfig appConfig) {
-        this.parentTid = parentTid;
-        this.appConfig = appConfig;
-    }
+		this.parentTid = parentTid;
+		this.appConfig = appConfig;
+	}
 	
 	~this(){
 		logSocketIOOutput("Destroying OneDriveSocketIo Instance");
@@ -57,7 +56,7 @@ public:
 	}
 
 	void start() {
-        if (started) return;
+		if (started) return;
 		// Get current WebSocket Notification URL
 		currentNotifUrl = appConfig.websocketNotificationUrl;
 		
@@ -68,30 +67,31 @@ public:
 	}
 
 	void stop() {
-        if (!started) return;
-        pleaseStop = true; // worker loop is cooperative
-        started = false;
+		if (!started) return;
+		pleaseStop = true; // worker loop is cooperative
+		started = false;
 		logSocketIOOutput("Flagged to stop WebSocket monitoring of Microsoft Graph API changes.");
 	}
 
 	Duration getNextExpirationCheckDuration() {
-        if (appConfig.websocketUrlExpiry.length == 0)
-            return dur!"seconds"(5);
+		if (appConfig.websocketUrlExpiry.length == 0)
+			return dur!"seconds"(5);
 
-        SysTime expiry;
-        auto err = collectException(expiry = SysTime.fromISOExtString(appConfig.websocketUrlExpiry));
-        if (err !is null)
-            return dur!"seconds"(5);
+		SysTime expiry;
+		auto err = collectException(expiry = SysTime.fromISOExtString(appConfig.websocketUrlExpiry));
+		if (err !is null)
+			return dur!"seconds"(5);
 
-        auto now = Clock.currTime(UTC());
-        if (expiry <= now) return dur!"seconds"(5);
+		auto now = Clock.currTime(UTC());
+		if (expiry <= now) return dur!"seconds"(5);
 
-        auto delta = expiry - now;
-        if (delta > renewEarly) delta -= renewEarly;
-        return (delta > Duration.zero) ? delta : dur!"seconds"(5);
-    }
+		auto delta = expiry - now;
+		if (delta > renewEarly) delta -= renewEarly;
+		return (delta > Duration.zero) ? delta : dur!"seconds"(5);
+	}
 
 private:
+	// Main function that listens and sends event
 	static void run(shared OneDriveSocketIo _this) {
 		
 		logSocketIOOutput("run() entered");
@@ -100,39 +100,39 @@ private:
 		self.ws = new CurlWebSocket();
 		
 		// Build Socket.IO WS URL from notificationUrl:
-        string notif = self.appConfig.websocketNotificationUrl;
-        if (notif.length == 0) {
-            logSocketIOOutput("no notificationUrl available");
-            return;
-        }
-        string wsUrl = toSocketIoWsUrl(notif);
+		string notif = self.appConfig.websocketNotificationUrl;
+		if (notif.length == 0) {
+			logSocketIOOutput("no notificationUrl available");
+			return;
+		}
+		string wsUrl = toSocketIoWsUrl(notif);
 
-        // Use application configuration values
+		// Use application configuration values
 		self.ws.setUserAgent(self.appConfig.getValueString("user_agent"));
-        self.ws.setTimeouts(10000, 15000);
+		self.ws.setTimeouts(10000, 15000);
 		self.ws.setHTTPSDebug(self.appConfig.getValueBool("debug_https"));
 		
 		// Log what we are connecting to
 		logSocketIOOutput("Connecting to " ~ wsUrl);
 
-        auto rc = self.ws.connect(wsUrl);
-        if (rc != 0) {
-            logSocketIOOutput("self.ws.connect failed");
-            return;
-        }
+		auto rc = self.ws.connect(wsUrl);
+		if (rc != 0) {
+			logSocketIOOutput("self.ws.connect failed");
+			return;
+		}
 
-        // Socket.IO handshake: wait for '0{json}'
-        if (!awaitEngineOpen(self.ws, self)) {
-            logSocketIOOutput("Socket.IO open handshake failed");
-            return;
-        }
+		// Socket.IO handshake: wait for '0{json}'
+		if (!awaitEngineOpen(self.ws, self)) {
+			logSocketIOOutput("Socket.IO open handshake failed");
+			return;
+		}
 
-        // Open default namespace: send "40"
+		// Open default namespace: send "40"
 		logSocketIOOutput("Sending Socket.IO connect (40) to default namespace");
-        if (self.ws.sendText("40") != 0) {
-            logSocketIOOutput("Failed to send 40 (open namespace)");
-            return;
-        } else {
+		if (self.ws.sendText("40") != 0) {
+			logSocketIOOutput("Failed to send 40 (open namespace)");
+			return;
+		} else {
 			logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/'");
 		}
 		
@@ -146,17 +146,17 @@ private:
 		}
 		
 		// Main loop with SysTime-based timing (no MonoTime import)
-        SysTime nextPing = Clock.currTime(UTC()) + dur!"msecs"(self.pingIntervalMs);
+		SysTime nextPing = Clock.currTime(UTC()) + dur!"msecs"(self.pingIntervalMs);
 		
-        for (;;) {
+		for (;;) {
 			// Watch for termination
 			if (self.pleaseStop) {
 				logSocketIOOutput("Stop requested; shutting down run() loop");
 				break;
 			}
 
-            // Subscription nearing expiry? (actual renewal lives elsewhere)
-            if (!self.expiryWarned && self.appConfig.websocketUrlExpiry.length > 0) {
+			// Subscription nearing expiry? (actual renewal lives elsewhere)
+			if (!self.expiryWarned && self.appConfig.websocketUrlExpiry.length > 0) {
 				SysTime expiry;
 				auto e = collectException(expiry = SysTime.fromISOExtString(self.appConfig.websocketUrlExpiry));
 				if (e is null) {
@@ -169,7 +169,7 @@ private:
 				}
 			}
 
-            // Renewal window check (emit once)
+			// Renewal window check (emit once)
 			if (!self.renewRequested && self.appConfig.websocketUrlExpiry.length > 0) {
 				SysTime expiry;
 				auto e = collectException(expiry = SysTime.fromISOExtString(self.appConfig.websocketUrlExpiry));
@@ -240,13 +240,13 @@ private:
 			}
 
 			// Receive Message
-            auto msg = self.ws.recvText();
-            if (msg.length == 0) {
-                Thread.sleep(dur!"msecs"(20));
-                continue;
-            }
+			auto msg = self.ws.recvText();
+			if (msg.length == 0) {
+				Thread.sleep(dur!"msecs"(20));
+				continue;
+			}
 
-            // Socket.IO parsing
+			// Socket.IO parsing
 			if (msg.length > 0 && msg[0] == '2') {
 				// Server ping -> immediate pong
 				if (self.ws.sendText("3") != 0) {
@@ -260,13 +260,13 @@ private:
 			}
 			
 			if (msg.length > 0 && msg[0] == '3') {
-                continue;
-            } else if (msg.length > 1 && msg[0] == '4' && msg[1] == '2') { // Received a '42' code message
+				continue;
+			} else if (msg.length > 1 && msg[0] == '4' && msg[1] == '2') { // Received a '42' code message
 				// Log what we received
 				logSocketIOOutput("Received 42 msg = " ~ to!string(msg));
 				handleSocketIoEvent(msg, self);
-                continue;
-            } else if (msg.length > 1 && msg[0] == '4' && msg[1] == '0') { // Received a '40' code message
+				continue;
+			} else if (msg.length > 1 && msg[0] == '4' && msg[1] == '0') { // Received a '40' code message
 				// Log what we received
 				logSocketIOOutput("Received 40 msg = " ~ to!string(msg));
 				
@@ -279,114 +279,113 @@ private:
 				auto ns = msg[3 .. i];
 				
 				if (ns == "notifications") {
-					logSocketIOOutput("Namespace '/notifications' opened; listening for Socket.IO events");	
+					logSocketIOOutput("Namespace '/notifications' opened; listening for Socket.IO events via WebSocket Transport");	
 				} else {
-					logSocketIOOutput("Namespace '/' opened; listening for Socket.IO events");
+					logSocketIOOutput("Namespace '/' opened; listening for Socket.IO events via WebSocket Transport");
 				}
-                
+				
 				// Set flag
 				self.namespaceOpened = true;
 				continue;
 				
-            } else if (msg.length > 1 && msg[0] == '4' && msg[1] == '1') { // Received a '41' code
-                logSocketIOOutput("got 41 (disconnect)");
-                break;
-            } else if (msg.length > 0 && msg[0] == '0') {
-                parseEngineOpenFromPacket(msg, self);
-                continue;
-            } else {
-                logSocketIOOutput("rx: " ~ msg);
-            }
-        }
+			} else if (msg.length > 1 && msg[0] == '4' && msg[1] == '1') { // Received a '41' code
+				logSocketIOOutput("got 41 (disconnect)");
+				break;
+			} else if (msg.length > 0 && msg[0] == '0') {
+				parseEngineOpenFromPacket(msg, self);
+				continue;
+			} else {
+				logSocketIOOutput("rx: " ~ msg);
+			}
+		}
 	}
 
-    // --- Helpers ---
-
-    static string toSocketIoWsUrl(string notificationUrl) {
-        // input:  https://host/notifications?token=...&applicationId=...
-        // output: wss://host/socket.io/?EIO=4&transport=websocket&token=...&applicationId=...
-		
+	// Convert the notificationURL into a usable WebSocket URL
+	static string toSocketIoWsUrl(string notificationUrl) {
+		// input:  https://host/notifications?token=...&applicationId=...
+		// output: wss://host/socket.io/?EIO=4&transport=websocket&token=...&applicationId=...
 		logSocketIOOutput("toSocketIoWsUrl input: " ~ notificationUrl);
 		
-        size_t schemePos = notificationUrl.length;
-        {
-            auto pos = cast(ptrdiff_t) -1;
-            // manual indexOf("://") without std.string
-            for (size_t i = 0; i + 2 < notificationUrl.length; ++i) {
-                if (notificationUrl[i] == ':' && notificationUrl[i+1] == '/' && notificationUrl[i+2] == '/') {
-                    pos = cast(ptrdiff_t)i;
-                    break;
-                }
-            }
-            if (pos >= 0) schemePos = cast(size_t)pos;
-        }
+		size_t schemePos = notificationUrl.length;
+		{
+			auto pos = cast(ptrdiff_t) -1;
+			// manual indexOf("://") without std.string
+			for (size_t i = 0; i + 2 < notificationUrl.length; ++i) {
+				if (notificationUrl[i] == ':' && notificationUrl[i+1] == '/' && notificationUrl[i+2] == '/') {
+					pos = cast(ptrdiff_t)i;
+					break;
+				}
+			}
+			if (pos >= 0) schemePos = cast(size_t)pos;
+		}
 
-        string hostAndAfter;
-        if (schemePos < notificationUrl.length) {
-            hostAndAfter = notificationUrl[(schemePos + 3) .. notificationUrl.length];
-        } else {
-            hostAndAfter = notificationUrl;
-        }
+		string hostAndAfter;
+		if (schemePos < notificationUrl.length) {
+			hostAndAfter = notificationUrl[(schemePos + 3) .. notificationUrl.length];
+		} else {
+			hostAndAfter = notificationUrl;
+		}
 
-        size_t slash = hostAndAfter.length;
-        foreach (i; 0 .. hostAndAfter.length) {
-            if (hostAndAfter[i] == '/') { slash = i; break; }
-        }
+		size_t slash = hostAndAfter.length;
+		foreach (i; 0 .. hostAndAfter.length) {
+			if (hostAndAfter[i] == '/') { slash = i; break; }
+		}
 
-        string host = (slash < hostAndAfter.length) ? hostAndAfter[0 .. slash] : hostAndAfter;
-        string query = "";
-        if (slash < hostAndAfter.length) {
-            auto rest = hostAndAfter[slash .. hostAndAfter.length];
-            size_t qpos = rest.length;
-            foreach (i; 0 .. rest.length) { if (rest[i] == '?') { qpos = i; break; } }
-            if (qpos < rest.length) query = rest[(qpos + 1) .. rest.length];
-        }
+		string host = (slash < hostAndAfter.length) ? hostAndAfter[0 .. slash] : hostAndAfter;
+		string query = "";
+		if (slash < hostAndAfter.length) {
+			auto rest = hostAndAfter[slash .. hostAndAfter.length];
+			size_t qpos = rest.length;
+			foreach (i; 0 .. rest.length) { if (rest[i] == '?') { qpos = i; break; } }
+			if (qpos < rest.length) query = rest[(qpos + 1) .. rest.length];
+		}
 
-        string outUrl = "wss://" ~ host ~ "/socket.io/?EIO=4&transport=websocket";
-        if (query.length > 0) outUrl ~= "&" ~ query;
-        
+		string outUrl = "wss://" ~ host ~ "/socket.io/?EIO=4&transport=websocket";
+		if (query.length > 0) outUrl ~= "&" ~ query;
+
 		logSocketIOOutput("toSocketIoWsUrl output: " ~ outUrl);
-		
 		return outUrl;
-    }
+	}
 
+	// Wait for Socket.IO to open
 	static bool awaitEngineOpen(curlWebsockets.CurlWebSocket ws, OneDriveSocketIo self) {
-        SysTime deadline = Clock.currTime(UTC()) + dur!"seconds"(10);
-        for (;;) {
-            if (Clock.currTime(UTC()) >= deadline) return false;
+		SysTime deadline = Clock.currTime(UTC()) + dur!"seconds"(10);
+		for (;;) {
+			if (Clock.currTime(UTC()) >= deadline) return false;
 
-            auto msg = ws.recvText();
-            if (msg.length == 0) {
-                Thread.sleep(dur!"msecs"(25));
-                continue;
-            }
+			auto msg = ws.recvText();
+			if (msg.length == 0) {
+				Thread.sleep(dur!"msecs"(25));
+				continue;
+			}
 
-            if (msg.length > 0 && msg[0] == '0') {
-                return parseEngineOpenFromPacket(msg, self);
-            }
-            if (msg.length > 1 && msg[0] == '4' && msg[1] == '0') {
-                self.namespaceOpened = true;
-                return true;
-            }
-            logSocketIOOutput("pre-open rx: " ~ msg);
-        }
-    }
+			if (msg.length > 0 && msg[0] == '0') {
+				return parseEngineOpenFromPacket(msg, self);
+			}
+			if (msg.length > 1 && msg[0] == '4' && msg[1] == '0') {
+				self.namespaceOpened = true;
+				return true;
+			}
+			logSocketIOOutput("Pre-open RX: " ~ msg);
+		}
+	}
 
-    static bool parseEngineOpenFromPacket(string packet, OneDriveSocketIo self) {
-        // packet = "0{...json...}"
-        if (packet.length < 2) return false;
-        auto jsonPart = packet[1 .. packet.length];
+	// Parse Socet.IO response
+	static bool parseEngineOpenFromPacket(string packet, OneDriveSocketIo self) {
+		// packet = "0{...json...}"
+		if (packet.length < 2) return false;
+		auto jsonPart = packet[1 .. packet.length];
 
-        import std.json : JSONValue, parseJSON, JSONType;
+		import std.json : JSONValue, parseJSON, JSONType;
 
-        JSONValue j;
-        auto err = collectException(j = parseJSON(jsonPart));
-        if (err !is null) {
-            logSocketIOOutput("failed to parse Socket.IO open JSON");
-            return false;
-        }
+		JSONValue j;
+		auto err = collectException(j = parseJSON(jsonPart));
+		if (err !is null) {
+			logSocketIOOutput("Failed to parse Socket.IO open JSON");
+			return false;
+		}
 
-        if (j.type == JSONType.object) {
+		if (j.type == JSONType.object) {
 			// sid
 			if ("sid" in j.object) {
 				auto vsid = j["sid"];
@@ -394,28 +393,29 @@ private:
 					self.engineSid = vsid.str;
 				}
 			}
-            // pingInterval
-            if ("pingInterval" in j.object) {
-                auto v = j["pingInterval"];
-                if (v.type == JSONType.integer) {
-                    self.pingIntervalMs = v.integer;
-                }
-            }
-            // pingTimeout
-            if ("pingTimeout" in j.object) {
-                auto v2 = j["pingTimeout"];
-                if (v2.type == JSONType.integer) {
-                    self.pingTimeoutMs = v2.integer;
-                }
-            }
-        }
+			// pingInterval
+			if ("pingInterval" in j.object) {
+				auto v = j["pingInterval"];
+				if (v.type == JSONType.integer) {
+					self.pingIntervalMs = v.integer;
+				}
+			}
+			// pingTimeout
+			if ("pingTimeout" in j.object) {
+				auto v2 = j["pingTimeout"];
+				if (v2.type == JSONType.integer) {
+					self.pingTimeoutMs = v2.integer;
+				}
+			}
+		}
 
-        // Log that we have opened a connection and have a valid SID
+		// Log that we have opened a connection and have a valid SID
 		logSocketIOOutput("Engine open; sid=" ~ self.engineSid ~ " pingInterval=" ~ self.pingIntervalMs.to!string ~ "ms" ~ " pingTimeout="  ~ self.pingTimeoutMs.to!string  ~ "ms");
 		return true;
-    }
+	}
 
-    static void handleSocketIoEvent(string msg, OneDriveSocketIo self) {
+	// Handle Socket.IO Events
+	static void handleSocketIoEvent(string msg, OneDriveSocketIo self) {
 		// Accept both: 42[...]
 		// and:         42/<namespace>,[...]
 		size_t i = 2;
@@ -470,12 +470,12 @@ private:
 		}
 
 		if (evName == "notification") {
-			logSocketIOOutput("notification event (ns='/" ~ ns ~ "') -> " ~ dataText);
+			logSocketIOOutput("Notification Event (ns='/" ~ ns ~ "') -> " ~ dataText);
 			// *** Signal main exactly like webhook does ***
 			collectException(send(self.parentTid, cast(ulong)1));
 		} else {
 			// Visibility in case the service uses other event names
-			logSocketIOOutput("event '" ~ evName ~ "' (ns='/" ~ ns ~ "') -> " ~ dataText);
+			logSocketIOOutput("Event '" ~ evName ~ "' (ns='/" ~ ns ~ "') -> " ~ dataText);
 		}
 	}
-}
+	}
