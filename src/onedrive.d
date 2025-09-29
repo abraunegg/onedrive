@@ -1087,6 +1087,7 @@ class OneDriveApi {
 		return get(url);
 	}
 
+	// Create Webhook Subscription
 	JSONValue createSubscription(string notificationUrl, SysTime expirationDateTime) {
 		string driveId;
 		string url = subscriptionUrl;
@@ -1118,7 +1119,8 @@ class OneDriveApi {
 		];
 		return post(url, request.toString());
 	}
-	
+
+	// Renew Webhook Subscription
 	JSONValue renewSubscription(string subscriptionId, SysTime expirationDateTime) {
 		string url;
 		url = subscriptionUrl ~ "/" ~ subscriptionId;
@@ -1127,19 +1129,20 @@ class OneDriveApi {
 		];
 		return patch(url, request.toString());
 	}
-	
-	// Obtain the Websocket Notification URL
-	JSONValue obtainWebSocketNotificationURL() {
-		addLogEntry("Request a Socket.IO Subscription Endpoint: " ~ websocketEndpoint);
-		return get(websocketEndpoint);
-	}
-	
+
+	// Delete Webhook subscription
 	void deleteSubscription(string subscriptionId) {
 		string url;
 		url = subscriptionUrl ~ "/" ~ subscriptionId;
 		performDelete(url);
 	}
-	
+
+	// Obtain the Websocket Notification URL
+	JSONValue obtainWebSocketNotificationURL() {
+		if (debugLogging) {addLogEntry("Request a Socket.IO Subscription Endpoint: " ~ websocketEndpoint, ["debug"]);}
+		return get(websocketEndpoint);
+	}
+
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
 	void downloadById(const(char)[] driveId, const(char)[] itemId, string saveToPath, long fileSize, JSONValue onlineHash, long resumeOffset = 0) {
 		// We pass through to 'downloadFile()'

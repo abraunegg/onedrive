@@ -14781,8 +14781,8 @@ class SyncEngine {
 			// Was a valid JSON response provided?
 			if (endpointResponse.type() == JSONType.object) {
 				
-				// DEBUGGING .. REMOVE LATER
-				addLogEntry("Response for a Socket.IO Subscription Endpoint: " ~ to!string(endpointResponse));
+				// Log response
+				if (debugLogging) {addLogEntry("Response for a Socket.IO Subscription Endpoint: " ~ to!string(endpointResponse), ["debug"]);}
 				
 				// Store the JSON in the configuration for reuse
 				appConfig.websocketEndpointResponse = to!string(endpointResponse);
@@ -14792,13 +14792,8 @@ class SyncEngine {
 				
 				// Extract and store the expiry
 				appConfig.websocketUrlExpiry = endpointResponse["expirationDateTime"].str;
-				
-				
 				SysTime expiryUTC = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
 				SysTime expiryLocal = expiryUTC.toLocalTime();
-				
-				
-
 				
 				// Do we have a valid Notification URL ?
 				if (!websocketURL.empty) {
@@ -14807,15 +14802,12 @@ class SyncEngine {
 					// Set flag
 					appConfig.websocketNotificationUrlAvailable = true;
 				
-				
-					// DEBUGGING .. REMOVE LATER
-					addLogEntry();
-					addLogEntry(websocketURL);
-					addLogEntry("Expiry (UTC):   " ~ to!string(expiryUTC));
-					addLogEntry("Expiry (Local): " ~ to!string(expiryLocal));
-					addLogEntry();
-				
-				
+					// Log WebSocket specifics
+					if (debugLogging) {
+						addLogEntry("WebSocket Notification URL: " ~ websocketURL, ["debug"]);
+						addLogEntry("WebSocket Expiry (UTC):     " ~ to!string(expiryUTC), ["debug"]);
+						addLogEntry("WebSocket Expiry (Local):   " ~ to!string(expiryLocal), ["debug"]);
+					}
 				}	
 			}
 			
