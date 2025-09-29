@@ -45,7 +45,7 @@ public:
 		this.parentTid = parentTid;
 		this.appConfig = appConfig;
 	}
-	
+
 	~this(){
 		logSocketIOOutput("Destroying OneDriveSocketIo Instance");
 		collectException(ws.close(1000, "client stop"));
@@ -478,4 +478,4 @@ private:
 			logSocketIOOutput("Event '" ~ evName ~ "' (ns='/" ~ ns ~ "') -> " ~ dataText);
 		}
 	}
-	}
+}
