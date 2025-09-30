@@ -969,13 +969,12 @@ int main(string[] cliArgs) {
 						
 						// Were we able to correctly obtain the endpoint response and build the socket.io WS endpoint
 						if (appConfig.websocketNotificationUrlAvailable) {
-							// URL is available
+							// Notification URL is available
 							if (oneDriveSocketIo is null) {
 								oneDriveSocketIo = new OneDriveSocketIo(thisTid, appConfig);
 								oneDriveSocketIo.start();
 							}
-							
-						// Logging of WebSocket being enabled is moved to socketio.d
+							addLogEntry("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 						} else {
 							addLogEntry("ERROR: Unable to configure WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 						}

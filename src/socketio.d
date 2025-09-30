@@ -19,7 +19,9 @@ import curlWebsockets;
 
 // ========== Logging Shim ==========
 private void logSocketIOOutput(string s) {
-	collectException(addLogEntry("SOCKETIO: " ~ s));
+	if (debugLogging) {
+		collectException(addLogEntry("SOCKETIO: " ~ s, ["debug"]));
+	}
 }
 
 final class OneDriveSocketIo {
@@ -68,7 +70,6 @@ public:
 		started = true;
 		pleaseStop = false;
 		workerTid = spawn(&run, cast(shared) this);
-		logSocketIOOutput("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 	}
 
 	void stop() {
@@ -259,7 +260,7 @@ private:
 							auto remain = expiry - Clock.currTime(UTC());
 							if (remain <= dur!"minutes"(2)) {
 								self.renewRequested = true;
-								logSocketIOOutput("Subscription nearing expiry; requesting renewal from main");
+								logSocketIOOutput("Subscription nearing expiry; requesting renewal from main() monitor loop");
 								send(self.parentTid, "SOCKETIO_RENEWAL_REQUEST");
 								send(self.parentTid, "SOCKETIO_RENEWAL_CONTEXT:" ~ "id=" ~ self.appConfig.websocketEndpointResponse ~ " url=" ~ self.appConfig.websocketNotificationUrl);
 							}
@@ -460,8 +461,6 @@ private:
 		if (packet.length < 2) return false;
 		auto jsonPart = packet[1 .. packet.length];
 
-		import std.json : JSONValue, parseJSON, JSONType;
-
 		JSONValue j;
 		auto err = collectException(j = parseJSON(jsonPart));
 		if (err !is null) {
@@ -555,7 +554,7 @@ private:
 
 		if (evName == "notification") {
 			logSocketIOOutput("Notification Event (ns='/" ~ ns ~ "') -> " ~ dataText);
-			// *** Signal main exactly like webhook does ***
+			// Signal main() monitor loop exactly like webhook does
 			collectException(send(self.parentTid, cast(ulong)1));
 		} else {
 			// Visibility in case the service uses other event names
