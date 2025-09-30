@@ -567,7 +567,7 @@ int main(string[] cliArgs) {
 		if (!appConfig.getValueBool("monitor")) {
 			// Running as --synchronize
 			addLogEntry();
-			addLogEntry("ERROR: Unable to reach Microsoft OneDrive API service, unable to initialise application");
+			addLogEntry("ERROR: Unable to reach the Microsoft OneDrive API service, unable to initialise application");
 			addLogEntry();
 			return EXIT_FAILURE;
 		} else {
@@ -621,7 +621,7 @@ int main(string[] cliArgs) {
 			
 			// Are we not doing a --sync or a --monitor operation?
 			if (syncOrMonitorMissing) { // this is 'true' if --sync or a --monitor were not used
-			
+
 				// Do not perform a vacuum on exit, pointless
 				performDatabaseVacuum = false;
 				
@@ -637,7 +637,7 @@ int main(string[] cliArgs) {
 				// - Are we renaming or moving a directory?
 				// - Are we displaying the quota information?
 				// - Did we just authorise the client?
-								
+
 				// --get-sharepoint-drive-id - Get the SharePoint Library drive_id
 				if (appConfig.getValueString("sharepoint_library_name") != "") {
 					// Get the SharePoint Library drive_id
@@ -646,7 +646,7 @@ int main(string[] cliArgs) {
 					// Use exit scopes to shutdown API and cleanup data
 					return EXIT_SUCCESS;
 				}
-				
+
 				// --display-sync-status - Query the sync status
 				if (appConfig.getValueBool("display_sync_status")) {
 					// path to query variable
@@ -663,7 +663,7 @@ int main(string[] cliArgs) {
 					// Use exit scopes to shutdown API and cleanup data
 					return EXIT_SUCCESS;
 				}
-				
+
 				// --get-file-link - Get the URL path for a synced file
 				if (appConfig.getValueString("get_file_link") != "") {
 					// Query the OneDrive API for the file link

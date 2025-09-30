@@ -4,7 +4,7 @@ module socketio;
 // What does this module require to function?
 import std.exception   : collectException;
 import core.thread     : Thread;
-import std.concurrency : Tid, spawn, send;
+import std.concurrency : spawn, Tid, thisTid, send, receiveTimeout;
 import core.time       : Duration, dur;
 import std.datetime    : SysTime, Clock, UTC;
 import std.conv        : to;
@@ -33,6 +33,7 @@ final class OneDriveSocketIo {
 	private string currentNotifUrl;
 
 	// Worker / state
+	private Tid controllerTid; // main/control thread to notify when the worker exits
 	private Tid workerTid;
 	private shared bool pleaseStop = false;
 	private long  pingIntervalMs = 25000;
@@ -60,17 +61,47 @@ public:
 		// Get current WebSocket Notification URL
 		currentNotifUrl = appConfig.websocketNotificationUrl;
 		
+		// Remember which thread to notify when worker exits
+		controllerTid = thisTid;
+		
 		// Set Flag
 		started = true;
+		pleaseStop = false;
 		workerTid = spawn(&run, cast(shared) this);
 		logSocketIOOutput("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 	}
 
 	void stop() {
 		if (!started) return;
-		pleaseStop = true; // worker loop is cooperative
-		started = false;
+
+		// Ask the worker to stop cooperatively
+		pleaseStop = true;
 		logSocketIOOutput("Flagged to stop WebSocket monitoring of Microsoft Graph API changes.");
+
+		// Wait for worker to acknowledge clean shutdown (up to ~6 seconds total)
+		bool acknowledged = false;
+		foreach (_; 0 .. 6) {
+			auto got = receiveTimeout(dur!"seconds"(1),
+				(string msg) {
+					// exact token from run() below
+					if (msg == "socketio:stopped") acknowledged = true;
+				}
+			);
+			static if (__traits(compiles, got)) {} // silence unused warning if needed
+			if (acknowledged) {
+				logSocketIOOutput("Worker stop acknowledgement received and stopped.");
+				break;
+			}
+		}
+
+		// Mark not started only after we know we've requested stop
+		started = false;
+
+		if (!acknowledged) {
+			// We asked nicely but didn’t get an ack within the window; continue shutdown anyway.
+			// Keeps behaviour safe; avoids hanging the main shutdown path
+			logSocketIOOutput("Worker stop acknowledgement not received within timeout; continuing shutdown.");
+		}
 	}
 
 	Duration getNextExpirationCheckDuration() {
@@ -101,6 +132,15 @@ private:
 		int backoffSeconds = 1;
 		const int maxBackoffSeconds = 60;
 		bool online;
+		
+		scope(exit) {
+			// Tell controller we are fully exited so shutdown can be clean
+			if (self.controllerTid != Tid.init) {
+				send(self.controllerTid, "socketio:stopped");
+			}
+			// Log that we are exiting the run() function
+			logSocketIOOutput("run() exiting");
+		}
 
 		while (!self.pleaseStop) {
 			// If we're offline (or OneDrive service not reachable), don't bother trying yet

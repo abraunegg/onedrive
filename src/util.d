@@ -362,6 +362,8 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 	// Set HTTP method to HEAD for minimal data transfer
 	http.method = HTTP.Method.head;
 	
+	bool reachedService = false;
+	
 	// Exit scope to ensure cleanup
 	scope(exit) {
 		// Shut http down and destroy
@@ -385,24 +387,35 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 			if (displayLogging) {
 				addLogEntry("Successfully reached the Microsoft OneDrive Service");
 			}
-			return true;
+			reachedService = true;
 		} else {
 			addLogEntry("Failed to reach the Microsoft OneDrive Service. HTTP status code: " ~ to!string(http.statusLine.code));
-			return false;
+			reachedService = false;
 		}
 	} catch (SocketException e) {
 		addLogEntry("Cannot connect to the Microsoft OneDrive Service - Socket Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-		return false;
+		reachedService = false;
 	} catch (CurlException e) {
 		addLogEntry("Cannot connect to the Microsoft OneDrive Service - Network Connection Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-		return false;
+		reachedService = false;
 	} catch (Exception e) {
 		addLogEntry("An unexpected error occurred: " ~ e.toString());
 		displayOneDriveErrorMessage(e.toString(), getFunctionName!({}));
-		return false;
+		reachedService = false;
 	}
+	
+	// Ensure everything is shutdown cleanly
+	http.shutdown();
+	object.destroy(http);
+	// Perform Garbage Collection
+	GC.collect();
+	// Return free memory to the OS
+	GC.minimize();
+	
+	// Return state
+	return reachedService;
 }
 
 // Retry Internet access test to Microsoft OneDrive
