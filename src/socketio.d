@@ -10,6 +10,7 @@ import std.datetime    : SysTime, Clock, UTC;
 import std.conv        : to;
 import std.string      : indexOf;
 import std.json        : JSONValue, JSONType, parseJSON;
+import core.atomic     : atomicLoad, atomicStore;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -42,6 +43,7 @@ final class OneDriveSocketIo {
 	private long  pingTimeoutMs  = 60000;
 	private bool  namespaceOpened = false;
 	private CurlWebSocket ws;
+	private shared bool workerExited = false; // set true by run() on clean exit
 
 public:
 	this(Tid parentTid, ApplicationConfig appConfig) {
@@ -63,12 +65,14 @@ public:
 		// Get current WebSocket Notification URL
 		currentNotifUrl = appConfig.websocketNotificationUrl;
 		
-		// Remember which thread to notify when worker exits
-		controllerTid = thisTid;
+		// Reset cooperative flags
+		pleaseStop = false;
+		atomicStore(workerExited, false);
 		
 		// Set Flag
 		started = true;
-		pleaseStop = false;
+		
+		// Spawn worker thread
 		workerTid = spawn(&run, cast(shared) this);
 	}
 
@@ -78,27 +82,22 @@ public:
 		// Ask the worker to stop cooperatively
 		pleaseStop = true;
 		logSocketIOOutput("Flagged to stop WebSocket monitoring of Microsoft Graph API changes.");
-
-		// Wait for worker to acknowledge clean shutdown (up to ~6 seconds total)
-		bool acknowledged = false;
-		foreach (_; 0 .. 6) {
-			auto got = receiveTimeout(dur!"seconds"(1),
-				(string msg) {
-					// exact token from run() below
-					if (msg == "socketio:stopped") acknowledged = true;
-				}
-			);
-			static if (__traits(compiles, got)) {} // silence unused warning if needed
-			if (acknowledged) {
-				logSocketIOOutput("Worker stop acknowledgement received and stopped.");
-				break;
-			}
+		// Wait up to ~6 seconds for the worker to finish cleanup.
+		// No mailbox usage here to avoid nested receiveTimeout on FreeBSD.
+		enum int totalWaitMs = 6000;
+		enum int stepMs = 100;
+		int waited = 0;
+		
+		while (!atomicLoad(workerExited) && waited < totalWaitMs) {
+			Thread.sleep(dur!"msecs"(stepMs));
+			waited += stepMs;
 		}
+		
 
 		// Mark not started only after we know we've requested stop
 		started = false;
 
-		if (!acknowledged) {
+		if (!atomicLoad(workerExited)) {
 			// We asked nicely but didn’t get an ack within the window; continue shutdown anyway.
 			// Keeps behaviour safe; avoids hanging the main shutdown path
 			logSocketIOOutput("Worker stop acknowledgement not received within timeout; continuing shutdown.");
@@ -135,10 +134,9 @@ private:
 		bool online;
 		
 		scope(exit) {
-			// Tell controller we are fully exited so shutdown can be clean
-			if (self.controllerTid != Tid.init) {
-				send(self.controllerTid, "socketio:stopped");
-			}
+			// Signal that the worker is fully done (visible across threads)
+			atomicStore(self.workerExited, true);
+			
 			// Log that we are exiting the run() function
 			logSocketIOOutput("run() exiting");
 		}
