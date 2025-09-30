@@ -108,6 +108,7 @@ private:
 			online = testInternetReachability(self.appConfig, false); // Will display failures, but nothing if successful .. a quiet check of sorts.
 			if (!online) {
 				logSocketIOOutput("Network or OneDrive service not reachable; delaying reconnect");
+				logSocketIOOutput("Backoff " ~ to!string(backoffSeconds) ~ "s before retry");
 				Thread.sleep(dur!"seconds"(backoffSeconds));
 				if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 				continue;
@@ -117,6 +118,7 @@ private:
 				string notif = self.appConfig.websocketNotificationUrl;
 				if (notif.length == 0) {
 					logSocketIOOutput("No notificationUrl available; will retry");
+					logSocketIOOutput("Backoff " ~ to!string(backoffSeconds) ~ "s before retry");
 					Thread.sleep(dur!"seconds"(backoffSeconds));
 					if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 					continue;
@@ -179,6 +181,10 @@ private:
 
 				// Connected successfully → reset backoff
 				backoffSeconds = 1;
+				// Reset per-connection flags so renew logic and ns-open tracking work after reconnection
+				self.expiryWarned   = false;
+				self.renewRequested = false;
+				self.namespaceOpened = false;
 
 				// Track last server ping received to detect a dead connection
 				SysTime lastPingAt = Clock.currTime(UTC());
@@ -331,6 +337,7 @@ private:
 				// Fell out of the inner loop → close and backoff, then retry
 				logSocketIOOutput("Retrying WebSocket Connection");
 				collectException(self.ws.close(1001, "reconnect"));
+				logSocketIOOutput("Backoff " ~ to!string(backoffSeconds) ~ "s before retry");
 				Thread.sleep(dur!"seconds"(backoffSeconds));
 				if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 			}
