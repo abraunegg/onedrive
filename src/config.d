@@ -418,6 +418,9 @@ class ApplicationConfig {
 		longValues["webhook_renewal_interval"] = 300;
 		longValues["webhook_retry_interval"] = 60;
 		
+		// WebSocket Feature Options
+		boolValues["disable_websocket_support"] = false;
+		
 		// GUI File Transfer and Deletion Notifications
 		boolValues["notify_file_actions"] = false;
 		
@@ -1626,6 +1629,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'monitor_interval'             = " ~ to!string(getValueLong("monitor_interval")));
 		addLogEntry("Config option 'monitor_log_frequency'        = " ~ to!string(getValueLong("monitor_log_frequency")));
 		addLogEntry("Config option 'monitor_fullscan_frequency'   = " ~ to!string(getValueLong("monitor_fullscan_frequency")));
+		addLogEntry("Config option 'disable_websocket_support'    = " ~ to!string(getValueBool("disable_websocket_support")));
 		
 		// sync process and method
 		addLogEntry("Config option 'read_only_auth_scope'         = " ~ to!string(getValueBool("read_only_auth_scope")));

@@ -961,22 +961,28 @@ int main(string[] cliArgs) {
 				
 					// If we are doing --upload-only however .. we need to 'ignore' online change
 					if (!appConfig.getValueBool("upload_only")) {
-						// Log that we are attempting to enable WebSocket Support
-						addLogEntry("Attempting to enable WebSocket support to monitor Microsoft Graph API changes in near real-time.");
-						
-						// Obtain the WebSocket Notification URL from the API endpoint
-						syncEngineInstance.obtainWebSocketNotificationURL();
-						
-						// Were we able to correctly obtain the endpoint response and build the socket.io WS endpoint
-						if (appConfig.websocketNotificationUrlAvailable) {
-							// Notification URL is available
-							if (oneDriveSocketIo is null) {
-								oneDriveSocketIo = new OneDriveSocketIo(thisTid, appConfig);
-								oneDriveSocketIo.start();
+						// Did the user configure to disable 'websocket' support?
+						if (!appConfig.getValueBool("disable_websocket_support")) {
+							// Log that we are attempting to enable WebSocket Support
+							addLogEntry("Attempting to enable WebSocket support to monitor Microsoft Graph API changes in near real-time.");
+							
+							// Obtain the WebSocket Notification URL from the API endpoint
+							syncEngineInstance.obtainWebSocketNotificationURL();
+							
+							// Were we able to correctly obtain the endpoint response and build the socket.io WS endpoint
+							if (appConfig.websocketNotificationUrlAvailable) {
+								// Notification URL is available
+								if (oneDriveSocketIo is null) {
+									oneDriveSocketIo = new OneDriveSocketIo(thisTid, appConfig);
+									oneDriveSocketIo.start();
+								}
+								addLogEntry("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
+							} else {
+								addLogEntry("ERROR: Unable to configure WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 							}
-							addLogEntry("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 						} else {
-							addLogEntry("ERROR: Unable to configure WebSocket support to monitor Microsoft Graph API changes in near real-time.");
+							// WebSocket Support has been disabled
+							addLogEntry("WebSocket support has been disabled by user configuration.");
 						}
 					} else {
 						// --upload only being used
@@ -1130,18 +1136,21 @@ int main(string[] cliArgs) {
 					} else {
 						// WebSocket support is enabled by default, but only if the version of libcurl supports it
 						if (appConfig.curlSupportsWebSockets) {
-							// Do we need to renew the notification URL?
-							auto renewEarly = dur!"seconds"(120);
-							if (appConfig.websocketNotificationUrlAvailable && appConfig.websocketUrlExpiry.length) {
-								auto expiry = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
-								auto now    = Clock.currTime(UTC());
-								if (expiry - now <= renewEarly) {
-									try {
-										// Obtain the WebSocket Notification URL from the API endpoint
-										syncEngineInstance.obtainWebSocketNotificationURL();
-										if (debugLogging) addLogEntry("Refreshed WebSocket notification URL prior to expiry", ["debug"]);
-									} catch (Exception e) {
-										if (debugLogging) addLogEntry("Failed to refresh WebSocket notification URL: " ~ e.msg, ["debug"]);
+							// Did the user configure to disable 'websocket' support?
+							if (!appConfig.getValueBool("disable_websocket_support")) {
+								// Do we need to renew the notification URL?
+								auto renewEarly = dur!"seconds"(120);
+								if (appConfig.websocketNotificationUrlAvailable && appConfig.websocketUrlExpiry.length) {
+									auto expiry = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
+									auto now    = Clock.currTime(UTC());
+									if (expiry - now <= renewEarly) {
+										try {
+											// Obtain the WebSocket Notification URL from the API endpoint
+											syncEngineInstance.obtainWebSocketNotificationURL();
+											if (debugLogging) addLogEntry("Refreshed WebSocket notification URL prior to expiry", ["debug"]);
+										} catch (Exception e) {
+											if (debugLogging) addLogEntry("Failed to refresh WebSocket notification URL: " ~ e.msg, ["debug"]);
+										}
 									}
 								}
 							}
@@ -1333,13 +1342,16 @@ int main(string[] cliArgs) {
 								// Webhook Notification reset to false for this loop
 								notificationReceived = false;
 							} else {
-								// WebSocket support is enabled by default, but only if the version of libcurl supports it
-								if (appConfig.curlSupportsWebSockets) {
-									// Update sleep time based on renew interval
-									Duration nextWebsocketCheckDuration = oneDriveSocketIo.getNextExpirationCheckDuration();
-									if (nextWebsocketCheckDuration < sleepTime) {
-										sleepTime = nextWebsocketCheckDuration;
-										if (debugLogging) {addLogEntry("Update sleeping time (based on WebSocket next expiration check) to " ~ to!string(sleepTime), ["debug"]);}
+								// Did the user configure to disable 'websocket' support?
+								if (!appConfig.getValueBool("disable_websocket_support")) {
+									// WebSocket support is enabled by default, but only if the version of libcurl supports it
+									if (appConfig.curlSupportsWebSockets) {
+										// Update sleep time based on renew interval
+										Duration nextWebsocketCheckDuration = oneDriveSocketIo.getNextExpirationCheckDuration();
+										if (nextWebsocketCheckDuration < sleepTime) {
+											sleepTime = nextWebsocketCheckDuration;
+											if (debugLogging) {addLogEntry("Update sleeping time (based on WebSocket next expiration check) to " ~ to!string(sleepTime), ["debug"]);}
+										}
 									}
 								}
 							}
