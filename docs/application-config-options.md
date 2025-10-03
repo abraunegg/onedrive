@@ -86,6 +86,7 @@ Before reading this document, please ensure you are running application version 
   - [CLI Option: --display-config](#cli-option---display-config)
   - [CLI Option: --display-sync-status](#cli-option---display-sync-status)
   - [CLI Option: --display-quota](#cli-option---display-quota)
+  - [CLI Option: --download-file](#cli-option---download-file)
   - [CLI Option: --force](#cli-option---force)
   - [CLI Option: --force-sync](#cli-option---force-sync)
   - [CLI Option: --get-file-link](#cli-option---get-file-link)
@@ -1344,6 +1345,11 @@ _**Usage Example:**_ `onedrive --display-sync-status`
 _**Description:**_ This CLI option will display the quota status of the account drive id or the configured 'drive_id' value
 
 _**Usage Example:**_ `onedrive --display-quota`
+
+### CLI Option: --download-file
+_**Description:**_ This CLI option will download a single file based on the online path. No sync will be performed.
+
+_**Usage Example:**_ `onedrive --download-file 'path/to/your/file/online'
 
 ### CLI Option: --force
 _**Description:**_ This CLI option enables the force the deletion of data when a 'big delete' is detected. 
