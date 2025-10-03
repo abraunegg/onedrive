@@ -1132,6 +1132,7 @@ class ApplicationConfig {
 		stringValues["auth_files"] = "";
 		stringValues["auth_response"] = "";
 		stringValues["share_password"] = "";
+		stringValues["download_single_file"] = "";
 		boolValues["display_config"] = false;
 		boolValues["display_sync_status"] = false;
 		boolValues["display_quota"] = false;
@@ -1214,6 +1215,9 @@ class ApplicationConfig {
 				"download-only",
 					"Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive",
 					&boolValues["download_only"],
+				"download-file",
+					"Download a single file from Microsoft OneDrive",
+					&stringValues["download_single_file"],
 				"dry-run",
 					"Perform a trial sync with no changes made",
 					&boolValues["dry_run"],
@@ -2641,6 +2645,7 @@ class ApplicationConfig {
 		// - Are we just deleting a directory online, without any sync being performed?
 		// - Are we renaming or moving a directory?
 		// - Are we displaying the quota information?
+		// - Are we downloading a single file?
 		bool noSyncOperation = false;
 		
 		// Return a true|false if any of these have been set, so that we use the 'dry-run' DB copy, to execute these tasks, in case the client is currently operational
@@ -2714,6 +2719,12 @@ class ApplicationConfig {
 		
 		// Are we displaying the quota information?
 		if (getValueBool("display_quota")) {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// Are we downloading a single file?
+		if ((getValueString("download_single_file") != "")) {
 			// flag that a no sync operation has been requested
 			noSyncOperation = true;
 		}
@@ -2801,6 +2812,7 @@ void outputLongHelp(Option[] opt) {
 			"--classify-as-big-delete",
 			"--create-share-link",
 			"--destination-directory",
+			"--download-file",
 			"--get-file-link",
 			"--get-O365-drive-id",
 			"--get-sharepoint-drive-id",
@@ -2842,7 +2854,9 @@ void outputLongHelp(Option[] opt) {
 			writefln("  %s%s%s%s\n      %s",
 					it.optLong,
 					it.optShort == "" ? "" : " " ~ it.optShort,
-					argsNeedingOptions.canFind(it.optLong) ? " ARG" : "",
+					argsNeedingOptions.canFind(it.optLong) ? " '<path or required value>'" : "",
 					it.required ? " (required)" : "", it.help);
 		}
+		// end with a blank line
+		writeln();
 }
