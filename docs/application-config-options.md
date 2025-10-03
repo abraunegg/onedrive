@@ -1349,7 +1349,7 @@ _**Usage Example:**_ `onedrive --display-quota`
 ### CLI Option: --download-file
 _**Description:**_ This CLI option will download a single file based on the online path. No sync will be performed.
 
-_**Usage Example:**_ `onedrive --download-file 'path/to/your/file/online'
+_**Usage Example:**_ `onedrive --download-file 'path/to/your/file/online'`
 
 ### CLI Option: --force
 _**Description:**_ This CLI option enables the force the deletion of data when a 'big delete' is detected. 
