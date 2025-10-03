@@ -133,7 +133,7 @@ A first run (or a deliberate `--resync`) must enumerate the entire tree to estab
 * **Item count & Online structure:** Many folders and files dominate metadata work leading to more metadata churn
 * **Network** Latency and throughput directly affect how quickly we can iterate Microsoft Graph API responses and transfer content.
 * **Local Disk & filesystem:** SSDs perform metadata and DB work far faster than spinning disks or remote mounts. Your filesystem type (e.g., ext4, XFS, ZFS) matters and should be tuned appropriately.
-* **File Indexing:** Disable File Indexing (Tracker, Baloo, Searchmonkey, Pinot and others) as these are adding latency and disk I/O to your operaions slowing down your performance.
+* **File Indexing:** Disable File Indexing (Tracker, Baloo, Searchmonkey, Pinot and others) as these are adding latency and disk I/O to your operations slowing down your performance.
 * **CPU & memory:** Classification and hashing are CPU-bound; insufficient RAM or swap can slow DB and traversal work.
 
 ## Delta Response vs Generated Delta Response

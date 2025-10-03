@@ -407,6 +407,7 @@ sargs
 sbindir
 scgi
 sdlang
+Searchmonkey
 semanage
 sendfd
 setsebool
