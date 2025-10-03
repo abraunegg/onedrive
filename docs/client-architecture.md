@@ -104,6 +104,47 @@ This exclusion process can be illustrated by the following activity diagram. A '
 
 ![Client Side Filtering Determination](./puml/client_side_filtering_rules.png)
 
+## Understanding how the client processes online state
+When you see `Fetching items from the OneDrive API for Drive ID:` or `Generating a /delta response from the OneDrive API for this Drive ID:` the client isn’t stuck—it’s working through paged change sets from Microsoft Graph using your current delta token, reconciling them with the local database, and safely scheduling work. Microsoft Graph returns paged results and signals either `@odata.nextLink` (more pages to fetch) or `@odata.deltaLink` (caught up; keep this token for next time) - the client follows those links until it reaches a stable point. Page sizing and paging behaviour are controlled by the Microsoft Graph API service.
+
+### What a typical cycle looks like
+1. **Fetching online state**
+    * **Application Output:** `Fetching items from the OneDrive API for Drive ID: …` or `Generating a /delta response from the OneDrive API for this Drive ID:`
+    * The client requests the next page of changes using your current delta token.
+2. **Processing received items**
+    * **Application Output:** `Processing N applicable changes and items received from Microsoft OneDrive`
+    * Each item received is classified (add/update/delete/excluded), matched against local state, and queued for action.
+3. **Execute required actions**
+    * Download new or modified files, Delete local data that has been deleted online, Create new local directories
+4. **Database Integrity**
+    * **Application Output:** `Performing a database consistency and integrity check on locally stored data`
+    * Integrity pass to prevent state corruption
+5. **Local scan for new local data**
+    * **Application Output:** `Scanning the local file system '…' for new data to upload`
+    * Traverse local filesystem, honouring client side filtering rules
+6. **True-Up**
+    * **Application Output:** `Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process`
+    * Final scan of online to ensure that everything is in the state it is meant to be
+
+### Why first runs or --resync take longer
+A first run (or a deliberate `--resync`) must enumerate the entire tree to establish a known-good baseline; subsequent incremental runs are much faster because the delta token limits work to just the changes since last time.
+
+### What affects performance the most
+* **Item count & Online structure:** Many folders and files dominate metadata work leading to more metadata churn
+* **Network** Latency and throughput directly affect how quickly we can iterate Microsoft Graph API responses and transfer content.
+* **Local Disk & filesystem:** SSDs perform metadata and DB work far faster than spinning disks or remote mounts. Your filesystem type (e.g., ext4, XFS, ZFS) matters and should be tuned appropriately.
+* **File Indexing:** Disable File Indexing (Tracker, Baloo, Searchmonkey, Pinot and others) as these are adding latency and disk I/O to your operations slowing down your performance.
+* **CPU & memory:** Classification and hashing are CPU-bound; insufficient RAM or swap can slow DB and traversal work.
+
+## Delta Response vs Generated Delta Response
+By default, the client uses Microsoft Graph’s `/delta` to retrieve changes efficiently. In a few situations, however, using `/delta` would be wrong or unsafe for your intent. In those cases the client generates a delta by walking the relevant online subtree and synthesising the current state before reconciling it locally. This is intentionally slower but correct.
+
+### When the client deliberately generates a delta
+* Some national cloud deployments where a needed delta endpoint/feature isn’t available. Capabilities differ by resource and cloud; when a required delta isn’t available, we walk the tree and synthesise the change set.
+* The use of `--single-directory` scope. A naïve drive-level /delta can include changes outside your intended scope. Generating a delta ensures only the in-scope subtree is considered.
+* The use of `--download-only --cleanup-local-files`. Raw /delta may replay online delete/replace churn that would remove valid local files you intend to keep. Generated delta captures the current online state and intentionally ignores those intermediate events to protect local data.
+* The use of 'Shared Folders'. Calling `/delta` on a shared path can be rooted at the owner’s drive, so your filters may not match what you see as “the shared folder”. Generated delta walks the shared subtree and normalises paths so the queue reflects what’s truly shared with you.
+
 ## File conflict handling - default operational modes
 
 When using the default operational modes (`--sync` or `--monitor`) the client application is conforming to how the Microsoft Windows OneDrive client operates in terms of resolving conflicts for files.
