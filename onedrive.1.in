@@ -189,6 +189,10 @@ Disable upload validation when uploading to OneDrive.
 Display the quota status of the client - no sync will be performed.
 
 .TP
+\fB\-\-download-file\fR
+This CLI option will download a single file based on the online path. No sync will be performed.
+
+.TP
 \fB\-\-display-running-config\fR
 Display what options the client has been configured to use on application startup.
 
