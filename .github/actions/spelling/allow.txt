@@ -56,11 +56,13 @@ bools
 bpozdena
 brp
 btw
+buflen
 bugzilla
 builddir
 buildfiles
 buildroot
 bytecompile
+bytesleft
 cancelfd
 CApath
 cattr
@@ -74,6 +76,7 @@ checkinterval
 chkconfig
 chpst
 classinfo
+clen
 cloexec
 Cloudflare
 cmptr
@@ -105,6 +108,8 @@ DHAO
 dhparams
 dirmask
 dlang
+dlclose
+dlfcn
 dlnow
 dltotal
 dmd
@@ -122,6 +127,7 @@ drwxrwxr
 dryrun
 DTime
 Dynu
+EIOv
 eis
 ele
 endinaness
@@ -175,8 +181,10 @@ grecord
 groupinstall
 gshared
 GVariant
+hdrs
 hideonindex
 hnsecs
+hostport
 hotmail
 howto
 hskrieg
@@ -213,6 +221,7 @@ kotlin
 krb
 lalen
 lbl
+Lcode
 lcurl
 ldbus
 ldc
@@ -295,6 +304,7 @@ nativeclient
 nbd
 nbytes
 ncache
+nconnection
 ndata
 netinet
 nev
@@ -320,6 +330,7 @@ nrecords
 ntfs
 nto
 nuntil
+nupgrade
 nupload
 nvia
 objectsx
@@ -334,13 +345,16 @@ onmicrosoft
 ontextmessage
 oob
 opensuse
+outp
 overallocated
 pacman
 pamac
 parentid
 passoff
 pastebin
+permessage
 pfa
+PFN
 phlibi
 phobos
 pidx
@@ -358,6 +372,7 @@ preinit
 preun
 privkey
 Privs
+prt
 prueba
 prw
 Pseudoblocking
@@ -365,6 +380,8 @@ publicsuffix
 puml
 Pwy
 qewrqwerwqer
+Qmark
+qpos
 QWords
 qxor
 raf
@@ -406,6 +423,7 @@ rwxr
 sargs
 sbindir
 scgi
+scl
 sdlang
 Searchmonkey
 semanage
@@ -418,6 +436,7 @@ sfn
 sharedstatedir
 sharepoint
 shortnames
+sidx
 sigaction
 sigchldhandler
 sigemptyset
@@ -425,10 +444,13 @@ signo
 sigpipe
 skilion
 skinparam
+slist
 Sockaddrs
+socketio
 somevar
 sooooo
 specpart
+SSLVERSION
 startuml
 statm
 stdc
@@ -460,6 +482,7 @@ tkx
 tlsv
 trashinfo
 Tting
+tval
 typecons
 uda
 udas
@@ -477,6 +500,7 @@ userpass
 usl
 valgrind
 verifypeer
+vsid
 vti
 wal
 websockets

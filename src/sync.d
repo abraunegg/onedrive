@@ -14759,4 +14759,81 @@ class SyncEngine {
 		// Return sanitised JSON string for logging output
 		return sanitisedJSONString;
 	}
+	
+	// Obtain the Websocket Notification URL
+	void obtainWebSocketNotificationURL() {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		string websocketURL;
+		
+		// Create a new API Instance for this thread and initialise it
+		OneDriveApi queryWebsocketURLApiInstance;
+		queryWebsocketURLApiInstance = new OneDriveApi(appConfig);
+		queryWebsocketURLApiInstance.initialise();
+		
+		// Try and query Websocket Notification URL
+		try {
+			JSONValue endpointResponse = queryWebsocketURLApiInstance.obtainWebSocketNotificationURL();
+			
+			// Was a valid JSON response provided?
+			if (endpointResponse.type() == JSONType.object) {
+				
+				// Log response
+				if (debugLogging) {addLogEntry("Response for a Socket.IO Subscription Endpoint: " ~ to!string(endpointResponse), ["debug"]);}
+				
+				// Store the JSON in the configuration for reuse
+				appConfig.websocketEndpointResponse = to!string(endpointResponse);
+				
+				// Extract and store the Notification URL from the response we received (no transformation)
+				websocketURL = endpointResponse["notificationUrl"].str;
+				
+				// Extract and store the expiry
+				appConfig.websocketUrlExpiry = endpointResponse["expirationDateTime"].str;
+				SysTime expiryUTC = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
+				SysTime expiryLocal = expiryUTC.toLocalTime();
+				
+				// Do we have a valid Notification URL ?
+				if (!websocketURL.empty) {
+					// Store the websocket notification URL
+					appConfig.websocketNotificationUrl = websocketURL;
+					// Set flag
+					appConfig.websocketNotificationUrlAvailable = true;
+				
+					// Log WebSocket specifics
+					if (debugLogging) {
+						addLogEntry("WebSocket Notification URL: " ~ websocketURL, ["debug"]);
+						addLogEntry("WebSocket Expiry (UTC):     " ~ to!string(expiryUTC), ["debug"]);
+						addLogEntry("WebSocket Expiry (Local):   " ~ to!string(expiryLocal), ["debug"]);
+					}
+				}	
+			}
+			
+		} catch (OneDriveException exception) {
+			// An error, regardless of what it is ... not good
+			// Display what the error is
+			// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+			displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+		}
+		
+		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+		queryWebsocketURLApiInstance.releaseCurlEngine();
+		queryWebsocketURLApiInstance = null;
+		// Perform Garbage Collection
+		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+	}
 }

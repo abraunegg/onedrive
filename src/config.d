@@ -49,6 +49,7 @@ class ApplicationConfig {
 	// - Default file fragment size for uploads
 	immutable long defaultFileFragmentSize = 10; // in MiB
 	immutable long defaultMaxFileFragmentSize = 60; // in MiB
+	immutable long defaultMonitorInterval = 300; // 5 minutes
 	
 	// Microsoft Requirements 
 	// - Default Application ID (abraunegg)
@@ -142,6 +143,14 @@ class ApplicationConfig {
 	// Sync Operations
 	bool fullScanTrueUpRequired = false;
 	bool suppressLoggingOutput = false;
+	
+	// WebSocket Operations
+	bool curlSupportsWebSockets = false;
+	bool websocketSupportCheckDone = false;
+	bool websocketNotificationUrlAvailable = false;
+	string websocketEndpointResponse;
+	string websocketNotificationUrl;
+	string websocketUrlExpiry;
 	
 	// Default number of concurrent threads when downloading and uploading data
 	ulong defaultConcurrentThreads = 8;
@@ -274,7 +283,7 @@ class ApplicationConfig {
 		// - Store how many times was --verbose added
 		longValues["verbose"] = verbosityCount; 
 		// - The amount of time (seconds) between monitor sync loops
-		longValues["monitor_interval"] = 300;
+		longValues["monitor_interval"] = defaultMonitorInterval;
 		// - What size of file should be skipped?
 		longValues["skip_size"] = 0;
 		// - How many 'loops' when using --monitor, before we print out high frequency recurring items?
@@ -408,6 +417,9 @@ class ApplicationConfig {
 		longValues["webhook_expiration_interval"] = 600;
 		longValues["webhook_renewal_interval"] = 300;
 		longValues["webhook_retry_interval"] = 60;
+		
+		// WebSocket Feature Options
+		boolValues["disable_websocket_support"] = false;
 		
 		// GUI File Transfer and Deletion Notifications
 		boolValues["notify_file_actions"] = false;
@@ -993,9 +1005,9 @@ class ApplicationConfig {
 				if (key == "monitor_interval") { // if key is 'monitor_interval' the value must be 300 or greater
 					ulong tempValue = thisConfigValue;
 					// the temp value needs to be 300 or greater
-					if (tempValue < 300) {
+					if (tempValue < defaultMonitorInterval) {
 						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
-						tempValue = 300;
+						tempValue = defaultMonitorInterval;
 					}
 					setValueLong("monitor_interval", tempValue);
 				} else if (key == "monitor_fullscan_frequency") { // if key is 'monitor_fullscan_frequency' the value must be 12 or greater
@@ -1438,9 +1450,9 @@ class ApplicationConfig {
 			}
 			
 			// Was --monitor-interval specified and now set to a value below minimum requirement?
-			if (getValueLong("monitor_interval") < 300 ) {
-				addLogEntry("Invalid value for --monitor-interval - using default value: 300");
-				setValueLong("monitor_interval", 300);
+			if (getValueLong("monitor_interval") < defaultMonitorInterval ) {
+				addLogEntry("Invalid value for --monitor-interval - using default value: " ~ to!string(defaultMonitorInterval));
+				setValueLong("monitor_interval", defaultMonitorInterval);
 			}
 			
 			// Was --file-fragment-size specified and now set to a value below or above maximum?
@@ -1617,6 +1629,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'monitor_interval'             = " ~ to!string(getValueLong("monitor_interval")));
 		addLogEntry("Config option 'monitor_log_frequency'        = " ~ to!string(getValueLong("monitor_log_frequency")));
 		addLogEntry("Config option 'monitor_fullscan_frequency'   = " ~ to!string(getValueLong("monitor_fullscan_frequency")));
+		addLogEntry("Config option 'disable_websocket_support'    = " ~ to!string(getValueBool("disable_websocket_support")));
 		
 		// sync process and method
 		addLogEntry("Config option 'read_only_auth_scope'         = " ~ to!string(getValueBool("read_only_auth_scope")));
