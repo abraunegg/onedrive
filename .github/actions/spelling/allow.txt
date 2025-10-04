@@ -425,6 +425,7 @@ sbindir
 scgi
 scl
 sdlang
+Searchmonkey
 semanage
 sendfd
 setsebool

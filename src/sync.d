@@ -5521,8 +5521,14 @@ class SyncEngine {
 			// Do we need to check skip dot files if configured
 			if (appConfig.getValueBool("skip_dotfiles")) {
 				if (isDotFile(localFilePath)) {
-					if (verboseLogging) {addLogEntry("Skipping item - .file or .folder: " ~ localFilePath, ["verbose"]);}
-					clientSideRuleExcludesPath = true;
+					if (!syncListConfigured) {
+						// 'sync_list' is not in use
+						if (verboseLogging) {addLogEntry("Skipping item - .file or .folder: " ~ localFilePath, ["verbose"]);}
+						clientSideRuleExcludesPath = true;
+					} else {
+						// 'sync_list' is in use - potentially skipping .file or .folder but it may be included via 'sync_list'
+						if (verboseLogging) {addLogEntry("Potentially skipping item - .file or .folder (sync_list inclusion check to be done): " ~ localFilePath, ["verbose"]);}
+					}
 				}
 			}
 		}
