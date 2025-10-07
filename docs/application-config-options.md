@@ -330,6 +330,19 @@ _**CLI Option Use:**_ `--disable-upload-validation`
 > [!CAUTION]
 > If you're uploading data to SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack. Enabling this option disables all upload integrity checks.
 
+
+### disable_websocket_support
+_**Description:**_ This option disables the built-in WebSocket support that leverages RFC6455 to communicate with the Microsoft Graph API Service, providing near real-time notifications of online changes.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `disable_websocket_support = "false"` or `disable_websocket_support = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+
 ### display_running_config
 _**Description:**_ This option will include the running config of the application at application startup. This may be desirable to enable when running in containerised environments so that any application logging that is occurring, will have the application configuration being consumed at startup, written out to any applicable log file.
 

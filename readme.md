@@ -35,7 +35,7 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 * Validates file transfers to ensure data integrity
 * Caches sync state for efficiency
 * Monitors local files in real-time using inotify
-* Supports near real-time processing of online changes via webhooks
+* Supports near real-time processing of online changes via either WebSockets (native support) or webhooks (manual configuration required)
 * Enhanced synchronisation speed with multi-threaded file transfers
 * Manages traffic bandwidth use with rate limiting
 * Supports sending desktop alerts using libnotify

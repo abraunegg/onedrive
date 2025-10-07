@@ -33,6 +33,7 @@ import clientSideFiltering;
 import monitor;
 import webhook;
 import intune;
+import socketio;
 
 // What other constant variables do we require?
 const int EXIT_RESYNC_REQUIRED = 126;
@@ -44,6 +45,7 @@ SyncEngine syncEngineInstance;
 ItemDatabase itemDB;
 ClientSideFiltering selectiveSync;
 Monitor filesystemMonitor;
+OneDriveSocketIo oneDriveSocketIo;
 
 // Class variables
 // Flag for performing a synchronised shutdown
@@ -565,7 +567,7 @@ int main(string[] cliArgs) {
 		if (!appConfig.getValueBool("monitor")) {
 			// Running as --synchronize
 			addLogEntry();
-			addLogEntry("ERROR: Unable to reach Microsoft OneDrive API service, unable to initialise application");
+			addLogEntry("ERROR: Unable to reach the Microsoft OneDrive API service, unable to initialise application");
 			addLogEntry();
 			return EXIT_FAILURE;
 		} else {
@@ -619,7 +621,7 @@ int main(string[] cliArgs) {
 			
 			// Are we not doing a --sync or a --monitor operation?
 			if (syncOrMonitorMissing) { // this is 'true' if --sync or a --monitor were not used
-			
+
 				// Do not perform a vacuum on exit, pointless
 				performDatabaseVacuum = false;
 				
@@ -635,7 +637,7 @@ int main(string[] cliArgs) {
 				// - Are we renaming or moving a directory?
 				// - Are we displaying the quota information?
 				// - Did we just authorise the client?
-								
+
 				// --get-sharepoint-drive-id - Get the SharePoint Library drive_id
 				if (appConfig.getValueString("sharepoint_library_name") != "") {
 					// Get the SharePoint Library drive_id
@@ -644,7 +646,7 @@ int main(string[] cliArgs) {
 					// Use exit scopes to shutdown API and cleanup data
 					return EXIT_SUCCESS;
 				}
-				
+
 				// --display-sync-status - Query the sync status
 				if (appConfig.getValueBool("display_sync_status")) {
 					// path to query variable
@@ -661,7 +663,7 @@ int main(string[] cliArgs) {
 					// Use exit scopes to shutdown API and cleanup data
 					return EXIT_SUCCESS;
 				}
-				
+
 				// --get-file-link - Get the URL path for a synced file
 				if (appConfig.getValueString("get_file_link") != "") {
 					// Query the OneDrive API for the file link
@@ -953,6 +955,53 @@ int main(string[] cliArgs) {
 			// Update the flag given we are running with --monitor
 			performFileSystemMonitoring = true;
 		
+			// If 'webhooks' are enabled, this is going to conflict with 'websockets' if the OS cURL library supports websockets
+			if (appConfig.getValueBool("webhook_enabled") && appConfig.curlSupportsWebSockets) {
+				// We have to disable 'websocket' support
+				addLogEntry();
+				addLogEntry("WARNING: WebSocket support has been disabled because Webhooks are already configured to monitor Microsoft Graph API changes.");
+				addLogEntry("         Only one API notification method can be active at a time.");
+				addLogEntry();
+				// Set the flag that this will not be used
+				appConfig.curlSupportsWebSockets = false;
+			} else {
+				// Double check scenario, this time 'false' checking 'webhook_enabled'
+				if ((!appConfig.getValueBool("webhook_enabled")) && (appConfig.curlSupportsWebSockets)) {
+				
+					// If we are doing --upload-only however .. we need to 'ignore' online change
+					if (!appConfig.getValueBool("upload_only")) {
+						// Did the user configure to disable 'websocket' support?
+						if (!appConfig.getValueBool("disable_websocket_support")) {
+							// Log that we are attempting to enable WebSocket Support
+							addLogEntry("Attempting to enable WebSocket support to monitor Microsoft Graph API changes in near real-time.");
+							
+							// Obtain the WebSocket Notification URL from the API endpoint
+							syncEngineInstance.obtainWebSocketNotificationURL();
+							
+							// Were we able to correctly obtain the endpoint response and build the socket.io WS endpoint
+							if (appConfig.websocketNotificationUrlAvailable) {
+								// Notification URL is available
+								if (oneDriveSocketIo is null) {
+									oneDriveSocketIo = new OneDriveSocketIo(thisTid, appConfig);
+									oneDriveSocketIo.start();
+								}
+								addLogEntry("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
+							} else {
+								addLogEntry("ERROR: Unable to configure WebSocket support to monitor Microsoft Graph API changes in near real-time.");
+							}
+						} else {
+							// WebSocket Support has been disabled
+							addLogEntry("WebSocket support has been disabled by user configuration.");
+						}
+					} else {
+						// --upload only being used
+						addLogEntry("Online changes will not be monitored by WebSocket support due to --upload-only");
+						// Set the flag that this will not be used
+						appConfig.curlSupportsWebSockets = false;
+					}
+				}
+			}
+			
 			// What are the current values for the platform we are running on
 			string maxOpenFiles = strip(getMaxOpenFiles());
 			// What is the currently configured maximum inotify watches that can be used
@@ -1078,18 +1127,43 @@ int main(string[] cliArgs) {
 					processInotifyEvents(true);
 				}
 				
-				// Webhook Notification Handling
+				// WebSocket and Webhook Notification Handling
 				bool notificationReceived = false;
 				
-				// Check for notifications pushed from Microsoft to the webhook
-				if (webhookEnabled) {
-					// Create a subscription on the first run, or renew the subscription
-					// on subsequent runs when it is about to expire.
-					if (oneDriveWebhook is null) {
-						oneDriveWebhook = new OneDriveWebhook(thisTid, appConfig);
-						oneDriveWebhook.serve();
+				// If we are doing --upload-only however .. we need to 'ignore' online change
+				if (!appConfig.getValueBool("upload_only")) {
+					// Check for notifications pushed from Microsoft to the webhook
+					if (webhookEnabled) {
+						// Create a subscription on the first run, or renew the subscription
+						// on subsequent runs when it is about to expire.
+						if (oneDriveWebhook is null) {
+							oneDriveWebhook = new OneDriveWebhook(thisTid, appConfig);
+							oneDriveWebhook.serve();
+						} else {
+							oneDriveWebhook.createOrRenewSubscription();
+						}
 					} else {
-						oneDriveWebhook.createOrRenewSubscription();
+						// WebSocket support is enabled by default, but only if the version of libcurl supports it
+						if (appConfig.curlSupportsWebSockets) {
+							// Did the user configure to disable 'websocket' support?
+							if (!appConfig.getValueBool("disable_websocket_support")) {
+								// Do we need to renew the notification URL?
+								auto renewEarly = dur!"seconds"(120);
+								if (appConfig.websocketNotificationUrlAvailable && appConfig.websocketUrlExpiry.length) {
+									auto expiry = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
+									auto now    = Clock.currTime(UTC());
+									if (expiry - now <= renewEarly) {
+										try {
+											// Obtain the WebSocket Notification URL from the API endpoint
+											syncEngineInstance.obtainWebSocketNotificationURL();
+											if (debugLogging) addLogEntry("Refreshed WebSocket notification URL prior to expiry", ["debug"]);
+										} catch (Exception e) {
+											if (debugLogging) addLogEntry("Failed to refresh WebSocket notification URL: " ~ e.msg, ["debug"]);
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 				
@@ -1243,9 +1317,9 @@ int main(string[] cliArgs) {
 					auto sleepTime = nextCheckTime - currentTime;
 					if (debugLogging) {addLogEntry("Sleep for " ~ to!string(sleepTime), ["debug"]);}
 					
-					if(filesystemMonitor.initialised || webhookEnabled) {
+					if (filesystemMonitor.initialised || webhookEnabled) {
 
-						if(filesystemMonitor.initialised) {
+						if (filesystemMonitor.initialised) {
 							// If local monitor is on and is waiting (previous event was not from webhook)
 							
 							// Obsidian Editor has been written in such a way that it is constantly writing each and every keystroke to a file.
@@ -1255,59 +1329,83 @@ int main(string[] cliArgs) {
 								Thread.sleep(dur!("seconds")(to!int(appConfig.getValueLong("inotify_delay"))));
 							}
 							
-							// start the worker and wait for event
+							// Start the filesystem monitor (inotify) worker and wait for inotify event
 							if (!notificationReceived) {
 								filesystemMonitor.send(true);
 							}
 						}
 						
-						if(webhookEnabled) {
-							// if onedrive webhook is enabled
-							// update sleep time based on renew interval
-							Duration nextWebhookCheckDuration = oneDriveWebhook.getNextExpirationCheckDuration();
-							if (nextWebhookCheckDuration < sleepTime) {
-								sleepTime = nextWebhookCheckDuration;
-								if (debugLogging) {addLogEntry("Update sleeping time to " ~ to!string(sleepTime), ["debug"]);}
-							}
-							// Webhook Notification reset to false for this loop
-							notificationReceived = false;
-						}
 						
-						int res = 1;
-						// Process incoming notifications if any.
-						auto signalExists = receiveTimeout(sleepTime, (int msg) {res = msg;},(ulong _) {notificationReceived = true;});
+						// If we are doing --upload-only however .. we need to 'ignore' online change
+						if (!appConfig.getValueBool("upload_only")) {
 						
-						// Debug values
-						if (debugLogging) {
-							addLogEntry("signalExists = " ~ to!string(signalExists), ["debug"]);
-							addLogEntry("worker status = " ~ to!string(res), ["debug"]);
-							addLogEntry("notificationReceived = " ~ to!string(notificationReceived), ["debug"]);
-						}
-					
-						// Empirical evidence shows that Microsoft often sends multiple
-						// notifications for one single change, so we need a loop to exhaust
-						// all signals that were queued up by the webhook. The notifications
-						// do not contain any actual changes, and we will always rely do the
-						// delta endpoint to sync to latest. Therefore, only one sync run is
-						// good enough to catch up for multiple notifications.
-						if (notificationReceived) {
-							int signalCount = 1;
-							while (true) {
-								signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
-								if (signalExists) {
-									signalCount++;
-								} else {
-									addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signals from the webhook");
-									oneDriveWebhookCallback();
-									break;
+							// Processing of online changes in near real-time .. update sleep time
+							if (webhookEnabled) {
+								// If onedrive webhook is enabled
+								// Update sleep time based on renew interval
+								Duration nextWebhookCheckDuration = oneDriveWebhook.getNextExpirationCheckDuration();
+								if (nextWebhookCheckDuration < sleepTime) {
+									sleepTime = nextWebhookCheckDuration;
+									if (debugLogging) {addLogEntry("Update sleeping time (based on webhook next expiration check) to " ~ to!string(sleepTime), ["debug"]);}
+								}
+								// Webhook Notification reset to false for this loop
+								notificationReceived = false;
+							} else {
+								// Did the user configure to disable 'websocket' support?
+								if (!appConfig.getValueBool("disable_websocket_support")) {
+									// WebSocket support is enabled by default, but only if the version of libcurl supports it
+									if (appConfig.curlSupportsWebSockets) {
+										// Update sleep time based on renew interval
+										Duration nextWebsocketCheckDuration = oneDriveSocketIo.getNextExpirationCheckDuration();
+										if (nextWebsocketCheckDuration < sleepTime) {
+											sleepTime = nextWebsocketCheckDuration;
+											if (debugLogging) {addLogEntry("Update sleeping time (based on WebSocket next expiration check) to " ~ to!string(sleepTime), ["debug"]);}
+										}
+									}
 								}
 							}
-						}
+							
+							// Process signals from 'WebSockets' or 'Webhook' source
+							int res = 1;
+							// Process incoming notifications if any.
+							auto signalExists = receiveTimeout(sleepTime, (int msg) {res = msg;},(ulong _) {notificationReceived = true;});
+							
+							// Debug values
+							if (debugLogging) {
+								addLogEntry("signalExists = " ~ to!string(signalExists), ["debug"]);
+								addLogEntry("worker status = " ~ to!string(res), ["debug"]);
+								addLogEntry("notificationReceived = " ~ to!string(notificationReceived), ["debug"]);
+							}
+						
+							// Empirical evidence shows that Microsoft often sends multiple
+							// notifications for one single change, so we need a loop to exhaust
+							// all signals that were queued up by the webhook. The notifications
+							// do not contain any actual changes, and we will always rely do the
+							// delta endpoint to sync to latest. Therefore, only one sync run is
+							// good enough to catch up for multiple notifications.
+							if (notificationReceived) {
+								int signalCount = 1;
+								while (true) {
+									signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
+									if (signalExists) {
+										signalCount++;
+									} else {
+										if (webhookEnabled) {
+											addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signal(s) from the Microsoft Graph API Webhook Endpoint");
+										} else {
+											addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signal(s) from the Microsoft Graph API WebSocket Endpoint");
+										}
+										oneDriveOnlineCallback();
+										break;
+									}
+								}
+							}
 
-						if(res == -1) {
-							addLogEntry("ERROR: Monitor worker failed.");
-							monitorFailures = true;
-							performFileSystemMonitoring = false;
+							if(res == -1) {
+								addLogEntry("ERROR: Monitor worker failed.");
+								monitorFailures = true;
+								performFileSystemMonitoring = false;
+							}
 						}
 					} else {
 						// no hooks available, nothing to check
@@ -1339,8 +1437,10 @@ void setDefaultApplicationThreads() {
 	
 	// Warning if configuredThreads is too high
 	if (configuredThreads > systemCPUs) {
+		addLogEntry();
 		addLogEntry("WARNING: Configured 'threads = " ~ to!string(configuredThreads) ~ "' exceeds available CPU cores (" ~ to!string(systemCPUs) ~ ").");
 		addLogEntry("         This may lead to reduced performance, CPU contention, and instability. For best results, set 'threads' no higher than the number of physical CPU cores.");
+		addLogEntry();
 	}
 	
 	// Set the default threads based on configured option
@@ -1409,16 +1509,20 @@ void printMissingOperationalSwitchesError() {
 	addLogEntry();
 }
 
-// Function used for webhook callbacks to perform specific activities
-void oneDriveWebhookCallback() {
+// Function used for WebSocket or Webhook callbacks to perform specific activities
+void oneDriveOnlineCallback() {
 	// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
 	if (!appConfig.getValueBool("download_only")) {
 		// Handle inotify events
 		processInotifyEvents(true);
 	}
 
-	// Download data from OneDrive last
-	syncEngineInstance.syncOneDriveAccountToLocalDisk();
+	// Sync any online change down to the local disk
+	// If we are doing --upload-only however .. we need to 'ignore' online change
+	if (!appConfig.getValueBool("upload_only")) {
+		// We are not doing an --upload-only scenario .. sync online change --> local
+		syncEngineInstance.syncOneDriveAccountToLocalDisk();
+	}
 	if (appConfig.getValueBool("monitor")) {
 		// Handle inotify events
 		processInotifyEvents(true);
@@ -1754,6 +1858,8 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			if (debugLogging) {addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);}
 			// Shutdown the OneDrive Webhook instance
 			shutdownOneDriveWebhook();
+			// Shutdown the OneDrive WebSocket instance
+			shutdownOneDriveSocketIo();
 			// Shutdown any local filesystem monitoring
 			shutdownFilesystemMonitor();
 			// Shutdown the sync engine
@@ -1785,6 +1891,16 @@ void shutdownOneDriveWebhook() {
         object.destroy(oneDriveWebhook);
         oneDriveWebhook = null;
 		if (debugLogging) {addLogEntry("Shutdown of OneDrive Webhook instance is complete", ["debug"]);}
+    }
+}
+
+void shutdownOneDriveSocketIo() {
+    if (oneDriveSocketIo !is null) {
+        if (debugLogging) addLogEntry("Shutting down OneDrive WebSocket instance", ["debug"]);
+        oneDriveSocketIo.stop();
+        object.destroy(oneDriveSocketIo);
+        oneDriveSocketIo = null;
+        if (debugLogging) addLogEntry("Shutdown of OneDrive WebSocket instance complete", ["debug"]);
     }
 }
 
