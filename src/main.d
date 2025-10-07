@@ -747,6 +747,15 @@ int main(string[] cliArgs) {
 					return EXIT_SUCCESS;
 				}
 				
+				// --download-file - Are we downloading a single file from Microsoft OneDrive
+				if ((appConfig.getValueString("download_single_file") != "")) {
+					// Handle downloading the single file
+					syncEngineInstance.downloadSingleFile(appConfig.getValueString("download_single_file"));
+					// Exit application
+					// Use exit scopes to shutdown API
+					return EXIT_SUCCESS;
+				}
+				
 				// If we get to this point, we have not performed a 'no-sync' task ..
 				
 				// Did we just authorise the client?

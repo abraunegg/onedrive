@@ -14836,4 +14836,89 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
+	
+	// Download a single file via --download-file <path/to/file>
+	void downloadSingleFile(string pathToQuery) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+		
+		OneDriveApi queryPathDetailsOnline;
+		JSONValue onlinePathData;
+		
+		// Was a path to query passed in?
+		if (pathToQuery.empty) {
+			// Nothing to query
+			addLogEntry("No path to query");
+			return;
+		}
+		
+		// Create new OneDrive API Instance
+		queryPathDetailsOnline = new OneDriveApi(appConfig);
+		queryPathDetailsOnline.initialise();
+		
+		try {
+			// Query the OneDrive API, using the path, which will query 'our' OneDrive Account
+			onlinePathData = queryPathDetailsOnline.getPathDetails(pathToQuery);
+			
+			
+		} catch (OneDriveException exception) {
+			
+			if (exception.httpStatusCode == 404) {
+				// Path does not exist online ...
+				addLogEntry("ERROR: The requested path does not exist online. Please check for your file online.");
+			} else {
+				// Display error message
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+			}
+			
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			queryPathDetailsOnline.releaseCurlEngine();
+			queryPathDetailsOnline = null;
+			// Perform Garbage Collection
+			GC.collect();
+			
+			// Return .. nothing to do
+			return;
+		}
+		
+		// Was a valid JSON response provided?
+		if (onlinePathData.type() == JSONType.object) {
+			// Valid JSON item was returned
+			// Is the item a file ?
+			if (isFileItem(onlinePathData)) {
+				// JSON item is a file
+				// Download the file based on the data returned
+				downloadFileItem(onlinePathData);
+			} else {
+				// The provided path is not a file
+				addLogEntry();
+				addLogEntry("ERROR: The requested path to download is not a file. Please correct this error and try again.");
+				addLogEntry();
+			}
+		} else {
+			addLogEntry();
+			addLogEntry("ERROR: The requested file to download has generated an error. Please correct this error and try again.");
+			addLogEntry();
+		}
+		
+		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+		queryPathDetailsOnline.releaseCurlEngine();
+		queryPathDetailsOnline = null;
+		// Perform Garbage Collection
+		GC.collect();
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+	}
 }
