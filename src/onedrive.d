@@ -2094,15 +2094,19 @@ class OneDriveApi {
 	private void setFreshConnectOption() {
 		if (debugLogging) {addLogEntry("Configuring libcurl to use a fresh connection for re-try", ["debug"]);}
 		curlEngine.http.handle.set(CurlOption.fresh_connect,1);
-		//curlEngine.http.handle.set(CurlOption.dns_cache_timeout, 0);
+		// Set libcurl dns_cache_timeout timeout
+		// https://curl.se/libcurl/c/CURLOPT_DNS_CACHE_TIMEOUT.html
+		// https://dlang.org/library/std/net/curl/http.dns_timeout.html
 		curlEngine.http.dnsTimeout = (dur!"seconds"(0));
 	}
 	
-	// Unset the libcurl fresh connection options
+	// Unset the libcurl fresh connection options and reset libcurl DNS Cache Timeout
 	private void unsetFreshConnectOption() {
 		if (debugLogging) {addLogEntry("Unsetting libcurl to use a fresh connection as this causes a performance impact if left enabled", ["debug"]);}
 		curlEngine.http.handle.set(CurlOption.fresh_connect,0);
-		//curlEngine.http.handle.set(CurlOption.dns_cache_timeout, 0);
+		// Reset libcurl dns_cache_timeout timeout
+		// https://curl.se/libcurl/c/CURLOPT_DNS_CACHE_TIMEOUT.html
+		// https://dlang.org/library/std/net/curl/http.dns_timeout.html
 		curlEngine.http.dnsTimeout = (dur!"seconds"(appConfig.getValueLong("dns_timeout")));
 	}
 	
