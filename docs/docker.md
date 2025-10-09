@@ -200,63 +200,60 @@ docker start onedrive
 docker rm -f onedrive
 ```
 
-## Advanced Usage
 
-### Run OneDrive with custom CLI arguments.
+### Customising OneDrive Runtime Behaviour in Docker
 
-Inside the Docker image, the entrypoint always starts the client with the arguments:
+When running the OneDrive client inside Docker, the container **always starts via `entrypoint.sh`**, which ensures that the following arguments are added automatically:
+
 ```
 --confdir /onedrive/conf --syncdir /onedrive/data
 ```
 
-If you want to add custom CLI arguments to the inner `onedrive` process of the container, you can do it like this or equivalently (notice `--other-custom-args` after the image name):
+This design guarantees that:
 
-```
-docker run \
-  -it \
-  --name onedrive \
-  --userns host \
-  -v ${ONEDRIVE_DIR}/conf:/onedrive/conf \
-  -v ${ONEDRIVE_DIR}/data:/onedrive/data \
-  -v ${ONEDRIVE_DIR}/logs:/onedrive/logs \
-  -l io.containers.autoupdate=image \
-  --restart unless-stopped \
-  --health-cmd "sh -c '[ -s /onedrive/conf/items.sqlite3-wal ]'" \
-  --health-interval 60s \
-  --health-retries 2 \
-  --health-timeout 5s \
-  docker.io/driveone/onedrive:latest \
-  --other-custom-args
-```
+* Your configuration files persist in the `/onedrive/conf` volume.
+* Your synchronised data persists in the `/onedrive/data` volume.
+* The container behaves consistently across hosts, upgrades, and architectures.
 
-> [!IMPORTANT]
-> Command-line flags override anything in the config file, so if you set `sync_dir` in the config, it will be superseded by the CLI flag. 
-> Moreover, if you override the container’s command and forget to include those arguments, the client will not have any information regarding the `sync_dir` and `conf_dir` location and thus it will fall back to `~/OneDrive` inside the container, which will look like it is “ignoring” your setting.
-
-So, if you use custom CLI arguments on the inner Docker process, you are skipping the automated inclusion of arguments `--confdir /onedrive/conf --syncdir /onedrive/data`, so you will probably need to explicitly add them again to your `docker run` command. The previous example would look like this if you apply these best practices:
+Because these arguments are always supplied, any `sync_dir` or `confdir` values defined in the configuration file are **overridden at runtime by design**. This avoids confusion and ensures predictable behaviour. These specific paths are the bind-mounts between container and host and should **not be changed manually**.
 
 
-```
-docker run \
-  -it \
-  --name onedrive \
-  --userns host \
-  -v ${ONEDRIVE_DIR}/conf:/onedrive/conf \
-  -v ${ONEDRIVE_DIR}/data:/onedrive/data \
-  -v ${ONEDRIVE_DIR}/logs:/onedrive/logs \
-  -l io.containers.autoupdate=image \
-  --restart unless-stopped \
-  --health-cmd "sh -c '[ -s /onedrive/conf/items.sqlite3-wal ]'" \
-  --health-interval 60s \
-  --health-retries 2 \
-  --health-timeout 5s \
-  docker.io/driveone/onedrive:latest \
-  --other-custom-args \
-  --sync-dir "/onedrive/data" \
-  --conf-dir "/onedrive/conf" 
-```
+### Supported ways to customise runtime behaviour
 
-Notice the explicit inclusion of `--sync-dir "/onedrive/data"` `--conf-dir "/onedrive/conf"` after the image name. 
+There are **two supported mechanisms** for adjusting how the client runs inside Docker:
+
+1. **Docker environment variables**
+   Many client options are exposed as environment variables in a reproducible way. For example:
+
+   ```shell
+   -e ONEDRIVE_DOWNLOADONLY=1
+   -e ONEDRIVE_SYNC_ONCE=1
+   -e ONEDRIVE_VERBOSE=1
+   ```
+
+   See the full list here:
+   👉 [Supported Docker environment variables](https://github.com/abraunegg/onedrive/blob/master/docs/docker.md#supported-docker-environment-variables)
+
+2. **Configuration file inside `/onedrive/conf`**
+   For permanent or advanced options not covered by environment variables, you can create or edit the client configuration file in the mounted config directory.
+   Documentation:
+   👉 [Editing the running configuration and using a config file](https://github.com/abraunegg/onedrive/blob/master/docs/docker.md#editing-the-running-configuration-and-using-a-config-file)
+
+---
+
+### Common misconceptions
+
+> **Do not manually add `--syncdir` or `--confdir`** when overriding the container command.
+
+If you do:
+
+* You bypass the `entrypoint.sh` logic that manages UID/GID mapping, privilege dropping, and environment translation.
+* You risk syncing data to the wrong location (`~/OneDrive` inside the container) or creating incorrect file ownership on the host.
+
+Instead:
+
+* Use **environment variables** for supported options.
+* Or use the **config file** inside `/onedrive/conf` for advanced configuration.
 
 
 ### How to use Docker-compose
