@@ -530,7 +530,7 @@ _**Value Type:**_ Integer
 
 _**Default Value:**_ 120
 
-_**Config Example:**_ `monitor_fullscan_frequency = "120"`
+_**Config Example:**_ `max_curl_idle = "120"`
 
 _**CLI Option Use:**_ *None - this is a config file option only*
 
