@@ -23,6 +23,7 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 ## Features
 * Compatible with OneDrive Personal and OneDrive for Business, including access to Microsoft SharePoint Libraries
 * Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
+* Supports near real-time processing of online changes via either WebSockets (native support) or webhooks (manual configuration required)
 * Supports single-tenant and multi-tenant applications
 * Supports Intune Single Sign-On (SSO) authentication via the Microsoft Identity Device Broker (D-Bus interface)
 * Supports OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
@@ -35,7 +36,6 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 * Validates file transfers to ensure data integrity
 * Caches sync state for efficiency
 * Monitors local files in real-time using inotify
-* Supports near real-time processing of online changes via either WebSockets (native support) or webhooks (manual configuration required)
 * Enhanced synchronisation speed with multi-threaded file transfers
 * Manages traffic bandwidth use with rate limiting
 * Supports sending desktop alerts using libnotify
