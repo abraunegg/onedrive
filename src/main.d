@@ -575,9 +575,8 @@ int main(string[] cliArgs) {
 			addLogEntry();
 			addLogEntry("Unable to reach the Microsoft OneDrive API service at this point in time, re-trying network tests based on applicable intervals");
 			addLogEntry();
-			if (!retryInternetConnectivityTest(appConfig)) {
-				return EXIT_FAILURE;
-			}
+			// Run the re-try of Internet connectivity test
+			online = retryInternetConnectivityTest(appConfig);
 		}
 	}
 	

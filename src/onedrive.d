@@ -1752,8 +1752,7 @@ class OneDriveApi {
 							addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
 						}
 						// unset the fresh connect option as this then creates performance issues if left enabled
-						if (debugLogging) {addLogEntry("Unsetting libcurl to use a fresh connection as this causes a performance impact if left enabled", ["debug"]);}
-						curlEngine.http.handle.set(CurlOption.fresh_connect,0);
+						unsetFreshConnectOption();
 					}
 					
 					// On successful processing, break out of the loop
@@ -2095,6 +2094,20 @@ class OneDriveApi {
 	private void setFreshConnectOption() {
 		if (debugLogging) {addLogEntry("Configuring libcurl to use a fresh connection for re-try", ["debug"]);}
 		curlEngine.http.handle.set(CurlOption.fresh_connect,1);
+		// Set libcurl dns_cache_timeout timeout
+		// https://curl.se/libcurl/c/CURLOPT_DNS_CACHE_TIMEOUT.html
+		// https://dlang.org/library/std/net/curl/http.dns_timeout.html
+		curlEngine.http.dnsTimeout = (dur!"seconds"(0));
+	}
+	
+	// Unset the libcurl fresh connection options and reset libcurl DNS Cache Timeout
+	private void unsetFreshConnectOption() {
+		if (debugLogging) {addLogEntry("Unsetting libcurl to use a fresh connection as this causes a performance impact if left enabled", ["debug"]);}
+		curlEngine.http.handle.set(CurlOption.fresh_connect,0);
+		// Reset libcurl dns_cache_timeout timeout
+		// https://curl.se/libcurl/c/CURLOPT_DNS_CACHE_TIMEOUT.html
+		// https://dlang.org/library/std/net/curl/http.dns_timeout.html
+		curlEngine.http.dnsTimeout = (dur!"seconds"(appConfig.getValueLong("dns_timeout")));
 	}
 	
 	// Generate a HTTP 'reason' based on the HTTP 'code'
