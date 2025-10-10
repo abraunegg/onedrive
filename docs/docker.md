@@ -203,7 +203,7 @@ docker rm -f onedrive
 
 ### Customising OneDrive Runtime Behaviour in Docker
 
-When running the OneDrive client inside Docker, the container **always starts via `entrypoint.sh`**, which ensures that the following arguments are added automatically:
+When running the OneDrive client inside Docker, the container **always starts** via `entrypoint.sh`, which ensures that the following arguments are added automatically:
 
 ```
 --confdir /onedrive/conf --syncdir /onedrive/data
@@ -239,21 +239,18 @@ There are **two supported mechanisms** for adjusting how the client runs inside 
    Documentation:
    👉 [Editing the running configuration and using a config file](https://github.com/abraunegg/onedrive/blob/master/docs/docker.md#editing-the-running-configuration-and-using-a-config-file)
 
----
-
-### Common misconceptions
-
+> [!IMPORTANT]
 > **Do not manually add `--syncdir` or `--confdir`** when overriding the container command.
-
-If you do:
-
-* You bypass the `entrypoint.sh` logic that manages UID/GID mapping, privilege dropping, and environment translation.
-* You risk syncing data to the wrong location (`~/OneDrive` inside the container) or creating incorrect file ownership on the host.
-
-Instead:
-
-* Use **environment variables** for supported options.
-* Or use the **config file** inside `/onedrive/conf` for advanced configuration.
+>
+> If you do:
+> 
+> * You bypass the `entrypoint.sh` logic that manages UID/GID mapping, privilege dropping, and environment translation.
+> * You risk syncing data to the wrong location (`~/OneDrive` inside the container) or creating incorrect file ownership on the host.
+> 
+> Instead:
+> 
+> * Use existing **Docker environment variables** for controling specific application functionality.
+> * Use a **config file** and or 'sync_list' file inside `/onedrive/conf` for advanced configuration.
 
 
 ### How to use Docker-compose
