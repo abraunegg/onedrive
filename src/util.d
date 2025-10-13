@@ -1917,3 +1917,14 @@ void displayFunctionProcessingTime(string functionName, SysTime functionStartTim
 	string processingTime = format("[%s] Application Function '%s' Processing Time = %.4f Seconds", strip(logKey), strip(functionName), functionDurationAsSeconds);
 	addLogEntry(processingTime);
 }
+
+// Return true if `dir` exists and has no entries.
+// Symlinks are treated as non-removable.
+bool isDirEmpty(string dir) {
+    if (!exists(dir) || !isDir(dir) || isSymlink(dir)) return false;
+    foreach (_; dirEntries(dir, SpanMode.shallow)) {
+        // Found at least one entry
+        return false;
+    }
+    return true;
+}

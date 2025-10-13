@@ -289,6 +289,10 @@ Remove a directory on OneDrive - no sync will be performed.
 Remove source file after successful transfer to OneDrive when using --upload-only.
 
 .TP
+\fB\-\-remove-source-folders\fR
+Remove the local directory structure post successful file transfer to Microsoft OneDrive when using --upload-only --remove-source-files.
+
+.TP
 \fB\-\-resync\fR
 Forget the last saved state, perform a full sync.
 
