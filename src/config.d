@@ -361,8 +361,10 @@ class ApplicationConfig {
 		boolValues["dry_run"] = false;
 		// Do we sync all the files in the 'sync_dir' root?
 		boolValues["sync_root_files"] = false;
-		// Do we delete source after successful transfer?
+		// Do we delete source file after successful transfer?
 		boolValues["remove_source_files"] = false;
+		// Do we delete source folders after successful transfer?
+		boolValues["remove_source_folders"] = false;
 		// Do we perform strict matching for skip_dir?
 		boolValues["skip_dir_strict_match"] = false;
 		// Do we perform a --resync?
@@ -1308,6 +1310,9 @@ class ApplicationConfig {
 				"remove-source-files",
 					"Remove source file after successful transfer to OneDrive when using --upload-only",
 					&boolValues["remove_source_files"],
+				"remove-source-folders",
+					"Remove the local directory structure post successful file transfer to Microsoft OneDrive when using --upload-only --remove-source-files",
+					&boolValues["remove_source_folders"],
 				"single-directory",
 					"Specify a single local directory within the OneDrive root to sync",
 					&stringValues["single_directory"],

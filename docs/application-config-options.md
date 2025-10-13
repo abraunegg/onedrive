@@ -734,6 +734,23 @@ _**CLI Option Use:**_ `--remove-source-files`
 > [!IMPORTANT]
 > This configuration option can *only* be used in conjunction with `--upload-only`
 
+### remove_source_folders
+_**Description:**_ This configuration option controls whether the OneDrive Client for Linux removes the local directory structure post successful file transfer to Microsoft OneDrive.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `remove_source_folders = "false"` or `remove_source_folders = "true"`
+
+_**CLI Option Use:**_ `--remove-source-folders`
+
+> [!IMPORTANT]
+> This configuration option can *only* be used in conjunction with `--upload-only --remove-source-files`
+
+> [!IMPORTANT]
+> The directory structure will only be removed if it is empty.
+
 ### resync
 _**Description:**_ This configuration option controls whether the known local sync state with Microsoft OneDrive is removed at application startup. When this option is used, a full scan of your data online is performed to ensure that the local sync state is correctly built back up.
 

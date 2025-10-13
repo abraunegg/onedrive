@@ -6727,6 +6727,15 @@ class SyncEngine {
 				if (debugLogging) {addLogEntry("Removing local file: " ~ localPathToRemove, ["debug"]);}
 				safeRemove(localPathToRemove);
 				addLogEntry("Removed local file:  " ~ localPathToRemove);
+				
+				// Do we try and attempt to remove the local source tree?
+				if (appConfig.getValueBool("remove_source_folders")) {
+					// Remove the source directory structure but only if it is empty
+					addLogEntry("Attempting removal of local directory structure as --upload-only & --remove-source-files & --remove-source-folders configured");
+					string parentPath = dirName(localPathToRemove);
+					removeEmptyParents(localPathToRemove);
+					addLogEntry("Removed parental path:  " ~ parentPath);
+				}
 			} else {
 				// --dry-run scenario
 				addLogEntry("Not removing local file as --dry-run configured");
@@ -6736,7 +6745,47 @@ class SyncEngine {
 			addLogEntry("Removing local file not possible as local file does not exist");
 		}
 	}
+	
+	// Remove empty parent directories of `filePath` upwards until:
+	//  - we hit a non-empty directory, or
+	//  - we reach the visible root (i.e. dirName(current) == ".").
+	// Never tries to remove ".".
+	void removeEmptyParents(string filePath) {
+		// Work with a normalised *relative* path inside the chrooted tree.
+		// If someone passed an absolute path, normalise it anyway; your codebase
+		// likely already ensures paths are relative within the sync root.
+		string current = dirName(buildNormalizedPath(filePath));
 		
+		while (current.length && current != ".") {
+			// Safety: don’t descend into symlinks
+			if (isSymlink(current)) {
+				if (debugLogging) addLogEntry("Skipping removal; parent is a symlink: " ~ current, ["debug"]);
+				break;
+			}
+
+			// Stop at first non-empty directory
+			if (!isDirEmpty(current)) {
+				if (debugLogging) addLogEntry("Stopping prune; directory not empty: " ~ current, ["debug"]);
+				break;
+			}
+
+			if (!dryRun) {
+				if (debugLogging) addLogEntry("Removing empty directory: " ~ current, ["debug"]);
+				// rmdir only succeeds for empty directories; errors are collected not thrown
+				collectException(rmdir(current));
+			} else {
+				addLogEntry("Not removing empty directory as --dry-run configured: " ~ current);
+			}
+
+			// Move up one level
+			string next = dirName(current);
+			if (next == current) { // Just in case (shouldn’t happen with relative paths)
+				break;
+			}
+			current = next;
+		}
+	}
+			
 	// Perform the upload of a locally modified file to OneDrive
 	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal) {
 		// Function Start Time
