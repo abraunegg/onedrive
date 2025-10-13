@@ -75,6 +75,7 @@ Cforce
 checkinterval
 chkconfig
 chpst
+chrooted
 classinfo
 clen
 cloexec

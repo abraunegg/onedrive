@@ -6751,7 +6751,7 @@ class SyncEngine {
 	//  - we reach the visible root (i.e. dirName(current) == ".").
 	// Never tries to remove ".".
 	void removeEmptyParents(string filePath) {
-		// Work with a normalised *relative* path inside the chrooted tree.
+		// Work with a normalised *relative* path inside the chrooted configured 'sync_dir'
 		// If someone passed an absolute path, normalise it anyway; your codebase
 		// likely already ensures paths are relative within the sync root.
 		string current = dirName(buildNormalizedPath(filePath));
