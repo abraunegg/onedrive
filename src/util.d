@@ -3,6 +3,7 @@ module util;
 
 // What does this module require to function?
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
+import core.stdc.errno : ENOENT;
 import std.base64;
 import std.conv;
 import std.digest.crc;
@@ -172,7 +173,21 @@ void safeRename(const(char)[] oldPath, const(char)[] newPath, bool dryRun) {
 
 // Deletes the specified file without throwing an exception if it does not exists
 void safeRemove(const(char)[] path) {
-	if (exists(path)) remove(path);
+	// Set this function name
+	string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+	
+	// Attempt the local deletion
+	try {
+		// Attempt once; no pre-check to avoid TOCTTOU
+		remove(path);				// attempt once, no pre-check
+		return;						// removed
+	} catch (FileException e) {
+		if (e.errno == ENOENT) {	// already gone → fine
+			return;					// nothing to do
+		}
+		// Anything else is noteworthy (EISDIR, EACCES, etc.)
+		displayFileSystemErrorMessage(e.msg, thisFunctionName);
+	}
 }
 
 // Returns the SHA1 hash hex string of a file, or an empty string on failure

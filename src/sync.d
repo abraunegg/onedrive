@@ -4582,13 +4582,13 @@ class SyncEngine {
 					// Perform the action
 					if (!dryRun) {
 						if (isFile(path)) {
-							remove(path);
+							safeRemove(path);
 						} else {
 							try {
 								// Remove any children of this path if they still exist
 								// Resolve 'Directory not empty' error when deleting local files
 								foreach (DirEntry child; dirEntries(path, SpanMode.depth, false)) {
-									attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
+									attrIsDir(child.linkAttributes) ? rmdir(child.name) : safeRemove(child.name);
 								}
 								// Remove the path now that it is empty of children
 								rmdirRecurse(path);
@@ -7629,7 +7629,7 @@ class SyncEngine {
 										// No --dry-run ... process local delete
 										if (exists(child)) {
 											try {
-												attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
+												attrIsDir(child.linkAttributes) ? rmdir(child.name) : safeRemove(child.name);
 											} catch (FileException e) {
 												// display the error message
 												displayFileSystemErrorMessage(e.msg, thisFunctionName);
@@ -9561,7 +9561,7 @@ class SyncEngine {
 				if (verboseLogging) {addLogEntry("File upload session failed - invalid calculation of fragment size", ["verbose"]);}
 
 				if (exists(threadUploadSessionFilePath)) {
-					remove(threadUploadSessionFilePath);
+					safeRemove(threadUploadSessionFilePath);
 				}
 				// set uploadResponse to null as error
 				uploadResponse = null;
@@ -9736,7 +9736,7 @@ class SyncEngine {
 
 				// cleanup session data
 				if (exists(threadUploadSessionFilePath)) {
-					remove(threadUploadSessionFilePath);
+					safeRemove(threadUploadSessionFilePath);
 				}
 				// set uploadResponse to null as error
 				uploadResponse = null;
@@ -9753,7 +9753,7 @@ class SyncEngine {
 
 		// Remove session file if it exists		
 		if (exists(threadUploadSessionFilePath)) {
-			remove(threadUploadSessionFilePath);
+			safeRemove(threadUploadSessionFilePath);
 		}
 
 		// Display function processing time if configured to do so
@@ -11423,6 +11423,9 @@ class SyncEngine {
 			} else {
 				uploadDeletedItem(dbItem, path);
 			}
+		} catch (FileException e) {
+			// filesystem generated an error message - display error message
+			displayFileSystemErrorMessage(e.msg, thisFunctionName);
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
 				addLogEntry(e.msg);
@@ -12733,7 +12736,7 @@ class SyncEngine {
 				// cleanup session path
 				if (exists(sessionFilePath)) {
 					if (!dryRun) {
-						remove(sessionFilePath);
+						safeRemove(sessionFilePath);
 					}
 				}
 			}
@@ -12787,7 +12790,7 @@ class SyncEngine {
 				// Cleanup 'resume_download' file
 				if (exists(resumeDownloadFile)) {
 					if (!dryRun) {
-						remove(resumeDownloadFile);
+						safeRemove(resumeDownloadFile);
 					}
 				}
 			}
