@@ -14227,6 +14227,9 @@ class SyncEngine {
 							// Add DB record to the local database
 							if (debugLogging) {addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);}
 							itemDB.upsert(sharedFilesPath);
+						} else {
+							// If the folder exists in the db, assign the variable to have the parentID available
+							sharedFilesPath = dbRecord;
 						}
 					}
 					
