@@ -55,6 +55,20 @@ private:
 	enum int  CURLOPT_TIMEOUT_MS        = 155;
 	enum int  CURLOPT_CONNECTTIMEOUT_MS = 156;
 	enum int  CURLOPT_VERBOSE           = 41;
+	
+	// Additional constants needed for WebSocket handling
+	enum int  CURLOPT_HTTP_VERSION      = 84;   // CURLOPT_HTTP_VERSION
+	enum int  CURLOPT_SSL_ENABLE_ALPN   = 226;  // CURLOPT_SSL_ENABLE_ALPN
+	enum int  CURLOPT_SSL_ENABLE_NPN    = 225;  // CURLOPT_SSL_ENABLE_NPN
+
+	// HTTP version flags (for CURLOPT_HTTP_VERSION)
+	enum long CURL_HTTP_VERSION_NONE           = 0;
+	enum long CURL_HTTP_VERSION_1_0            = 1;
+	enum long CURL_HTTP_VERSION_1_1            = 2;
+	enum long CURL_HTTP_VERSION_2_0            = 3;
+	enum long CURL_HTTP_VERSION_2TLS           = 4;
+	enum long CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE = 5;
+	enum long CURL_HTTP_VERSION_3              = 30; // (added in curl 7.66.0+)
 
 	CURL*   curl = null;
 	bool    websocketConnected = false;
@@ -139,6 +153,11 @@ public:
 		curl_easy_setopt(curl, cast(int)CURLOPT_CONNECT_ONLY,       1L);
 		curl_easy_setopt(curl, cast(int)CURLOPT_URL,                connectUrl.toStringz);  // NUL-terminated
 		
+		// Force HTTP/1.1 and disable ALPN/NPN
+		curl_easy_setopt(curl, cast(int)CURLOPT_SSL_ENABLE_ALPN,    0L);
+		curl_easy_setopt(curl, cast(int)CURLOPT_SSL_ENABLE_NPN,     0L);
+		curl_easy_setopt(curl, cast(int)CURLOPT_HTTP_VERSION,       CURL_HTTP_VERSION_1_1);
+				
 		// Do we enable HTTPS Debugging?
 		if (httpsDebug) {
 			// Enable curl verbosity
