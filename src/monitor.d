@@ -511,7 +511,7 @@ final class Monitor {
 		synchronized(inotifyMutex) {
 			int ret = worker.removeInotifyWatch(wd);
 			if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
-			if (verboseLogging) {addLogEntry("Monitored directory removed: " ~ to!string(wdToDirName[wd]), ["verbose"]);}
+			if (verboseLogging) {addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ to!string(wdToDirName[wd]), ["verbose"]);}
 			wdToDirName.remove(wd);
 		}
 	}
@@ -524,7 +524,7 @@ final class Monitor {
 				int ret = worker.removeInotifyWatch(wd);
 				if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
 				wdToDirName.remove(wd);
-				if (verboseLogging) {addLogEntry("Monitored directory removed: " ~ dirname, ["verbose"]);}
+				if (verboseLogging) {addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ dirname, ["verbose"]);}
 			}
 		}
 	}
