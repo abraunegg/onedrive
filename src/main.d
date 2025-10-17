@@ -1061,6 +1061,9 @@ int main(string[] cliArgs) {
 					} else {
 						addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
 					}
+				} catch (FileException e) {
+					// Path is gone locally, log and continue.
+					addLogEntry("ERROR: The local file system returned an error with the following message: " ~ e.msg, ["verbose"]);
 				} catch (Exception e) {
 					addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
 				}
