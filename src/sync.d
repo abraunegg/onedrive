@@ -14191,13 +14191,18 @@ class SyncEngine {
 						sharedByFolderName = sharedByName ~ " (" ~ sharedByEmail ~ ")";
 						
 					} else {
+						if (debugLogging) {addLogEntry("Either name or email is not defined -> check specifically. Currently: " ~ to!string(sharedByName) ~ " / " ~ to!string(sharedByEmail), ["debug"]);}
 						if (sharedByName != "") {
 							sharedByFolderName = sharedByName;
+						} else {
+							sharedByFolderName = sharedByEmail;
 						}
 					}
+					if (debugLogging) {addLogEntry("Combined folder set to " ~ to!string(sharedByFolderName), ["debug"]);}
 					
 					// Create the local path to store this users shared files with us
 					newLocalSharedFilePath = buildNormalizedPath(buildPath(appConfig.configuredBusinessSharedFilesDirectoryName, sharedByFolderName));
+					if (debugLogging) {addLogEntry("newLocalSharedFilePath is located at " ~ to!string(newLocalSharedFilePath), ["debug"]);}
 					
 					// Does the Shared File Users Local Directory to store the shared file(s) exist?
 					if (!exists(newLocalSharedFilePath)) {
@@ -14230,6 +14235,10 @@ class SyncEngine {
 							// Add DB record to the local database
 							if (debugLogging) {addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);}
 							itemDB.upsert(sharedFilesPath);
+						} else {
+							// If the folder exists in the db, assign the variable to have the parentID available
+							sharedFilesPath = dbRecord;
+							if (debugLogging) {addLogEntry("Recreating local database record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);}
 						}
 					}
 					
