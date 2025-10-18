@@ -42,12 +42,22 @@ class ClientSideFiltering {
 			loadSyncList(appConfig.syncListFilePath);
 		}
 		
-		// Configure skip_dir, skip_file, skip-dir-strict-match & skip_dotfiles from config entries
 		// Handle skip_dir configuration in config file
-		if (debugLogging) {
-			addLogEntry("Configuring skip_dir ...", ["debug"]);
-			addLogEntry("skip_dir: " ~ to!string(appConfig.getValueString("skip_dir")), ["debug"]);
+		if (debugLogging) {addLogEntry("Configuring skip_dir ...", ["debug"]);}
+		
+		// Validate skip_dir entries to ensure that this does not contain an invalid configuration
+		// Do not use a skip_dir entry of .* as this will prevent correct searching of local changes to process.
+		foreach(entry; appConfig.getValueString("skip_dir").split("|")){
+			if (entry == ".*") {
+				// invalid entry element detected
+				addLogEntry("ERROR: Invalid skip_dir entry '.*' detected.");
+				addLogEntry("       To exclude hidden directories (those starting with '.'), enable the 'skip_dotfiles' configuration option instead of using wildcard patterns.");
+				return false;
+			}
 		}
+		
+		// All skip_dir entries are valid
+		if (debugLogging) {addLogEntry("skip_dir: " ~ appConfig.getValueString("skip_dir"), ["debug"]);}
 		setDirMask(appConfig.getValueString("skip_dir"));
 		
 		// Was --skip-dir-strict-match configured?
@@ -59,6 +69,24 @@ class ClientSideFiltering {
 			setSkipDirStrictMatch();
 		}
 		
+		// Handle skip_file configuration in config file
+		if (debugLogging) {addLogEntry("Configuring skip_file ...", ["debug"]);}
+		
+		// Validate skip_file entries to ensure that this does not contain an invalid configuration
+		// Do not use a skip_file entry of .* as this will prevent correct searching of local changes to process.
+		foreach(entry; appConfig.getValueString("skip_file").split("|")){
+			if (entry == ".*") {
+				// invalid entry element detected
+				addLogEntry("ERROR: Invalid skip_file entry '.*' detected.");
+				addLogEntry("       To exclude hidden files (those starting with '.'), enable the 'skip_dotfiles' configuration option instead of using wildcard patterns.");
+				return false;
+			}
+		}
+		
+		// All skip_file entries are valid
+		if (debugLogging) {addLogEntry("skip_file: " ~ appConfig.getValueString("skip_file"), ["debug"]);}
+		setFileMask(appConfig.getValueString("skip_file"));
+		
 		// Was --skip-dot-files configured?
 		if (debugLogging) {
 			addLogEntry("Configuring skip_dotfiles ...", ["debug"]);
@@ -67,23 +95,6 @@ class ClientSideFiltering {
 		if (appConfig.getValueBool("skip_dotfiles")) {
 			setSkipDotfiles();
 		}
-		
-		// Handle skip_file configuration in config file
-		if (debugLogging) {addLogEntry("Configuring skip_file ...", ["debug"]);}
-		
-		// Validate skip_file to ensure that this does not contain an invalid configuration
-		// Do not use a skip_file entry of .* as this will prevent correct searching of local changes to process.
-		foreach(entry; appConfig.getValueString("skip_file").split("|")){
-			if (entry == ".*") {
-				// invalid entry element detected
-				addLogEntry("ERROR: Invalid skip_file entry '.*' detected");
-				return false;
-			}
-		}
-		
-		// All skip_file entries are valid
-		if (debugLogging) {addLogEntry("skip_file: " ~ appConfig.getValueString("skip_file"), ["debug"]);}
-		setFileMask(appConfig.getValueString("skip_file"));
 		
 		// All configured OK
 		return true;
