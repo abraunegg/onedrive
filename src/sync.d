@@ -5821,30 +5821,55 @@ class SyncEngine {
 					// variable to check the file path against skip_dir
 					string pathToCheck;
 					
-					if (hasParentReference(onedriveJSONItem)) {
-						// use onedriveJSONItem["parentReference"]["path"].str
-						string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str;
+					if (parentInDatabase) {
+						// Parent is in the database - use those details to compute this files parental path
+						pathToCheck = computeItemPath(thisItemDriveId, thisItemParentId);
+						if (debugLogging) {addLogEntry("Resulting pathToCheck for 'skip_dir' validation for file JSON using computeItemPath() = " ~ pathToCheck, ["debug"]);}
+					} else {
+						// Parent is not in the database .. compute manually
+						if (hasParentReference(onedriveJSONItem)) {
+							// use onedriveJSONItem["parentReference"]["path"].str
+							string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str;
+							if (debugLogging) {addLogEntry("Initial file based selfBuiltPath = " ~ selfBuiltPath, ["debug"]);}
+							
+							// Check for ':' and split if present within 'selfBuiltPath'
+							auto splitIndex = selfBuiltPath.indexOf(":");
+							if (splitIndex != -1) {
+								// Keep only the part after ':'
+								string pathAfterSplit = selfBuiltPath[splitIndex + 1 .. $];
+								if (debugLogging) {addLogEntry("pathAfterSplit = " ~ pathAfterSplit, ["debug"]);}
+								
+								if (pathAfterSplit.empty) {
+									// Empty path, thus this is most likely a file in the account root
+									selfBuiltPath = "/";
+								} else {
+									// There is a path after the split, this is the path we are interested in
+									// However ... in a Shared Folder scenario, this path now is the absolute path on the remote driveID .. could be problematic
+									selfBuiltPath = pathAfterSplit;
+								}
+								
+								// Result after split
+								if (debugLogging) {addLogEntry("selfBuiltPath after splitting at : = " ~ selfBuiltPath, ["debug"]);}
+							}
 						
-						// Check for ':' and split if present
-						auto splitIndex = selfBuiltPath.indexOf(":");
-						if (splitIndex != -1) {
-							// Keep only the part after ':'
-							selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
+							// Update file path to check against 'skip_dir' using the self built details
+							pathToCheck = selfBuiltPath;
+							if (debugLogging) {addLogEntry("Resulting pathToCheck for 'skip_dir' validation for file JSON using manual computation = " ~ pathToCheck, ["debug"]);}
 						}
+					}	
 					
-						// update file path to check against 'skip_dir'
-						pathToCheck = selfBuiltPath;
-						string logItemPath = "." ~ pathToCheck ~ "/" ~ onedriveJSONItem["name"].str;
-						
-						// perform the skip_dir check for file path
-						clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(pathToCheck);
-						
-						// result
-						if (debugLogging) {addLogEntry("skip_dir exclude result (file based): " ~ to!string(clientSideRuleExcludesPath), ["debug"]);}
-						if (clientSideRuleExcludesPath) {
-							// this files path should be skipped
-							if (verboseLogging) {addLogEntry("Skipping file - file path is excluded by skip_dir config: " ~ logItemPath, ["verbose"]);}
-						}
+					// Build the consistent path for logging output
+					string logItemPath = ensureStartsWithDotSlash(buildNormalizedPath(pathToCheck ~ "/" ~ onedriveJSONItem["name"].str));
+					
+					// Perform the skip_dir check for file path
+					if (debugLogging) {addLogEntry("skip_dir path to check (file based): " ~ to!string(pathToCheck), ["debug"]);}
+					clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(pathToCheck);
+					
+					// 'skip_dir' result
+					if (debugLogging) {addLogEntry("skip_dir exclude result (file based): " ~ to!string(clientSideRuleExcludesPath), ["debug"]);}
+					if (clientSideRuleExcludesPath) {
+						// this files path should be skipped
+						if (verboseLogging) {addLogEntry("Skipping file - file path is excluded by skip_dir config: " ~ logItemPath, ["verbose"]);}
 					}
 				}
 			}
