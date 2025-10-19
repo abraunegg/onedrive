@@ -50,8 +50,10 @@ class ClientSideFiltering {
 		foreach(entry; appConfig.getValueString("skip_dir").split("|")){
 			if (entry == ".*") {
 				// invalid entry element detected
+				addLogEntry();
 				addLogEntry("ERROR: Invalid skip_dir entry '.*' detected.");
 				addLogEntry("       To exclude hidden directories (those starting with '.'), enable the 'skip_dotfiles' configuration option instead of using wildcard patterns.");
+				addLogEntry();
 				return false;
 			}
 		}
@@ -77,8 +79,10 @@ class ClientSideFiltering {
 		foreach(entry; appConfig.getValueString("skip_file").split("|")){
 			if (entry == ".*") {
 				// invalid entry element detected
+				addLogEntry();
 				addLogEntry("ERROR: Invalid skip_file entry '.*' detected.");
 				addLogEntry("       To exclude hidden files (those starting with '.'), enable the 'skip_dotfiles' configuration option instead of using wildcard patterns.");
+				addLogEntry();
 				return false;
 			}
 		}
