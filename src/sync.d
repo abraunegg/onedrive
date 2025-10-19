@@ -3350,6 +3350,12 @@ class SyncEngine {
 		addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder from the online parental data: " ~ sharedFolderDatabaseTie.name, ["debug"]);
 		addLogEntry("Shared Folder DB Tie Record data: " ~ to!string(sharedFolderDatabaseTie), ["debug"]);
 		
+		// Is this a dry-run excercise?
+		if (dryRun) {
+			// We need to ensure we add this to our faked entries
+			idsFaked ~= [sharedFolderDatabaseTie.driveId, sharedFolderDatabaseTie.id];
+		}
+		
 		// Save item
 		itemDB.upsert(sharedFolderDatabaseTie);
 		
@@ -5138,6 +5144,12 @@ class SyncEngine {
 			}
 		}
 		
+		// Debug logging of paths being checked
+		if (debugLogging) {
+			addLogEntry("Database item being checked: " ~ to!string(dbItem), ["debug"]);
+			addLogEntry("Local Path being checked:    " ~ localFilePath, ["debug"]);
+		}
+		
 		// Determine which action to take
 		final switch (dbItem.type) {
 		case ItemType.file:
@@ -5319,7 +5331,7 @@ class SyncEngine {
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
-			
+		
 		// What is the source of this item data?
 		string itemSource = "database";
 		
