@@ -248,7 +248,7 @@ class ClientSideFiltering {
 		// Ensure the path being passed in is cleaned up to remove the leading '.'
 		if (startsWith(name, "./")) {
 			name = name[1..$];
-			if (debugLogging) {addLogEntry("skip_dir evaluation for (updated): " ~ name, ["debug"]);}
+			if (debugLogging) {addLogEntry("skip_dir evaluation for (post normalisation): " ~ name, ["debug"]);}
 		}
 
 		// Try full path match first

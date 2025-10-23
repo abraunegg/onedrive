@@ -4442,7 +4442,7 @@ class SyncEngine {
 			// This function traverses the parent chain of a given item (e.g., folder or file) using stored parent-child relationships 
 			// in the database, reconstructing the correct path from the item's root to itself.
 			calculatedPath = itemDB.computePath(thisDriveId, thisItemId);
-			if (debugLogging) {addLogEntry("Calculated local path = " ~ to!string(calculatedPath), ["debug"]);}
+			if (debugLogging) {addLogEntry("Calculated local path via itemDB.computePath() = " ~ to!string(calculatedPath), ["debug"]);}
 		} catch (core.exception.AssertError) {
 			// broken tree in the database, we cant compute the path for this item id, exit
 			addLogEntry("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
@@ -5718,9 +5718,16 @@ class SyncEngine {
 		
 		// Is this parent is in the database
 		bool parentInDatabase = false;
+		string calculatedParentalPath;
 		
-		// Calculate if the Parent Item is in the database so that it can be re-used
+		// Calculate if the Parent Item is in the database so that this flag can be reused
 		parentInDatabase = itemDB.idInLocalDatabase(thisItemDriveId, thisItemParentId);
+		if (parentInDatabase) {
+			// Calculate this items path based on database entries
+			if (debugLogging) {addLogEntry("Parent path details are in DB - computing 'calculatedParentalPath' using computeItemPath()", ["debug"]);}
+			calculatedParentalPath = computeItemPath(thisItemDriveId, thisItemParentId);
+			if (debugLogging) {addLogEntry("Resulting 'calculatedParentalPath' using computeItemPath() = " ~ calculatedParentalPath, ["debug"]);}
+		}
 		
 		// Check if this is excluded by config option: skip_dir 
 		if (!clientSideRuleExcludesPath) {
@@ -5746,8 +5753,8 @@ class SyncEngine {
 						// complex path calculation
 						if (parentInDatabase) {
 							// build up complexPathToCheck based on database data
-							complexPathToCheck = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-							if (debugLogging) {addLogEntry("skip_dir path to check (computed): " ~ complexPathToCheck, ["debug"]);}
+							complexPathToCheck = calculatedParentalPath ~ "/" ~ thisItemName;
+							if (debugLogging) {addLogEntry("Updated 'complexPathToCheck' to '"~ complexPathToCheck ~"' for 'skip_dir' validation to determine if this directory should be excluded.", ["debug"]);}
 						} else {
 							if (debugLogging) {addLogEntry("Parent details not in database - unable to compute complex path to check using database data", ["debug"]);}
 							// use onedriveJSONItem["parentReference"]["path"].str
@@ -5835,8 +5842,8 @@ class SyncEngine {
 					
 					if (parentInDatabase) {
 						// Parent is in the database - use those details to compute this files parental path
-						pathToCheck = computeItemPath(thisItemDriveId, thisItemParentId);
-						if (debugLogging) {addLogEntry("Resulting pathToCheck for 'skip_dir' validation for file JSON using computeItemPath() = " ~ pathToCheck, ["debug"]);}
+						pathToCheck = calculatedParentalPath;
+						if (debugLogging) {addLogEntry("Updated 'pathToCheck' to '"~ pathToCheck ~"' for 'skip_dir' validation to determine if this file should be excluded.", ["debug"]);}
 					} else {
 						// Parent is not in the database .. compute manually
 						if (hasParentReference(onedriveJSONItem)) {
@@ -5866,7 +5873,8 @@ class SyncEngine {
 						
 							// Update file path to check against 'skip_dir' using the self built details
 							pathToCheck = selfBuiltPath;
-							if (debugLogging) {addLogEntry("Resulting pathToCheck for 'skip_dir' validation for file JSON using manual computation = " ~ pathToCheck, ["debug"]);}
+							if (debugLogging) {addLogEntry("Updated (manual computation) 'pathToCheck' to '"~ pathToCheck ~"' for 'skip_dir' validation to determine if this file should be excluded.", ["debug"]);}
+		
 						}
 					}	
 					
@@ -5904,23 +5912,24 @@ class SyncEngine {
 				// is the parent id in the database?
 				if (parentInDatabase) {
 					// parent id is in the database, so we can try and calculate the full file path
-					string jsonItemPath = "";
+					string newItemPath = "";
 					
 					// Compute this item path & need the full path for this file
-					jsonItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-					// Log the calculation
-					if (debugLogging) {addLogEntry("New Item calculated full path is: " ~ jsonItemPath, ["debug"]);}
-					
+					newItemPath = calculatedParentalPath ~ "/" ~ thisItemName;
+										
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
 					// However, as 'path' used throughout, use a temp variable with this modification so that we use the temp variable for exclusion checks
-					if (!startsWith(jsonItemPath, "/")){
+					if (!startsWith(newItemPath, "/")){
 						// Add '/' to the path
-						exclusionTestPath = '/' ~ jsonItemPath;
+						exclusionTestPath = '/' ~ newItemPath;
 					}
 					
+					// Normalise the path to ensure any initial sequence of '/./././' or similar is normalised
+					exclusionTestPath = buildNormalizedPath(exclusionTestPath);
+					
 					// what are we checking
-					if (debugLogging) {addLogEntry("skip_file item to check (full calculated path): " ~ exclusionTestPath, ["debug"]);}
+					if (debugLogging) {addLogEntry("Updated 'newItemPath' to '"~ newItemPath ~"' for 'skip_file' validation to determine if this file should be excluded.", ["debug"]);}
 				} else {
 					// parent not in database, we can only check using this JSON item's name
 					if (!startsWith(thisItemName, "/")){
@@ -5934,7 +5943,7 @@ class SyncEngine {
 				
 				// Perform the 'skip_file' evaluation
 				clientSideRuleExcludesPath = selectiveSync.isFileNameExcluded(exclusionTestPath);
-				if (debugLogging) {addLogEntry("Result: " ~ to!string(clientSideRuleExcludesPath), ["debug"]);}
+				if (debugLogging) {addLogEntry("skip_file evaluation result: " ~ to!string(clientSideRuleExcludesPath), ["debug"]);}
 				
 				if (clientSideRuleExcludesPath) {
 					// This path should be skipped
@@ -5948,7 +5957,6 @@ class SyncEngine {
 			// No need to try and process something against a sync_list if it has been configured
 			if (syncListConfigured) {
 				// Compute the item path if empty - as to check sync_list we need an actual path to check
-				
 				// What is the path of the new item
 				string newItemPath;
 				
@@ -5956,8 +5964,8 @@ class SyncEngine {
 				// In a --resync scenario - the database is empty
 				if (parentInDatabase) {
 					// Calculate this items path based on database entries
-					if (debugLogging) {addLogEntry("Parent path details are in DB", ["debug"]);}
-					newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
+					newItemPath = calculatedParentalPath ~ "/" ~ thisItemName;
+					if (debugLogging) {addLogEntry("Updated 'newItemPath' to '"~ newItemPath ~"' for 'sync_list' validation to determine if this directory should be included.", ["debug"]);}
 				} else {
 					// Parent is not in the database .. we need to compute it .. why ????
 					if (appConfig.getValueBool("resync")) {
@@ -6150,6 +6158,10 @@ class SyncEngine {
 		// return if path is excluded
 		return clientSideRuleExcludesPath;
 	}
+	
+	
+	
+	
 	
 	// Ensure the path passed in, is in the correct format to use when evaluating 'sync_list' rules
 	string ensureStartsWithDotSlash(string inputPath) {
