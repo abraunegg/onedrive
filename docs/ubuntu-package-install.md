@@ -39,7 +39,7 @@ To remove the Ubuntu Universe client, perform the following actions:
 sudo apt remove onedrive
 ```
 
-#### Step 1c: Remove errant systemd service file installed by PPA or distribution package
+#### Step 1c: Remove errant systemd service file installed by Ubuntu Universe distribution package
 
 The Ubuntu Universe distribution packages have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated. The following is logged when you install from the Ubuntu Universe package:
 ```
