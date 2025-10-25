@@ -181,6 +181,13 @@ if [ -n "${ONEDRIVE_FILE_FRAGMENT_SIZE:=""}" ]; then
 	ARGS=(--file-fragment-size ${ONEDRIVE_FILE_FRAGMENT_SIZE} ${ARGS[@]})
 fi
 
+# Tell client to use a specific threads value for parallel operations
+if [ -n "${ONEDRIVE_THREADS:=""}" ]; then
+	echo "# We are specifying a thread value for the number of worker threads used for parallel upload and download operations"
+	echo "# Adding --threads ARG"
+	ARGS=(--threads ${ONEDRIVE_THREADS} ${ARGS[@]})
+fi
+
 if [ ${#} -gt 0 ]; then
 	ARGS=("${@}")
 fi

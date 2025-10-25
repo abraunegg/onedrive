@@ -1032,6 +1032,8 @@ _**Maximum Value:**_ `16`
 
 _**Config Example:**_ `threads = "16"`
 
+_**CLI Option Use:**_ `--threads '16'`
+
 > [!NOTE]
 > The default value of `8` threads is based on the average number of physical CPU cores found in consumer and workstation-grade Intel and AMD processors released from approximately 2012 through 2025. This includes laptops, desktops, and server-grade CPUs where 4–8 physical cores are typical.
 > 

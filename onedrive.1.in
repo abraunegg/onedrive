@@ -353,6 +353,10 @@ Specify the local directory used for synchronisation to OneDrive.
 Perform a synchronisation with Microsoft OneDrive (DEPRECATED).
 
 .TP
+\fB\-\-threads\fR \fIARG\fR
+Specify a value for the number of worker threads used for parallel upload and download operations.
+
+.TP
 \fB\-\-upload-only\fR
 Replicate the locally configured sync_dir state to OneDrive, by only uploading local changes to OneDrive. Do not download changes from OneDrive.
 
