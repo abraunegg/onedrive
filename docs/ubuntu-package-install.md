@@ -26,15 +26,22 @@ Ubuntu and its clones are based on various different releases, thus, you must us
 #### Step 1a: Remove PPA if configured
 Many Internet 'help' pages provide inconsistent details on how to install the OneDrive Client for Linux. A number of these websites continue to point users to install the client via the yann1ck PPA repository however this PPA no longer exists and should not be used. If you have previously configured, or attempted to add this PPA, this needs to be removed.
 
-To remove the PPA repository and the older client, perform the following actions:
+To remove the yann1ck PPA repository, perform the following actions:
 ```text
-sudo apt remove onedrive
 sudo add-apt-repository --remove ppa:yann1ck/onedrive
 ```
 
-#### Step 1b: Remove errant systemd service file installed by PPA or distribution package
+#### Step 1b: Remove 'onedrive' package provided by Ubuntu Universe Repository
+Many Internet 'help' pages provide inconsistent details on how to install the OneDrive Client for Linux. A number of these websites continue to advise users to install the client via `sudo apt install onedrive` without first configuring the OpenSuSE Build Service (OBS) Repository. When installing without OBS, you install an obsolete client version with known bugs that have been fixed, but this package also contains an errant systemd service (see below) that impacts background running of this client.
 
-Additionally, the distribution packages have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated:
+To remove the Ubuntu Universe client, perform the following actions:
+```text
+sudo apt remove onedrive
+```
+
+#### Step 1c: Remove errant systemd service file installed by Ubuntu Universe distribution package
+
+The Ubuntu Universe distribution packages have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated. The following is logged when you install from the Ubuntu Universe package:
 ```
 Created symlink /etc/systemd/user/default.target.wants/onedrive.service → /usr/lib/systemd/user/onedrive.service.
 ```
@@ -47,8 +54,9 @@ ERROR: onedrive application is already running - check system process list for a
 
 Waiting for all internal threads to complete before exiting application
 ```
+As the client is also built with GUI notifications enabled, every time this systemd service 'restarts' it will send a GUI notification which can spam your GUI with notifications.
 
-To remove this symbolic link, run the following command:
+To remove this symbolic link for the errant systemd service, run the following command:
 ```
 sudo rm /etc/systemd/user/default.target.wants/onedrive.service
 ```
@@ -125,7 +133,7 @@ Reading state information... Done
 root@ubuntu-20-LTS:~#
 ```
 
-Reboot your system after running this process before continuing with Step 3.
+Reboot your system after running this process before continuing with Step 3. This ensures that your system is correctly up-to-date and any prior running 'onedrive' process and systemd service is now correctly removed and not running.
 ```text
 reboot
 ```
