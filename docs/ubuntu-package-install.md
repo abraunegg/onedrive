@@ -41,7 +41,7 @@ sudo apt remove onedrive
 
 #### Step 1c: Remove errant systemd service file installed by PPA or distribution package
 
-Additionally, the distribution packages have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated:
+The Ubuntu Universe distribution packages have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated. The following is logged when you install from the Ubuntu Universe package:
 ```
 Created symlink /etc/systemd/user/default.target.wants/onedrive.service → /usr/lib/systemd/user/onedrive.service.
 ```
