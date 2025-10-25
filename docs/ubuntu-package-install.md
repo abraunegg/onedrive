@@ -31,7 +31,7 @@ To remove the yann1ck PPA repository, perform the following actions:
 sudo add-apt-repository --remove ppa:yann1ck/onedrive
 ```
 
-#### Step 1b: Remove 'ondrive' package provided by Ubuntu Universe Repository
+#### Step 1b: Remove 'onedrive' package provided by Ubuntu Universe Repository
 Many Internet 'help' pages provide inconsistent details on how to install the OneDrive Client for Linux. A number of these websites continue to advise users to install the client via `sudo apt install onedrive` without first configuring the OpenSuSE Build Service (OBS) Repository. When installing without OBS, you install an obsolete client version with known bugs that have been fixed, but this package also contains an errant systemd service (see below) that impacts background running of this client.
 
 To remove the Ubuntu Universe client, perform the following actions:
