@@ -181,6 +181,7 @@ GPOs
 grecord
 groupinstall
 gshared
+gtk
 GVariant
 hdrs
 hideonindex
@@ -215,6 +216,7 @@ itimerspec
 journalctl
 jsvar
 kdbx
+kde
 keepass
 keyboxd
 keyutils
