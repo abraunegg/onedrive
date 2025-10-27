@@ -953,6 +953,9 @@ int main(string[] cliArgs) {
 		if (appConfig.getValueBool("monitor")) {
 			// Update the flag given we are running with --monitor
 			performFileSystemMonitoring = true;
+			
+			// Attempt to configure the desktop integration whilst the client is running in --monitor mode
+			attemptFileManagerIntegration();
 		
 			// If 'webhooks' are enabled, this is going to conflict with 'websockets' if the OS cURL library supports websockets
 			if (appConfig.getValueBool("webhook_enabled") && appConfig.curlSupportsWebSockets) {
@@ -1858,6 +1861,10 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 		try {
 			// Log who called this function
 			if (debugLogging) {addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);}
+			// Remove Desktop integration
+			if(performFileSystemMonitoring) {
+				attemptFileManagerIntegrationRemoval();
+			}
 			// Shutdown the OneDrive Webhook instance
 			shutdownOneDriveWebhook();
 			// Shutdown the OneDrive WebSocket instance
@@ -1994,4 +2001,46 @@ string compilerDetails() {
 	else enum compiler = "Unknown compiler";
 	string compilerString = compiler ~ " " ~ to!string(__VERSION__);
 	return compilerString;
+}
+
+void attemptFileManagerIntegration() {
+	// Are we running under a Desktop Manager (GNOME or KDE)?
+	if (appConfig.isGuiSessionDetected()) {
+		// Generate desktop hints
+		auto hints = appConfig.detectDesktop();
+		
+		// GNOME Desktop File Manager integration
+		if (hints.gnome) {
+			// Attempt integration
+			appConfig.addGnomeBookmark();
+			return;
+		}
+		
+		// KDE Desktop File Manager integration
+		if (hints.kde) {
+			// Attempt integration
+			return;
+		}
+	}
+}
+
+void attemptFileManagerIntegrationRemoval() {
+	// Are we running under a Desktop Manager (GNOME or KDE)?
+	if (appConfig.isGuiSessionDetected()) {
+		// Generate desktop hints
+		auto hints = appConfig.detectDesktop();
+		
+		// GNOME Desktop File Manager integration
+		if (hints.gnome) {
+			// Attempt integration
+			appConfig.removeGnomeBookmark();
+			return;
+		}
+		
+		// KDE Desktop File Manager integration
+		if (hints.kde) {
+			// Attempt integration
+			return;
+		}	
+	}
 }

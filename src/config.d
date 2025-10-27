@@ -19,6 +19,7 @@ import std.format;
 import std.ascii;
 import std.datetime;
 import std.exception;
+import core.sys.posix.unistd : geteuid, getuid;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -2817,6 +2818,142 @@ class ApplicationConfig {
 		// Append subdirectories based on the recycle bin path
 		recycleBinFilePath = basePath ~ "files/";
 		recycleBinInfoPath = basePath ~ "info/";
+	}
+	
+	// Is the client running under a GUI session?
+	// - GNOME
+	// - KDE
+	bool isGuiSessionDetected() {
+	
+		bool hasDisplay = false;
+		bool hasRuntime = false;
+		bool uidMatches = false;
+		bool homeOK = false;
+		string xdgType;
+
+		try {
+			xdgType = environment.get("XDG_SESSION_TYPE", "");
+		} catch (Exception e) {
+			xdgType = "";
+		}
+		
+		try {
+			hasDisplay = environment.get("WAYLAND_DISPLAY", "").length > 0 || environment.get("DISPLAY", "").length > 0;
+		} catch (Exception e) {
+			hasDisplay = false;
+		}
+		
+		try {
+			hasRuntime = environment.get("XDG_RUNTIME_DIR", "").length > 0;
+		} catch (Exception e) {
+			hasRuntime = false;
+		}
+		
+		try {
+			uidMatches = (geteuid() == getuid());
+		} catch (Exception e) {
+			uidMatches = false;
+		}
+		
+		try {
+			homeOK = environment.get("HOME", "").length > 0;
+		} catch (Exception e) {
+			homeOK = false;
+		}
+		
+		bool hasGuiElements = hasDisplay || (xdgType == "wayland" || xdgType == "x11");
+		
+		return hasGuiElements && hasRuntime && uidMatches && homeOK;
+	}
+	
+	// Attempt to detect the running display manager
+	DesktopHints detectDesktop() {
+		string all = (  environment.get("XDG_CURRENT_DESKTOP","") ~ ":" ~
+						environment.get("XDG_SESSION_DESKTOP","") ~ ":" ~
+						environment.get("DESKTOP_SESSION","") ~ ":" ~
+						environment.get("GDMSESSION","") ~ ":" ~
+						environment.get("KDE_FULL_SESSION","")).toLower();
+		DesktopHints hints;
+		hints.gnome = all.canFind("gnome");
+		hints.kde   = all.canFind("kde") || all.canFind("plasma");
+		return hints;
+	}
+	
+	string fileUriFor(string absPath) {
+		// Basic, safe URI for local file
+		return "file://" ~ expandTilde(absPath);
+	}
+	
+	void addGnomeBookmark() {
+		// Configure required variables
+		string uri = fileUriFor(getValueString("sync_dir"));
+		string bookmarksPath = buildPath(expandTilde(environment.get("HOME", "")), ".config", "gtk-3.0", "bookmarks");
+		
+		// Ensure the bookmarks path exists
+		mkdirRecurse(dirName(bookmarksPath));
+		
+		// Does the bookmark already exist?
+		string content = exists(bookmarksPath) ? readText(bookmarksPath) : "";
+		bool present = false;
+		foreach (line; content.splitLines()) {
+			if (line.strip == uri) { present = true; break; }
+		}
+		if (present) return;
+		
+		// Append newline if needed, then our URI
+		string newline = content.length && !content.endsWith("\n") ? "\n" : "";
+		string updated = content ~ newline ~ uri ~ "\n";
+
+		// Atomic write
+		string tmp = bookmarksPath ~ ".tmp";
+		std.file.write(tmp, updated);
+		rename(tmp, bookmarksPath);
+		
+		// Log outcome
+		addLogEntry("GNOME Desktop Integration: bookmark added successfully", ["info"]);
+	}
+	
+	void removeGnomeBookmark() {
+		// Configure required variables
+		string uri = fileUriFor(getValueString("sync_dir"));
+		string bookmarksPath = buildPath(expandTilde(environment.get("HOME", "")), ".config", "gtk-3.0", "bookmarks");
+
+		// Does the bookmark path exist?
+		if (!exists(bookmarksPath)) {
+			return;
+		}
+		
+		// Read existing bookmarks
+		string content = readText(bookmarksPath);
+		auto lines = content.splitLines();
+
+		bool changed = false;
+		string[] kept;
+		kept.reserve(lines.length);
+
+		foreach (line; lines) {
+			// Remove every line that exactly matches the URI (after stripping whitespace)
+			if (line.strip == uri) {
+				changed = true;
+				continue;
+			}
+			kept ~= line;
+		}
+
+		if (!changed) {
+			return;
+		}
+
+		// Rebuild file (ensure trailing newline if non-empty)
+		string updated = kept.length ? kept.join("\n") ~ "\n" : "";
+
+		// Atomic write
+		const string tmp = bookmarksPath ~ ".tmp";
+		std.file.write(tmp, updated);
+		rename(tmp, bookmarksPath);
+
+		// Log outcome
+		addLogEntry("GNOME Desktop Integration: bookmark removed successfully", ["info"]);
 	}
 }
 

@@ -51,6 +51,11 @@ __gshared bool exitHandlerTriggered = false;
 // util module variable
 ulong previousRSS;
 
+struct DesktopHints {
+    bool gnome;
+    bool kde;
+}
+
 shared static this() {
 	deviceName = Socket.hostName;
 }
