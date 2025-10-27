@@ -20,6 +20,7 @@ import std.ascii;
 import std.datetime;
 import std.exception;
 import core.sys.posix.unistd : geteuid, getuid;
+import std.process : spawnProcess, wait;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -2910,7 +2911,34 @@ class ApplicationConfig {
 		rename(tmp, bookmarksPath);
 		
 		// Log outcome
-		addLogEntry("GNOME Desktop Integration: bookmark added successfully", ["info"]);
+		addLogEntry("GNOME Desktop Integration: Bookmark added successfully", ["info"]);
+	}
+	
+	void setOneDriveFolderIcon() {
+		// Get the sync directory
+		string syncDir = expandTilde(getValueString("sync_dir"));
+	
+		// Build gio command
+		string[] gioCmd = [
+			"gio",
+			"set",
+			syncDir,
+			"metadata::custom-icon-name",
+			"onedrive"
+		];
+		
+		// Try and set folder icon
+		try {
+			auto p = spawnProcess(gioCmd);
+			int status = p.wait();
+			if (status == 0) {
+				addLogEntry("GNOME Desktop Integration: Set folder icon to 'onedrive' for " ~ syncDir, ["info"]);
+			} else {
+				addLogEntry("GNOME Desktop Integration: Failed to set folder icon for " ~ syncDir ~ " (gio exit " ~ status.to!string ~ ")", ["info"]);
+			}
+		} catch (Exception e) {
+			addLogEntry("GNOME Desktop Integration: Exception setting folder icon: " ~ e.msg, ["info"]);
+		}
 	}
 	
 	void removeGnomeBookmark() {
@@ -2953,7 +2981,34 @@ class ApplicationConfig {
 		rename(tmp, bookmarksPath);
 
 		// Log outcome
-		addLogEntry("GNOME Desktop Integration: bookmark removed successfully", ["info"]);
+		addLogEntry("GNOME Desktop Integration: Bookmark removed successfully", ["info"]);
+	}
+	
+	void removeOneDriveFolderIcon() {
+		// Get the sync directory
+		string syncDir = expandTilde(getValueString("sync_dir"));
+	
+		// Build gio command
+		string[] gioCmd = [
+			"gio",
+			"set",
+			syncDir,
+			"metadata::custom-icon-name",
+			"folder"
+		];
+		
+		// Try and set folder icon
+		try {
+			auto p = spawnProcess(gioCmd);
+			int status = p.wait();
+			if (status == 0) {
+				addLogEntry("GNOME Desktop Integration: Remove folder icon to 'default' for " ~ syncDir, ["info"]);
+			} else {
+				addLogEntry("GNOME Desktop Integration: Failed to remove folder icon for " ~ syncDir ~ " (gio exit " ~ status.to!string ~ ")", ["info"]);
+			}
+		} catch (Exception e) {
+			addLogEntry("GNOME Desktop Integration: Exception setting folder icon: " ~ e.msg, ["info"]);
+		}
 	}
 }
 

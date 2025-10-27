@@ -2013,6 +2013,7 @@ void attemptFileManagerIntegration() {
 		if (hints.gnome) {
 			// Attempt integration
 			appConfig.addGnomeBookmark();
+			appConfig.setOneDriveFolderIcon();
 			return;
 		}
 		
@@ -2032,8 +2033,9 @@ void attemptFileManagerIntegrationRemoval() {
 		
 		// GNOME Desktop File Manager integration
 		if (hints.gnome) {
-			// Attempt integration
+			// Attempt integration removal
 			appConfig.removeGnomeBookmark();
+			appConfig.removeOneDriveFolderIcon();
 			return;
 		}
 		
