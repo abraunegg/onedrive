@@ -2877,6 +2877,7 @@ class ApplicationConfig {
 						environment.get("DESKTOP_SESSION","") ~ ":" ~
 						environment.get("GDMSESSION","") ~ ":" ~
 						environment.get("KDE_FULL_SESSION","")).toLower();
+		
 		DesktopHints hints;
 		hints.gnome = all.canFind("gnome");
 		hints.kde   = all.canFind("kde") || all.canFind("plasma");
@@ -3005,13 +3006,106 @@ class ApplicationConfig {
 			auto p = spawnProcess(gioCmd);
 			int status = p.wait();
 			if (status == 0) {
-				addLogEntry("GNOME Desktop Integration: Remove folder icon to 'default' for " ~ syncDir, ["info"]);
+				addLogEntry("GNOME Desktop Integration: Reset folder icon to 'default' for " ~ syncDir, ["info"]);
 			} else {
-				addLogEntry("GNOME Desktop Integration: Failed to remove folder icon for " ~ syncDir ~ " (gio exit " ~ status.to!string ~ ")", ["info"]);
+				addLogEntry("GNOME Desktop Integration: Failed to reset folder icon for " ~ syncDir ~ " (gio exit " ~ status.to!string ~ ")", ["info"]);
 			}
 		} catch (Exception e) {
 			addLogEntry("GNOME Desktop Integration: Exception setting folder icon: " ~ e.msg, ["info"]);
 		}
+	}
+	
+	void addKDEPlacesEntry() {
+		// Configure required variables
+		string uri = fileUriFor(getValueString("sync_dir"));
+		string xbelPath = buildPath(expandTilde(environment.get("HOME", "")), ".local", "share", "user-places.xbel");
+		string content;
+		
+		// Ensure the xbelPath path exists
+		mkdirRecurse(dirName(xbelPath));
+		
+		// Does the xbel file exist?		
+		if (exists(xbelPath)) {
+			// Path exists - read the file
+			content = readText(xbelPath);
+			
+			// Does the 'sync_dir' path exist in the xbel file?
+			if (content.canFind(`href="` ~ uri ~ `"`)) {
+				return; // already present
+			}
+		} else {
+			// xbel path does not exist, create minimal XBEL skeleton
+			content = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+					   <xbel version=\"1.0\">
+					   </xbel>";
+		}
+
+		// Insert xbel bookmark before closing tag
+		string bookmark = ` <bookmark href="` ~ uri ~ `">
+		<title>OneDrive</title>
+		<info>
+		  <metadata owner="http://www.freedesktop.org">
+			<bookmark:icon name="onedrive"/>
+		  </metadata>
+		</info>
+	  </bookmark>`;
+		
+		// Update xbel file with Microsoft OneDrive Bookmark
+		string updated;
+		auto idx = content.lastIndexOf("</xbel>");
+		if (idx >= 0) {
+			updated = content[0 .. idx] ~ bookmark ~ "\n" ~ content[idx .. $];
+		} else {
+			// Fallback: append (still valid for many parsers)
+			updated = content ~ "\n" ~ bookmark ~ "\n</xbel>\n";
+		}
+
+		string tmp = xbelPath ~ ".tmp";
+		std.file.write(tmp, updated);
+		rename(tmp, xbelPath);
+		
+		// Log outcome
+		addLogEntry("KDE Desktop Integration: KDE/Plasma place added successfully", ["info"]);
+	}
+		
+	void removeKDEPlacesEntry() {
+		// Compute paths/values
+		const string uri = fileUriFor(getValueString("sync_dir")); 
+		const string xbelPath = buildPath(expandTilde(environment.get("HOME", "")), ".local", "share", "user-places.xbel");
+
+		if (!exists(xbelPath)) {
+			return;
+		}
+
+		string content = readText(xbelPath);
+		auto before = content;
+
+		// Build a regex that matches:
+		// <bookmark ... href="URI" ...> ... </bookmark>
+		// - tolerate attribute order/whitespace
+		// - accept single or double quotes around URI
+		// - non-greedy body match
+		const esc = regexEscape(uri);
+		auto re = regex(`(?s)<bookmark\b[^>]*\bhref\s*=\s*["']` ~ esc ~ `["'][^>]*>.*?</bookmark\s*>`);
+
+		// Remove all matches
+		content = replaceAll(content, re, "");
+
+		// Optional: tidy up multiple blank lines left behind
+		auto cleanup = regex(`\n{3,}`);
+		content = replaceAll(content, cleanup, "\n\n");
+
+		// If nothing changed, exit quietly
+		if (content == before) {
+			return;
+		}
+
+		// Atomic write
+		string tmp = xbelPath ~ ".tmp";
+		std.file.write(tmp, content);
+		rename(tmp, xbelPath);
+
+		addLogEntry("KDE Desktop Integration: KDE/Plasma place removed successfully", ["info"]);
 	}
 }
 

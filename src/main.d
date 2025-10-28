@@ -2020,6 +2020,7 @@ void attemptFileManagerIntegration() {
 		// KDE Desktop File Manager integration
 		if (hints.kde) {
 			// Attempt integration
+			appConfig.addKDEPlacesEntry();
 			return;
 		}
 	}
@@ -2031,7 +2032,7 @@ void attemptFileManagerIntegrationRemoval() {
 		// Generate desktop hints
 		auto hints = appConfig.detectDesktop();
 		
-		// GNOME Desktop File Manager integration
+		// GNOME Desktop File Manager integration removal
 		if (hints.gnome) {
 			// Attempt integration removal
 			appConfig.removeGnomeBookmark();
@@ -2039,9 +2040,10 @@ void attemptFileManagerIntegrationRemoval() {
 			return;
 		}
 		
-		// KDE Desktop File Manager integration
+		// KDE Desktop File Manager integration removal
 		if (hints.kde) {
-			// Attempt integration
+			// Attempt integration removal
+			appConfig.removeKDEPlacesEntry();
 			return;
 		}	
 	}
