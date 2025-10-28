@@ -49,6 +49,7 @@ BBBA
 BBD
 bcdefghi
 beffdb
+bhref
 bindir
 bir
 blargh
@@ -514,6 +515,7 @@ wpath
 writefln
 wrt
 wtf
+xbel
 xca
 xcbac
 xdeadbeef
