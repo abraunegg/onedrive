@@ -6129,8 +6129,18 @@ class SyncEngine {
 						
 						// So that this path is in the DB, we need to add onedriveJSONItem to the DB so that this record can be used to build paths if required
 						if (parentInDatabase) {
-							// Save this JSON now
-							saveItem(onedriveJSONItem);
+							// Parent is in DB .. is this a 'new' object or an 'existing' object?
+							// Issue #3501 - If an online name name is done, the item needs to be 'renamed' via applyPotentiallyChangedItem() later
+							// Only save to the database at this point, if this JSON 'id' is not already in the database to allow applyPotentiallyChangedItem() to operate as expected
+							Item tempDBItem;
+							itemDB.selectById(onedriveJSONItem["parentReference"]["driveId"].str, onedriveJSONItem["id"].str, tempDBItem);
+							
+							// Was a valid DB response returned
+							if (tempDBItem.driveId.empty) {
+								// No .. so this is a new item
+								// Save this JSON now
+								saveItem(onedriveJSONItem);
+							}
 						}
 					}
 				}
