@@ -3453,7 +3453,8 @@ class SyncEngine {
 						// Track this as a faked id item
 						idsFaked ~= [changedOneDriveItem.driveId, changedOneDriveItem.id];
 						// We also need to track that we did not rename this path
-						pathsRenamed ~= [existingItemPath];
+						// When we are checking entries in this array, paths need to have './' added
+						pathsRenamed ~= [ensureStartsWithDotSlash(buildNormalizedPath(existingItemPath))];
 					}
 				} catch (FileException e) {
 					// display the error message
@@ -7404,7 +7405,7 @@ class SyncEngine {
 			} else {
 				// We are in a --dry-run scenario .. this might have been a directory we 'faked' doing something with. 
 				// pathsRenamed contains all the paths that were 'renamed'
-				if (pathsRenamed.canFind(pathToAdd)) {
+				if (pathsRenamed.canFind(ensureStartsWithDotSlash(buildNormalizedPath(pathToAdd)))) {
 					// Path was renamed .. but faked due to --dry-run
 					if (debugLogging) {addLogEntry("DRY-RUN: Skipping creating this directory online as this was a faked local change", ["debug"]);}
 				} else {
@@ -7828,7 +7829,7 @@ class SyncEngine {
 									newLocalFilesToUploadToOneDrive ~= path;
 								} else {
 									// In a --dry-run scenario, we may have locally fake changed a directory name, thus, this path we are checking needs to checked against 'pathsRenamed'
-									if (pathsRenamed.canFind(parentPath)) {
+									if (pathsRenamed.canFind(ensureStartsWithDotSlash(buildNormalizedPath(parentPath)))) {
 										// Parental path was renamed
 										if (debugLogging) {addLogEntry("DRY-RUN: parentPath found in 'pathsRenamed' ... skipping uploading this file", ["debug"]);}
 									} else {
