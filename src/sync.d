@@ -3453,7 +3453,8 @@ class SyncEngine {
 						// Track this as a faked id item
 						idsFaked ~= [changedOneDriveItem.driveId, changedOneDriveItem.id];
 						// We also need to track that we did not rename this path
-						pathsRenamed ~= [existingItemPath];
+						// When we are checking entries in this array, paths need to have './' added
+						pathsRenamed ~= [ensureStartsWithDotSlash(buildNormalizedPath(existingItemPath))];
 					}
 				} catch (FileException e) {
 					// display the error message
@@ -5296,13 +5297,26 @@ class SyncEngine {
 				// We are in a --dry-run situation, file appears to have been deleted locally - this file may never have existed locally as we never downloaded it due to --dry-run
 				// Did we 'fake create it' as part of --dry-run ?
 				bool idsFakedMatch = false;
+				
+				// Check the file id - was this faked
 				foreach (i; idsFaked) {
 					if (i[1] == dbItem.id) {
-						if (debugLogging) {addLogEntry("Matched faked file which is 'supposed' to exist but not created due to --dry-run use", ["debug"]);}
+						if (debugLogging) {addLogEntry("Matched faked file which is 'supposed' to exist locally but not created|renamed due to --dry-run use", ["debug"]);}
 						if (verboseLogging) {addLogEntry("The file has not changed", ["verbose"]);}
 						idsFakedMatch = true;
 					}
 				}
+				
+				// Check if the parent folder was faked being changed in any way .. so we need to check the parent id
+				foreach (i; idsFaked) {
+					if (i[1] == dbItem.parentId) {
+						if (debugLogging) {addLogEntry("Matched faked parental directory which is 'supposed' to exist locally but not created|renamed due to --dry-run use", ["debug"]);}
+						if (verboseLogging) {addLogEntry("The file has not changed", ["verbose"]);}
+						idsFakedMatch = true;
+					}
+				}
+				
+				// file id or parent id of the file did not match anything we faked changing due to --dry-run
 				if (!idsFakedMatch) {
 					// dbItem.id did not match a 'faked' download new file creation - so this in-sync object was actually deleted locally, but we are in a --dry-run situation
 					if (verboseLogging) {addLogEntry("The file has been deleted locally", ["verbose"]);}
@@ -5384,7 +5398,7 @@ class SyncEngine {
 				bool idsFakedMatch = false;
 				foreach (i; idsFaked) {
 					if (i[1] == dbItem.id) {
-						if (debugLogging) {addLogEntry("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use", ["debug"]);}
+						if (debugLogging) {addLogEntry("Matched faked directory which is 'supposed' to exist locally but not created|renamed due to --dry-run use", ["debug"]);}
 						if (verboseLogging) {addLogEntry("The directory has not changed", ["verbose"]);}
 						idsFakedMatch = true;
 					}
@@ -7379,11 +7393,26 @@ class SyncEngine {
 			// We can never add or create online the OneDrive 'root'
 			return;
 		}
-	
+		
 		// Only add unique paths
 		if (!pathsToCreateOnline.canFind(pathToAdd)) {
 			// Add this unique path to the created online
-			pathsToCreateOnline ~= pathToAdd;
+			
+			// are we in a --dry-run scenario?
+			if (!dryRun) {
+				// Add this to the list to create online
+				pathsToCreateOnline ~= pathToAdd;
+			} else {
+				// We are in a --dry-run scenario .. this might have been a directory we 'faked' doing something with. 
+				// pathsRenamed contains all the paths that were 'renamed'
+				if (pathsRenamed.canFind(ensureStartsWithDotSlash(buildNormalizedPath(pathToAdd)))) {
+					// Path was renamed .. but faked due to --dry-run
+					if (debugLogging) {addLogEntry("DRY-RUN: Skipping creating this directory online as this was a faked local change", ["debug"]);}
+				} else {
+					// Add this to the list to create online
+					pathsToCreateOnline ~= pathToAdd;
+				}
+			}
 		}
 	}
 	
@@ -7788,12 +7817,27 @@ class SyncEngine {
 								// Ensure this directory on OneDrive so that we can upload files to it
 								// Add this path to an array so that the directory online can be created before we upload files
 								string parentPath = dirName(path);
+								
 								if (debugLogging) {addLogEntry("Adding parental path to create online (file inclusion): " ~ parentPath, ["debug"]);}
 								addPathToCreateOnline(parentPath);
 								
 								// Add this path as a file we need to upload
 								if (debugLogging) {addLogEntry("OneDrive Client flagging to upload this file to Microsoft OneDrive: " ~ path, ["debug"]);}
-								newLocalFilesToUploadToOneDrive ~= path;
+								
+								if (!dryRun) {
+									// Add to the array
+									newLocalFilesToUploadToOneDrive ~= path;
+								} else {
+									// In a --dry-run scenario, we may have locally fake changed a directory name, thus, this path we are checking needs to checked against 'pathsRenamed'
+									if (pathsRenamed.canFind(ensureStartsWithDotSlash(buildNormalizedPath(parentPath)))) {
+										// Parental path was renamed
+										if (debugLogging) {addLogEntry("DRY-RUN: parentPath found in 'pathsRenamed' ... skipping uploading this file", ["debug"]);}
+									} else {
+										// Add to the array
+										newLocalFilesToUploadToOneDrive ~= path;
+									}
+								}
+								
 							} else {
 								// we need to clean up this file
 								addLogEntry("Removing local file as --download-only & --cleanup-local-files configured");
@@ -10012,7 +10056,7 @@ class SyncEngine {
 					}
 				} else {
 					// log that this is a dry-run activity
-					addLogEntry("dry run - no delete activity");
+					addLogEntry("DRY-RUN: No delete activity");
 				}
 			} else {
 				// --download-only operation, we are not uploading any delete event to OneDrive

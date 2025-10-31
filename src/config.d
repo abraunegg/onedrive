@@ -706,7 +706,7 @@ class ApplicationConfig {
 			}
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
-			addLogEntry("DRY RUN: Not creating backup config file as --dry-run has been used");
+			addLogEntry("DRY-RUN: Not creating backup config file as --dry-run has been used");
 		}
 	}
 	
@@ -2120,7 +2120,7 @@ class ApplicationConfig {
 			safeRemove(syncListHashFile);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
-			addLogEntry("DRY RUN: Not removing hash files as --dry-run has been used");
+			addLogEntry("DRY-RUN: Not removing hash files as --dry-run has been used");
 		}
 	}
 	
@@ -2157,7 +2157,7 @@ class ApplicationConfig {
 			}
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
-			addLogEntry("DRY RUN: Not updating hash files as --dry-run has been used");
+			addLogEntry("DRY-RUN: Not updating hash files as --dry-run has been used");
 		}
 	}
 	
