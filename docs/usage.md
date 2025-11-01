@@ -735,7 +735,7 @@ This will synchronise files from your Microsoft OneDrive account to your `~/OneD
 > ```
 > or by using the command-line argument at runtime:
 > ```text
-> onedrive <other applicable options> --local-first
+> onedrive --sync --local-first
 > ```
 > 
 > When this option is enabled, the client will prioritise local data as the source of truth when comparing file differences and resolving synchronisation conflicts.
