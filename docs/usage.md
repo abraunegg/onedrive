@@ -723,11 +723,23 @@ onedrive --sync
 ```
 This will synchronise files from your Microsoft OneDrive account to your `~/OneDrive` local directory or to your specified 'sync_dir' location.
 
-> [!TIP]
-> If you prefer to use your local files as stored in `~/OneDrive` as your 'source of truth,' use the following sync command:
-> ```text
-> onedrive --sync --local-first
-> ```
+#### Specifying the 'source of truth' for your synchronisation with Microsoft OneDrive
+By default, the OneDrive Client for Linux treats your online OneDrive data as the source of truth. This means that when determining which version of a file should be trusted as authoritative, the client prioritises the state of files stored online over local copies.
+
+In some workflows, you may prefer to treat your local files as the primary reference instead — for example, when you regularly make changes locally and want those to take precedence during conflict resolution.
+
+To change this behaviour, enable the local-first mode by setting the configuration option in your `config` file:
+```text
+local_first = "true"
+```
+or by using the command-line argument at runtime:
+```text
+onedrive <other applicable option> --local-first
+```
+
+When this option is enabled, the client will prioritise local data as the source of truth when comparing file differences and resolving synchronisation conflicts.
+
+
 
 ### Performing a single directory synchronisation with Microsoft OneDrive
 In some cases, it may be desirable to synchronise a single directory under ~/OneDrive without having to change your client configuration. To do this, use the following command:
