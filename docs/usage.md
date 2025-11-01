@@ -1165,25 +1165,31 @@ If `--resync` is used, all resumable data is discarded intentionally.
 ## Frequently Asked Configuration Questions
 
 ### How to change the default configuration of the client?
-Configuration is determined by three layers, and applied in the following order:
-*   Application default values
-*   Values that are set in the configuration file
-*   Values that are passed in via the command line at application runtime. These values will override any configuration file set value.
+The OneDrive Client for Linux determines its configuration from three layers, applied in the following order of priority:
 
-The default application values provide a reasonable operational default, and additional configuration is entirely optional.
+1. Application default values – internal defaults built into the client
+2. Configuration file values – user-defined settings from a config file (if present)
+3. Command-line arguments – values passed at runtime override both of the above
 
-If you want to change the application defaults, you can download a copy of the config file into your application configuration directory. Valid default directories for the config file are:
-*   `~/.config/onedrive`
-*   `/etc/onedrive`
+The built-in application defaults are sufficient for most users and provide a reliable operational baseline. Adding a configuration file or command-line options is optional, and only required when you want to customise application runtime behaviour.
+
+>[!NOTE]
+> The OneDrive Client does not create a configuration file automatically.
+> If no configuration file is found, the client runs entirely using its internally defined default values.
+> You only need to create a config file if you wish to override those defaults.
+
+If you want to adjust the default settings, download a copy of the configuration template into your local configuration directory. Valid configuration file locations are:
+*   `~/.config/onedrive` – for per-user configuration
+*   `/etc/onedrive` – for system-wide configuration
 
 > [!TIP] 
-> To download a copy of the config file, use the following:
+> To download a copy of the default configuration template, run:
 > ```text
 > mkdir -p ~/.config/onedrive
 > wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/onedrive/config
 > ```
 
-For full configuration options and CLI switches, please refer to [application-config-options.md](application-config-options.md)
+For a full list of configuration options and command-line switches, see [application-config-options.md](application-config-options.md)
 
 ### How to change where my data from Microsoft OneDrive is stored?
 By default, the location where your Microsoft OneDrive data is stored, is within your Home Directory under a directory called 'OneDrive'. This replicates as close as possible where the Microsoft Windows OneDrive client stores data.
