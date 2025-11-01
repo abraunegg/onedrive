@@ -246,7 +246,7 @@ This example sets the delay to 10 seconds.
 > Adjust this setting with extreme caution and test thoroughly to ensure it does not impact your workflow or data integrity.
 
 > [!TIP]
-> An Obsidian Plugin exists to 'control' the auto save behaviour.
+> An Obsidian Plugin also exists to 'control' the auto save behaviour of Obsidian.
 > 
 > Instead of saving every two seconds from start of typing (Obsidian default), this plugin makes Obsidian wait for the user to finish with editing, and after the input stops, it waits for a defined time (by default 10 seconds) and then it only saves once.
 > 
