@@ -245,6 +245,14 @@ This example sets the delay to 10 seconds.
 >
 > Adjust this setting with extreme caution and test thoroughly to ensure it does not impact your workflow or data integrity.
 
+> [!TIP]
+> An Obsidian Plugin exists to 'control' the auto save behaviour.
+> 
+> Instead of saving every two seconds from start of typing (Obsidian default), this plugin makes Obsidian wait for the user to finish with editing, and after the input stops, it waits for a defined time (by default 10 seconds) and then it only saves once.
+> 
+> For more information please read: https://github.com/mihasm/obsidian-autosave-control 
+
+
 ### Compatibility with curl
 If your system uses curl < 7.47.0, curl will default to HTTP/1.1 for HTTPS operations, and the client will follow suit, using HTTP/1.1.
 
@@ -259,17 +267,17 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 |----|----------|-----------------------|
 | 1  | HTTP/2 support: Introduced HTTP/2 support, enabling multiplexed transfers over a single connection | 7.47.0 |
 | 2  | HTTP/2 issue: Resolved an issue where HTTP/2 connections were not properly reused, leading to unnecessary new connections. | 7.68.0 |
-| 3  | HTTP/2 issue: Addressed a race condition in HTTP/2 multiplexing that could lead to unexpected behavior. | 7.74.0 |
+| 3  | HTTP/2 issue: Addressed a race condition in HTTP/2 multiplexing that could lead to unexpected behaviour. | 7.74.0 |
 | 4  | HTTP/2 issue: Improved handling of HTTP/2 priority frames to ensure proper stream prioritisation. | 7.81.0 |
 | 5  | HTTP/2 issue: Fixed a bug where HTTP/2 connections were prematurely closed, resulting in incomplete data transfers. | 7.88.1 |
 | 6  | HTTP/2 issue: Resolved a problem with HTTP/2 frame handling that could cause data corruption during transfers. | 8.2.1 |
 | 7  | HTTP/2 issue: Corrected an issue where HTTP/2 streams were not properly closed, leading to potential memory leaks. | 8.5.0 |
 | 8  | HTTP/2 issue: Addressed a bug where HTTP/2 connections could hang under specific conditions, improving reliability. | 8.8.0 |
 | 9  | HTTP/2 issue: Improved handling of HTTP/2 connections to prevent unexpected stream resets and enhance stability. | 8.9.0 |
-| 10 | SIGPIPE issue: Resolved a problem where SIGPIPE signals were not properly handled, leading to unexpected behavior. | 8.9.1 |
+| 10 | SIGPIPE issue: Resolved a problem where SIGPIPE signals were not properly handled, leading to unexpected behaviour. | 8.9.1 |
 | 11 | SIGPIPE issue: Addressed a SIGPIPE leak that occurred in certain cases starting with version 8.9.1 | 8.10.0 |
 | 12 | HTTP/2 issue: Stopped offering ALPN `http/1.1` for `http2-prior-knowledge` to ensure proper protocol negotiation. | 8.10.0 |
-| 13 | HTTP/2 issue: Improved handling of end-of-stream (EOS) and blocked states to prevent unexpected behavior.| 8.11.0 |
+| 13 | HTTP/2 issue: Improved handling of end-of-stream (EOS) and blocked states to prevent unexpected behaviour.| 8.11.0 |
 | 14 | OneDrive operation encountered an issue with libcurl reading the local SSL CA Certificates issue | 8.14.1 |
 
 #### Known curl versions with compatibility issues for this client
