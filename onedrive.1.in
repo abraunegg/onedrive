@@ -163,6 +163,8 @@ Create a directory on OneDrive - no sync will be performed.
 .TP
 \fB\-\-create-share-link\fR \fIARG\fR
 Create a shareable link for an existing file on OneDrive.
+Use --with-editing-perms to create a read-write share link instead of read-only.
+Use --share-password <password> to protect the shared link with a password.
 
 .TP
 \fB\-\-debug-https\fR
@@ -190,7 +192,8 @@ Display the quota status of the client - no sync will be performed.
 
 .TP
 \fB\-\-download-file\fR
-This CLI option will download a single file based on the online path. No sync will be performed.
+Download a single file from Microsoft OneDrive.
+Specify the full online path to the file. No synchronisation will be performed.
 
 .TP
 \fB\-\-display-running-config\fR
@@ -261,6 +264,10 @@ Logout the current user.
 Display the last modified by details of a given path.
 
 .TP
+\fB\-\-monitor-fullscan-frequency\fR \fIARG\fR
+Number of sync runs before performing a full local scan of the synced directory.
+
+.TP
 \fB\-\-monitor-interval\fR \fIARG\fR
 Number of seconds by which each sync operation is undertaken when idle under monitor mode.
 
@@ -299,6 +306,11 @@ Forget the last saved state, perform a full sync.
 .TP
 \fB\-\-resync-auth\fR
 Approve the use of performing a --resync action.
+
+.TP
+\fB\-\-share-password\fR \fIARG\fR
+Require a password to access the shared link when used with --create-share-link <file>.
+Only supported for OneDrive Business and SharePoint environments that permit password-protected sharing.
 
 .TP
 \fB\-\-single-directory\fR \fIARG\fR

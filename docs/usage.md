@@ -1630,79 +1630,83 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
 
   Options:
 
-  --auth-files ARG
-      Perform authentication not via interactive dialog but via files read/writes to these files.
-  --auth-response ARG
-      Perform authentication not via interactive dialog but via providing the response url directly.
+  --auth-files '<path or required value>'
+      Perform authentication not via interactive dialog but via files read/writes to these files
+  --auth-response '<path or required value>'
+      Perform authentication not via interactive dialog but via providing the response url directly
   --check-for-nomount
-      Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
+      Check for the presence of .nosync in the syncdir root. If found, do not perform sync
   --check-for-nosync
-      Check for the presence of .nosync in each directory. If found, skip directory from sync.
-  --classify-as-big-delete ARG
+      Check for the presence of .nosync in each directory. If found, skip directory from sync
+  --classify-as-big-delete '<path or required value>'
       Number of children in a path that is locally removed which will be classified as a 'big data delete'
   --cleanup-local-files
-      Cleanup additional local files when using --download-only. This will remove local data.
-  --confdir ARG
+      Cleanup additional local files when using --download-only. This will remove local data
+  --confdir '<path or required value>'
       Set the directory used to store the configuration files
-  --create-directory ARG
-      Create a directory on OneDrive - no sync will be performed.
-  --create-share-link ARG
+  --create-directory '<path or required value>'
+      Create a directory on OneDrive - no sync will be performed
+  --create-share-link '<path or required value>'
       Create a shareable link for an existing file on OneDrive
   --debug-https
       Debug OneDrive HTTPS communication.
-  --destination-directory ARG
-      Destination directory for renamed or move on OneDrive - no sync will be performed.
+  --destination-directory '<path or required value>'
+      Destination directory for renamed or move on OneDrive - no sync will be performed
   --disable-download-validation
       Disable download validation when downloading from OneDrive
   --disable-notifications
-      Do not use desktop notifications in monitor mode.
+      Do not use desktop notifications in monitor mode
   --disable-upload-validation
       Disable upload validation when uploading to OneDrive
   --display-config
-      Display what options the client will use as currently configured - no sync will be performed.
+      Display what options the client will use as currently configured - no sync will be performed
   --display-quota
-      Display the quota status of the client - no sync will be performed.
+      Display the quota status of the client - no sync will be performed
   --display-running-config
-      Display what options the client has been configured to use on application startup.
+      Display what options the client has been configured to use on application startup
   --display-sync-status
-      Display the sync status of the client - no sync will be performed.
+      Display the sync status of the client - no sync will be performed
+  --download-file '<path or required value>'
+      Download a single file from Microsoft OneDrive
   --download-only
-      Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive.
+      Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive
   --dry-run
       Perform a trial sync with no changes made
   --enable-logging
       Enable client activity to a separate log file
+  --file-fragment-size
+      Specify the file fragment size for large file uploads (in MB)
   --force
       Force the deletion of data when a 'big delete' is detected
   --force-http-11
       Force the use of HTTP 1.1 for all operations
   --force-sync
       Force a synchronization of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules
-  --get-O365-drive-id ARG
+  --get-O365-drive-id '<path or required value>'
       Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library (DEPRECATED)
-  --get-file-link ARG
+  --get-file-link '<path or required value>'
       Display the file link of a synced file
-  --get-sharepoint-drive-id ARG
+  --get-sharepoint-drive-id '<path or required value>'
       Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
   --help -h
       This help information.
   --list-shared-items
       List OneDrive Business Shared Items
   --local-first
-      Synchronize from the local directory source first, before downloading changes from OneDrive.
-  --log-dir ARG
-      Directory where logging output is saved to, needs to end with a slash.
+      Synchronize from the local directory source first, before downloading changes from OneDrive
+  --log-dir '<path or required value>'
+      Directory where logging output is saved to, needs to end with a slash
   --logout
       Logout the current user
-  --modified-by ARG
+  --modified-by '<path or required value>'
       Display the last modified by details of a given path
   --monitor -m
       Keep monitoring for local and remote changes
-  --monitor-fullscan-frequency ARG
+  --monitor-fullscan-frequency '<path or required value>'
       Number of sync runs before performing a full local scan of the synced directory
-  --monitor-interval ARG
-      Number of seconds by which each sync operation is undertaken when idle under monitor mode.
-  --monitor-log-frequency ARG
+  --monitor-interval '<path or required value>'
+      Number of seconds by which each sync operation is undertaken when idle under monitor mode
+  --monitor-log-frequency '<path or required value>'
       Frequency of logging in monitor mode
   --no-remote-delete
       Do not delete local file 'deletes' from OneDrive when using --upload-only
@@ -1710,44 +1714,50 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
       Print the access token, useful for debugging
   --reauth
       Reauthenticate the client with OneDrive
-  --remove-directory ARG
-      Remove a directory on OneDrive - no sync will be performed.
+  --remove-directory '<path or required value>'
+      Remove a directory on OneDrive - no sync will be performed
   --remove-source-files
       Remove source file after successful transfer to OneDrive when using --upload-only
+  --remove-source-folders
+      Remove the local directory structure post successful file transfer to Microsoft OneDrive when using --upload-only --remove-source-files
   --resync
       Forget the last saved state, perform a full sync
   --resync-auth
       Approve the use of performing a --resync action
-  --single-directory ARG
-      Specify a single local directory within the OneDrive root to sync.
-  --skip-dir ARG
+  --share-password '<path or required value>'
+      Require a password to access the shared link when used with --create-share-link <file>
+  --single-directory '<path or required value>'
+      Specify a single local directory within the OneDrive root to sync
+  --skip-dir '<path or required value>'
       Skip any directories that match this pattern from syncing
   --skip-dir-strict-match
       When matching skip_dir directories, only match explicit matches
   --skip-dot-files
       Skip dot files and folders from syncing
-  --skip-file ARG
+  --skip-file '<path or required value>'
       Skip any files that match this pattern from syncing
-  --skip-size ARG
+  --skip-size '<path or required value>'
       Skip new files larger than this size (in MB)
   --skip-symlinks
       Skip syncing of symlinks
-  --source-directory ARG
-      Source directory to rename or move on OneDrive - no sync will be performed.
-  --space-reservation ARG
+  --source-directory '<path or required value>'
+      Source directory to rename or move on OneDrive - no sync will be performed
+  --space-reservation '<path or required value>'
       The amount of disk space to reserve (in MB) to avoid 100% disk space utilisation
   --sync -s
       Perform a synchronisation with Microsoft OneDrive
   --sync-root-files
-      Sync all files in sync_dir root when using sync_list.
+      Sync all files in sync_dir root when using sync_list
   --sync-shared-files
       Sync OneDrive Business Shared Files to the local filesystem
-  --syncdir ARG
+  --syncdir '<path or required value>'
       Specify the local directory used for synchronisation to OneDrive
   --synchronize
       Perform a synchronisation with Microsoft OneDrive (DEPRECATED)
+  --threads
+      Specify a value for the number of worker threads used for parallel upload and download operations
   --upload-only
-      Replicate the locally configured sync_dir state to OneDrive, by only uploading local changes to OneDrive. Do not download changes from OneDrive.
+      Replicate the locally configured sync_dir state to OneDrive, by only uploading local changes to OneDrive. Do not download changes from OneDrive
   --verbose -v+
       Print more details, useful for debugging (repeat for extra debugging)
   --version
