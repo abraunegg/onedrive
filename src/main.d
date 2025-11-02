@@ -464,7 +464,7 @@ int main(string[] cliArgs) {
 			safeRemove(appConfig.intuneAccountDetailsFilePath);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
-			addLogEntry("DRY RUN: Not removing the saved authentication status");
+			addLogEntry("DRY-RUN: Not removing the saved authentication status");
 		}
 		// Exit
 		return EXIT_SUCCESS;
@@ -481,7 +481,7 @@ int main(string[] cliArgs) {
 			safeRemove(appConfig.intuneAccountDetailsFilePath);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
-			addLogEntry("DRY RUN: Not removing the saved authentication status");
+			addLogEntry("DRY-RUN: Not removing the saved authentication status");
 		}
 	}
 	
@@ -1722,7 +1722,7 @@ void processResyncDatabaseRemoval(string databaseFilePathToRemove) {
 		safeRemove(databaseFilePathToRemove);
 	} else {
 		// --dry-run scenario ... technically we should not be making any local file changes .......
-		addLogEntry("DRY RUN: Not removing the saved application sync status");
+		addLogEntry("DRY-RUN: Not removing the saved application sync status");
 	}
 }
 

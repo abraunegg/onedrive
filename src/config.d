@@ -708,7 +708,7 @@ class ApplicationConfig {
 			}
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
-			addLogEntry("DRY RUN: Not creating backup config file as --dry-run has been used");
+			addLogEntry("DRY-RUN: Not creating backup config file as --dry-run has been used");
 		}
 	}
 	
@@ -1178,10 +1178,10 @@ class ApplicationConfig {
 				std.getopt.config.bundling,
 				std.getopt.config.caseSensitive,
 				"auth-files",
-					"Perform authentication not via interactive dialog but via files read/writes to these files",
+					"Perform authentication via files rather than an interactive dialogue. The application reads/writes the required values from/to the specified files",
 					&stringValues["auth_files"],
 				"auth-response",
-					"Perform authentication not via interactive dialog but via providing the response url directly",
+					"Perform authentication via a supplied response URL rather than an interactive dialogue",
 					&stringValues["auth_response"],
 				"check-for-nomount",
 					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync",
@@ -1193,10 +1193,10 @@ class ApplicationConfig {
 					"Number of children in a path that is locally removed which will be classified as a 'big data delete'",
 					&longValues["classify_as_big_delete"],
 				"cleanup-local-files",
-					"Cleanup additional local files when using --download-only. This will remove local data",
+					"Clean up additional local files when using --download-only. This will remove local data",
 					&boolValues["cleanup_local_files"],	
 				"create-directory",
-					"Create a directory on OneDrive - no sync will be performed",
+					"Create a directory on OneDrive. No synchronisation will be performed",
 					&stringValues["create_directory"],
 				"create-share-link",
 					"Create a shareable link for an existing file on OneDrive",
@@ -1205,7 +1205,7 @@ class ApplicationConfig {
 					"Debug OneDrive HTTPS communication.",
 					&boolValues["debug_https"],
 				"destination-directory",
-					"Destination directory for renamed or move on OneDrive - no sync will be performed",
+					"Destination directory for renamed or moved items on OneDrive. No synchronisation will be performed",
 					&stringValues["destination_directory"],
 				"disable-notifications",
 					"Do not use desktop notifications in monitor mode",
@@ -1217,16 +1217,16 @@ class ApplicationConfig {
 					"Disable upload validation when uploading to OneDrive",
 					&boolValues["disable_upload_validation"],
 				"display-config",
-					"Display what options the client will use as currently configured - no sync will be performed",
+					"Display what options the client will use as currently configured. No synchronisation will be performed",
 					&boolValues["display_config"],
 				"display-running-config",
 					"Display what options the client has been configured to use on application startup",
 					&boolValues["display_running_config"],
 				"display-sync-status",
-					"Display the sync status of the client - no sync will be performed",
+					"Display the sync status of the client. No synchronisation will be performed",
 					&boolValues["display_sync_status"],
 				"display-quota",
-					"Display the quota status of the client - no sync will be performed",
+					"Display the quota status of the client. No synchronisation will be performed",
 					&boolValues["display_quota"],
 				"download-only",
 					"Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive",
@@ -1250,7 +1250,7 @@ class ApplicationConfig {
 					"Force the deletion of data when a 'big delete' is detected",
 					&boolValues["force"],
 				"force-sync",
-					"Force a synchronization of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules",
+					"Force a synchronisation of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules",
 					&boolValues["force_sync"],
 				"get-file-link",
 					"Display the file link of a synced file",
@@ -1268,13 +1268,13 @@ class ApplicationConfig {
 					"Sync OneDrive Business Shared Files to the local filesystem",
 					&boolValues["sync_business_shared_files"],
 				"local-first",
-					"Synchronize from the local directory source first, before downloading changes from OneDrive",
+					"Synchronise from the local directory source first, before downloading changes from OneDrive",
 					&boolValues["local_first"],
 				"log-dir",
 					"Directory where logging output is saved to, needs to end with a slash",
 					&stringValues["log_dir"],
 				"logout",
-					"Logout the current user",
+					"Log out the current user",
 					&boolValues["logout"],
 				"modified-by",
 					"Display the last modified by details of a given path",
@@ -1307,7 +1307,7 @@ class ApplicationConfig {
 					"Approve the use of performing a --resync action",
 					&boolValues["resync_auth"],
 				"remove-directory",
-					"Remove a directory on OneDrive - no sync will be performed",
+					"Remove a directory on OneDrive. No synchronisation will be performed",
 					&stringValues["remove_directory"],
 				"remove-source-files",
 					"Remove source file after successful transfer to OneDrive when using --upload-only",
@@ -1337,7 +1337,7 @@ class ApplicationConfig {
 					"Skip syncing of symlinks",
 					&boolValues["skip_symlinks"],
 				"source-directory",
-					"Source directory to rename or move on OneDrive - no sync will be performed",
+					"Source directory to rename or move on OneDrive. No synchronisation will be performed",
 					&stringValues["source_directory"],
 				"space-reservation",
 					"The amount of disk space to reserve (in MB) to avoid 100% disk space utilisation",
@@ -2122,7 +2122,7 @@ class ApplicationConfig {
 			safeRemove(syncListHashFile);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
-			addLogEntry("DRY RUN: Not removing hash files as --dry-run has been used");
+			addLogEntry("DRY-RUN: Not removing hash files as --dry-run has been used");
 		}
 	}
 	
@@ -2159,7 +2159,7 @@ class ApplicationConfig {
 			}
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
-			addLogEntry("DRY RUN: Not updating hash files as --dry-run has been used");
+			addLogEntry("DRY-RUN: Not updating hash files as --dry-run has been used");
 		}
 	}
 	
@@ -3143,9 +3143,9 @@ void outputLongHelp(Option[] opt) {
 
   Usage:
     onedrive [options] --sync
-      Do a one time synchronization
+      Do a one-time synchronisation with Microsoft OneDrive
     onedrive [options] --monitor
-      Monitor filesystem and sync regularly
+      Monitor filesystem and synchronise regularly with Microsoft OneDrive
     onedrive [options] --display-config
       Display the currently used configuration
     onedrive [options] --display-sync-status

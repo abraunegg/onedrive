@@ -217,7 +217,7 @@ This behaviour is intended to improve data integrity and crash resilience, but i
 
 #### How This Affects the OneDrive Client
 
-Because Obsidian is constantly writing files, running the OneDrive Client for Linux in `--monitor` mode causes the client to continually receive inotify events. This leads to constant re-uploading of files, regardless of whether meaningful content has changed.
+Because Obsidian is constantly writing files, running the OneDrive Client for Linux in `--monitor` mode causes the client to continually receive inotify events from the local file system. This leads to constant re-uploading of files, regardless of whether meaningful content has changed.
 
 The consequences of this are:
 
@@ -227,12 +227,12 @@ The consequences of this are:
 
 #### Recommendation
 
-If you use Obsidian, it is *strongly* recommended that you enable the following two configuration options in your OneDrive client `config` file:
+If you use Obsidian, it is *strongly* recommended that you enable the following two configuration options in your OneDrive Client for Linux `config` file:
 ```
 force_session_upload = "true"
 delay_inotify_processing = "true"
 ```
-These settings introduce a delay in processing local file change events, allowing the OneDrive client to batch or debounce Obsidian's frequent writes. By default, this delay is 5 seconds.
+These settings introduce a delay in processing local file change events, allowing the OneDrive Client for Linux to batch or debounce Obsidian's frequent writes. By default, this delay is 5 seconds.
 
 To adjust this delay, you can add the following configuration option:
 ```
@@ -244,6 +244,14 @@ This example sets the delay to 10 seconds.
 > Increasing `inotify_delay` too aggressively may have unintended side effects. All file system events are queued and processed in order, so setting a very high delay could result in large backlogs or undesirable data synchronisation outcomes — particularly in cases of rapid file changes or deletions.
 >
 > Adjust this setting with extreme caution and test thoroughly to ensure it does not impact your workflow or data integrity.
+
+> [!TIP]
+> An Obsidian Plugin also exists to 'control' the auto save behaviour of Obsidian.
+> 
+> Instead of saving every two seconds from start of typing (Obsidian default), this plugin makes Obsidian wait for the user to finish with editing, and after the input stops, it waits for a defined time (by default 10 seconds) and then it only saves once.
+> 
+> For more information please read: https://github.com/mihasm/obsidian-autosave-control 
+
 
 ### Compatibility with curl
 If your system uses curl < 7.47.0, curl will default to HTTP/1.1 for HTTPS operations, and the client will follow suit, using HTTP/1.1.
@@ -259,17 +267,17 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 |----|----------|-----------------------|
 | 1  | HTTP/2 support: Introduced HTTP/2 support, enabling multiplexed transfers over a single connection | 7.47.0 |
 | 2  | HTTP/2 issue: Resolved an issue where HTTP/2 connections were not properly reused, leading to unnecessary new connections. | 7.68.0 |
-| 3  | HTTP/2 issue: Addressed a race condition in HTTP/2 multiplexing that could lead to unexpected behavior. | 7.74.0 |
+| 3  | HTTP/2 issue: Addressed a race condition in HTTP/2 multiplexing that could lead to unexpected behaviour. | 7.74.0 |
 | 4  | HTTP/2 issue: Improved handling of HTTP/2 priority frames to ensure proper stream prioritisation. | 7.81.0 |
 | 5  | HTTP/2 issue: Fixed a bug where HTTP/2 connections were prematurely closed, resulting in incomplete data transfers. | 7.88.1 |
 | 6  | HTTP/2 issue: Resolved a problem with HTTP/2 frame handling that could cause data corruption during transfers. | 8.2.1 |
 | 7  | HTTP/2 issue: Corrected an issue where HTTP/2 streams were not properly closed, leading to potential memory leaks. | 8.5.0 |
 | 8  | HTTP/2 issue: Addressed a bug where HTTP/2 connections could hang under specific conditions, improving reliability. | 8.8.0 |
 | 9  | HTTP/2 issue: Improved handling of HTTP/2 connections to prevent unexpected stream resets and enhance stability. | 8.9.0 |
-| 10 | SIGPIPE issue: Resolved a problem where SIGPIPE signals were not properly handled, leading to unexpected behavior. | 8.9.1 |
+| 10 | SIGPIPE issue: Resolved a problem where SIGPIPE signals were not properly handled, leading to unexpected behaviour. | 8.9.1 |
 | 11 | SIGPIPE issue: Addressed a SIGPIPE leak that occurred in certain cases starting with version 8.9.1 | 8.10.0 |
 | 12 | HTTP/2 issue: Stopped offering ALPN `http/1.1` for `http2-prior-knowledge` to ensure proper protocol negotiation. | 8.10.0 |
-| 13 | HTTP/2 issue: Improved handling of end-of-stream (EOS) and blocked states to prevent unexpected behavior.| 8.11.0 |
+| 13 | HTTP/2 issue: Improved handling of end-of-stream (EOS) and blocked states to prevent unexpected behaviour.| 8.11.0 |
 | 14 | OneDrive operation encountered an issue with libcurl reading the local SSL CA Certificates issue | 8.14.1 |
 
 #### Known curl versions with compatibility issues for this client
@@ -716,10 +724,22 @@ onedrive --sync
 This will synchronise files from your Microsoft OneDrive account to your `~/OneDrive` local directory or to your specified 'sync_dir' location.
 
 > [!TIP]
-> If you prefer to use your local files as stored in `~/OneDrive` as your 'source of truth,' use the following sync command:
+> #### Specifying the 'source of truth' for your synchronisation with Microsoft OneDrive
+> By default, the OneDrive Client for Linux treats your online OneDrive data as the source of truth. This means that when determining which version of a file should be trusted as authoritative, the client prioritises the state of files stored online over local copies.
+> 
+> In some workflows, you may prefer to treat your local files as the primary reference instead — for example, when you regularly make changes locally and want those to take precedence during conflict resolution.
+> 
+> To change this behaviour, enable the local-first mode by setting the configuration option in your `config` file:
+> ```text
+> local_first = "true"
+> ```
+> or by using the command-line argument at runtime:
 > ```text
 > onedrive --sync --local-first
 > ```
+> 
+> When this option is enabled, the client will prioritise local data as the source of truth when comparing file differences and resolving synchronisation conflicts.
+> 
 
 ### Performing a single directory synchronisation with Microsoft OneDrive
 In some cases, it may be desirable to synchronise a single directory under ~/OneDrive without having to change your client configuration. To do this, use the following command:
@@ -1165,25 +1185,31 @@ If `--resync` is used, all resumable data is discarded intentionally.
 ## Frequently Asked Configuration Questions
 
 ### How to change the default configuration of the client?
-Configuration is determined by three layers, and applied in the following order:
-*   Application default values
-*   Values that are set in the configuration file
-*   Values that are passed in via the command line at application runtime. These values will override any configuration file set value.
+The OneDrive Client for Linux determines its configuration from three layers, applied in the following order of priority:
 
-The default application values provide a reasonable operational default, and additional configuration is entirely optional.
+1. Application default values – internal defaults built into the client
+2. Configuration file values – user-defined settings from a config file (if present)
+3. Command-line arguments – values passed at runtime override both of the above
 
-If you want to change the application defaults, you can download a copy of the config file into your application configuration directory. Valid default directories for the config file are:
-*   `~/.config/onedrive`
-*   `/etc/onedrive`
+The built-in application defaults are sufficient for most users and provide a reliable operational baseline. Adding a configuration file or command-line options is optional, and only required when you want to customise application runtime behaviour.
+
+>[!NOTE]
+> The OneDrive Client does not create a configuration file automatically.
+> If no configuration file is found, the client runs entirely using its internally defined default values.
+> You only need to create a config file if you wish to override those defaults.
+
+If you want to adjust the default settings, download a copy of the configuration template into your local configuration directory. Valid configuration file locations are:
+*   `~/.config/onedrive` – for per-user configuration
+*   `/etc/onedrive` – for system-wide configuration
 
 > [!TIP] 
-> To download a copy of the config file, use the following:
+> To download a copy of the default configuration template, run:
 > ```text
 > mkdir -p ~/.config/onedrive
 > wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/onedrive/config
 > ```
 
-For full configuration options and CLI switches, please refer to [application-config-options.md](application-config-options.md)
+For a full list of configuration options and command-line switches, see [application-config-options.md](application-config-options.md)
 
 ### How to change where my data from Microsoft OneDrive is stored?
 By default, the location where your Microsoft OneDrive data is stored, is within your Home Directory under a directory called 'OneDrive'. This replicates as close as possible where the Microsoft Windows OneDrive client stores data.
@@ -1590,9 +1616,9 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
 
   Usage:
     onedrive [options] --sync
-      Do a one time synchronization
+      Do a one-time synchronisation with Microsoft OneDrive
     onedrive [options] --monitor
-      Monitor filesystem and sync regularly
+      Monitor filesystem and synchronise regularly with Microsoft OneDrive
     onedrive [options] --display-config
       Display the currently used configuration
     onedrive [options] --display-sync-status
@@ -1604,79 +1630,83 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
 
   Options:
 
-  --auth-files ARG
-      Perform authentication not via interactive dialog but via files read/writes to these files.
-  --auth-response ARG
-      Perform authentication not via interactive dialog but via providing the response url directly.
+  --auth-files '<path or required value>'
+      Perform authentication via files rather than an interactive dialogue. The application reads/writes the required values from/to the specified files
+  --auth-response '<path or required value>'
+      Perform authentication via a supplied response URL rather than an interactive dialogue
   --check-for-nomount
-      Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
+      Check for the presence of .nosync in the syncdir root. If found, do not perform sync
   --check-for-nosync
-      Check for the presence of .nosync in each directory. If found, skip directory from sync.
-  --classify-as-big-delete ARG
+      Check for the presence of .nosync in each directory. If found, skip directory from sync
+  --classify-as-big-delete '<path or required value>'
       Number of children in a path that is locally removed which will be classified as a 'big data delete'
   --cleanup-local-files
-      Cleanup additional local files when using --download-only. This will remove local data.
-  --confdir ARG
+      Clean up additional local files when using --download-only. This will remove local data
+  --confdir '<path or required value>'
       Set the directory used to store the configuration files
-  --create-directory ARG
-      Create a directory on OneDrive - no sync will be performed.
-  --create-share-link ARG
+  --create-directory '<path or required value>'
+      Create a directory on OneDrive. No synchronisation will be performed
+  --create-share-link '<path or required value>'
       Create a shareable link for an existing file on OneDrive
   --debug-https
       Debug OneDrive HTTPS communication.
-  --destination-directory ARG
-      Destination directory for renamed or move on OneDrive - no sync will be performed.
+  --destination-directory '<path or required value>'
+      Destination directory for renamed or moved items on OneDrive. No synchronisation will be performed
   --disable-download-validation
       Disable download validation when downloading from OneDrive
   --disable-notifications
-      Do not use desktop notifications in monitor mode.
+      Do not use desktop notifications in monitor mode
   --disable-upload-validation
       Disable upload validation when uploading to OneDrive
   --display-config
-      Display what options the client will use as currently configured - no sync will be performed.
+      Display what options the client will use as currently configured. No synchronisation will be performed
   --display-quota
-      Display the quota status of the client - no sync will be performed.
+      Display the quota status of the client. No synchronisation will be performed
   --display-running-config
-      Display what options the client has been configured to use on application startup.
+      Display what options the client has been configured to use on application startup
   --display-sync-status
-      Display the sync status of the client - no sync will be performed.
+      Display the sync status of the client. No synchronisation will be performed
+  --download-file '<path or required value>'
+      Download a single file from Microsoft OneDrive
   --download-only
-      Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive.
+      Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive
   --dry-run
       Perform a trial sync with no changes made
   --enable-logging
       Enable client activity to a separate log file
+  --file-fragment-size
+      Specify the file fragment size for large file uploads (in MB)
   --force
       Force the deletion of data when a 'big delete' is detected
   --force-http-11
       Force the use of HTTP 1.1 for all operations
   --force-sync
-      Force a synchronization of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules
-  --get-O365-drive-id ARG
+      Force a synchronisation of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules
+  --get-O365-drive-id '<path or required value>'
       Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library (DEPRECATED)
-  --get-file-link ARG
+  --get-file-link '<path or required value>'
       Display the file link of a synced file
-  --get-sharepoint-drive-id ARG
+  --get-sharepoint-drive-id '<path or required value>'
       Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
   --help -h
       This help information.
   --list-shared-items
       List OneDrive Business Shared Items
   --local-first
-      Synchronize from the local directory source first, before downloading changes from OneDrive.
-  --log-dir ARG
-      Directory where logging output is saved to, needs to end with a slash.
+      Synchronise from the local directory source first, before downloading changes from OneDrive
+  --log-dir '<path or required value>'
+      Directory where logging output is saved to, needs to end with a slash
   --logout
-      Logout the current user
-  --modified-by ARG
+      Log out the current user
+  --modified-by '<path or required value>'
       Display the last modified by details of a given path
   --monitor -m
       Keep monitoring for local and remote changes
-  --monitor-fullscan-frequency ARG
+  --monitor-fullscan-frequency '<path or required value>'
       Number of sync runs before performing a full local scan of the synced directory
-  --monitor-interval ARG
-      Number of seconds by which each sync operation is undertaken when idle under monitor mode.
-  --monitor-log-frequency ARG
+  --monitor-interval '<path or required value>'
+      Number of seconds by which each sync operation is undertaken when idle under monitor mode
+  --monitor-log-frequency '<path or required value>'
       Frequency of logging in monitor mode
   --no-remote-delete
       Do not delete local file 'deletes' from OneDrive when using --upload-only
@@ -1684,44 +1714,50 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
       Print the access token, useful for debugging
   --reauth
       Reauthenticate the client with OneDrive
-  --remove-directory ARG
-      Remove a directory on OneDrive - no sync will be performed.
+  --remove-directory '<path or required value>'
+      Remove a directory on OneDrive. No synchronisation will be performed
   --remove-source-files
       Remove source file after successful transfer to OneDrive when using --upload-only
+  --remove-source-folders
+      Remove the local directory structure post successful file transfer to Microsoft OneDrive when using --upload-only --remove-source-files
   --resync
       Forget the last saved state, perform a full sync
   --resync-auth
       Approve the use of performing a --resync action
-  --single-directory ARG
-      Specify a single local directory within the OneDrive root to sync.
-  --skip-dir ARG
+  --share-password '<path or required value>'
+      Require a password to access the shared link when used with --create-share-link <file>
+  --single-directory '<path or required value>'
+      Specify a single local directory within the OneDrive root to sync
+  --skip-dir '<path or required value>'
       Skip any directories that match this pattern from syncing
   --skip-dir-strict-match
       When matching skip_dir directories, only match explicit matches
   --skip-dot-files
       Skip dot files and folders from syncing
-  --skip-file ARG
+  --skip-file '<path or required value>'
       Skip any files that match this pattern from syncing
-  --skip-size ARG
+  --skip-size '<path or required value>'
       Skip new files larger than this size (in MB)
   --skip-symlinks
       Skip syncing of symlinks
-  --source-directory ARG
-      Source directory to rename or move on OneDrive - no sync will be performed.
-  --space-reservation ARG
+  --source-directory '<path or required value>'
+      Source directory to rename or move on OneDrive. No synchronisation will be performed
+  --space-reservation '<path or required value>'
       The amount of disk space to reserve (in MB) to avoid 100% disk space utilisation
   --sync -s
       Perform a synchronisation with Microsoft OneDrive
   --sync-root-files
-      Sync all files in sync_dir root when using sync_list.
+      Sync all files in sync_dir root when using sync_list
   --sync-shared-files
       Sync OneDrive Business Shared Files to the local filesystem
-  --syncdir ARG
+  --syncdir '<path or required value>'
       Specify the local directory used for synchronisation to OneDrive
   --synchronize
       Perform a synchronisation with Microsoft OneDrive (DEPRECATED)
+  --threads
+      Specify a value for the number of worker threads used for parallel upload and download operations
   --upload-only
-      Replicate the locally configured sync_dir state to OneDrive, by only uploading local changes to OneDrive. Do not download changes from OneDrive.
+      Replicate the locally configured sync_dir state to OneDrive, by only uploading local changes to OneDrive. Do not download changes from OneDrive
   --verbose -v+
       Print more details, useful for debugging (repeat for extra debugging)
   --version
