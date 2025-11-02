@@ -158,7 +158,7 @@ Number of children in a path that is locally removed which will be classified as
 
 .TP
 \fB\-\-cleanup-local-files\fR
-Cleanup additional local files when using --download-only. This will remove local data.
+Clean up additional local files when using --download-only. This will remove local data.
 
 .TP
 \fB\-\-confdir\fR \fIARG\fR
