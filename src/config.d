@@ -1194,7 +1194,7 @@ class ApplicationConfig {
 					"Cleanup additional local files when using --download-only. This will remove local data",
 					&boolValues["cleanup_local_files"],	
 				"create-directory",
-					"Create a directory on OneDrive - no sync will be performed",
+					"Create a directory on OneDrive. No synchronisation will be performed",
 					&stringValues["create_directory"],
 				"create-share-link",
 					"Create a shareable link for an existing file on OneDrive",
@@ -1215,16 +1215,16 @@ class ApplicationConfig {
 					"Disable upload validation when uploading to OneDrive",
 					&boolValues["disable_upload_validation"],
 				"display-config",
-					"Display what options the client will use as currently configured - no sync will be performed",
+					"Display what options the client will use as currently configured. No synchronisation will be performed",
 					&boolValues["display_config"],
 				"display-running-config",
 					"Display what options the client has been configured to use on application startup",
 					&boolValues["display_running_config"],
 				"display-sync-status",
-					"Display the sync status of the client - no sync will be performed",
+					"Display the sync status of the client. No synchronisation will be performed",
 					&boolValues["display_sync_status"],
 				"display-quota",
-					"Display the quota status of the client - no sync will be performed",
+					"Display the quota status of the client. No synchronisation will be performed",
 					&boolValues["display_quota"],
 				"download-only",
 					"Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive",
@@ -1305,7 +1305,7 @@ class ApplicationConfig {
 					"Approve the use of performing a --resync action",
 					&boolValues["resync_auth"],
 				"remove-directory",
-					"Remove a directory on OneDrive - no sync will be performed",
+					"Remove a directory on OneDrive. No synchronisation will be performed",
 					&stringValues["remove_directory"],
 				"remove-source-files",
 					"Remove source file after successful transfer to OneDrive when using --upload-only",
@@ -1335,7 +1335,7 @@ class ApplicationConfig {
 					"Skip syncing of symlinks",
 					&boolValues["skip_symlinks"],
 				"source-directory",
-					"Source directory to rename or move on OneDrive - no sync will be performed",
+					"Source directory to rename or move on OneDrive. No synchronisation will be performed",
 					&stringValues["source_directory"],
 				"space-reservation",
 					"The amount of disk space to reserve (in MB) to avoid 100% disk space utilisation",
@@ -2857,9 +2857,9 @@ void outputLongHelp(Option[] opt) {
 
   Usage:
     onedrive [options] --sync
-      Do a one time synchronisation against Microsoft OneDrive
+      Do a one-time synchronisation with Microsoft OneDrive
     onedrive [options] --monitor
-      Monitor filesystem and sync regularly with Microsoft OneDrive
+      Monitor filesystem and synchronise regularly with Microsoft OneDrive
     onedrive [options] --display-config
       Display the currently used configuration
     onedrive [options] --display-sync-status

@@ -107,7 +107,7 @@ If the client has been compiled with support for notifications, the client will 
 When running onedrive all actions can be logged to a separate log file. This can be enabled by using the \fB--enable-logging\fP flag. By default, log files will be written to \fB/var/log/onedrive\fP. All logfiles will be in the format of \fB%username%.onedrive.log\fP, where \fB%username%\fP represents the user who ran the client.
 
 .SH ALL CLI OPTIONS
-The options below allow you to control the behavior of the onedrive client from the CLI. Without any specific option, if the client is already authenticated, the client will exit without any further action.
+The options below allow you to control the behaviour of the onedrive client from the CLI. Without any specific option, if the client is already authenticated, the client will exit without any further action.
 
 .TP
 \fB\-\-sync\fR, -s
@@ -115,7 +115,7 @@ Do a one-time synchronisation with Microsoft OneDrive.
 
 .TP
 \fB\-\-monitor\fR, -m
-Monitor filesystem for changes and sync regularly.
+Monitor filesystem for changes and and synchronise regularly.
 
 .TP
 \fB\-\-display-config\fR
@@ -158,7 +158,7 @@ Set the directory used to store the configuration files.
 
 .TP
 \fB\-\-create-directory\fR \fIARG\fR
-Create a directory on OneDrive - no sync will be performed.
+Create a directory on OneDrive. No synchronisation will be performed.
 
 .TP
 \fB\-\-create-share-link\fR \fIARG\fR
@@ -174,7 +174,7 @@ Debug OneDrive HTTPS communication.
 
 .TP
 \fB\-\-destination-directory\fR \fIARG\fR
-Destination directory for renamed or moved items on OneDrive - no sync will be performed.
+Destination directory for renamed or moved items on OneDrive. No synchronisation will be performed.
 
 .TP
 \fB\-\-disable-download-validation\fR
@@ -190,7 +190,7 @@ Disable upload validation when uploading to OneDrive.
 
 .TP
 \fB\-\-display-quota\fR
-Display the quota status of the client - no sync will be performed.
+Display the quota status of the client. No synchronisation will be performed.
 
 .TP
 \fB\-\-download-file\fR \fIARG\fR
@@ -215,7 +215,7 @@ Perform a trial sync with no changes made.
 Enable client activity to a separate log file.
 
 .TP
-\fB\-\-file-fragment-size\fR
+\fB\-\-file-fragment-size\fR \fIARG\fR
 Specify the file fragment size for large file uploads (in MB).
 
 .TP
@@ -292,7 +292,7 @@ Reauthenticate the client with OneDrive.
 
 .TP
 \fB\-\-remove-directory\fR \fIARG\fR
-Remove a directory on OneDrive - no sync will be performed.
+Remove a directory on OneDrive. No synchronisation will be performed.
 
 .TP
 \fB\-\-remove-source-files\fR
@@ -345,7 +345,7 @@ Skip syncing of symlinks.
 
 .TP
 \fB\-\-source-directory\fR \fIARG\fR
-Source directory to rename or move on OneDrive - no sync will be performed.
+Source directory to rename or move on OneDrive. No synchronisation will be performed.
 
 .TP
 \fB\-\-space-reservation\fR \fIARG\fR
