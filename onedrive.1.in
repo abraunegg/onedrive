@@ -63,19 +63,49 @@ Designed for maximum flexibility and reliability, this powerful and highly confi
 * Supports sending desktop alerts using libnotify
 
 .SH CONFIGURATION
-By default, the client will use a sensible set of default values to interact with the Microsoft OneDrive service.
-.TP
-Should you wish to change these defaults, you should copy the default config file into your home directory before making any applicable changes:
+By default, the OneDrive Client for Linux uses a sensible set of built-in defaults to interact with the Microsoft OneDrive service.
 
+.PP
+The client determines its configuration from three layers, applied in the following order of priority:
+.IP "1."
+Application default values – internal defaults compiled into the client.
+.IP "2."
+Configuration file values – user-defined settings loaded from a configuration file (if present).
+.IP "3."
+Command-line arguments – values specified at runtime override both the configuration file and application defaults.
+
+.PP
+The built-in defaults are sufficient for most users and provide a reliable operational baseline. Creating a configuration file or using command-line options is optional, and only required when you wish to customise runtime behaviour.
+
+.TP
+.B NOTE:
+The OneDrive Client does not create a configuration file automatically.  
+If no configuration file is found, the client runs entirely using its internally defined default values.  
+You only need to create a configuration file if you wish to override those defaults.
+
+.PP
+If you want to adjust the default settings, download a copy of the default configuration template into your local configuration directory.  
+Valid configuration file locations are:
+.IP • 2
+\fB~/.config/onedrive\fP – for per-user configuration.
+.IP • 2
+\fB/etc/onedrive\fP – for system-wide configuration.
+
+.TP
+.B Example:
+To download a copy of the default configuration template, run:
+.PP
 .nf
 \fB
-mkdir\ \-p\ ~/.config/onedrive
-cp\ @DOCDIR@/config\ ~/.config/onedrive/config
+mkdir -p ~/.config/onedrive
+wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/onedrive/config
 \fP
 .fi
 
-.TP
-Please refer to the online documentation file application-config-options.md for details on all configuration file options.
+.PP
+For a full list of configuration options and command-line switches, refer to the online documentation:
+.br
+\fIhttps://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md\fP
 
 .SH CLIENT SIDE FILTERING
 Client Side Filtering in the context of the OneDrive Client for Linux refers to user-configured rules that determine what files and directories the client should upload or download from Microsoft OneDrive. These rules are crucial for optimising synchronisation, especially when dealing with large numbers of files or specific file types. The OneDrive Client for Linux offers several configuration options to facilitate this:

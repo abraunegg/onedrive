@@ -1616,9 +1616,9 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
 
   Usage:
     onedrive [options] --sync
-      Do a one time synchronization
+      Do a one-time synchronisation with Microsoft OneDrive
     onedrive [options] --monitor
-      Monitor filesystem and sync regularly
+      Monitor filesystem and synchronise regularly with Microsoft OneDrive
     onedrive [options] --display-config
       Display the currently used configuration
     onedrive [options] --display-sync-status
@@ -1631,9 +1631,9 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
   Options:
 
   --auth-files '<path or required value>'
-      Perform authentication not via interactive dialog but via files read/writes to these files
+      Perform authentication via files rather than an interactive dialogue. The application reads/writes the required values from/to the specified files
   --auth-response '<path or required value>'
-      Perform authentication not via interactive dialog but via providing the response url directly
+      Perform authentication via a supplied response URL rather than an interactive dialogue
   --check-for-nomount
       Check for the presence of .nosync in the syncdir root. If found, do not perform sync
   --check-for-nosync
@@ -1641,17 +1641,17 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
   --classify-as-big-delete '<path or required value>'
       Number of children in a path that is locally removed which will be classified as a 'big data delete'
   --cleanup-local-files
-      Cleanup additional local files when using --download-only. This will remove local data
+      Clean up additional local files when using --download-only. This will remove local data
   --confdir '<path or required value>'
       Set the directory used to store the configuration files
   --create-directory '<path or required value>'
-      Create a directory on OneDrive - no sync will be performed
+      Create a directory on OneDrive. No synchronisation will be performed
   --create-share-link '<path or required value>'
       Create a shareable link for an existing file on OneDrive
   --debug-https
       Debug OneDrive HTTPS communication.
   --destination-directory '<path or required value>'
-      Destination directory for renamed or move on OneDrive - no sync will be performed
+      Destination directory for renamed or moved items on OneDrive. No synchronisation will be performed
   --disable-download-validation
       Disable download validation when downloading from OneDrive
   --disable-notifications
@@ -1659,13 +1659,13 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
   --disable-upload-validation
       Disable upload validation when uploading to OneDrive
   --display-config
-      Display what options the client will use as currently configured - no sync will be performed
+      Display what options the client will use as currently configured. No synchronisation will be performed
   --display-quota
-      Display the quota status of the client - no sync will be performed
+      Display the quota status of the client. No synchronisation will be performed
   --display-running-config
       Display what options the client has been configured to use on application startup
   --display-sync-status
-      Display the sync status of the client - no sync will be performed
+      Display the sync status of the client. No synchronisation will be performed
   --download-file '<path or required value>'
       Download a single file from Microsoft OneDrive
   --download-only
@@ -1681,7 +1681,7 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
   --force-http-11
       Force the use of HTTP 1.1 for all operations
   --force-sync
-      Force a synchronization of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules
+      Force a synchronisation of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules
   --get-O365-drive-id '<path or required value>'
       Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library (DEPRECATED)
   --get-file-link '<path or required value>'
@@ -1693,11 +1693,11 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
   --list-shared-items
       List OneDrive Business Shared Items
   --local-first
-      Synchronize from the local directory source first, before downloading changes from OneDrive
+      Synchronise from the local directory source first, before downloading changes from OneDrive
   --log-dir '<path or required value>'
       Directory where logging output is saved to, needs to end with a slash
   --logout
-      Logout the current user
+      Log out the current user
   --modified-by '<path or required value>'
       Display the last modified by details of a given path
   --monitor -m
@@ -1715,7 +1715,7 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
   --reauth
       Reauthenticate the client with OneDrive
   --remove-directory '<path or required value>'
-      Remove a directory on OneDrive - no sync will be performed
+      Remove a directory on OneDrive. No synchronisation will be performed
   --remove-source-files
       Remove source file after successful transfer to OneDrive when using --upload-only
   --remove-source-folders
@@ -1741,7 +1741,7 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
   --skip-symlinks
       Skip syncing of symlinks
   --source-directory '<path or required value>'
-      Source directory to rename or move on OneDrive - no sync will be performed
+      Source directory to rename or move on OneDrive. No synchronisation will be performed
   --space-reservation '<path or required value>'
       The amount of disk space to reserve (in MB) to avoid 100% disk space utilisation
   --sync -s
