@@ -20,39 +20,47 @@ onedrive \- A client for the Microsoft OneDrive Cloud Service
 .B onedrive
 --version
 .SH DESCRIPTION
-This is a free Microsoft OneDrive Client designed to work with OneDrive Personal, OneDrive for Business, Office365 OneDrive, and SharePoint Libraries. It's fully compatible with most major Linux distributions and FreeBSD, and can be containerised using Docker or Podman. The client offers secure one-way and two-way synchronisation capabilities, making it easy to connect to Microsoft OneDrive services across various platforms.
+A fully featured, free, and actively maintained Microsoft OneDrive client that seamlessly supports OneDrive Personal, OneDrive for Business, Microsoft 365 (formerly Office 365), and SharePoint document libraries.
+.br
+Designed for maximum flexibility and reliability, this powerful and highly configurable client works across all major Linux distributions and FreeBSD. It can also be deployed in containerised environments using Docker or Podman. Supporting both one-way and two-way synchronisation modes, the client provides secure and efficient file syncing with Microsoft OneDrive services — tailored to suit both desktop and server environments.
 
 .SH FEATURES
 .br
-* Compatible with OneDrive Personal, OneDrive for Business including accessing Microsoft SharePoint Libraries
+* Compatible with OneDrive Personal and OneDrive for Business, including access to Microsoft SharePoint Libraries
+.br
+* Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
+.br
+* Supports near real-time processing of online changes via either WebSockets (native support) or webhooks (manual configuration required)
+.br
+* Supports single-tenant and multi-tenant applications
+.br
+* Supports Intune Single Sign-On (SSO) authentication via the Microsoft Identity Device Broker (D-Bus interface)
+.br
+* Supports OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
+.br
+* Supports the FreeDesktop.org Trash specification, allowing locally deleted files to be safely recoverable in case of accidental online deletion
+.br
+* Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany, and Azure/Office 365 operated by VNET in China
 .br
 * Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
 .br
-* Caches sync state for efficiency
+* Protects against significant data loss on OneDrive after configuration changes
 .br
 * Supports a dry-run option for safe configuration testing
 .br
+* Supports interruption-tolerant uploads and downloads by resuming file transfers from the point of failure, ensuring data integrity and efficiency
+.br
 * Validates file transfers to ensure data integrity
 .br
+* Caches sync state for efficiency
+.br
 * Monitors local files in real-time using inotify
-.br
-* Supports interrupted uploads for completion at a later time
-.br
-* Capability to sync remote updates immediately via webhooks
 .br
 * Enhanced synchronisation speed with multi-threaded file transfers
 .br
 * Manages traffic bandwidth use with rate limiting
 .br
-* Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
-.br
-* Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany, and Azure and Office 365 operated by VNET in China
-.br
 * Supports sending desktop alerts using libnotify
-.br
-* Protects against significant data loss on OneDrive after configuration changes
-.br
-* Works with both single and multi-tenant applications
 
 .SH CONFIGURATION
 By default, the client will use a sensible set of default values to interact with the Microsoft OneDrive service.
@@ -115,7 +123,7 @@ Do a one-time synchronisation with Microsoft OneDrive.
 
 .TP
 \fB\-\-monitor\fR, -m
-Monitor filesystem for changes and and synchronise regularly.
+Monitor filesystem and synchronise regularly with Microsoft OneDrive.
 
 .TP
 \fB\-\-display-config\fR
@@ -260,7 +268,7 @@ Directory where logging output is saved to, needs to end with a slash.
 
 .TP
 \fB\-\-logout\fR
-Logout the current user.
+Log out the current user.
 
 .TP
 \fB\-\-modified-by\fR \fIARG\fR
