@@ -21,8 +21,7 @@ onedrive \- A client for the Microsoft OneDrive Cloud Service
 --version
 .SH DESCRIPTION
 A fully featured, free, and actively maintained Microsoft OneDrive client that seamlessly supports OneDrive Personal, OneDrive for Business, Microsoft 365 (formerly Office 365), and SharePoint document libraries.
-.br
-.br
+.PP
 Designed for maximum flexibility and reliability, this powerful and highly configurable client works across all major Linux distributions and FreeBSD. It can also be deployed in containerised environments using Docker or Podman. Supporting both one-way and two-way synchronisation modes, the client provides secure and efficient file syncing with Microsoft OneDrive services — tailored to suit both desktop and server environments.
 
 .SH FEATURES
@@ -68,7 +67,8 @@ By default, the OneDrive Client for Linux uses a sensible set of built-in defaul
 
 .PP
 The client determines its configuration from three layers, applied in the following order of priority:
-.br
+
+.PP
 1. Application default values – internal defaults compiled into the client.
 .br
 2. Configuration file values – user-defined settings loaded from a configuration file (if present).
@@ -85,8 +85,8 @@ The OneDrive Client does not create a configuration file automatically. If no co
 .PP
 If you want to adjust the default settings, download a copy of the default configuration template into your local configuration directory.
 Valid configuration file locations are:
-.br
-.br
+
+.PP
 \fB~/.config/onedrive\fP – for per-user configuration.
 .br
 \fB/etc/onedrive\fP – for system-wide configuration.
