@@ -2857,9 +2857,9 @@ void outputLongHelp(Option[] opt) {
 
   Usage:
     onedrive [options] --sync
-      Do a one time synchronisation
+      Do a one time synchronisation against Microsoft OneDrive
     onedrive [options] --monitor
-      Monitor filesystem and sync regularly
+      Monitor filesystem and sync regularly with Microsoft OneDrive
     onedrive [options] --display-config
       Display the currently used configuration
     onedrive [options] --display-sync-status
