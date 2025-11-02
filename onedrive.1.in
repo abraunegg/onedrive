@@ -72,16 +72,20 @@ Please refer to the online documentation file application-config-options.md for 
 .SH CLIENT SIDE FILTERING
 Client Side Filtering in the context of the OneDrive Client for Linux refers to user-configured rules that determine what files and directories the client should upload or download from Microsoft OneDrive. These rules are crucial for optimising synchronisation, especially when dealing with large numbers of files or specific file types. The OneDrive Client for Linux offers several configuration options to facilitate this:
 .TP
-.B skip_dir
+.B --skip-dir 
+.B 'skip_dir' config file option
 Specifies directories that should not be synchronised with OneDrive. Useful for omitting large or irrelevant directories from the sync process.
 .TP
-.B skip_dotfiles
+.B --skip-dot-files
+.B 'skip_dotfiles' config file option
 Excludes dotfiles, usually configuration files or scripts, from the sync. Ideal for users who prefer to keep these files local.
 .TP
-.B skip_file
+.B --skip-file
+.B 'skip_file' config file option
 Allows specifying specific files to exclude from synchronisation. Offers flexibility in selecting essential files for cloud storage.
 .TP
-.B skip_symlinks
+.B --skip-symlinks
+.B 'skip_symlinks' config file option
 Prevents symlinks, which often point to files outside the OneDrive directory or to irrelevant locations, from being included in the sync.
 .PP
 Additionally, the OneDrive Client for Linux allows the implementation of Client Side Filtering rules through a 'sync_list' file. This file explicitly states which directories or files should be included in the synchronisation. By default, any item not listed in the 'sync_list' file is excluded. This approach offers granular control over synchronisation, ensuring that only necessary data is transferred to and from Microsoft OneDrive.
@@ -110,11 +114,11 @@ When running onedrive all actions can be logged to a separate log file. This can
 The options below allow you to control the behavior of the onedrive client from the CLI. Without any specific option, if the client is already authenticated, the client will exit without any further action.
 
 .TP
-\fB\-\-sync\fR
-Do a one-time synchronisation with OneDrive.
+\fB\-\-sync\fR, -s
+Do a one-time synchronisation with Microsoft OneDrive.
 
 .TP
-\fB\-\-monitor\fR
+\fB\-\-monitor\fR, -m
 Monitor filesystem for changes and sync regularly.
 
 .TP
@@ -163,7 +167,9 @@ Create a directory on OneDrive - no sync will be performed.
 .TP
 \fB\-\-create-share-link\fR \fIARG\fR
 Create a shareable link for an existing file on OneDrive.
+.br
 Use --with-editing-perms to create a read-write share link instead of read-only.
+.br
 Use --share-password <password> to protect the shared link with a password.
 
 .TP
@@ -191,8 +197,9 @@ Disable upload validation when uploading to OneDrive.
 Display the quota status of the client - no sync will be performed.
 
 .TP
-\fB\-\-download-file\fR
+\fB\-\-download-file\fR \fIARG\fR
 Download a single file from Microsoft OneDrive.
+.br
 Specify the full online path to the file. No synchronisation will be performed.
 
 .TP
@@ -236,7 +243,7 @@ Query and return the Office 365 Drive ID for a given Office 365 SharePoint Share
 Display the file link of a synced file.
 
 .TP
-\fB\-\-get-sharepoint-drive-id\fR
+\fB\-\-get-sharepoint-drive-id\fR \fIARG\fR
 Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library.
 
 .TP

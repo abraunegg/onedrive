@@ -1248,7 +1248,7 @@ class ApplicationConfig {
 					"Force the deletion of data when a 'big delete' is detected",
 					&boolValues["force"],
 				"force-sync",
-					"Force a synchronization of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules",
+					"Force a synchronisation of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules",
 					&boolValues["force_sync"],
 				"get-file-link",
 					"Display the file link of a synced file",
@@ -2857,7 +2857,7 @@ void outputLongHelp(Option[] opt) {
 
   Usage:
     onedrive [options] --sync
-      Do a one time synchronization
+      Do a one time synchronisation
     onedrive [options] --monitor
       Monitor filesystem and sync regularly
     onedrive [options] --display-config
