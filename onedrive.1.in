@@ -74,7 +74,7 @@ The client determines its configuration from three layers, applied in the follow
 2. Configuration file values – user-defined settings loaded from a configuration file (if present).
 .br
 3. Command-line arguments – values specified at runtime override both the configuration file and application defaults.
-
+.br
 .PP
 The built-in application defaults are sufficient for most users and provide a reliable operational baseline. Creating a configuration file or using command-line options is optional, and only required when you wish to customise runtime behaviour.
 
@@ -85,7 +85,7 @@ The OneDrive Client does not create a configuration file automatically. If no co
 .PP
 If you want to adjust the default settings, download a copy of the default configuration template into your local configuration directory.
 Valid configuration file locations are:
-
+.br
 .PP
 \fB~/.config/onedrive\fP – for per-user configuration.
 .br
