@@ -20,68 +20,106 @@ onedrive \- A client for the Microsoft OneDrive Cloud Service
 .B onedrive
 --version
 .SH DESCRIPTION
-This is a free Microsoft OneDrive Client designed to work with OneDrive Personal, OneDrive for Business, Office365 OneDrive, and SharePoint Libraries. It's fully compatible with most major Linux distributions and FreeBSD, and can be containerised using Docker or Podman. The client offers secure one-way and two-way synchronisation capabilities, making it easy to connect to Microsoft OneDrive services across various platforms.
+A fully featured, free, and actively maintained Microsoft OneDrive client that seamlessly supports OneDrive Personal, OneDrive for Business, Microsoft 365 (formerly Office 365), and SharePoint document libraries.
+.PP
+Designed for maximum flexibility and reliability, this powerful and highly configurable client works across all major Linux distributions and FreeBSD. It can also be deployed in containerised environments using Docker or Podman. Supporting both one-way and two-way synchronisation modes, the client provides secure and efficient file syncing with Microsoft OneDrive services — tailored to suit both desktop and server environments.
 
 .SH FEATURES
 .br
-* Compatible with OneDrive Personal, OneDrive for Business including accessing Microsoft SharePoint Libraries
+* Compatible with OneDrive Personal and OneDrive for Business, including access to Microsoft SharePoint Libraries
+.br
+* Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
+.br
+* Supports near real-time processing of online changes via either WebSockets (native support) or webhooks (manual configuration required)
+.br
+* Supports single-tenant and multi-tenant applications
+.br
+* Supports Intune Single Sign-On (SSO) authentication via the Microsoft Identity Device Broker (D-Bus interface)
+.br
+* Supports OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
+.br
+* Supports the FreeDesktop.org Trash specification, allowing locally deleted files to be safely recoverable in case of accidental online deletion
+.br
+* Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany, and Azure/Office 365 operated by VNET in China
 .br
 * Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
 .br
-* Caches sync state for efficiency
+* Protects against significant data loss on OneDrive after configuration changes
 .br
 * Supports a dry-run option for safe configuration testing
 .br
+* Supports interruption-tolerant uploads and downloads by resuming file transfers from the point of failure, ensuring data integrity and efficiency
+.br
 * Validates file transfers to ensure data integrity
 .br
+* Caches sync state for efficiency
+.br
 * Monitors local files in real-time using inotify
-.br
-* Supports interrupted uploads for completion at a later time
-.br
-* Capability to sync remote updates immediately via webhooks
 .br
 * Enhanced synchronisation speed with multi-threaded file transfers
 .br
 * Manages traffic bandwidth use with rate limiting
 .br
-* Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
-.br
-* Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany, and Azure and Office 365 operated by VNET in China
-.br
 * Supports sending desktop alerts using libnotify
-.br
-* Protects against significant data loss on OneDrive after configuration changes
-.br
-* Works with both single and multi-tenant applications
 
 .SH CONFIGURATION
-By default, the client will use a sensible set of default values to interact with the Microsoft OneDrive service.
-.TP
-Should you wish to change these defaults, you should copy the default config file into your home directory before making any applicable changes:
+By default, the OneDrive Client for Linux uses a sensible set of built-in defaults to interact with the Microsoft OneDrive service.
 
+.PP
+The client determines its configuration from three layers, applied in the following order of priority:
+
+.PP
+1. Application default values – internal defaults compiled into the client.
+.br
+2. Configuration file values – user-defined settings loaded from a configuration file (if present).
+.br
+3. Command-line arguments – values specified at runtime override both the configuration file and application defaults.
+.br
+.PP
+The built-in application defaults are sufficient for most users and provide a reliable operational baseline. Creating a configuration file or using command-line options is optional, and only required when you wish to customise runtime behaviour.
+
+.TP
+.B NOTE:
+The OneDrive Client does not create a configuration file automatically. If no configuration file is found, the client runs entirely using its internally defined default values. You only need to create a configuration file if you wish to override those defaults.
+
+.PP
+If you want to adjust the default settings, download a copy of the default configuration template into your local configuration directory.
+Valid configuration file locations are:
+.br
+.PP
+\fB~/.config/onedrive\fP – for per-user configuration.
+.br
+\fB/etc/onedrive\fP – for system-wide configuration.
+
+.TP
+.B Example:
+To download a copy of the default configuration template, run:
+.PP
 .nf
 \fB
-mkdir\ \-p\ ~/.config/onedrive
-cp\ @DOCDIR@/config\ ~/.config/onedrive/config
+mkdir -p ~/.config/onedrive
+wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/onedrive/config
 \fP
 .fi
 
-.TP
-Please refer to the online documentation file application-config-options.md for details on all configuration file options.
+.PP
+For a full list of configuration options and command-line switches, refer to the online documentation:
+.br
+\fIhttps://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md\fP
 
 .SH CLIENT SIDE FILTERING
 Client Side Filtering in the context of the OneDrive Client for Linux refers to user-configured rules that determine what files and directories the client should upload or download from Microsoft OneDrive. These rules are crucial for optimising synchronisation, especially when dealing with large numbers of files or specific file types. The OneDrive Client for Linux offers several configuration options to facilitate this:
 .TP
-.B skip_dir
+.B --skip-dir or 'skip_dir' config file option
 Specifies directories that should not be synchronised with OneDrive. Useful for omitting large or irrelevant directories from the sync process.
 .TP
-.B skip_dotfiles
+.B --skip-dot-files or 'skip_dotfiles' config file option
 Excludes dotfiles, usually configuration files or scripts, from the sync. Ideal for users who prefer to keep these files local.
 .TP
-.B skip_file
+.B --skip-file or 'skip_file' config file option
 Allows specifying specific files to exclude from synchronisation. Offers flexibility in selecting essential files for cloud storage.
 .TP
-.B skip_symlinks
+.B --skip-symlinks or 'skip_symlinks' config file option
 Prevents symlinks, which often point to files outside the OneDrive directory or to irrelevant locations, from being included in the sync.
 .PP
 Additionally, the OneDrive Client for Linux allows the implementation of Client Side Filtering rules through a 'sync_list' file. This file explicitly states which directories or files should be included in the synchronisation. By default, any item not listed in the 'sync_list' file is excluded. This approach offers granular control over synchronisation, ensuring that only necessary data is transferred to and from Microsoft OneDrive.
@@ -107,15 +145,15 @@ If the client has been compiled with support for notifications, the client will 
 When running onedrive all actions can be logged to a separate log file. This can be enabled by using the \fB--enable-logging\fP flag. By default, log files will be written to \fB/var/log/onedrive\fP. All logfiles will be in the format of \fB%username%.onedrive.log\fP, where \fB%username%\fP represents the user who ran the client.
 
 .SH ALL CLI OPTIONS
-The options below allow you to control the behavior of the onedrive client from the CLI. Without any specific option, if the client is already authenticated, the client will exit without any further action.
+The options below allow you to control the behaviour of the onedrive client from the CLI. Without any specific option, if the client is already authenticated, the client will exit without any further action.
 
 .TP
-\fB\-\-sync\fR
-Do a one-time synchronisation with OneDrive.
+\fB\-\-sync\fR, -s
+Do a one-time synchronisation with Microsoft OneDrive.
 
 .TP
-\fB\-\-monitor\fR
-Monitor filesystem for changes and sync regularly.
+\fB\-\-monitor\fR, -m
+Monitor filesystem and synchronise regularly with Microsoft OneDrive.
 
 .TP
 \fB\-\-display-config\fR
@@ -127,14 +165,14 @@ Query OneDrive service and report on pending changes.
 
 .TP
 \fB\-\-auth-files\fR \fIARG\fR
-Perform authentication not via interactive dialog but via files that are read/written when using this option. The two files are passed in as \fBARG\fP in the format \fBauthUrl:responseUrl\fP.
+Perform authentication not via interactive dialogue but via files that are read/written when using this option. The two files are passed in as \fBARG\fP in the format \fBauthUrl:responseUrl\fP.
 The authorisation URL is written to the \fBauthUrl\fP file, then \fBonedrive\fP waits for the file \fBresponseUrl\fP to be present, and reads the response from that file.
 .br
 Always specify the full path when using this option, otherwise the application will default to using the default configuration path for these files (~/.config/onedrive/)
 
 .TP
 \fB\-\-auth-response\fR \fIARG\fR
-Perform authentication not via interactive dialog but via providing the response URL directly.
+Perform authentication not via interactive dialogue but via providing the response URL directly.
 
 .TP
 \fB\-\-check-for-nomount\fR
@@ -150,7 +188,7 @@ Number of children in a path that is locally removed which will be classified as
 
 .TP
 \fB\-\-cleanup-local-files\fR
-Cleanup additional local files when using --download-only. This will remove local data.
+Clean up additional local files when using --download-only. This will remove local data.
 
 .TP
 \fB\-\-confdir\fR \fIARG\fR
@@ -158,11 +196,15 @@ Set the directory used to store the configuration files.
 
 .TP
 \fB\-\-create-directory\fR \fIARG\fR
-Create a directory on OneDrive - no sync will be performed.
+Create a directory on OneDrive. No synchronisation will be performed.
 
 .TP
 \fB\-\-create-share-link\fR \fIARG\fR
 Create a shareable link for an existing file on OneDrive.
+.br
+Use --with-editing-perms to create a read-write share link instead of read-only.
+.br
+Use --share-password <password> to protect the shared link with a password.
 
 .TP
 \fB\-\-debug-https\fR
@@ -170,7 +212,7 @@ Debug OneDrive HTTPS communication.
 
 .TP
 \fB\-\-destination-directory\fR \fIARG\fR
-Destination directory for renamed or moved items on OneDrive - no sync will be performed.
+Destination directory for renamed or moved items on OneDrive. No synchronisation will be performed.
 
 .TP
 \fB\-\-disable-download-validation\fR
@@ -186,11 +228,13 @@ Disable upload validation when uploading to OneDrive.
 
 .TP
 \fB\-\-display-quota\fR
-Display the quota status of the client - no sync will be performed.
+Display the quota status of the client. No synchronisation will be performed.
 
 .TP
-\fB\-\-download-file\fR
-This CLI option will download a single file based on the online path. No sync will be performed.
+\fB\-\-download-file\fR \fIARG\fR
+Download a single file from Microsoft OneDrive.
+.br
+Specify the full online path to the file. No synchronisation will be performed.
 
 .TP
 \fB\-\-display-running-config\fR
@@ -209,7 +253,7 @@ Perform a trial sync with no changes made.
 Enable client activity to a separate log file.
 
 .TP
-\fB\-\-file-fragment-size\fR
+\fB\-\-file-fragment-size\fR \fIARG\fR
 Specify the file fragment size for large file uploads (in MB).
 
 .TP
@@ -233,7 +277,7 @@ Query and return the Office 365 Drive ID for a given Office 365 SharePoint Share
 Display the file link of a synced file.
 
 .TP
-\fB\-\-get-sharepoint-drive-id\fR
+\fB\-\-get-sharepoint-drive-id\fR \fIARG\fR
 Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library.
 
 .TP
@@ -254,11 +298,15 @@ Directory where logging output is saved to, needs to end with a slash.
 
 .TP
 \fB\-\-logout\fR
-Logout the current user.
+Log out the current user.
 
 .TP
 \fB\-\-modified-by\fR \fIARG\fR
 Display the last modified by details of a given path.
+
+.TP
+\fB\-\-monitor-fullscan-frequency\fR \fIARG\fR
+Number of sync runs before performing a full local scan of the synced directory.
 
 .TP
 \fB\-\-monitor-interval\fR \fIARG\fR
@@ -282,7 +330,7 @@ Reauthenticate the client with OneDrive.
 
 .TP
 \fB\-\-remove-directory\fR \fIARG\fR
-Remove a directory on OneDrive - no sync will be performed.
+Remove a directory on OneDrive. No synchronisation will be performed.
 
 .TP
 \fB\-\-remove-source-files\fR
@@ -299,6 +347,11 @@ Forget the last saved state, perform a full sync.
 .TP
 \fB\-\-resync-auth\fR
 Approve the use of performing a --resync action.
+
+.TP
+\fB\-\-share-password\fR \fIARG\fR
+Require a password to access the shared link when used with --create-share-link <file>.
+Only supported for OneDrive Business and SharePoint environments that permit password-protected sharing.
 
 .TP
 \fB\-\-single-directory\fR \fIARG\fR
@@ -330,7 +383,7 @@ Skip syncing of symlinks.
 
 .TP
 \fB\-\-source-directory\fR \fIARG\fR
-Source directory to rename or move on OneDrive - no sync will be performed.
+Source directory to rename or move on OneDrive. No synchronisation will be performed.
 
 .TP
 \fB\-\-space-reservation\fR \fIARG\fR
