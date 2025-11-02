@@ -67,28 +67,25 @@ By default, the OneDrive Client for Linux uses a sensible set of built-in defaul
 
 .PP
 The client determines its configuration from three layers, applied in the following order of priority:
-.IP "1."
-Application default values – internal defaults compiled into the client.
-.IP "2."
-Configuration file values – user-defined settings loaded from a configuration file (if present).
-.IP "3."
-Command-line arguments – values specified at runtime override both the configuration file and application defaults.
+1. Application default values – internal defaults compiled into the client.
+.br
+2. Configuration file values – user-defined settings loaded from a configuration file (if present).
+.br
+3. Command-line arguments – values specified at runtime override both the configuration file and application defaults.
 
 .PP
-The built-in defaults are sufficient for most users and provide a reliable operational baseline. Creating a configuration file or using command-line options is optional, and only required when you wish to customise runtime behaviour.
+The built-in application defaults are sufficient for most users and provide a reliable operational baseline. Creating a configuration file or using command-line options is optional, and only required when you wish to customise runtime behaviour.
 
 .TP
 .B NOTE:
-The OneDrive Client does not create a configuration file automatically.  
-If no configuration file is found, the client runs entirely using its internally defined default values.  
-You only need to create a configuration file if you wish to override those defaults.
+The OneDrive Client does not create a configuration file automatically. If no configuration file is found, the client runs entirely using its internally defined default values. You only need to create a configuration file if you wish to override those defaults.
 
 .PP
-If you want to adjust the default settings, download a copy of the default configuration template into your local configuration directory.  
+If you want to adjust the default settings, download a copy of the default configuration template into your local configuration directory.
 Valid configuration file locations are:
-.IP • 2
+.br
 \fB~/.config/onedrive\fP – for per-user configuration.
-.IP • 2
+.br
 \fB/etc/onedrive\fP – for system-wide configuration.
 
 .TP
