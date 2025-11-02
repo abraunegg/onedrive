@@ -68,6 +68,7 @@ By default, the OneDrive Client for Linux uses a sensible set of built-in defaul
 
 .PP
 The client determines its configuration from three layers, applied in the following order of priority:
+.br
 1. Application default values – internal defaults compiled into the client.
 .br
 2. Configuration file values – user-defined settings loaded from a configuration file (if present).
@@ -84,6 +85,7 @@ The OneDrive Client does not create a configuration file automatically. If no co
 .PP
 If you want to adjust the default settings, download a copy of the default configuration template into your local configuration directory.
 Valid configuration file locations are:
+.br
 .br
 \fB~/.config/onedrive\fP – for per-user configuration.
 .br
