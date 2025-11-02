@@ -217,7 +217,7 @@ This behaviour is intended to improve data integrity and crash resilience, but i
 
 #### How This Affects the OneDrive Client
 
-Because Obsidian is constantly writing files, running the OneDrive Client for Linux in `--monitor` mode causes the client to continually receive inotify events. This leads to constant re-uploading of files, regardless of whether meaningful content has changed.
+Because Obsidian is constantly writing files, running the OneDrive Client for Linux in `--monitor` mode causes the client to continually receive inotify events from the local file system. This leads to constant re-uploading of files, regardless of whether meaningful content has changed.
 
 The consequences of this are:
 
@@ -227,12 +227,12 @@ The consequences of this are:
 
 #### Recommendation
 
-If you use Obsidian, it is *strongly* recommended that you enable the following two configuration options in your OneDrive client `config` file:
+If you use Obsidian, it is *strongly* recommended that you enable the following two configuration options in your OneDrive Client for Linux `config` file:
 ```
 force_session_upload = "true"
 delay_inotify_processing = "true"
 ```
-These settings introduce a delay in processing local file change events, allowing the OneDrive client to batch or debounce Obsidian's frequent writes. By default, this delay is 5 seconds.
+These settings introduce a delay in processing local file change events, allowing the OneDrive Client for Linux to batch or debounce Obsidian's frequent writes. By default, this delay is 5 seconds.
 
 To adjust this delay, you can add the following configuration option:
 ```
