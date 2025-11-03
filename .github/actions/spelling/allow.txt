@@ -412,6 +412,8 @@ retu
 revents
 rko
 rlc
+rlim
+rlimit
 robertschulze
 rpaths
 rpcing
