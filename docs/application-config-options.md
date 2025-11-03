@@ -22,6 +22,7 @@ Before reading this document, please ensure you are running application version 
   - [disable_notifications](#disable_notifications)
   - [disable_permission_set](#disable_permission_set)
   - [disable_upload_validation](#disable_upload_validation)
+  - [disable_websocket_support](#disable_websocket_support)
   - [display_manager_integration](#display_manager_integration)
   - [display_running_config](#display_running_config)
   - [display_transfer_metrics](#display_transfer_metrics)
@@ -330,7 +331,6 @@ _**CLI Option Use:**_ `--disable-upload-validation`
 
 > [!CAUTION]
 > If you're uploading data to SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack. Enabling this option disables all upload integrity checks.
-
 
 ### disable_websocket_support
 _**Description:**_ This option disables the built-in WebSocket support that leverages RFC6455 to communicate with the Microsoft Graph API Service, providing near real-time notifications of online changes.

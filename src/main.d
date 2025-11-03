@@ -1008,7 +1008,8 @@ int main(string[] cliArgs) {
 			}
 			
 			// What are the current values for the platform we are running on
-			string maxOpenFiles = strip(getMaxOpenFiles());
+			string maxOpenFilesSoft = strip(to!string(getSoftOpenFilesLimit()));
+			string maxOpenFilesHard = strip(to!string(getHardOpenFilesLimit()));
 			// What is the currently configured maximum inotify watches that can be used
 			string maxInotifyWatches = strip(getMaxInotifyWatches());
 			
@@ -1018,7 +1019,8 @@ int main(string[] cliArgs) {
 			// If we are in a --download-only method of operation, the output of these is not required
 			if (!appConfig.getValueBool("download_only")) {
 				if (verboseLogging) {
-					addLogEntry("Maximum allowed open files:                  " ~ maxOpenFiles, ["verbose"]);
+					addLogEntry("Maximum allowed open files (soft):           " ~ maxOpenFilesSoft, ["verbose"]);
+					addLogEntry("Maximum allowed open files (hard):           " ~ maxOpenFilesHard, ["verbose"]);
 					addLogEntry("Maximum allowed inotify user watches:        " ~ maxInotifyWatches, ["verbose"]);
 				}
 			}
@@ -1453,36 +1455,6 @@ void setDefaultApplicationThreads() {
 	
 	// Set the default threads based on configured option
 	defaultPoolThreads(configuredThreads);
-}
-
-// Retrieves the maximum number of open files allowed by the system
-string getMaxOpenFiles() {
-	// Predefined Versions
-	// https://dlang.org/spec/version.html#predefined-versions
-	version (linux) {
-		try {
-			// Read max open files from procfs on Linux
-			return strip(readText("/proc/sys/fs/file-max"));
-		} catch (Exception e) {
-			return "Unknown (Error reading /proc/sys/fs/file-max)";
-		}
-	} else version (FreeBSD) {
-		try {
-			// Read max open files using sysctl on FreeBSD
-			return strip(executeShell("sysctl -n kern.maxfiles").output);
-		} catch (Exception e) {
-			return "Unknown (sysctl error)";
-		}
-	} else version (OpenBSD) {
-		try {
-			// Read max open files using sysctl on OpenBSD
-			return strip(executeShell("sysctl -n kern.maxfiles").output);
-		} catch (Exception e) {
-			return "Unknown (sysctl error)";
-		}
-	} else {
-		return "Unsupported platform";
-	}
 }
 
 // Retrieves the maximum inotify watches allowed by the system
