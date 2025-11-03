@@ -22,6 +22,7 @@ Before reading this document, please ensure you are running application version 
   - [disable_notifications](#disable_notifications)
   - [disable_permission_set](#disable_permission_set)
   - [disable_upload_validation](#disable_upload_validation)
+  - [display_manager_integration](#display_manager_integration)
   - [display_running_config](#display_running_config)
   - [display_transfer_metrics](#display_transfer_metrics)
   - [dns_timeout](#dns_timeout)
@@ -342,6 +343,17 @@ _**Config Example:**_ `disable_websocket_support = "false"` or `disable_websocke
 
 _**CLI Option Use:**_ *None - this is a config file option only*
 
+
+### display_manager_integration
+_**Description:**_ Controls whether the client integrates the configured 'sync_dir' with the desktop’s file manager (e.g. Nautilus for GNOME, Dolphin for KDE), adding it as a “special place” in the sidebar and setting a custom OneDrive folder icon where supported.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `display_manager_integration = "false"` or `display_manager_integration = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
 
 ### display_running_config
 _**Description:**_ This option will include the running config of the application at application startup. This may be desirable to enable when running in containerised environments so that any application logging that is occurring, will have the application configuration being consumed at startup, written out to any applicable log file.
