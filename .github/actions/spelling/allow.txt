@@ -223,6 +223,7 @@ keyboxd
 keyutils
 kotlin
 krb
+kservices
 lalen
 lbl
 Lcode
