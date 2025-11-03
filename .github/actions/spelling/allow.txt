@@ -261,6 +261,7 @@ libnghttp
 libnotify
 libphobos
 libpsl
+libqt
 libsepol
 libsqlite
 libssh

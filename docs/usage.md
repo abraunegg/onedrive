@@ -1206,6 +1206,15 @@ display_manager_integration = "true"
 ```
 When enabled, the client detects the active desktop session and applies the corresponding integration automatically when the client is running in `--monitor` mode only.
 
+#### Fedora Workstaion Display Manager Integration
+
+
+#### Ubuntu Display Manager Integration
+![ubuntu_integration](./images/ubuntu_integration.png)
+
+#### Kubuntu Display Manager Integration
+![kubuntu_integration](./images/kubuntu_integration.png)
+
 #### What about context menu integration?
 Context-menu integration is a desktop-specific capability, not part of the core OneDrive Client. It can be achieved through desktop-provided extension mechanisms:
 
