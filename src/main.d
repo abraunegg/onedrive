@@ -1460,12 +1460,7 @@ string getMaxOpenFiles() {
 	// Predefined Versions
 	// https://dlang.org/spec/version.html#predefined-versions
 	version (linux) {
-		try {
-			// Read max open files from procfs on Linux
-			return strip(readText("/proc/sys/fs/file-max"));
-		} catch (Exception e) {
-			return "Unknown (Error reading /proc/sys/fs/file-max)";
-		}
+		return to!string(getHardOpenFilesLimit());
 	} else version (FreeBSD) {
 		try {
 			// Read max open files using sysctl on FreeBSD

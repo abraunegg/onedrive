@@ -37,6 +37,7 @@ import core.stdc.string;
 import core.sys.posix.signal;
 import etc.c.curl;
 import std.process;
+import core.sys.posix.sys.resource;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -1620,6 +1621,22 @@ string getUserName() {
         if (debugLogging) {addLogEntry("User Name:  unknown", ["debug"]);}
         return "unknown";
     }
+}
+
+// Get resource limit in POSIX portable manner (hard limit max open files)
+ulong getHardOpenFilesLimit() {
+    rlimit lim;
+    if (getrlimit(RLIMIT_NOFILE, &lim) == 0)
+        return cast(ulong) lim.rlim_max; // hard limit
+    return 0; // or throw / handle error
+}
+
+// Get resource limit in POSIX portable manner (soft limit max open files)
+ulong softOpenFilesLimit() {
+    rlimit lim;
+    if (getrlimit(RLIMIT_NOFILE, &lim) == 0)
+        return cast(ulong) lim.rlim_cur; // soft limit
+    return 0;
 }
 
 // Calculate the ETA for when a 'large file' will be completed (upload & download operations)
