@@ -1207,7 +1207,7 @@ display_manager_integration = "true"
 When enabled, the client detects the active desktop session and applies the corresponding integration automatically when the client is running in `--monitor` mode only.
 
 #### Fedora Display Manager Integration
-
+![fedora_integration](./images/fedora_integration.png)
 
 #### Ubuntu Display Manager Integration
 ![ubuntu_integration](./images/ubuntu_integration.png)
