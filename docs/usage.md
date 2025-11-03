@@ -1220,6 +1220,20 @@ File overlay badges are typically associated with Microsoft’s Files-On-Demand 
 
 Because Files-On-Demand is currently a feature request for this client, overlay badges are not implemented and remain out of scope for now.
 
+#### What about a system tray or application indicator?
+While the core OneDrive Client for Linux does not include its own tray icon or GUI dashboard, the community provides complementary tools that plug into it — exposing sync status, pause/resume controls, tray menus, and GUI configuration front-ends. Below are two popular options:
+
+**1. OneDriveGUI** - https://github.com/bpozdena/OneDriveGUI
+* A full-featured graphical user interface built for the OneDrive Linux client.
+* Key features include: multi-account support, asynchronous real-time monitoring of multiple OneDrive profiles, a setup wizard for profile creation/import, automatic sync on GUI startup, and GUI-based login. 
+* Includes tray icon support when the desktop environment allows it. 
+* Intended to simplify one-click configuration of the CLI client, help users visualise current operations (uploads/downloads), and manage advanced features such as SharePoint libraries and multiple profiles.
+
+**2. onedrive_tray** - https://github.com/DanielBorgesOliveira/onedrive_tray
+* A lightweight system tray utility written in Qt (using libqt5 or later) that monitors the running OneDrive Linux client and displays status via a tray icon. 
+* Left-click the tray icon to view sync progress; right-click to access a menu of available actions; middle-click shows the PID of the running client. 
+* Ideal for users who just want visual status cues (e.g., “sync in progress”, “idle”, “error”) without a full GUI configuration tool.
+
 ## Frequently Asked Configuration Questions
 
 ### How to change the default configuration of the client?
