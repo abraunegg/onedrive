@@ -38,6 +38,7 @@ Before reading this document, please ensure you are running application version 
   - [Handling a Microsoft OneDrive Account Password Change](#handling-a-microsoft-onedrive-account-password-change)
   - [Determining the synchronisation result](#determining-the-synchronisation-result)
   - [Resumable Transfers](#resumable-transfers)
+  - [Display Manager Integration](#display-manager-integration)
 - [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
   - [How to change the default configuration of the client?](#how-to-change-the-default-configuration-of-the-client)
   - [How to change where my data from Microsoft OneDrive is stored?](#how-to-change-where-my-data-from-microsoft-onedrive-is-stored)
@@ -1181,6 +1182,43 @@ If `--resync` is used, all resumable data is discarded intentionally.
 > [!NOTE] 
 > Resumable transfer support is built-in and requires no special configuration. It is automatically applied during both standalone and monitor operational modes when applicable.
 
+### Display Manager Integration
+Modern desktop environments such as GNOME and KDE Plasma provide graphical file managers — Nautilus (GNOME Files) and Dolphin, respectively — to help users navigate their local and remote storage.
+
+#### What “Display Manager Integration” means
+Display Manager Integration refers to an ability to integrate your configured Microsoft OneDrive synchronisation directory (`sync_dir`) with the desktop’s file manager environment. Depending on the platform and desktop environment, this may include:
+
+1. **Sidebar registration** — Adding the OneDrive folder as a “special place” within the sidebar of Nautilus (GNOME) or Dolphin (KDE), providing easy access without manual navigation.
+2. **Custom folder icon** — Applying a dedicated OneDrive icon to visually distinguish the synchronised directory within the file manager.
+3. **Context-menu extensions** — Adding right-click actions such as “Upload to OneDrive” or “Share via OneDrive” directly inside Nautilus or Dolphin.
+4. **File overlay badges** — Displaying icons (check-marks, sync arrows, or cloud symbols) to represent file synchronisation state.
+5. **System tray or application indicator** — Presenting sync status, pause/resume controls, or notifications via a tray icon.
+
+#### What display manager integration is available in the OneDrive Client for Linux
+The OneDrive Client for Linux currently supports the following integration features:
+
+1. **Sidebar registration** — The client automatically registers the OneDrive folder as a “special place” within the sidebar of Nautilus (GNOME) or Dolphin (KDE).
+2. **Custom folder icon** — The client applies a OneDrive-specific icon to the synchronisation directory where supported by the installed icon theme.
+
+This behaviour is controlled by the configuration option:
+```text
+display_manager_integration = "true"
+```
+When enabled, the client detects the active desktop session and applies the corresponding integration automatically when the client is running in `--monitor` mode only.
+
+#### What about context menu integration?
+Context-menu integration is a desktop-specific capability, not part of the core OneDrive Client. It can be achieved through desktop-provided extension mechanisms:
+
+1. **Shell-script bridge** — A simple shell script can be registered as a KDE ServiceMenu or a GNOME Nautilus Script to trigger local actions (for example, creating a symbolic link in `~/OneDrive` to upload a file).
+2. **Python + Nautilus API (GNOME)** — Implemented via nautilus-python bindings by registering a subclass of `Nautilus.MenuProvider`.
+3. **Qt/KIO Plugins (KDE)** — Implemented using C++ or declarative .desktop ServiceMenu definitions under `/usr/share/kservices5/ServiceMenus/`.
+
+These methods are optional and operate independently of the core OneDrive Client. They can be used by advanced users or system integrators to provide additional right-click functionality.
+
+#### What about file overlay badges?
+File overlay badges are typically associated with Microsoft’s Files-On-Demand feature, which allows selective file downloads and visual state indicators (online-only, available offline, etc.).
+
+Because Files-On-Demand is currently a feature request for this client, overlay badges are not implemented and remain out of scope for now.
 
 ## Frequently Asked Configuration Questions
 
