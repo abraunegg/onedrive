@@ -61,6 +61,8 @@ Designed for maximum flexibility and reliability, this powerful and highly confi
 * Manages traffic bandwidth use with rate limiting
 .br
 * Supports sending desktop alerts using libnotify
+.br
+* Provides desktop file-manager integration by registering the OneDrive folder as a sidebar location with a distinctive icon
 
 .SH CONFIGURATION
 By default, the OneDrive Client for Linux uses a sensible set of built-in defaults to interact with the Microsoft OneDrive service.
