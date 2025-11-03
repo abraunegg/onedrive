@@ -1008,7 +1008,8 @@ int main(string[] cliArgs) {
 			}
 			
 			// What are the current values for the platform we are running on
-			string maxOpenFiles = strip(getMaxOpenFiles());
+			string maxOpenFilesSoft = strip(to!string(getSoftOpenFilesLimit()));
+			string maxOpenFilesHard = strip(getMaxOpenFiles());
 			// What is the currently configured maximum inotify watches that can be used
 			string maxInotifyWatches = strip(getMaxInotifyWatches());
 			
@@ -1018,7 +1019,8 @@ int main(string[] cliArgs) {
 			// If we are in a --download-only method of operation, the output of these is not required
 			if (!appConfig.getValueBool("download_only")) {
 				if (verboseLogging) {
-					addLogEntry("Maximum allowed open files:                  " ~ maxOpenFiles, ["verbose"]);
+					addLogEntry("Maximum allowed open files (soft):           " ~ maxOpenFilesSoft, ["verbose"]);
+					addLogEntry("Maximum allowed open files (hard):           " ~ maxOpenFilesHard, ["verbose"]);
 					addLogEntry("Maximum allowed inotify user watches:        " ~ maxInotifyWatches, ["verbose"]);
 				}
 			}

@@ -1632,7 +1632,7 @@ ulong getHardOpenFilesLimit() {
 }
 
 // Get resource limit in POSIX portable manner (soft limit max open files)
-ulong softOpenFilesLimit() {
+ulong getSoftOpenFilesLimit() {
     rlimit lim;
     if (getrlimit(RLIMIT_NOFILE, &lim) == 0)
         return cast(ulong) lim.rlim_cur; // soft limit
