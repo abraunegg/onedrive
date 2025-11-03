@@ -954,8 +954,11 @@ int main(string[] cliArgs) {
 			// Update the flag given we are running with --monitor
 			performFileSystemMonitoring = true;
 			
-			// Attempt to configure the desktop integration whilst the client is running in --monitor mode
-			attemptFileManagerIntegration();
+			// Is Display Manager Integration enabled?
+			if (appConfig.getValueBool("display_manager_integration")) {
+				// Attempt to configure the desktop integration whilst the client is running in --monitor mode
+				attemptFileManagerIntegration();
+			}
 		
 			// If 'webhooks' are enabled, this is going to conflict with 'websockets' if the OS cURL library supports websockets
 			if (appConfig.getValueBool("webhook_enabled") && appConfig.curlSupportsWebSockets) {
@@ -1863,7 +1866,11 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			if (debugLogging) {addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);}
 			// Remove Desktop integration
 			if(performFileSystemMonitoring) {
-				attemptFileManagerIntegrationRemoval();
+				// Was desktop integration enabled?
+				if (appConfig.getValueBool("display_manager_integration")) {
+					// Attempt removal
+					attemptFileManagerIntegrationRemoval();
+				}
 			}
 			// Shutdown the OneDrive Webhook instance
 			shutdownOneDriveWebhook();
