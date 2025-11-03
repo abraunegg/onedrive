@@ -224,6 +224,7 @@ keyutils
 kotlin
 krb
 kservices
+kubuntu
 lalen
 lbl
 Lcode
