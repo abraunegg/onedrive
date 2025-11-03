@@ -1206,13 +1206,16 @@ display_manager_integration = "true"
 ```
 When enabled, the client detects the active desktop session and applies the corresponding integration automatically when the client is running in `--monitor` mode only.
 
-#### Fedora Display Manager Integration
+> [!NOTE] 
+> Display Manager Integration remains active only while the OneDrive client or its systemd service is running. If the client stops or the service is stopped, the desktop integration is automatically cleared. It is re-applied the next time the client starts.
+
+#### Fedora Display Manager Integration Example
 ![fedora_integration](./images/fedora_integration.png)
 
-#### Ubuntu Display Manager Integration
+#### Ubuntu Display Manager Integration Example
 ![ubuntu_integration](./images/ubuntu_integration.png)
 
-#### Kubuntu Display Manager Integration
+#### Kubuntu Display Manager Integration Example
 ![kubuntu_integration](./images/kubuntu_integration.png)
 
 #### What about context menu integration?
