@@ -51,6 +51,11 @@ __gshared bool exitHandlerTriggered = false;
 // util module variable
 ulong previousRSS;
 
+struct DesktopHints {
+    bool gnome;
+    bool kde;
+}
+
 shared static this() {
 	deviceName = Socket.hostName;
 }
@@ -1942,4 +1947,16 @@ bool isDirEmpty(string dir) {
         return false;
     }
     return true;
+}
+
+// Escape a string for literal use inside a regex
+string regexEscape(string s) {
+	auto b = appender!string();
+	foreach (c; s) {
+		// characters with special meaning in regex
+		immutable specials = "\\.^$|?*+()[]{}";
+		if (specials.canFind(c)) b.put('\\');
+		b.put(c);
+	}
+	return b.data;
 }

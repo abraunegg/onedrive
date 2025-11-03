@@ -39,6 +39,7 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 * Enhanced synchronisation speed with multi-threaded file transfers
 * Manages traffic bandwidth use with rate limiting
 * Supports sending desktop alerts using libnotify
+* Provides desktop file-manager integration by registering the OneDrive folder as a sidebar location with a distinctive icon.
 
 
 ## What's missing

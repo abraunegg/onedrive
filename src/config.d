@@ -19,6 +19,8 @@ import std.format;
 import std.ascii;
 import std.datetime;
 import std.exception;
+import core.sys.posix.unistd : geteuid, getuid;
+import std.process : spawnProcess, wait;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -444,6 +446,9 @@ class ApplicationConfig {
 		// Use authentication via OAuth2 Device Authorisation Flow
 		boolValues["use_device_auth"] = false;
 		
+		// GUI | Display Manager Integration
+		boolValues["display_manager_integration"] = false;
+				
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -2820,6 +2825,290 @@ class ApplicationConfig {
 		// Append subdirectories based on the recycle bin path
 		recycleBinFilePath = basePath ~ "files/";
 		recycleBinInfoPath = basePath ~ "info/";
+	}
+	
+	// Is the client running under a GUI session?
+	// - GNOME
+	// - KDE
+	bool isGuiSessionDetected() {
+	
+		bool hasDisplay = false;
+		bool hasRuntime = false;
+		bool uidMatches = false;
+		bool homeOK = false;
+		string xdgType;
+
+		try {
+			xdgType = environment.get("XDG_SESSION_TYPE", "");
+		} catch (Exception e) {
+			xdgType = "";
+		}
+		
+		try {
+			hasDisplay = environment.get("WAYLAND_DISPLAY", "").length > 0 || environment.get("DISPLAY", "").length > 0;
+		} catch (Exception e) {
+			hasDisplay = false;
+		}
+		
+		try {
+			hasRuntime = environment.get("XDG_RUNTIME_DIR", "").length > 0;
+		} catch (Exception e) {
+			hasRuntime = false;
+		}
+		
+		try {
+			uidMatches = (geteuid() == getuid());
+		} catch (Exception e) {
+			uidMatches = false;
+		}
+		
+		try {
+			homeOK = environment.get("HOME", "").length > 0;
+		} catch (Exception e) {
+			homeOK = false;
+		}
+		
+		bool hasGuiElements = hasDisplay || (xdgType == "wayland" || xdgType == "x11");
+		
+		return hasGuiElements && hasRuntime && uidMatches && homeOK;
+	}
+	
+	// Attempt to detect the running display manager
+	DesktopHints detectDesktop() {
+		string all = (  environment.get("XDG_CURRENT_DESKTOP","") ~ ":" ~
+						environment.get("XDG_SESSION_DESKTOP","") ~ ":" ~
+						environment.get("DESKTOP_SESSION","") ~ ":" ~
+						environment.get("GDMSESSION","") ~ ":" ~
+						environment.get("KDE_FULL_SESSION","")).toLower();
+		
+		DesktopHints hints;
+		hints.gnome = all.canFind("gnome");
+		hints.kde   = all.canFind("kde") || all.canFind("plasma");
+		return hints;
+	}
+	
+	string fileUriFor(string absPath) {
+		// Basic, safe URI for local file
+		return "file://" ~ expandTilde(absPath);
+	}
+	
+	void addGnomeBookmark() {
+		// Configure required variables
+		string uri = fileUriFor(getValueString("sync_dir"));
+		string bookmarksPath = buildPath(expandTilde(environment.get("HOME", "")), ".config", "gtk-3.0", "bookmarks");
+		
+		// Ensure the bookmarks path exists
+		mkdirRecurse(dirName(bookmarksPath));
+		
+		// Does the bookmark already exist?
+		string content = exists(bookmarksPath) ? readText(bookmarksPath) : "";
+		bool present = false;
+		foreach (line; content.splitLines()) {
+			if (line.strip == uri) { present = true; break; }
+		}
+		if (present) return;
+		
+		// Append newline if needed, then our URI
+		string newline = content.length && !content.endsWith("\n") ? "\n" : "";
+		string updated = content ~ newline ~ uri ~ "\n";
+
+		// Atomic write
+		string tmp = bookmarksPath ~ ".tmp";
+		std.file.write(tmp, updated);
+		rename(tmp, bookmarksPath);
+		
+		// Log outcome
+		addLogEntry("GNOME Desktop Integration: Bookmark added successfully", ["info"]);
+	}
+	
+	void setOneDriveFolderIcon() {
+		// Get the sync directory
+		string syncDir = expandTilde(getValueString("sync_dir"));
+	
+		// Build gio command
+		string[] gioCmd = [
+			"gio",
+			"set",
+			syncDir,
+			"metadata::custom-icon-name",
+			"onedrive"
+		];
+		
+		// Try and set folder icon
+		try {
+			auto p = spawnProcess(gioCmd);
+			int status = p.wait();
+			if (status == 0) {
+				addLogEntry("GNOME Desktop Integration: Set folder icon to 'onedrive' for " ~ syncDir, ["info"]);
+			} else {
+				addLogEntry("GNOME Desktop Integration: Failed to set folder icon for " ~ syncDir ~ " (gio exit " ~ status.to!string ~ ")", ["info"]);
+			}
+		} catch (Exception e) {
+			addLogEntry("GNOME Desktop Integration: Exception setting folder icon: " ~ e.msg, ["info"]);
+		}
+	}
+	
+	void removeGnomeBookmark() {
+		// Configure required variables
+		string uri = fileUriFor(getValueString("sync_dir"));
+		string bookmarksPath = buildPath(expandTilde(environment.get("HOME", "")), ".config", "gtk-3.0", "bookmarks");
+
+		// Does the bookmark path exist?
+		if (!exists(bookmarksPath)) {
+			return;
+		}
+		
+		// Read existing bookmarks
+		string content = readText(bookmarksPath);
+		auto lines = content.splitLines();
+
+		bool changed = false;
+		string[] kept;
+		kept.reserve(lines.length);
+
+		foreach (line; lines) {
+			// Remove every line that exactly matches the URI (after stripping whitespace)
+			if (line.strip == uri) {
+				changed = true;
+				continue;
+			}
+			kept ~= line;
+		}
+
+		if (!changed) {
+			return;
+		}
+
+		// Rebuild file (ensure trailing newline if non-empty)
+		string updated = kept.length ? kept.join("\n") ~ "\n" : "";
+
+		// Atomic write
+		const string tmp = bookmarksPath ~ ".tmp";
+		std.file.write(tmp, updated);
+		rename(tmp, bookmarksPath);
+
+		// Log outcome
+		addLogEntry("GNOME Desktop Integration: Bookmark removed successfully", ["info"]);
+	}
+	
+	void removeOneDriveFolderIcon() {
+		// Get the sync directory
+		string syncDir = expandTilde(getValueString("sync_dir"));
+	
+		// Build gio command
+		string[] gioCmd = [
+			"gio",
+			"set",
+			syncDir,
+			"metadata::custom-icon-name",
+			"folder"
+		];
+		
+		// Try and set folder icon
+		try {
+			auto p = spawnProcess(gioCmd);
+			int status = p.wait();
+			if (status == 0) {
+				addLogEntry("GNOME Desktop Integration: Reset folder icon to 'default' for " ~ syncDir, ["info"]);
+			} else {
+				addLogEntry("GNOME Desktop Integration: Failed to reset folder icon for " ~ syncDir ~ " (gio exit " ~ status.to!string ~ ")", ["info"]);
+			}
+		} catch (Exception e) {
+			addLogEntry("GNOME Desktop Integration: Exception setting folder icon: " ~ e.msg, ["info"]);
+		}
+	}
+	
+	void addKDEPlacesEntry() {
+		// Configure required variables
+		string uri = fileUriFor(getValueString("sync_dir"));
+		string xbelPath = buildPath(expandTilde(environment.get("HOME", "")), ".local", "share", "user-places.xbel");
+		string content;
+		
+		// Ensure the xbelPath path exists
+		mkdirRecurse(dirName(xbelPath));
+		
+		// Does the xbel file exist?		
+		if (exists(xbelPath)) {
+			// Path exists - read the file
+			content = readText(xbelPath);
+			
+			// Does the 'sync_dir' path exist in the xbel file?
+			if (content.canFind(`href="` ~ uri ~ `"`)) {
+				return; // already present
+			}
+		} else {
+			// xbel path does not exist, create minimal XBEL skeleton
+			content = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+					   <xbel version=\"1.0\">
+					   </xbel>";
+		}
+
+		// Insert xbel bookmark before closing tag
+		string bookmark = ` <bookmark href="` ~ uri ~ `">
+		<title>OneDrive</title>
+		<info>
+		  <metadata owner="http://www.freedesktop.org">
+			<bookmark:icon name="onedrive"/>
+		  </metadata>
+		</info>
+	  </bookmark>`;
+		
+		// Update xbel file with Microsoft OneDrive Bookmark
+		string updated;
+		auto idx = content.lastIndexOf("</xbel>");
+		if (idx >= 0) {
+			updated = content[0 .. idx] ~ bookmark ~ "\n" ~ content[idx .. $];
+		} else {
+			// Fallback: append (still valid for many parsers)
+			updated = content ~ "\n" ~ bookmark ~ "\n</xbel>\n";
+		}
+
+		string tmp = xbelPath ~ ".tmp";
+		std.file.write(tmp, updated);
+		rename(tmp, xbelPath);
+		
+		// Log outcome
+		addLogEntry("KDE Desktop Integration: KDE/Plasma place added successfully", ["info"]);
+	}
+		
+	void removeKDEPlacesEntry() {
+		// Compute paths/values
+		const string uri = fileUriFor(getValueString("sync_dir")); 
+		const string xbelPath = buildPath(expandTilde(environment.get("HOME", "")), ".local", "share", "user-places.xbel");
+
+		if (!exists(xbelPath)) {
+			return;
+		}
+
+		string content = readText(xbelPath);
+		auto before = content;
+
+		// Build a regex that matches:
+		// <bookmark ... href="URI" ...> ... </bookmark>
+		// - tolerate attribute order/whitespace
+		// - accept single or double quotes around URI
+		// - non-greedy body match
+		const esc = regexEscape(uri);
+		auto re = regex(`(?s)<bookmark\b[^>]*\bhref\s*=\s*["']` ~ esc ~ `["'][^>]*>.*?</bookmark\s*>`);
+
+		// Remove all matches
+		content = replaceAll(content, re, "");
+
+		// Optional: tidy up multiple blank lines left behind
+		auto cleanup = regex(`\n{3,}`);
+		content = replaceAll(content, cleanup, "\n\n");
+
+		// If nothing changed, exit quietly
+		if (content == before) {
+			return;
+		}
+
+		// Atomic write
+		string tmp = xbelPath ~ ".tmp";
+		std.file.write(tmp, content);
+		rename(tmp, xbelPath);
+
+		addLogEntry("KDE Desktop Integration: KDE/Plasma place removed successfully", ["info"]);
 	}
 }
 

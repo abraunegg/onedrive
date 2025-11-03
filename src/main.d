@@ -953,6 +953,12 @@ int main(string[] cliArgs) {
 		if (appConfig.getValueBool("monitor")) {
 			// Update the flag given we are running with --monitor
 			performFileSystemMonitoring = true;
+			
+			// Is Display Manager Integration enabled?
+			if (appConfig.getValueBool("display_manager_integration")) {
+				// Attempt to configure the desktop integration whilst the client is running in --monitor mode
+				attemptFileManagerIntegration();
+			}
 		
 			// If 'webhooks' are enabled, this is going to conflict with 'websockets' if the OS cURL library supports websockets
 			if (appConfig.getValueBool("webhook_enabled") && appConfig.curlSupportsWebSockets) {
@@ -1858,6 +1864,14 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 		try {
 			// Log who called this function
 			if (debugLogging) {addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);}
+			// Remove Desktop integration
+			if(performFileSystemMonitoring) {
+				// Was desktop integration enabled?
+				if (appConfig.getValueBool("display_manager_integration")) {
+					// Attempt removal
+					attemptFileManagerIntegrationRemoval();
+				}
+			}
 			// Shutdown the OneDrive Webhook instance
 			shutdownOneDriveWebhook();
 			// Shutdown the OneDrive WebSocket instance
@@ -1994,4 +2008,50 @@ string compilerDetails() {
 	else enum compiler = "Unknown compiler";
 	string compilerString = compiler ~ " " ~ to!string(__VERSION__);
 	return compilerString;
+}
+
+void attemptFileManagerIntegration() {
+	// Are we running under a Desktop Manager (GNOME or KDE)?
+	if (appConfig.isGuiSessionDetected()) {
+		// Generate desktop hints
+		auto hints = appConfig.detectDesktop();
+		
+		// GNOME Desktop File Manager integration
+		if (hints.gnome) {
+			// Attempt integration
+			appConfig.addGnomeBookmark();
+			appConfig.setOneDriveFolderIcon();
+			return;
+		}
+		
+		// KDE Desktop File Manager integration
+		if (hints.kde) {
+			// Attempt integration
+			appConfig.addKDEPlacesEntry();
+			return;
+		}
+	}
+}
+
+void attemptFileManagerIntegrationRemoval() {
+	// Are we running under a Desktop Manager (GNOME or KDE)?
+	if (appConfig.isGuiSessionDetected()) {
+		// Generate desktop hints
+		auto hints = appConfig.detectDesktop();
+		
+		// GNOME Desktop File Manager integration removal
+		if (hints.gnome) {
+			// Attempt integration removal
+			appConfig.removeGnomeBookmark();
+			appConfig.removeOneDriveFolderIcon();
+			return;
+		}
+		
+		// KDE Desktop File Manager integration removal
+		if (hints.kde) {
+			// Attempt integration removal
+			appConfig.removeKDEPlacesEntry();
+			return;
+		}	
+	}
 }
