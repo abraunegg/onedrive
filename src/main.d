@@ -1009,7 +1009,7 @@ int main(string[] cliArgs) {
 			
 			// What are the current values for the platform we are running on
 			string maxOpenFilesSoft = strip(to!string(getSoftOpenFilesLimit()));
-			string maxOpenFilesHard = strip(getMaxOpenFiles());
+			string maxOpenFilesHard = strip(to!string(getHardOpenFilesLimit()));
 			// What is the currently configured maximum inotify watches that can be used
 			string maxInotifyWatches = strip(getMaxInotifyWatches());
 			
@@ -1455,31 +1455,6 @@ void setDefaultApplicationThreads() {
 	
 	// Set the default threads based on configured option
 	defaultPoolThreads(configuredThreads);
-}
-
-// Retrieves the maximum number of open files allowed by the system
-string getMaxOpenFiles() {
-	// Predefined Versions
-	// https://dlang.org/spec/version.html#predefined-versions
-	version (linux) {
-		return to!string(getHardOpenFilesLimit());
-	} else version (FreeBSD) {
-		try {
-			// Read max open files using sysctl on FreeBSD
-			return strip(executeShell("sysctl -n kern.maxfiles").output);
-		} catch (Exception e) {
-			return "Unknown (sysctl error)";
-		}
-	} else version (OpenBSD) {
-		try {
-			// Read max open files using sysctl on OpenBSD
-			return strip(executeShell("sysctl -n kern.maxfiles").output);
-		} catch (Exception e) {
-			return "Unknown (sysctl error)";
-		}
-	} else {
-		return "Unsupported platform";
-	}
 }
 
 // Retrieves the maximum inotify watches allowed by the system

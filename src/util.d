@@ -1623,20 +1623,20 @@ string getUserName() {
     }
 }
 
-// Get resource limit in POSIX portable manner (hard limit max open files)
-ulong getHardOpenFilesLimit() {
-    rlimit lim;
-    if (getrlimit(RLIMIT_NOFILE, &lim) == 0)
-        return cast(ulong) lim.rlim_max; // hard limit
-    return 0; // or throw / handle error
-}
-
 // Get resource limit in POSIX portable manner (soft limit max open files)
 ulong getSoftOpenFilesLimit() {
     rlimit lim;
     if (getrlimit(RLIMIT_NOFILE, &lim) == 0)
         return cast(ulong) lim.rlim_cur; // soft limit
     return 0;
+}
+
+// Get resource limit in POSIX portable manner (hard limit max open files)
+ulong getHardOpenFilesLimit() {
+    rlimit lim;
+    if (getrlimit(RLIMIT_NOFILE, &lim) == 0)
+        return cast(ulong) lim.rlim_max; // hard limit
+    return 0; // or throw / handle error
 }
 
 // Calculate the ETA for when a 'large file' will be completed (upload & download operations)
