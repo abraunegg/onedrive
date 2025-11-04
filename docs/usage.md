@@ -42,6 +42,7 @@ Before reading this document, please ensure you are running application version 
 - [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
   - [How to change the default configuration of the client?](#how-to-change-the-default-configuration-of-the-client)
   - [How to change where my data from Microsoft OneDrive is stored?](#how-to-change-where-my-data-from-microsoft-onedrive-is-stored)
+  - [Why does the client create 'safeBackup' files?](#why-does-the-client-create-safebackup-files)
   - [How to change what file and directory permissions are assigned to data that is downloaded from Microsoft OneDrive?](#how-to-change-what-file-and-directory-permissions-are-assigned-to-data-that-is-downloaded-from-microsoft-onedrive)
   - [How are uploads and downloads managed?](#how-are-uploads-and-downloads-managed)
   - [How to only sync a specific directory?](#how-to-only-sync-a-specific-directory)
@@ -1281,7 +1282,7 @@ By default, the location where your Microsoft OneDrive data is stored, is within
 To change this location, the application configuration option 'sync_dir' is used to specify a new local directory where your Microsoft OneDrive data should be stored.
 
 > [!IMPORTANT]
->  Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of local file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
+> Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of local file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
 
 ### Why does the client create 'safeBackup' files?
 'safeBackup' files are created to prevent local data loss whenever the client is about to replace or remove a local file and there’s any chance the current on-disk content might be different to what OneDrive expects.
@@ -1295,20 +1296,20 @@ filename-hostname-safeBackup-0001.ext
 The client will increment the number if additional backups are needed.
 
 #### The most common reasons you’ll see 'safeBackup' files
-1. You ran the client with `--resync`
+**1. You ran the client with `--resync`**
 
-`--resync` intentionally discards the client’s local state, so the client no longer “knows” what used to be in sync. During the first pass after a resync, the online state is treated as source-of-truth. If the client finds a local file whose content differs from the online version (hash mismatch), it will back up your local copy first and then bring the local file in line with OneDrive.
+>> `--resync` intentionally discards the client’s local state, so the client no longer “knows” what used to be in sync. During the first pass after a resync, the online state is treated as source-of-truth. If the client finds a local file whose content differs from the online version (hash mismatch), it will back up your local copy first and then bring the local file in line with OneDrive.
 
-If you wish to treat your local files as the source-of-truth, you can set the following configuration option:
-```
-local_first = "true"
-```
+>> If you wish to treat your local files as the source-of-truth, you can set the following configuration option:
+>> ```
+>> local_first = "true"
+>> ```
 
-2. Dual-booting and pointing sync_dir at your Windows OneDrive folder.
+**2. Dual-booting and pointing sync_dir at your Windows OneDrive folder.**
 
 If you dual boot and set the Linux client’s sync_dir to the same path used by the Windows client, there will be times when files already exist on disk without matching local DB entries or with content that changed while Linux wasn’t running. When the Linux client encounters such a file (e.g. “exists locally but isn’t represented the way the DB expects” or “exists but content/hash differs”), the client will protect the on-disk content by creating a 'safeBackup' before it reconciles the file.
 
-3. The online file was modified (server-side) and now differs from your local copy
+**3. The online file was modified (server-side) and now differs from your local copy**
 
 If Microsoft OneDrive (or another app) changes a file online, the hash reported by the Graph API won’t match your local content. When the client is about to update the local item to match what’s online, a 'safeBackup' is created so your current local data isn’t lost.
 
