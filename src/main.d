@@ -954,6 +954,9 @@ int main(string[] cliArgs) {
 			// Update the flag given we are running with --monitor
 			performFileSystemMonitoring = true;
 			
+			// Set initial variable for when we last uploaded something or made an online change from a local inotify event
+			lastLocalWrite = MonoTime.currTime() - dur!"hours"(24);
+			
 			// Is Display Manager Integration enabled?
 			if (appConfig.getValueBool("display_manager_integration")) {
 				// Attempt to configure the desktop integration whilst the client is running in --monitor mode
@@ -1037,6 +1040,7 @@ int main(string[] cliArgs) {
 					if (verboseLogging) {addLogEntry("[M] Local directory created: " ~ path, ["verbose"]);}
 					try {
 						syncEngineInstance.scanLocalFilesystemPathForNewData(path);
+						markLocalWrite();
 					} catch (CurlException e) {
 						if (verboseLogging) {addLogEntry("Offline, cannot create remote dir: " ~ path, ["verbose"]);}
 					} catch (Exception e) {
@@ -1050,6 +1054,7 @@ int main(string[] cliArgs) {
 				// Handle a potentially locally changed file
 				// Logging for this event moved to handleLocalFileTrigger() due to threading and false triggers from scanLocalFilesystemPathForNewData() above
 				syncEngineInstance.handleLocalFileTrigger(changedLocalFilesToUploadToOneDrive);
+				markLocalWrite();
 				if (verboseLogging) {addLogEntry("[M] Total number of local file(s) added or changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length), ["verbose"]);}
 			};
 
@@ -1061,6 +1066,7 @@ int main(string[] cliArgs) {
 					addLogEntry("The operating system sent a deletion notification. Trying to delete this item as requested: " ~ path);
 					// perform the delete action
 					syncEngineInstance.deleteByPath(path);
+					markLocalWrite();
 				} catch (CurlException e) {
 					if (verboseLogging) {addLogEntry("Offline, cannot delete item: " ~ path, ["verbose"]);}
 				} catch (SyncException e) {
@@ -1088,6 +1094,7 @@ int main(string[] cliArgs) {
 					} else {
 						syncEngineInstance.uploadMoveItem(from, to);
 					}
+					markLocalWrite();
 				} catch (CurlException e) {
 					if (verboseLogging) {addLogEntry("Offline, cannot move item !", ["verbose"]);}
 				} catch (Exception e) {
@@ -1114,6 +1121,7 @@ int main(string[] cliArgs) {
 			// Immutables
 			immutable auto checkOnlineInterval = dur!"seconds"(appConfig.getValueLong("monitor_interval"));
 			immutable auto githubCheckInterval = dur!"seconds"(86400);
+			immutable auto localEchoDebounce = dur!"seconds"(10);
 			immutable ulong fullScanFrequency = appConfig.getValueLong("monitor_fullscan_frequency");
 			immutable ulong logOutputSuppressionInterval = appConfig.getValueLong("monitor_log_frequency");
 			immutable bool webhookEnabled = appConfig.getValueBool("webhook_enabled");
@@ -1345,7 +1353,6 @@ int main(string[] cliArgs) {
 							}
 						}
 						
-						
 						// If we are doing --upload-only however .. we need to 'ignore' online change
 						if (!appConfig.getValueBool("upload_only")) {
 						
@@ -1395,16 +1402,39 @@ int main(string[] cliArgs) {
 							// good enough to catch up for multiple notifications.
 							if (notificationReceived) {
 								int signalCount = 1;
+								
 								while (true) {
 									signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
 									if (signalExists) {
 										signalCount++;
 									} else {
+										// Local change 'echo' debounce check
+										auto now = MonoTime.currTime();
+										auto sinceLocal = now - lastLocalWrite;
+										
+										if (sinceLocal < localEchoDebounce) {
+											if (debugLogging) {
+												addLogEntry(
+													"Debounced online refresh signal (" ~
+													to!string(sinceLocal.total!"msecs"()) ~ " ms since local write; threshold " ~
+													to!string(localEchoDebounce.total!"msecs"()) ~ " ms)",
+													["debug"]
+												);
+											}
+										
+											// Ignore this reflection; skip the immediate online scan.
+											// Next push or the regular monitor cadence will pick up genuine remote changes.
+											break;
+										}
+										
+										// Not a debounce .. most likely a legitimate online change
 										if (webhookEnabled) {
 											addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signal(s) from the Microsoft Graph API Webhook Endpoint");
 										} else {
 											addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signal(s) from the Microsoft Graph API WebSocket Endpoint");
 										}
+										
+										// Perform the online scan callback
 										oneDriveOnlineCallback();
 										break;
 									}
