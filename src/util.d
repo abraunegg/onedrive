@@ -49,6 +49,9 @@ import curlEngine;
 __gshared string deviceName;
 // Global flag for SIGINT (CTRL-C) and SIGTERM (kill) state
 __gshared bool exitHandlerTriggered = false;
+// Global variable for when we last uploaded something or made an online change from a local inotify event
+__gshared MonoTime lastLocalWrite;
+
 // util module variable
 ulong previousRSS;
 
@@ -1976,4 +1979,9 @@ string regexEscape(string s) {
 		b.put(c);
 	}
 	return b.data;
+}
+
+// Update lastLocalWrite to denote we just performed a local-originated write
+void markLocalWrite() {
+    lastLocalWrite = MonoTime.currTime();
 }
