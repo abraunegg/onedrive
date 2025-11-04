@@ -32,12 +32,13 @@ Before reading this document, please ensure you are running application version 
   - [Enabling the Client Activity Log](#enabling-the-client-activity-log)
     - [Client Activity Log Example:](#client-activity-log-example)
     - [Client Activity Log Differences](#client-activity-log-differences)
-  - [Using a local Recycle Bin](#using-a-local-recycle-bin)
+  - [Display Manager Integration](#display-manager-integration)
   - [GUI Notifications](#gui-notifications)
+  - [Using a local Recycle Bin](#using-a-local-recycle-bin)
   - [Handling a Microsoft OneDrive Account Password Change](#handling-a-microsoft-onedrive-account-password-change)
   - [Determining the synchronisation result](#determining-the-synchronisation-result)
   - [Resumable Transfers](#resumable-transfers)
-  - [Display Manager Integration](#display-manager-integration)
+  
 - [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
   - [How to change the default configuration of the client?](#how-to-change-the-default-configuration-of-the-client)
   - [How to change where my data from Microsoft OneDrive is stored?](#how-to-change-where-my-data-from-microsoft-onedrive-is-stored)
@@ -1068,30 +1069,74 @@ Using 'user' configuration path for application state data: /home/user/.config/o
 Using the following path to store the runtime application log: /var/log/onedrive
 ```
 
-### Using a local Recycle Bin
-By default, this application will process online deletions and directly delete the corresponding file or folder directly from your configured 'sync_dir'.
+### Display Manager Integration
+Modern desktop environments such as GNOME and KDE Plasma provide graphical file managers — Nautilus (GNOME Files) and Dolphin, respectively — to help users navigate their local and remote storage.
 
-In some cases, it may actually be desirable to move these files to your Linux user default 'Recycle Bin', so that you can manually delete the files at your own discretion.
+#### What “Display Manager Integration” means
+Display Manager Integration refers to an ability to integrate your configured Microsoft OneDrive synchronisation directory (`sync_dir`) with the desktop’s file manager environment. Depending on the platform and desktop environment, this may include:
 
-To enable this application functionality, add the following to your 'config' file:
+1. **Sidebar registration** — Adding the OneDrive folder as a “special place” within the sidebar of Nautilus (GNOME) or Dolphin (KDE), providing easy access without manual navigation.
+2. **Custom folder icon** — Applying a dedicated OneDrive icon to visually distinguish the synchronised directory within the file manager.
+3. **Context-menu extensions** — Adding right-click actions such as “Upload to OneDrive” or “Share via OneDrive” directly inside Nautilus or Dolphin.
+4. **File overlay badges** — Displaying icons (check-marks, sync arrows, or cloud symbols) to represent file synchronisation state.
+5. **System tray or application indicator** — Presenting sync status, pause/resume controls, or notifications via a tray icon.
+
+#### What display manager integration is available in the OneDrive Client for Linux
+The OneDrive Client for Linux currently supports the following integration features:
+
+1. **Sidebar registration** — The client automatically registers the OneDrive folder as a “special place” within the sidebar of Nautilus (GNOME) or Dolphin (KDE).
+2. **Custom folder icon** — The client applies a OneDrive-specific icon to the synchronisation directory where supported by the installed icon theme.
+3. **GUI Notifications** — The client (when compiled with `--enable-notifications`) will send notifications to the GUI when important events occur.
+4. **Recycle Bin** — The client (when configured with `use_recycle_bin = "true"`) will use your Display Manager Recycle Bin for online deletions that are actioned locally.
+
+This behaviour is controlled by the configuration option:
+```text
+display_manager_integration = "true"
 ```
-use_recycle_bin = "true"
-```
+When enabled, the client detects the active desktop session and applies the corresponding integration automatically when the client is running in `--monitor` mode only.
 
-This capability is designed to be compatible with the [FreeDesktop.org Trash Specification](https://specifications.freedesktop.org/trash-spec/1.0/), ensuring interoperability with GUI-based desktop environments such as GNOME (GIO) and KDE (KIO). It follows the required structure by:
-* Moving deleted files and directories to `~/.local/share/Trash/files/`
-* Creating matching metadata files in `~/.local/share/Trash/info/` with the correct `.trashinfo` format, including the original absolute path and ISO 8601-formatted deletion timestamp
-* Resolving filename collisions using a `name.N.ext` pattern (e.g., `Document.2.docx`), consistent with GNOME and KDE behaviour.
+> [!NOTE] 
+> Display Manager Integration remains active only while the OneDrive client or its systemd service is running. If the client stops or the service is stopped, the desktop integration is automatically cleared. It is re-applied the next time the client starts.
 
+#### Fedora (GNOME) Display Manager Integration Example
+![fedora_integration](./images/fedora_integration.png)
 
+#### Fedora (KDE) Display Manager Integration Example
+![fedora_kde_integration](./images/fedora_kde_integration.png)
 
-To specify an explicit 'Recycle Bin' directory, add the following to your 'config' file:
-```
-recycle_bin_path = "/path/to/desired/location/"
-```
+#### Ubuntu Display Manager Integration Example
+![ubuntu_integration](./images/ubuntu_integration.png)
 
-The same FreeDesktop.org Trash Specification will be used with this explicit 'Recycle Bin' directory.
+#### Kubuntu Display Manager Integration Example
+![kubuntu_integration](./images/kubuntu_integration.png)
 
+#### What about context menu integration?
+Context-menu integration is a desktop-specific capability, not part of the core OneDrive Client. It can be achieved through desktop-provided extension mechanisms:
+
+1. **Shell-script bridge** — A simple shell script can be registered as a KDE ServiceMenu or a GNOME Nautilus Script to trigger local actions (for example, creating a symbolic link in `~/OneDrive` to upload a file).
+2. **Python + Nautilus API (GNOME)** — Implemented via nautilus-python bindings by registering a subclass of `Nautilus.MenuProvider`.
+3. **Qt/KIO Plugins (KDE)** — Implemented using C++ or declarative .desktop ServiceMenu definitions under `/usr/share/kservices5/ServiceMenus/`.
+
+These methods are optional and operate independently of the core OneDrive Client. They can be used by advanced users or system integrators to provide additional right-click functionality.
+
+#### What about file overlay badges?
+File overlay badges are typically associated with Microsoft’s Files-On-Demand feature, which allows selective file downloads and visual state indicators (online-only, available offline, etc.).
+
+Because Files-On-Demand is currently a feature request for this client, overlay badges are not implemented and remain out of scope for now.
+
+#### What about a system tray or application indicator?
+While the core OneDrive Client for Linux does not include its own tray icon or GUI dashboard, the community provides complementary tools that plug into it — exposing sync status, pause/resume controls, tray menus, and GUI configuration front-ends. Below are two popular options:
+
+**1. OneDriveGUI** - https://github.com/bpozdena/OneDriveGUI
+* A full-featured graphical user interface built for the OneDrive Linux client.
+* Key features include: multi-account support, asynchronous real-time monitoring of multiple OneDrive profiles, a setup wizard for profile creation/import, automatic sync on GUI startup, and GUI-based login. 
+* Includes tray icon support when the desktop environment allows it. 
+* Intended to simplify one-click configuration of the CLI client, help users visualise current operations (uploads/downloads), and manage advanced features such as SharePoint libraries and multiple profiles.
+
+**2. onedrive_tray** - https://github.com/DanielBorgesOliveira/onedrive_tray
+* A lightweight system tray utility written in Qt (using libqt5 or later) that monitors the running OneDrive Linux client and displays status via a tray icon. 
+* Left-click the tray icon to view sync progress; right-click to access a menu of available actions; middle-click shows the PID of the running client. 
+* Ideal for users who just want visual status cues (e.g., “sync in progress”, “idle”, “error”) without a full GUI configuration tool.
 
 ### GUI Notifications
 To enable GUI notifications, you must compile the application with GUI Notification Support. Refer to [GUI Notification Support](install.md#gui-notification-support) for details. Once compiled, GUI notifications will work by default in the display manager session under the following conditions:
@@ -1131,6 +1176,28 @@ To disable *all* GUI notifications, add the following to your 'config' file:
 ```
 disable_notifications = "true"
 ```
+
+### Using a local Recycle Bin
+By default, this application will process online deletions and directly delete the corresponding file or folder directly from your configured 'sync_dir'.
+
+In some cases, it may actually be desirable to move these files to your Linux user default 'Recycle Bin', so that you can manually delete the files at your own discretion.
+
+To enable this application functionality, add the following to your 'config' file:
+```
+use_recycle_bin = "true"
+```
+
+This capability is designed to be compatible with the [FreeDesktop.org Trash Specification](https://specifications.freedesktop.org/trash-spec/1.0/), ensuring interoperability with GUI-based desktop environments such as GNOME (GIO) and KDE (KIO). It follows the required structure by:
+* Moving deleted files and directories to `~/.local/share/Trash/files/`
+* Creating matching metadata files in `~/.local/share/Trash/info/` with the correct `.trashinfo` format, including the original absolute path and ISO 8601-formatted deletion timestamp
+* Resolving filename collisions using a `name.N.ext` pattern (e.g., `Document.2.docx`), consistent with GNOME and KDE behaviour.
+
+To specify an explicit 'Recycle Bin' directory, add the following to your 'config' file:
+```
+recycle_bin_path = "/path/to/desired/location/"
+```
+
+The same FreeDesktop.org Trash Specification will be used with this explicit 'Recycle Bin' directory.
 
 ### Handling a Microsoft OneDrive Account Password Change
 If you change your Microsoft OneDrive Account Password, the client will no longer be authorised to sync, and will generate the following error upon next application run:
@@ -1202,73 +1269,6 @@ If `--resync` is used, all resumable data is discarded intentionally.
 
 > [!NOTE] 
 > Resumable transfer support is built-in and requires no special configuration. It is automatically applied during both standalone and monitor operational modes when applicable.
-
-### Display Manager Integration
-Modern desktop environments such as GNOME and KDE Plasma provide graphical file managers — Nautilus (GNOME Files) and Dolphin, respectively — to help users navigate their local and remote storage.
-
-#### What “Display Manager Integration” means
-Display Manager Integration refers to an ability to integrate your configured Microsoft OneDrive synchronisation directory (`sync_dir`) with the desktop’s file manager environment. Depending on the platform and desktop environment, this may include:
-
-1. **Sidebar registration** — Adding the OneDrive folder as a “special place” within the sidebar of Nautilus (GNOME) or Dolphin (KDE), providing easy access without manual navigation.
-2. **Custom folder icon** — Applying a dedicated OneDrive icon to visually distinguish the synchronised directory within the file manager.
-3. **Context-menu extensions** — Adding right-click actions such as “Upload to OneDrive” or “Share via OneDrive” directly inside Nautilus or Dolphin.
-4. **File overlay badges** — Displaying icons (check-marks, sync arrows, or cloud symbols) to represent file synchronisation state.
-5. **System tray or application indicator** — Presenting sync status, pause/resume controls, or notifications via a tray icon.
-
-#### What display manager integration is available in the OneDrive Client for Linux
-The OneDrive Client for Linux currently supports the following integration features:
-
-1. **Sidebar registration** — The client automatically registers the OneDrive folder as a “special place” within the sidebar of Nautilus (GNOME) or Dolphin (KDE).
-2. **Custom folder icon** — The client applies a OneDrive-specific icon to the synchronisation directory where supported by the installed icon theme.
-
-This behaviour is controlled by the configuration option:
-```text
-display_manager_integration = "true"
-```
-When enabled, the client detects the active desktop session and applies the corresponding integration automatically when the client is running in `--monitor` mode only.
-
-> [!NOTE] 
-> Display Manager Integration remains active only while the OneDrive client or its systemd service is running. If the client stops or the service is stopped, the desktop integration is automatically cleared. It is re-applied the next time the client starts.
-
-#### Fedora (GNOME) Display Manager Integration Example
-![fedora_integration](./images/fedora_integration.png)
-
-#### Fedora (KDE) Display Manager Integration Example
-![fedora_kde_integration](./images/fedora_kde_integration.png)
-
-#### Ubuntu Display Manager Integration Example
-![ubuntu_integration](./images/ubuntu_integration.png)
-
-#### Kubuntu Display Manager Integration Example
-![kubuntu_integration](./images/kubuntu_integration.png)
-
-#### What about context menu integration?
-Context-menu integration is a desktop-specific capability, not part of the core OneDrive Client. It can be achieved through desktop-provided extension mechanisms:
-
-1. **Shell-script bridge** — A simple shell script can be registered as a KDE ServiceMenu or a GNOME Nautilus Script to trigger local actions (for example, creating a symbolic link in `~/OneDrive` to upload a file).
-2. **Python + Nautilus API (GNOME)** — Implemented via nautilus-python bindings by registering a subclass of `Nautilus.MenuProvider`.
-3. **Qt/KIO Plugins (KDE)** — Implemented using C++ or declarative .desktop ServiceMenu definitions under `/usr/share/kservices5/ServiceMenus/`.
-
-These methods are optional and operate independently of the core OneDrive Client. They can be used by advanced users or system integrators to provide additional right-click functionality.
-
-#### What about file overlay badges?
-File overlay badges are typically associated with Microsoft’s Files-On-Demand feature, which allows selective file downloads and visual state indicators (online-only, available offline, etc.).
-
-Because Files-On-Demand is currently a feature request for this client, overlay badges are not implemented and remain out of scope for now.
-
-#### What about a system tray or application indicator?
-While the core OneDrive Client for Linux does not include its own tray icon or GUI dashboard, the community provides complementary tools that plug into it — exposing sync status, pause/resume controls, tray menus, and GUI configuration front-ends. Below are two popular options:
-
-**1. OneDriveGUI** - https://github.com/bpozdena/OneDriveGUI
-* A full-featured graphical user interface built for the OneDrive Linux client.
-* Key features include: multi-account support, asynchronous real-time monitoring of multiple OneDrive profiles, a setup wizard for profile creation/import, automatic sync on GUI startup, and GUI-based login. 
-* Includes tray icon support when the desktop environment allows it. 
-* Intended to simplify one-click configuration of the CLI client, help users visualise current operations (uploads/downloads), and manage advanced features such as SharePoint libraries and multiple profiles.
-
-**2. onedrive_tray** - https://github.com/DanielBorgesOliveira/onedrive_tray
-* A lightweight system tray utility written in Qt (using libqt5 or later) that monitors the running OneDrive Linux client and displays status via a tray icon. 
-* Left-click the tray icon to view sync progress; right-click to access a menu of available actions; middle-click shows the PID of the running client. 
-* Ideal for users who just want visual status cues (e.g., “sync in progress”, “idle”, “error”) without a full GUI configuration tool.
 
 ## Frequently Asked Configuration Questions
 
