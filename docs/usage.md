@@ -6,7 +6,6 @@ Before reading this document, please ensure you are running application version 
 
 - [Important Notes](#important-notes)
   - [Memory Usage](#memory-usage)
-  - [Upgrading from the 'skilion' Client](#upgrading-from-the-skilion-client)
   - [Guidelines for Local File and Folder Naming in the Synchronisation Directory](#guidelines-for-local-file-and-folder-naming-in-the-synchronisation-directory)
   - [Support for Microsoft Azure Information Protected Files](#support-for-microsoft-azure-information-protected-files)
   - [Compatibility with Editors and Applications Using Atomic Save Operations](#compatibility-with-editors-and-applications-using-atomic-save-operations)
@@ -81,9 +80,6 @@ Starting with version 2.5.x, the application has been completely rewritten. It i
 During a `--resync` or full online scan, the OneDrive Client may use approximately 1GB of memory for every 100,000 objects stored online. This is because the client retrieves data for all objects via the OneDrive API before processing them locally. Once this process completes, the memory is freed. To avoid performance issues, ensure your system has sufficient available memory. If the system starts using swap space due to insufficient free memory, this can significantly slow down the application and impact overall performance.
 
 To avoid potential system instability or the client being terminated by your Out-Of-Memory (OOM) process monitors, please ensure your system has sufficient memory allocated or configure adequate swap space.
-
-### Upgrading from the 'skilion' Client
-The 'skilion' version has a significant number of issues in how it manages the local sync state. When upgrading from the 'skilion' client to this client, it's recommended to stop any service or OneDrive process that may be running. Once all OneDrive services are stopped, make sure to remove any old client binaries from your system.
 
 ### Guidelines for Local File and Folder Naming in the Synchronisation Directory
 To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adhere strictly to the prescribed naming conventions for your files and folders within the sync directory. The guidelines detailed below are designed to preempt potential sync failures by aligning with Microsoft Windows Naming Conventions, coupled with specific OneDrive restrictions.
@@ -530,33 +526,57 @@ Two common errors can occur when using monitor mode:
 *   Unable to add a new inotify watch
 
 Both of these errors are local environment issues, where the following system variables need to be increased as the current system values are potentially too low:
-*   `fs.file-max`
+*   Open Files Soft limit (current session)
+*   Open Files Hard limit (current session)
 *   `fs.inotify.max_user_watches`
 
 To determine what the existing values are on your system, use the following commands:
+**open files**
 ```text
-sysctl fs.file-max
+ulimit -Sn
+ulimit -Hn
+```
+
+**inotify watches**
+```text
 sysctl fs.inotify.max_user_watches
 ```
+
 Alternatively, when running the client with increased verbosity (see below), the client will display what the current configured system maximum values are:
 ```text
 ...
-All application operations will be performed in: /home/user/OneDrive
+All application operations will be performed in the configured local 'sync_dir' directory: /home/alex/OneDrive
 OneDrive synchronisation interval (seconds): 300
-Maximum allowed open files:                 393370   <-- This is the current operating system fs.file-max value
-Maximum allowed inotify watches:            29374    <-- This is the current operating system fs.inotify.max_user_watches value
+Maximum allowed open files (soft):           1024
+Maximum allowed open files (hard):           262144
+Maximum allowed inotify user watches:        29463
 Initialising filesystem inotify monitoring ...
 ...
 ```
-To determine what value to change to, you need to count all the files and folders in your configured 'sync_dir':
+To determine what value to change to, you need to count all the files and folders in your configured 'sync_dir' location:
 ```text
 cd /path/to/your/sync/dir
 ls -laR | wc -l
 ```
 
 To make a change to these variables using your file and folder count, use the following process:
+**open files**
+You can increase the limits for your current shell session temporarily using:
+```
+ulimit -n <new_value>
+```
+Refer to your distribution documentation to make the change persistent across reboots and sessions. 
+
+> [!NOTE]
+> systemd overrides these values for user sessions and services. If you are making a system wide change that is persistent across reboots and sessions you will also have to modify your systemd service files in the following manner:
+> ```
+> [Service]
+> LimitNOFILE=<new_value>
+> ```
+> Post the modification of systemd serice files you will need to reload and restart the services.
+
+**inotify watches**
 ```text
-sudo sysctl fs.file-max=<new_value>
 sudo sysctl fs.inotify.max_user_watches=<new_value>
 ```
 Once these values are changed, you will need to restart your client so that the new values are detected and used.
