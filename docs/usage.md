@@ -1210,8 +1210,11 @@ When enabled, the client detects the active desktop session and applies the corr
 > [!NOTE] 
 > Display Manager Integration remains active only while the OneDrive client or its systemd service is running. If the client stops or the service is stopped, the desktop integration is automatically cleared. It is re-applied the next time the client starts.
 
-#### Fedora Display Manager Integration Example
+#### Fedora (GNOME) Display Manager Integration Example
 ![fedora_integration](./images/fedora_integration.png)
+
+#### Fedora (KDE) Display Manager Integration Example
+![fedora_kde_integration](./images/fedora_kde_integration.png)
 
 #### Ubuntu Display Manager Integration Example
 ![ubuntu_integration](./images/ubuntu_integration.png)
