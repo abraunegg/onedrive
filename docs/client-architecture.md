@@ -181,9 +181,21 @@ Due to this factor, when using `--resync` the online source is always going to b
 > [!CAUTION]
 > The creation of backup files when there is a conflict to avoid local data loss can be disabled.
 > 
-> To do this, utilise the configuration option **bypass_data_preservation**
+> To do this, utilise the configuration option **'bypass_data_preservation'** 
+> ```
+> bypass_data_preservation = "true"
+> ```
 > 
-> If this is enabled, you will experience data loss on your local data as the local file will be over-written with data from OneDrive online. Use with care and caution.
+> If enable this option, you may experience data loss on your local data as the existing local file will be over-written with data from OneDrive online. Use with extreme care and caution.
+
+> [!TIP]
+> If you wish to avoid having these backup files from being uploaded to your online OneDrive account, you can utilise the configuration option **'skip_file'** to skip these files from being uploaded.
+>
+> For example:
+> ```
+> skip_file = "~*|.~*|*.tmp|*.swp|*.partial|*-safeBackup-*"
+> ```
+> This example retails the application defaults for 'skip_file' and adds an entry to skip any 'safeBackup' generated file.
 
 ### Default Operational Modes - Conflict Handling
 

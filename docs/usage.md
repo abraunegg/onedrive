@@ -1283,6 +1283,49 @@ To change this location, the application configuration option 'sync_dir' is used
 > [!IMPORTANT]
 >  Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of local file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
 
+### Why does the client create 'safeBackup' files?
+'safeBackup' files are created to prevent local data loss whenever the client is about to replace or remove a local file and there’s any chance the current on-disk content might be different to what OneDrive expects.
+
+Under the hood, the client makes specific decisions right before a local file would otherwise be overwritten, renamed, or deleted. Instead of risking silent data loss, the client renames your current local file to a clearly marked backup name and then proceeds with the sync action.
+
+From v2.5.3+, the backup name is:
+```
+filename-hostname-safeBackup-0001.ext
+```
+The client will increment the number if additional backups are needed.
+
+#### The most common reasons you’ll see 'safeBackup' files
+1. You ran the client with `--resync`
+
+`--resync` intentionally discards the client’s local state, so the client no longer “knows” what used to be in sync. During the first pass after a resync, the online state is treated as source-of-truth. If the client finds a local file whose content differs from the online version (hash mismatch), it will back up your local copy first and then bring the local file in line with OneDrive.
+
+If you wish to treat your local files as the source-of-truth, you can set the following configuration option:
+```
+local_first = "true"
+```
+
+2. Dual-booting and pointing sync_dir at your Windows OneDrive folder.
+
+If you dual boot and set the Linux client’s sync_dir to the same path used by the Windows client, there will be times when files already exist on disk without matching local DB entries or with content that changed while Linux wasn’t running. When the Linux client encounters such a file (e.g. “exists locally but isn’t represented the way the DB expects” or “exists but content/hash differs”), the client will protect the on-disk content by creating a 'safeBackup' before it reconciles the file.
+
+3. The online file was modified (server-side) and now differs from your local copy
+
+If Microsoft OneDrive (or another app) changes a file online, the hash reported by the Graph API won’t match your local content. When the client is about to update the local item to match what’s online, a 'safeBackup' is created so your current local data isn’t lost.
+
+#### Can I turn this functionality off?
+
+Yes, but be careful. To disable local data protection entirely, set the following configuration option:
+```
+bypass_data_preservation = "true"
+```
+If you enable this, the client will not create 'safeBackup' files and may overwrite or remove local content during conflict resolution. **Use with extreme caution.**
+
+If you simply don’t want 'safeBackup' files uploaded to OneDrive, it is advisable to keep protection enabled and add a 'skip_file' rule:
+```
+skip_file = "~*|.~*|*.tmp|*.swp|*.partial|*-safeBackup-*"
+```
+This allows you to handle the safeBackup files locally, without having to remediate anything online.
+
 ### How to change what file and directory permissions are assigned to data that is downloaded from Microsoft OneDrive?
 The following are the application default permissions for any new directory or file that is created locally when downloaded from Microsoft OneDrive:
 *   Directories: 700 - This provides the following permissions: `drwx------`
