@@ -6,7 +6,6 @@ Before reading this document, please ensure you are running application version 
 
 - [Important Notes](#important-notes)
   - [Memory Usage](#memory-usage)
-  - [Upgrading from the 'skilion' Client](#upgrading-from-the-skilion-client)
   - [Guidelines for Local File and Folder Naming in the Synchronisation Directory](#guidelines-for-local-file-and-folder-naming-in-the-synchronisation-directory)
   - [Support for Microsoft Azure Information Protected Files](#support-for-microsoft-azure-information-protected-files)
   - [Compatibility with Editors and Applications Using Atomic Save Operations](#compatibility-with-editors-and-applications-using-atomic-save-operations)
@@ -33,15 +32,17 @@ Before reading this document, please ensure you are running application version 
   - [Enabling the Client Activity Log](#enabling-the-client-activity-log)
     - [Client Activity Log Example:](#client-activity-log-example)
     - [Client Activity Log Differences](#client-activity-log-differences)
-  - [Using a local Recycle Bin](#using-a-local-recycle-bin)
+  - [Display Manager Integration](#display-manager-integration)
   - [GUI Notifications](#gui-notifications)
+  - [Using a local Recycle Bin](#using-a-local-recycle-bin)
   - [Handling a Microsoft OneDrive Account Password Change](#handling-a-microsoft-onedrive-account-password-change)
   - [Determining the synchronisation result](#determining-the-synchronisation-result)
   - [Resumable Transfers](#resumable-transfers)
-  - [Display Manager Integration](#display-manager-integration)
+  
 - [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
   - [How to change the default configuration of the client?](#how-to-change-the-default-configuration-of-the-client)
   - [How to change where my data from Microsoft OneDrive is stored?](#how-to-change-where-my-data-from-microsoft-onedrive-is-stored)
+  - [Why does the client create 'safeBackup' files?](#why-does-the-client-create-safebackup-files)
   - [How to change what file and directory permissions are assigned to data that is downloaded from Microsoft OneDrive?](#how-to-change-what-file-and-directory-permissions-are-assigned-to-data-that-is-downloaded-from-microsoft-onedrive)
   - [How are uploads and downloads managed?](#how-are-uploads-and-downloads-managed)
   - [How to only sync a specific directory?](#how-to-only-sync-a-specific-directory)
@@ -80,9 +81,6 @@ Starting with version 2.5.x, the application has been completely rewritten. It i
 During a `--resync` or full online scan, the OneDrive Client may use approximately 1GB of memory for every 100,000 objects stored online. This is because the client retrieves data for all objects via the OneDrive API before processing them locally. Once this process completes, the memory is freed. To avoid performance issues, ensure your system has sufficient available memory. If the system starts using swap space due to insufficient free memory, this can significantly slow down the application and impact overall performance.
 
 To avoid potential system instability or the client being terminated by your Out-Of-Memory (OOM) process monitors, please ensure your system has sufficient memory allocated or configure adequate swap space.
-
-### Upgrading from the 'skilion' Client
-The 'skilion' version has a significant number of issues in how it manages the local sync state. When upgrading from the 'skilion' client to this client, it's recommended to stop any service or OneDrive process that may be running. Once all OneDrive services are stopped, make sure to remove any old client binaries from your system.
 
 ### Guidelines for Local File and Folder Naming in the Synchronisation Directory
 To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adhere strictly to the prescribed naming conventions for your files and folders within the sync directory. The guidelines detailed below are designed to preempt potential sync failures by aligning with Microsoft Windows Naming Conventions, coupled with specific OneDrive restrictions.
@@ -529,33 +527,57 @@ Two common errors can occur when using monitor mode:
 *   Unable to add a new inotify watch
 
 Both of these errors are local environment issues, where the following system variables need to be increased as the current system values are potentially too low:
-*   `fs.file-max`
+*   Open Files Soft limit (current session)
+*   Open Files Hard limit (current session)
 *   `fs.inotify.max_user_watches`
 
 To determine what the existing values are on your system, use the following commands:
+**open files**
 ```text
-sysctl fs.file-max
+ulimit -Sn
+ulimit -Hn
+```
+
+**inotify watches**
+```text
 sysctl fs.inotify.max_user_watches
 ```
+
 Alternatively, when running the client with increased verbosity (see below), the client will display what the current configured system maximum values are:
 ```text
 ...
-All application operations will be performed in: /home/user/OneDrive
+All application operations will be performed in the configured local 'sync_dir' directory: /home/alex/OneDrive
 OneDrive synchronisation interval (seconds): 300
-Maximum allowed open files:                 393370   <-- This is the current operating system fs.file-max value
-Maximum allowed inotify watches:            29374    <-- This is the current operating system fs.inotify.max_user_watches value
+Maximum allowed open files (soft):           1024
+Maximum allowed open files (hard):           262144
+Maximum allowed inotify user watches:        29463
 Initialising filesystem inotify monitoring ...
 ...
 ```
-To determine what value to change to, you need to count all the files and folders in your configured 'sync_dir':
+To determine what value to change to, you need to count all the files and folders in your configured 'sync_dir' location:
 ```text
 cd /path/to/your/sync/dir
 ls -laR | wc -l
 ```
 
 To make a change to these variables using your file and folder count, use the following process:
+**open files**
+You can increase the limits for your current shell session temporarily using:
+```
+ulimit -n <new_value>
+```
+Refer to your distribution documentation to make the change persistent across reboots and sessions. 
+
+> [!NOTE]
+> systemd overrides these values for user sessions and services. If you are making a system wide change that is persistent across reboots and sessions you will also have to modify your systemd service files in the following manner:
+> ```
+> [Service]
+> LimitNOFILE=<new_value>
+> ```
+> Post the modification of systemd service files you will need to reload and restart the services.
+
+**inotify watches**
 ```text
-sudo sysctl fs.file-max=<new_value>
 sudo sysctl fs.inotify.max_user_watches=<new_value>
 ```
 Once these values are changed, you will need to restart your client so that the new values are detected and used.
@@ -1047,30 +1069,74 @@ Using 'user' configuration path for application state data: /home/user/.config/o
 Using the following path to store the runtime application log: /var/log/onedrive
 ```
 
-### Using a local Recycle Bin
-By default, this application will process online deletions and directly delete the corresponding file or folder directly from your configured 'sync_dir'.
+### Display Manager Integration
+Modern desktop environments such as GNOME and KDE Plasma provide graphical file managers — Nautilus (GNOME Files) and Dolphin, respectively — to help users navigate their local and remote storage.
 
-In some cases, it may actually be desirable to move these files to your Linux user default 'Recycle Bin', so that you can manually delete the files at your own discretion.
+#### What “Display Manager Integration” means
+Display Manager Integration refers to an ability to integrate your configured Microsoft OneDrive synchronisation directory (`sync_dir`) with the desktop’s file manager environment. Depending on the platform and desktop environment, this may include:
 
-To enable this application functionality, add the following to your 'config' file:
+1. **Sidebar registration** — Adding the OneDrive folder as a “special place” within the sidebar of Nautilus (GNOME) or Dolphin (KDE), providing easy access without manual navigation.
+2. **Custom folder icon** — Applying a dedicated OneDrive icon to visually distinguish the synchronised directory within the file manager.
+3. **Context-menu extensions** — Adding right-click actions such as “Upload to OneDrive” or “Share via OneDrive” directly inside Nautilus or Dolphin.
+4. **File overlay badges** — Displaying icons (check-marks, sync arrows, or cloud symbols) to represent file synchronisation state.
+5. **System tray or application indicator** — Presenting sync status, pause/resume controls, or notifications via a tray icon.
+
+#### What display manager integration is available in the OneDrive Client for Linux
+The OneDrive Client for Linux currently supports the following integration features:
+
+1. **Sidebar registration** — The client automatically registers the OneDrive folder as a “special place” within the sidebar of Nautilus (GNOME) or Dolphin (KDE).
+2. **Custom folder icon** — The client applies a OneDrive-specific icon to the synchronisation directory where supported by the installed icon theme.
+3. **GUI Notifications** — The client (when compiled with `--enable-notifications`) will send notifications to the GUI when important events occur.
+4. **Recycle Bin** — The client (when configured with `use_recycle_bin = "true"`) will use your Display Manager Recycle Bin for online deletions that are actioned locally.
+
+This behaviour is controlled by the configuration option:
+```text
+display_manager_integration = "true"
 ```
-use_recycle_bin = "true"
-```
+When enabled, the client detects the active desktop session and applies the corresponding integration automatically when the client is running in `--monitor` mode only.
 
-This capability is designed to be compatible with the [FreeDesktop.org Trash Specification](https://specifications.freedesktop.org/trash-spec/1.0/), ensuring interoperability with GUI-based desktop environments such as GNOME (GIO) and KDE (KIO). It follows the required structure by:
-* Moving deleted files and directories to `~/.local/share/Trash/files/`
-* Creating matching metadata files in `~/.local/share/Trash/info/` with the correct `.trashinfo` format, including the original absolute path and ISO 8601-formatted deletion timestamp
-* Resolving filename collisions using a `name.N.ext` pattern (e.g., `Document.2.docx`), consistent with GNOME and KDE behaviour.
+> [!NOTE] 
+> Display Manager Integration remains active only while the OneDrive client or its systemd service is running. If the client stops or the service is stopped, the desktop integration is automatically cleared. It is re-applied the next time the client starts.
 
+#### Fedora (GNOME) Display Manager Integration Example
+![fedora_integration](./images/fedora_integration.png)
 
+#### Fedora (KDE) Display Manager Integration Example
+![fedora_kde_integration](./images/fedora_kde_integration.png)
 
-To specify an explicit 'Recycle Bin' directory, add the following to your 'config' file:
-```
-recycle_bin_path = "/path/to/desired/location/"
-```
+#### Ubuntu Display Manager Integration Example
+![ubuntu_integration](./images/ubuntu_integration.png)
 
-The same FreeDesktop.org Trash Specification will be used with this explicit 'Recycle Bin' directory.
+#### Kubuntu Display Manager Integration Example
+![kubuntu_integration](./images/kubuntu_integration.png)
 
+#### What about context menu integration?
+Context-menu integration is a desktop-specific capability, not part of the core OneDrive Client. It can be achieved through desktop-provided extension mechanisms:
+
+1. **Shell-script bridge** — A simple shell script can be registered as a KDE ServiceMenu or a GNOME Nautilus Script to trigger local actions (for example, creating a symbolic link in `~/OneDrive` to upload a file).
+2. **Python + Nautilus API (GNOME)** — Implemented via nautilus-python bindings by registering a subclass of `Nautilus.MenuProvider`.
+3. **Qt/KIO Plugins (KDE)** — Implemented using C++ or declarative .desktop ServiceMenu definitions under `/usr/share/kservices5/ServiceMenus/`.
+
+These methods are optional and operate independently of the core OneDrive Client. They can be used by advanced users or system integrators to provide additional right-click functionality.
+
+#### What about file overlay badges?
+File overlay badges are typically associated with Microsoft’s Files-On-Demand feature, which allows selective file downloads and visual state indicators (online-only, available offline, etc.).
+
+Because Files-On-Demand is currently a feature request for this client, overlay badges are not implemented and remain out of scope for now.
+
+#### What about a system tray or application indicator?
+While the core OneDrive Client for Linux does not include its own tray icon or GUI dashboard, the community provides complementary tools that plug into it — exposing sync status, pause/resume controls, tray menus, and GUI configuration front-ends. Below are two popular options:
+
+**1. OneDriveGUI** - https://github.com/bpozdena/OneDriveGUI
+* A full-featured graphical user interface built for the OneDrive Linux client.
+* Key features include: multi-account support, asynchronous real-time monitoring of multiple OneDrive profiles, a setup wizard for profile creation/import, automatic sync on GUI startup, and GUI-based login. 
+* Includes tray icon support when the desktop environment allows it. 
+* Intended to simplify one-click configuration of the CLI client, help users visualise current operations (uploads/downloads), and manage advanced features such as SharePoint libraries and multiple profiles.
+
+**2. onedrive_tray** - https://github.com/DanielBorgesOliveira/onedrive_tray
+* A lightweight system tray utility written in Qt (using libqt5 or later) that monitors the running OneDrive Linux client and displays status via a tray icon. 
+* Left-click the tray icon to view sync progress; right-click to access a menu of available actions; middle-click shows the PID of the running client. 
+* Ideal for users who just want visual status cues (e.g., “sync in progress”, “idle”, “error”) without a full GUI configuration tool.
 
 ### GUI Notifications
 To enable GUI notifications, you must compile the application with GUI Notification Support. Refer to [GUI Notification Support](install.md#gui-notification-support) for details. Once compiled, GUI notifications will work by default in the display manager session under the following conditions:
@@ -1110,6 +1176,28 @@ To disable *all* GUI notifications, add the following to your 'config' file:
 ```
 disable_notifications = "true"
 ```
+
+### Using a local Recycle Bin
+By default, this application will process online deletions and directly delete the corresponding file or folder directly from your configured 'sync_dir'.
+
+In some cases, it may actually be desirable to move these files to your Linux user default 'Recycle Bin', so that you can manually delete the files at your own discretion.
+
+To enable this application functionality, add the following to your 'config' file:
+```
+use_recycle_bin = "true"
+```
+
+This capability is designed to be compatible with the [FreeDesktop.org Trash Specification](https://specifications.freedesktop.org/trash-spec/1.0/), ensuring interoperability with GUI-based desktop environments such as GNOME (GIO) and KDE (KIO). It follows the required structure by:
+* Moving deleted files and directories to `~/.local/share/Trash/files/`
+* Creating matching metadata files in `~/.local/share/Trash/info/` with the correct `.trashinfo` format, including the original absolute path and ISO 8601-formatted deletion timestamp
+* Resolving filename collisions using a `name.N.ext` pattern (e.g., `Document.2.docx`), consistent with GNOME and KDE behaviour.
+
+To specify an explicit 'Recycle Bin' directory, add the following to your 'config' file:
+```
+recycle_bin_path = "/path/to/desired/location/"
+```
+
+The same FreeDesktop.org Trash Specification will be used with this explicit 'Recycle Bin' directory.
 
 ### Handling a Microsoft OneDrive Account Password Change
 If you change your Microsoft OneDrive Account Password, the client will no longer be authorised to sync, and will generate the following error upon next application run:
@@ -1182,70 +1270,6 @@ If `--resync` is used, all resumable data is discarded intentionally.
 > [!NOTE] 
 > Resumable transfer support is built-in and requires no special configuration. It is automatically applied during both standalone and monitor operational modes when applicable.
 
-### Display Manager Integration
-Modern desktop environments such as GNOME and KDE Plasma provide graphical file managers — Nautilus (GNOME Files) and Dolphin, respectively — to help users navigate their local and remote storage.
-
-#### What “Display Manager Integration” means
-Display Manager Integration refers to an ability to integrate your configured Microsoft OneDrive synchronisation directory (`sync_dir`) with the desktop’s file manager environment. Depending on the platform and desktop environment, this may include:
-
-1. **Sidebar registration** — Adding the OneDrive folder as a “special place” within the sidebar of Nautilus (GNOME) or Dolphin (KDE), providing easy access without manual navigation.
-2. **Custom folder icon** — Applying a dedicated OneDrive icon to visually distinguish the synchronised directory within the file manager.
-3. **Context-menu extensions** — Adding right-click actions such as “Upload to OneDrive” or “Share via OneDrive” directly inside Nautilus or Dolphin.
-4. **File overlay badges** — Displaying icons (check-marks, sync arrows, or cloud symbols) to represent file synchronisation state.
-5. **System tray or application indicator** — Presenting sync status, pause/resume controls, or notifications via a tray icon.
-
-#### What display manager integration is available in the OneDrive Client for Linux
-The OneDrive Client for Linux currently supports the following integration features:
-
-1. **Sidebar registration** — The client automatically registers the OneDrive folder as a “special place” within the sidebar of Nautilus (GNOME) or Dolphin (KDE).
-2. **Custom folder icon** — The client applies a OneDrive-specific icon to the synchronisation directory where supported by the installed icon theme.
-
-This behaviour is controlled by the configuration option:
-```text
-display_manager_integration = "true"
-```
-When enabled, the client detects the active desktop session and applies the corresponding integration automatically when the client is running in `--monitor` mode only.
-
-> [!NOTE] 
-> Display Manager Integration remains active only while the OneDrive client or its systemd service is running. If the client stops or the service is stopped, the desktop integration is automatically cleared. It is re-applied the next time the client starts.
-
-#### Fedora Display Manager Integration Example
-![fedora_integration](./images/fedora_integration.png)
-
-#### Ubuntu Display Manager Integration Example
-![ubuntu_integration](./images/ubuntu_integration.png)
-
-#### Kubuntu Display Manager Integration Example
-![kubuntu_integration](./images/kubuntu_integration.png)
-
-#### What about context menu integration?
-Context-menu integration is a desktop-specific capability, not part of the core OneDrive Client. It can be achieved through desktop-provided extension mechanisms:
-
-1. **Shell-script bridge** — A simple shell script can be registered as a KDE ServiceMenu or a GNOME Nautilus Script to trigger local actions (for example, creating a symbolic link in `~/OneDrive` to upload a file).
-2. **Python + Nautilus API (GNOME)** — Implemented via nautilus-python bindings by registering a subclass of `Nautilus.MenuProvider`.
-3. **Qt/KIO Plugins (KDE)** — Implemented using C++ or declarative .desktop ServiceMenu definitions under `/usr/share/kservices5/ServiceMenus/`.
-
-These methods are optional and operate independently of the core OneDrive Client. They can be used by advanced users or system integrators to provide additional right-click functionality.
-
-#### What about file overlay badges?
-File overlay badges are typically associated with Microsoft’s Files-On-Demand feature, which allows selective file downloads and visual state indicators (online-only, available offline, etc.).
-
-Because Files-On-Demand is currently a feature request for this client, overlay badges are not implemented and remain out of scope for now.
-
-#### What about a system tray or application indicator?
-While the core OneDrive Client for Linux does not include its own tray icon or GUI dashboard, the community provides complementary tools that plug into it — exposing sync status, pause/resume controls, tray menus, and GUI configuration front-ends. Below are two popular options:
-
-**1. OneDriveGUI** - https://github.com/bpozdena/OneDriveGUI
-* A full-featured graphical user interface built for the OneDrive Linux client.
-* Key features include: multi-account support, asynchronous real-time monitoring of multiple OneDrive profiles, a setup wizard for profile creation/import, automatic sync on GUI startup, and GUI-based login. 
-* Includes tray icon support when the desktop environment allows it. 
-* Intended to simplify one-click configuration of the CLI client, help users visualise current operations (uploads/downloads), and manage advanced features such as SharePoint libraries and multiple profiles.
-
-**2. onedrive_tray** - https://github.com/DanielBorgesOliveira/onedrive_tray
-* A lightweight system tray utility written in Qt (using libqt5 or later) that monitors the running OneDrive Linux client and displays status via a tray icon. 
-* Left-click the tray icon to view sync progress; right-click to access a menu of available actions; middle-click shows the PID of the running client. 
-* Ideal for users who just want visual status cues (e.g., “sync in progress”, “idle”, “error”) without a full GUI configuration tool.
-
 ## Frequently Asked Configuration Questions
 
 ### How to change the default configuration of the client?
@@ -1281,7 +1305,50 @@ By default, the location where your Microsoft OneDrive data is stored, is within
 To change this location, the application configuration option 'sync_dir' is used to specify a new local directory where your Microsoft OneDrive data should be stored.
 
 > [!IMPORTANT]
->  Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of local file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
+> Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of local file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
+
+### Why does the client create 'safeBackup' files?
+'safeBackup' files are created to prevent local data loss whenever the client is about to replace or remove a local file and there’s any chance the current on-disk content might be different to what OneDrive expects.
+
+Under the hood, the client makes specific decisions right before a local file would otherwise be overwritten, renamed, or deleted. Instead of risking silent data loss, the client renames your current local file to a clearly marked backup name and then proceeds with the sync action.
+
+From v2.5.3+, the backup name is:
+```
+filename-hostname-safeBackup-0001.ext
+```
+The client will increment the number if additional backups are needed.
+
+#### The most common reasons you’ll see 'safeBackup' files
+**1. You ran the client with `--resync`**
+
+`--resync` intentionally discards the client’s local state, so the client no longer “knows” what used to be in sync. During the first pass after a resync, the online state is treated as source-of-truth. If the client finds a local file whose content differs from the online version (hash mismatch), it will back up your local copy first and then bring the local file in line with OneDrive.
+
+If you wish to treat your local files as the source-of-truth, you can set the following configuration option:
+```
+local_first = "true"
+```
+
+**2. Dual-booting and pointing sync_dir at your Windows OneDrive folder.**
+
+If you dual boot and set the Linux client’s sync_dir to the same path used by the Windows client, there will be times when files already exist on disk without matching local DB entries or with content that changed while Linux wasn’t running. When the Linux client encounters such a file (e.g. “exists locally but isn’t represented the way the DB expects” or “exists but content/hash differs”), the client will protect the on-disk content by creating a 'safeBackup' before it reconciles the file.
+
+**3. The online file was modified (server-side) and now differs from your local copy**
+
+If Microsoft OneDrive (or another app) changes a file online, the hash reported by the Graph API won’t match your local content. When the client is about to update the local item to match what’s online, a 'safeBackup' is created so your current local data isn’t lost if the client determines that this action should be taken.
+
+#### Can I turn this functionality off?
+
+Yes, but be careful. To disable local data protection entirely, set the following configuration option:
+```
+bypass_data_preservation = "true"
+```
+If you enable this, the client will not create 'safeBackup' files and may overwrite or remove local content during conflict resolution. **Use with extreme caution.**
+
+If you simply don’t want 'safeBackup' files uploaded to OneDrive, it is advisable to keep protection enabled and add a 'skip_file' rule:
+```
+skip_file = "~*|.~*|*.tmp|*.swp|*.partial|*-safeBackup-*"
+```
+This allows you to handle the safeBackup files locally, without having to remediate anything online.
 
 ### How to change what file and directory permissions are assigned to data that is downloaded from Microsoft OneDrive?
 The following are the application default permissions for any new directory or file that is created locally when downloaded from Microsoft OneDrive:

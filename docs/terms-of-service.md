@@ -32,7 +32,7 @@ The OneDrive Client for Linux software is provided "as is" without any warrantie
 
 Microsoft is not responsible for OneDrive Client for Linux. Any issues or problems with OneDrive Client for Linux should be raised on GitHub at https://github.com/abraunegg/onedrive or email support@mynas.com.au
 
-OneDrive Client for Linux is not responsible for the Microsoft OneDrive Service or the Microsoft Graph API Service that this Application utilizes. Any issue with either Microsoft OneDrive or Microsoft Graph API should be raised with Microsoft via their support channel in your country.
+OneDrive Client for Linux is not responsible for the Microsoft OneDrive Service or the Microsoft Graph API Service that this Application utilises. Any issue with either Microsoft OneDrive or Microsoft Graph API should be raised with Microsoft via their support channel in your country.
 
 ## 6. Limitation of Liability
 
