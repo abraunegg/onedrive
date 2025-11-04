@@ -573,7 +573,7 @@ Refer to your distribution documentation to make the change persistent across re
 > [Service]
 > LimitNOFILE=<new_value>
 > ```
-> Post the modification of systemd serice files you will need to reload and restart the services.
+> Post the modification of systemd service files you will need to reload and restart the services.
 
 **inotify watches**
 ```text
