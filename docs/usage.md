@@ -1298,20 +1298,20 @@ The client will increment the number if additional backups are needed.
 #### The most common reasons you’ll see 'safeBackup' files
 **1. You ran the client with `--resync`**
 
-&nbsp;&nbsp;&nbsp;&nbsp;`--resync` intentionally discards the client’s local state, so the client no longer “knows” what used to be in sync. During the first pass after a resync, the online state is treated as source-of-truth. If the client finds a local file whose content differs from the online version (hash mismatch), it will back up your local copy first and then bring the local file in line with OneDrive.
+`--resync` intentionally discards the client’s local state, so the client no longer “knows” what used to be in sync. During the first pass after a resync, the online state is treated as source-of-truth. If the client finds a local file whose content differs from the online version (hash mismatch), it will back up your local copy first and then bring the local file in line with OneDrive.
 
-&nbsp;&nbsp;&nbsp;&nbsp;If you wish to treat your local files as the source-of-truth, you can set the following configuration option:
-&nbsp;&nbsp;&nbsp;&nbsp;```
-&nbsp;&nbsp;&nbsp;&nbsp;local_first = "true"
-&nbsp;&nbsp;&nbsp;&nbsp;```
+If you wish to treat your local files as the source-of-truth, you can set the following configuration option:
+```
+local_first = "true"
+```
 
 **2. Dual-booting and pointing sync_dir at your Windows OneDrive folder.**
 
-&nbsp;&nbsp;&nbsp;&nbsp;If you dual boot and set the Linux client’s sync_dir to the same path used by the Windows client, there will be times when files already exist on disk without matching local DB entries or with content that changed while Linux wasn’t running. When the Linux client encounters such a file (e.g. “exists locally but isn’t represented the way the DB expects” or “exists but content/hash differs”), the client will protect the on-disk content by creating a 'safeBackup' before it reconciles the file.
+If you dual boot and set the Linux client’s sync_dir to the same path used by the Windows client, there will be times when files already exist on disk without matching local DB entries or with content that changed while Linux wasn’t running. When the Linux client encounters such a file (e.g. “exists locally but isn’t represented the way the DB expects” or “exists but content/hash differs”), the client will protect the on-disk content by creating a 'safeBackup' before it reconciles the file.
 
 **3. The online file was modified (server-side) and now differs from your local copy**
 
-&nbsp;&nbsp;&nbsp;&nbsp;If Microsoft OneDrive (or another app) changes a file online, the hash reported by the Graph API won’t match your local content. When the client is about to update the local item to match what’s online, a 'safeBackup' is created so your current local data isn’t lost if the client determines that this action should be taken.
+If Microsoft OneDrive (or another app) changes a file online, the hash reported by the Graph API won’t match your local content. When the client is about to update the local item to match what’s online, a 'safeBackup' is created so your current local data isn’t lost if the client determines that this action should be taken.
 
 #### Can I turn this functionality off?
 
