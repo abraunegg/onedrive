@@ -429,6 +429,7 @@ runstatedir
 runsvdir
 Ruppe
 rwxr
+safebackup
 sargs
 sbindir
 scgi
