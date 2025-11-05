@@ -2,6 +2,38 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.8 - 2025-11-05
+
+### Added
+*   Implement Feature Request: Add that dotfiles in sync_list should be synced even when skip_dotfiles = "true" (#3456)
+*   Implement Feature Request: Add websocket notification support (#3413)
+*   Implement Feature Request: Add --download-file feature (#3459)
+*   Implement Feature Request: Add option to remove source folders when using --upload-only --remove-source-files (#3473)
+*   Implement Feature Request: Add support for AlmaLinux (#3485)
+*   Implement Feature Request: Add ONEDRIVE_THREADS Docker option (#3494)
+*   Implement Feature Request: Implement Desktop Manager Integration for GNOME and KDE (#3500)
+
+### Changed
+*   Changed how the file path is computed when there are 'skip_dir' entries to be consistent (#3484)
+*   Changed checkJSONAgainstClientSideFiltering() to avoid multiple calls to computeItemPath() (#3489)
+
+### Fixed
+*   Fix Bug: Ensure driveId target is cached for modified file uploads (#3454)
+*   Fix Bug: Ensure that 'use_intune_sso' and 'use_device_auth' cannot be used together (#3453)
+*   Fix Bug: Force DNS Timeout when forcing a libcurl fresh connection (#3468)
+*   Fix Bug: Fix WebSocket connection failure on libcurl 8.12.x by forcing HTTP/1.1 and disabling ALPN/NPN (#3482)
+*   Fix Bug: Fix application crash after deleting file locally (#3481)
+*   Fix Bug: Fix missing user information when syncing shared files (#3483)
+*   Fix Bug: Fix Shared Folder data being deleted due to 'skip_dir' entry of '.*' (#3476)
+*   Fix Bug: Fix that if using 'sync_list' only add new JSON items early to allow applyPotentiallyChangedItem() to operate as expected (#3505)
+*   Fix Bug: When using --dry-run use tracked renamed directories to avoid falsely indicating local data is new and uploading as new data (#3503)
+*   Fix Bug: Fix the fetching of maximum open files to be more POSIX compliant (#3508)
+*   Fix Bug: Fix the Handling of WebSocket 'echo' from a local change (#3509)
+
+### Updated
+*   Updated documentation
+
+
 ## 2.5.7 - 2025-09-23
 
 ### Added
