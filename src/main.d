@@ -1383,6 +1383,13 @@ int main(string[] cliArgs) {
 							}
 						}
 						
+						// Empirical evidence shows that Microsoft often sends multiple
+						// notifications for one single change, so we need a loop to exhaust
+						// all signals that were queued up by the webhook. The notifications
+						// do not contain any actual changes, and we will always rely do the
+						// delta endpoint to sync to latest. Therefore, only one sync run is
+						// good enough to catch up for multiple notifications.
+						
 						// Only process online notifications if NOT '--upload-only'
 						if (!appConfig.getValueBool("upload_only") && onlineSignal) {
 							int signalCount = 1;

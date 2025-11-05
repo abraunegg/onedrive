@@ -2,6 +2,16 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.9 - 2025-11-06
+
+### Fixed
+*   Fix Bug: Fix very high CPU & memory utilisation with 2.5.8 when using --upload-only (#3515) (CRITICAL BUGFIX)
+*   Fix Bug: Unexpected deletion of empty nested folders during first sync with 'sync_list' and --resync (#3513) (CRITICAL BUGFIX)
+
+### Updated
+*   Updated documentation
+
+
 ## 2.5.8 - 2025-11-05
 
 ### Added
