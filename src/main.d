@@ -1353,99 +1353,79 @@ int main(string[] cliArgs) {
 							}
 						}
 						
-						// If we are doing --upload-only however .. we need to 'ignore' online change
+						// Adjust sleepTime based on webhook/websocket only when NOT upload_only
 						if (!appConfig.getValueBool("upload_only")) {
-						
-							// Processing of online changes in near real-time .. update sleep time
 							if (webhookEnabled) {
-								// If onedrive webhook is enabled
-								// Update sleep time based on renew interval
 								Duration nextWebhookCheckDuration = oneDriveWebhook.getNextExpirationCheckDuration();
-								if (nextWebhookCheckDuration < sleepTime) {
-									sleepTime = nextWebhookCheckDuration;
-									if (debugLogging) {addLogEntry("Update sleeping time (based on webhook next expiration check) to " ~ to!string(sleepTime), ["debug"]);}
-								}
-								// Webhook Notification reset to false for this loop
+								if (nextWebhookCheckDuration < sleepTime) sleepTime = nextWebhookCheckDuration;
 								notificationReceived = false;
-							} else {
-								// Did the user configure to disable 'websocket' support?
-								if (!appConfig.getValueBool("disable_websocket_support")) {
-									// WebSocket support is enabled by default, but only if the version of libcurl supports it
-									if (appConfig.curlSupportsWebSockets) {
-										// Update sleep time based on renew interval
-										Duration nextWebsocketCheckDuration = oneDriveSocketIo.getNextExpirationCheckDuration();
-										if (nextWebsocketCheckDuration < sleepTime) {
-											sleepTime = nextWebsocketCheckDuration;
-											if (debugLogging) {addLogEntry("Update sleeping time (based on WebSocket next expiration check) to " ~ to!string(sleepTime), ["debug"]);}
-										}
-									}
-								}
+							} else if (!appConfig.getValueBool("disable_websocket_support") && appConfig.curlSupportsWebSockets) {
+								Duration nextWebsocketCheckDuration = oneDriveSocketIo.getNextExpirationCheckDuration();
+								if (nextWebsocketCheckDuration < sleepTime) sleepTime = nextWebsocketCheckDuration;
 							}
-							
-							// Process signals from 'WebSockets' or 'Webhook' source
-							int res = 1;
-							// Process incoming notifications if any.
-							auto signalExists = receiveTimeout(sleepTime, (int msg) {res = msg;},(ulong _) {notificationReceived = true;});
-							
-							// Debug values
-							if (debugLogging) {
-								addLogEntry("signalExists = " ~ to!string(signalExists), ["debug"]);
-								addLogEntry("worker status = " ~ to!string(res), ["debug"]);
-								addLogEntry("notificationReceived = " ~ to!string(notificationReceived), ["debug"]);
-							}
+						}
 						
-							// Empirical evidence shows that Microsoft often sends multiple
-							// notifications for one single change, so we need a loop to exhaust
-							// all signals that were queued up by the webhook. The notifications
-							// do not contain any actual changes, and we will always rely do the
-							// delta endpoint to sync to latest. Therefore, only one sync run is
-							// good enough to catch up for multiple notifications.
-							if (notificationReceived) {
-								int signalCount = 1;
-								
-								while (true) {
-									signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
-									if (signalExists) {
-										signalCount++;
-									} else {
-										// Local change 'echo' debounce check
-										auto now = MonoTime.currTime();
-										auto sinceLocal = now - lastLocalWrite;
-										
-										if (sinceLocal < localEchoDebounce) {
-											if (debugLogging) {
-												addLogEntry(
-													"Debounced online refresh signal (" ~
-													to!string(sinceLocal.total!"msecs"()) ~ " ms since local write; threshold " ~
-													to!string(localEchoDebounce.total!"msecs"()) ~ " ms)",
-													["debug"]
-												);
-											}
-										
-											// Ignore this reflection; skip the immediate online scan.
-											// Next push or the regular monitor cadence will pick up genuine remote changes.
-											break;
+						// ALWAYS wait for FS worker, but only track webhook/websocket if NOT '--upload-only'
+						int res = 1;
+						bool onlineSignal = false;
+
+						if (appConfig.getValueBool("upload_only")) {
+							receiveTimeout(sleepTime, (int msg) { res = msg; });
+						} else {
+							receiveTimeout(sleepTime, (int msg) { res = msg; }, (ulong _) { onlineSignal = true; });
+						}
+
+						// Debug logging of worker status
+						if (debugLogging) {
+							addLogEntry("worker status = " ~ to!string(res), ["debug"]);
+							if (!appConfig.getValueBool("upload_only")) {
+								addLogEntry("notificationReceived = " ~ to!string(onlineSignal), ["debug"]);
+							}
+						}
+						
+						// Only process online notifications if NOT '--upload-only'
+						if (!appConfig.getValueBool("upload_only") && onlineSignal) {
+							int signalCount = 1;
+							while (true) {
+								auto more = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
+								if (more) {
+									signalCount++;
+								} else {
+									auto now = MonoTime.currTime();
+									auto sinceLocal = now - lastLocalWrite;
+									if (sinceLocal < localEchoDebounce) {
+										if (debugLogging) {
+											addLogEntry(
+												"Debounced online refresh signal (" ~
+												to!string(sinceLocal.total!"msecs"()) ~ " ms since local write; threshold " ~
+												to!string(localEchoDebounce.total!"msecs"()) ~ " ms)",
+												["debug"]
+											);
 										}
 										
-										// Not a debounce .. most likely a legitimate online change
-										if (webhookEnabled) {
-											addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signal(s) from the Microsoft Graph API Webhook Endpoint");
-										} else {
-											addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signal(s) from the Microsoft Graph API WebSocket Endpoint");
-										}
-										
-										// Perform the online scan callback
-										oneDriveOnlineCallback();
+										// Ignore this reflection; skip the immediate online scan.
+										// Next push or the regular monitor cadence will pick up genuine remote changes.
 										break;
 									}
+
+									if (webhookEnabled) {
+										addLogEntry("Received " ~ to!string(signalCount) ~ " signal(s) from Webhook");
+									} else {
+										addLogEntry("Received " ~ to!string(signalCount) ~ " signal(s) from WebSocket");
+									}
+									
+									// Perform online callback action
+									oneDriveOnlineCallback();
+									break;
 								}
 							}
+						}
 
-							if(res == -1) {
-								addLogEntry("ERROR: Monitor worker failed.");
-								monitorFailures = true;
-								performFileSystemMonitoring = false;
-							}
+						// Worker failure remains outside '--upload-only' filter
+						if (res == -1) {
+							addLogEntry("ERROR: Monitor worker failed.");
+							monitorFailures = true;
+							performFileSystemMonitoring = false;
 						}
 					} else {
 						// no hooks available, nothing to check
