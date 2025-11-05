@@ -532,6 +532,7 @@ Both of these errors are local environment issues, where the following system va
 *   `fs.inotify.max_user_watches`
 
 To determine what the existing values are on your system, use the following commands:
+
 **open files**
 ```text
 ulimit -Sn
@@ -561,7 +562,9 @@ ls -laR | wc -l
 ```
 
 To make a change to these variables using your file and folder count, use the following process:
+
 **open files**
+
 You can increase the limits for your current shell session temporarily using:
 ```
 ulimit -n <new_value>

@@ -544,25 +544,36 @@ class ClientSideFiltering {
 					anywhereRuleStripped = syncListRuleEntry;
 				}
 				
-				if (canFind(path, anywhereRuleStripped)) {
-					// we matched the path to the rule
-					if (debugLogging) {addLogEntry(" - anywhere rule 'canFind' MATCH", ["debug"]);}
+				// If the input path is exactly the parent root (single segment) and that segment
+				// matches the rule's first segment, treat it as a match.
+				if (!ruleSegments.empty && count(pathSegments) == 1 && matchFirstSegmentToPathFirstSegment(ruleSegments, pathSegments)) {
+					if (debugLogging) {
+						addLogEntry(" - anywhere rule 'parent root' MATCH with '" ~ ruleSegments[0] ~ "'", ["debug"]);
+					}
 					anywhereRuleMatched = true;
-				} else {
-					// no 'canFind' match, try via regex
-					if (debugLogging) {addLogEntry(" - anywhere rule 'canFind' NO_MATCH .. trying a regex match", ["debug"]);}
-					
-					// create regex from 'syncListRuleEntry'
-					auto allowedMask = regex(createRegexCompatiblePath(syncListRuleEntry));
-					
-					// perform regex match attempt
-					if (matchAll(path, allowedMask)) {
-						// we regex matched the path to the rule
-						if (debugLogging) {addLogEntry(" - anywhere rule 'matchAll via regex' MATCH", ["debug"]);}
+				}
+				
+				if (!anywhereRuleMatched) {
+					if (canFind(path, anywhereRuleStripped)) {
+						// we matched the path to the rule
+						if (debugLogging) {addLogEntry(" - anywhere rule 'canFind' MATCH", ["debug"]);}
 						anywhereRuleMatched = true;
 					} else {
-						// no match
-						if (debugLogging) {addLogEntry(" - anywhere rule 'matchAll via regex' NO_MATCH", ["debug"]);}
+						// no 'canFind' match, try via regex
+						if (debugLogging) {addLogEntry(" - anywhere rule 'canFind' NO_MATCH .. trying a regex match", ["debug"]);}
+						
+						// create regex from 'syncListRuleEntry'
+						auto allowedMask = regex(createRegexCompatiblePath(syncListRuleEntry));
+						
+						// perform regex match attempt
+						if (matchAll(path, allowedMask)) {
+							// we regex matched the path to the rule
+							if (debugLogging) {addLogEntry(" - anywhere rule 'matchAll via regex' MATCH", ["debug"]);}
+							anywhereRuleMatched = true;
+						} else {
+							// no match
+							if (debugLogging) {addLogEntry(" - anywhere rule 'matchAll via regex' NO_MATCH", ["debug"]);}
+						}
 					}
 				}
 				
