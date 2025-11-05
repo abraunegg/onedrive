@@ -2630,6 +2630,13 @@ class SyncEngine {
 					string existingItemPath = computeItemPath(queryDriveID, queryParentID) ~ "/" ~ existingDatabaseItem.name;
 					if (debugLogging) {addLogEntry("existingItemPath calculated full path is: " ~ existingItemPath, ["debug"]);}
 					
+					// Ensure that this path exists if this is an 'existing' database item
+					if (existingDatabaseItem.type == ItemType.dir) {
+						if (!exists(existingItemPath)) {
+							handleLocalDirectoryCreation(existingDatabaseItem, existingItemPath, onedriveJSONItem);
+						}
+					}
+					
 					// Attempt to apply this changed item
 					applyPotentiallyChangedItem(existingDatabaseItem, existingItemPath, newDatabaseItem, newItemPath, onedriveJSONItem);
 					
