@@ -408,6 +408,7 @@ recvfd
 redhat
 relocs
 relro
+repology
 restorecon
 retu
 revents

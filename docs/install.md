@@ -53,7 +53,7 @@ You should only build from source in the following circumstances:
 2. Your distribution does not have a package for your to install. Refer to [repology](https://repology.org/project/onedrive/versions) as a source of all 'onedrive' client versions available across tracked distributions
 3. You require code newer than the latest release or are building a Pull Request to validate a bugfix
 
-Outside of these 3 reasons, you should not be building the client yourself. You should endevour where possible to use a pre-built package.
+Outside of these 3 reasons, you should not be building the client yourself. You should endeavour where possible to use a pre-built package.
 
 > [!IMPORTANT]
 > If your distribution does not provide a package, raise a request with them to get the client packaged and maintained in your chosen distribution.
@@ -93,7 +93,13 @@ You will need at least GDC version 15. If your distribution's repositories inclu
 ### Install Build Dependencies (By Distribution)
 
 #### Arch Linux & Manjaro Linux
-- detail packages
+```text
+sudo pacman -S git make pkg-config curl sqlite dbus ldc
+```
+For GUI notifications the following is also necessary:
+```text
+sudo pacman -S libnotify
+```
 
 #### CentOS
 - detail packages
