@@ -19,7 +19,7 @@
 
 | Distribution                    | Distribution Package Name & Link                                                                         | &nbsp;&nbsp;Distribution Package Version&nbsp;&nbsp; | Correct Installation Method |
 |---------------------------------|----------------------------------------------------------------------------------------------------------|:----------------------------------------------------:|-----------------------------|
-| Alpine Linux                    | [onedrive](https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge)                              |<a href="https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge"><img src="https://repology.org/badge/version-for-repo/alpine_edge/onedrive.svg?header=" alt="Alpine Linux Edge package" width="46" height="20"></a> | Alpine **Stable** may ship older versions. If version is outdated → build from source |
+| Alpine Linux                    | [onedrive](https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge)                              |<a href="https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge"><img src="https://repology.org/badge/version-for-repo/alpine_edge/onedrive.svg?header=" alt="Alpine Linux Edge package" width="46" height="20"></a> | Alpine **Stable** may ship older versions. If your version is outdated, you need to build from source |
 | Arch Linux<br><br>Manjaro Linux | [onedrive-abraunegg](https://aur.archlinux.org/packages/onedrive-abraunegg/)                             |<a href="https://aur.archlinux.org/packages/onedrive-abraunegg"><img src="https://repology.org/badge/version-for-repo/aur/onedrive-abraunegg.svg?header=" alt="AUR package" width="46" height="20"></a>| Install via: `pamac build onedrive-abraunegg` from the Arch Linux User Repository (AUR)<br><br>**Note:** You must first install 'base-devel' as this is a pre-requisite for using the AUR<br><br>**Note:** If asked regarding a provider for 'd-runtime' and 'd-compiler', select 'liblphobos' and 'ldc'<br><br>**Note:** System must have at least 1GB of memory & 1GB swap space<br><br>AUR package `onedrive-abraunegg` follows the release versions<br>AUR package `onedrive-abraunegg-git` follows the 'master' branch |
 | CentOS Stream 8                 | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_8/onedrive.svg?header=" alt="CentOS 8 package" width="46" height="20"></a>| Install via: `sudo dnf install onedrive` |
 | CentOS Stream 9                 | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_9/onedrive.svg?header=" alt="CentOS 9 package" width="46" height="20"></a>| Install via: `sudo dnf install onedrive` |
@@ -46,24 +46,49 @@
 | Void Linux                      | [onedrive](https://voidlinux.org/packages/?arch=x86_64&q=onedrive)                                       |<a href="https://voidlinux.org/packages/?arch=x86_64&q=onedrive"><img src="https://repology.org/badge/version-for-repo/void_x86_64/onedrive.svg?header=" alt="Void Linux x86_64 package" width="46" height="20"></a>||
 
 
-
-
 ## When Should You Build From Source?
-Short list of real reasons:
-- You are packaging for a custom or minimal distro
-- You are contributing patches or developing features
-- You require code newer than the latest release
+You should only build from source in the following circumstances:
 
-Otherwise → **use packages above.**
+1. You are packaging for a custom or minimal distro
+2. Your distribution does not have a package for your to install. Refer to [repology](https://repology.org/project/onedrive/versions) as a source of all 'onedrive' client versions available across tracked distributions
+3. You require code newer than the latest release or are building a Pull Request to validate a bugfix
+
+Outside of these 3 reasons, you should not be building the client yourself. You should endevour where possible to use a pre-built package.
+
+> [!IMPORTANT]
+> If your distribution does not provide a package, raise a request with them to get the client packaged and maintained in your chosen distribution.
+
 
 ## Building from Source
-1. Ensure your system meets the minimum requirements
-2. Install Build Dependencies
+1. Ensure your system meets the minimum build requirements
+2. Install Build Dependencies including the relevant compiler
 3. Clone, configure, build, install
 
-### Minimum Requirements
-- 1GB RAM + 1GB Swap recommended
-- D compiler: DMD ≥ 2.091.1, LDC ≥ 1.20.1, or GDC ≥ 15
+### Minimum Build Requirements
+*   For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space.
+*   Install the required distribution package dependencies covering the required development tools and development libraries for curl and sqlite
+*   Install the [Digital Mars D Compiler (DMD)](https://dlang.org/download.html), [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc), or, at least version 15 of the [GNU D Compiler (GDC)](https://www.gdcproject.org/)
+
+> [!IMPORTANT]
+> To compile this application successfully, the minimum supported versions of each compiler are: DMD **2.091.1**, LDC **1.20.1**, and, GDC **15**. Ensuring compatibility and optimal performance necessitates the use of these specific versions or their more recent updates.
+>
+> You only need 1 compiler installed. You do not need to install DMD, LDC and GDC. Please *pick* the most applicable compiler for your distribution.
+
+#### Installing DMD Compiler
+To install the DMD Compiler, this can be achieved in the following manner:
+```text
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+
+#### Installing LDC Compiler
+To install the LDC Compiler, this can be achieved in the following manner:
+```text
+curl -fsS https://dlang.org/install.sh | bash -s ldc
+```
+
+#### Installing GDC Compiler
+You will need at least GDC version 15. If your distribution's repositories include a suitable version, you can install it from there. Common names for the GDC package are listed on the [GDC website](https://www.gdcproject.org/downloads#linux-distribution-packages). If the package is unavailable or its version is too old, you can try building it from source following [these instructions](https://wiki.dlang.org/GDC/Installation).
+
 
 ### Install Build Dependencies (By Distribution)
 

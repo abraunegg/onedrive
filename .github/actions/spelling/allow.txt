@@ -136,6 +136,7 @@ endinaness
 enduml
 Entra
 envp
+eopkg
 epel
 epfd
 eselect
