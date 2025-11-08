@@ -43,7 +43,6 @@
 | Ubuntu 20.04 LTS                | [onedrive](https://packages.ubuntu.com/focal/onedrive)                                                   |<a href="https://packages.ubuntu.com/focal/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
 | Ubuntu 22.04 LTS                | [onedrive](https://packages.ubuntu.com/jammy/onedrive)                                                   |<a href="https://packages.ubuntu.com/jammy/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_22_04/onedrive.svg?header=" alt="Ubuntu 22.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
 | Ubuntu 24.04 LTS                | [onedrive](https://packages.ubuntu.com/noble/onedrive)                                                   |<a href="https://packages.ubuntu.com/noble/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_24_04/onedrive.svg?header=" alt="Ubuntu 24.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
-| Void Linux                      | [onedrive](https://voidlinux.org/packages/?arch=x86_64&q=onedrive)                                       |<a href="https://voidlinux.org/packages/?arch=x86_64&q=onedrive"><img src="https://repology.org/badge/version-for-repo/void_x86_64/onedrive.svg?header=" alt="Void Linux x86_64 package" width="46" height="20"></a>||
 
 
 ## When Should You Build From Source?
@@ -92,7 +91,7 @@ You will need at least GDC version 15. If your distribution's repositories inclu
 
 ### Install Build Dependencies (By Distribution)
 
-#### Arch Linux & Manjaro Linux
+#### Arch Linux | Manjaro Linux
 ```text
 sudo pacman -S git make pkg-config curl sqlite dbus ldc
 ```
@@ -101,32 +100,137 @@ For GUI notifications the following is also necessary:
 sudo pacman -S libnotify
 ```
 
-#### CentOS
-- detail packages
+#### Dependencies: CentOS 6.x | RHEL 6.x
+CentOS 6.x and RHEL 6.x reached End of Life status on November 30th 2020 and is no longer supported or tested against.
 
-#### Debian | Linux Mint Debian Edition
+#### Dependencies: CentOS 7.x | RHEL 7.x
+CentOS 7.x and RHEL 7.x reached End of Life status on June 30th 2024 and is no longer supported or tested against.
+
+#### CentOS Stream 8 | CentOS Stream 9
+```text
+sudo dnf groupinstall 'Development Tools'
+sudo dnf install libcurl-devel sqlite-devel dbus-devel
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+For GUI notifications the following is also necessary:
+```text
+sudo dnf install libnotify-devel
+```
+
+#### CentOS Stream 10
  - detail packages
 
-#### Fedora
-- detail packages
+
+#### Debian 9
+Debian 9 reached the end of its five-year LTS window on July 18th 2020 and is no longer supported or tested against.
+
+#### Debian 10
+Debian 10 reached the end of its five-year LTS window on September 10th 2022 and is no longer supported or tested against.
+
+#### Debian 11 | Debian 12 | Debian 13 | Linux Mint Debian Edition 6 | Linux Mint Debian Edition 7
+ ```text
+sudo apt install build-essential
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+For GUI notifications the following is also necessary:
+```text
+sudo apt install libnotify-dev
+```
+
+#### Fedora <= version 40
+```text
+sudo dnf groupinstall 'Development Tools'
+sudo dnf install libcurl-devel sqlite-devel dbus-devel
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+For GUI notifications the following is also necessary:
+```text
+sudo dnf install libnotify-devel
+```
+
+#### Fedora >= version 41
+> [!NOTE]
+> Fedora 41 and above uses dnf5 which removes some deprecated aliases, specifically 'groupinstall' in this instance.
+
+```text
+sudo dnf group install development-tools
+sudo dnf install libcurl-devel sqlite-devel dbus-devel
+```
+Before running the dmd install you need to check for the option 'use-keyboxd' in your gnupg common.conf file and comment it out while running the install.
+```text
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+Or you may get the following error:
+```text
+myuser@fedora:~$ curl -fsS https://dlang.org/install.sh | bash -s dmd
+Downloading https://dlang.org/d-keyring.gpg
+######################################################################## 100.0%
+gpg: Note: Specified keyrings are ignored due to option "use-keyboxd"
+gpg: Signature made Thu 06 Mar 2025 10:45:29 GMT
+gpg:                using RSA key F3F896F3274BBD9BBBA59058710592E7FB7AF6CA
+gpg: Can't check signature: No public key
+Invalid signature https://dlang.org/d-keyring.gpg.sig
+```
+For GUI notifications the following is also necessary:
+```text
+sudo dnf install libnotify-devel
+```
 
 #### FreeBSD
-- detail packages
+> [!NOTE]
+> Install the required FreeBSD packages as 'root' unless you have installed 'sudo'
+
+```text
+pkg install bash bash-completion gmake pkgconf autoconf automake logrotate libinotify git sqlite3 ldc
+```
+For GUI notifications the following is also necessary:
+```text
+pkg install libnotify
+```
 
 #### Gentoo
-- detail packages
-
-#### Ubuntu | Kubuntu | Linux Mint
-- detail packages
+```text
+sudo emerge --onlydeps net-misc/onedrive
+```
 
 #### OpenSUSE Leap
-- detail packages
+```text
+sudo zypper refresh
+sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static dbus-1-devel
+```
+For GUI notifications the following is also necessary:
+```text
+sudo zypper install libnotify-devel
+```
 
 #### OpenSUSE Tumbleweed
 - detail packages
 
-#### Ubuntu
-- detail packages
+#### Ubuntu 16.x
+Ubuntu 16.x LTS reached the end of its five-year LTS window on April 30th 2021 and is no longer supported or tested against.
+
+#### Ubuntu 18.x 
+Ubuntu 18.x LTS reached the end of its five-year LTS window on May 31th 2023 and is no longer supported or tested against.
+
+#### Ubuntu 20.x | Ubuntu 22.x | Ubuntu 24.x
+> [!NOTE]
+> These dependencies are also applicable for all distributions that are based on Ubuntu such as:
+> *   Lubuntu
+> *   Linux Mint
+> *   POP OS
+> *   Peppermint OS
+> *   Zorin OS
+
+```text
+sudo apt install build-essential
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+For GUI notifications the following is also necessary:
+```text
+sudo apt install libnotify-dev
+```
 
 ### Clone, Configure, Build, Install
 
