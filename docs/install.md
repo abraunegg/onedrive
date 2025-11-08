@@ -6,7 +6,7 @@
 
 ## Recommended Installation Method (Using Pre-Built Packages)
 
-### Important Notice for all Debian | Ubuntu | Linux Mint | Pop!_OS | Raspberry Pi OS | Zorin Users
+### Important Notice for all Debian | Ubuntu | Linux Mint | Pop!_OS | Raspbian | Zorin Users
 
 > [!IMPORTANT]
 > **DO NOT install the OneDrive client from your distribution repositories**
@@ -17,32 +17,32 @@
 
 ### Which Installation Method Should I Use?
 
-| Distribution                    | Distribution Package Name & Link                                                                         | &nbsp;&nbsp;Distribution Package Version&nbsp;&nbsp; | Correct Installation Method |
-|---------------------------------|----------------------------------------------------------------------------------------------------------|:----------------------------------------------------:|-----------------------------|
-| Alpine Linux                    | [onedrive](https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge)                              |<a href="https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge"><img src="https://repology.org/badge/version-for-repo/alpine_edge/onedrive.svg?header=" alt="Alpine Linux Edge package" width="46" height="20"></a> | Alpine **Stable** may ship older versions. If your version is outdated, you need to build from source |
-| Arch Linux<br><br>Manjaro Linux | [onedrive-abraunegg](https://aur.archlinux.org/packages/onedrive-abraunegg/)                             |<a href="https://aur.archlinux.org/packages/onedrive-abraunegg"><img src="https://repology.org/badge/version-for-repo/aur/onedrive-abraunegg.svg?header=" alt="AUR package" width="46" height="20"></a>| Install via: `pamac build onedrive-abraunegg` from the Arch Linux User Repository (AUR)<br><br>**Note:** You must first install 'base-devel' as this is a pre-requisite for using the AUR<br><br>**Note:** If asked regarding a provider for 'd-runtime' and 'd-compiler', select 'liblphobos' and 'ldc'<br><br>**Note:** System must have at least 1GB of memory & 1GB swap space<br><br>AUR package `onedrive-abraunegg` follows the release versions<br>AUR package `onedrive-abraunegg-git` follows the 'master' branch |
-| CentOS Stream 8                 | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_8/onedrive.svg?header=" alt="CentOS 8 package" width="46" height="20"></a>| Install via: `sudo dnf install onedrive` |
-| CentOS Stream 9                 | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_9/onedrive.svg?header=" alt="CentOS 9 package" width="46" height="20"></a>| Install via: `sudo dnf install onedrive` |
-| CentOS Stream 10                | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_10/onedrive.svg?header=" alt="CentOS 10 package" width="46" height="20"></a>| Install via: `sudo dnf install onedrive` |
-| Debian 11                       | [onedrive](https://packages.debian.org/bullseye/source/onedrive)                                         |<a href="https://packages.debian.org/bullseye/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_11/onedrive.svg?header=" alt="Debian 11 package" width="46" height="20"></a>| **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
-| Debian 12                       | [onedrive](https://packages.debian.org/bookworm/source/onedrive)                                         |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_12/onedrive.svg?header=" alt="Debian 12 package" width="46" height="20"></a>| **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
-| Debian 13                       | [onedrive](https://packages.debian.org/trixie/source/onedrive)                                           |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_13/onedrive.svg?header=" alt="Debian 13 package" width="46" height="20"></a>| **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
-| Debian Sid                      | [onedrive](https://packages.debian.org/sid/onedrive)                                                     |<a href="https://packages.debian.org/sid/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_unstable/onedrive.svg?header=" alt="Debian Sid package" width="46" height="20"></a>| Install via: `sudo apt install --no-install-recommends --no-install-suggests onedrive` |
-| Fedora                          | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/fedora_rawhide/onedrive.svg?header=" alt="Fedora Rawhide package" width="46" height="20"></a>| Install via: `sudo dnf install onedrive` |
-| FreeBSD                         | [onedrive](https://www.freshports.org/net/onedrive)                                                      |<a href="https://www.freshports.org/net/onedrive"><img src="https://repology.org/badge/version-for-repo/freebsd/onedrive.svg?header=" alt="FreeBSD package" width="46" height="20"></a>| Install via: `pkg install onedrive` |
-| Gentoo                          | [onedrive](https://packages.gentoo.org/packages/net-misc/onedrive)                                       |<a href="https://packages.gentoo.org/packages/net-misc/onedrive"><img src="https://repology.org/badge/version-for-repo/gentoo/onedrive.svg?header=" alt="Gentoo package" width="46" height="20"></a>| Install via: `sudo emerge net-misc/onedrive` |
-| Homebrew                        | [onedrive-cli](https://formulae.brew.sh/formula/onedrive-cli)                                            |<a href="https://formulae.brew.sh/formula/onedrive-cli"><img src="https://repology.org/badge/version-for-repo/homebrew/onedrive-cli.svg?header=" alt="Homebrew package" width="46" height="20"></a> | Install via: `brew install onedrive-cli` |
-| Linux Mint 20.x                 | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
-| Linux Mint 21.x                 | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_22_04/onedrive.svg?header=" alt="Ubuntu 22.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
-| Linux Mint 22.x                 | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_24_04/onedrive.svg?header=" alt="Ubuntu 24.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
-| NixOS                           | [onedrive](https://search.nixos.org/packages?channel=20.09&from=0&size=50&sort=relevance&query=onedrive) |<a href="https://search.nixos.org/packages?channel=20.09&from=0&size=50&sort=relevance&query=onedrive"><img src="https://repology.org/badge/version-for-repo/nix_unstable/onedrive.svg?header=" alt="nixpkgs unstable package" width="46" height="20"></a>| Install via: `nix-env -iA nixpkgs.onedrive` **or** `services.onedrive.enable = true` in `configuration.nix` |
-| OpenSUSE                        | [onedrive](https://software.opensuse.org/package/onedrive)                                               |<a href="https://software.opensuse.org/package/onedrive"><img src="https://repology.org/badge/version-for-repo/opensuse_network_tumbleweed/onedrive.svg?header=" alt="openSUSE Tumbleweed package" width="46" height="20"></a>| Install via: `sudo zypper install onedrive` |
-| Raspbian                        | [onedrive](https://archive.raspbian.org/raspbian/pool/main/o/onedrive/)                                  |<a href="https://archive.raspbian.org/raspbian/pool/main/o/onedrive/"><img src="https://repology.org/badge/version-for-repo/raspbian_stable/onedrive.svg?header=" alt="Raspbian Stable package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
-| Slackware                       | [onedrive](https://slackbuilds.org/result/?search=onedrive&sv=)                                          |<a href="https://slackbuilds.org/result/?search=onedrive&sv="><img src="https://repology.org/badge/version-for-repo/slackbuilds/onedrive.svg?header=" alt="SlackBuilds package" width="46" height="20"></a>| Install via SlackBuilds: https://slackbuilds.org/result/?search=onedrive |
-| Solus                           | [onedrive](https://packages.getsol.us/shannon/o/onedrive/?sort=time&order=desc)                          |<a href="https://packages.getsol.us/shannon/o/onedrive/?sort=time&order=desc"><img src="https://repology.org/badge/version-for-repo/solus/onedrive.svg?header=" alt="Solus package" width="46" height="20"></a>| Install via: `sudo eopkg install onedrive` |
-| Ubuntu 20.04 LTS                | [onedrive](https://packages.ubuntu.com/focal/onedrive)                                                   |<a href="https://packages.ubuntu.com/focal/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
-| Ubuntu 22.04 LTS                | [onedrive](https://packages.ubuntu.com/jammy/onedrive)                                                   |<a href="https://packages.ubuntu.com/jammy/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_22_04/onedrive.svg?header=" alt="Ubuntu 22.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
-| Ubuntu 24.04 LTS                | [onedrive](https://packages.ubuntu.com/noble/onedrive)                                                   |<a href="https://packages.ubuntu.com/noble/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_24_04/onedrive.svg?header=" alt="Ubuntu 24.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
+| Distribution                           | Distribution Package Name & Link                                                                         | &nbsp;&nbsp;Distribution Package Version&nbsp;&nbsp; | Correct Installation Method |
+|----------------------------------------|----------------------------------------------------------------------------------------------------------|:----------------------------------------------------:|-----------------------------|
+| Alpine Linux                           | [onedrive](https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge)                              |<a href="https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge"><img src="https://repology.org/badge/version-for-repo/alpine_edge/onedrive.svg?header=" alt="Alpine Linux Edge package" width="46" height="20"></a> | Alpine **Stable** may ship older versions. If your version is outdated, you need to build from source |
+| Arch Linux<br><br>Manjaro Linux        | [onedrive-abraunegg](https://aur.archlinux.org/packages/onedrive-abraunegg/)                             |<a href="https://aur.archlinux.org/packages/onedrive-abraunegg"><img src="https://repology.org/badge/version-for-repo/aur/onedrive-abraunegg.svg?header=" alt="AUR package" width="46" height="20"></a>| Install via: `pamac build onedrive-abraunegg` from the Arch Linux User Repository (AUR)<br><br>**Note:** You must first install 'base-devel' as this is a pre-requisite for using the AUR<br><br>**Note:** If asked regarding a provider for 'd-runtime' and 'd-compiler', select 'liblphobos' and 'ldc'<br><br>**Note:** System must have at least 1GB of memory & 1GB swap space<br><br>AUR package `onedrive-abraunegg` follows the release versions<br>AUR package `onedrive-abraunegg-git` follows the 'master' branch |
+| CentOS Stream 8                        | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_8/onedrive.svg?header=" alt="CentOS 8 package" width="46" height="20"></a>| Install via: `sudo dnf install onedrive` |
+| CentOS Stream 9                        | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_9/onedrive.svg?header=" alt="CentOS 9 package" width="46" height="20"></a>| Install via: `sudo dnf install onedrive` |
+| CentOS Stream 10                       | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_10/onedrive.svg?header=" alt="CentOS 10 package" width="46" height="20"></a>| Install via: `sudo dnf install onedrive` |
+| Debian 11                              | [onedrive](https://packages.debian.org/bullseye/source/onedrive)                                         |<a href="https://packages.debian.org/bullseye/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_11/onedrive.svg?header=" alt="Debian 11 package" width="46" height="20"></a>| **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
+| Debian 12                              | [onedrive](https://packages.debian.org/bookworm/source/onedrive)                                         |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_12/onedrive.svg?header=" alt="Debian 12 package" width="46" height="20"></a>| **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
+| Debian 13                              | [onedrive](https://packages.debian.org/trixie/source/onedrive)                                           |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_13/onedrive.svg?header=" alt="Debian 13 package" width="46" height="20"></a>| **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
+| Debian Sid                             | [onedrive](https://packages.debian.org/sid/onedrive)                                                     |<a href="https://packages.debian.org/sid/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_unstable/onedrive.svg?header=" alt="Debian Sid package" width="46" height="20"></a>| Install via: `sudo apt install --no-install-recommends --no-install-suggests onedrive` |
+| Fedora                                 | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/fedora_rawhide/onedrive.svg?header=" alt="Fedora Rawhide package" width="46" height="20"></a>| Install via: `sudo dnf install onedrive` |
+| FreeBSD                                | [onedrive](https://www.freshports.org/net/onedrive)                                                      |<a href="https://www.freshports.org/net/onedrive"><img src="https://repology.org/badge/version-for-repo/freebsd/onedrive.svg?header=" alt="FreeBSD package" width="46" height="20"></a>| Install via: `pkg install onedrive` |
+| Gentoo                                 | [onedrive](https://packages.gentoo.org/packages/net-misc/onedrive)                                       |<a href="https://packages.gentoo.org/packages/net-misc/onedrive"><img src="https://repology.org/badge/version-for-repo/gentoo/onedrive.svg?header=" alt="Gentoo package" width="46" height="20"></a>| Install via: `sudo emerge net-misc/onedrive` |
+| Homebrew                               | [onedrive-cli](https://formulae.brew.sh/formula/onedrive-cli)                                            |<a href="https://formulae.brew.sh/formula/onedrive-cli"><img src="https://repology.org/badge/version-for-repo/homebrew/onedrive-cli.svg?header=" alt="Homebrew package" width="46" height="20"></a> | Install via: `brew install onedrive-cli` |
+| Linux Mint 20.x                        | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
+| Linux Mint 21.x                        | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_22_04/onedrive.svg?header=" alt="Ubuntu 22.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
+| Linux Mint 22.x                        | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_24_04/onedrive.svg?header=" alt="Ubuntu 24.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
+| NixOS                                  | [onedrive](https://search.nixos.org/packages?channel=20.09&from=0&size=50&sort=relevance&query=onedrive) |<a href="https://search.nixos.org/packages?channel=20.09&from=0&size=50&sort=relevance&query=onedrive"><img src="https://repology.org/badge/version-for-repo/nix_unstable/onedrive.svg?header=" alt="nixpkgs unstable package" width="46" height="20"></a>| Install via: `nix-env -iA nixpkgs.onedrive` **or** `services.onedrive.enable = true` in `configuration.nix` |
+| OpenSUSE                               | [onedrive](https://software.opensuse.org/package/onedrive)                                               |<a href="https://software.opensuse.org/package/onedrive"><img src="https://repology.org/badge/version-for-repo/opensuse_network_tumbleweed/onedrive.svg?header=" alt="openSUSE Tumbleweed package" width="46" height="20"></a>| Install via: `sudo zypper install onedrive` |
+| Raspbian                               | [onedrive](https://archive.raspbian.org/raspbian/pool/main/o/onedrive/)                                  |<a href="https://archive.raspbian.org/raspbian/pool/main/o/onedrive/"><img src="https://repology.org/badge/version-for-repo/raspbian_stable/onedrive.svg?header=" alt="Raspbian Stable package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
+| Slackware                              | [onedrive](https://slackbuilds.org/result/?search=onedrive&sv=)                                          |<a href="https://slackbuilds.org/result/?search=onedrive&sv="><img src="https://repology.org/badge/version-for-repo/slackbuilds/onedrive.svg?header=" alt="SlackBuilds package" width="46" height="20"></a>| Install via SlackBuilds: https://slackbuilds.org/result/?search=onedrive |
+| Solus                                  | [onedrive](https://packages.getsol.us/shannon/o/onedrive/?sort=time&order=desc)                          |<a href="https://packages.getsol.us/shannon/o/onedrive/?sort=time&order=desc"><img src="https://repology.org/badge/version-for-repo/solus/onedrive.svg?header=" alt="Solus package" width="46" height="20"></a>| Install via: `sudo eopkg install onedrive` |
+| Ubuntu 20.04 LTS                       | [onedrive](https://packages.ubuntu.com/focal/onedrive)                                                   |<a href="https://packages.ubuntu.com/focal/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
+| Ubuntu 22.04 LTS                       | [onedrive](https://packages.ubuntu.com/jammy/onedrive)                                                   |<a href="https://packages.ubuntu.com/jammy/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_22_04/onedrive.svg?header=" alt="Ubuntu 22.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
+| Ubuntu 24.04 LTS                       | [onedrive](https://packages.ubuntu.com/noble/onedrive)                                                   |<a href="https://packages.ubuntu.com/noble/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_24_04/onedrive.svg?header=" alt="Ubuntu 24.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
 
 
 ## When Should You Build From Source?
@@ -100,10 +100,10 @@ For GUI notifications the following is also necessary:
 sudo pacman -S libnotify
 ```
 
-#### Dependencies: CentOS 6.x | RHEL 6.x
+#### CentOS 6.x | RHEL 6.x
 CentOS 6.x and RHEL 6.x reached End of Life status on November 30th 2020 and is no longer supported or tested against.
 
-#### Dependencies: CentOS 7.x | RHEL 7.x
+#### CentOS 7.x | RHEL 7.x
 CentOS 7.x and RHEL 7.x reached End of Life status on June 30th 2024 and is no longer supported or tested against.
 
 #### CentOS Stream 8 | CentOS Stream 9
@@ -120,18 +120,27 @@ sudo dnf install libnotify-devel
 #### CentOS Stream 10
  - detail packages
 
-
 #### Debian 9
 Debian 9 reached the end of its five-year LTS window on July 18th 2020 and is no longer supported or tested against.
 
 #### Debian 10
 Debian 10 reached the end of its five-year LTS window on September 10th 2022 and is no longer supported or tested against.
 
-#### Debian 11 | Debian 12 | Debian 13 | Linux Mint Debian Edition 6 | Linux Mint Debian Edition 7
+#### Debian 11 | Debian 12 | Debian 13 | Linux Mint Debian Edition 6 | Linux Mint Debian Edition 7 - x86_64
  ```text
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+For GUI notifications the following is also necessary:
+```text
+sudo apt install libnotify-dev
+```
+
+#### Debian 11 | Debian 12 | Debian 13 - ARMHF and ARM64
+```text
+sudo apt install build-essential
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -151,7 +160,7 @@ sudo dnf install libnotify-devel
 
 #### Fedora >= version 41
 > [!NOTE]
-> Fedora 41 and above uses dnf5 which removes some deprecated aliases, specifically 'groupinstall' in this instance.
+> Fedora 41 and above uses **dnf5** which removes some deprecated aliases, specifically 'groupinstall' in this instance.
 
 ```text
 sudo dnf group install development-tools
@@ -207,18 +216,37 @@ sudo zypper install libnotify-devel
 #### OpenSUSE Tumbleweed
 - detail packages
 
+#### Raspbian - ARMHF and ARM64
+> [!CAUTION]
+> The minimum LDC compiler version required to compile this application is 1.20.1, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+
+> [!NOTE]
+> These dependencies were validated using:
+> *   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-armhf-lite) using Raspberry Pi 3B (revision 1.2)
+> *   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-arm64-lite) using Raspberry Pi 3B (revision 1.2)
+> *   `Linux ubuntu 5.15.0-1005-raspi #5-Ubuntu SMP PREEMPT Mon Apr 4 12:21:48 UTC 2022 aarch64 aarch64 aarch64 GNU/Linux` (ubuntu-22.04-preinstalled-server-arm64+raspi) using Raspberry Pi 3B (revision 1.2)
+
+```text
+sudo apt install build-essential
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev
+```
+For GUI notifications the following is also necessary:
+```text
+sudo apt install libnotify-dev
+```
+
 #### Ubuntu 16.x
 Ubuntu 16.x LTS reached the end of its five-year LTS window on April 30th 2021 and is no longer supported or tested against.
 
 #### Ubuntu 18.x 
 Ubuntu 18.x LTS reached the end of its five-year LTS window on May 31th 2023 and is no longer supported or tested against.
 
-#### Ubuntu 20.x | Ubuntu 22.x | Ubuntu 24.x
+#### Ubuntu 20.x | Ubuntu 22.x | Ubuntu 24.x - x86_64
 > [!NOTE]
 > These dependencies are also applicable for all distributions that are based on Ubuntu such as:
 > *   Lubuntu
 > *   Linux Mint
-> *   POP OS
+> *   Pop!_OS
 > *   Peppermint OS
 > *   Zorin OS
 
