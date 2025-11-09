@@ -120,6 +120,7 @@ dnotify
 Dockerfiles
 dotfile
 dphys
+dri
 driveid
 driveone
 druntime
@@ -251,16 +252,21 @@ libexecdir
 libgcc
 libgdk
 libgio
+libgl
+libglapi
 libglib
+libglx
 libgobject
 libidn
 libinotify
 libkadm
 liblphobos
 libm
+libmalcontent
 libmpc
 libnghttp
 libnotify
+libpam
 libphobos
 libpsl
 libqt
@@ -268,6 +274,7 @@ libsepol
 libsqlite
 libssh
 libverto
+libxatracker
 libxcrypt
 Lighttpd
 lintian
@@ -481,6 +488,7 @@ sysconf
 sysconfdir
 systemdsystemunitdir
 systemduserunitdir
+sysv
 tbh
 tdcockers
 tempauth

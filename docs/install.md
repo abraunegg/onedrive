@@ -11,11 +11,10 @@ This page details the recommended installation methods for the OneDrive Client f
 ### Important Notice for all Debian | Ubuntu | Linux Mint | Pop!_OS | Raspbian | Zorin Users
 
 > [!IMPORTANT]
-> **DO NOT install the OneDrive client from your distribution repositories**
+> **Do NOT install the OneDrive client from your distribution’s default repositories.** These packaged versions are **outdated, unsupported, and contain known defects.**
 >
-> These packages are **outdated, unsupported, and contain known defects**
->
-> Install the fully supported package from the **openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md)
+> Instead, install the **fully supported and actively maintained version** from the **openSUSE Build Service (OBS)** by following the [Ubuntu / Debian Package Installation Guide](ubuntu-package-install.md)
+
 
 ### Which Installation Method Should I Use?
 
@@ -58,7 +57,7 @@ You should only build from source in the following circumstances:
 Outside of these 3 reasons, you should not be building the client yourself. You should endeavour where possible to use a pre-built package.
 
 > [!IMPORTANT]
-> If your distribution does not provide a package, raise a request with them to get the client packaged and maintained in your chosen distribution.
+> If your distribution does not currently offer a packaged version of the client, you should **request that your distribution maintainers package and support it** as part of their official repositories.
 
 
 ## Building from Source
@@ -150,18 +149,7 @@ For GUI notifications the following is also necessary:
 sudo apt install libnotify-dev
 ```
 
-#### Fedora <= version 40
-```text
-sudo dnf groupinstall 'Development Tools'
-sudo dnf install libcurl-devel sqlite-devel dbus-devel
-curl -fsS https://dlang.org/install.sh | bash -s dmd
-```
-For GUI notifications the following is also necessary:
-```text
-sudo dnf install libnotify-devel
-```
-
-#### Fedora >= version 41
+#### Fedora
 > [!NOTE]
 > Fedora 41 and above uses **dnf5** which removes some deprecated aliases, specifically 'groupinstall' in this instance.
 
