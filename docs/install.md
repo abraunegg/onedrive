@@ -3,6 +3,8 @@
 ## Table of Contents
 
 ## Overview
+This page details the recommended installation methods for the OneDrive Client for Linux for most Linux distributions and FreeBSD.
+
 
 ## Recommended Installation Method (Using Pre-Built Packages)
 
@@ -35,12 +37,13 @@
 | Linux Mint 20.x                        | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
 | Linux Mint 21.x                        | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_22_04/onedrive.svg?header=" alt="Ubuntu 22.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
 | Linux Mint 22.x                        | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_24_04/onedrive.svg?header=" alt="Ubuntu 24.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
-| NixOS                                  | [onedrive](https://search.nixos.org/packages?channel=20.09&from=0&size=50&sort=relevance&query=onedrive) |<a href="https://search.nixos.org/packages?channel=20.09&from=0&size=50&sort=relevance&query=onedrive"><img src="https://repology.org/badge/version-for-repo/nix_unstable/onedrive.svg?header=" alt="nixpkgs unstable package" width="46" height="20"></a>| Install via: `nix-env -iA nixpkgs.onedrive` **or** `services.onedrive.enable = true` in `configuration.nix` |
+| Linux Mint Debian Edition 6            | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_12/onedrive.svg?header=" alt="Debian 12 package" width="46" height="20"></a>| **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
+| Linux Mint Debian Edition 7            | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_13/onedrive.svg?header=" alt="Debian 13 package" width="46" height="20"></a>| **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
+| NixOS                                  | [onedrive](https://search.nixos.org/packages?channel=25.05&query=onedrive)                               |<a href="https://search.nixos.org/packages?channel=25.05&query=onedrive"><img src="https://repology.org/badge/version-for-repo/nix_unstable/onedrive.svg?header=" alt="nixpkgs unstable package" width="46" height="20"></a>| Install via: `nix-env -iA nixpkgs.onedrive` **or** `services.onedrive.enable = true` in `configuration.nix` |
 | OpenSUSE                               | [onedrive](https://software.opensuse.org/package/onedrive)                                               |<a href="https://software.opensuse.org/package/onedrive"><img src="https://repology.org/badge/version-for-repo/opensuse_network_tumbleweed/onedrive.svg?header=" alt="openSUSE Tumbleweed package" width="46" height="20"></a>| Install via: `sudo zypper install onedrive` |
 | Raspbian                               | [onedrive](https://archive.raspbian.org/raspbian/pool/main/o/onedrive/)                                  |<a href="https://archive.raspbian.org/raspbian/pool/main/o/onedrive/"><img src="https://repology.org/badge/version-for-repo/raspbian_stable/onedrive.svg?header=" alt="Raspbian Stable package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
 | Slackware                              | [onedrive](https://slackbuilds.org/result/?search=onedrive&sv=)                                          |<a href="https://slackbuilds.org/result/?search=onedrive&sv="><img src="https://repology.org/badge/version-for-repo/slackbuilds/onedrive.svg?header=" alt="SlackBuilds package" width="46" height="20"></a>| Install via SlackBuilds: https://slackbuilds.org/result/?search=onedrive |
 | Solus                                  | [onedrive](https://packages.getsol.us/shannon/o/onedrive/?sort=time&order=desc)                          |<a href="https://packages.getsol.us/shannon/o/onedrive/?sort=time&order=desc"><img src="https://repology.org/badge/version-for-repo/solus/onedrive.svg?header=" alt="Solus package" width="46" height="20"></a>| Install via: `sudo eopkg install onedrive` |
-| Ubuntu 20.04 LTS                       | [onedrive](https://packages.ubuntu.com/focal/onedrive)                                                   |<a href="https://packages.ubuntu.com/focal/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
 | Ubuntu 22.04 LTS                       | [onedrive](https://packages.ubuntu.com/jammy/onedrive)                                                   |<a href="https://packages.ubuntu.com/jammy/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_22_04/onedrive.svg?header=" alt="Ubuntu 22.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
 | Ubuntu 24.04 LTS                       | [onedrive](https://packages.ubuntu.com/noble/onedrive)                                                   |<a href="https://packages.ubuntu.com/noble/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_24_04/onedrive.svg?header=" alt="Ubuntu 24.04 package" width="46" height="20"></a> | **Install using the openSUSE Build Service (OBS)** using these install [instructions](ubuntu-package-install.md) |
 
@@ -241,9 +244,12 @@ Ubuntu 16.x LTS reached the end of its five-year LTS window on April 30th 2021 a
 #### Ubuntu 18.x 
 Ubuntu 18.x LTS reached the end of its five-year LTS window on May 31th 2023 and is no longer supported or tested against.
 
-#### Ubuntu 20.x | Ubuntu 22.x | Ubuntu 24.x - x86_64
+#### Ubuntu 20.x
+Ubuntu 20.x LTS reached the end of its five-year LTS window on May 31th 2025 and is no longer supported or tested against.
+
+#### Ubuntu 22.x | Ubuntu 24.x
 > [!NOTE]
-> These dependencies are also applicable for all distributions that are based on Ubuntu such as:
+> These dependency requirements also apply to any distribution derived from Ubuntu, including but not limited to:
 > *   Lubuntu
 > *   Linux Mint
 > *   Pop!_OS

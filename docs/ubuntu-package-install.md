@@ -18,6 +18,15 @@ This document outlines the steps for installing the 'onedrive' client on Debian,
 >
 > Although packages for the 'onedrive' client are available through distribution repositories, it is strongly advised against installing them. These distribution-provided packages are outdated, unsupported, and contain bugs and issues that have already been resolved in newer versions. They should not be used.
 
+> [!IMPORTANT]
+> The distributions listed below are **End-of-Life (EOL)** and are **no longer supported** or tested with current client releases. You must upgrade to a supported distribution before proceeding.
+> * Debian 9
+> * Debian 10
+> * Ubuntu 16.x
+> * Ubuntu 18.x
+> * Ubuntu 20.x
+
+
 ## Determine which instructions to use
 Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependency issues and will be unable to install the client.
 
@@ -76,30 +85,37 @@ apt-get autoclean -y
 
 Run this script as 'root' by using `su -` to elevate to 'root'. Example below:
 ```text
-Welcome to Ubuntu 20.04.1 LTS (GNU/Linux 5.4.0-48-generic x86_64)
+Welcome to Ubuntu 24.04 LTS (GNU/Linux 6.8.0-36-generic x86_64)
 
  * Documentation:  https://help.ubuntu.com
  * Management:     https://landscape.canonical.com
- * Support:        https://ubuntu.com/advantage
+ * Support:        https://ubuntu.com/pro
 
-425 updates can be installed immediately.
-208 of these updates are security updates.
-To see these additional updates run: apt list --upgradable
+Expanded Security Maintenance for Applications is not enabled.
 
-Your Hardware Enablement Stack (HWE) is supported until April 2025.
-Last login: Thu Jan 20 14:21:48 2022 from my.ip.address
-alex@ubuntu-20-LTS:~$ su -
+0 updates can be applied immediately.
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+
+
+The list of available updates is more than a week old.
+To check for new updates run: sudo apt update
+Last login: Mon Nov 10 06:42:58 2025 from xxx.xxx.xxx.xxx
+alex@ubuntu-24-04:~$ su -
 Password: 
-root@ubuntu-20-LTS:~# ls -la
-total 28
-drwx------  3 root root 4096 Oct 10  2020 .
-drwxr-xr-x 20 root root 4096 Oct 10  2020 ..
--rw-------  1 root root  175 Jan 20 14:23 .bash_history
--rw-r--r--  1 root root 3106 Dec  6  2019 .bashrc
-drwx------  2 root root 4096 Apr 23  2020 .cache
--rw-r--r--  1 root root  161 Dec  6  2019 .profile
--rwxr-xr-x  1 root root  174 Oct 10  2020 update-os.sh
-root@ubuntu-20-LTS:~# cat update-os.sh 
+root@ubuntu-24-04:~# ls -la
+total 36
+drwx------  5 root root 4096 Nov 10 06:43 .
+drwxr-xr-x 23 root root 4096 Jun 30  2024 ..
+-rw-------  1 root root  168 Nov 10 06:43 .bash_history
+-rw-r--r--  1 root root 3106 Apr 22  2024 .bashrc
+drwx------  2 root root 4096 Apr 24  2024 .cache
+-rw-r--r--  1 root root  161 Apr 22  2024 .profile
+drwx------  6 root root 4096 Jun 30  2024 snap
+drwx------  2 root root 4096 Jun 30  2024 .ssh
+-rwxr-xr-x  1 root root  174 Nov 10 06:43 update_os.sh
+root@ubuntu-24-04:~# cat update_os.sh 
 #!/bin/bash
 rm -rf /var/lib/dpkg/lock-frontend
 rm -rf /var/lib/dpkg/lock
@@ -108,29 +124,41 @@ apt-get upgrade -y
 apt-get dist-upgrade -y
 apt-get autoremove -y
 apt-get autoclean -y
-root@ubuntu-20-LTS:~# ./update-os.sh 
-Hit:1 http://au.archive.ubuntu.com/ubuntu focal InRelease
-Hit:2 http://au.archive.ubuntu.com/ubuntu focal-updates InRelease
-Hit:3 http://au.archive.ubuntu.com/ubuntu focal-backports InRelease
-Hit:4 http://security.ubuntu.com/ubuntu focal-security InRelease
-Reading package lists... 96%
-...
-Sourcing file `/etc/default/grub'
-Sourcing file `/etc/default/grub.d/init-select.cfg'
-Generating grub configuration file ...
-Found linux image: /boot/vmlinuz-5.13.0-27-generic
-Found initrd image: /boot/initrd.img-5.13.0-27-generic
-Found linux image: /boot/vmlinuz-5.4.0-48-generic
-Found initrd image: /boot/initrd.img-5.4.0-48-generic
-Found memtest86+ image: /boot/memtest86+.elf
-Found memtest86+ image: /boot/memtest86+.bin
-done
-Removing linux-modules-5.4.0-26-generic (5.4.0-26.30) ...
-Processing triggers for libc-bin (2.31-0ubuntu9.2) ...
-Reading package lists... Done
-Building dependency tree       
-Reading state information... Done
-root@ubuntu-20-LTS:~#
+root@ubuntu-24-04:~# ./update_os.sh 
+Get:1 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Hit:2 http://au.archive.ubuntu.com/ubuntu noble InRelease                
+Get:3 http://au.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Get:4 http://au.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+Get:5 http://au.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1,585 kB]
+....
+Unpacking libglx-mesa0:amd64 (25.0.7-0ubuntu0.24.04.2) over (24.0.5-1ubuntu1) ...
+Preparing to unpack .../6-libgl1-amber-dri_21.3.9-0ubuntu3~24.04.1_amd64.deb ...
+Unpacking libgl1-amber-dri:amd64 (21.3.9-0ubuntu3~24.04.1) over (21.3.9-0ubuntu2) ...
+(Reading database ... 152058 files and directories currently installed.)
+Removing libglapi-mesa:amd64 (24.0.5-1ubuntu1) ...
+Selecting previously unselected package libglapi-amber:amd64.
+(Reading database ... 152049 files and directories currently installed.)
+Preparing to unpack .../00-libglapi-amber_21.3.9-0ubuntu3~24.04.1_amd64.deb ...
+Unpacking libglapi-amber:amd64 (21.3.9-0ubuntu3~24.04.1) ...
+Selecting previously unselected package libmalcontent-0-0:amd64.
+Preparing to unpack .../01-libmalcontent-0-0_0.11.1-1ubuntu1.2_amd64.deb ...
+Unpacking libmalcontent-0-0:amd64 (0.11.1-1ubuntu1.2) ...
+Preparing to unpack .../02-gnome-control-center_1%3a46.7-0ubuntu0.24.04.2_amd64.deb ...
+Unpacking gnome-control-center (1:46.7-0ubuntu0.24.04.2) over (1:46.0.1-1ubuntu7) ...
+Preparing to unpack .../03-libxatracker2_25.0.7-0ubuntu0.24.04.2_amd64.deb ...
+Unpacking libxatracker2:amd64 (25.0.7-0ubuntu0.24.04.2) over (24.0.5-1ubuntu1) ...
+Selecting previously unselected package linux-modules-6.14.0-35-generic.
+Preparing to unpack .../04-linux-modules-6.14.0-35-generic_6.14.0-35.35~24.04.1_amd64.deb ...
+Unpacking linux-modules-6.14.0-35-generic (6.14.0-35.35~24.04.1) ...
+Selecting previously unselected package linux-image-6.14.0-35-generic.
+Preparing to unpack .../05-linux-image-6.14.0-35-generic_6.14.0-35.35~24.04.1_amd64.deb ...
+Unpacking linux-image-6.14.0-35-generic (6.14.0-35.35~24.04.1) ...
+Selecting previously unselected package linux-modules-extra-6.14.0-35-generic.
+Preparing to unpack .../06-linux-modules-extra-6.14.0-35-generic_6.14.0-35.35~24.04.1_amd64.deb ...
+....
+Del libpam-modules-bin 1.5.3-5ubuntu5.1 [51.9 kB]
+Del systemd-sysv 255.4-1ubuntu8.1 [11.9 kB]
+root@ubuntu-24-04:~# 
 ```
 
 Reboot your system after running this process before continuing with Step 3. This ensures that your system is correctly up-to-date and any prior running 'onedrive' process and systemd service is now correctly removed and not running.
@@ -145,12 +173,13 @@ lsb_release -a
 ```
 **Example:**
 ```text
-alex@ubuntu-system:~$ lsb_release -a
+alex@ubuntu-24-04:~$ lsb_release -a
 No LSB modules are available.
 Distributor ID: Ubuntu
-Description:    Ubuntu 22.04 LTS
-Release:        22.04
-Codename:       jammy
+Description:    Ubuntu 24.04 LTS
+Release:        24.04
+Codename:       noble
+alex@ubuntu-24-04:~$ 
 ```
 
 ### Step 4: Pick the correct instructions to use
@@ -158,14 +187,15 @@ If required, review the table below based on your 'lsb_release' information to p
 
 | Release & Codename | Instructions to use |
 |--------------------|---------------------|
-| Linux Mint 19.x           | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to at least Linux Mint 20.x |
-| Linux Mint 20.x           | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below |
+| Linux Mint 19.x           | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to at least Linux Mint 22.x |
+| Linux Mint 20.x           | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to at least Linux Mint 22.x |
 | Linux Mint 21.x           | Use [Ubuntu 22.04](#distribution-ubuntu-2204) instructions below |
 | Linux Mint 22.x           | Use [Ubuntu 24.04](#distribution-ubuntu-2404) instructions below |
 | Linux Mint Debian Edition (LMDE) 5 / Elsie | Use [Debian 11](#distribution-debian-11) instructions below |
 | Linux Mint Debian Edition (LMDE) 6 / Faye  | Use [Debian 12](#distribution-debian-12) instructions below |
-| Debian 9                  | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to Debian 13 |
-| Debian 10                 | You must build from source or upgrade your Operating System to Debian 13 |
+| Linux Mint Debian Edition (LMDE) 7 / Gigi  | Use [Debian 13](#distribution-debian-13) instructions below |
+| Debian 9                  | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to at least Debian 13 |
+| Debian 10                 | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to at least Debian 13 |
 | Debian 11                 | Use [Debian 11](#distribution-debian-11) instructions below |
 | Debian 12                 | Use [Debian 12](#distribution-debian-12) instructions below |
 | Debian 13                 | Use [Debian 13](#distribution-debian-13) instructions below |
@@ -173,8 +203,9 @@ If required, review the table below based on your 'lsb_release' information to p
 | Raspbian GNU/Linux 10     | You must build from source or upgrade your Operating System to Raspbian GNU/Linux 12 |
 | Raspbian GNU/Linux 11     | Use [Debian 11](#distribution-debian-11) instructions below |
 | Raspbian GNU/Linux 12     | Use [Debian 12](#distribution-debian-12) instructions below |
-| Ubuntu 18.04 / Bionic     | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to at least Ubuntu 20.04 |
-| Ubuntu 20.04 / Focal      | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below |
+| Ubuntu 16.04 / Xenial     | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to at least Ubuntu 24.04 |
+| Ubuntu 18.04 / Bionic     | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to at least Ubuntu 24.04 |
+| Ubuntu 20.04 / Focal      | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to at least Ubuntu 24.04 |
 | Ubuntu 21.04 / Hirsute    | Use [Ubuntu 21.04](#distribution-ubuntu-2104) instructions below |
 | Ubuntu 21.10 / Impish     | Use [Ubuntu 21.10](#distribution-ubuntu-2110) instructions below |
 | Ubuntu 22.04 / Jammy      | Use [Ubuntu 22.04](#distribution-ubuntu-2204) instructions below |
@@ -263,33 +294,6 @@ wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ub
 Add the OpenSuSE Build Service repository using the following command:
 ```text
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_13/ ./" | sudo tee /etc/apt/sources.list.d/onedrive.list
-```
-
-#### Step 3: Update your apt package cache
-Run: `sudo apt-get update`
-
-#### Step 4: Install 'onedrive'
-Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
-
-#### Step 5: Read 'Known Issues' with these packages
-Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
-
-### Distribution: Ubuntu 20.04
-The packages support the following platform architectures:
-| &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
-|:----:|:------:|:-----:|:-------:|
-|❌|✔|✔|✔|
-
-#### Step 1: Add the OpenSuSE Build Service repository release key
-Add the OpenSuSE Build Service repository release key using the following command:
-```text
-wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_20.04/Release.key | sudo apt-key add -
-```
-
-#### Step 2: Add the OpenSuSE Build Service repository
-Add the OpenSuSE Build Service repository using the following command:
-```text
-echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_20.04/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
 #### Step 3: Update your apt package cache
