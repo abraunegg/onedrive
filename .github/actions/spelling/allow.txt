@@ -120,6 +120,7 @@ dnotify
 Dockerfiles
 dotfile
 dphys
+dri
 driveid
 driveone
 druntime
@@ -136,6 +137,7 @@ endinaness
 enduml
 Entra
 envp
+eopkg
 epel
 epfd
 eselect
@@ -250,16 +252,21 @@ libexecdir
 libgcc
 libgdk
 libgio
+libgl
+libglapi
 libglib
+libglx
 libgobject
 libidn
 libinotify
 libkadm
 liblphobos
 libm
+libmalcontent
 libmpc
 libnghttp
 libnotify
+libpam
 libphobos
 libpsl
 libqt
@@ -267,6 +274,7 @@ libsepol
 libsqlite
 libssh
 libverto
+libxatracker
 libxcrypt
 Lighttpd
 lintian
@@ -407,6 +415,7 @@ recvfd
 redhat
 relocs
 relro
+repology
 restorecon
 retu
 revents
@@ -479,6 +488,7 @@ sysconf
 sysconfdir
 systemdsystemunitdir
 systemduserunitdir
+sysv
 tbh
 tdcockers
 tempauth
@@ -535,5 +545,5 @@ yourapp
 yourdomain
 yourfile
 yourprogram
-Zorin
+zorin
 zypper
