@@ -215,12 +215,13 @@ If required, review the table below based on your 'lsb_release' information to p
 | Ubuntu 24.04 / Noble      | Use [Ubuntu 24.04](#distribution-ubuntu-2404) instructions below |
 | Ubuntu 24.10 / Oracular   | This platform is **End-of-Life (EOL)** and no longer supported. You must upgrade to at least Ubuntu 25.04 |
 | Ubuntu 25.04 / Plucky     | Use [Ubuntu 25.04](#distribution-ubuntu-2504) instructions below |
+| Ubuntu 25.10 / Questing   | Use [Ubuntu 25.10](#distribution-ubuntu-2510) instructions below |
 
 > [!IMPORTANT]
-> If your Linux distribution and release is not in the table above, you have 2 options:
+> If your Linux distribution or release is **not listed in the table above**, you have two options:
 >
-> 1. Compile the application from source. Refer to install.md (Compilation & Installation) for assistance.
-> 2. Raise a support case with your Linux Distribution to provide you with an applicable package you can use.
+> 1. Compile the client from source. Refer to [Installing or Upgrading the OneDrive Client for Linux](install.md).
+> 2. Request packaging support from your distribution’s maintainers so that an official, supported package can be provided.
 
 ## Distribution Package Install Instructions
 
@@ -386,7 +387,33 @@ Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
 #### Step 5: Read 'Known Issues' with these packages
 Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
 
+### Distribution: Ubuntu 25.10
+The packages support the following platform architectures:
+| &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
+|:----:|:------:|:-----:|:-------:|
+|❌|✔|❌|✔|
+
+#### Step 1: Add the OpenSuSE Build Service repository release key
+Add the OpenSuSE Build Service repository release key using the following command:
+```text
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_25.10/Release.key | gpg --dearmor | sudo tee /usr/share/keyrings/obs-onedrive.gpg > /dev/null
+```
+
+#### Step 2: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
+```text
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_25.10/ ./" | sudo tee /etc/apt/sources.list.d/onedrive.list
+```
+
+#### Step 3: Update your apt package cache
+Run: `sudo apt-get update`
+
+#### Step 4: Install 'onedrive'
+Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
+
+#### Step 5: Read 'Known Issues' with these packages
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
+
 
 ## Known Issues with Installing from the above packages
-
 There are currently no known issues when installing 'onedrive' from the OpenSuSE Build Service repository.
