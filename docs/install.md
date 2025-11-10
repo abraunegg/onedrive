@@ -2,6 +2,29 @@
 
 ## Table of Contents
 
+- [Recommended Installation Method (Using Pre-Built Packages)](#recommended-installation-method-using-pre-built-packages)
+  - [Important Notice for all Debian \| Ubuntu \| Linux Mint \| Pop!_OS \| Raspbian \| Zorin Users](#important-notice-for-all-debian--ubuntu--linux-mint--pop_os--raspbian--zorin-users)
+  - [Which Installation Method Should I Use?](#which-installation-method-should-i-use)
+  - [When Should You Build From Source?](#when-should-you-build-from-source)
+
+- [Building from Source](#building-from-source)
+  - [Minimum Build Requirements](#minimum-build-requirements)
+  - [Install Build Dependencies (By Distribution)](#install-build-dependencies-by-distribution)
+
+- [Clone, Configure, Build, Install](#clone-configure-build-install)
+  - [High Level Steps to building the OneDrive Client for Linux](#high-level-steps-to-building-the-onedrive-client-for-linux)
+  - [Building the Application Using Default configure Settings](#building-the-application-using-default-configure-settings)
+  - [Build Options for Customising the Application](#build-options-for-customising-the-application)
+
+- [Upgrading the Client](#upgrading-the-client)
+  - [If installed from a distribution package](#if-installed-from-a-distribution-package)
+  - [If installed from source](#if-installed-from-source)
+
+- [Uninstalling the client](#uninstalling-the-client)
+  - [If installed from a distribution package](#if-installed-from-a-distribution-package-1)
+  - [If installed from source](#if-installed-from-source-1)
+
+
 ## Overview
 This document explains how to install or upgrade the OneDrive Client for Linux.
 
@@ -56,7 +79,7 @@ Before continuing, identify your Linux distribution and follow the installation 
 > [!IMPORTANT]
 > Distribution versions that are considered **End-of-Life (EOL)** are **no longer supported** or tested with current client releases.
 
-## When Should You Build From Source?
+### When Should You Build From Source?
 You should only build from source in the following circumstances:
 
 1. You are packaging for a custom or minimal distro
