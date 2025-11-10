@@ -545,5 +545,5 @@ yourapp
 yourdomain
 yourfile
 yourprogram
-Zorin
+zorin
 zypper
