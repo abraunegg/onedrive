@@ -332,6 +332,17 @@ _**CLI Option Use:**_ `--disable-upload-validation`
 > [!CAUTION]
 > If you're uploading data to SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack. Enabling this option disables all upload integrity checks.
 
+### disable_version_check
+_**Description:**_ This option determines whether the client will check the GitHub API for the current application version and grace period of running older application versions
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `disable_version_check = "false"` or `disable_version_check = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
 ### disable_websocket_support
 _**Description:**_ This option disables the built-in WebSocket support that leverages RFC6455 to communicate with the Microsoft Graph API Service, providing near real-time notifications of online changes.
 
