@@ -448,6 +448,9 @@ class ApplicationConfig {
 		
 		// GUI | Display Manager Integration
 		boolValues["display_manager_integration"] = false;
+		
+		// Disable GitHub Version check
+		boolValues["disable_version_check"] = false;
 				
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.

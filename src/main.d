@@ -583,8 +583,10 @@ int main(string[] cliArgs) {
 	// This needs to be a separate 'if' statement, as, if this was an 'if-else' from above, if we were originally offline and using --monitor, we would never get to this point
 	if (online) {
 		// Check Application Version
-		if (verboseLogging) {addLogEntry("Checking Application Version ...", ["verbose"]);}
-		checkApplicationVersion();
+		if (!appConfig.getValueBool("disable_version_check")) {
+			if (verboseLogging) {addLogEntry("Checking Application Version ...", ["verbose"]);}
+			checkApplicationVersion();
+		}
 		
 		// Initialise the OneDrive API
 		if (verboseLogging) {addLogEntry("Attempting to initialise the OneDrive API ...", ["verbose"]);}
