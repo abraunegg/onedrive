@@ -22,6 +22,7 @@ Before reading this document, please ensure you are running application version 
   - [disable_notifications](#disable_notifications)
   - [disable_permission_set](#disable_permission_set)
   - [disable_upload_validation](#disable_upload_validation)
+  - [disable_version_check](#disable_version_check)
   - [disable_websocket_support](#disable_websocket_support)
   - [display_manager_integration](#display_manager_integration)
   - [display_running_config](#display_running_config)

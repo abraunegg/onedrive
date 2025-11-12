@@ -5257,18 +5257,25 @@ class SyncEngine {
 							if (!appConfig.getValueBool("download_only")) {
 								// Not a --download-only scenario
 								if (!dryRun) {
-									// Attempt to update the online date time stamp
+									// Attempt to update the timestamp in the correct location
 									// We need to use the correct driveId and itemId, especially if we are updating a OneDrive Business Shared File timestamp
 									if (dbItem.type == ItemType.file) {
 										// Not a remote file
-										// Log what is being done
-										if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online - correcting timestamp online", ["verbose"]);}
-										// Correct timestamp
-										uploadLastModifiedTime(dbItem, dbItem.driveId, dbItem.id, localModifiedTime.toUTC(), dbItem.eTag);
+										// Where should the timestamp update be performed ?
+										if (localModifiedTime >= itemModifiedTime) {
+											// Log what is being done
+											if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with a newer local timestamp - correcting online timestamp", ["verbose"]);}
+											// Correct timestamp
+											uploadLastModifiedTime(dbItem, dbItem.driveId, dbItem.id, localModifiedTime.toUTC(), dbItem.eTag);
+										} else {
+											// Log what is being done
+											if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with an older local timestamp - correcting local timestamp", ["verbose"]);}
+											// Set the timestamp, logging and error handling done within function
+											setLocalPathTimestamp(dryRun, localFilePath, dbItem.mtime);
+										}
 									} else {
 										// Remote file, remote values need to be used, we may not even have permission to change timestamp, update local file
 										if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online, however file is a OneDrive Business Shared File - correcting local timestamp", ["verbose"]);}
-										
 										// Set the timestamp, logging and error handling done within function
 										setLocalPathTimestamp(dryRun, localFilePath, dbItem.mtime);
 									}
