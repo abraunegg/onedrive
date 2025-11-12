@@ -66,6 +66,7 @@ Before continuing, identify your Linux distribution and follow the installation 
 | Linux Mint Debian Edition 6            | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_12/onedrive.svg?header=" alt="Debian 12 package" width="46" height="20"></a>| Install from the openSUSE Build Service (OBS) repository by following the [Ubuntu / Debian Package Installation Guide](ubuntu-package-install.md) |
 | Linux Mint Debian Edition 7            | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_13/onedrive.svg?header=" alt="Debian 13 package" width="46" height="20"></a>| Install from the openSUSE Build Service (OBS) repository by following the [Ubuntu / Debian Package Installation Guide](ubuntu-package-install.md) |
 | NixOS                                  | [onedrive](https://search.nixos.org/packages?channel=25.05&query=onedrive)                               |<a href="https://search.nixos.org/packages?channel=25.05&query=onedrive"><img src="https://repology.org/badge/version-for-repo/nix_unstable/onedrive.svg?header=" alt="nixpkgs unstable package" width="46" height="20"></a>| Install via: `nix-env -iA nixpkgs.onedrive` **or** `services.onedrive.enable = true` in `configuration.nix` |
+| MX Linux                               | [onedrive](https://mxrepo.com/mx/repo/pool/main/o/onedrive/)                                             |<a href="https://mxrepo.com/mx/repo/pool/main/o/onedrive/"><img src="https://repology.org/badge/version-for-repo/mx_25/onedrive.svg?header=" alt="MX Linux package" width="46" height="20"></a>| Install via: `sudo apt install --no-install-recommends --no-install-suggests onedrive` |
 | OpenSUSE                               | [onedrive](https://software.opensuse.org/package/onedrive)                                               |<a href="https://software.opensuse.org/package/onedrive"><img src="https://repology.org/badge/version-for-repo/opensuse_network_tumbleweed/onedrive.svg?header=" alt="openSUSE Tumbleweed package" width="46" height="20"></a>| Install via: `sudo zypper install onedrive` |
 | Raspbian                               | [onedrive](https://archive.raspbian.org/raspbian/pool/main/o/onedrive/)                                  |<a href="https://archive.raspbian.org/raspbian/pool/main/o/onedrive/"><img src="https://repology.org/badge/version-for-repo/raspbian_stable/onedrive.svg?header=" alt="Raspbian Stable package" width="46" height="20"></a> | Install from the openSUSE Build Service (OBS) repository by following the [Ubuntu / Debian Package Installation Guide](ubuntu-package-install.md) |
 | RedHat Enterprise Linux 8              | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/epel_8/onedrive.svg?header=" alt="EPEL 8 package" width="46" height="20"></a>| **Note:** You must install and enable the EPEL Repository first.<br><br>Install via: `sudo dnf install onedrive` |
@@ -78,6 +79,13 @@ Before continuing, identify your Linux distribution and follow the installation 
 
 > [!IMPORTANT]
 > Distribution versions that are considered **End-of-Life (EOL)** are **no longer supported** or tested with current client releases.
+
+> [!IMPORTANT]
+> Distribution package maintainers are volunteers who generously contribute their time to make software available for your system. New releases of the client may take some time to appear in your distribution’s repositories.
+> 
+> If you believe a new release is significantly delayed, please contact your distribution’s package maintainer directly to request an update.
+>
+> **Do not open a bug report or discussion about this here**, as we have no control over the packaging process for your distribution.
 
 ### When Should You Build From Source?
 You should only build from source in the following circumstances:
