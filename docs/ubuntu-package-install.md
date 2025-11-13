@@ -10,6 +10,7 @@ This document outlines the steps for installing the 'onedrive' client on Debian,
 > * Kali Linux
 > * Lubuntu
 > * Linux Mint
+> * MX Linux
 > * Pop!_OS
 > * Peppermint OS
 > * Raspbian | Raspberry Pi OS
@@ -194,11 +195,11 @@ If required, review the table below based on your 'lsb_release' information to p
 | Linux Mint Debian Edition (LMDE) 5 / Elsie | Use [Debian 11](#distribution-debian-11) instructions below |
 | Linux Mint Debian Edition (LMDE) 6 / Faye  | Use [Debian 12](#distribution-debian-12) instructions below |
 | Linux Mint Debian Edition (LMDE) 7 / Gigi  | Use [Debian 13](#distribution-debian-13) instructions below |
-| Debian 9                  | This platform is **End-of-Life (EOL)** and no longer supported. You must upgrade to at least Debian 13 |
-| Debian 10                 | This platform is **End-of-Life (EOL)** and no longer supported. You must upgrade to at least Debian 13 |
-| Debian 11                 | Use [Debian 11](#distribution-debian-11) instructions below |
-| Debian 12                 | Use [Debian 12](#distribution-debian-12) instructions below |
-| Debian 13                 | Use [Debian 13](#distribution-debian-13) instructions below |
+| Debian 9 / stretch        | This platform is **End-of-Life (EOL)** and no longer supported. You must upgrade to at least Debian 13 |
+| Debian 10 / buster        | This platform is **End-of-Life (EOL)** and no longer supported. You must upgrade to at least Debian 13 |
+| Debian 11 / bullseye      | Use [Debian 11](#distribution-debian-11) instructions below |
+| Debian 12 / bookworm      | Use [Debian 12](#distribution-debian-12) instructions below |
+| Debian 13 / trixie        | Use [Debian 13](#distribution-debian-13) instructions below |
 | Debian Sid                | Refer to https://packages.debian.org/sid/onedrive for assistance |
 | Raspbian GNU/Linux 10     | You must build from source or upgrade your Operating System to Raspbian GNU/Linux 12 |
 | Raspbian GNU/Linux 11     | Use [Debian 11](#distribution-debian-11) instructions below |
