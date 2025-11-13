@@ -102,9 +102,10 @@ Outside of these 3 reasons, you should not be building the client yourself. You 
 
 
 ## Building from Source
-1. Ensure your system meets the minimum build requirements
-2. Install Build Dependencies including the relevant compiler
-3. Clone, configure, build, install
+If you need to build the client from source, follow this high-level process:
+1. Ensure your system meets the [minimum build requirements](#minimum-build-requirements).
+2. Install the necessary build dependencies and a supported D compiler.
+3. Clone the repository, configure the build options, compile, and install the client.
 
 ### Minimum Build Requirements
 *   For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space.
