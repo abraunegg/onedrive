@@ -73,15 +73,15 @@ class OneDriveApi {
 	CurlResponse response;
 	
 	// API Endpoint Constants
-	immutable string driveUrlAPIEndpoint = "/v1.0/me/drive";
-	immutable string driveByIdUrlAPIEndpoint = "/v1.0/drives/";
-	immutable string sharedWithMeUrlAPIEndpoint = "/v1.0/me/drive/sharedWithMe";
-	immutable string itemByIdUrlAPIEndpoint = "/v1.0/me/drive/items/";
-	immutable string itemByPathUrlAPIEndpoint = "/v1.0/me/drive/root:/";
-	immutable string siteSearchUrlAPIEndpoint = "/v1.0/sites?search";
-	immutable string siteDriveUrlAPIEndpoint = "/v1.0/sites/";
-	immutable string subscriptionUrlAPIEndpoint = "/v1.0/subscriptions";
-	immutable string websocketEndpointAPIEndpoint = "/v1.0/me/drive/root/subscriptions/socketIo";
+	immutable string defaultDriveUrlAPIEndpoint = "/v1.0/me/drive";
+	immutable string defaultDriveByIdUrlAPIEndpoint = "/v1.0/drives/";
+	immutable string defaultSharedWithMeUrlAPIEndpoint = "/v1.0/me/drive/sharedWithMe";
+	immutable string defaultItemByIdUrlAPIEndpoint = "/v1.0/me/drive/items/";
+	immutable string defaultItemByPathUrlAPIEndpoint = "/v1.0/me/drive/root:/";
+	immutable string defaultSiteSearchUrlAPIEndpoint = "/v1.0/sites?search";
+	immutable string defaultSiteDriveUrlAPIEndpoint = "/v1.0/sites/";
+	immutable string defaultSubscriptionUrlAPIEndpoint = "/v1.0/subscriptions";
+	immutable string defaultWebsocketEndpointAPIEndpoint = "/v1.0/me/drive/root/subscriptions/socketIo";
 	
 	// Class variables
 	string clientId = "";
@@ -101,6 +101,7 @@ class OneDriveApi {
 	string tenantId = "";
 	string authScope = "";
 	string websocketEndpoint = "";
+	string websocketEndpointAPIEndpoint = defaultWebsocketEndpointAPIEndpoint;
 	const(char)[] refreshToken = "";
 	bool dryRun = false;
 	bool keepAlive = false;
@@ -114,24 +115,24 @@ class OneDriveApi {
 		// These however can be updated by config option 'azure_ad_endpoint', thus handled differently
 		
 		// Drive Queries
-		driveUrl = appConfig.globalGraphEndpoint ~ driveUrlAPIEndpoint;
-		driveByIdUrl = appConfig.globalGraphEndpoint ~ driveByIdUrlAPIEndpoint;
+		driveUrl = appConfig.globalGraphEndpoint ~ defaultDriveUrlAPIEndpoint;
+		driveByIdUrl = appConfig.globalGraphEndpoint ~ defaultDriveByIdUrlAPIEndpoint;
 
 		// What is 'shared with me' Query
-		sharedWithMeUrl = appConfig.globalGraphEndpoint ~ sharedWithMeUrlAPIEndpoint;
+		sharedWithMeUrl = appConfig.globalGraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 
 		// Item Queries
-		itemByIdUrl = appConfig.globalGraphEndpoint ~ itemByIdUrlAPIEndpoint;
-		itemByPathUrl = appConfig.globalGraphEndpoint ~ itemByPathUrlAPIEndpoint;
+		itemByIdUrl = appConfig.globalGraphEndpoint ~ defaultItemByIdUrlAPIEndpoint;
+		itemByPathUrl = appConfig.globalGraphEndpoint ~ defaultItemByPathUrlAPIEndpoint;
 
 		// Office 365 / SharePoint Queries
-		siteSearchUrl = appConfig.globalGraphEndpoint ~ siteSearchUrlAPIEndpoint;
-		siteDriveUrl = appConfig.globalGraphEndpoint ~ siteDriveUrlAPIEndpoint;
+		siteSearchUrl = appConfig.globalGraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
+		siteDriveUrl = appConfig.globalGraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
 
 		// Subscriptions
-		subscriptionUrl = appConfig.globalGraphEndpoint ~ subscriptionUrlAPIEndpoint;
+		subscriptionUrl = appConfig.globalGraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 		
-		// WebSocket Endpoint
+		// WebSocket Endpoint - sets the default: /v1.0/me/drive/root/subscriptions/socketIo
 		websocketEndpoint = appConfig.globalGraphEndpoint ~ websocketEndpointAPIEndpoint;
 	}
 	
@@ -213,6 +214,9 @@ class OneDriveApi {
 			driveUrl = driveByIdUrl ~ appConfig.getValueString("drive_id");
 			itemByIdUrl = driveUrl ~ "/items";
 			itemByPathUrl = driveUrl ~ "/root:/";
+			
+			// Need to update 'websocketEndpointAPIEndpoint' to /v1.0/drives/{driveId}/root/subscriptions/socketIo
+			websocketEndpointAPIEndpoint = "/v1.0/drives/" ~ appConfig.getValueString("drive_id") ~ "/root/subscriptions/socketIo";
 		}
 		
 		// Configure the authentication scope
@@ -246,6 +250,8 @@ class OneDriveApi {
 				deviceAuthUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/devicecode";
 				redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				tokenUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
+				// WebSocket Endpoint
+				websocketEndpoint = appConfig.globalGraphEndpoint ~ websocketEndpointAPIEndpoint;
 				break;
 			case "USL4":
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD for US Government Endpoints");
@@ -263,18 +269,18 @@ class OneDriveApi {
 				}
 
 				// Drive Queries
-				driveUrl = appConfig.usl4GraphEndpoint ~ driveUrlAPIEndpoint;
-				driveByIdUrl = appConfig.usl4GraphEndpoint ~ driveByIdUrlAPIEndpoint;
+				driveUrl = appConfig.usl4GraphEndpoint ~ defaultDriveUrlAPIEndpoint;
+				driveByIdUrl = appConfig.usl4GraphEndpoint ~ defaultDriveByIdUrlAPIEndpoint;
 				// Item Queries
-				itemByIdUrl = appConfig.usl4GraphEndpoint ~ itemByIdUrlAPIEndpoint;
-				itemByPathUrl = appConfig.usl4GraphEndpoint ~ itemByPathUrlAPIEndpoint;
+				itemByIdUrl = appConfig.usl4GraphEndpoint ~ defaultItemByIdUrlAPIEndpoint;
+				itemByPathUrl = appConfig.usl4GraphEndpoint ~ defaultItemByPathUrlAPIEndpoint;
 				// Office 365 / SharePoint Queries
-				siteSearchUrl = appConfig.usl4GraphEndpoint ~ siteSearchUrlAPIEndpoint;
-				siteDriveUrl = appConfig.usl4GraphEndpoint ~ siteDriveUrlAPIEndpoint;
+				siteSearchUrl = appConfig.usl4GraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
+				siteDriveUrl = appConfig.usl4GraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
 				// Shared With Me
-				sharedWithMeUrl = appConfig.usl4GraphEndpoint ~ sharedWithMeUrlAPIEndpoint;
+				sharedWithMeUrl = appConfig.usl4GraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 				// Subscriptions
-				subscriptionUrl = appConfig.usl4GraphEndpoint ~ subscriptionUrlAPIEndpoint;
+				subscriptionUrl = appConfig.usl4GraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.usl4GraphEndpoint ~ websocketEndpointAPIEndpoint;
 				break;
@@ -294,18 +300,18 @@ class OneDriveApi {
 				}
 
 				// Drive Queries
-				driveUrl = appConfig.usl5GraphEndpoint ~ driveUrlAPIEndpoint;
-				driveByIdUrl = appConfig.usl5GraphEndpoint ~ driveByIdUrlAPIEndpoint;
+				driveUrl = appConfig.usl5GraphEndpoint ~ defaultDriveUrlAPIEndpoint;
+				driveByIdUrl = appConfig.usl5GraphEndpoint ~ defaultDriveByIdUrlAPIEndpoint;
 				// Item Queries
-				itemByIdUrl = appConfig.usl5GraphEndpoint ~ itemByIdUrlAPIEndpoint;
-				itemByPathUrl = appConfig.usl5GraphEndpoint ~ itemByPathUrlAPIEndpoint;
+				itemByIdUrl = appConfig.usl5GraphEndpoint ~ defaultItemByIdUrlAPIEndpoint;
+				itemByPathUrl = appConfig.usl5GraphEndpoint ~ defaultItemByPathUrlAPIEndpoint;
 				// Office 365 / SharePoint Queries
-				siteSearchUrl = appConfig.usl5GraphEndpoint ~ siteSearchUrlAPIEndpoint;
-				siteDriveUrl = appConfig.usl5GraphEndpoint ~ siteDriveUrlAPIEndpoint;
+				siteSearchUrl = appConfig.usl5GraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
+				siteDriveUrl = appConfig.usl5GraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
 				// Shared With Me
-				sharedWithMeUrl = appConfig.usl5GraphEndpoint ~ sharedWithMeUrlAPIEndpoint;
+				sharedWithMeUrl = appConfig.usl5GraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 				// Subscriptions
-				subscriptionUrl = appConfig.usl5GraphEndpoint ~ subscriptionUrlAPIEndpoint;
+				subscriptionUrl = appConfig.usl5GraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.usl5GraphEndpoint ~ websocketEndpointAPIEndpoint;
 				break;
@@ -325,18 +331,18 @@ class OneDriveApi {
 				}
 
 				// Drive Queries
-				driveUrl = appConfig.deGraphEndpoint ~ driveUrlAPIEndpoint;
-				driveByIdUrl = appConfig.deGraphEndpoint ~ driveByIdUrlAPIEndpoint;
+				driveUrl = appConfig.deGraphEndpoint ~ defaultDriveUrlAPIEndpoint;
+				driveByIdUrl = appConfig.deGraphEndpoint ~ defaultDriveByIdUrlAPIEndpoint;
 				// Item Queries
-				itemByIdUrl = appConfig.deGraphEndpoint ~ itemByIdUrlAPIEndpoint;
-				itemByPathUrl = appConfig.deGraphEndpoint ~ itemByPathUrlAPIEndpoint;
+				itemByIdUrl = appConfig.deGraphEndpoint ~ defaultItemByIdUrlAPIEndpoint;
+				itemByPathUrl = appConfig.deGraphEndpoint ~ defaultItemByPathUrlAPIEndpoint;
 				// Office 365 / SharePoint Queries
-				siteSearchUrl = appConfig.deGraphEndpoint ~ siteSearchUrlAPIEndpoint;
-				siteDriveUrl = appConfig.deGraphEndpoint ~ siteDriveUrlAPIEndpoint;
+				siteSearchUrl = appConfig.deGraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
+				siteDriveUrl = appConfig.deGraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
 				// Shared With Me
-				sharedWithMeUrl = appConfig.deGraphEndpoint ~ sharedWithMeUrlAPIEndpoint;
+				sharedWithMeUrl = appConfig.deGraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 				// Subscriptions
-				subscriptionUrl = appConfig.deGraphEndpoint ~ subscriptionUrlAPIEndpoint;
+				subscriptionUrl = appConfig.deGraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.deGraphEndpoint ~ websocketEndpointAPIEndpoint;
 				break;
@@ -356,18 +362,18 @@ class OneDriveApi {
 				}
 
 				// Drive Queries
-				driveUrl = appConfig.cnGraphEndpoint ~ driveUrlAPIEndpoint;
-				driveByIdUrl = appConfig.cnGraphEndpoint ~ driveByIdUrlAPIEndpoint;
+				driveUrl = appConfig.cnGraphEndpoint ~ defaultDriveUrlAPIEndpoint;
+				driveByIdUrl = appConfig.cnGraphEndpoint ~ defaultDriveByIdUrlAPIEndpoint;
 				// Item Queries
-				itemByIdUrl = appConfig.cnGraphEndpoint ~ itemByIdUrlAPIEndpoint;
-				itemByPathUrl = appConfig.cnGraphEndpoint ~ itemByPathUrlAPIEndpoint;
+				itemByIdUrl = appConfig.cnGraphEndpoint ~ defaultItemByIdUrlAPIEndpoint;
+				itemByPathUrl = appConfig.cnGraphEndpoint ~ defaultItemByPathUrlAPIEndpoint;
 				// Office 365 / SharePoint Queries
-				siteSearchUrl = appConfig.cnGraphEndpoint ~ siteSearchUrlAPIEndpoint;
-				siteDriveUrl = appConfig.cnGraphEndpoint ~ siteDriveUrlAPIEndpoint;
+				siteSearchUrl = appConfig.cnGraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
+				siteDriveUrl = appConfig.cnGraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
 				// Shared With Me
-				sharedWithMeUrl = appConfig.cnGraphEndpoint ~ sharedWithMeUrlAPIEndpoint;
+				sharedWithMeUrl = appConfig.cnGraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 				// Subscriptions
-				subscriptionUrl = appConfig.cnGraphEndpoint ~ subscriptionUrlAPIEndpoint;
+				subscriptionUrl = appConfig.cnGraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.cnGraphEndpoint ~ websocketEndpointAPIEndpoint;
 				break;
@@ -439,24 +445,26 @@ class OneDriveApi {
 		// Debug output of configured URL's
 		// Application Identification
 		if (debugLogging) {
-			addLogEntry("Configured clientId          " ~ clientId, ["debug"]);
-			addLogEntry("Configured userAgent         " ~ appConfig.getValueString("user_agent"), ["debug"]);
+			addLogEntry("Configured clientId           " ~ clientId, ["debug"]);
+			addLogEntry("Configured userAgent          " ~ appConfig.getValueString("user_agent"), ["debug"]);
 			// Authentication
-			addLogEntry("Configured authScope:        " ~ authScope, ["debug"]);
-			addLogEntry("Configured authUrl:          " ~ authUrl, ["debug"]);
-			addLogEntry("Configured redirectUrl:      " ~ redirectUrl, ["debug"]);
-			addLogEntry("Configured tokenUrl:         " ~ tokenUrl, ["debug"]);
+			addLogEntry("Configured authScope:         " ~ authScope, ["debug"]);
+			addLogEntry("Configured authUrl:           " ~ authUrl, ["debug"]);
+			addLogEntry("Configured redirectUrl:       " ~ redirectUrl, ["debug"]);
+			addLogEntry("Configured tokenUrl:          " ~ tokenUrl, ["debug"]);
 			// Drive Queries
-			addLogEntry("Configured driveUrl:         " ~ driveUrl, ["debug"]);
-			addLogEntry("Configured driveByIdUrl:     " ~ driveByIdUrl, ["debug"]);
+			addLogEntry("Configured driveUrl:          " ~ driveUrl, ["debug"]);
+			addLogEntry("Configured driveByIdUrl:      " ~ driveByIdUrl, ["debug"]);
 			// Shared With Me
-			addLogEntry("Configured sharedWithMeUrl:  " ~ sharedWithMeUrl, ["debug"]);
+			addLogEntry("Configured sharedWithMeUrl:   " ~ sharedWithMeUrl, ["debug"]);
 			// Item Queries
-			addLogEntry("Configured itemByIdUrl:      " ~ itemByIdUrl, ["debug"]);
-			addLogEntry("Configured itemByPathUrl:    " ~ itemByPathUrl, ["debug"]);
+			addLogEntry("Configured itemByIdUrl:       " ~ itemByIdUrl, ["debug"]);
+			addLogEntry("Configured itemByPathUrl:     " ~ itemByPathUrl, ["debug"]);
 			// SharePoint Queries
-			addLogEntry("Configured siteSearchUrl:    " ~ siteSearchUrl, ["debug"]);
-			addLogEntry("Configured siteDriveUrl:     " ~ siteDriveUrl, ["debug"]);
+			addLogEntry("Configured siteSearchUrl:     " ~ siteSearchUrl, ["debug"]);
+			addLogEntry("Configured siteDriveUrl:      " ~ siteDriveUrl, ["debug"]);
+			// Websocket 
+			addLogEntry("Configured websocketEndpoint: " ~ websocketEndpoint, ["debug"]);
 		}
 	}
 	
