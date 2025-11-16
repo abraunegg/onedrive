@@ -362,7 +362,11 @@ This client supports the following methods to authenticate the application with 
 #### Interactive Authentication using OAuth2 and a redirect URI
 When you run the application for the first time, you'll be prompted to open a specific URL in your web browser. This URL takes you to the Microsoft login page, where you’ll sign in with your Microsoft Account and grant the application permission to access your files.
 
-After granting permission, your browser will redirect you to a blank page. This is expected behaviour.
+After granting permission, your browser will redirect you to a blank page, or a page that displays this message: 
+
+![microsoft-auth-display-message](./images/microsoft-auth-display-message.png)
+
+This is expected behaviour.
 
 At this point, copy the full redirect URI shown in your browser's address bar and paste it into the terminal where prompted.
 
@@ -391,7 +395,7 @@ user@hostname:~$
 
 ```
 
-**Interactive Authentication Process Illustrated:**
+**Interactive OAuth2 Authentication Process Illustrated:**
 ![initial_auth_url_access_redacted](./images/initial_auth_url_access_redacted.png)
 
 ![copy_redirect_uri_to_application](./images/authorise_client_before_copy_with_arrow.png)
