@@ -661,13 +661,19 @@ _**Config Example:**_ `notify_file_actions = "true"`
 > GUI Notification Support must be compiled in first, otherwise this option will have zero effect and will not be used.
 
 ### operation_timeout
-_**Description:**_ This configuration option controls the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc. We recommend users not to tamper with this option unless strictly necessary. This option controls the CURLOPT_TIMEOUT setting of libcurl.
+_**Description:**_ This configuration option controls the maximum total time (in seconds) that any network operation is allowed to take. This limit applies to the *entire* request, including DNS resolution, connection setup, TLS negotiation, and data transfer.  This option maps directly to libcurl’s `CURLOPT_TIMEOUT`.
 
 _**Value Type:**_ Integer
 
-_**Default Value:**_ 3600
+_**Default Value:**_ 0 (no timeout)
 
 _**Config Example:**_ `operation_timeout = "3600"`
+
+> [!IMPORTANT]
+> Setting a non-zero value will cause libcurl to abort the operation once the specified time has elapsed — even if data is still flowing normally.
+> For large file downloads, particularly on slower connections, enabling a finite timeout may cause transfers to be terminated prematurely.
+>
+> It is strongly recommend to leave this option at its default of `0` unless you specifically require a hard global time limit.
 
 ### permanent_delete
 _**Description:**_ Permanently delete an item online when it is removed locally. When using this method, they're permanently removed and aren't sent to the Microsoft OneDrive Recycle Bin. Therefore, permanently deleted drive items can't be restored afterward. Online data loss MAY occur in this scenario.
