@@ -1446,67 +1446,140 @@ class OneDriveApi {
 	private void downloadFile(const(char)[] driveId, const(char)[] itemId, const(char)[] url, string filename, long fileSize, JSONValue onlineHash, long resumeOffset = 0, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
-		
-		// To support marking of partially-downloaded files, 
+
+		// To support marking of partially-downloaded files
 		string originalFilename = filename;
 		string downloadFilename = filename ~ ".partial";
-		
+
 		// To support resumable downloads, configure the 'resumable data' file path
 		string threadResumeDownloadFilePath = appConfig.resumeDownloadFilePath ~ "." ~ generateAlphanumericString();
-		
+
 		// Create a JSONValue with download state so this can be used when resuming, to evaluate if the online file has changed, and if we are able to resume in a safe manner
 		JSONValue resumeDownloadData = JSONValue([
-				"driveId": JSONValue(to!string(driveId)),
-				"itemId": JSONValue(to!string(itemId)),
-				"onlineHash": onlineHash,
-				"originalFilename": JSONValue(originalFilename),
-				"downloadFilename": JSONValue(downloadFilename),
-				"resumeOffset": JSONValue(to!string(resumeOffset))
+			"driveId":          JSONValue(to!string(driveId)),
+			"itemId":           JSONValue(to!string(itemId)),
+			"onlineHash":       onlineHash,
+			"originalFilename": JSONValue(originalFilename),
+			"downloadFilename": JSONValue(downloadFilename),
+			"resumeOffset":     JSONValue(to!string(resumeOffset))
 		]);
-		
+
+		// ----------------------------------------------------------------------
+		// Progress state – must live for the whole downloadFile() call so that
+		// retries triggered by oneDriveErrorHandlerWrapper() do NOT reset the
+		// visible progress bar back to 0%.
+		// ----------------------------------------------------------------------
+		size_t expected_total_segments = 20;
+
+		SysTime startTime = Clock.currTime();
+		long   start_unix_time = startTime.toUnixTime();
+		int    h, m, s;
+		string etaString;
+		bool   barInit = false;
+		real   previousProgressPercent = 0.0; // last *displayed* percent
+		real   percentCheck = 5.0;
+		size_t segmentCount = 0;
+
 		// Validate the JSON response
 		bool validateJSONResponse = false;
-				
+
 		oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.get, url, false, response);
 
-			if (fileSize >= thresholdFileSize){
-				// If we have a resumable offset to use, set this as the offset to use
-				if (resumeOffset > 0) {
-					curlEngine.setDownloadResumeOffset(resumeOffset);
+			if (fileSize >= thresholdFileSize) {
+				// ------------------------------------------------------------------
+				// Determine an effective resume offset for this attempt.
+				//
+				//  - Start from the passed-in resumeOffset (from resume_download.*)
+				//  - If a .partial file exists and is larger, prefer its size.
+				//    This ensures we never re-download bytes we already have on disk.
+				// ------------------------------------------------------------------
+				long effectiveResumeOffset = resumeOffset;
+
+				if (exists(downloadFilename)) {
+					try {
+						auto partialSize = cast(long) getSize(downloadFilename);
+						if (partialSize > effectiveResumeOffset) {
+							if (debugLogging) {
+								addLogEntry(
+									"Resumable download: detected existing partial file '" ~ downloadFilename ~
+									"' of size " ~ to!string(partialSize) ~ " bytes",
+									["debug"]
+								);
+								addLogEntry(
+									"Adjusting resumable offset for '" ~ originalFilename ~
+									"' from " ~ to!string(effectiveResumeOffset) ~
+									" to " ~ to!string(partialSize),
+									["debug"]
+								);
+							}
+							effectiveResumeOffset = partialSize;
+						}
+					} catch (FileException ex) {
+						if (debugLogging) {
+							addLogEntry(
+								"Failed to obtain size of partial download file '" ~ downloadFilename ~
+								"': " ~ ex.msg,
+								["debug"]
+							);
+						}
+					}
 				}
-			
-				// Download Progress variables
-				size_t expected_total_segments = 20;
-				
-				// Time sensitive and ETA string items
-				SysTime currentTime = Clock.currTime();
-				long start_unix_time = currentTime.toUnixTime();
-				int h, m, s;
-				string etaString;
-				bool barInit = false;
-				real previousProgressPercent = -1.0;
-				real percentCheck = 5.0;
-				size_t segmentCount = -1;
-				
+
+				// If we have a resumable offset to use, set this as the offset to use
+				if (effectiveResumeOffset > 0) {
+					curlEngine.setDownloadResumeOffset(effectiveResumeOffset);
+
+					// Keep the JSON state in sync with the absolute offset
+					resumeDownloadData["resumeOffset"] = JSONValue(to!string(effectiveResumeOffset));
+				}
+
 				// Setup progress bar to display
 				curlEngine.http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
-					// For each onProgress, what is the % of dlnow to dltotal
-					// floor - rounds down to nearest whole number
-					real currentDLPercent = floor(double(dlnow)/dltotal*100);
 					string downloadLogEntry = "Downloading: " ~ filename ~ " ... ";
-					
-					// Have we started downloading?
-					if (currentDLPercent > 0){
-						// We have started downloading
-						if (debugLogging) {
-							addLogEntry("", ["debug"]); // Debug new line only
-							addLogEntry("Data Received    = " ~ to!string(dlnow), ["debug"]);
-							addLogEntry("Expected Total   = " ~ to!string(dltotal), ["debug"]);
-							addLogEntry("Percent Complete = " ~ to!string(currentDLPercent), ["debug"]);
-						}
-						// Every 5% download we need to increment the download bar
 
+					// ------------------------------------------------------------------
+					// Compute absolute progress as bytes_on_disk + bytes_this_transfer.
+					// This ensures that after a retry, the percentage continues from
+					// (for example) 25% instead of restarting at 0%.
+					// ------------------------------------------------------------------
+					long absoluteNow = effectiveResumeOffset + cast(long)dlnow;
+
+					long absoluteTotal;
+					if (fileSize > 0) {
+						absoluteTotal = fileSize;
+					} else if (dltotal > 0) {
+						absoluteTotal = effectiveResumeOffset + cast(long)dltotal;
+					} else {
+						absoluteTotal = absoluteNow; // best effort; avoids div-by-zero
+					}
+
+					if (absoluteTotal <= 0) {
+						absoluteTotal = 1; // safety guard
+					}
+
+					// Floor to nearest whole number
+					real currentDLPercent = floor(
+						(cast(real) absoluteNow / cast(real) absoluteTotal) * 100.0
+					);
+
+					// Clamp just in case
+					if (currentDLPercent < 0.0) {
+						currentDLPercent = 0.0;
+					} else if (currentDLPercent > 100.0) {
+						currentDLPercent = 100.0;
+					}
+
+					// Debug logging (optional, but handy while we’re testing)
+					if (debugLogging) {
+						addLogEntry("", ["debug"]);
+						addLogEntry("absoluteNow      = " ~ to!string(absoluteNow), ["debug"]);
+						addLogEntry("absoluteTotal    = " ~ to!string(absoluteTotal), ["debug"]);
+						addLogEntry("Percent Complete = " ~ to!string(currentDLPercent), ["debug"]);
+					}
+
+					// Have we started downloading (in absolute terms)?
+					if (currentDLPercent > 0) {
 						// Has the user set a data rate limit?
 						// when using rate_limit, we will get odd download rates, for example:
 						// Percent Complete = 24
@@ -1519,99 +1592,91 @@ class OneDriveApi {
 						// Data Received    = 13685777
 						// Expected Total   = 52428800
 						// Percent Complete = 26
-											
+
 						if (appConfig.getValueLong("rate_limit") > 0) {
-							// User configured rate limit
-							// How much data should be in each segment to qualify for 5%
-							size_t dataPerSegment = cast(size_t)(floor(double(dltotal)/expected_total_segments));
-							// How much data received do we need to validate against
-							size_t thisSegmentData = dataPerSegment * segmentCount;
-							size_t nextSegmentData = dataPerSegment * (segmentCount + 1);
-							
-							// Has the data that has been received in a 5% window that we need to increment the progress bar at
-							if ((dlnow > thisSegmentData) && (dlnow < nextSegmentData) && (previousProgressPercent != currentDLPercent) || (dlnow == dltotal)) {
-								// Downloaded data equals approx 5%
-								if (debugLogging) {addLogEntry("Incrementing Progress Bar using calculated 5% of data received", ["debug"]);}
-								
-								// 100% check
-								if (currentDLPercent != 100) {
-									// Not 100% yet
-									// Calculate the output
-									segmentCount++;
-									// Generate ETA time output
-									etaString = formatETA(calc_eta(segmentCount, expected_total_segments, start_unix_time));
-									// Calculate percentage
-									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
-									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
-								} else {
-									// 100% done
-									SysTime endTime = Clock.currTime();
-									long end_unix_time = endTime.toUnixTime();
-									int upload_duration = cast(int)(end_unix_time - start_unix_time);
-									dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
-									etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
-									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
-									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+							// Under rate limiting, libcurl can "jump" the visible percentage,
+							// e.g. 24% -> 26%, which can skip a clean 5% boundary.
+							// To keep a stable 5% display (5, 10, 15, ...), we use a
+							// catch-up loop that prints every missing 5% step up to
+							// currentDLPercent, based on the *absolute* percentage.
+
+							real nextPercent = previousProgressPercent + percentCheck;
+
+							// Emit all missing 5% steps below 100%
+							while (nextPercent < 100.0 && currentDLPercent >= nextPercent) {
+								if (debugLogging) {
+									addLogEntry("Incrementing Progress Bar (rate_limit) to " ~ to!string(nextPercent) ~ "%", ["debug"]);
 								}
-								
-								// update values
-								if (debugLogging) {addLogEntry("Setting previousProgressPercent to " ~ to!string(currentDLPercent), ["debug"]);}
-								previousProgressPercent = currentDLPercent;
-								if (debugLogging) {addLogEntry("Incrementing segmentCount", ["debug"]);}
+
 								segmentCount++;
+								etaString = formatETA(calc_eta(segmentCount, expected_total_segments, start_unix_time));
+								string percentage = leftJustify(to!string(cast(int) nextPercent) ~ "%", 5, ' ');
+								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+
+								previousProgressPercent = nextPercent;
+								nextPercent += percentCheck;
+							}
+
+							// Handle 100% exactly once
+							if ((currentDLPercent >= 100.0) && (previousProgressPercent < 100.0)) {
+								SysTime endTime = Clock.currTime();
+								long end_unix_time = endTime.toUnixTime();
+								int download_duration = cast(int)(end_unix_time - start_unix_time);
+								dur!"seconds"(download_duration).split!("hours", "minutes", "seconds")(h, m, s);
+								etaString = format!"| DONE in %02d:%02d:%02d"(h, m, s);
+								string percentage = leftJustify("100%", 5, ' ');
+								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+
+								previousProgressPercent = 100.0;
 							}
 						} else {
-							// Is currentDLPercent divisible by 5 leaving remainder 0 and does previousProgressPercent not equal currentDLPercent
-							if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousProgressPercent != currentDLPercent)) {
+							// Non-rate-limited case: fmod-based behaviour but applied to the absolute percentage
+							if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) &&
+								(previousProgressPercent != currentDLPercent)) {
 								// currentDLPercent matches a new increment
-								if (debugLogging) {addLogEntry("Incrementing Progress Bar using fmod match", ["debug"]);}
-								
-								// 100% check
+								if (debugLogging) {
+									addLogEntry("Incrementing Progress Bar using fmod match", ["debug"]);
+								}
+
 								if (currentDLPercent != 100) {
 									// Not 100% yet
-									// Calculate the output
 									segmentCount++;
-									// Generate ETA time output
 									etaString = formatETA(calc_eta(segmentCount, expected_total_segments, start_unix_time));
-									// Calculate percentage
-									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
+									string percentage = leftJustify(to!string(cast(int) currentDLPercent) ~ "%", 5, ' ');
 									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 								} else {
 									// 100% done
 									SysTime endTime = Clock.currTime();
 									long end_unix_time = endTime.toUnixTime();
-									int upload_duration = cast(int)(end_unix_time - start_unix_time);
-									dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
-									etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
-									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
+									int download_duration = cast(int)(end_unix_time - start_unix_time);
+									dur!"seconds"(download_duration).split!("hours", "minutes", "seconds")(h, m, s);
+									etaString = format!"| DONE in %02d:%02d:%02d"(h, m, s);
+									string percentage = leftJustify("100%", 5, ' ');
 									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 								}
-								
-								// update values
+
 								previousProgressPercent = currentDLPercent;
 							}
 						}
-						
-						// Has 'dlnow' changed?
-						if (dlnow > to!long(resumeDownloadData["resumeOffset"].str)) {
-							// Update resumeOffset for this progress event with the latest 'dlnow' value
-							resumeDownloadData["resumeOffset"] = JSONValue(to!string(dlnow));
-					
+
+						// Has our absolute offset advanced?
+						if (absoluteNow > to!long(resumeDownloadData["resumeOffset"].str)) {
+							// Update resumeOffset for this progress event with the latest absolute offset
+							resumeDownloadData["resumeOffset"] = JSONValue(to!string(absoluteNow));
+
 							// Save resumable download data - this needs to be saved on every onProgress event that is processed
 							saveResumeDownloadFile(threadResumeDownloadFilePath, resumeDownloadData);
 						}
 					} else {
+						// We may get frequent progress callbacks at 0%, make sure we initialise the bar once per overall download
 						if ((currentDLPercent == 0) && (!barInit)) {
-							// Calculate the output
-							segmentCount++;
 							etaString = "|  ETA    --:--:--";
-							string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
+							string percentage = leftJustify("0%", 5, ' ');
 							addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 							barInit = true;
 						}
 					}
-					
-					// return
+
 					return 0;
 				};
 			} else {
@@ -1620,10 +1685,10 @@ class OneDriveApi {
 
 			// Capture the result of the download action
 			auto result = curlEngine.download(originalFilename, downloadFilename);
-			
-			// Safe remove 'threadResumeDownloadFilePath' as if we get to this point, the file has been download successfully
+
+			// Safe remove 'threadResumeDownloadFilePath' as if we get to this point, the file has been downloaded successfully
 			safeRemove(threadResumeDownloadFilePath);
-			
+
 			// Reset this curlEngine offset value now that the file has been downloaded successfully
 			curlEngine.resetDownloadResumeOffset();
 
@@ -1631,7 +1696,7 @@ class OneDriveApi {
 			return result;
 		}, validateJSONResponse, callingFunction, lineno);
 	}
-	
+
 	// Save the resume download data
 	private void saveResumeDownloadFile(string threadResumeDownloadFilePath, JSONValue resumeDownloadData) {
 		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
@@ -1752,18 +1817,14 @@ class OneDriveApi {
 						}
 					}
 					
+					// If we get to this point, there is no error from http.perform() on re-try
 					// If retryAttempts is greater than 1, it means we were re-trying the request
 					if (retryAttempts > 1) {
-						// No error from http.perform() on re-try
-						if (!transientError) {
-							// Log that Internet access has been restored
-							addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
-						}
 						// unset the fresh connect option as this then creates performance issues if left enabled
 						unsetFreshConnectOption();
 					}
 					
-					// On successful processing, break out of the loop
+					// On successful http.perform() processing, break out of the loop
 					break;
 				} else {
 					// Throw a custom 506 error
@@ -1796,7 +1857,7 @@ class OneDriveApi {
 				// - Couldn't resolve host name on handle
 				// - Could not resolve host name on handle (changed noticed in curl 8.14.1, possibly done earlier ...)
 				// - Timeout was reached on handle
-				if (canFind(errorMessage, "connect to server on handle") || canFind(errorMessage, "resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
+				if (canFind(errorMessage, "connect to server on handle") || canFind(errorMessage, "resolve host name on handle") || canFind(errorMessage, "resolve hostname on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
 					// Connectivity to Microsoft OneDrive was lost
 					addLogEntry("Internet connectivity to Microsoft OneDrive service has been interrupted .. re-trying in the background");
 					
@@ -1813,13 +1874,14 @@ class OneDriveApi {
 					if (canFind(errorMessage, "Timeout was reached on handle")) {
 						// Common cause is libcurl trying IPv6 DNS resolution when there are only IPv4 DNS servers available
 						if (verboseLogging) {
-							addLogEntry("A libcurl timeout has been triggered - data transfer too slow, no DNS resolution response, no server response", ["verbose"]);
+							addLogEntry("A libcurl timeout has been triggered - data transfer too slow, no DNS resolution response, no server response or operational timeout", ["verbose"]);
 							// There are 3 common causes for this issue:
 							// 1. Usually poor DNS resolution where libcurl flip/flops to use IPv6 and is unable to resolve
 							// 2. A device between the user and Microsoft OneDrive is unable to correctly handle HTTP/2 communication
 							// 3. No Internet access from this system at this point in time
 							addLogEntry(" - IPv6 DNS resolution issues may be causing timeouts. Consider setting 'ip_protocol_version' to IPv4 to potentially avoid this", ["verbose"]);
 							addLogEntry(" - HTTP/2 compatibility issues might also be interfering with your system. Use 'force_http_11' to switch to HTTP/1.1 to potentially avoid this", ["verbose"]);
+							addLogEntry(" - Ensure 'operation_timeout' is configured for the conditions of your network, covering DNS lookups, connection setup, TLS negotiation, and how long data transfers normally take", ["verbose"]);
 							addLogEntry(" - If these options do not resolve this timeout issue, please use --debug-https to diagnose this issue further.", ["verbose"]);
 						}
 					}
@@ -1999,7 +2061,7 @@ class OneDriveApi {
 
 			// Increment re-try counter
 			retryAttempts++;
-			
+
 			// Configure libcurl to perform a fresh connection on API retry
 			setFreshConnectOption();
 			

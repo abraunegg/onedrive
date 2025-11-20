@@ -78,10 +78,22 @@ class ApplicationConfig {
 	// Default data timeout for HTTP operations
 	// curl.d has a default of: _defaultDataTimeout = dur!"minutes"(2);
 	immutable int defaultDataTimeout = 60; // in seconds
-	// Maximum time any operation is allowed to take
-	// This includes dns resolution, connecting, data transfer, etc.
-	// Controls CURLOPT_TIMEOUT
-	immutable int defaultOperationTimeout = 3600; // in seconds
+	// Maximum total time (in seconds) that any transfer operation is allowed to take.
+	// This maps directly to libcurl's CURLOPT_TIMEOUT.
+	//
+	// IMPORTANT:
+	//   • CURLOPT_TIMEOUT applies to the *entire* operation — DNS lookup, TCP connect,
+	//     TLS negotiation, and the full data transfer.
+	//   • If this timeout is reached, libcurl will abort the request even if data is
+	//     flowing normally.
+	//   • For large file downloads, especially on slower links, setting a non-zero
+	//     timeout can cause the transfer to be killed prematurely.
+	//
+	// Behaviour:
+	//   • A value of 0 disables the limit entirely (libcurl’s default behaviour).
+	//   • It is strongly recommended to keep this at 0 unless a hard global cap is
+	//     explicitly required by the user or their environment.
+	immutable int defaultOperationTimeout = 0; // 0 = no timeout (safe for extremely large file downloads)
 	// Specify what IP protocol version should be used when communicating with OneDrive
 	immutable int defaultIpProtocol = 0; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
 	// Specify how many redirects should be allowed
