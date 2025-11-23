@@ -68,16 +68,36 @@ shared static this() {
 // If the path already ends with "-<deviceName>-safeBackup-####", the counter is incremented
 // instead of appending another "-<deviceName>-safeBackup-".
 void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, out string renamedPath) {
-    // Is the input path a folder|directory? These should never be renamed
-	if (isDir(path)) {
+    // Ensure this is currently null
+	renamedPath = null;
+	bool isDirectory = false;
+	
+	// If the path doesn’t exist, there is nothing to back up
+	if (!exists(path)) {
+		if (debugLogging) {
+			addLogEntry("safeBackup: Skipping backup as local path does not exist: " ~ to!string(path), ["debug"]);
+		}
+		return;
+	}
+
+	// Is the path a directory?
+	try {
+		isDirectory = isDir(path);
+	} catch (FileException e) {
+		// Path disappeared or became inaccessible between exists() and isDir()
+		if (debugLogging) {
+			addLogEntry("safeBackup: Unable to determine if path is a directory, treating as non-directory: " ~ to!string(path) ~ " : " ~ e.msg, ["debug"]);
+		}
+		isDirectory = false;
+	}
+	
+	// Is the input path a folder|directory? These should never be renamed
+	if (isDirectory) {
 		if (verboseLogging) {
 			addLogEntry("Renaming request of local directory is being ignored: " ~ to!string(path), ["verbose"]);
 		}
 		return;
 	}
-	
-	// Ensure this is currently null
-	renamedPath = null;
 	
 	// Has the user configured to IGNORE local data protection rules?
     if (bypassDataPreservation) {
