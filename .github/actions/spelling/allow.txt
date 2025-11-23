@@ -472,6 +472,7 @@ specpart
 SSLVERSION
 startuml
 statm
+stat'ing
 stdc
 stringof
 Stringz
