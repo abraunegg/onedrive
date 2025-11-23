@@ -85,10 +85,11 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 		isDirectory = isDir(path);
 	} catch (FileException e) {
 		// Path disappeared or became inaccessible between exists() and isDir()
-		if (debugLogging) {
-			addLogEntry("safeBackup: Unable to determine if path is a directory, treating as non-directory: " ~ to!string(path) ~ " : " ~ e.msg, ["debug"]);
+		if (verboseLogging) {
+			addLogEntry("Path to backup no longer exists or is inaccessible: " ~ to!string(path) ~ " : " ~ e.msg, ["verbose"]);
 		}
-		isDirectory = false;
+		// Nothing left to back up — exit safely
+		return;
 	}
 	
 	// Is the input path a folder|directory? These should never be renamed
