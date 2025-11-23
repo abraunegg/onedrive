@@ -2,42 +2,42 @@
 module util;
 
 // What does this module require to function?
-import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
+import core.memory;
 import core.stdc.errno : ENOENT;
+import core.stdc.stdlib;
+import core.stdc.string;
+import core.sys.posix.pwd;
+import core.sys.posix.signal;
+import core.sys.posix.sys.resource;
+import core.sys.posix.sys.stat;
+import core.sys.posix.unistd;
+import core.thread;
+import etc.c.curl;
+import std.algorithm;
+import std.array;
+import std.ascii;
 import std.base64;
 import std.conv;
+import std.datetime;
 import std.digest.crc;
 import std.digest.sha;
-import std.net.curl;
-import std.datetime;
+import std.exception;
 import std.file;
+import std.format;
+import std.json;
+import std.math;
+import std.net.curl;
 import std.path;
+import std.process;
+import std.random;
+import std.range;
 import std.regex;
 import std.socket;
 import std.stdio;
 import std.string;
-import std.algorithm;
-import std.uri;
-import std.json;
 import std.traits;
+import std.uri;
 import std.utf;
-import core.stdc.stdlib;
-import core.thread;
-import core.memory;
-import std.math;
-import std.format;
-import std.random;
-import std.array;
-import std.ascii;
-import std.range;
-import std.exception;
-import core.sys.posix.pwd;
-import core.sys.posix.unistd;
-import core.stdc.string;
-import core.sys.posix.signal;
-import etc.c.curl;
-import std.process;
-import core.sys.posix.sys.resource;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -199,129 +199,173 @@ void safeRemove(const(char)[] path) {
 	}
 }
 
-// Returns the SHA1 hash hex string of a file, or an empty string on failure
-string computeSha1Hash(string path) {
-	SHA1 sha;
-	File file;
-	bool fileOpened = false;
-	
-	scope(exit) {
-		if (fileOpened) {
-			file.close(); // Ensure file is closed on function exit
-		}
-	}
-
-	try {
-		file = File(path, "rb");
-		fileOpened = true;
-
-		// Read file in chunks and feed into the hash
-		foreach (ubyte[] data; chunks(file, 4096)) {
-			sha.put(data);
-		}
-	} catch (ErrnoException e) {
-		addLogEntry("Failed to compute SHA1 Hash for file: " ~ path ~ " - " ~ e.msg);
-		return "";
-	} catch (Exception e) {
-		addLogEntry("Unexpected error while computing SHA1 Hash for file: " ~ path ~ " - " ~ e.msg);
-		return "";
-	}
-
-	// Ensure file is closed if opened
-	if (fileOpened) {
-		try {
-			file.close();
-		} catch (Exception e) {
-			addLogEntry("Failed to close file after hashing: " ~ path ~ " - " ~ e.msg);
-		}
-	}
-
-	// Finish hashing and return hex result
-	auto hashResult = sha.finish();
-	return toHexString(hashResult).idup;
-}
-
 // Returns the quickXorHash base64 string of a file, or an empty string on failure
 string computeQuickXorHash(string path) {
-	QuickXor qxor;
-	File file;
-	bool fileOpened = false;
-	
-	scope(exit) {
-		if (fileOpened) {
-			file.close(); // Ensure file is closed on function exit
-		}
-	}
 
-	try {
-		file = File(path, "rb");
-		fileOpened = true;
+    QuickXor qxor;
+    File file;
+    bool fileOpened = false;
 
-		// Read file in chunks and feed into the hash
-		foreach (ubyte[] data; chunks(file, 4096)) {
-			qxor.put(data);
-		}
-	} catch (ErrnoException e) {
-		addLogEntry("Failed to compute QuickXor Hash for file: " ~ path ~ " - " ~ e.msg);
-		return ""; // Return empty string on failure
-	} catch (Exception e) {
-		addLogEntry("Unexpected error while computing QuickXor Hash for file: " ~ path ~ " - " ~ e.msg);
-		return ""; // Return empty string on unexpected error
-	}
+    scope(exit) {
+        if (fileOpened) {
+            file.close();
+        }
+    }
 
-	// Ensure file is closed if opened
-	if (fileOpened) {
-		try {
-			file.close();
-		} catch (Exception e) {
-			addLogEntry("Failed to close file after hashing: " ~ path ~ " - " ~ e.msg);
-		}
-	}
+    try {
+        // Open file for reading
+        file = File(path, "rb");
+        fileOpened = true;
 
-	// Finish hashing and return base64 result
-	auto hashResult = qxor.finish();
+        // Single stat call for BOTH size and preferred block size
+        ulong fs = 0;
+        size_t blockSize = 4096; // sensible default
+
+        try {
+            auto de = DirEntry(path);
+            auto st = de.statBuf; // POSIX stat struct inferred
+
+            if (st.st_size > 0)
+                fs = cast(ulong) st.st_size;
+
+            if (st.st_blksize > 0)
+                blockSize = cast(size_t) st.st_blksize;
+        } catch (Exception e) {
+            // Best-effort only; keep defaults if stat fails
+            addLogEntry("Unexpected error while stat'ing file for hash sizing: " ~ path ~ " - " ~ e.msg);
+        }
+
+        // Choose factor based on file size
+        size_t factor;
+        if (fs == 0) {
+            factor = 256;                                  // unknown size -> moderate buffer
+        } else if (fs < 1_048_576UL) {                     // < 1 MiB
+            factor = 16;                                   // small buffer
+        } else if (fs < 1_073_741_824UL) {                 // < 1 GiB
+            factor = 256;                                  // medium buffer
+        } else {                                           // >= 1 GiB
+            factor = 512;                                  // larger buffer
+        }
+
+        // Compute bufSize and clamp to [64 KiB, 8 MiB]
+        size_t bufSize = blockSize * factor;
+
+        if (bufSize < 64 * 1024)
+            bufSize = 64 * 1024;
+        if (bufSize > 8 * 1024 * 1024)
+            bufSize = 8 * 1024 * 1024;
+
+        // Allocate outside GC to avoid scanning big buffers
+        auto raw = cast(ubyte*) malloc(bufSize);
+        if (raw is null) {
+            addLogEntry("Failed to compute QuickXor Hash for file: " ~ path ~ " - out of memory allocating buffer");
+            return "";
+        }
+        scope(exit) free(raw);
+
+        ubyte[] buf = raw[0 .. bufSize];
+
+        // Large sequential reads, minimal syscall overhead
+        for (;;) {
+            auto chunk = file.rawRead(buf);   // returns slice of bytes read
+            if (chunk.length == 0) break;     // EOF
+            qxor.put(chunk);
+        }
+
+    } catch (ErrnoException e) {
+        addLogEntry("Failed to compute QuickXor Hash for file: " ~ path ~ " - " ~ e.msg);
+        return "";
+    } catch (Exception e) {
+        addLogEntry("Unexpected error while computing QuickXor Hash for file: " ~ path ~ " - " ~ e.msg);
+        return "";
+    }
+
+    auto hashResult = qxor.finish();
 	return Base64.encode(hashResult).idup;
 }
 
 // Returns the SHA256 hash hex string of a file, or an empty string on failure
 string computeSHA256Hash(string path) {
-	SHA256 sha256;
-	File file;
-	bool fileOpened = false;
-	
-	scope(exit) {
-		if (fileOpened) {
-			file.close(); // Ensure file is closed on function exit
-		}
-	}
 
-	try {
-		file = File(path, "rb");
-		fileOpened = true;
+    SHA256 sha256;
+    File file;
+    bool fileOpened = false;
 
-		// Read file in chunks and feed into the hash
-		foreach (ubyte[] data; chunks(file, 4096)) {
-			sha256.put(data);
-		}
-	} catch (ErrnoException e) {
-		addLogEntry("Failed to compute SHA256 Hash for file: " ~ path ~ " - " ~ e.msg);
-		return "";
-	} catch (Exception e) {
-		addLogEntry("Unexpected error while computing SHA256 Hash for file: " ~ path ~ " - " ~ e.msg);
-		return "";
-	}
+    scope(exit) {
+        if (fileOpened) {
+            file.close();
+        }
+    }
 
-	// Ensure file is closed if opened
-	if (fileOpened) {
-		try {
-			file.close();
-		} catch (Exception e) {
-			addLogEntry("Failed to close file after hashing: " ~ path ~ " - " ~ e.msg);
-		}
-	}
+    try {
+        // Open file for reading
+        file = File(path, "rb");
+        fileOpened = true;
 
-	// Finish hashing and return hex result
-	auto hashResult = sha256.finish();
+        // Single stat call for BOTH size and preferred block size
+        ulong fs = 0;
+        size_t blockSize = 4096; // sensible default
+
+        try {
+            auto de = DirEntry(path);
+            auto st = de.statBuf; // POSIX stat struct inferred
+
+            if (st.st_size > 0)
+                fs = cast(ulong) st.st_size;
+
+            if (st.st_blksize > 0)
+                blockSize = cast(size_t) st.st_blksize;
+        } catch (Exception e) {
+            // Best-effort only; keep defaults if stat fails
+            addLogEntry("Unexpected error while stat'ing file for hash sizing: " ~ path ~ " - " ~ e.msg);
+        }
+
+        // Choose factor based on file size
+        size_t factor;
+        if (fs == 0) {
+            factor = 256;                                  // unknown size -> moderate buffer
+        } else if (fs < 1_048_576UL) {                     // < 1 MiB
+            factor = 16;                                   // small buffer
+        } else if (fs < 1_073_741_824UL) {                 // < 1 GiB
+            factor = 256;                                  // medium buffer
+        } else {                                           // >= 1 GiB
+            factor = 512;                                  // larger buffer
+        }
+
+        // Compute bufSize and clamp to [64 KiB, 8 MiB]
+        size_t bufSize = blockSize * factor;
+
+        if (bufSize < 64 * 1024)
+            bufSize = 64 * 1024;
+        if (bufSize > 8 * 1024 * 1024)
+            bufSize = 8 * 1024 * 1024;
+
+        // Allocate outside GC to avoid scanning big buffers
+        auto raw = cast(ubyte*) malloc(bufSize);
+        if (raw is null) {
+            addLogEntry("Failed to compute SHA256 Hash for file: " ~ path ~ " - out of memory allocating buffer");
+            return "";
+        }
+        scope(exit) free(raw);
+
+        ubyte[] buf = raw[0 .. bufSize];
+
+        // Large sequential reads, minimal syscall overhead
+        for (;;) {
+            auto chunk = file.rawRead(buf);   // returns slice of bytes read
+            if (chunk.length == 0) break;     // EOF
+            sha256.put(chunk);
+        }
+
+    } catch (ErrnoException e) {
+        addLogEntry("Failed to compute SHA256 Hash for file: " ~ path ~ " - " ~ e.msg);
+        return "";
+    } catch (Exception e) {
+        addLogEntry("Unexpected error while computing SHA256 Hash for file: " ~ path ~ " - " ~ e.msg);
+        return "";
+    }
+
+    auto hashResult = sha256.finish();
 	return toHexString(hashResult).idup;
 }
 
