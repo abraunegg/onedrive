@@ -769,13 +769,6 @@ bool isValidUTF8(string input) {
 			return false;
 		}
 
-		// is the string empty?
-		if (input.empty) {
-			// input is empty
-			addLogEntry("UTF-8 validation failed: Input is empty.");
-			return false;
-		}
-	
 		// return true
 		return true;
 	} catch (UTFException) {
