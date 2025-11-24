@@ -2001,7 +2001,6 @@ class SyncEngine {
 		
 		// Is the item deleted online?
 		if(!itemIsDeletedOnline) {
-			
 			// Is the item a confirmed root object?
 			
 			// The JSON item should be considered a 'root' item if:
@@ -2020,6 +2019,8 @@ class SyncEngine {
 		} else {
 			// Change is to delete an item
 			if (debugLogging) {addLogEntry("Handing a OneDrive Online Deleted Item", ["debug"]);}
+			
+			// Is the deleted item in our database?
 			if (existingDBEntry) {
 				// Is the item to delete locally actually in sync with OneDrive currently?
 				// What is the source of this item data?
@@ -2033,10 +2034,32 @@ class SyncEngine {
 					// Use the DB entries returned - add the driveId, itemId and parentId values  to the array
 					idsToDelete ~= [existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId];
 				} else {
-					// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
-					// In case the renamed path is needed
-					string renamedPath;
-					safeBackup(localPathToDelete, dryRun, bypassDataPreservation, renamedPath);
+					// Local item is not in sync with the online item, but the online item has been deleted, and we are flagging to delete the local item
+					// We need to determine the trigger for isItemSynced() returning false before we determine if we should make utilise safeBackup()
+					// Is this the exact same file?
+					// Test the file hash against the hash of the file online
+					
+					// Empirical evidence shows that Microsoft do not provide a 'valid' hash in JSON data for online deleted items, for example:
+					//   file":{"hashes":{"quickXorHash":"AAAAAAAAAAAAAAAAAAAAAAAAAAA="}},
+					// Thus this makes using the provided data via the API useless for a hash comparison test
+					
+					// Test the existing database item hash against the hash on the local disk - as this is what we know was in-sync with online prior to online deletion event
+					if (!testFileHash(localPathToDelete, existingDatabaseItem)) {
+						// Current file on disk is different by hash / content
+						// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
+						// In case the renamed path is needed
+						string renamedPath;
+						safeBackup(localPathToDelete, dryRun, bypassDataPreservation, renamedPath);
+						
+						// Purge the old record from the database as this still exists. The safeBackup() generated file now will be 'new' on the local filesystem
+						itemDB.deleteById(existingDatabaseItem.driveId, existingDatabaseItem.id);
+					} else {
+						// Hash is the same, we can assume the isItemSynced() returning false was due to some sort of timestamp issue
+						// Flag to delete rather than create a backup of the local file
+						if (debugLogging) {addLogEntry("Flagging to delete item locally due to online deletion event: " ~ to!string(onedriveJSONItem), ["debug"]);}
+						// Use the DB entries returned - add the driveId, itemId and parentId values  to the array
+						idsToDelete ~= [existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId];
+					}
 				}
 			} else {
 				// Flag to ignore
