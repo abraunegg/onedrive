@@ -2043,7 +2043,7 @@ class SyncEngine {
 					//   file":{"hashes":{"quickXorHash":"AAAAAAAAAAAAAAAAAAAAAAAAAAA="}},
 					// Thus this makes using the provided data via the API useless for a hash comparison test
 					
-					// Test the existing database item hash against the hash on the local disk - as this is what we know was in-sync with online
+					// Test the existing database item hash against the hash on the local disk - as this is what we know was in-sync with online prior to online deletion event
 					if (!testFileHash(localPathToDelete, existingDatabaseItem)) {
 						// Current file on disk is different by hash / content
 						// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
