@@ -1194,7 +1194,7 @@ To enable this application functionality, add the following to your 'config' fil
 use_recycle_bin = "true"
 ```
 
-This capability is designed to be compatible with the [FreeDesktop.org Trash Specification](https://specifications.freedesktop.org/trash-spec/1.0/), ensuring interoperability with GUI-based desktop environments such as GNOME (GIO) and KDE (KIO). It follows the required structure by:
+This capability is designed to be compatible with the [FreeDesktop.org Trash Specification](https://specifications.freedesktop.org/trash/latest/), ensuring interoperability with GUI-based desktop environments such as GNOME (GIO) and KDE (KIO). It follows the required structure by:
 * Moving deleted files and directories to `~/.local/share/Trash/files/`
 * Creating matching metadata files in `~/.local/share/Trash/info/` with the correct `.trashinfo` format, including the original absolute path and ISO 8601-formatted deletion timestamp
 * Resolving filename collisions using a `name.N.ext` pattern (e.g., `Document.2.docx`), consistent with GNOME and KDE behaviour.
@@ -1204,7 +1204,10 @@ To specify an explicit 'Recycle Bin' directory, add the following to your 'confi
 recycle_bin_path = "/path/to/desired/location/"
 ```
 
-The same FreeDesktop.org Trash Specification will be used with this explicit 'Recycle Bin' directory.
+The same FreeDesktop.org Trash Specification will be used with this explicit 'Recycle Bin' directory as illustrated below:
+
+![using_recycle_bin](./images/using_recycle_bin.png)
+
 
 ### Handling a Microsoft OneDrive Account Password Change
 If you change your Microsoft OneDrive Account Password, the client will no longer be authorised to sync, and will generate the following error upon next application run:
