@@ -1205,6 +1205,7 @@ recycle_bin_path = "/path/to/desired/location/"
 ```
 
 The same FreeDesktop.org Trash Specification will be used with this explicit 'Recycle Bin' directory as illustrated below:
+
 ![using_recycle_bin](./images/using_recycle_bin.png)
 
 
