@@ -823,53 +823,125 @@ onedrive --sync --upload-only
 
 ### Performing a selective synchronisation via 'sync_list' file
 Selective synchronisation allows you to sync only specific files and directories.
+
 To enable selective synchronisation, create a file named `sync_list` in your application configuration directory (default is `~/.config/onedrive`).
 
 > [!IMPORTANT]
 > Important points to understand before using 'sync_list'.
 > *    'sync_list' excludes _everything_ by default on OneDrive.
 > *    'sync_list' follows an _"exclude overrides include"_ rule, and requires **explicit inclusion**.
-> *    Order exclusions before inclusions, so that anything _specifically included_ is included.
+> *    Order specific exclusions before inclusions, so that anything _specifically included_ is included.
 > *    How and where you place your `/` matters for excludes and includes in subdirectories.
 
 Each line of the 'sync_list' file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations. 
 
-Additionally, the use of `/` is critically important to determine how a rule is interpreted. It is very similar to `**` wildcards, for those that are familiar with globbing patterns.
-Here is an example of `sync_list`:
+> [!CAUTION]
+> Rules without slashes (`Codes`, `Work`, `Backup`, `notes.txt`, etc.) are the most expensive form of `sync_list` rule as this instructs the client to scan every folder online & local to find a match. As a result, these types of rules can cause:
+> * High CPU usage
+> * High disk or network activity
+> * Increased fan usage (especially on laptops)
+>
+> If you want best performance, always prefer fully-qualified or path-scoped 'sync_list' rules. Avoid generic includes unless absolutely necessary.
+
+#### Example 'sync_list' rules
 ```text
-# sync_list supports comments
+# ======================================================================
+# Example sync_list
+# ======================================================================
+# IMPORTANT:
+# - 'sync_list' EXCLUDES EVERYTHING by default.
+# - Exclusions come first.
+# - Inclusions follow.
 #
-# The ordering of entries is highly recommended - exclusions before inclusions
+# Matching behaviour:
+# - Rules WITHOUT a slash (e.g., "Backup", "notes.txt") match ANYWHERE.
+#   ⚠️ These rules force exhaustive scanning of ALL online and local folders.
+#   ⚠️ They are computationally expensive.
 #
-# Exclude temp folder(s) or file(s) under Documents folder(s), anywhere in OneDrive
+# - Rules with a leading "/" apply ONLY to the OneDrive ROOT.
+#
+# - Rules with a trailing "/" match DIRECTORIES only.
+#
+# Wildcards and globbing:
+# - "*"   matches any characters within a single path segment.
+# - "**"  matches directories RECURSIVELY across ANY depth.
+# ======================================================================
+
+# ----------------------------------------------------------------------
+# EXCLUSIONS (ALWAYS PUT THESE FIRST)
+# ----------------------------------------------------------------------
+
+# Exclude temporary folders inside ANY Documents folder (any level)
 !Documents/temp*
-#
-# Exclude secret data folder in root directory only
+
+# Exclude Secret_data ONLY in OneDrive root
 !/Secret_data/*
-#
-# Include everything else in root directory
-# - Use 'sync_root_files' or --sync-root-files option
-# Do not use /* as this will include everything including items you are expecting to be excluded
-#
-# Include my Backup folder(s) or file(s) anywhere on OneDrive
+
+# ----------------------------------------------------------------------
+# Modern development / programming exclusions
+# (Common cache/build folders used by many languages & tools)
+# ----------------------------------------------------------------------
+
+# Python virtual environments
+!venv/*
+!.venv/*
+!__pycache__/*
+
+# Node.js / JavaScript build directories
+!node_modules/*
+!.next/*
+
+# Java & Kotlin build caches
+!build/kotlin/*
+!.kotlin/*
+
+# Gradle build system cache
+!.gradle/*
+
+# JetBrains IDE caches
+!.idea/libraries/*
+!.idea/caches/*
+
+# Generic runtime caches
+!.cache/*
+
+
+# ----------------------------------------------------------------------
+# INCLUSIONS (WHAT YOU *DO* WANT TO SYNC)
+# ----------------------------------------------------------------------
+
+# Include the Backup folder OR any file/folder named "Backup" ANYWHERE.
+# ⚠️ High-cost rule — causes full tree scanning.
 Backup
-#
-# Include my Backup folder in root
-/Backup/
-#
-# Include Documents folder(s) anywhere in OneDrive
+
+# Include Documents directory ANYWHERE
+# ⚠️ High-cost rule — causes full tree scanning.
 Documents/
-#
-# Include all PDF files in Documents folder(s), anywhere in OneDrive
+
+# Include all PDF files inside any Documents folder
+# ⚠️ High-cost rule — causes full tree scanning.
 Documents/*.pdf
-#
-# Include this single document in Documents folder(s), anywhere in OneDrive
+
+# Include one specific file, if present inside ANY Documents folder
+# ⚠️ High-cost rule — causes full tree scanning.
 Documents/latest_report.docx
-#
-# Include all Work/Project directories or files, inside 'Work' folder(s), anywhere in OneDrive
+
+# Include the /Backup/ folder ONLY in the OneDrive root
+/Backup/
+
+# Include Blender ONLY if in root
+/Blender
+
+
+# ----------------------------------------------------------------------
+# PROJECT / DEVELOPMENT STRUCTURES WITH WILDCARDS & GLOBBING
+# ----------------------------------------------------------------------
+
+# Include any folder or file beginning with "Project" inside ANY Work/ folder
+# ⚠️ High-cost rule — causes full tree scanning.
 Work/Project*
-#
-# Include the 'Blog' directory, but exclude 'Parent' and any other children of the parent
+
+# Include the 'Blog' directory — and ONLY that specific folder
 # .
 # ├── Parent
 # │   ├── Blog
@@ -880,23 +952,62 @@ Work/Project*
 # │   │       ├── cAuQMfX7qsMIOmzyQYdELikZwsXeCYsL
 # │   │       └── GqjZuo7UBB0qjYM2WUcZXOvToAhCQ29M
 # │   └── other_stuffs
+#
 /Parent/Blog/*
-#
-# Include all "notes.txt" files, anywhere in OneDrive
+
+# Include Android build directories located ANYWHERE inside ANY project
+!/Programming/Projects/Android/**/build/*
+
+# Include Android NDK /.cxx build trees ANYWHERE inside ANY project
+!/Programming/Projects/Android/**/.cxx/*
+
+# Include Web build output directories across ANY nested depth
+!/Programming/Projects/Web/**/build/*
+
+# Include the entire /Programming directory from OneDrive root
+/Programming
+
+
+# ----------------------------------------------------------------------
+# FILE-BY-NAME MATCHING ANYWHERE
+# ----------------------------------------------------------------------
+
+# Match all files named exactly "notes.txt" ANYWHERE
+# ⚠️ High-cost rule — causes full tree scanning.
 notes.txt
-#
-# Include /Blender in the ~OneDrive root but not if elsewhere in OneDrive
-/Blender
-#
-# Include these directories(or files) in 'Pictures' folder(s), that have a space in their name
+
+
+# ----------------------------------------------------------------------
+# DIRECTORIES WITH SPACES
+# ----------------------------------------------------------------------
+# - There is zero requirement to escape space sequences within the 'sync_list' file
+
+# Include directories under ANY Pictures folder
+# ⚠️ High-cost rule — causes full tree scanning.
 Pictures/Camera Roll
 Pictures/Saved Pictures
-#
-# Include these names if they match any file or folder
+
+# Include 'Camera Roll' and all files / folders 
+/Pictures/Camera Roll/*
+
+# Include 'Saved Pictures' and all files / folders 
+/Pictures/Saved Pictures/*
+
+
+# ----------------------------------------------------------------------
+# GENERIC NAME MATCHES (⚠️ VERY EXPENSIVE)
+# These match ANY file or folder with that name ANYWHERE in OneDrive.
+# They cause full, exhaustive scanning of ALL online and local folders.
+# ----------------------------------------------------------------------
+
 Cinema Soc
 Codes
 Textbooks
 Year 2
+Documents
+Pictures
+Music
+
 ```
 The following are supported for pattern matching and exclusion rules:
 *   Use the `*` to wildcard select any characters to match for the item to be included

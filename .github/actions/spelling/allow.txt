@@ -394,6 +394,7 @@ Pseudoblocking
 publicsuffix
 puml
 Pwy
+pycache
 qewrqwerwqer
 Qmark
 qpos
@@ -471,8 +472,8 @@ sooooo
 specpart
 SSLVERSION
 startuml
-statm
 stat'ing
+statm
 stdc
 stringof
 Stringz
