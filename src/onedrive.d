@@ -1243,9 +1243,13 @@ class OneDriveApi {
 	
 	private void acquireToken(char[] postData) {
 		JSONValue response;
-		// Debug this input
-		if (debugLogging) {addLogEntry("Manual Auth postData = " ~ to!string(postData), ["debug"]);}
-
+		
+		// Log what we are doing
+		if (debugLogging) {
+			addLogEntry("acquireToken: requesting new access token using refresh token (value redacted)", ["debug"]);
+		}
+		
+		// Try and process the 'postData' content
 		try {
 			response = post(tokenUrl, postData, null, true, "application/x-www-form-urlencoded");
 		} catch (OneDriveException exception) {
@@ -1268,9 +1272,14 @@ class OneDriveApi {
 		}
 
 		if (response.type() == JSONType.object) {
-			// Debug this response
-			if (debugLogging) {addLogEntry("Manual Auth Response JSON = " ~ to!string(response), ["debug"]);}
-		
+			// Debug the provided response
+			if (debugLogging) {
+				string scopes = ("scope" in response) ? response["scope"].str() : "<none>";
+				string tokenType = ("token_type" in response) ? response["token_type"].str() : "<none>";
+				long expiresIn = ("expires_in" in response) ? response["expires_in"].integer() : -1;
+				addLogEntry("acquireToken post response: token_type=" ~ tokenType ~ ", expires_in=" ~ to!string(expiresIn) ~ ", scope=" ~ scopes, ["debug"]);
+			}
+			
 			// Has the client been configured to use read_only_auth_scope
 			if (appConfig.getValueBool("read_only_auth_scope")) {
 				// read_only_auth_scope has been configured

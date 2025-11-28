@@ -594,7 +594,7 @@ class SyncEngine {
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
 		if ((defaultOneDriveDriveDetails.type() == JSONType.object) && (hasId(defaultOneDriveDriveDetails))) {
-			if (debugLogging) {addLogEntry("OneDrive Account Default Drive Details:      " ~ to!string(defaultOneDriveDriveDetails), ["debug"]);}
+			if (debugLogging) {addLogEntry("OneDrive Account Default Drive Details:      " ~ sanitiseJSONItem(defaultOneDriveDriveDetails), ["debug"]);}
 			appConfig.accountType = defaultOneDriveDriveDetails["driveType"].str;
 			
 			// Issue #3115 - Validate driveId length
@@ -754,7 +754,7 @@ class SyncEngine {
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
 		if ((defaultOneDriveRootDetails.type() == JSONType.object) && (hasId(defaultOneDriveRootDetails))) {
 			// Read the returned JSON data for the root drive details
-			if (debugLogging) {addLogEntry("OneDrive Account Default Root Details:       " ~ to!string(defaultOneDriveRootDetails), ["debug"]);}
+			if (debugLogging) {addLogEntry("OneDrive Account Default Root Details:       " ~ sanitiseJSONItem(defaultOneDriveRootDetails), ["debug"]);}
 			appConfig.defaultRootId = defaultOneDriveRootDetails["id"].str;
 			if (debugLogging) {addLogEntry("appConfig.defaultRootId      = " ~ appConfig.defaultRootId, ["debug"]);}
 			
@@ -10321,15 +10321,13 @@ class SyncEngine {
 					// Log that we skipping adding item to the local DB and the reason why
 					if (debugLogging) {addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);}
 				} else {
-					// What is the JSON item we are trying to create a DB record with?
-					if (debugLogging) {addLogEntry("saveItem - creating DB item from this JSON: " ~ sanitiseJSONItem(jsonItem), ["debug"]);}
-					
 					// Takes a JSON input and formats to an item which can be used by the database
 					Item item = makeItem(jsonItem);
 					
 					// Is this JSON item a 'root' item?
 					if ((isItemRoot(jsonItem)) && (item.name == "root")) {
 						if (debugLogging) {
+							addLogEntry("Creating 'root' DB item from this JSON: " ~ sanitiseJSONItem(jsonItem), ["debug"]);
 							addLogEntry("Updating DB Item object with correct values as this is a 'root' object", ["debug"]);
 							addLogEntry(" item.parentId = null", ["debug"]);
 							addLogEntry(" item.type = ItemType.root", ["debug"]);
@@ -14934,14 +14932,17 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// Eventual output variable
-		string sanitisedJSONString;
-		
 		// Validate UTF-8 before serialisation
 		if (!validateUTF8JSON(onedriveJSONItem)) {
 			return "JSON Validation Failed: JSON data from OneDrive API contains invalid UTF-8 characters";
 		}
 		
+		// Redact PII in JSON before serialisation
+		redactPII(onedriveJSONItem);
+		
+		// Eventual output variable
+		string sanitisedJSONString;
+				
 		// Try and serialise the JSON into a string
 		try {
 			auto app = appender!string();
@@ -14959,6 +14960,32 @@ class SyncEngine {
 		
 		// Return sanitised JSON string for logging output
 		return sanitisedJSONString;
+	}
+	
+	// Recursively redact PII and sensitive elements from JSONValue
+	void redactPII(ref JSONValue j) {
+		if (j.type == JSONType.object) {
+			foreach (key, ref value; j.object) {
+
+				// Match Graph's actual keys directly
+				if (key == "email") {
+					value = JSONValue("<redacted-email>");
+					continue;
+				}
+
+				if (key == "displayName") {
+					value = JSONValue("<redacted-displayName>");
+					continue;
+				}
+
+				// Recurse
+				redactPII(value);
+			}
+		} else if (j.type == JSONType.array) {
+			foreach (ref value; j.array) {
+				redactPII(value);
+			}
+		}
 	}
 	
 	// Obtain the Websocket Notification URL

@@ -373,6 +373,7 @@ PFN
 phlibi
 phobos
 pidx
+pii
 pixbuf
 pkgconf
 pkgconfig
