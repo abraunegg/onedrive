@@ -1728,7 +1728,7 @@ class ApplicationConfig {
 		
 		// Recycle Bin 
 		addLogEntry("Config option 'use_recycle_bin'              = " ~ to!string(getValueBool("use_recycle_bin")));
-		addLogEntry("Config option 'recycle_bin_path'             = " ~ recycleBinParentPath);
+		addLogEntry("Config option 'recycle_bin_path'             = " ~ getValueString("recycle_bin_path"));
 				
 		// Is sync_list configured and contains entries?
 		if (exists(syncListFilePath) && getSize(syncListFilePath) > 0) {
