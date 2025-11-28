@@ -242,9 +242,13 @@ class ApplicationConfig {
 	
 	// Recycle Bin Configuration
 	// These paths are used by the application, if 'use_recycle_bin' is enabled
+	string recycleBinParentPath;
 	string recycleBinFilePath;
 	string recycleBinInfoPath;
 	
+	// Runtime 'sync_dir' as initialised
+	string runtimeSyncDirectory;
+		
 	// Initialise the application configuration
 	bool initialise(string confdirOption, bool helpRequested) {
 		
@@ -496,6 +500,7 @@ class ApplicationConfig {
 		// ├── files/   # The actual trashed files
 		// └── info/    # .trashinfo metadata about each file (original path, deletion date)
 		setValueString("recycle_bin_path", defaultHomePath ~ "/.local/share/Trash/");
+		recycleBinParentPath = getValueString("recycle_bin_path");
 		
 		// DEVELOPER OPTIONS
 		// display_memory = true | false
@@ -2565,9 +2570,7 @@ class ApplicationConfig {
 	
 	// Initialise the correct 'sync_dir' expanding any '~' if present
 	string initialiseRuntimeSyncDirectory() {
-	
-		string runtimeSyncDirectory;
-		
+		// Log what we are doing
 		if (debugLogging) {addLogEntry("sync_dir: Setting runtimeSyncDirectory from config value 'sync_dir'", ["debug"]);}
 		
 		if (!shellEnvironmentSet){
@@ -2829,17 +2832,61 @@ class ApplicationConfig {
 	
 	// Set the Recycle Bin Paths
 	void setRecycleBinPaths() {
-		// Get the configured base path
-		string basePath = getValueString("recycle_bin_path");
+		string configured = getValueString("recycle_bin_path");
+		string basePath;
+		string dirSeparatorString = "/";
 
-		// Ensure basePath ends with a single '/'
-		if (!basePath.endsWith("/")) {
-			basePath ~= "/";
+		// Handle the "no shell / no user" case similarly to sync_dir
+		if (!shellEnvironmentSet) {
+			// No SHELL or USER means expandTilde() will fail if '~' is present
+			if (canFind(configured, "~")) {
+				// Replace '~' with defaultHomePath explicitly
+				basePath = buildNormalizedPath(
+					buildPath(defaultHomePath, strip(configured, "~"))
+				);
+			} else {
+				basePath = configured;
+			}
+		} else {
+			// Normal case: shell + user are set; we can rely on expandTilde()
+			if (canFind(configured, "~")) {
+				basePath = expandTilde(configured);
+			} else {
+				basePath = configured;
+			}
 		}
 
-		// Append subdirectories based on the recycle bin path
-		recycleBinFilePath = basePath ~ "files/";
-		recycleBinInfoPath = basePath ~ "info/";
+		// Make sure it's normalised and has a trailing '/'
+		basePath = buildNormalizedPath(basePath);
+		if (!basePath.endsWith(dirSeparatorString)) {
+			basePath ~= dirSeparatorString;
+		}
+		
+		// Update Recycle Bin paths
+		recycleBinParentPath = basePath;
+		recycleBinFilePath = basePath ~ "files" ~ dirSeparatorString;
+		recycleBinInfoPath = basePath ~ "info"  ~ dirSeparatorString;
+	}
+	
+	// Is 'recycleBinParentPath' a child path of the configured 'runtimeSyncDirectory'?
+	bool checkRecycleBinPathAsChildOfSyncDir() {
+		// Configure the variables to check
+		string syncRoot = runtimeSyncDirectory;
+		string recycleBin = recycleBinParentPath;
+		string sep = "/";
+		
+		// Make prefix check robust – ensure syncRoot ends with separator
+		if (!syncRoot.endsWith(sep)) {
+			syncRoot ~= sep;
+		}
+		
+		// Make prefix check robust – ensure recycleBin ends with separator
+		if (!recycleBin.endsWith(sep)) {
+			recycleBin ~= sep;
+		}
+		
+		// Perform the check and return the evaluation
+		return startsWith(recycleBin, syncRoot);
 	}
 	
 	// Is the client running under a GUI session?

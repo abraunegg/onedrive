@@ -202,6 +202,9 @@ int main(string[] cliArgs) {
 	// If --debug-https has been used, set the applicable flag
 	debugHTTPSResponse = appConfig.getValueBool("debug_https"); // set __gshared bool debugHTTPSResponse in log.d now that we have read-in any CLI arguments
 	
+	// Read in the configured 'sync_dir' from appConfig with '~' if present correctly expanded based on the user environment
+	runtimeSyncDirectory = appConfig.initialiseRuntimeSyncDirectory();
+	
 	// Are we doing a --sync or a --monitor operation? Both of these will be false if they are not set
 	if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
 		syncOrMonitorMissing = true; // --sync or --monitor is missing 
@@ -235,41 +238,57 @@ int main(string[] cliArgs) {
 		// Configure the internal application paths which will be used to move rather than delete any online deletes to
 		appConfig.setRecycleBinPaths();
 		
-		// We need to ensure that the Recycle Bin Paths exist on the file system, and if they do not exist, create them
-		// Test for appConfig.recycleBinFilePath
-		if (!exists(appConfig.recycleBinFilePath)) {
-			try {
-				// Attempt to create the 'Recycle Bin' file path we have been configured with
-				mkdirRecurse(appConfig.recycleBinFilePath);
-				
-				// Configure the applicable permissions for the folder
-				if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ appConfig.recycleBinFilePath, ["debug"]);}
-				appConfig.recycleBinFilePath.setAttributes(octal!700); // Set to 0700 as Trash may contain sensitive and is the expected default permissions by GIO or KIO
-				
-			} catch (std.file.FileException e) {
-				// Creating the 'Recycle Bin' file path failed
-				addLogEntry("ERROR: Unable to create the configured local 'Recycle Bin' file directory: " ~ e.msg, ["info", "notify"]);
-				// Use exit scopes to shutdown API
+		// If we are not using --display-config, test if the Recycle Bin Paths exist on the file system
+		if (!appConfig.getValueBool("display_config")) {
+			
+			// We need to test that the configured 'Recycle Bin' path is not within the configured 'sync_dir'
+			if (appConfig.checkRecycleBinPathAsChildOfSyncDir) {
+				// ERROR: 'Recycle Bin' path is a child of the configured 'sync_dir'
+				addLogEntry();
+				addLogEntry("ERROR: The configured 'recycle_bin_path' (" ~ appConfig.recycleBinParentPath ~ ") is located within the configured 'sync_dir' (" ~ appConfig.runtimeSyncDirectory ~ ").", ["info", "notify"]);
+				addLogEntry("       This would cause locally recycled items to be re-uploaded to Microsoft OneDrive.");
+				addLogEntry("       Please set 'recycle_bin_path' to a location outside of 'sync_dir' and restart the client.");
+				addLogEntry();
 				return EXIT_FAILURE;
-			}
-		}
-		
-		// Test for appConfig.recycleBinInfoPath
-		if (!exists(appConfig.recycleBinInfoPath)) {
-			try {
-				// Attempt to create the 'Recycle Bin' info path we have been configured with
-				mkdirRecurse(appConfig.recycleBinInfoPath);
+			} else {
+				// 'Recycle Bin' path is not within the configured 'sync_dir'
+				// We need to ensure that the Recycle Bin Paths exist on the file system, and if they do not exist, create them
+				// Test for appConfig.recycleBinFilePath
+				if (!exists(appConfig.recycleBinFilePath)) {
+					try {
+						// Attempt to create the 'Recycle Bin' file path we have been configured with
+						mkdirRecurse(appConfig.recycleBinFilePath);
+						
+						// Configure the applicable permissions for the folder
+						if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ appConfig.recycleBinFilePath, ["debug"]);}
+						appConfig.recycleBinFilePath.setAttributes(octal!700); // Set to 0700 as Trash may contain sensitive and is the expected default permissions by GIO or KIO
+						
+					} catch (std.file.FileException e) {
+						// Creating the 'Recycle Bin' file path failed
+						addLogEntry("ERROR: Unable to create the configured local 'Recycle Bin' file directory: " ~ e.msg, ["info", "notify"]);
+						// Use exit scopes to shutdown API
+						return EXIT_FAILURE;
+					}
+				}
 				
-				// Configure the applicable permissions for the folder
-				if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ appConfig.recycleBinInfoPath, ["debug"]);}
-				appConfig.recycleBinInfoPath.setAttributes(octal!700); // Set to 0700 as Trash may contain sensitive and is the expected default permissions by GIO or KIO
-				
-				
-			} catch (std.file.FileException e) {
-				// Creating the 'Recycle Bin' info path failed
-				addLogEntry("ERROR: Unable to create the configured local 'Recycle Bin' info directory: " ~ e.msg, ["info", "notify"]);
-				// Use exit scopes to shutdown API
-				return EXIT_FAILURE;
+				// Test for appConfig.recycleBinInfoPath
+				if (!exists(appConfig.recycleBinInfoPath)) {
+					try {
+						// Attempt to create the 'Recycle Bin' info path we have been configured with
+						mkdirRecurse(appConfig.recycleBinInfoPath);
+						
+						// Configure the applicable permissions for the folder
+						if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ appConfig.recycleBinInfoPath, ["debug"]);}
+						appConfig.recycleBinInfoPath.setAttributes(octal!700); // Set to 0700 as Trash may contain sensitive and is the expected default permissions by GIO or KIO
+						
+						
+					} catch (std.file.FileException e) {
+						// Creating the 'Recycle Bin' info path failed
+						addLogEntry("ERROR: Unable to create the configured local 'Recycle Bin' info directory: " ~ e.msg, ["info", "notify"]);
+						// Use exit scopes to shutdown API
+						return EXIT_FAILURE;
+					}
+				}
 			}
 		}
 	}
@@ -394,9 +413,6 @@ int main(string[] cliArgs) {
 	
 	// Set runtimeDatabaseFile, this will get updated if we are using --dry-run
 	runtimeDatabaseFile = appConfig.databaseFilePath;
-	
-	// Read in 'sync_dir' from appConfig with '~' if present expanded
-	runtimeSyncDirectory = appConfig.initialiseRuntimeSyncDirectory();
 	
 	// DEVELOPER OPTIONS OUTPUT
 	// Set to display memory details as early as possible
