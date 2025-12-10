@@ -1230,8 +1230,7 @@ When enabled, the client detects the active desktop session and applies the corr
 Additionally, the following display manager integrations are independent from the above configuration specification:
 
 1. **GUI Notifications** — The client (when compiled with `--enable-notifications`) will send notifications to the GUI when important events occur.
-2. **Recycle Bin** — When `use_recycle_bin = "true"` is enabled, the client uses the FreeDesktop.org Trash Specification–compliant recycle bin for any online deletions that are processed locally. This works even when no GUI is available.
-
+2. **Recycle Bin** — When `use_recycle_bin = "true"` is enabled, the client uses the FreeDesktop.org Trash Specification–compliant recycle bin for any online deletions that are processed locally. This capability can be utilised even when no GUI is available.
 
 
 #### What about context menu integration?
