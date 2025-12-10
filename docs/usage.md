@@ -1214,12 +1214,6 @@ When enabled, the client detects the active desktop session and applies the corr
 > [!NOTE] 
 > Display Manager Integration remains active only while the OneDrive client or its systemd service is running. If the client stops or the service is stopped, the desktop integration is automatically cleared. It is re-applied the next time the client starts.
 
-Additionally, the following display manager integrations are independent from the above configuration specification:
-
-1. **GUI Notifications** — The client (when compiled with `--enable-notifications`) will send notifications to the GUI when important events occur.
-2. **Recycle Bin** — When `use_recycle_bin = "true"` is enabled, the client uses the FreeDesktop.org Trash Specification–compliant recycle bin for any online deletions that are processed locally. This works even when no GUI is available.
-
-
 #### Fedora (GNOME) Display Manager Integration Example
 ![fedora_integration](./images/fedora_integration.png)
 
@@ -1231,6 +1225,14 @@ Additionally, the following display manager integrations are independent from th
 
 #### Kubuntu Display Manager Integration Example
 ![kubuntu_integration](./images/kubuntu_integration.png)
+
+
+Additionally, the following display manager integrations are independent from the above configuration specification:
+
+1. **GUI Notifications** — The client (when compiled with `--enable-notifications`) will send notifications to the GUI when important events occur.
+2. **Recycle Bin** — When `use_recycle_bin = "true"` is enabled, the client uses the FreeDesktop.org Trash Specification–compliant recycle bin for any online deletions that are processed locally. This works even when no GUI is available.
+
+
 
 #### What about context menu integration?
 Context-menu integration is a desktop-specific capability, not part of the core OneDrive Client. It can be achieved through desktop-provided extension mechanisms:
