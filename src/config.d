@@ -2617,11 +2617,10 @@ class ApplicationConfig {
 	
 	// Initialise the correct 'log_dir' when application logging to a separate file is enabled with 'enable_logging' and expanding any '~' if present
 	string calculateLogDirectory() {
-		
 		string configuredLogDirPath;
-		
+
 		if (debugLogging) {addLogEntry("log_dir: Setting runtime application log from config value 'log_dir'", ["debug"]);}
-				
+
 		if (getValueString("log_dir") != defaultLogFileDir) {
 			// User modified 'log_dir' to be used with 'enable_logging'
 			// if 'log_dir' contains a '~' this needs to be expanded correctly
@@ -2629,23 +2628,23 @@ class ApplicationConfig {
 				// ~ needs to be expanded correctly
 				if (!shellEnvironmentSet) {
 					// No shell or user environment variable set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
-					if (debugLogging) {addLogEntry("log_dir: A '~' was found in log_dir, using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);}
+					if (debugLogging) {addLogEntry("log_dir: A '~' was found in 'log_dir' however '~' as no SHELL or USER environment variable set", ["debug"]);}
 					configuredLogDirPath = buildNormalizedPath(buildPath(defaultHomePath, strip(getValueString("log_dir"), "~")));
 				} else {
-					// A shell and user environment variable is set, expand any ~ as this will be expanded correctly if present
+					// We have a SHELL or USER environment variable set, so expandTilde() should work correctly
 					if (debugLogging) {addLogEntry("log_dir: A '~' was found in the configured 'log_dir', automatically expanding as SHELL and USER environment variable is set", ["debug"]);}
-					configuredLogDirPath = expandTilde(getValueString("log_dir"));
-				}		
+					configuredLogDirPath = buildNormalizedPath(expandTilde(getValueString("log_dir")));
+				}
 			} else {
-				// '~' not found in log_dir entry, use as is
-				configuredLogDirPath = getValueString("log_dir");
+				// No '~' present - use as-is, but normalise
+				configuredLogDirPath = buildNormalizedPath(getValueString("log_dir"));
 			}
 		} else {
 			// Default 'log_dir' to be used with 'enable_logging'
 			configuredLogDirPath = defaultLogFileDir;
 		}
-		
-		// Attempt to create 'configuredLogDirPath' otherwise we need to fall back to the users home directory
+
+		// Attempt to create 'configuredLogDirPath' if this does not exist, otherwise we need to fall back to the users home directory
 		if (!exists(configuredLogDirPath)) {
 			// 'configuredLogDirPath' path does not exist - try and create it
 			try {
@@ -2654,19 +2653,38 @@ class ApplicationConfig {
 				// We got an error when attempting to create the directory ..
 				addLogEntry();
 				addLogEntry("ERROR: Unable to create " ~ configuredLogDirPath);
-				addLogEntry("ERROR: Please manually create '" ~ configuredLogDirPath ~ "' and set appropriate permissions to allow write access for your user to this location.");
+				addLogEntry("ERROR: Please manually create '" ~ configuredLogDirPath ~ "' and ensure that the permissions allow write access for your user to this location.");
 				addLogEntry("ERROR: The requested client activity log will instead be located in your users home directory");
 				addLogEntry();
-				
+
 				// Reconfigure 'configuredLogDirPath' to use environment.get("HOME") value, which we have already calculated
 				configuredLogDirPath = defaultHomePath;
 			}
 		}
-		
+
+		// Verify that we can actually write in configuredLogDirPath
+		// If we cannot, fall back to the user's home directory instead of later crashing
+		try {
+			auto testFile = buildNormalizedPath(buildPath(configuredLogDirPath, ".onedrive_log_write_test"));
+			// Try to append a zero-length string – this will create the file if possible
+			std.file.append(testFile, "");
+			// Clean up the test file
+			std.file.remove(testFile);
+		} catch (std.file.FileException e) {
+			addLogEntry();
+			addLogEntry("ERROR: Unable to write to " ~ configuredLogDirPath);
+			addLogEntry("ERROR: Please manually adjust permissions or choose a different 'log_dir' in the configuration file.");
+			addLogEntry("ERROR: The requested client activity log will instead be located in your users home directory");
+			addLogEntry();
+
+			// Reconfigure 'configuredLogDirPath' to use environment.get("HOME") value, which we have already calculated
+			configuredLogDirPath = defaultHomePath;
+		}
+
 		// Return the initialised application log path
 		return configuredLogDirPath;
 	}
-	
+
 	// What IP protocol is going to be used to access Microsoft OneDrive
 	void displayIPProtocol() {
 		if (getValueLong("ip_protocol_version") == 0) addLogEntry("Using IPv4 and IPv6 (if configured) for all network operations");
