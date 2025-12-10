@@ -1204,10 +1204,8 @@ The OneDrive Client for Linux currently supports the following integration featu
 
 1. **Sidebar registration** — The client automatically registers the OneDrive folder as a “special place” within the sidebar of Nautilus (GNOME) or Dolphin (KDE).
 2. **Custom folder icon** — The client applies a OneDrive-specific icon to the synchronisation directory where supported by the installed icon theme.
-3. **GUI Notifications** — The client (when compiled with `--enable-notifications`) will send notifications to the GUI when important events occur.
-4. **Recycle Bin** — The client (when configured with `use_recycle_bin = "true"`) will use your Display Manager Recycle Bin for online deletions that are actioned locally.
 
-This behaviour is controlled by the configuration option:
+Sidebar registration and custom folder icon behaviour is controlled by the configuration option:
 ```text
 display_manager_integration = "true"
 ```
@@ -1227,6 +1225,13 @@ When enabled, the client detects the active desktop session and applies the corr
 
 #### Kubuntu Display Manager Integration Example
 ![kubuntu_integration](./images/kubuntu_integration.png)
+
+
+Additionally, the following display manager integrations are independent from the above configuration specification:
+
+1. **GUI Notifications** — The client (when compiled with `--enable-notifications`) will send notifications to the GUI when important events occur.
+2. **Recycle Bin** — When `use_recycle_bin = "true"` is enabled, the client uses the FreeDesktop.org Trash Specification–compliant recycle bin for any online deletions that are processed locally. This capability can be utilised even when no GUI is available.
+
 
 #### What about context menu integration?
 Context-menu integration is a desktop-specific capability, not part of the core OneDrive Client. It can be achieved through desktop-provided extension mechanisms:
