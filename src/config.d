@@ -1816,7 +1816,7 @@ class ApplicationConfig {
 			addLogEntry("         For safest operation:", ["consoleOnly"]);
 			addLogEntry("         * Ensure you have a current backup of your sync_dir.", ["consoleOnly"]);
 			addLogEntry("         * Run this command first with --dry-run to confirm all planned actions.", ["consoleOnly"]);
-			addLogEntry("         * Enable 'use_recycle_bin' so that any online deletions triggered locally are preserved in your system Trash.", ["consoleOnly"]);
+			addLogEntry("         * Enable 'use_recycle_bin' so that online deletion events from OneDrive are moved to your system Trash rather than deleted from your local disk.", ["consoleOnly"]);
 			addLogEntry("", ["consoleOnly"]);
 			addLogEntry("If in doubt, stop now and back up your local data before continuing.", ["consoleOnly"]);
 			addLogEntry("", ["consoleOnly"]);
