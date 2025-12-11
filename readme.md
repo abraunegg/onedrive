@@ -40,10 +40,10 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 * Dry-run mode - test configuration changes safely without modifying files.
 * Safe conflict handling minimises data loss by creating local backups whenever this is determined to be the safest conflict-resolution strategy.
 
-### Selective Sync & Granular Filtering
+### Client-Side Filtering & Granular Sync Control
 
-* Comprehensive rules-based selective sync (inclusions, exclusions, wildcard *, globbing **).
-* Filter specific files, folders, or patterns to tailor exactly what is synced.
+* Comprehensive rules-based client-side filtering (inclusions, exclusions, wildcard `*`, globbing `**`).
+* Filter specific files, folders, or patterns to tailor precisely what is synced with Microsoft OneDrive.
 * Efficient cached sync state for fast decision-making during large or complex sync sets.
 
 ### Real-Time Monitoring & Online Change Detection
