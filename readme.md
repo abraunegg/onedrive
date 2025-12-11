@@ -34,11 +34,11 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 
 ### Flexible Synchronisation Modes
 
-* Bi-directional sync (default): keeps local and remote data fully aligned.
-* Upload-only mode: only uploads local changes; does not download remote ones.
-* Download-only mode: only downloads remote changes; does not upload local ones.
-* Dry-run mode: test configuration changes safely without modifying files.
-* Safe conflict handling ensures minimal risk of data loss.
+* Bi-directional sync (default) - keeps local and remote data fully aligned.
+* Upload-only mode - only uploads local changes; does not download remote changes.
+* Download-only mode - only downloads remote changes; does not upload local changes.
+* Dry-run mode - test configuration changes safely without modifying files.
+* Safe conflict handling minimises data loss by creating local backups whenever this is determined to be the safest conflict-resolution strategy.
 
 ### Selective Sync & Granular Filtering
 
@@ -50,11 +50,11 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 
 * Near real-time processing of cloud-side changes using native WebSocket support.
 * Webhook support for environments where WebSockets are unsuitable (manual setup).
-* Real-time local file monitoring via inotify.
+* Real-time local change monitoring via inotify.
 
 ### Data Safety, Recovery & Integrity Protection
 
-* Implements the FreeDesktop.org Trash specification, enabling recovery of items deleted locally before they sync online.
+* Implements the FreeDesktop.org Trash specification, enabling recovery of items deleted locally due to online deletion.
 * Strong safeguards to prevent accidental remote deletion or overwrite after configuration changes.
 * Interruption-tolerant uploads and downloads, automatically resuming transfers.
 * Integrity validation for every file transferred.
@@ -75,7 +75,7 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 
 * libnotify desktop notifications for sync events, warnings, and errors.
 * Registers the OneDrive folder as a sidebar location in supported file managers, complete with a distinctive icon.
-* Works fully in both GUI and headless/server environments.
+* Works seamlessly in GUI and headless/server environments. A GUI is only required for Intune SSO, notifications, and sidebar integration; all other features function without graphical support.
 
 
 ## What's missing
