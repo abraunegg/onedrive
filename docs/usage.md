@@ -1026,21 +1026,34 @@ The following are supported for pattern matching and exclusion rules:
 > This will tell the application to sync any file that it finds in your 'sync_dir' root by default, negating the need to constantly update your 'sync_list' file.
 
 ### Performing a --resync
-If you alter any of the subsequent configuration items, you will be required to execute a `--resync` to make sure your client is syncing your data with the updated configuration:
-*   check_nosync
-*   drive_id
-*   sync_dir
-*   skip_file
-*   skip_dir
-*   skip_dotfiles
-*   skip_size
-*   skip_symlinks
-*   sync_business_shared_items
-*   Creating, Modifying or Deleting the 'sync_list' file
 
-Additionally, you might opt for a `--resync` if you think it's necessary to ensure your data remains in sync. If you're using this switch simply because you're unsure of the sync status, you can check the actual sync status using `--display-sync-status`.
+A `--resync` operation instructs the client to delete its local state database and fully rebuild it from the current online OneDrive contents. This is a powerful recovery and re-alignment action that should be used **sparingly** and **with care**.
 
-When you use `--resync`, you'll encounter the following warning and advice:
+You **must** perform a `--resync` after modifying any of the following configuration items:
+
+* `check_nosync`
+* `drive_id`
+* `sync_dir`
+* `skip_file`
+* `skip_dir`
+* `skip_dotfiles`
+* `skip_size`
+* `skip_symlinks`
+* `sync_business_shared_items`
+* Creating, modifying, or deleting the `sync_list` file
+
+You may also use `--resync` if you believe the local state has become inconsistent with OneDrive. However, if you're simply unsure of your current sync status, consider running:
+
+```text
+onedrive --display-sync-status
+```
+
+This shows whether you are up-to-date without requiring a resynchronisation.
+
+#### What happens when you use `--resync`
+
+When invoking `--resync`, the client presents the following warning:
+
 ```text
 WARNING: You have asked the client to perform a --resync operation.
 
@@ -1062,16 +1075,57 @@ If in doubt, stop now and back up your local data before continuing.
 Are you sure you wish to proceed with --resync? [Y/N]
 ```
 
-To proceed with `--resync`, you must type 'y' or 'Y' to allow the application to continue.
+You must press `Y` or `y` to continue with `--resync` action. Any other entry will exit the application.
 
-> [!CAUTION] 
-> It's highly recommended to use `--resync` only if the application prompts you to do so. Don't blindly set the application to start with `--resync` as your default option.
+#### Understanding the --resync risks and behaviour
+A `--resync` **does not delete local-only files**.
+If an item exists locally but not in OneDrive, and is not excluded via a `sync_list` rule, it will be treated as **new local content** and uploaded during the resynchronisation.
 
-> [!IMPORTANT]
-> The increased activity against the Microsoft Graph API when using this option may trigger HTTP 429 (throttling) responses during the synchronisation process.
+The risks when using `--resync` come from the loss of historic state:
+* The client no longer knows which side previously held the authoritative version.
+* Conflict handling still preserves data via safe backup mechanisms, but may result in renamed or duplicated files.
+* Upload and download volumes may spike significantly.
+* Increased calls to the Graph API can lead to temporary throttling (HTTP 429).
 
-> [!IMPORTANT]
-> In certain automated environments (assuming you know what you're doing due to automation), to avoid the 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
+This makes it essential that users **verify actions with `--dry-run`** and **maintain proper backups**.
+
+#### Best-practice guidance when using --resync
+
+1. Always back up your data. This client is **not** a backup system. Ensure your `sync_dir` is protected with real backup tooling such as:
+    - rsnapshot
+	- borg
+	- restic
+	- Timeshift
+	- ZFS or Btrfs snapshots
+
+2. Use `--dry-run` before performing a real `--resync`
+
+   This allows you to preview all intended changes without modifying your filesystem.
+
+3. Enable the Recycle Bin feature
+
+   Configure the client configuration with `use_recycle_bin = "true"`. When this is enabled:
+    - Online deletions received from OneDrive via the Graph API are moved to the FreeDesktop.org-compliant system Trash rather than being removed permanently from your disk
+
+4. Avoid using `--resync` unnecessarily
+
+   Only use it in the following scenarios:
+    - When the client explicitly requests it, or
+	- When you’ve confirmed, via logs or sync status, that the local state has become invalid
+	
+   Avoid configuring `--resync` as a default startup option.
+
+
+#### Automated environments
+If you **fully understand the implications** and are operating in a scripted or automated environment, you may bypass the confirmation prompt by adding:
+
+```bash
+--resync-auth
+```
+
+This should **only** be used when automation requires non-interactive operation and robust backups are in place.
+
+
 
 ### Performing a --force-sync without a --resync or changing your configuration
 In some cases and situations, you may have configured the application to skip certain files and folders using 'skip_file' and 'skip_dir' configuration. You then may have a requirement to actually sync one of these items, but do not wish to modify your configuration, nor perform an entire `--resync` twice.
