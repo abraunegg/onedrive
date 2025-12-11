@@ -1043,17 +1043,33 @@ Additionally, you might opt for a `--resync` if you think it's necessary to ensu
 
 When you use `--resync`, you'll encounter the following warning and advice:
 ```text
-Using --resync will delete your local 'onedrive' client state, so there won't be a record of your current 'sync status.'
-This may potentially overwrite local versions of files with older versions downloaded from OneDrive, leading to local data loss.
-If in doubt, back up your local data before using --resync.
+WARNING: You have asked the client to perform a --resync operation.
 
-Are you sure you want to proceed with --resync? [Y/N] 
+         This operation will delete the client’s local state database and rebuild it entirely from the current online OneDrive state.
+
+         Because previous sync state will no longer be available, the following may occur:
+         * Local files that also exist in OneDrive may have local changes overwritten by the cloud version if a conflict cannot be safely resolved.
+         * Local files may be renamed or duplicated locally as part of conflict resolution and data-preservation handling.
+         * The initial synchronisation pass may involve a large number of file uploads and downloads.
+         * The increased activity against the Microsoft Graph API may trigger HTTP 429 (throttling) responses during the synchronisation process.
+
+         For safest operation:
+         * Ensure you have a current backup of your sync_dir.
+         * Run this command first with --dry-run to confirm all planned actions.
+         * Enable 'use_recycle_bin' so that any online deletions triggered locally are preserved in your system Trash.
+
+If in doubt, stop now and back up your local data before continuing.
+
+Are you sure you wish to proceed with --resync? [Y/N]
 ```
 
 To proceed with `--resync`, you must type 'y' or 'Y' to allow the application to continue.
 
 > [!CAUTION] 
 > It's highly recommended to use `--resync` only if the application prompts you to do so. Don't blindly set the application to start with `--resync` as your default option.
+
+> [!IMPORTANT]
+> The increased activity against the Microsoft Graph API when using this option may trigger HTTP 429 (throttling) responses during the synchronisation process.
 
 > [!IMPORTANT]
 > In certain automated environments (assuming you know what you're doing due to automation), to avoid the 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.

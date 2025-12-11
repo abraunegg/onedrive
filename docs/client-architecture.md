@@ -376,11 +376,6 @@ Waiting for all internal threads to complete before exiting application
 #### Evidence of Conflict Handling
 ```
 ...
-
-The usage of --resync will delete your local 'onedrive' client state, thus no record of your current 'sync status' will exist.
-This has the potential to overwrite local versions of files with perhaps older versions of documents downloaded from OneDrive, resulting in local data loss.
-If in doubt, backup your local data before using --resync
-
 Are you sure you wish to proceed with --resync? [Y/N] y
 
 Deleting the saved application sync status ...
