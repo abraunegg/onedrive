@@ -1807,7 +1807,7 @@ class ApplicationConfig {
 			addLogEntry("", ["consoleOnly"]);
 			addLogEntry("         This operation will delete the client’s local state database and rebuild it entirely from the current online OneDrive state.", ["consoleOnly"]);
 			addLogEntry("", ["consoleOnly"]);
-			addLogEntry("         Because previous sync state will no longer be available, the following may occur:", ["consoleOnly"]);
+			addLogEntry("         Because the previous sync state will no longer be available, the following may occur:", ["consoleOnly"]);
 			addLogEntry("         * Local files that also exist in OneDrive may have local changes overwritten by the cloud version if a conflict cannot be safely resolved.", ["consoleOnly"]);
 			addLogEntry("         * Local files may be renamed or duplicated locally as part of conflict resolution and data-preservation handling.", ["consoleOnly"]);
 			addLogEntry("         * The initial synchronisation pass may involve a large number of file uploads and downloads.", ["consoleOnly"]);

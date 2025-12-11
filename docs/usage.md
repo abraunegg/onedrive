@@ -649,7 +649,6 @@ Only essential information is shown — suitable for standard usage without addi
 Enables general status and progress information. Use:
 ```text
 onedrive --sync --verbose
-
 ```
 or its short form:
 ```text
@@ -1047,7 +1046,7 @@ WARNING: You have asked the client to perform a --resync operation.
 
          This operation will delete the client’s local state database and rebuild it entirely from the current online OneDrive state.
 
-         Because previous sync state will no longer be available, the following may occur:
+         Because the previous sync state will no longer be available, the following may occur:
          * Local files that also exist in OneDrive may have local changes overwritten by the cloud version if a conflict cannot be safely resolved.
          * Local files may be renamed or duplicated locally as part of conflict resolution and data-preservation handling.
          * The initial synchronisation pass may involve a large number of file uploads and downloads.
@@ -1056,7 +1055,7 @@ WARNING: You have asked the client to perform a --resync operation.
          For safest operation:
          * Ensure you have a current backup of your sync_dir.
          * Run this command first with --dry-run to confirm all planned actions.
-         * Enable 'use_recycle_bin' so that any online deletions triggered locally are preserved in your system Trash.
+         * Enable 'use_recycle_bin' so that online deletion events from OneDrive are moved to your system Trash rather than deleted from your local disk.
 
 If in doubt, stop now and back up your local data before continuing.
 
