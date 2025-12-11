@@ -28,9 +28,9 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 * Full support for shared folders and files across both Personal and Business accounts.
 * Supports single-tenant and multi-tenant Microsoft Entra ID environments.
 * Compatible with national cloud deployments:
-* Microsoft Cloud for US Government
-* Microsoft Cloud Germany
-* Azure/Office 365 operated by VNET in China
+  * Microsoft Cloud for US Government
+  * Microsoft Cloud Germany
+  * Azure/Office 365 operated by VNET in China
 
 ### Flexible Synchronisation Modes
 
