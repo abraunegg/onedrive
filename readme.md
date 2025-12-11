@@ -21,25 +21,61 @@ Since forking in early 2018, this client has evolved into a clean re-imagining o
 
 
 ## Features
-* Compatible with OneDrive Personal and OneDrive for Business, including access to Microsoft SharePoint Libraries
-* Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
-* Supports near real-time processing of online changes via either WebSockets (native support) or webhooks (manual configuration required)
-* Supports single-tenant and multi-tenant applications
-* Supports Intune Single Sign-On (SSO) authentication via the Microsoft Identity Device Broker (D-Bus interface)
-* Supports OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
-* Supports the FreeDesktop.org Trash specification, allowing locally deleted files to be safely recoverable in case of accidental online deletion
-* Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany, and Azure/Office 365 operated by VNET in China
-* Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
-* Protects against significant data loss on OneDrive after configuration changes
-* Supports a dry-run option for safe configuration testing
-* Supports interruption-tolerant uploads and downloads by resuming file transfers from the point of failure, ensuring data integrity and efficiency
-* Validates file transfers to ensure data integrity
-* Caches sync state for efficiency
-* Monitors local files in real-time using inotify
-* Enhanced synchronisation speed with multi-threaded file transfers
-* Manages traffic bandwidth use with rate limiting
-* Supports sending desktop alerts using libnotify
-* Provides desktop file-manager integration by registering the OneDrive folder as a sidebar location with a distinctive icon.
+
+### Broad Microsoft OneDrive Compatibility
+
+* Works with OneDrive Personal, OneDrive for Business, and Microsoft SharePoint Libraries.
+* Full support for shared folders and files across both Personal and Business accounts.
+* Supports single-tenant and multi-tenant Microsoft Entra ID environments.
+* Compatible with national cloud deployments:
+  * Microsoft Cloud for US Government
+  * Microsoft Cloud Germany
+  * Azure/Office 365 operated by VNET in China
+
+### Flexible Synchronisation Modes
+
+* Bi-directional sync (default) - keeps local and remote data fully aligned.
+* Upload-only mode - only uploads local changes; does not download remote changes.
+* Download-only mode - only downloads remote changes; does not upload local changes.
+* Dry-run mode - test configuration changes safely without modifying files.
+* Safe conflict handling minimises data loss by creating local backups whenever this is determined to be the safest conflict-resolution strategy.
+
+### Client-Side Filtering & Granular Sync Control
+
+* Comprehensive rules-based client-side filtering (inclusions, exclusions, wildcard `*`, globbing `**`).
+* Filter specific files, folders, or patterns to tailor precisely what is synced with Microsoft OneDrive.
+* Efficient cached sync state for fast decision-making during large or complex sync sets.
+
+### Real-Time Monitoring & Online Change Detection
+
+* Near real-time processing of cloud-side changes using native WebSocket support.
+* Webhook support for environments where WebSockets are unsuitable (manual setup).
+* Real-time local change monitoring via inotify.
+
+### Data Safety, Recovery & Integrity Protection
+
+* Implements the FreeDesktop.org Trash specification, enabling recovery of items deleted locally due to online deletion.
+* Strong safeguards to prevent accidental remote deletion or overwrite after configuration changes.
+* Interruption-tolerant uploads and downloads, automatically resuming transfers.
+* Integrity validation for every file transferred.
+
+### Modern Authentication Support
+
+* Standard OAuth2 Native Client Authorisation Flow (default), supporting browser-based login, multi-factor authentication (MFA), and modern Microsoft account security requirements.
+* OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts, ideal for headless systems, servers, and terminal-only environments.
+* Intune Single Sign-On (SSO) using the Microsoft Identity Device Broker (IDB) via D-Bus, enabling seamless enterprise authentication without manual credential entry.
+
+### Performance, Efficiency & Resource Management
+
+* Multi-threaded file transfers for significantly improved sync speeds.
+* Bandwidth rate limiting to control network consumption.
+* Highly efficient processing with state caching, reducing API traffic and improving performance.
+
+### Desktop Integration & User Experience
+
+* libnotify desktop notifications for sync events, warnings, and errors.
+* Registers the OneDrive folder as a sidebar location in supported file managers, complete with a distinctive icon.
+* Works seamlessly in GUI and headless/server environments. A GUI is only required for Intune SSO, notifications, and sidebar integration; all other features function without graphical support.
 
 
 ## What's missing
