@@ -803,6 +803,9 @@ _**CLI Option Use:**_ `--resync`
 > *   sync_business_shared_items
 > *   Creating, Modifying or Deleting the 'sync_list' file
 
+> [!IMPORTANT]
+> The increased activity against the Microsoft Graph API when using this option may trigger HTTP 429 (throttling) responses during the synchronisation process.
+
 ### resync_auth
 _**Description:**_ This configuration option controls the approval of performing a 'resync' which can be beneficial in automated environments.
 

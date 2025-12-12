@@ -1803,10 +1803,23 @@ class ApplicationConfig {
 			
 			// --resync warning message
 			addLogEntry("", ["consoleOnly"]); // new line, console only
-			addLogEntry("The usage of --resync will delete your local 'onedrive' client state, thus no record of your current 'sync status' will exist.", ["consoleOnly"]);
-			addLogEntry("This has the potential to overwrite local versions of files with perhaps older versions of documents downloaded from OneDrive, resulting in local data loss.", ["consoleOnly"]);
-			addLogEntry("If in doubt, backup your local data before using --resync", ["consoleOnly"]);
-			addLogEntry("", ["consoleOnly"]); // new line, console only
+			addLogEntry("WARNING: You have asked the client to perform a --resync operation.", ["consoleOnly"]);
+			addLogEntry("", ["consoleOnly"]);
+			addLogEntry("         This operation will delete the client’s local state database and rebuild it entirely from the current online OneDrive state.", ["consoleOnly"]);
+			addLogEntry("", ["consoleOnly"]);
+			addLogEntry("         Because the previous sync state will no longer be available, the following may occur:", ["consoleOnly"]);
+			addLogEntry("         * Local files that also exist in OneDrive may have local changes overwritten by the cloud version if a conflict cannot be safely resolved.", ["consoleOnly"]);
+			addLogEntry("         * Local files may be renamed or duplicated locally as part of conflict resolution and data-preservation handling.", ["consoleOnly"]);
+			addLogEntry("         * The initial synchronisation pass may involve a large number of file uploads and downloads.", ["consoleOnly"]);
+			addLogEntry("         * The increased activity against the Microsoft Graph API may trigger HTTP 429 (throttling) responses during the synchronisation process.", ["consoleOnly"]);
+			addLogEntry("", ["consoleOnly"]);
+			addLogEntry("         For safest operation:", ["consoleOnly"]);
+			addLogEntry("         * Ensure you have a current backup of your sync_dir.", ["consoleOnly"]);
+			addLogEntry("         * Run this command first with --dry-run to confirm all planned actions.", ["consoleOnly"]);
+			addLogEntry("         * Enable 'use_recycle_bin' so that online deletion events from OneDrive are moved to your system Trash rather than deleted from your local disk.", ["consoleOnly"]);
+			addLogEntry("", ["consoleOnly"]);
+			addLogEntry("If in doubt, stop now and back up your local data before continuing.", ["consoleOnly"]);
+			addLogEntry("", ["consoleOnly"]);
 			addLogEntry("Are you sure you wish to proceed with --resync? [Y/N] ", ["consoleOnlyNoNewLine"]);
 						
 			try {
