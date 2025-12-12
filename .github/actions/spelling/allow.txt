@@ -56,6 +56,7 @@ blargh
 bools
 bpozdena
 brp
+Btrfs
 btw
 buflen
 bugzilla
@@ -418,6 +419,7 @@ redhat
 relocs
 relro
 repology
+restic
 restorecon
 retu
 revents
@@ -433,6 +435,7 @@ rpmlib
 rpmuncompress
 Rproj
 rrodrigueznt
+rsnapshot
 rsv
 rtud
 rul

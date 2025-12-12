@@ -1054,6 +1054,16 @@ This shows whether you are up-to-date without requiring a resynchronisation.
 
 When invoking `--resync`, the client presents the following warning:
 
+#### v2.5.9 and below
+```text
+The usage of --resync will delete your local 'onedrive' client state, thus no record of your current 'sync status' will exist.
+This has the potential to overwrite local versions of files with perhaps older versions of documents downloaded from OneDrive, resulting in local data loss.
+If in doubt, backup your local data before using --resync
+
+Are you sure you wish to proceed with --resync? [Y/N]
+```
+
+#### v2.5.10 and above
 ```text
 WARNING: You have asked the client to perform a --resync operation.
 
