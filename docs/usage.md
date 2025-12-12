@@ -1028,6 +1028,24 @@ The following are supported for pattern matching and exclusion rules:
 ### Performing a --resync
 A `--resync` operation instructs the client to delete its local state database and fully rebuild it from the current online OneDrive contents. This is a powerful recovery and re-alignment action that should be used **sparingly** and **with care**.
 
+> [!IMPORTANT]
+> **Do not use --resync as part of normal or routine operation.**
+>
+> A `--resync` is **not** a “refresh” or “force sync” button. It is a destructive recovery action that discards the client’s local sync history and forces a rebuild based solely on the current online OneDrive state.
+>
+> Habitually using `--resync` has several negative impacts:
+> * It removes the historical sync context the client uses to safely resolve conflicts.
+> * It can cause unnecessary uploads, downloads, and renames.
+> * It increases the chance of triggering rate-limiting (HTTP 429 responses) from the Microsoft Graph API.
+> * It can mask underlying configuration or permission issues that should be properly diagnosed instead.
+>
+> If you are unsure whether the client is in sync, do not run `--resync`. Instead, use:
+>```
+> onedrive --display-sync-status
+>```
+> Only use `--resync` when the client explicitly requests it or when a documented configuration change requires it.
+
+#### When a --resync is required
 You **must** perform a `--resync` after modifying any of the following configuration items:
 
 * `check_nosync`
@@ -1041,8 +1059,7 @@ You **must** perform a `--resync` after modifying any of the following configura
 * `sync_business_shared_items`
 * Creating, modifying, or deleting the `sync_list` file
 
-You may also use `--resync` if you believe the local state has become inconsistent with OneDrive. However, if you're simply unsure of your current sync status, consider running:
-
+You may also use `--resync` if you believe the local state has become inconsistent with online OneDrive state. However, if you only want to check the current sync status, run:
 ```text
 onedrive --display-sync-status
 ```
@@ -1051,7 +1068,7 @@ This shows whether you are up-to-date without requiring a resynchronisation.
 
 #### What happens when you use `--resync`
 
-When invoking `--resync`, the client presents the following warning:
+When invoking `--resync`, the client displays one of the following prompts depending on version.
 
 #### v2.5.9 and below
 ```text
@@ -1087,15 +1104,18 @@ Are you sure you wish to proceed with --resync? [Y/N]
 You must press `Y` or `y` to continue with `--resync` action. Any other entry will exit the application.
 
 #### Understanding the --resync risks and behaviour
-A `--resync` **does not delete local-only files**. When a file exists locally but not in OneDrive, and is not excluded via a `sync_list` rule, it is treated as new local content and will be uploaded during the resynchronisation process.
+A `--resync` **does not delete local-only files**. When a file exists locally but not in OneDrive, and is not excluded via a `sync_list` rule, it is treated as **new local content** and will be uploaded during the resynchronisation process.
 
-Local deletion of such files when using `--resync` only occurs when using the explicit local data destructive modes such as `--download-only --cleanup-local-files`.
+Local deletion of such files when using `--resync` only occurs when using the explicit local data destructive modes such as:
+```text
+--download-only --cleanup-local-files
+```
 
-The risks when using `--resync` come from the loss of the historic state:
+The risks associated with `--resync` stem entirely from the loss of the local historic state:
 * The client no longer knows which side previously held the authoritative version of your data.
-* Conflict handling still preserves data via safe backup mechanisms, but may result in renamed or duplicated files.
+* Conflict handling still protects data using safe-backup mechanisms, but may result in renamed or duplicated files.
 * Upload and download volumes may spike significantly.
-* Increased calls to the Graph API can lead to temporary throttling (HTTP 429 response).
+* Increased calls to the Microsoft Graph API may result in temporary throttling (HTTP 429 responses).
 
 This makes it essential that users **verify actions with `--dry-run`** and **maintain proper backups**.
 
@@ -1108,18 +1128,18 @@ This makes it essential that users **verify actions with `--dry-run`** and **mai
 	- Timeshift
 	- ZFS or Btrfs snapshots
 
-2. Use `--dry-run` before performing a real `--resync`
+2. Use `--dry-run` before a real `--resync`
 
-   This allows you to preview all intended changes without modifying your filesystem.
+   Allows you to preview all intended changes without modifying your filesystem.
 
 3. Enable the Recycle Bin feature
 
-   Configure the client configuration with `use_recycle_bin = "true"`. When this is enabled:
-    - Online deletions received from OneDrive via the Graph API are moved to the FreeDesktop.org-compliant system Trash rather than being removed permanently from your disk
+   Set `use_recycle_bin = "true"` in your application configuration. When enabled:
+    - Online deletions received from OneDrive via the Graph API are moved to the FreeDesktop.org-compliant system Trash rather than being permanently deleted from your disk.
 
 4. Avoid using `--resync` unnecessarily
 
-   Only use it in the following scenarios:
+   Only use it:
     - When the client explicitly requests it, or
 	- When you’ve confirmed, via logs or sync status, that the local state has become invalid
 	
