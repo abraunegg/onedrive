@@ -1096,7 +1096,7 @@ The risks when using `--resync` come from the loss of the historic state:
 * The client no longer knows which side previously held the authoritative version of your data.
 * Conflict handling still preserves data via safe backup mechanisms, but may result in renamed or duplicated files.
 * Upload and download volumes may spike significantly.
-* Increased calls to the Graph API can lead to temporary throttling (HTTP 429).
+* Increased calls to the Graph API can lead to temporary throttling (HTTP 429 response).
 
 This makes it essential that users **verify actions with `--dry-run`** and **maintain proper backups**.
 
