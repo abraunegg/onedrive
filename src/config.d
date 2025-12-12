@@ -569,10 +569,18 @@ class ApplicationConfig {
 		
 		// Configuration directory should now have been correctly identified
 		if (!exists(configDirName)) {
-			// create the directory
-			mkdirRecurse(configDirName);
-			// Configure the applicable permissions for the folder
-			configDirName.setAttributes(returnRequiredDirectoryPermissions());
+			// Attempt path creation
+			try {
+				// create the configuration directory
+				mkdirRecurse(configDirName);
+				// Configure the applicable permissions for the folder
+				configDirName.setAttributes(returnRequiredDirectoryPermissions());
+			} catch (std.file.FileException e) {
+				// Creating the configuration directory failed
+				addLogEntry("ERROR: Unable to create the required application configuration directory: " ~ e.msg, ["info", "notify"]);
+				// Use exit scopes to shutdown API
+				return EXIT_FAILURE;
+			}
 		} else {
 			// The config path exists
 			// The path that exists must be a directory, not a file
@@ -2991,7 +2999,14 @@ class ApplicationConfig {
 		string bookmarksPath = buildPath(expandTilde(environment.get("HOME", "")), ".config", "gtk-3.0", "bookmarks");
 		
 		// Ensure the bookmarks path exists
-		mkdirRecurse(dirName(bookmarksPath));
+		try {
+			// Attempt bookmarks path creation
+			mkdirRecurse(dirName(bookmarksPath));
+		} catch (std.file.FileException e) {
+			// Creating the bookmarks path failed
+			addLogEntry("ERROR: Unable to create the GNOME bookmark directory: " ~ e.msg, ["info", "notify"]);
+			return;
+		}
 		
 		// Does the bookmark already exist?
 		string content = exists(bookmarksPath) ? readText(bookmarksPath) : "";
@@ -3118,7 +3133,14 @@ class ApplicationConfig {
 		string content;
 		
 		// Ensure the xbelPath path exists
-		mkdirRecurse(dirName(xbelPath));
+		try {
+			// Attempt xbelPath creation
+			mkdirRecurse(dirName(xbelPath));
+		} catch (std.file.FileException e) {
+			// Creating the xbelPath path failed
+			addLogEntry("ERROR: Unable to create the KDE Places directory: " ~ e.msg, ["info", "notify"]);
+			return;
+		}
 		
 		// Does the xbel file exist?		
 		if (exists(xbelPath)) {

@@ -959,8 +959,17 @@ class SyncEngine {
 							// Folder does not exist locally and needs to be created
 							addLogEntry("Creating the OneDrive Business Shared Files Local Directory: " ~ appConfig.configuredBusinessSharedFilesDirectoryName);
 						
-							// Local folder does not exist, thus needs to be created
-							mkdirRecurse(appConfig.configuredBusinessSharedFilesDirectoryName);
+							if (!dryRun) {
+								// Local folder does not exist, thus needs to be created
+								try {
+									// Attempt path creation
+									mkdirRecurse(appConfig.configuredBusinessSharedFilesDirectoryName);
+								} catch (std.file.FileException e) {
+									// Creating the path failed
+									addLogEntry("ERROR: Unable to create the OneDrive Business Shared Files Local Directory: " ~ e.msg, ["info", "notify"]);
+								}
+							}
+							
 							// As this will not be created online, generate a response so it can be saved to the database
 							Item sharedFilesPath = makeItem(createFakeResponse(baseName(appConfig.configuredBusinessSharedFilesDirectoryName)));
 							
@@ -14347,8 +14356,16 @@ class SyncEngine {
 						// Folder does not exist locally and needs to be created
 						addLogEntry("Creating the OneDrive Business Shared File Users Local Directory: " ~ newLocalSharedFilePath);
 					
-						// Local folder does not exist, thus needs to be created
-						mkdirRecurse(newLocalSharedFilePath);
+						if (!dryRun) {
+							// Local folder does not exist, thus needs to be created
+							try {
+								// Attempt path creation
+								mkdirRecurse(newLocalSharedFilePath);
+							} catch (std.file.FileException e) {
+								// Creating the path failed
+								addLogEntry("ERROR: Unable to create the OneDrive Business Shared File Users Local Directory: " ~ e.msg, ["info", "notify"]);
+							}
+						}
 						
 						// As this will not be created online, generate a response so it can be saved to the database
 						sharedFilesPath = makeItem(createFakeResponse(baseName(newLocalSharedFilePath)));
