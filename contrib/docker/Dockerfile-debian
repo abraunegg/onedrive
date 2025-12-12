@@ -3,6 +3,7 @@
 ARG DEBIAN_VERSION=trixie
 
 FROM debian:${DEBIAN_VERSION} AS builder-onedrive
+ARG DEBIAN_VERSION
 
 # Add backports repository and update before initial DEBIAN_FRONTEND installation
 RUN apt-get clean \
@@ -24,6 +25,7 @@ RUN ./configure --enable-debug\
  && make install
 
 FROM debian:${DEBIAN_VERSION}-slim
+ARG DEBIAN_VERSION
 
 # Add backports repository and update after DEBIAN_FRONTEND installation
 RUN apt-get clean \
