@@ -1068,7 +1068,7 @@ This shows whether you are up-to-date without requiring a resynchronisation.
 
 #### What happens when you use `--resync`
 
-When invoking `--resync`, the client displays one of the following prompts depending on version.
+When invoking `--resync`, the client displays one of the following prompts depending on the client version.
 
 #### v2.5.9 and below
 ```text
