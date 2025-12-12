@@ -1088,11 +1088,12 @@ Are you sure you wish to proceed with --resync? [Y/N]
 You must press `Y` or `y` to continue with `--resync` action. Any other entry will exit the application.
 
 #### Understanding the --resync risks and behaviour
-A `--resync` **does not delete local-only files**.
-If an item exists locally but not in OneDrive, and is not excluded via a `sync_list` rule, it will be treated as **new local content** and uploaded during the resynchronisation.
+A `--resync` **does not delete local-only files**. When a file exists locally but not in OneDrive, and is not excluded via a `sync_list` rule, it is treated as new local content and will be uploaded during the resynchronisation process.
 
-The risks when using `--resync` come from the loss of historic state:
-* The client no longer knows which side previously held the authoritative version.
+Local deletion of such files when using `--resync` only occurs when using the explicit local data destructive modes such as `--download-only --cleanup-local-files`.
+
+The risks when using `--resync` come from the loss of the historic state:
+* The client no longer knows which side previously held the authoritative version of your data.
 * Conflict handling still preserves data via safe backup mechanisms, but may result in renamed or duplicated files.
 * Upload and download volumes may spike significantly.
 * Increased calls to the Graph API can lead to temporary throttling (HTTP 429).
