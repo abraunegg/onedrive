@@ -1026,7 +1026,6 @@ The following are supported for pattern matching and exclusion rules:
 > This will tell the application to sync any file that it finds in your 'sync_dir' root by default, negating the need to constantly update your 'sync_list' file.
 
 ### Performing a --resync
-
 A `--resync` operation instructs the client to delete its local state database and fully rebuild it from the current online OneDrive contents. This is a powerful recovery and re-alignment action that should be used **sparingly** and **with care**.
 
 You **must** perform a `--resync` after modifying any of the following configuration items:
@@ -1124,8 +1123,8 @@ This makes it essential that users **verify actions with `--dry-run`** and **mai
     - When the client explicitly requests it, or
 	- When you’ve confirmed, via logs or sync status, that the local state has become invalid
 	
-   Avoid configuring `--resync` as a default startup option.
-
+	> [!CAUTION]
+	> Avoid configuring `--resync` as a default startup option.
 
 #### Automated environments
 If you **fully understand the implications** and are operating in a scripted or automated environment, you may bypass the confirmation prompt by adding:
