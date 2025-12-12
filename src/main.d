@@ -910,11 +910,19 @@ int main(string[] cliArgs) {
 			if (!exists(singleDirectoryPath)) {
 				// The requested path to use with --single-directory does not exist locally within the configured 'sync_dir'
 				addLogEntry("WARNING: The requested path for --single-directory does not exist locally. Creating requested path within " ~ runtimeSyncDirectory, ["info", "notify"]);
-				// Make the required --single-directory path locally
-				mkdirRecurse(singleDirectoryPath);
-				// Configure the applicable permissions for the folder
-				if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ singleDirectoryPath, ["debug"]);}
-				singleDirectoryPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+				// Attempt path creation
+				try {
+					// Attempt to create the required --single-directory path locally
+					mkdirRecurse(singleDirectoryPath);
+					// Configure the applicable permissions for the folder
+					if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ singleDirectoryPath, ["debug"]);}
+					singleDirectoryPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+				} catch (std.file.FileException e) {
+					// Creating the sync directory failed
+					addLogEntry("ERROR: Unable to create the required --single-directory path: " ~ e.msg, ["info", "notify"]);
+					// Use exit scopes to shutdown API
+					return EXIT_FAILURE;
+				}
 			}
 			
 			// Update the paths that we use to perform the sync actions
