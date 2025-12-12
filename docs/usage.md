@@ -1123,8 +1123,8 @@ This makes it essential that users **verify actions with `--dry-run`** and **mai
     - When the client explicitly requests it, or
 	- When you’ve confirmed, via logs or sync status, that the local state has become invalid
 	
-	> [!CAUTION]
-	> Avoid configuring `--resync` as a default startup option.
+> [!CAUTION]
+> Avoid configuring `--resync` as a default startup option.
 
 #### Automated environments
 If you **fully understand the implications** and are operating in a scripted or automated environment, you may bypass the confirmation prompt by adding:
