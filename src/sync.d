@@ -9119,8 +9119,18 @@ class SyncEngine {
 								
 								// Does the data from online match our local file that we are attempting to upload as a new file?
 								if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
-									// Save online item details to the database
-									saveItem(fileDetailsFromOneDrive);
+									// Need a check here around the 'upload_only' and 'remove_source_files'
+									// Are we in an --upload-only & --remove-source-files scenario?
+									if ((uploadOnly) && (localDeleteAfterUpload)) {
+										// Perform the local file deletion as the file exists online, hash matches, no upload
+										removeLocalFilePostUpload(fileToUpload);
+										
+										// As file is now removed, we have nothing to add to the local database
+										if (debugLogging) {addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);}
+									} else {
+										// Save online item details to the database
+										saveItem(fileDetailsFromOneDrive);
+									}
 								} else {
 									// The local file we are attempting to upload as a new file is different to the existing file online
 									if (debugLogging) {addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);}
