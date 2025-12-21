@@ -216,7 +216,7 @@ void safeRemove(const(char)[] path) {
 			return;					// nothing to do
 		}
 		// Anything else is noteworthy (EISDIR, EACCES, etc.)
-		displayFileSystemErrorMessage(e.msg, thisFunctionName);
+		displayFileSystemErrorMessage(e.msg, thisFunctionName, to!string(path));
 	}
 }
 
@@ -547,6 +547,9 @@ bool retryInternetConnectivityTest(ApplicationConfig appConfig) {
 // https://github.com/abraunegg/onedrive/issues/113
 // returns true if file can be accessed
 bool readLocalFile(string path) {
+	// Set this function name
+	string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+
     // What is the file size
 	if (getSize(path) != 0) {
 		try {
@@ -561,7 +564,7 @@ bool readLocalFile(string path) {
 			}
 		} catch (std.file.FileException e) {
 			// Unable to read the file, log the error message
-			displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+			displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
 			return false;
 		}
 		return true;
@@ -1000,29 +1003,100 @@ void handleClientUnauthorised(int httpStatusCode, JSONValue errorMessage) {
 }
 
 // Parse and display error message received from the local file system
-void displayFileSystemErrorMessage(string message, string callingFunction) {
-    addLogEntry(); // used rather than writeln
-    addLogEntry("ERROR: The local file system returned an error with the following message:");
+void displayFileSystemErrorMessage(string message, string callingFunction, string contextPath) {
+	// Separate this block from surrounding log output
+	addLogEntry();
 
-    auto errorArray = splitLines(message);
-    // Safely get the error message
-    string errorMessage = errorArray.length > 0 ? to!string(errorArray[0]) : "No error message available";
-    addLogEntry("  Error Message:    " ~ errorMessage);
-    
-    // Log the calling function
-    addLogEntry("  Calling Function: " ~ callingFunction);
+	// Header
+	addLogEntry("ERROR: The local file system returned an error with the following details:");
+		
+	// Calling context (helps correlate where this came from)
+	if (!callingFunction.empty) {
+		addLogEntry("  Calling Function:  " ~ callingFunction);
+	}
 
-    try {
-        // Safely check for disk space
-        ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
-        if (localActualFreeSpace == 0) {
-            // Must force exit here, allow logging to be done
-			forceExit();
-        }
-    } catch (Exception e) {
-        // Handle exceptions from disk space check or type conversion
-        addLogEntry("  Exception in disk space check: " ~ e.msg);
-    }
+	// Path context (the *thing* we were operating on)
+	if (!contextPath.empty) {
+		addLogEntry("  Path:              " ~ contextPath);
+	} else {
+		addLogEntry("  Path:              (not available)");
+	}
+
+	// Primary error message (first line) + any additional lines
+	string errorMessage = message;
+	string[] errorLines;
+	try {
+		errorLines = splitLines(message);
+	} catch (Exception e) {
+		// splitLines should not fail, but never let logging throw
+		addLogEntry("  NOTE: Failed to split file system exception message into lines: " ~ e.msg);
+	}
+
+	// If we have lines to process
+	if (errorLines.length > 0) {
+		// First line: usually the most useful
+		errorMessage = to!string(errorLines[0]);
+		addLogEntry("  Error Message:     " ~ errorMessage);
+
+		// Remaining lines (if any) often contain errno / path / syscall details
+		if (errorLines.length > 1) {
+			addLogEntry("  Error Details:");
+			foreach (i, line; errorLines[1 .. $]) {
+				// Avoid logging empty lines, but keep order
+				if (!line.empty) {
+					addLogEntry("     - " ~ to!string(line));
+				}
+			}
+		}
+	} else {
+		addLogEntry("  Error Message:     No error message available");
+	}
+
+	// Disk space diagnostics (best-effort)
+	// We intentionally probe both the current directory and the target path directory when possible.
+	try {
+		// Always check the current working directory as a baseline
+		ulong freeCwd = to!ulong(getAvailableDiskSpace("."));
+		addLogEntry("  Disk Space (CWD):  " ~ to!string(freeCwd) ~ " bytes available");
+
+		// If we have a context path, also check its parent directory when possible.
+		// We keep this conservative: if anything throws, just log the exception.
+		if (!contextPath.empty) {
+			string targetProbePath = contextPath;
+
+			// If it's a file path, probe the parent directory (where writes/renames happen).
+			// Avoid throwing if parentDir isn't available or contextPath is weird.
+			try {
+				// std.path.dirName handles both file/dir paths; if it returns ".", keep as-is.
+				import std.path : dirName;
+				auto parent = dirName(contextPath);
+				if (!parent.empty) targetProbePath = parent;
+			} catch (Exception e) {
+				addLogEntry("  NOTE: Failed to derive parent directory from path: " ~ e.msg);
+			}
+
+			ulong freeTarget = to!ulong(getAvailableDiskSpace(targetProbePath));
+			addLogEntry("  Disk Space (Path): " ~ to!string(freeTarget) ~ " bytes available (probe: " ~ targetProbePath ~ ")");
+
+			// Preserve existing behaviour: if disk space check returns 0, force exit.
+			// (Assumes getAvailableDiskSpace returns 0 on a hard failure in your implementation.)
+			if (freeTarget == 0 || freeCwd == 0) {
+				// Must force exit here, allow logging to be done
+				forceExit();
+			}
+		} else {
+			// Preserve existing behaviour: if disk space check returns 0, force exit.
+			if (freeCwd == 0) {
+				forceExit();
+			}
+		}
+	} catch (Exception e) {
+		// Handle exceptions from disk space check or type conversion
+		addLogEntry("  NOTE: Exception during disk space check: " ~ e.msg);
+	}
+	
+	// Separate this block from surrounding log output 
+	addLogEntry();
 }
 
 // Display the POSIX Error Message
@@ -1911,6 +1985,8 @@ bool isBadCurlVersion(string curlVersion) {
 
 // Set the timestamp of the provided path to ensure this is done in a consistent manner
 void setLocalPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) {
+	// Set this function name
+	string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
 	
 	SysTime updatedModificationTime;
 	bool makeTimestampChange = false;
@@ -1980,7 +2056,7 @@ void setLocalPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) 
 				}
 			} catch (FileException e) {
 				// display the error message
-				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				displayFileSystemErrorMessage(e.msg, thisFunctionName, inputPath);
 			}
 			
 			SysTime newAccessTime;
@@ -1995,7 +2071,7 @@ void setLocalPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) 
 		}
 	} catch (FileException e) {
 		// display the error message
-		displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+		displayFileSystemErrorMessage(e.msg, thisFunctionName, inputPath);
 	}
 }
 

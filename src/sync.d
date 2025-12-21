@@ -3149,7 +3149,7 @@ class SyncEngine {
 					saveDatabaseItem(newDatabaseItem);
 				} catch (FileException e) {
 					// display the error message
-					displayFileSystemErrorMessage(e.msg, thisFunctionName);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath);
 				}
 			} else {
 				// we dont create the directory, but we need to track that we 'faked it'
@@ -3497,7 +3497,7 @@ class SyncEngine {
 					}
 				} catch (FileException e) {
 					// display the error message
-					displayFileSystemErrorMessage(e.msg, thisFunctionName);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, existingItemPath);
 				}
 			}
 			
@@ -3853,12 +3853,12 @@ class SyncEngine {
 					} catch (FileException e) {
 						// There was a file system error
 						// display the error message
-						displayFileSystemErrorMessage(e.msg, thisFunctionName);
+						displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath);
 						downloadFailed = true;
 					} catch (ErrnoException e) {
 						// There was a file system error
 						// display the error message
-						displayFileSystemErrorMessage(e.msg, thisFunctionName);
+						displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath);
 						downloadFailed = true;
 					}
 				
@@ -4640,7 +4640,7 @@ class SyncEngine {
 								rmdirRecurse(path);
 							} catch (FileException e) {
 								// display the error message
-								displayFileSystemErrorMessage(e.msg, thisFunctionName);
+								displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
 							}
 						}
 					}
@@ -5420,7 +5420,7 @@ class SyncEngine {
 				}
 			} catch (FileException e) {
 				// display the error message
-				displayFileSystemErrorMessage(e.msg, thisFunctionName);
+				displayFileSystemErrorMessage(e.msg, thisFunctionName, localFilePath);
 			}
 		} else {
 			// Directory does not exist locally, but it is in our database as a dbItem containing all the data was passed into this function
@@ -7064,7 +7064,7 @@ class SyncEngine {
 					}
 				} catch (FileException e) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, thisFunctionName);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, localFilePath);
 				}
 			} else {
 				// As this is a unique thread, the sessionFilePath for where we save the data needs to be unique
@@ -7097,8 +7097,8 @@ class SyncEngine {
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
 				} catch (FileException e) {
-					addLogEntry("DEBUG TO REMOVE: Modified file upload FileException Handling (Create the Upload Session)");
-					displayFileSystemErrorMessage(e.msg, thisFunctionName);
+					// Display filesystem exception error message
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, threadUploadSessionFilePath);
 				}
 				
 				// Do we have a valid session URL that we can use ?
@@ -7121,8 +7121,8 @@ class SyncEngine {
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 						
 					} catch (FileException e) {
-						addLogEntry("DEBUG TO REMOVE: Modified file upload FileException Handling (Perform the Upload using the session)");
-						displayFileSystemErrorMessage(e.msg, thisFunctionName);
+						// Display filesystem exception error message
+						displayFileSystemErrorMessage(e.msg, thisFunctionName, threadUploadSessionFilePath);
 					}
 				} else {
 					// Create session Upload URL failed
@@ -7731,6 +7731,9 @@ class SyncEngine {
 			// Before we traverse this 'path', we need to make a last check to see if this was just excluded
 			bool skipFolderTraverse = skipBusinessSharedFolder(path);
 			
+			// Current path for error logging
+			string currentPath;
+			
 			if (!unwanted) {
 				// At this point, this path, we want to scan for new data as it is not excluded
 				if (isDir(path)) {
@@ -7751,6 +7754,9 @@ class SyncEngine {
 							try {
 								auto directoryEntries = dirEntries(path, SpanMode.depth, false);
 								foreach (DirEntry child; directoryEntries) {
+									// set for error logging
+									currentPath = child.name;
+								
 									// what sort of child is this?
 									if (isDir(child.name)) {
 										addLogEntry("Removing local directory: " ~ child.name);
@@ -7766,7 +7772,7 @@ class SyncEngine {
 												attrIsDir(child.linkAttributes) ? rmdir(child.name) : safeRemove(child.name);
 											} catch (FileException e) {
 												// display the error message
-												displayFileSystemErrorMessage(e.msg, thisFunctionName);
+												displayFileSystemErrorMessage(e.msg, thisFunctionName, currentPath);
 											}
 										}
 									}
@@ -7785,14 +7791,14 @@ class SyncEngine {
 											rmdirRecurse(path);
 										} catch (FileException e) {
 											// display the error message
-											displayFileSystemErrorMessage(e.msg, thisFunctionName);
+											displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
 										}
 										
 									}
 								}
 							} catch (FileException e) {
 								// display the error message
-								displayFileSystemErrorMessage(e.msg, thisFunctionName);
+								displayFileSystemErrorMessage(e.msg, thisFunctionName, currentPath);
 								
 								// Display function processing time if configured to do so
 								if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -7813,14 +7819,14 @@ class SyncEngine {
 							try {
 								auto directoryEntries = dirEntries(path, SpanMode.shallow, false);
 								foreach (DirEntry entry; directoryEntries) {
-									string thisPath = entry.name;
-									scanPathForNewData(thisPath);
+									currentPath = entry.name;
+									scanPathForNewData(entry.name);
 								}
 								// Clear directoryEntries
 								object.destroy(directoryEntries);
 							} catch (FileException e) {
 								// display the error message
-								displayFileSystemErrorMessage(e.msg, thisFunctionName);
+								displayFileSystemErrorMessage(e.msg, thisFunctionName, currentPath);
 								
 								// Display function processing time if configured to do so
 								if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -7947,14 +7953,14 @@ class SyncEngine {
 								try {
 									auto directoryEntries = dirEntries(path, SpanMode.shallow, false);
 									foreach (DirEntry entry; directoryEntries) {
-										string thisPath = entry.name;
-										scanPathForNewData(thisPath);
+										currentPath = entry.name;
+										scanPathForNewData(entry.name);
 									}
 									// Clear directoryEntries
 									object.destroy(directoryEntries);
 								} catch (FileException e) {
 									// display the error message
-									displayFileSystemErrorMessage(e.msg, thisFunctionName);
+									displayFileSystemErrorMessage(e.msg, thisFunctionName, currentPath);
 									
 									// Display function processing time if configured to do so
 									if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -9331,7 +9337,7 @@ class SyncEngine {
 				} catch (FileException e) {
 					// display the error message
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
-					displayFileSystemErrorMessage(e.msg, thisFunctionName);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, fileToUpload);
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -9367,7 +9373,7 @@ class SyncEngine {
 				} catch (FileException e) {
 					// display the error message
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
-					displayFileSystemErrorMessage(e.msg, thisFunctionName);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, fileToUpload);
 				}
 				
 				// Do we have a valid session URL that we can use ?
@@ -9625,7 +9631,7 @@ class SyncEngine {
 			std.file.write(threadUploadSessionFilePath, uploadSessionData.toString());
 		} catch (FileException e) {
 			// display the error message
-			displayFileSystemErrorMessage(e.msg, thisFunctionName);
+			displayFileSystemErrorMessage(e.msg, thisFunctionName, threadUploadSessionFilePath);
 		}
 		
 		// Display function processing time if configured to do so
@@ -9844,13 +9850,13 @@ class SyncEngine {
 					
 				} catch (std.exception.ErrnoException e) {
 					// There was a file system error - display the error message
-					displayFileSystemErrorMessage(e.msg, thisFunctionName);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, newUploadSession["localPath"].str);
 					return uploadResponse;
 				}
 			} catch (ErrnoException e) {
 				// There was a file system error
 				// display the error message
-				displayFileSystemErrorMessage(e.msg, thisFunctionName);
+				displayFileSystemErrorMessage(e.msg, thisFunctionName, uploadSessionData["localPath"].str);
 				uploadResponse = null;
 				return uploadResponse;
 			}
@@ -11582,7 +11588,7 @@ class SyncEngine {
 			}
 		} catch (FileException e) {
 			// filesystem generated an error message - display error message
-			displayFileSystemErrorMessage(e.msg, thisFunctionName);
+			displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
 				addLogEntry(e.msg);

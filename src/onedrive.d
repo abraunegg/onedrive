@@ -486,6 +486,9 @@ class OneDriveApi {
 
 	// Authenticate this client against Microsoft OneDrive API using one of the 3 authentication methods this client supports
 	bool authorise() {
+		// Set this function name
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+	
 		// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
 		if (appConfig.getValueBool("use_intune_sso")) {
 			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
@@ -697,7 +700,7 @@ class OneDriveApi {
 				char[] response;
 				// What URL should be presented to the user to access
 				string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
-				// Configure automated authentication if --auth-files authUrl:responseUrl is being used
+				// Configure automated authentication if --auth-files authUrlFilePath:responseUrlFilePath is being used
 				string authFilesString = appConfig.getValueString("auth_files");
 				string authResponseString = appConfig.getValueString("auth_response");
 			
@@ -706,48 +709,64 @@ class OneDriveApi {
 					response = cast(char[]) authResponseString;
 				} else if (authFilesString != "") {
 					string[] authFiles = authFilesString.split(":");
-					string authUrl = authFiles[0];
-					string responseUrl = authFiles[1];
+					string authUrlFilePath = authFiles[0];
+					string responseUrlFilePath = authFiles[1];
 					
 					try {
-						auto authUrlFile = File(authUrl, "w");
+						auto authUrlFile = File(authUrlFilePath, "w");
 						authUrlFile.write(url);
 						authUrlFile.close();
 					} catch (FileException exception) {
 						// There was a file system error
 						// display the error message
-						displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
 						// Must force exit here, allow logging to be done
 						forceExit();
 					} catch (ErrnoException exception) {
 						// There was a file system error
 						// display the error message
-						displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
 						// Must force exit here, allow logging to be done
 						forceExit();
 					}
-			
+
+					// Log we are now waiting
 					addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
 					
-					while (!exists(responseUrl)) {
+					while (!exists(responseUrlFilePath)) {
 						Thread.sleep(dur!("msecs")(100));
 					}
 
 					// read response from provided from OneDrive
 					try {
-						response = cast(char[]) read(responseUrl);
+						response = cast(char[]) read(responseUrlFilePath);
 					} catch (OneDriveException exception) {
 						// exception generated
-						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 						return false;
 					}
 
-					// try to remove old files
+					// try to remove old files one at a time
 					try {
-						std.file.remove(authUrl);
-						std.file.remove(responseUrl);
+						std.file.remove(authUrlFilePath);
+						
 					} catch (FileException exception) {
-						addLogEntry("Cannot remove files " ~ authUrl ~ " " ~ responseUrl);
+						addLogEntry("Cannot remove --auth-files elements - details below");
+						// There was a file system error
+						// display the error message
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
+						
+						return false;
+					}
+					
+					try {
+						std.file.remove(responseUrlFilePath);
+					} catch (FileException exception) {
+						addLogEntry("Cannot remove --auth-files elements - details below");
+						// There was a file system error
+						// display the error message
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, responseUrlFilePath);
+						
 						return false;
 					}
 				} else {
@@ -794,8 +813,10 @@ class OneDriveApi {
 	
 	// Process Intune JSON response data
 	void processIntuneResponse(JSONValue intuneBrokerJSONData) {
-		// Use the provided JSON data and configure elements, save JSON data to disk for reuse
+		// Set this function name
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
 		
+		// Use the provided JSON data and configure elements, save JSON data to disk for reuse
 		long expiresOnMs = intuneBrokerJSONData["expiresOn"].integer();
 		// Convert to SysTime 
 		SysTime expiryTime = SysTime.fromUnixTime(expiresOnMs / 1000);
@@ -821,7 +842,7 @@ class OneDriveApi {
 			appConfig.intuneAccountDetailsFilePath.setAttributes(appConfig.returnSecureFilePermission());
 		} catch (FileException exception) {
 			// display the error message
-			displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+			displayFileSystemErrorMessage(exception.msg, thisFunctionName, appConfig.intuneAccountDetailsFilePath);
 		}
 	}
 	
@@ -1153,6 +1174,9 @@ class OneDriveApi {
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
 	void downloadById(const(char)[] driveId, const(char)[] itemId, string saveToPath, long fileSize, JSONValue onlineHash, long resumeOffset = 0) {
+		// Set this function name
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+	
 		// We pass through to 'downloadFile()'
 		// - resumeOffset
 		// - onlineHash
@@ -1166,7 +1190,7 @@ class OneDriveApi {
 					remove(saveToPath);
 				} catch (FileException exception) {
 					// display the error message
-					displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(exception.msg, thisFunctionName, saveToPath);
 				}
 			}
 		}
@@ -1190,7 +1214,7 @@ class OneDriveApi {
 				}
 			} catch (FileException exception) {
 				// display the error message
-				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+				displayFileSystemErrorMessage(exception.msg, thisFunctionName, parentalPath);
 			}
 		}
 
@@ -1242,6 +1266,10 @@ class OneDriveApi {
 	}
 	
 	private void acquireToken(char[] postData) {
+		// Set this function name
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+	
+		// Configure the response JSON
 		JSONValue response;
 		
 		// Log what we are doing
@@ -1266,7 +1294,7 @@ class OneDriveApi {
 					// There was a HTTP 5xx Server Side Error - retry
 					acquireToken(postData);
 				} else {
-					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
 			}
 		}
@@ -1327,6 +1355,9 @@ class OneDriveApi {
 		
 	// Process the authentication JSON
 	private void processAuthenticationJSON(JSONValue response) {
+		// Set this function name
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+	
 		// Use 'access_token' and set in the application configuration
 		appConfig.accessToken = "bearer " ~ strip(response["access_token"].str);
 				
@@ -1363,7 +1394,7 @@ class OneDriveApi {
 				appConfig.refreshTokenFilePath.setAttributes(appConfig.returnSecureFilePermission());
 			} catch (FileException exception) {
 				// display the error message
-				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
+				displayFileSystemErrorMessage(exception.msg, thisFunctionName, appConfig.refreshTokenFilePath);
 			}
 		}
 	}
@@ -1708,12 +1739,14 @@ class OneDriveApi {
 
 	// Save the resume download data
 	private void saveResumeDownloadFile(string threadResumeDownloadFilePath, JSONValue resumeDownloadData) {
+		// Set this function name
 		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		
 		try {
 			std.file.write(threadResumeDownloadFilePath, resumeDownloadData.toString());
 		} catch (FileException e) {
 			// display the error message
-			displayFileSystemErrorMessage(e.msg, thisFunctionName);
+			displayFileSystemErrorMessage(e.msg, thisFunctionName, threadResumeDownloadFilePath);
 		}
 	}
 
@@ -2036,11 +2069,10 @@ class OneDriveApi {
 						throw new OneDriveException(response.statusLine.code, response.statusLine.reason, response);
 				}
 				
-			// A FileSystem exception was thrown
-			} catch (ErrnoException exception) {
-				// There was a file system error
-				// display the error message
-				displayFileSystemErrorMessage(exception.msg, callingFunction);
+			// A FileSystem exception was thrown from somewhere
+			} catch (FileException exception) {
+				// There was a file system error - display the error message
+				displayFileSystemErrorMessage(exception.msg, callingFunction, "unknown file path");
 				throw new OneDriveException(0, "There was a file system error during OneDrive request: " ~ exception.msg, response);
 			
 			// A OneDriveError was thrown

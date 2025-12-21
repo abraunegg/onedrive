@@ -853,7 +853,17 @@ int main(string[] cliArgs) {
 	}
 	
 	// Change the working directory to the 'sync_dir' as configured
-	chdir(runtimeSyncDirectory);
+	try {
+		chdir(runtimeSyncDirectory);
+	// A FileSystem exception was thrown when attempting to change to the configured 'sync_dir'
+	} catch (FileException e) {
+		// Log error message
+		addLogEntry("FATAL: Unable to change to the configured local 'sync_dir' directory: " ~ runtimeSyncDirectory);
+		// A file system exception was generated
+		displayFileSystemErrorMessage(e.msg, strip(getFunctionName!({})), runtimeSyncDirectory);
+		// Use exit scopes to shutdown API as if we are unable to change to the 'sync_dir' we need to exit
+		return EXIT_FAILURE;
+	}
 	
 	// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file
 	checkForNoMountScenario();

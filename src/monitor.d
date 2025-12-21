@@ -360,6 +360,9 @@ final class Monitor {
 
 	// Recursively add this path to be monitored
 	private void addRecursive(string dirname) {
+		// Set this function name
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		
 		// skip non existing/disappeared items
 		if (!exists(dirname)) {
 			if (verboseLogging) {addLogEntry("Not adding non-existing/disappeared directory: " ~ dirname, ["verbose"]);}
@@ -452,17 +455,24 @@ final class Monitor {
 		// Catch any FileException error which is generated
 		} catch (std.file.FileException e) {
 			// Standard filesystem error
-			displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+			displayFileSystemErrorMessage(e.msg, thisFunctionName, dirname);
 			return;
 		}
 	}
 	
 	// Traverse directory to test if this should have an inotify watch added
 	private void traverseDirectory(string dirname) {
+		// Set this function name
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+	
+		// Current path for error logging
+		string currentPath;
+		
 		// Try and get all the directory entities for this path
 		try {
 			auto pathList = dirEntries(dirname, SpanMode.shallow, false);
 			foreach(DirEntry entry; pathList) {
+				currentPath = entry.name;
 				if (entry.isDir) {
 					if (debugLogging) {addLogEntry("Calling addRecursive() for this directory: " ~ entry.name, ["debug"]);}
 					addRecursive(entry.name);
@@ -471,7 +481,7 @@ final class Monitor {
 		// Catch any FileException error which is generated
 		} catch (std.file.FileException e) {
 			// Standard filesystem error
-			displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+			displayFileSystemErrorMessage(e.msg, thisFunctionName, currentPath);
 			return;
 		} catch (Exception e) {
 			// Issue #1154 handling
@@ -486,7 +496,7 @@ final class Monitor {
 				forceExit();
 			} else {
 				// some other error
-				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				displayFileSystemErrorMessage(e.msg, thisFunctionName, currentPath);
 				return;
 			}
 		}
