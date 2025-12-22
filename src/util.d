@@ -1076,7 +1076,7 @@ void displayFileSystemErrorMessage(string message, string callingFunction, strin
 			}
 
 			ulong freeTarget = to!ulong(getAvailableDiskSpace(targetProbePath));
-			addLogEntry("  Disk Space (Path): " ~ to!string(freeTarget) ~ " bytes available (probe: " ~ targetProbePath ~ ")");
+			addLogEntry("  Disk Space (Path): " ~ to!string(freeTarget) ~ " bytes available (parent path: " ~ targetProbePath ~ ")");
 
 			// Preserve existing behaviour: if disk space check returns 0, force exit.
 			// (Assumes getAvailableDiskSpace returns 0 on a hard failure in your implementation.)
