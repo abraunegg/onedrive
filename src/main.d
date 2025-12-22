@@ -852,7 +852,7 @@ int main(string[] cliArgs) {
 		return EXIT_FAILURE;
 	}
 	
-	// Change the working directory to the 'sync_dir' as configured
+	// Try and change to the working directory to the 'sync_dir' as configured
 	try {
 		chdir(runtimeSyncDirectory);
 	// A FileSystem exception was thrown when attempting to change to the configured 'sync_dir'
@@ -860,7 +860,7 @@ int main(string[] cliArgs) {
 		// Log error message
 		addLogEntry("FATAL: Unable to change to the configured local 'sync_dir' directory: " ~ runtimeSyncDirectory);
 		// A file system exception was generated
-		displayFileSystemErrorMessage(e.msg, strip(getFunctionName!({})), runtimeSyncDirectory);
+		displayFileSystemErrorMessage(e.msg, strip(getFunctionName!({})), runtimeSyncDirectory, FsErrorSeverity.fatal);
 		// Use exit scopes to shutdown API as if we are unable to change to the 'sync_dir' we need to exit
 		return EXIT_FAILURE;
 	}

@@ -737,7 +737,7 @@ class ApplicationConfig {
 					configBackupFile.setAttributes(convertedPermissionValue);
 				} catch (FileException e) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, configBackupFile);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, configBackupFile, FsErrorSeverity.warning);
 				}
 			}
 		} else {
@@ -1978,11 +1978,11 @@ class ApplicationConfig {
 				} catch (FileException e) {
 					// filesystem error
 					failedToReadBackupConfig = true;
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, configBackupFile);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, configBackupFile, FsErrorSeverity.warning);
 				} catch (std.exception.ErrnoException e) {
 					// filesystem error
 					failedToReadBackupConfig = true;
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, configBackupFile);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, configBackupFile, FsErrorSeverity.warning);
 				}
 				
 				scope(exit) {
@@ -2194,7 +2194,7 @@ class ApplicationConfig {
 					configHashFile.setAttributes(convertedPermissionValue);
 				} catch (FileException e) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, configHashFile);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, configHashFile, FsErrorSeverity.warning);
 				}
 			}
 			// Update 'sync_list' files
@@ -2207,7 +2207,7 @@ class ApplicationConfig {
 					syncListHashFile.setAttributes(convertedPermissionValue);
 				} catch (FileException e) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, syncListHashFile);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, syncListHashFile, FsErrorSeverity.warning);
 				}
 			}
 		} else {
@@ -2231,7 +2231,7 @@ class ApplicationConfig {
 					configHashFile.setAttributes(convertedPermissionValue);
 				} catch (FileException e) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, configHashFile);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, configHashFile, FsErrorSeverity.warning);
 				}
 			}
 			// Generate the runtime hash for the 'config' file
@@ -2248,7 +2248,7 @@ class ApplicationConfig {
 					syncListHashFile.setAttributes(convertedPermissionValue);
 				} catch (FileException e) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, syncListHashFile);
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, syncListHashFile, FsErrorSeverity.warning);
 				}
 			}
 			// Generate the runtime hash for the 'sync_list' file

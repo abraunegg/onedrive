@@ -64,6 +64,13 @@ shared static this() {
 	deviceName = Socket.hostName;
 }
 
+// To assist with filesystem severity issues, configure an enum that can be used
+enum FsErrorSeverity {
+    warning,
+    error,
+    fatal
+}
+
 // Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario.
 // If the path already ends with "-<deviceName>-safeBackup-####", the counter is incremented
 // instead of appending another "-<deviceName>-safeBackup-".
@@ -1003,12 +1010,17 @@ void handleClientUnauthorised(int httpStatusCode, JSONValue errorMessage) {
 }
 
 // Parse and display error message received from the local file system
-void displayFileSystemErrorMessage(string message, string callingFunction, string contextPath) {
+void displayFileSystemErrorMessage(string message, string callingFunction, string contextPath, FsErrorSeverity severity = FsErrorSeverity.error) {
 	// Separate this block from surrounding log output
 	addLogEntry();
 
-	// Header
-	addLogEntry("ERROR: The local file system returned an error with the following details:");
+	// Header prefix for logging accuracy
+	string headerPrefix = severity == FsErrorSeverity.warning ? "WARNING"
+                      : severity == FsErrorSeverity.fatal ? "FATAL"
+                      : "ERROR";
+	
+	// Filesystem logging header
+	addLogEntry(headerPrefix ~ ": The local file system returned an error with the following details:");
 		
 	// Calling context (helps correlate where this came from)
 	if (!callingFunction.empty) {
@@ -1093,6 +1105,27 @@ void displayFileSystemErrorMessage(string message, string callingFunction, strin
 	} catch (Exception e) {
 		// Handle exceptions from disk space check or type conversion
 		addLogEntry("  NOTE: Exception during disk space check: " ~ e.msg);
+	}
+	
+	// Add note for WARNING messages
+	if (headerPrefix == "WARNING") {
+		addLogEntry();
+		addLogEntry("NOTE: This error is non-fatal; the client will continue to operate, but this may affect future operations if not resolved");
+		addLogEntry();
+	}
+	
+	// Add note for ERROR messages
+	if (headerPrefix == "ERROR") {
+		addLogEntry();
+		addLogEntry("NOTE: This error requires attention; the client may continue running, but functionality is impaired and the issue should be resolved.");
+		addLogEntry();
+	}
+	
+	// Add note for FATAL messages
+	if (headerPrefix == "FATAL") {
+		addLogEntry();
+		addLogEntry("NOTE: This error is fatal; the client cannot continue and this issue must be corrected before retrying.");
+		addLogEntry();
 	}
 	
 	// Separate this block from surrounding log output 

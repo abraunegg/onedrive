@@ -746,16 +746,14 @@ class OneDriveApi {
 						return false;
 					}
 
-					// try to remove old files one at a time
+					// try to remove auth files one at a time
 					try {
 						std.file.remove(authUrlFilePath);
 						
 					} catch (FileException exception) {
 						addLogEntry("Cannot remove --auth-files elements - details below");
-						// There was a file system error
-						// display the error message
+						// There was a file system error - display the error message
 						displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
-						
 						return false;
 					}
 					
@@ -763,10 +761,8 @@ class OneDriveApi {
 						std.file.remove(responseUrlFilePath);
 					} catch (FileException exception) {
 						addLogEntry("Cannot remove --auth-files elements - details below");
-						// There was a file system error
-						// display the error message
+						// There was a file system error - display the error message
 						displayFileSystemErrorMessage(exception.msg, thisFunctionName, responseUrlFilePath);
-						
 						return false;
 					}
 				} else {
