@@ -446,6 +446,7 @@ final class ItemDatabase {
 		
 		switch (exception.errorCode) {
 			case 7:   // SQLITE_FULL
+			case 8:   // SQLITE_READONLY
 			case 10:  // SQLITE_SCHEMA
 			case 11:  // SQLITE_CORRUPT
 			case 17:  // SQLITE_IOERR

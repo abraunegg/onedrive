@@ -723,6 +723,9 @@ class ApplicationConfig {
 	
 	// Create a backup of the 'config' file if it does not exist
 	void createBackupConfigFile() {
+		// Set this function name
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+	
 		if (!getValueBool("dry_run")) {
 			// Is there a backup of the config file if the config file exists?
 			if (exists(applicableConfigFilePath)) {
@@ -734,7 +737,7 @@ class ApplicationConfig {
 					configBackupFile.setAttributes(convertedPermissionValue);
 				} catch (FileException e) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, configBackupFile, FsErrorSeverity.warning);
 				}
 			}
 		} else {
@@ -1906,6 +1909,9 @@ class ApplicationConfig {
 	// Check the application configuration for any changes that need to trigger a --resync
 	// This function is only called if --resync is not present
 	bool applicationChangeWhereResyncRequired() {
+		// Set this function name
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+	
 		// Default is that no resync is required
 		bool resyncRequired = false;
 
@@ -1972,11 +1978,11 @@ class ApplicationConfig {
 				} catch (FileException e) {
 					// filesystem error
 					failedToReadBackupConfig = true;
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, configBackupFile, FsErrorSeverity.warning);
 				} catch (std.exception.ErrnoException e) {
 					// filesystem error
 					failedToReadBackupConfig = true;
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, configBackupFile, FsErrorSeverity.warning);
 				}
 				
 				scope(exit) {
@@ -2172,6 +2178,9 @@ class ApplicationConfig {
 	
 	// For each of the config files, update the hash data in the hash files
 	void updateHashContentsForConfigFiles() {
+		// Set this function name
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+	
 		// Are we in a --dry-run scenario?
 		if (!getValueBool("dry_run")) {
 			// Not a dry-run scenario, update the applicable files
@@ -2185,7 +2194,7 @@ class ApplicationConfig {
 					configHashFile.setAttributes(convertedPermissionValue);
 				} catch (FileException e) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, configHashFile, FsErrorSeverity.warning);
 				}
 			}
 			// Update 'sync_list' files
@@ -2198,7 +2207,7 @@ class ApplicationConfig {
 					syncListHashFile.setAttributes(convertedPermissionValue);
 				} catch (FileException e) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, syncListHashFile, FsErrorSeverity.warning);
 				}
 			}
 		} else {
@@ -2209,6 +2218,9 @@ class ApplicationConfig {
 	
 	// Create any required hash files for files that help us determine if the configuration has changed since last run
 	void createRequiredInitialConfigurationHashFiles() {
+		// Set this function name
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+	
 		// Does a 'config' file exist with a valid hash file
 		if (exists(applicableConfigFilePath)) {
 			if (!exists(configHashFile)) {
@@ -2219,7 +2231,7 @@ class ApplicationConfig {
 					configHashFile.setAttributes(convertedPermissionValue);
 				} catch (FileException e) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, configHashFile, FsErrorSeverity.warning);
 				}
 			}
 			// Generate the runtime hash for the 'config' file
@@ -2236,7 +2248,7 @@ class ApplicationConfig {
 					syncListHashFile.setAttributes(convertedPermissionValue);
 				} catch (FileException e) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					displayFileSystemErrorMessage(e.msg, thisFunctionName, syncListHashFile, FsErrorSeverity.warning);
 				}
 			}
 			// Generate the runtime hash for the 'sync_list' file
