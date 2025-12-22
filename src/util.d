@@ -1124,7 +1124,7 @@ void displayFileSystemErrorMessage(string message, string callingFunction, strin
 	// Add note for FATAL messages
 	if (headerPrefix == "FATAL") {
 		addLogEntry();
-		addLogEntry("NOTE: This error is fatal; the client cannot continue and this issue must be corrected before retrying.");
+		addLogEntry("NOTE: This error is fatal; the client cannot continue and this issue must be corrected before retrying. The client will now attempt to exit in a safe and orderly manner.");
 		addLogEntry();
 	}
 	
