@@ -99,8 +99,19 @@ class ClientSideFiltering {
 		if (appConfig.getValueBool("skip_dotfiles")) {
 			setSkipDotfiles();
 		}
+
+		// Validate 'sync_list' include rules are not shadowed by 'skip_file' entries
+		if (!validateSyncListNotShadowedBySkipFile()) {
+			return false;
+		}
 		
-		// All configured OK
+		// Validate 'sync_list' include rules are not shadowed by 'skip_dir' entries
+		if (!validateSyncListNotShadowedBySkipDir()) {
+			// The application configuration is invalid .. 'skip_dir' is shadowing paths included by 'sync_list'
+			return false;
+		}
+		
+		// Client Side Filtering has been configured correctly
 		return true;
 	}
 	
@@ -876,5 +887,87 @@ class ClientSideFiltering {
 		} else {
 			return false;
 		}
+	}
+	
+	// Validate that 'sync_list' *include* rules are not rendered non-viable by 'skip_dir' entries.
+	// If an include rule would be excluded by 'skip_dir' evaluation, it is "shadowed" by that entry.
+	bool validateSyncListNotShadowedBySkipDir() {
+		// No sync_list include rules loaded => nothing to validate
+		if (syncListIncludePathsOnly is null || syncListIncludePathsOnly.empty) return true;
+
+		// No skip_dir configured => nothing to validate
+		if (appConfig.getValueString("skip_dir").empty) return true;
+
+		string[] shadowedRules;
+
+		foreach (rule; syncListIncludePathsOnly) {
+			// syncListIncludePathsOnly should only contain include rules, but be defensive.
+			if (rule.empty) continue;
+			if (rule[0] == '!' || rule[0] == '-') continue;
+
+			// Use the *actual* runtime skip_dir evaluation logic (strict/non-strict)
+			// so the check matches real behaviour.
+			if (isDirNameExcluded(rule)) {
+				shadowedRules ~= rule;
+			}
+		}
+
+		if (!shadowedRules.empty) {
+			addLogEntry();
+			addLogEntry("ERROR: Invalid Client Side Filtering configuration detected.", ["info", "notify"]);
+			addLogEntry("       One or more 'sync_list' inclusion rules are shadowed by 'skip_dir' and will never be viable.", ["info", "notify"]);
+			foreach (r; shadowedRules) {
+				addLogEntry("       Shadowed 'sync_list' rule: " ~ r, ["info", "notify"]);
+			}
+			addLogEntry("       Fix: remove or narrow the conflicting 'skip_dir' entry/entries, or adjust your 'sync_list' rules.", ["info", "notify"]);
+			addLogEntry("       See the 'skip_dir' documentation for correct usage and examples.", ["info", "notify"]);
+			addLogEntry();
+			return false;
+		}
+
+		return true;
+	}
+	
+	// Validate that 'sync_list' *include* rules are not rendered non-viable by 'skip_file' entries.
+	// If an include rule would be excluded by 'skip_file' evaluation, it is "shadowed" by that entry.
+	bool validateSyncListNotShadowedBySkipFile() {
+		// No sync_list include rules loaded => nothing to validate
+		if (syncListIncludePathsOnly is null || syncListIncludePathsOnly.empty) return true;
+
+		// No skip_file configured => nothing to validate
+		if (appConfig.getValueString("skip_file").empty) return true;
+
+		string[] shadowedRules;
+
+		foreach (rule; syncListIncludePathsOnly) {
+			// Defensive: ignore empty or explicitly negative rules
+			if (rule.empty) continue;
+			if (rule[0] == '!' || rule[0] == '-') continue;
+
+			// Only validate file-intent rules:
+			// - If it ends with '/', treat as a directory include and do not apply skip_file shadow validation.
+			//   (Users commonly include folders; skip_file patterns like '*.tmp' should not invalidate that.)
+			if (rule.length > 1 && rule[$ - 1] == '/') continue;
+
+			// Use the *actual* runtime skip_file evaluation logic so this check matches real behaviour.
+			if (isFileNameExcluded(rule)) {
+				shadowedRules ~= rule;
+			}
+		}
+
+		if (!shadowedRules.empty) {
+			addLogEntry();
+			addLogEntry("ERROR: Invalid Client Side Filtering configuration detected.", ["info", "notify"]);
+			addLogEntry("       One or more 'sync_list' inclusion rules are shadowed by 'skip_file' and will never be viable.", ["info", "notify"]);
+			foreach (r; shadowedRules) {
+				addLogEntry("       Shadowed 'sync_list' rule: " ~ r, ["info", "notify"]);
+			}
+			addLogEntry("       Fix: remove or narrow the conflicting 'skip_file' entry/entries, or adjust your 'sync_list' rules.", ["info", "notify"]);
+			addLogEntry("       See the 'skip_file' documentation for correct usage and examples.", ["info", "notify"]);
+			addLogEntry();
+			return false;
+		}
+
+		return true;
 	}
 }
