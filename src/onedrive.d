@@ -2068,7 +2068,7 @@ class OneDriveApi {
 			// A FileSystem exception was thrown from somewhere
 			} catch (FileException exception) {
 				// There was a file system error - display the error message
-				displayFileSystemErrorMessage(exception.msg, callingFunction, "unknown file path");
+				displayFileSystemErrorMessage(exception.msg, callingFunction, ""); // as we have no file path reference here, use a blank input
 				throw new OneDriveException(0, "There was a file system error during OneDrive request: " ~ exception.msg, response);
 			
 			// A OneDriveError was thrown
