@@ -944,25 +944,15 @@ class ApplicationConfig {
 				} else if (key == "skip_file") {
 					// Flag this as true
 					configFileSkipFileReadIn = true;
-					// Handle multiple 'config' file entries of skip_file
-					if (configFileSkipFile.empty) {
-						// currently no entry exists
-						configFileSkipFile = c.front.dup;
-					} else {
-						// add to existing entry
-						configFileSkipFile = configFileSkipFile ~ "|" ~ to!string(c.front.dup);
-						setValueString("skip_file", configFileSkipFile);
-					}
+					// Merge safely, removing empty entries and de-duplicating
+					configFileSkipFile = mergePipeDelimitedRulesDedup(configFileSkipFile, to!string(c.front.dup));
+					// Update stored config value
+					setValueString("skip_file", configFileSkipFile);
 				} else if (key == "skip_dir") {
-					// Handle multiple entries of skip_dir
-					if (configFileSkipDir.empty) {
-						// currently no entry exists
-						configFileSkipDir = c.front.dup;
-					} else {
-						// add to existing entry
-						configFileSkipDir = configFileSkipDir ~ "|" ~ to!string(c.front.dup);
-						setValueString("skip_dir", configFileSkipDir);
-					}
+					// Merge safely, removing empty entries and de-duplicating
+					configFileSkipDir = mergePipeDelimitedRulesDedup(configFileSkipDir, to!string(c.front.dup));
+					// Update stored config value
+					setValueString("skip_dir", configFileSkipDir);
 				} else if (key == "single_directory") {
 					// --single-directory Strip quotation marks from path 
 					// This is an issue when using ONEDRIVE_SINGLE_DIRECTORY with Docker
@@ -2025,27 +2015,15 @@ class ApplicationConfig {
 								// skip_file handling
 								if (key == "skip_file") {
 									skip_file_present = true;
-									// Handle multiple entries of skip_file
-									if (backupConfigFileSkipFile.empty) {
-										// currently no entry value exists
-										backupConfigFileSkipFile = to!string(c.front.dup);
-									} else {
-										// add to existing backupConfigFileSkipFile entry
-										backupConfigFileSkipFile = backupConfigFileSkipFile ~ "|" ~ to!string(c.front.dup);
-									}
+									// Merge safely, removing empty entries and de-duplicating
+									backupConfigFileSkipFile = mergePipeDelimitedRulesDedup(backupConfigFileSkipFile, to!string(c.front.dup));
 								}
 								
 								// skip_dir handling
 								if (key == "skip_dir") {
 									skip_dir_present = true;
-									// Handle multiple entries of skip_dir
-									if (backupConfigFileSkipDir.empty) {
-										// currently no entry value exists
-										backupConfigFileSkipDir = to!string(c.front.dup);
-									} else {
-										// add to existing backupConfigFileSkipDir entry
-										backupConfigFileSkipDir = backupConfigFileSkipDir ~ "|" ~ to!string(c.front.dup);
-									}
+									// Merge safely, removing empty entries and de-duplicating
+									backupConfigFileSkipDir = mergePipeDelimitedRulesDedup(backupConfigFileSkipDir, to!string(c.front.dup));
 								}
 								
 								if (key == "skip_dotfiles") {
@@ -3000,11 +2978,13 @@ class ApplicationConfig {
 		return hints;
 	}
 	
+	// Generate the correct file:// URI for display manager integration
 	string fileUriFor(string absPath) {
 		// Basic, safe URI for local file
 		return "file://" ~ expandTilde(absPath);
 	}
 	
+	// Add GNOME Bookmark
 	void addGnomeBookmark() {
 		// Configure required variables
 		string uri = fileUriFor(getValueString("sync_dir"));
@@ -3041,6 +3021,7 @@ class ApplicationConfig {
 		addLogEntry("GNOME Desktop Integration: Bookmark added successfully", ["info"]);
 	}
 	
+	// Set the correct folder icon for the 'sync_dir' path
 	void setOneDriveFolderIcon() {
 		// Get the sync directory
 		string syncDir = expandTilde(getValueString("sync_dir"));
@@ -3068,6 +3049,7 @@ class ApplicationConfig {
 		}
 	}
 	
+	// Remove GNOME Bookmark
 	void removeGnomeBookmark() {
 		// Configure required variables
 		string uri = fileUriFor(getValueString("sync_dir"));
@@ -3111,6 +3093,7 @@ class ApplicationConfig {
 		addLogEntry("GNOME Desktop Integration: Bookmark removed successfully", ["info"]);
 	}
 	
+	// Remove folder icon
 	void removeOneDriveFolderIcon() {
 		// Get the sync directory
 		string syncDir = expandTilde(getValueString("sync_dir"));
@@ -3138,6 +3121,7 @@ class ApplicationConfig {
 		}
 	}
 	
+	// Add KDE Places entry
 	void addKDEPlacesEntry() {
 		// Configure required variables
 		string uri = fileUriFor(getValueString("sync_dir"));
@@ -3198,6 +3182,7 @@ class ApplicationConfig {
 		addLogEntry("KDE Desktop Integration: KDE/Plasma place added successfully", ["info"]);
 	}
 		
+	// Remove KDE Places entry
 	void removeKDEPlacesEntry() {
 		// Compute paths/values
 		const string uri = fileUriFor(getValueString("sync_dir")); 
@@ -3236,6 +3221,26 @@ class ApplicationConfig {
 		rename(tmp, xbelPath);
 
 		addLogEntry("KDE Desktop Integration: KDE/Plasma place removed successfully", ["info"]);
+	}
+	
+	// Safely merge multiple '|'-delimited rule strings by normalising, removing empty entries, trimming whitespace, 
+	// and de-duplicating rules so malformed or repeated config entries do not corrupt 'skip_dir' / 'skip_file' processing
+	private string mergePipeDelimitedRulesDedup(const string existing, const string incoming) {
+		auto resultString = appender!(string[])();
+
+		void addTokens(const string raw) {
+			foreach (part; raw.splitter('|')) {
+				auto t = part.strip();
+				if (t.empty) continue;
+				// Keep first occurrence
+				if (!resultString.data.canFind(t)) resultString ~= t.idup;
+			}
+		}
+
+		addTokens(existing);
+		addTokens(incoming);
+
+		return resultString.data.joiner("|").to!string;
 	}
 }
 
