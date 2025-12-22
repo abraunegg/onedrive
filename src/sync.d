@@ -3851,14 +3851,14 @@ class SyncEngine {
 							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 						}
 					} catch (FileException e) {
-						// There was a file system error
-						// display the error message
-						displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath);
+						// There was a file system error - display the error message
+						displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath, FsErrorSeverity.error);
+						if (verboseLogging) {addLogEntry("Download failed (local file system error): " ~ newItemPath, ["verbose"]);}
 						downloadFailed = true;
 					} catch (ErrnoException e) {
-						// There was a file system error
-						// display the error message
-						displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath);
+						// There was a file system error - display the error message
+						displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath, FsErrorSeverity.error);
+						if (verboseLogging) {addLogEntry("Download failed (local file system error): " ~ newItemPath, ["verbose"]);}
 						downloadFailed = true;
 					}
 				
@@ -3926,10 +3926,14 @@ class SyncEngine {
 								// Set the timestamp, logging and error handling done within function
 								setLocalPathTimestamp(dryRun, newItemPath, itemModifiedTime);
 							} else {
+								// QuickXorHash in this client incorporates the file length into the final digest, so a size mismatch would be expected to also produce a hash mismatch. 
+								// However, QuickXorHash is not collision-resistant, so we treat the hash mismatch as the definitive integrity failure condition and log size mismatches 
+								// as advisory
+							
 								// Downloaded file does not match size or hash .. which is it?
 								bool downloadValueMismatch = false;
 								
-								// Size error?
+								// Size difference between what was written to disk and what the API reported as the file size
 								if (downloadFileSize != jsonFileSize) {
 									// downloaded file size does not match
 									downloadValueMismatch = true;
@@ -3937,10 +3941,16 @@ class SyncEngine {
 										addLogEntry("Actual file size on disk:   " ~ to!string(downloadFileSize), ["debug"]);
 										addLogEntry("OneDrive API reported size: " ~ to!string(jsonFileSize), ["debug"]);
 									}
-									addLogEntry("ERROR: File download size mismatch. Increase logging verbosity to determine why.");
+									if ((verboseLogging)||(debugLogging)) {
+										// verbose or debug message
+										addLogEntry("WARNING: Download validation failed (size mismatch): " ~ newItemPath ~ " | expected=" ~ to!string(jsonFileSize) ~ " | actual=" ~ to!string(downloadFileSize), ["verbose"]);
+									} else {
+										// non-verbose message
+										addLogEntry("WARNING: File download size mismatch. Re-run with --verbose for additional diagnostic information to assist with troubleshooting.");
+									}
 								}
 								
-								// Hash Error?
+								// Hash difference between what was written to disk and then QuickXOR calculated and what the API reported as the file hash online
 								if (downloadedFileHash != onlineFileHash) {
 									// downloaded file hash does not match
 									downloadValueMismatch = true;
@@ -3948,7 +3958,14 @@ class SyncEngine {
 										addLogEntry("Actual local file hash:     " ~ downloadedFileHash, ["debug"]);
 										addLogEntry("OneDrive API reported hash: " ~ onlineFileHash, ["debug"]);
 									}
-									addLogEntry("ERROR: File download hash mismatch. Increase logging verbosity to determine why.");
+									
+									if ((verboseLogging)||(debugLogging)) {
+										// verbose or debug message
+										addLogEntry("ERROR: Download validation failed (hash mismatch): " ~ newItemPath ~ " | expected=" ~ onlineFileHash ~ " | actual=" ~ downloadedFileHash, ["verbose"]);
+									} else {
+										// non-verbose message
+										addLogEntry("ERROR: File download hash mismatch. Re-run with --verbose for additional diagnostic information to assist with troubleshooting.");
+									}
 								}
 								
 								// .heic data loss check
@@ -4014,7 +4031,6 @@ class SyncEngine {
 								long downloadFileSize = getSize(newItemPath);
 								
 								if ((OneDriveFileXORHash != localFileHash) && (jsonFileSize != downloadFileSize)) {
-								
 									// High potential to be an AIP protected file given the following scenario
 									// Business | SharePoint Account Type (not a personal account)
 									// --disable-download-validation is being used .. meaning the user has specifically configured this due the Microsoft SharePoint Enrichment Feature (bug)
@@ -4037,8 +4053,14 @@ class SyncEngine {
 							}
 						}	// end of (!disableDownloadValidation)
 					} else {
-						// File does not exist locally
-						addLogEntry("ERROR: File failed to download. Increase logging verbosity to determine why.");
+						// File does not exist locally ... so the download failed
+						if ((verboseLogging)||(debugLogging)) {
+							// If we are doing verbose logging, 
+							addLogEntry("ERROR: Download failed (file not present after download): " ~ newItemPath ~ " | expectedSize=" ~ to!string(jsonFileSize) ~ " | resumeOffset=" ~ to!string(resumeOffset), ["verbose"]);
+						} else {
+							addLogEntry("ERROR: File failed to download. Re-run with --verbose for additional diagnostic information to assist with troubleshooting.");
+						}
+						
 						// Was this item previously in-sync with the local system?
 						// We previously searched for the file in the DB, we need to use that record
 						if (fileFoundInDB) {
@@ -4112,7 +4134,7 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-	
+
 	// Write xattr data if configured to do so
 	void writeXattrData(string filePath, JSONValue onedriveJSONItem) {
 		// Function Start Time
