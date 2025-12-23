@@ -298,7 +298,10 @@ case "$(uname -s)" in
         bsd_inotify_LIBS=""
         ;;
     FreeBSD)
-        bsd_inotify_LIBS="-L/usr/local/lib -linotify"
+        AS_IF([test "$(uname -U)" -gt 1500060],
+            [bsd_inotify_LIBS=""],
+            [bsd_inotify_LIBS="-L/usr/local/lib -linotify"]
+        )
         ;;
     OpenBSD)
         bsd_inotify_LIBS="-L/usr/local/lib/inotify -linotify"
