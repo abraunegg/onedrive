@@ -29,7 +29,11 @@ import log;
 import clientSideFiltering;
 
 // Relevant inotify events
-private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
+version(FreeBSD) {
+     private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE;
+} else {
+     private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
+}
 
 class MonitorException: ErrnoException {
     @safe this(string msg, string file = __FILE__, size_t line = __LINE__) {
