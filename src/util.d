@@ -455,6 +455,19 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 	// Set IP protocol version
 	http.handle.set(CurlOption.ipresolve, appConfig.getValueLong("ip_protocol_version"));
 
+	// Explicitly set libcurl options to avoid using signal handlers in a multi-threaded environment
+	//   https://curl.se/libcurl/c/CURLOPT_NOSIGNAL.html
+	http.handle.set(CurlOption.nosignal,1);
+	
+	// Explicitly set the use of TCP NAGLE
+	//   https://curl.se/libcurl/c/CURLOPT_TCP_NODELAY.html
+	//   Ensure that TCP_NODELAY is set to 0 to ensure that TCP NAGLE is enabled
+	http.handle.set(CurlOption.tcp_nodelay,0);
+	
+	// Explicitly set to ensure the connection get closed at once after use
+	//   https://curl.se/libcurl/c/CURLOPT_FORBID_REUSE.html
+	http.handle.set(CurlOption.forbid_reuse,0);
+	
 	// Set HTTP method to HEAD for minimal data transfer
 	http.method = HTTP.Method.head;
 	
