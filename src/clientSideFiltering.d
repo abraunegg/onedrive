@@ -905,9 +905,42 @@ class ClientSideFiltering {
 			if (rule.empty) continue;
 			if (rule[0] == '!' || rule[0] == '-') continue;
 
+			// Normalise the rule to match how skip_dir rules are evaluated at runtime.
+			// skip_dir entries are relative to sync_dir. sync_list entries may be rooted (start with '/').
+			string candidate = rule;
+
+			// Normalise leading "./" (defensive)
+			if (candidate.length >= 2 && candidate[0 .. 2] == "./") {
+				candidate = candidate[2 .. $];
+			}
+
+			// Normalise sync_list rooted includes: "/Documents" -> "Documents"
+			if (candidate.length >= 1 && candidate[0] == '/') {
+				// Remove only the first '/', sync_list rules are single-rooted relative to sync_dir
+				candidate = candidate[1 .. $];
+			}
+
+			if (candidate.empty) continue;
+
 			// Use the *actual* runtime skip_dir evaluation logic (strict/non-strict)
 			// so the check matches real behaviour.
-			if (isDirNameExcluded(rule)) {
+			bool shadowed = false;
+
+			// Test as-is
+			if (isDirNameExcluded(candidate)) {
+				shadowed = true;
+			} else {
+				// Also test with a trailing slash where appropriate, so:
+				//   skip_dir = "Documents/" correctly shadows sync_list = "/Documents"
+				// (Users often represent a directory root either way.)
+				if (candidate[$ - 1] != '/') {
+					if (isDirNameExcluded(candidate ~ "/")) {
+						shadowed = true;
+					}
+				}
+			}
+
+			if (shadowed) {
 				shadowedRules ~= rule;
 			}
 		}
@@ -949,8 +982,24 @@ class ClientSideFiltering {
 			//   (Users commonly include folders; skip_file patterns like '*.tmp' should not invalidate that.)
 			if (rule.length > 1 && rule[$ - 1] == '/') continue;
 
+			// Normalise the rule to match how skip_file rules are evaluated at runtime.
+			// skip_file entries are relative to sync_dir. sync_list entries may be rooted (start with '/').
+			string candidate = rule;
+
+			// Normalise leading "./" (defensive)
+			if (candidate.length >= 2 && candidate[0 .. 2] == "./") {
+				candidate = candidate[2 .. $];
+			}
+
+			// Normalise sync_list rooted includes: "/Documents/file.txt" -> "Documents/file.txt"
+			if (candidate.length >= 1 && candidate[0] == '/') {
+				candidate = candidate[1 .. $];
+			}
+
+			if (candidate.empty) continue;
+
 			// Use the *actual* runtime skip_file evaluation logic so this check matches real behaviour.
-			if (isFileNameExcluded(rule)) {
+			if (isFileNameExcluded(candidate)) {
 				shadowedRules ~= rule;
 			}
 		}
