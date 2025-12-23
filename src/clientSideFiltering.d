@@ -249,40 +249,95 @@ class ClientSideFiltering {
 		}
 	}
 	
-	// config file skip_dir parameter
-	bool isDirNameExcluded(string name) {
-		// Does the directory name match skip_dir config entry?
-		// Returns true if the name matches a skip_dir config entry
+	// config 'skip_dir' parameter checking
+	bool isDirNameExcluded(string inputPath) {
+		// Returns true if the inputPath matches a skip_dir config entry (directoryMask)
 		// Returns false if no match
-		if (debugLogging) {addLogEntry("skip_dir evaluation for: " ~ name, ["debug"]);}
 
-		// Ensure the path being passed in is cleaned up to remove the leading '.'
-		if (startsWith(name, "./")) {
-			name = name[1..$];
-			if (debugLogging) {addLogEntry("skip_dir evaluation for (post normalisation): " ~ name, ["debug"]);}
+		if (debugLogging) {
+			addLogEntry("skip_dir evaluation for: " ~ inputPath, ["debug"]);
 		}
 
-		// Try full path match first
-		if (!name.matchFirst(directoryMask).empty) {
-			if (debugLogging) {addLogEntry("skip_dir evaluation: '!name.matchFirst(directoryMask).empty' returned true = matched", ["debug"]);}
-			return true;
-		} 
+		// Build candidate path variants to cover common inputs:
+		// - "./Documents/Uni" (most common from sync engine)
+		// - "Documents/Uni"  (relative)
+		// - "/Documents/Uni" (user occasionally prefixes with '/')
+		string name = inputPath;
 
-		// Test individual segments if not in strict match mode
+		// Normalise leading "./" to relative
+		if (startsWith(name, "./")) {
+			name = name[2 .. $];
+			if (debugLogging) addLogEntry("skip_dir evaluation (normalised inputPath, removed leading './'): " ~ name, ["debug"]);
+		}
+
+		// Create a small set of candidates (avoid duplicates)
+		string[] candidates;
+		void addCandidate(string c) {
+			if (c.empty) return;
+			foreach (e; candidates) {
+				if (e == c) return;
+			}
+			candidates ~= c;
+		}
+
+		addCandidate(name);
+
+		// If name is rooted, also test relative form
+		if (!name.empty && name[0] == '/') {
+			addCandidate(name[1 .. $]);
+		} else {
+			// If name is relative, also test rooted form (covers skip_dir rules that were authored with a leading '/')
+			addCandidate("/" ~ name);
+		}
+
+		// Also test trailing-slash equivalence for directory roots
+		// (treat "Documents" and "Documents/" the same, but do not create "//")
+		string[] expanded;
+		foreach (c; candidates) {
+			expanded ~= c;
+			if (c.length > 1 && c[$ - 1] != '/') {
+				expanded ~= (c ~ "/");
+			}
+		}
+		candidates = expanded;
+
+		// ------------------------------------------------------------
+		// 1) Full-path match first (strict semantics)
+		// ------------------------------------------------------------
+		foreach (c; candidates) {
+			if (!c.matchFirst(directoryMask).empty) {
+				if (debugLogging) addLogEntry("skip_dir full-path match: " ~ c, ["debug"]);
+				return true;
+			}
+		}
+
+		// ------------------------------------------------------------
+		// 2) Non-strict mode: test path segments for a match
+		// ------------------------------------------------------------
 		if (!skipDirStrictMatch) {
-			if (debugLogging) {addLogEntry("No Strict Matching Enforced", ["debug"]);}
+			if (debugLogging) addLogEntry("No Strict Matching Enforced - testing individual path segments", ["debug"]);
 
-			string path = buildNormalizedPath(name);
-			foreach_reverse(directory; pathSplitter(path)) {
-				if (directory != "/") {
-					if (directory.matchFirst(directoryMask)) {
-						if (debugLogging) {addLogEntry("skip_dir evaluation: 'directory.matchFirst(directoryMask)' returned true = matched", ["debug"]);}
+			foreach (c; candidates) {
+				// buildNormalizedPath may introduce a leading '/', so we keep it as-is
+				// and let pathSplitter do its job. We are matching segments, not full paths here.
+				string path = buildNormalizedPath(c);
+
+				if (debugLogging) addLogEntry("skip_dir segment test path: " ~ path, ["debug"]);
+
+				foreach_reverse(seg; pathSplitter(path)) {
+					if (seg == "/") continue;
+
+					// seg is a single component (e.g. "Documents")
+					if (!seg.matchFirst(directoryMask).empty) {
+						if (debugLogging) {
+							addLogEntry("skip_dir segment match: " ~ seg, ["debug"]);
+						}
 						return true;
 					}
 				}
 			}
 		} else {
-			if (debugLogging) {addLogEntry("Strict Matching Enforced - No Match", ["debug"]);}
+			if (debugLogging) addLogEntry("Strict Matching Enforced - no segment testing", ["debug"]);
 		}
 
 		// No match
