@@ -40,11 +40,20 @@ private struct WsFrame {
 	ubyte[] payload;
 }
 
+private enum long CURL_GLOBAL_DEFAULT = 3;
+
+shared static this() {
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+}
+
+shared static ~this() {
+    curl_global_cleanup();
+}
+
 final class CurlWebSocket {
 
 private:
 	// libcurl constants defined locally
-	enum long CURL_GLOBAL_DEFAULT       = 3;
 	enum int  CURLOPT_URL               = 10002;
 	enum int  CURLOPT_FOLLOWLOCATION    = 52;
 	enum int  CURLOPT_NOSIGNAL          = 99;
@@ -87,7 +96,6 @@ private:
 public:
 	this() {
 		websocketConnected = false;
-		curl_global_init(CURL_GLOBAL_DEFAULT);
 		curl = curl_easy_init();
 		rng = Random(unpredictableSeed);
 		logCurlWebsocketOutput("Created a new instance of a CurlWebSocket object accessing libcurl for HTTP operations");
@@ -96,13 +104,10 @@ public:
 	~this() {
 		if (curl !is null) {
 			curl_easy_cleanup(curl);
+			curl = null;
 		}
-		curl_global_cleanup();
 		websocketConnected = false;
-		object.destroy(curl);
-		logCurlWebsocketOutput("Destroyed 'curl' object");
-		curl = null;
-		logCurlWebsocketOutput("Destroyed instance of a CurlWebSocket object accessing libcurl for HTTP operations");
+		logCurlWebsocketOutput("Cleaned-up an instance of a CurlWebSocket object accessing libcurl for HTTP operations");
     }
 
 	bool isConnected() {
@@ -110,8 +115,8 @@ public:
 	}
 
 	void setTimeouts(int connectMs, int rwMs) {
-		connectTimeoutMs = connectMs;
-		ioTimeoutMs = rwMs;
+		this.connectTimeoutMs = connectMs;
+		this.ioTimeoutMs = rwMs;
 	}
 
 	void setUserAgent(string ua) {
@@ -119,7 +124,7 @@ public:
 	}
 
 	void setHTTPSDebug(bool httpsDebug) {
-		httpsDebug = httpsDebug;
+		this.httpsDebug = httpsDebug;
 	}
 
 	int connect(string wsUrl) {
@@ -140,9 +145,10 @@ public:
 		pathQuery = p.pathQuery;
 
 		string connectUrl = (scheme == "wss" ? "https://" : "http://") ~ hostPort ~ pathQuery;
-
-		curl_easy_reset(curl);
 		
+		// Reset
+		curl_easy_reset(curl);
+		// Configure curl options
 		curl_easy_setopt(curl, cast(int)CURLOPT_NOSIGNAL,           1L);
 		curl_easy_setopt(curl, cast(int)CURLOPT_FOLLOWLOCATION,     1L);
 		curl_easy_setopt(curl, cast(int)CURLOPT_USERAGENT,          userAgent.toStringz);   // NUL-terminated

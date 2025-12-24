@@ -466,7 +466,7 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 	
 	// Explicitly set to ensure the connection get closed at once after use
 	//   https://curl.se/libcurl/c/CURLOPT_FORBID_REUSE.html
-	http.handle.set(CurlOption.forbid_reuse,0);
+	http.handle.set(CurlOption.forbid_reuse,1);
 	
 	// Set HTTP method to HEAD for minimal data transfer
 	http.method = HTTP.Method.head;
@@ -475,13 +475,8 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 	
 	// Exit scope to ensure cleanup
 	scope(exit) {
-		// Shut http down and destroy
+		// Ensure everything is shutdown cleanly
 		http.shutdown();
-		object.destroy(http);
-		// Perform Garbage Collection
-		GC.collect();
-		// Return free memory to the OS
-		GC.minimize();
 	}
 
 	// Execute the request and handle exceptions
@@ -514,14 +509,6 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 		displayOneDriveErrorMessage(e.toString(), getFunctionName!({}));
 		reachedService = false;
 	}
-	
-	// Ensure everything is shutdown cleanly
-	http.shutdown();
-	object.destroy(http);
-	// Perform Garbage Collection
-	GC.collect();
-	// Return free memory to the OS
-	GC.minimize();
 	
 	// Return state
 	return reachedService;
