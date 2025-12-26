@@ -473,9 +473,9 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 	
 	bool reachedService = false;
 	
-	// Exit scope to ensure cleanup
+	// Exit scope to ensure cleanup http object
 	scope(exit) {
-		// Ensure everything is shutdown cleanly
+		// Shut http down http object
 		http.shutdown();
 		// Destroy http object
 		object.destroy(http);

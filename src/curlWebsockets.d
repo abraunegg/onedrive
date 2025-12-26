@@ -44,7 +44,7 @@ final class CurlWebSocket {
 
 private:
 	// libcurl constants defined locally
-	enum long CURL_GLOBAL_DEFAULT = 3;
+	enum long CURL_GLOBAL_DEFAULT       = 3;
 	enum int  CURLOPT_URL               = 10002;
 	enum int  CURLOPT_FOLLOWLOCATION    = 52;
 	enum int  CURLOPT_NOSIGNAL          = 99;
@@ -98,6 +98,7 @@ public:
 			curl = null;
 		}
 		websocketConnected = false;
+		object.destroy(curl);
 		logCurlWebsocketOutput("Cleaned-up an instance of a CurlWebSocket object accessing libcurl for HTTP operations");
     }
 
@@ -106,16 +107,16 @@ public:
 	}
 
 	void setTimeouts(int connectMs, int rwMs) {
-		this.connectTimeoutMs = connectMs;
-		this.ioTimeoutMs = rwMs;
+		connectTimeoutMs = connectMs;
+		ioTimeoutMs = rwMs;
 	}
 
 	void setUserAgent(string ua) {
 		if (!ua.empty) userAgent = ua;
 	}
 
-	void setHTTPSDebug(bool httpsDebug) {
-		this.httpsDebug = httpsDebug;
+	void setHTTPSDebug(bool httpsDebugInput) {
+		this.httpsDebug = httpsDebugInput;
 	}
 
 	int connect(string wsUrl) {
@@ -137,9 +138,9 @@ public:
 
 		string connectUrl = (scheme == "wss" ? "https://" : "http://") ~ hostPort ~ pathQuery;
 		
-		// Reset
+		// Reset 'curl' using curl_easy_reset
 		curl_easy_reset(curl);
-		// Configure curl options
+		// Configure required curl options
 		curl_easy_setopt(curl, cast(int)CURLOPT_NOSIGNAL,           1L);
 		curl_easy_setopt(curl, cast(int)CURLOPT_FOLLOWLOCATION,     1L);
 		curl_easy_setopt(curl, cast(int)CURLOPT_USERAGENT,          userAgent.toStringz);   // NUL-terminated

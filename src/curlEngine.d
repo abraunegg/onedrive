@@ -622,6 +622,10 @@ class CurlEngine {
 			object.destroy(http); // Destroy, however we cant set to null
 			if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("Stopped HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);}
 		}
+		// Perform Garbage Collection
+		GC.collect();
+		// Return free memory to the OS
+		GC.minimize();
 	}
 	
 	// Disable SSL certificate peer verification for libcurl operations.
@@ -766,6 +770,10 @@ void releaseAllCurlInstances() {
 			curlEnginePool.length = 0; // More explicit than curlEnginePool = [];
 		}
 	}
+	// Perform Garbage Collection on the destroyed curl engines
+	GC.collect();
+	// Return free memory to the OS
+	GC.minimize();
 	// Log that all curl engines have been released
 	if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine releaseAllCurlInstances() completed", ["debug"]);}
 }
