@@ -1458,9 +1458,9 @@ int main(string[] cliArgs) {
 									}
 
 									if (webhookEnabled) {
-										addLogEntry("Received " ~ to!string(signalCount) ~ " signal(s) from Webhook");
+										addLogEntry("Received " ~ to!string(signalCount) ~ " signal(s) from Webhook handler");
 									} else {
-										addLogEntry("Received " ~ to!string(signalCount) ~ " signal(s) from WebSocket");
+										addLogEntry("Received " ~ to!string(signalCount) ~ " signal(s) from WebSocket handler");
 									}
 									
 									// Perform online callback action
