@@ -44,7 +44,6 @@ final class CurlWebSocket {
 
 private:
 	// libcurl constants defined locally
-	enum long CURL_GLOBAL_DEFAULT       = 3;
 	enum int  CURLOPT_URL               = 10002;
 	enum int  CURLOPT_FOLLOWLOCATION    = 52;
 	enum int  CURLOPT_NOSIGNAL          = 99;
@@ -116,7 +115,7 @@ public:
 	}
 
 	void setHTTPSDebug(bool httpsDebugInput) {
-		this.httpsDebug = httpsDebugInput;
+		httpsDebug = httpsDebugInput;
 	}
 
 	int connect(string wsUrl) {
