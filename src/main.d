@@ -1340,12 +1340,18 @@ int main(string[] cliArgs) {
 					if (debugLogging) {addLogEntry("CurlEngine Pool Size POST Cleanup: " ~ to!string(curlEnginePoolLength()) , ["debug"]);}
 					
 					// Display memory details before garbage collection
-					if (displayMemoryUsage) displayMemoryUsagePreGC();
+					if (displayMemoryUsage) {
+						addLogEntry("Monitor Loop Count: " ~ to!string(monitorLoopFullCount));
+						// Get the current time in the local timezone
+						auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
+						addLogEntry("Timestamp:          " ~ to!string(timeStamp));
+						// Display memory stats before GC cleanup
+						displayMemoryUsagePreGC();
+					}
 					// Perform Garbage Collection
 					GC.collect();
 					// Return free memory to the OS
 					GC.minimize();
-					
 					// Display memory details after garbage collection
 					if (displayMemoryUsage) displayMemoryUsagePostGC();
 					
