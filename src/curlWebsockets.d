@@ -40,20 +40,11 @@ private struct WsFrame {
 	ubyte[] payload;
 }
 
-private enum long CURL_GLOBAL_DEFAULT = 3;
-
-shared static this() {
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-}
-
-shared static ~this() {
-    curl_global_cleanup();
-}
-
 final class CurlWebSocket {
 
 private:
 	// libcurl constants defined locally
+	enum long CURL_GLOBAL_DEFAULT = 3;
 	enum int  CURLOPT_URL               = 10002;
 	enum int  CURLOPT_FOLLOWLOCATION    = 52;
 	enum int  CURLOPT_NOSIGNAL          = 99;

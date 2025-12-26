@@ -464,9 +464,9 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 	//   Ensure that TCP_NODELAY is set to 0 to ensure that TCP NAGLE is enabled
 	http.handle.set(CurlOption.tcp_nodelay,0);
 	
-	// Explicitly set to ensure the connection get closed at once after use
+	// Explicitly set to ensure libcurl keep the connection open for possible later reuse
 	//   https://curl.se/libcurl/c/CURLOPT_FORBID_REUSE.html
-	http.handle.set(CurlOption.forbid_reuse,1);
+	http.handle.set(CurlOption.forbid_reuse,0);
 	
 	// Set HTTP method to HEAD for minimal data transfer
 	http.method = HTTP.Method.head;
@@ -477,6 +477,12 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 	scope(exit) {
 		// Ensure everything is shutdown cleanly
 		http.shutdown();
+		// Destroy http object
+		object.destroy(http);
+		// Perform Garbage Collection
+		GC.collect();
+		// Return free memory to the OS
+		GC.minimize();
 	}
 
 	// Execute the request and handle exceptions
