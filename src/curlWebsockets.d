@@ -240,7 +240,7 @@ public:
 	int close(ushort code = 1000, string reason = "") {
 		logCurlWebsocketOutput("Running curlWebsocket close()");
 		if (!websocketConnected) {
-			logCurlWebsocketOutput("Websocket alread closed - websocketConnected = false");
+			logCurlWebsocketOutput("Websocket already closed - websocketConnected = false");
 			return 0;
 		} else {
 			logCurlWebsocketOutput("Running curlWebsocket close() - websocketConnected = true");
