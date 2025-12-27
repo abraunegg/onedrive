@@ -477,12 +477,6 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 	scope(exit) {
 		// Shut http down http object
 		http.shutdown();
-		// Destroy http object
-		object.destroy(http);
-		// Perform Garbage Collection
-		GC.collect();
-		// Return free memory to the OS
-		GC.minimize();
 	}
 
 	// Execute the request and handle exceptions
@@ -492,7 +486,7 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 		}
 		http.perform();
 
-		// Check response for HTTP status code
+		// Check response for HTTP status code - consider 2xx and 3xx as "reachable"
 		if (http.statusLine.code >= 200 && http.statusLine.code < 400) {
 			if (displayLogging) {
 				addLogEntry("Successfully reached the Microsoft OneDrive Service");

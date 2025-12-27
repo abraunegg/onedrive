@@ -8,7 +8,7 @@ module curlWebsockets;
 // What does this module require to function?
 import etc.c.curl : CURL, CURLcode, curl_easy_cleanup, curl_easy_getinfo,
 	curl_easy_init, curl_easy_perform, curl_easy_recv, curl_easy_reset,
-	curl_easy_send, curl_easy_setopt, curl_global_cleanup, curl_global_init;
+	curl_easy_send, curl_easy_setopt;
 
 import core.stdc.string : memcpy, memmove;
 import core.time        : MonoTime, dur;
@@ -97,7 +97,6 @@ public:
 			curl = null;
 		}
 		websocketConnected = false;
-		object.destroy(curl);
 		logCurlWebsocketOutput("Cleaned-up an instance of a CurlWebSocket object accessing libcurl for HTTP operations");
     }
 
