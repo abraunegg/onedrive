@@ -252,11 +252,7 @@ public:
 		auto rc = sendAll(frame);
 		// Even if sending fails, cleanup below so we don’t leak.
 		collectException(logCurlWebsocketOutput("Sending RFC6455 Close (code=" ~ to!string(code) ~ ")"));
-		// Clean up curl handle
-		if (curl !is null) {
-			curl_easy_cleanup(curl);
-			curl = null;
-		}
+		// Flag we are no longer connected with the websocket
 		websocketConnected = false;
 		return rc;
 	}
