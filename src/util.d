@@ -464,7 +464,7 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 	//   Ensure that TCP_NODELAY is set to 0 to ensure that TCP NAGLE is enabled
 	http.handle.set(CurlOption.tcp_nodelay,0);
 	
-	// Explicitly set to ensure the connection get closed at once after use
+	// Explicitly set to ensure libcurl keep the connection open for possible later reuse
 	//   https://curl.se/libcurl/c/CURLOPT_FORBID_REUSE.html
 	http.handle.set(CurlOption.forbid_reuse,0);
 	
@@ -473,15 +473,10 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 	
 	bool reachedService = false;
 	
-	// Exit scope to ensure cleanup
+	// Exit scope to ensure cleanup http object
 	scope(exit) {
-		// Shut http down and destroy
+		// Shut http down http object
 		http.shutdown();
-		object.destroy(http);
-		// Perform Garbage Collection
-		GC.collect();
-		// Return free memory to the OS
-		GC.minimize();
 	}
 
 	// Execute the request and handle exceptions
@@ -491,7 +486,7 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 		}
 		http.perform();
 
-		// Check response for HTTP status code
+		// Check response for HTTP status code - consider 2xx and 3xx as "reachable"
 		if (http.statusLine.code >= 200 && http.statusLine.code < 400) {
 			if (displayLogging) {
 				addLogEntry("Successfully reached the Microsoft OneDrive Service");
@@ -514,14 +509,6 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 		displayOneDriveErrorMessage(e.toString(), getFunctionName!({}));
 		reachedService = false;
 	}
-	
-	// Ensure everything is shutdown cleanly
-	http.shutdown();
-	object.destroy(http);
-	// Perform Garbage Collection
-	GC.collect();
-	// Return free memory to the OS
-	GC.minimize();
 	
 	// Return state
 	return reachedService;
