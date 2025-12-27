@@ -383,6 +383,8 @@ pkolmann
 podman
 pollfd
 pollfds
+postfields
+postfieldsize
 postun
 prefork
 preinit

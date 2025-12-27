@@ -503,6 +503,20 @@ class CurlEngine {
 		http.onSend = data => uploadFile.rawRead(data).length;
 		http.contentLength = offsetSize;
 	}
+	
+	void setZeroContentLength() {
+		// Explicit HTTP semantics
+		http.contentLength = 0;
+		addRequestHeader("Content-Length", to!string(0));
+		
+		// Force libcurl POST-with-empty-body semantics
+		// This prevents libcurl from attempting to read from stdin when performing a POST with no payload.
+		http.handle.set(CurlOption.postfields, "");
+		http.handle.set(CurlOption.postfieldsize, 0L);
+		
+		// Defensive: ensure we are NOT in upload/read-callback mode
+		http.handle.set(CurlOption.upload, 0);
+	}
 
 	CurlResponse execute() {
 		scope(exit) {
