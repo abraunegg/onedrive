@@ -1474,6 +1474,7 @@ class OneDriveApi {
 		bool validateJSONResponse = false;
 		oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.post, url, false, response, requestHeaders);
+			curlEngine.setZeroContentLength();
 			return curlEngine.execute();
 		}, validateJSONResponse, callingFunction, lineno);
 	}
