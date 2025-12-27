@@ -21,7 +21,7 @@ import curlWebsockets;
 // ========== Logging Shim ==========
 private void logSocketIOOutput(string s) {
 	if (debugLogging) {
-		collectException(addLogEntry("SOCKETIO: " ~ s, ["debug"]));
+		addLogEntry("SOCKETIO: " ~ s, ["debug"]);
 	}
 }
 
@@ -50,16 +50,26 @@ public:
 		this.parentTid = parentTid;
 		this.appConfig = appConfig;
 	}
+	
+	~this() {
+		logSocketIOOutput("Signalling to stop a OneDriveSocketIo instance");
+		stop(); // sets pleaseStop + waits for workerExited
 
-	~this(){
-		logSocketIOOutput("Destroying OneDriveSocketIo Instance");
-		collectException(ws.close(1000, "client stop"));
-		logSocketIOOutput("Closed libcurl RFC6455 WebSocket client cleanly");
-		object.destroy(ws); // call destructor
-		ws = null;
-		logSocketIOOutput("Destroyed libcurl RFC6455 WebSocket client cleanly");
+		if (atomicLoad(workerExited)) {
+			if (ws !is null) {
+				logSocketIOOutput("Attempting to destroy libcurl RFC6455 WebSocket client cleanly");
+				// Worker has exited; safe to close/cleanup/destroy
+				collectException(ws.close(1000, "client stop"));
+				object.destroy(ws);
+				ws = null;
+				logSocketIOOutput("Destroyed libcurl RFC6455 WebSocket client cleanly");
+			}
+		} else {
+			// Worker still running; DO NOT touch ws/curl from this thread.
+			logSocketIOOutput("Worker still running; skipping ws destruction to avoid race.");
+		}
 	}
-
+	
 	void start() {
 		if (started) return;
 		// Get current WebSocket Notification URL
@@ -93,7 +103,6 @@ public:
 			waited += stepMs;
 		}
 		
-
 		// Mark not started only after we know we've requested stop
 		started = false;
 
@@ -234,6 +243,7 @@ private:
 					if (self.pleaseStop) {
 						logSocketIOOutput("Stop requested; shutting down run() loop");
 						collectException(self.ws.close(1000, "stop-requested"));
+						collectException(self.ws.cleanupCurlHandle());
 						return;
 					}
 

@@ -27,7 +27,7 @@ import log;
 // ========== Logging Shim ==========
 private void logCurlWebsocketOutput(string s) {
 	if (debugLogging) {
-		collectException(addLogEntry("WEBSOCKET: " ~ s, ["debug"]));
+		addLogEntry("WEBSOCKET: " ~ s, ["debug"]);
 	}
 }
 
@@ -93,11 +93,12 @@ public:
 
 	~this() {
 		if (curl !is null) {
+			logCurlWebsocketOutput("Cleaning up an instance of a CurlWebSocket object accessing libcurl for HTTP operations");
 			curl_easy_cleanup(curl);
 			curl = null;
+			logCurlWebsocketOutput("Cleaned up an instance of a CurlWebSocket object accessing libcurl for HTTP operations");
 		}
 		websocketConnected = false;
-		logCurlWebsocketOutput("Cleaned-up an instance of a CurlWebSocket object accessing libcurl for HTTP operations");
     }
 
 	bool isConnected() {
@@ -238,8 +239,12 @@ public:
 
 	int close(ushort code = 1000, string reason = "") {
 		logCurlWebsocketOutput("Running curlWebsocket close()");
-		if (!websocketConnected) return 0;
-		logCurlWebsocketOutput("Running curlWebsocket close() - websocketConnected = true");
+		if (!websocketConnected) {
+			logCurlWebsocketOutput("Websocket alread closed - websocketConnected = false");
+			return 0;
+		} else {
+			logCurlWebsocketOutput("Running curlWebsocket close() - websocketConnected = true");
+		}
 
 		// Build close payload: 2 bytes status code (network order) + optional reason
 		ubyte[] pay;
@@ -251,10 +256,20 @@ public:
 		auto frame = encodeFrame(0x8, pay); // opcode 0x8 = Close
 		auto rc = sendAll(frame);
 		// Even if sending fails, cleanup below so we don’t leak.
-		collectException(logCurlWebsocketOutput("Sending RFC6455 Close (code=" ~ to!string(code) ~ ")"));
+		logCurlWebsocketOutput("Sending RFC6455 Close (code=" ~ to!string(code) ~ ")");
 		// Flag we are no longer connected with the websocket
 		websocketConnected = false;
 		return rc;
+	}
+	
+	// Cleanup curl handler
+	void cleanupCurlHandle() {
+		if (curl !is null) {
+			logCurlWebsocketOutput("Cleaning up an instance of a CurlWebSocket object accessing libcurl for HTTP operations");
+			curl_easy_cleanup(curl);
+			curl = null;
+			logCurlWebsocketOutput("Cleaned up an instance of a CurlWebSocket object accessing libcurl for HTTP operations");
+		}
 	}
 
 	int sendText(string payload) {
