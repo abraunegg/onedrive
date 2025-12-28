@@ -397,12 +397,15 @@ private:
 			} catch (CurlException e) {
 				// Caught a CurlException
 				addLogEntry("Network error during socketio loop: " ~ e.msg ~ " (will retry)");
+				Thread.sleep(dur!"seconds"(5));
 			} catch (SocketException e) {
 				// Caught a SocketException
 				addLogEntry("Socket error during socketio loop: " ~ e.msg ~ " (will retry)");
+				Thread.sleep(dur!"seconds"(5));
 			} catch (Exception e) {
 				// Caught some other error
 				addLogEntry("Unexpected error during socketio loop: " ~ e.toString());
+				Thread.sleep(dur!"seconds"(5));
 			}
 		}
 	}

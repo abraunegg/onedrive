@@ -1331,12 +1331,15 @@ int main(string[] cliArgs) {
 					} catch (CurlException e) {
 						// Caught a CurlException
 						addLogEntry("Network error during main monitor loop: " ~ e.msg ~ " (will retry)");
+						Thread.sleep(dur!"seconds"(5));
 					} catch (SocketException e) {
 						// Caught a SocketException
 						addLogEntry("Socket error during main monitor loop: " ~ e.msg ~ " (will retry)");
+						Thread.sleep(dur!"seconds"(5));
 					} catch (Exception e) {
 						// Caught some other error
 						addLogEntry("Unexpected error during main monitor loop: " ~ e.toString());
+						Thread.sleep(dur!"seconds"(5));
 					}
 					
 					// Output end of loop processing times
