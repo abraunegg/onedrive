@@ -3,7 +3,7 @@ module util;
 
 // What does this module require to function?
 import core.memory;
-import core.stdc.errno : ENOENT, EINTR, EBUSY;
+import core.stdc.errno : ENOENT, EINTR, EBUSY, EXDEV;
 import core.stdc.stdlib;
 import core.stdc.string;
 import core.sys.posix.pwd;
@@ -198,14 +198,47 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 
 // Rename the given item, and only performs the function if not in a --dry-run scenario
 void safeRename(const(char)[] oldPath, const(char)[] newPath, bool dryRun) {
-	// Perform the rename
-	if (!dryRun) {
-		if (debugLogging) {addLogEntry("Calling rename(oldPath, newPath)", ["debug"]);}
-		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
-		rename(oldPath, newPath);
-	} else {
-		if (debugLogging) {addLogEntry("DRY-RUN: Skipping local file rename", ["debug"]);}
+	string thisFunctionName = format("%s.%s", strip(__MODULE__), strip(getFunctionName!({})));
+
+	if (dryRun) {
+		if (debugLogging) { addLogEntry("DRY-RUN: Skipping local file rename", ["debug"]); }
+		return;
 	}
+
+	int maxAttempts = 5;
+
+	foreach (attempt; 0 .. maxAttempts) {
+		try {
+			if (debugLogging) { addLogEntry("Calling rename(oldPath, newPath)", ["debug"]); }
+			rename(oldPath, newPath);
+			return;
+		} catch (FileException e) {
+			// Retry on EINTR
+			if (e.errno == EINTR) {        // Interrupted by signal → retry
+				// 10ms backoff to avoid spinning if signals are frequent
+				Thread.sleep(dur!"msecs"(10 * (attempt + 1)));
+				continue;
+			}
+			// Retry on EBUSY
+			if (e.errno == EBUSY) {        // Filesystem was busy → retry
+				// 25ms backoff to avoid spinning if signals are frequent
+				Thread.sleep(dur!"msecs"(25 * (attempt + 1)));
+				continue;
+			}
+			// Cross-device rename: not retryable
+			if (e.errno == EXDEV) {
+				displayFileSystemErrorMessage("Rename failed (cross-filesystem): " ~ e.msg, thisFunctionName, "oldPath=" ~ to!string(oldPath) ~ " newPath=" ~ to!string(newPath));
+				return;
+			}
+			// Everything else: log once and return
+			displayFileSystemErrorMessage(e.msg, thisFunctionName, "oldPath=" ~ to!string(oldPath) ~ " newPath=" ~ to!string(newPath));
+			return;
+		}
+	}
+
+	// If we get here, we exhausted retries
+	// Log the last failure
+	displayFileSystemErrorMessage("Failed to rename after retries: ", thisFunctionName, "oldPath=" ~ to!string(oldPath) ~ " newPath=" ~ to!string(newPath));
 }
 
 // Deletes the specified file without throwing an exception if there is an issue
@@ -221,11 +254,13 @@ void safeRemove(const(char)[] path) {
 			return;
 		} catch (FileException e) {
 			if (e.errno == ENOENT) return; // already gone → fine
+			// Retry on EINTR
 			if (e.errno == EINTR) {        // Interrupted by signal → retry
 				// 10ms backoff to avoid spinning if signals are frequent
 				Thread.sleep(dur!"msecs"(10 * (attempt + 1)));
 				continue;
 			}
+			// Retry on EBUSY
 			if (e.errno == EBUSY) {        // Filesystem was busy → retry
 				// 25ms backoff to avoid spinning if signals are frequent
 				Thread.sleep(dur!"msecs"(25 * (attempt + 1)));
@@ -236,7 +271,7 @@ void safeRemove(const(char)[] path) {
 			return;
 		}
 	}
-	// If we get here, we exhausted retries on EINTR
+	// If we get here, we exhausted retries
 	// Log the last failure
 	displayFileSystemErrorMessage("Failed to remove file after retries: " ~ to!string(path), thisFunctionName, to!string(path));
 }
