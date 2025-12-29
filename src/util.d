@@ -3,7 +3,7 @@ module util;
 
 // What does this module require to function?
 import core.memory;
-import core.stdc.errno : ENOENT;
+import core.stdc.errno : ENOENT, EINTR, EBUSY;
 import core.stdc.stdlib;
 import core.stdc.string;
 import core.sys.posix.pwd;
@@ -208,23 +208,37 @@ void safeRename(const(char)[] oldPath, const(char)[] newPath, bool dryRun) {
 	}
 }
 
-// Deletes the specified file without throwing an exception if it does not exists
+// Deletes the specified file without throwing an exception if there is an issue
 void safeRemove(const(char)[] path) {
-	// Set this function name
-	string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
-	
-	// Attempt the local deletion
-	try {
-		// Attempt once; no pre-check to avoid TOCTTOU
-		remove(path);				// attempt once, no pre-check
-		return;						// removed
-	} catch (FileException e) {
-		if (e.errno == ENOENT) {	// already gone → fine
-			return;					// nothing to do
+	string thisFunctionName = format("%s.%s", strip(__MODULE__), strip(getFunctionName!({})));
+
+	int maxAttempts = 5;
+
+	foreach (attempt; 0 .. maxAttempts) {
+		try {
+			// Attempt to remove; no pre-check to avoid TOCTTOU
+			remove(path);
+			return;
+		} catch (FileException e) {
+			if (e.errno == ENOENT) return; // already gone → fine
+			if (e.errno == EINTR) {        // Interrupted by signal → retry
+				// 10ms backoff to avoid spinning if signals are frequent
+				Thread.sleep(dur!"msecs"(10 * (attempt + 1)));
+				continue;
+			}
+			if (e.errno == EBUSY) {        // Filesystem was busy → retry
+				// 25ms backoff to avoid spinning if signals are frequent
+				Thread.sleep(dur!"msecs"(25 * (attempt + 1)));
+				continue;
+			}
+			// Anything else is noteworthy (EISDIR, EACCES, etc.)
+			displayFileSystemErrorMessage(e.msg, thisFunctionName, to!string(path));
+			return;
 		}
-		// Anything else is noteworthy (EISDIR, EACCES, etc.)
-		displayFileSystemErrorMessage(e.msg, thisFunctionName, to!string(path));
 	}
+	// If we get here, we exhausted retries on EINTR
+	// Log the last failure
+	displayFileSystemErrorMessage("Failed to remove file after retries: " ~ to!string(path), thisFunctionName, to!string(path));
 }
 
 // Returns the quickXorHash base64 string of a file, or an empty string on failure
