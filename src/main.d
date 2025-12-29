@@ -1472,11 +1472,18 @@ int main(string[] cliArgs) {
 										// Next push or the regular monitor cadence will pick up genuine remote changes.
 										break;
 									}
-
+									
+									// Get the signal timestamp - this is as close as possible to when this was received
+									SysTime signalTimeStamp = Clock.currTime();
+									signalTimeStamp.fracSecs = Duration.zero;
+									
+									// Log what signal we received
 									if (webhookEnabled) {
-										addLogEntry("Received " ~ to!string(signalCount) ~ " signal(s) from Webhook handler");
+										string webhookLogEntry = format("Received %s signal(s) from Webhook handler (%s)", to!string(signalCount), to!string(signalTimeStamp));
+										addLogEntry(webhookLogEntry);
 									} else {
-										addLogEntry("Received " ~ to!string(signalCount) ~ " signal(s) from WebSocket handler");
+										string websocketLogEntry = format("Received %s signal(s) from WebSocket handler (%s)", to!string(signalCount), to!string(signalTimeStamp));
+										addLogEntry(websocketLogEntry);
 									}
 									
 									// Perform online callback action
