@@ -423,6 +423,7 @@ relro
 repology
 restic
 restorecon
+retryable
 retu
 revents
 rko
