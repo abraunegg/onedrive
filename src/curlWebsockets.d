@@ -92,11 +92,10 @@ public:
 	}
 
 	~this() {
+		// No logging output in ~this()
 		if (curl !is null) {
-			logCurlWebsocketOutput("Cleaning up an instance of a CurlWebSocket object accessing libcurl for HTTP operations");
 			curl_easy_cleanup(curl);
 			curl = null;
-			logCurlWebsocketOutput("Cleaned up an instance of a CurlWebSocket object accessing libcurl for HTTP operations");
 		}
 		websocketConnected = false;
     }
@@ -264,11 +263,10 @@ public:
 	
 	// Cleanup curl handler
 	void cleanupCurlHandle() {
+		// No logging output for this function
 		if (curl !is null) {
-			logCurlWebsocketOutput("Cleaning up an instance of a CurlWebSocket object accessing libcurl for HTTP operations");
 			curl_easy_cleanup(curl);
 			curl = null;
-			logCurlWebsocketOutput("Cleaned up an instance of a CurlWebSocket object accessing libcurl for HTTP operations");
 		}
 	}
 
