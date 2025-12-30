@@ -63,6 +63,7 @@ public:
 				// Worker has exited; safe to close/cleanup/destroy
 				collectException(ws.close(1000, "client stop"));
 				collectException(ws.cleanupCurlHandle());
+				logSocketIOOutput("Cleaned up an instance of a CurlWebSocket object via cleanupCurlHandle()");
 				object.destroy(ws);
 				ws = null;
 				logSocketIOOutput("Destroyed libcurl RFC6455 WebSocket client cleanly");
