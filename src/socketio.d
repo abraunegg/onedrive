@@ -248,6 +248,7 @@ private:
 							logSocketIOOutput("Stop requested; shutting down run() loop");
 							collectException(self.ws.close(1000, "stop-requested"));
 							collectException(self.ws.cleanupCurlHandle());
+							logSocketIOOutput("Cleaned up an instance of a CurlWebSocket object via cleanupCurlHandle()");
 							return;
 						}
 
@@ -294,6 +295,7 @@ private:
 							logSocketIOOutput("Detected new notificationUrl; reconnecting");
 							collectException(self.ws.close(1000, "reconnect"));
 							collectException(self.ws.cleanupCurlHandle());
+							logSocketIOOutput("Cleaned up an instance of a CurlWebSocket object via cleanupCurlHandle()");
 
 							// Establish a fresh connection and handshakes
 							self.currentNotifUrl = self.appConfig.websocketNotificationUrl;
