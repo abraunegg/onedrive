@@ -293,11 +293,11 @@ private:
 
 							logSocketIOOutput("Detected new notificationUrl; reconnecting");
 							collectException(self.ws.close(1000, "reconnect"));
-
-							self.currentNotifUrl = self.appConfig.websocketNotificationUrl;
-							string newWsUrl = toSocketIoWsUrl(self.currentNotifUrl);
+							collectException(self.ws.cleanupCurlHandle());
 
 							// Establish a fresh connection and handshakes
+							self.currentNotifUrl = self.appConfig.websocketNotificationUrl;
+							string newWsUrl = toSocketIoWsUrl(self.currentNotifUrl);
 							self.ws = new CurlWebSocket();
 							self.ws.setUserAgent(self.appConfig.getValueString("user_agent"));
 							self.ws.setTimeouts(10000, 15000);
