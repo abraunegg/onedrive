@@ -268,6 +268,7 @@ public:
 			curl_easy_cleanup(curl);
 			curl = null;
 		}
+		websocketConnected = false;
 	}
 
 	int sendText(string payload) {
