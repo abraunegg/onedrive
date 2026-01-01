@@ -1289,57 +1289,42 @@ int main(string[] cliArgs) {
 					// How long has the application been running for?
 					auto elapsedTime = Clock.currTime() - applicationStartTime;
 					if (debugLogging) {addLogEntry("Application run-time thus far: " ~ to!string(elapsedTime), ["debug"]);}
-					
-					// Catch network exceptions at the monitor-loop level and treat them as recoverable
-					try {
-						// Need to re-validate that the client is still online for this loop
-						if (testInternetReachability(appConfig)) {
-							// Starting a sync - we are online
-							addLogEntry("Starting a sync with Microsoft OneDrive");
-							
-							// Attempt to reset syncFailures from any prior loop
-							syncEngineInstance.resetSyncFailures();
-							
-							// Update cached quota details from online as this may have changed online in the background outside of this application
-							syncEngineInstance.freshenCachedDriveQuotaDetails();
-							
-							// Did the user specify --upload-only?
-							if (appConfig.getValueBool("upload_only")) {
-								// Perform the --upload-only sync process
-								performUploadOnlySyncProcess(localPath, filesystemMonitor);
-							} else {
-								// Perform the standard sync process
-								performStandardSyncProcess(localPath, filesystemMonitor);
-							}
-							
-							// Handle any new inotify events
-							processInotifyEvents(true);
-							
-							// Detail the outcome of the sync process
-							displaySyncOutcome();
-							
-							// Cleanup sync process arrays
-							syncEngineInstance.cleanupArrays();
-							
-							// Write WAL and SHM data to file for this loop and release memory used by in-memory processing
-							if (debugLogging) {addLogEntry("Merge contents of WAL and SHM files into main database file", ["debug"]);}
-							itemDB.performCheckpoint("PASSIVE");
+										
+					// Need to re-validate that the client is still online for this loop
+					if (testInternetReachability(appConfig)) {
+						// Starting a sync - we are online
+						addLogEntry("Starting a sync with Microsoft OneDrive");
+						
+						// Attempt to reset syncFailures from any prior loop
+						syncEngineInstance.resetSyncFailures();
+						
+						// Update cached quota details from online as this may have changed online in the background outside of this application
+						syncEngineInstance.freshenCachedDriveQuotaDetails();
+						
+						// Did the user specify --upload-only?
+						if (appConfig.getValueBool("upload_only")) {
+							// Perform the --upload-only sync process
+							performUploadOnlySyncProcess(localPath, filesystemMonitor);
 						} else {
-							// Not online
-							addLogEntry("Microsoft OneDrive service is not reachable at this time. Will re-try on next sync attempt.");
+							// Perform the standard sync process
+							performStandardSyncProcess(localPath, filesystemMonitor);
 						}
-					} catch (CurlException e) {
-						// Caught a CurlException
-						addLogEntry("Network error during main monitor loop: " ~ e.msg ~ " (will retry)");
-						Thread.sleep(dur!"seconds"(5));
-					} catch (SocketException e) {
-						// Caught a SocketException
-						addLogEntry("Socket error during main monitor loop: " ~ e.msg ~ " (will retry)");
-						Thread.sleep(dur!"seconds"(5));
-					} catch (Exception e) {
-						// Caught some other error
-						addLogEntry("Unexpected error during main monitor loop: " ~ e.toString());
-						Thread.sleep(dur!"seconds"(5));
+						
+						// Handle any new inotify events
+						processInotifyEvents(true);
+						
+						// Detail the outcome of the sync process
+						displaySyncOutcome();
+						
+						// Cleanup sync process arrays
+						syncEngineInstance.cleanupArrays();
+						
+						// Write WAL and SHM data to file for this loop and release memory used by in-memory processing
+						if (debugLogging) {addLogEntry("Merge contents of WAL and SHM files into main database file", ["debug"]);}
+						itemDB.performCheckpoint("PASSIVE");
+					} else {
+						// Not online
+						addLogEntry("Microsoft OneDrive service is not reachable at this time. Will re-try on next sync attempt.");
 					}
 					
 					// Output end of loop processing times
@@ -1357,10 +1342,11 @@ int main(string[] cliArgs) {
 					
 					// Display memory details before garbage collection
 					if (displayMemoryUsage) {
-						addLogEntry("Monitor Loop Count: " ~ to!string(monitorLoopFullCount));
+						addLogEntry("Monitor Loop Count:   " ~ to!string(monitorLoopFullCount));
 						// Get the current time in the local timezone
 						auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
-						addLogEntry("Timestamp:          " ~ to!string(timeStamp));
+						addLogEntry("Timestamp:            " ~ to!string(timeStamp));
+						addLogEntry("Application Run Time: " ~ to!string(elapsedTime);
 						// Display memory stats before GC cleanup
 						displayMemoryUsagePreGC();
 					}
