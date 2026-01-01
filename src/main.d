@@ -1289,7 +1289,7 @@ int main(string[] cliArgs) {
 					// How long has the application been running for?
 					auto elapsedTime = Clock.currTime() - applicationStartTime;
 					if (debugLogging) {addLogEntry("Application run-time thus far: " ~ to!string(elapsedTime), ["debug"]);}
-										
+					
 					// Need to re-validate that the client is still online for this loop
 					if (testInternetReachability(appConfig)) {
 						// Starting a sync - we are online
@@ -1346,7 +1346,7 @@ int main(string[] cliArgs) {
 						// Get the current time in the local timezone
 						auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
 						addLogEntry("Timestamp:            " ~ to!string(timeStamp));
-						addLogEntry("Application Run Time: " ~ to!string(elapsedTime);
+						addLogEntry("Application Run Time: " ~ to!string(elapsedTime));
 						// Display memory stats before GC cleanup
 						displayMemoryUsagePreGC();
 					}
