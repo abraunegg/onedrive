@@ -3470,22 +3470,32 @@ class SyncEngine {
 					}
 				}
 				
-				// Try and rename path, catch any exception generated
+				// We should no longer need a try block for safeRename() as retry / error handling occurs within safeRename() and setLocalPathTimestamp() .. but keeping this for the moment
 				try {
-					// If we are in a --dry-run situation? , the actual rename did not occur - but we need to track like it did
+					// If we are in a --dry-run situation?
 					if(!dryRun) {
-						// Rename this item, passing in if we are performing a --dry-run or not
-						safeRename(existingItemPath, changedItemPath, dryRun);
-					
-						// Flag that the item was moved | renamed
-						itemWasMoved = true;
-					
-						// If the item is a file, make sure that the local timestamp now is the same as the timestamp online
-						// Otherwise when we do the DB check, the move on the file system, the file technically has a newer timestamp
-						// which is 'correct' .. but we need to report locally the online timestamp here as the move was made online
-						if (changedOneDriveItem.type == ItemType.file) {
-							// Set the timestamp, logging and error handling done within function
-							setLocalPathTimestamp(dryRun, changedItemPath, changedOneDriveItem.mtime);
+						// We are not in a --dry-run situation
+						
+						// Attempt rename (returns true only if rename succeeded)
+						bool renamedOk = safeRename(existingItemPath, changedItemPath, dryRun);
+						
+						// Was the rename successful?
+						if (renamedOk) {
+							// Flag that the item was moved | renamed
+							itemWasMoved = true;
+							
+							// If the item is a file, make sure that the local timestamp now is the same as the timestamp online
+							// Otherwise when we do the DB check, the move on the file system, the file technically has a newer timestamp
+							// which is 'correct' .. but we need to report locally the online timestamp here as the move was made online
+							if (changedOneDriveItem.type == ItemType.file) {
+								// Set the timestamp, logging and error handling done within function
+								setLocalPathTimestamp(dryRun, changedItemPath, changedOneDriveItem.mtime);
+							}
+						} else {
+							// Rename failed - do NOT track as moved, do NOT touch timestamps on the target path
+							addLogEntry("ERROR: Local rename failed; item will not be treated as moved: " ~ to!string(existingItemPath) ~ " -> " ~ to!string(changedItemPath), ["error", "notify"]);
+							// We need to return here and stop processing this JSON item ... 
+							return;
 						}
 					} else {
 						// --dry-run situation - the actual rename did not occur - but we need to track like it did
@@ -3496,7 +3506,7 @@ class SyncEngine {
 						pathsRenamed ~= [ensureStartsWithDotSlash(buildNormalizedPath(existingItemPath))];
 					}
 				} catch (FileException e) {
-					// display the error message
+					// Display the error message from the filesystem
 					displayFileSystemErrorMessage(e.msg, thisFunctionName, existingItemPath);
 				}
 			}
