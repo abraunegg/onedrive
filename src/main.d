@@ -2,24 +2,25 @@
 module main;
 
 // What does this module require to function?
+import core.memory;
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.sys.posix.signal;
-import core.memory;
-import core.time;
 import core.thread;
-import std.stdio;
-import std.getopt;
-import std.string;
-import std.file;
-import std.process;
+import core.time;
 import std.algorithm;
-import std.path;
 import std.concurrency;
-import std.parallelism;
 import std.conv;
-import std.traits;
-import std.net.curl: CurlException;
 import std.datetime;
+import std.file;
+import std.getopt;
+import std.net.curl: CurlException;
+import std.parallelism;
+import std.path;
+import std.process;
+import std.socket: SocketException;
+import std.stdio;
+import std.string;
+import std.traits;
 
 // What other modules that we have created do we need to import?
 import config;
@@ -1340,12 +1341,19 @@ int main(string[] cliArgs) {
 					if (debugLogging) {addLogEntry("CurlEngine Pool Size POST Cleanup: " ~ to!string(curlEnginePoolLength()) , ["debug"]);}
 					
 					// Display memory details before garbage collection
-					if (displayMemoryUsage) displayMemoryUsagePreGC();
+					if (displayMemoryUsage) {
+						addLogEntry("Monitor Loop Count:   " ~ to!string(monitorLoopFullCount));
+						// Get the current time in the local timezone
+						auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
+						addLogEntry("Timestamp:            " ~ to!string(timeStamp));
+						addLogEntry("Application Run Time: " ~ to!string(elapsedTime));
+						// Display memory stats before GC cleanup
+						displayMemoryUsagePreGC();
+					}
 					// Perform Garbage Collection
 					GC.collect();
 					// Return free memory to the OS
 					GC.minimize();
-					
 					// Display memory details after garbage collection
 					if (displayMemoryUsage) displayMemoryUsagePostGC();
 					
@@ -1450,11 +1458,18 @@ int main(string[] cliArgs) {
 										// Next push or the regular monitor cadence will pick up genuine remote changes.
 										break;
 									}
-
+									
+									// Get the signal timestamp - this is as close as possible to when this was received
+									SysTime signalTimeStamp = Clock.currTime();
+									signalTimeStamp.fracSecs = Duration.zero;
+									
+									// Log what signal we received
 									if (webhookEnabled) {
-										addLogEntry("Received " ~ to!string(signalCount) ~ " signal(s) from Webhook");
+										string webhookLogEntry = format("Received %s signal(s) from Webhook handler (%s)", to!string(signalCount), to!string(signalTimeStamp));
+										addLogEntry(webhookLogEntry);
 									} else {
-										addLogEntry("Received " ~ to!string(signalCount) ~ " signal(s) from WebSocket");
+										string websocketLogEntry = format("Received %s signal(s) from WebSocket handler (%s)", to!string(signalCount), to!string(signalTimeStamp));
+										addLogEntry(websocketLogEntry);
 									}
 									
 									// Perform online callback action

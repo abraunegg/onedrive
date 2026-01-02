@@ -8,7 +8,7 @@ module curlWebsockets;
 // What does this module require to function?
 import etc.c.curl : CURL, CURLcode, curl_easy_cleanup, curl_easy_getinfo,
 	curl_easy_init, curl_easy_perform, curl_easy_recv, curl_easy_reset,
-	curl_easy_send, curl_easy_setopt, curl_global_cleanup, curl_global_init;
+	curl_easy_send, curl_easy_setopt;
 
 import core.stdc.string : memcpy, memmove;
 import core.time        : MonoTime, dur;
@@ -27,7 +27,7 @@ import log;
 // ========== Logging Shim ==========
 private void logCurlWebsocketOutput(string s) {
 	if (debugLogging) {
-		collectException(addLogEntry("WEBSOCKET: " ~ s, ["debug"]));
+		addLogEntry("WEBSOCKET: " ~ s, ["debug"]);
 	}
 }
 
@@ -44,7 +44,6 @@ final class CurlWebSocket {
 
 private:
 	// libcurl constants defined locally
-	enum long CURL_GLOBAL_DEFAULT       = 3;
 	enum int  CURLOPT_URL               = 10002;
 	enum int  CURLOPT_FOLLOWLOCATION    = 52;
 	enum int  CURLOPT_NOSIGNAL          = 99;
@@ -87,22 +86,18 @@ private:
 public:
 	this() {
 		websocketConnected = false;
-		curl_global_init(CURL_GLOBAL_DEFAULT);
 		curl = curl_easy_init();
 		rng = Random(unpredictableSeed);
 		logCurlWebsocketOutput("Created a new instance of a CurlWebSocket object accessing libcurl for HTTP operations");
 	}
 
 	~this() {
+		// No logging output in ~this()
 		if (curl !is null) {
 			curl_easy_cleanup(curl);
+			curl = null;
 		}
-		curl_global_cleanup();
 		websocketConnected = false;
-		object.destroy(curl);
-		logCurlWebsocketOutput("Destroyed 'curl' object");
-		curl = null;
-		logCurlWebsocketOutput("Destroyed instance of a CurlWebSocket object accessing libcurl for HTTP operations");
     }
 
 	bool isConnected() {
@@ -118,8 +113,8 @@ public:
 		if (!ua.empty) userAgent = ua;
 	}
 
-	void setHTTPSDebug(bool httpsDebug) {
-		httpsDebug = httpsDebug;
+	void setHTTPSDebug(bool httpsDebugInput) {
+		httpsDebug = httpsDebugInput;
 	}
 
 	int connect(string wsUrl) {
@@ -140,9 +135,10 @@ public:
 		pathQuery = p.pathQuery;
 
 		string connectUrl = (scheme == "wss" ? "https://" : "http://") ~ hostPort ~ pathQuery;
-
-		curl_easy_reset(curl);
 		
+		// Reset 'curl' using curl_easy_reset
+		curl_easy_reset(curl);
+		// Configure required curl options
 		curl_easy_setopt(curl, cast(int)CURLOPT_NOSIGNAL,           1L);
 		curl_easy_setopt(curl, cast(int)CURLOPT_FOLLOWLOCATION,     1L);
 		curl_easy_setopt(curl, cast(int)CURLOPT_USERAGENT,          userAgent.toStringz);   // NUL-terminated
@@ -242,8 +238,12 @@ public:
 
 	int close(ushort code = 1000, string reason = "") {
 		logCurlWebsocketOutput("Running curlWebsocket close()");
-		if (!websocketConnected) return 0;
-		logCurlWebsocketOutput("Running curlWebsocket close() - websocketConnected = true");
+		if (!websocketConnected) {
+			logCurlWebsocketOutput("Websocket already closed - websocketConnected = false");
+			return 0;
+		} else {
+			logCurlWebsocketOutput("Running curlWebsocket close() - websocketConnected = true");
+		}
 
 		// Build close payload: 2 bytes status code (network order) + optional reason
 		ubyte[] pay;
@@ -255,14 +255,20 @@ public:
 		auto frame = encodeFrame(0x8, pay); // opcode 0x8 = Close
 		auto rc = sendAll(frame);
 		// Even if sending fails, cleanup below so we don’t leak.
-		collectException(logCurlWebsocketOutput("Sending RFC6455 Close (code=" ~ to!string(code) ~ ")"));
-		// Clean up curl handle
+		logCurlWebsocketOutput("Sending RFC6455 Close (code=" ~ to!string(code) ~ ")");
+		// Flag we are no longer connected with the websocket
+		websocketConnected = false;
+		return rc;
+	}
+	
+	// Cleanup curl handler
+	void cleanupCurlHandle() {
+		// No logging output for this function
 		if (curl !is null) {
 			curl_easy_cleanup(curl);
 			curl = null;
 		}
 		websocketConnected = false;
-		return rc;
 	}
 
 	int sendText(string payload) {

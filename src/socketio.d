@@ -2,15 +2,17 @@
 module socketio;
 
 // What does this module require to function?
-import std.exception   : collectException;
-import core.thread     : Thread;
-import std.concurrency : spawn, Tid, thisTid, send, receiveTimeout;
-import core.time       : Duration, dur;
-import std.datetime    : SysTime, Clock, UTC;
-import std.conv        : to;
-import std.string      : indexOf;
-import std.json        : JSONValue, JSONType, parseJSON;
 import core.atomic     : atomicLoad, atomicStore;
+import core.thread     : Thread;
+import core.time       : Duration, dur;
+import std.concurrency : spawn, Tid, thisTid, send, receiveTimeout;
+import std.conv        : to;
+import std.datetime    : SysTime, Clock, UTC;
+import std.exception   : collectException;
+import std.json        : JSONValue, JSONType, parseJSON;
+import std.net.curl    : CurlException;
+import std.socket      : SocketException;
+import std.string      : indexOf;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -21,7 +23,7 @@ import curlWebsockets;
 // ========== Logging Shim ==========
 private void logSocketIOOutput(string s) {
 	if (debugLogging) {
-		collectException(addLogEntry("SOCKETIO: " ~ s, ["debug"]));
+		addLogEntry("SOCKETIO: " ~ s, ["debug"]);
 	}
 }
 
@@ -50,16 +52,28 @@ public:
 		this.parentTid = parentTid;
 		this.appConfig = appConfig;
 	}
+	
+	~this() {
+		logSocketIOOutput("Signalling to stop a OneDriveSocketIo instance");
+		stop(); // sets pleaseStop + waits for workerExited
 
-	~this(){
-		logSocketIOOutput("Destroying OneDriveSocketIo Instance");
-		collectException(ws.close(1000, "client stop"));
-		logSocketIOOutput("Closed libcurl RFC6455 WebSocket client cleanly");
-		object.destroy(ws); // call destructor
-		ws = null;
-		logSocketIOOutput("Destroyed libcurl RFC6455 WebSocket client cleanly");
+		if (atomicLoad(workerExited)) {
+			if (ws !is null) {
+				logSocketIOOutput("Attempting to destroy libcurl RFC6455 WebSocket client cleanly");
+				// Worker has exited; safe to close/cleanup/destroy
+				collectException(ws.close(1000, "client stop"));
+				collectException(ws.cleanupCurlHandle());
+				logSocketIOOutput("Cleaned up an instance of a CurlWebSocket object via cleanupCurlHandle()");
+				object.destroy(ws);
+				ws = null;
+				logSocketIOOutput("Destroyed libcurl RFC6455 WebSocket client cleanly");
+			}
+		} else {
+			// Worker still running; DO NOT touch ws/curl from this thread.
+			logSocketIOOutput("Worker still running; skipping ws destruction to avoid race.");
+		}
 	}
-
+	
 	void start() {
 		if (started) return;
 		// Get current WebSocket Notification URL
@@ -93,7 +107,6 @@ public:
 			waited += stepMs;
 		}
 		
-
 		// Mark not started only after we know we've requested stop
 		started = false;
 
@@ -142,243 +155,261 @@ private:
 		}
 
 		while (!self.pleaseStop) {
-			// If we're offline (or OneDrive service not reachable), don't bother trying yet
-			logSocketIOOutput("Testing network to ensure network connectivity to Microsoft OneDrive Service");
-			online = testInternetReachability(self.appConfig, false); // Will display failures, but nothing if successful .. a quiet check of sorts.
-			if (!online) {
-				logSocketIOOutput("Network or OneDrive service not reachable; delaying reconnect");
-				logSocketIOOutput("Backoff " ~ to!string(backoffSeconds) ~ "s before retry");
-				Thread.sleep(dur!"seconds"(backoffSeconds));
-				if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
-				continue;
-			} else {
-				// We are 'online'
-				// Build Socket.IO WS URL from notificationUrl
-				string notif = self.appConfig.websocketNotificationUrl;
-				if (notif.length == 0) {
-					logSocketIOOutput("No notificationUrl available; will retry");
+			// Catch network exceptions at the socketio-loop level and treat them as recoverable
+			try {
+				// If we're offline (or OneDrive service not reachable), don't bother trying yet
+				logSocketIOOutput("Testing network to ensure network connectivity to Microsoft OneDrive Service");
+				online = testInternetReachability(self.appConfig, false); // Will display failures, but nothing if successful .. a quiet check of sorts.
+				if (!online) {
+					logSocketIOOutput("Network or OneDrive service not reachable; delaying reconnect");
 					logSocketIOOutput("Backoff " ~ to!string(backoffSeconds) ~ "s before retry");
 					Thread.sleep(dur!"seconds"(backoffSeconds));
 					if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 					continue;
-				}
-
-				self.currentNotifUrl = notif;
-				string wsUrl = toSocketIoWsUrl(notif);
-
-				// Fresh WS instance per attempt
-				self.ws = new CurlWebSocket();
-
-				// Use application configuration values
-				self.ws.setUserAgent(self.appConfig.getValueString("user_agent"));
-				self.ws.setHTTPSDebug(self.appConfig.getValueBool("debug_https"));
-				self.ws.setTimeouts(10000, 15000);
-
-				// Connect to Microsoft Graph API using WebSockets and Socket.IO v4
-				logSocketIOOutput("Connecting to " ~ wsUrl);
-				auto rc = self.ws.connect(wsUrl);
-				if (rc != 0) {
-					logSocketIOOutput("self.ws.connect failed; will retry");
-					collectException(self.ws.close(1002, "connect-failed"));
-					Thread.sleep(dur!"seconds"(backoffSeconds));
-					if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
-					continue;
-				}
-
-				// Socket.IO handshake: wait for '0{json}'
-				if (!awaitEngineOpen(self.ws, self)) {
-					logSocketIOOutput("Socket.IO open handshake failed; will retry");
-					collectException(self.ws.close(1002, "handshake-failed"));
-					Thread.sleep(dur!"seconds"(backoffSeconds));
-					if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
-					continue;
-				}
-
-				// Open default namespace: send "40"
-				logSocketIOOutput("Sending Socket.IO connect (40) to default namespace");
-				if (self.ws.sendText("40") != 0) {
-					logSocketIOOutput("Failed to send 40 (open namespace); will retry");
-					collectException(self.ws.close(1002, "ns40-failed"));
-					Thread.sleep(dur!"seconds"(backoffSeconds));
-					if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
-					continue;
 				} else {
-					logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/'");
-				}
-
-				// Open 'notifications' namespace: send "40/notifications"
-				logSocketIOOutput("Sending Socket.IO connect (40) to '/notifications' namespace");
-				if (self.ws.sendText("40/notifications") != 0) {
-					logSocketIOOutput("Failed to send 40 for '/notifications' namespace; will retry");
-					collectException(self.ws.close(1002, "ns40-failed"));
-					Thread.sleep(dur!"seconds"(backoffSeconds));
-					if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
-					continue;
-				} else {
-					logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/notifications'");
-				}
-
-				// Connected successfully → reset backoff
-				backoffSeconds = 1;
-				// Reset per-connection flags so renew logic and ns-open tracking work after reconnection
-				self.expiryWarned   = false;
-				self.renewRequested = false;
-				self.namespaceOpened = false;
-
-				// Track last server ping received to detect a dead connection
-				SysTime lastPingAt = Clock.currTime(UTC());
-
-				// Listen for Socket.IO Events
-				for (;;) {
-					// Stop request
-					if (self.pleaseStop) {
-						logSocketIOOutput("Stop requested; shutting down run() loop");
-						collectException(self.ws.close(1000, "stop-requested"));
-						return;
-					}
-
-					// Subscription nearing expiry? (informational; renewal happens elsewhere)
-					if (!self.expiryWarned && self.appConfig.websocketUrlExpiry.length > 0) {
-						SysTime expiry;
-						auto e = collectException(expiry = SysTime.fromISOExtString(self.appConfig.websocketUrlExpiry));
-						if (e is null) {
-							auto remain = expiry - Clock.currTime(UTC());
-							if (remain <= dur!"minutes"(5)) {
-								self.expiryWarned = true; // emit only once
-								logSocketIOOutput("subscription nearing expiry; renewal required soon");
-							}
-						}
-					}
-
-					// Renewal window check (emit once; 2 minutes before)
-					if (!self.renewRequested && self.appConfig.websocketUrlExpiry.length > 0) {
-						SysTime expiry;
-						auto e = collectException(expiry = SysTime.fromISOExtString(self.appConfig.websocketUrlExpiry));
-						if (e is null) {
-							auto remain = expiry - Clock.currTime(UTC());
-							if (remain <= dur!"minutes"(2)) {
-								self.renewRequested = true;
-								logSocketIOOutput("Subscription nearing expiry; requesting renewal from main() monitor loop");
-								send(self.parentTid, "SOCKETIO_RENEWAL_REQUEST");
-								send(self.parentTid, "SOCKETIO_RENEWAL_CONTEXT:" ~ "id=" ~ self.appConfig.websocketEndpointResponse ~ " url=" ~ self.appConfig.websocketNotificationUrl);
-							}
-						}
-					}
-
-					// If we haven't seen a server ping within pingInterval + pingTimeout → treat as dead link
-					auto now = Clock.currTime(UTC());
-					auto maxSilence = dur!"msecs"(self.pingIntervalMs + self.pingTimeoutMs);
-					if (now - lastPingAt > maxSilence) {
-						logSocketIOOutput("No server ping within expected window; restarting WebSocket");
-						break; // fall out to backoff/retry
-					}
-
-					// Reconnect to a new endpoint if main updated websocketNotificationUrl
-					if (self.appConfig.websocketNotificationUrl.length > 0 &&
-						self.appConfig.websocketNotificationUrl != self.currentNotifUrl) {
-
-						logSocketIOOutput("Detected new notificationUrl; reconnecting");
-						collectException(self.ws.close(1000, "reconnect"));
-
-						self.currentNotifUrl = self.appConfig.websocketNotificationUrl;
-						string newWsUrl = toSocketIoWsUrl(self.currentNotifUrl);
-
-						// Establish a fresh connection and handshakes
-						self.ws = new CurlWebSocket();
-						self.ws.setUserAgent(self.appConfig.getValueString("user_agent"));
-						self.ws.setTimeouts(10000, 15000);
-						self.ws.setHTTPSDebug(self.appConfig.getValueBool("debug_https"));
-
-						auto rc2 = self.ws.connect(newWsUrl);
-						if (rc2 != 0) {
-							logSocketIOOutput("reconnect failed");
-							break; // fall out to backoff/retry
-						}
-						if (!awaitEngineOpen(self.ws, self)) {
-							logSocketIOOutput("Socket.IO open after reconnect failed");
-							break; // fall out to backoff/retry
-						}
-
-						// Open default namespace again
-						logSocketIOOutput("Sending Socket.IO connect (40) to default namespace");
-						if (self.ws.sendText("40") != 0) {
-							logSocketIOOutput("Failed to send 40 (open namespace)");
-							break; // fall out to backoff/retry
-						} else {
-							logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/'");
-						}
-
-						// Open '/notifications' again (best-effort)
-						logSocketIOOutput("Sending Socket.IO connect (40) to '/notifications' namespace");
-						if (self.ws.sendText("40/notifications") != 0) {
-							logSocketIOOutput("Failed to send 40 for '/notifications' namespace");
-							break; // fall out to backoff/retry
-						} else {
-							logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/notifications'");
-						}
-
-						// Reset ping reference after a clean reconnect
-						lastPingAt = Clock.currTime(UTC());
-					}
-
-					// Receive message
-					auto msg = self.ws.recvText();
-					if (msg.length == 0) {
-						Thread.sleep(dur!"msecs"(20));
+					// We are 'online'
+					// Build Socket.IO WS URL from notificationUrl
+					string notif = self.appConfig.websocketNotificationUrl;
+					if (notif.length == 0) {
+						logSocketIOOutput("No notificationUrl available; will retry");
+						logSocketIOOutput("Backoff " ~ to!string(backoffSeconds) ~ "s before retry");
+						Thread.sleep(dur!"seconds"(backoffSeconds));
+						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
 					}
 
-					// Socket.IO parsing
-					if (msg.length > 0 && msg[0] == '2') {
-						// Server ping -> immediate pong, and mark last ping time
-						if (self.ws.sendText("3") != 0) {
-							logSocketIOOutput("Failed sending Socket.IO pong '3'");
-							break; // fall out to backoff/retry
-						} else {
-							lastPingAt = Clock.currTime(UTC());
-							logSocketIOOutput("Socket.IO ping received, → pong sent");
-						}
+					self.currentNotifUrl = notif;
+					string wsUrl = toSocketIoWsUrl(notif);
+
+					// Fresh WS instance per attempt
+					self.ws = new CurlWebSocket();
+
+					// Use application configuration values
+					self.ws.setUserAgent(self.appConfig.getValueString("user_agent"));
+					self.ws.setHTTPSDebug(self.appConfig.getValueBool("debug_https"));
+					self.ws.setTimeouts(10000, 15000);
+
+					// Connect to Microsoft Graph API using WebSockets and Socket.IO v4
+					logSocketIOOutput("Connecting to " ~ wsUrl);
+					auto rc = self.ws.connect(wsUrl);
+					if (rc != 0) {
+						logSocketIOOutput("self.ws.connect failed; will retry");
+						collectException(self.ws.close(1002, "connect-failed"));
+						Thread.sleep(dur!"seconds"(backoffSeconds));
+						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
 					}
 
-					if (msg.length > 0 && msg[0] == '3') {
+					// Socket.IO handshake: wait for '0{json}'
+					if (!awaitEngineOpen(self.ws, self)) {
+						logSocketIOOutput("Socket.IO open handshake failed; will retry");
+						collectException(self.ws.close(1002, "handshake-failed"));
+						Thread.sleep(dur!"seconds"(backoffSeconds));
+						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
-					} else if (msg.length > 1 && msg[0] == '4' && msg[1] == '2') {
-						logSocketIOOutput("Received 42 msg = " ~ to!string(msg));
-						handleSocketIoEvent(msg, self);
-						continue;
-					} else if (msg.length > 1 && msg[0] == '4' && msg[1] == '0') {
-						logSocketIOOutput("Received 40 msg = " ~ to!string(msg));
-						// 40{"sid":...} or 40/notifications,{...}
-						size_t i = 3;
-						while (i < msg.length && msg[i] != ',') i++;
-						auto ns = msg[3 .. i];
+					}
 
-						if (ns == "notifications") {
-							logSocketIOOutput("Namespace '/notifications' opened; listening for Socket.IO events via WebSocket Transport");
-						} else {
-							logSocketIOOutput("Namespace '/' opened; listening for Socket.IO events via WebSocket Transport");
-						}
-						self.namespaceOpened = true;
-						continue;
-
-					} else if (msg.length > 1 && msg[0] == '4' && msg[1] == '1') {
-						logSocketIOOutput("got 41 (disconnect)");
-						break; // fall out to backoff/retry
-					} else if (msg.length > 0 && msg[0] == '0') {
-						parseEngineOpenFromPacket(msg, self);
+					// Open default namespace: send "40"
+					logSocketIOOutput("Sending Socket.IO connect (40) to default namespace");
+					if (self.ws.sendText("40") != 0) {
+						logSocketIOOutput("Failed to send 40 (open namespace); will retry");
+						collectException(self.ws.close(1002, "ns40-failed"));
+						Thread.sleep(dur!"seconds"(backoffSeconds));
+						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
 					} else {
-						logSocketIOOutput("Received Unhandled Message: " ~ msg);
+						logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/'");
 					}
-				}
 
-				// Fell out of the inner loop → close and backoff, then retry
-				logSocketIOOutput("Retrying WebSocket Connection");
-				collectException(self.ws.close(1001, "reconnect"));
-				logSocketIOOutput("Backoff " ~ to!string(backoffSeconds) ~ "s before retry");
-				Thread.sleep(dur!"seconds"(backoffSeconds));
-				if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
+					// Open 'notifications' namespace: send "40/notifications"
+					logSocketIOOutput("Sending Socket.IO connect (40) to '/notifications' namespace");
+					if (self.ws.sendText("40/notifications") != 0) {
+						logSocketIOOutput("Failed to send 40 for '/notifications' namespace; will retry");
+						collectException(self.ws.close(1002, "ns40-failed"));
+						Thread.sleep(dur!"seconds"(backoffSeconds));
+						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
+						continue;
+					} else {
+						logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/notifications'");
+					}
+
+					// Connected successfully → reset backoff
+					backoffSeconds = 1;
+					// Reset per-connection flags so renew logic and ns-open tracking work after reconnection
+					self.expiryWarned   = false;
+					self.renewRequested = false;
+					self.namespaceOpened = false;
+
+					// Track last server ping received to detect a dead connection
+					SysTime lastPingAt = Clock.currTime(UTC());
+
+					// Listen for Socket.IO Events
+					for (;;) {
+						// Stop request
+						if (self.pleaseStop) {
+							logSocketIOOutput("Stop requested; shutting down run() loop");
+							collectException(self.ws.close(1000, "stop-requested"));
+							collectException(self.ws.cleanupCurlHandle());
+							logSocketIOOutput("Cleaned up an instance of a CurlWebSocket object via cleanupCurlHandle()");
+							return;
+						}
+
+						// Subscription nearing expiry? (informational; renewal happens elsewhere)
+						if (!self.expiryWarned && self.appConfig.websocketUrlExpiry.length > 0) {
+							SysTime expiry;
+							auto e = collectException(expiry = SysTime.fromISOExtString(self.appConfig.websocketUrlExpiry));
+							if (e is null) {
+								auto remain = expiry - Clock.currTime(UTC());
+								if (remain <= dur!"minutes"(5)) {
+									self.expiryWarned = true; // emit only once
+									logSocketIOOutput("subscription nearing expiry; renewal required soon");
+								}
+							}
+						}
+
+						// Renewal window check (emit once; 2 minutes before)
+						if (!self.renewRequested && self.appConfig.websocketUrlExpiry.length > 0) {
+							SysTime expiry;
+							auto e = collectException(expiry = SysTime.fromISOExtString(self.appConfig.websocketUrlExpiry));
+							if (e is null) {
+								auto remain = expiry - Clock.currTime(UTC());
+								if (remain <= dur!"minutes"(2)) {
+									self.renewRequested = true;
+									logSocketIOOutput("Subscription nearing expiry; requesting renewal from main() monitor loop");
+									send(self.parentTid, "SOCKETIO_RENEWAL_REQUEST");
+									send(self.parentTid, "SOCKETIO_RENEWAL_CONTEXT:" ~ "id=" ~ self.appConfig.websocketEndpointResponse ~ " url=" ~ self.appConfig.websocketNotificationUrl);
+								}
+							}
+						}
+
+						// If we haven't seen a server ping within pingInterval + pingTimeout → treat as dead link
+						auto now = Clock.currTime(UTC());
+						auto maxSilence = dur!"msecs"(self.pingIntervalMs + self.pingTimeoutMs);
+						if (now - lastPingAt > maxSilence) {
+							logSocketIOOutput("No server ping within expected window; restarting WebSocket");
+							break; // fall out to backoff/retry
+						}
+
+						// Reconnect to a new endpoint if main updated websocketNotificationUrl
+						if (self.appConfig.websocketNotificationUrl.length > 0 &&
+							self.appConfig.websocketNotificationUrl != self.currentNotifUrl) {
+
+							logSocketIOOutput("Detected new notificationUrl; reconnecting");
+							collectException(self.ws.close(1000, "reconnect"));
+							collectException(self.ws.cleanupCurlHandle());
+							logSocketIOOutput("Cleaned up an instance of a CurlWebSocket object via cleanupCurlHandle()");
+
+							// Establish a fresh connection and handshakes
+							self.currentNotifUrl = self.appConfig.websocketNotificationUrl;
+							string newWsUrl = toSocketIoWsUrl(self.currentNotifUrl);
+							self.ws = new CurlWebSocket();
+							self.ws.setUserAgent(self.appConfig.getValueString("user_agent"));
+							self.ws.setTimeouts(10000, 15000);
+							self.ws.setHTTPSDebug(self.appConfig.getValueBool("debug_https"));
+
+							auto rc2 = self.ws.connect(newWsUrl);
+							if (rc2 != 0) {
+								logSocketIOOutput("reconnect failed");
+								break; // fall out to backoff/retry
+							}
+							if (!awaitEngineOpen(self.ws, self)) {
+								logSocketIOOutput("Socket.IO open after reconnect failed");
+								break; // fall out to backoff/retry
+							}
+
+							// Open default namespace again
+							logSocketIOOutput("Sending Socket.IO connect (40) to default namespace");
+							if (self.ws.sendText("40") != 0) {
+								logSocketIOOutput("Failed to send 40 (open namespace)");
+								break; // fall out to backoff/retry
+							} else {
+								logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/'");
+							}
+
+							// Open '/notifications' again (best-effort)
+							logSocketIOOutput("Sending Socket.IO connect (40) to '/notifications' namespace");
+							if (self.ws.sendText("40/notifications") != 0) {
+								logSocketIOOutput("Failed to send 40 for '/notifications' namespace");
+								break; // fall out to backoff/retry
+							} else {
+								logSocketIOOutput("Sent Socket.IO connect '40' for namespace '/notifications'");
+							}
+
+							// Reset ping reference after a clean reconnect
+							lastPingAt = Clock.currTime(UTC());
+						}
+
+						// Receive message
+						auto msg = self.ws.recvText();
+						if (msg.length == 0) {
+							Thread.sleep(dur!"msecs"(20));
+							continue;
+						}
+
+						// Socket.IO parsing
+						if (msg.length > 0 && msg[0] == '2') {
+							// Server ping -> immediate pong, and mark last ping time
+							if (self.ws.sendText("3") != 0) {
+								logSocketIOOutput("Failed sending Socket.IO pong '3'");
+								break; // fall out to backoff/retry
+							} else {
+								lastPingAt = Clock.currTime(UTC());
+								logSocketIOOutput("Socket.IO ping received, → pong sent");
+							}
+							continue;
+						}
+
+						if (msg.length > 0 && msg[0] == '3') {
+							continue;
+						} else if (msg.length > 1 && msg[0] == '4' && msg[1] == '2') {
+							logSocketIOOutput("Received 42 msg = " ~ to!string(msg));
+							handleSocketIoEvent(msg, self);
+							continue;
+						} else if (msg.length > 1 && msg[0] == '4' && msg[1] == '0') {
+							logSocketIOOutput("Received 40 msg = " ~ to!string(msg));
+							// 40{"sid":...} or 40/notifications,{...}
+							size_t i = 3;
+							while (i < msg.length && msg[i] != ',') i++;
+							auto ns = msg[3 .. i];
+
+							if (ns == "notifications") {
+								logSocketIOOutput("Namespace '/notifications' opened; listening for Socket.IO events via WebSocket Transport");
+							} else {
+								logSocketIOOutput("Namespace '/' opened; listening for Socket.IO events via WebSocket Transport");
+							}
+							self.namespaceOpened = true;
+							continue;
+
+						} else if (msg.length > 1 && msg[0] == '4' && msg[1] == '1') {
+							logSocketIOOutput("got 41 (disconnect)");
+							break; // fall out to backoff/retry
+						} else if (msg.length > 0 && msg[0] == '0') {
+							parseEngineOpenFromPacket(msg, self);
+							continue;
+						} else {
+							logSocketIOOutput("Received Unhandled Message: " ~ msg);
+						}
+					}
+
+					// Fell out of the inner loop → close and backoff, then retry
+					logSocketIOOutput("Retrying WebSocket Connection");
+					collectException(self.ws.close(1001, "reconnect"));
+					logSocketIOOutput("Backoff " ~ to!string(backoffSeconds) ~ "s before retry");
+					Thread.sleep(dur!"seconds"(backoffSeconds));
+					if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
+				}
+			} catch (CurlException e) {
+				// Caught a CurlException
+				addLogEntry("Network error during socketio loop: " ~ e.msg ~ " (will retry)");
+				Thread.sleep(dur!"seconds"(5));
+			} catch (SocketException e) {
+				// Caught a SocketException
+				addLogEntry("Socket error during socketio loop: " ~ e.msg ~ " (will retry)");
+				Thread.sleep(dur!"seconds"(5));
+			} catch (Exception e) {
+				// Caught some other error
+				addLogEntry("Unexpected error during socketio loop: " ~ e.toString());
+				Thread.sleep(dur!"seconds"(5));
 			}
 		}
 	}
