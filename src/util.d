@@ -168,27 +168,14 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 
     // Perform (or simulate) the rename
     if (!dryRun) {
-	
-		// Not a --dry-run scenario - attempt the file rename
-		//
-		// There are 2 options to rename a file
-		// rename() - https://dlang.org/library/std/file/rename.html
-		// std.file.copy() - https://dlang.org/library/std/file/copy.html
-		//
-		// rename:
-		//   It is not possible to rename a file across different mount points or drives. On POSIX, the operation is atomic. That means, if to already exists there will be no time period during the operation where to is missing.
-		//
-		// std.file.copy
-		//   Copy file from to file to. File timestamps are preserved. File attributes are preserved, if preserve equals Yes.preserveAttributes
-		//
-		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
-		
-        try {
-            rename(spath, candidate); // POSIX atomic on same mount
-            renamedPath = candidate;
-        } catch (Exception e) {
-            addLogEntry("Renaming of local file failed for " ~ spath ~ ": " ~ e.msg, ["error"]);
-        }
+		// Not a --dry-run scenario - attempt the file rename to create a safe backup
+		// Use safeRename()
+		if (safeRename(spath, candidate, dryRun)) {
+			renamedPath = candidate;
+		} else {
+			// Failed to rename using safeRename()
+			addLogEntry("Renaming of local file failed for " ~ spath ~ " -> " ~ candidate, ["error"]);
+		}
     } else {
         if (debugLogging) {
             addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ spath ~ " -> " ~ candidate, ["debug"]);
@@ -197,12 +184,12 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 }
 
 // Rename the given item, and only performs the function if not in a --dry-run scenario
-void safeRename(const(char)[] oldPath, const(char)[] newPath, bool dryRun) {
+bool safeRename(const(char)[] oldPath, const(char)[] newPath, bool dryRun) {
 	string thisFunctionName = format("%s.%s", strip(__MODULE__), strip(getFunctionName!({})));
 
 	if (dryRun) {
 		if (debugLogging) { addLogEntry("DRY-RUN: Skipping local file rename", ["debug"]); }
-		return;
+		return true;
 	}
 
 	int maxAttempts = 5;
@@ -210,8 +197,21 @@ void safeRename(const(char)[] oldPath, const(char)[] newPath, bool dryRun) {
 	foreach (attempt; 0 .. maxAttempts) {
 		try {
 			if (debugLogging) { addLogEntry("Calling rename(oldPath, newPath)", ["debug"]); }
+			
+			// There are 2 options to rename a file
+			// rename() - https://dlang.org/library/std/file/rename.html
+			// std.file.copy() - https://dlang.org/library/std/file/copy.html
+			//
+			// rename:
+			//   It is not possible to rename a file across different mount points or drives. On POSIX, the operation is atomic. That means, if to already exists there will be no time period during the operation where to is missing.
+			//
+			// std.file.copy
+			//   Copy file from to file to. File timestamps are preserved. File attributes are preserved, if preserve equals Yes.preserveAttributes
+			//
+			// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
+						
 			rename(oldPath, newPath);
-			return;
+			return true;
 		} catch (FileException e) {
 			// Retry on EINTR
 			if (e.errno == EINTR) {        // Interrupted by signal → retry
@@ -228,17 +228,18 @@ void safeRename(const(char)[] oldPath, const(char)[] newPath, bool dryRun) {
 			// Cross-device rename: not retryable
 			if (e.errno == EXDEV) {
 				displayFileSystemErrorMessage("Rename failed (cross-filesystem): " ~ e.msg, thisFunctionName, "oldPath=" ~ to!string(oldPath) ~ " newPath=" ~ to!string(newPath));
-				return;
+				return false;
 			}
 			// Everything else: log once and return
 			displayFileSystemErrorMessage(e.msg, thisFunctionName, "oldPath=" ~ to!string(oldPath) ~ " newPath=" ~ to!string(newPath));
-			return;
+			return false;
 		}
 	}
 
 	// If we get here, we exhausted retries
 	// Log the last failure
 	displayFileSystemErrorMessage("Failed to rename after retries: ", thisFunctionName, "oldPath=" ~ to!string(oldPath) ~ " newPath=" ~ to!string(newPath));
+	return false;
 }
 
 // Deletes the specified file without throwing an exception if there is an issue
