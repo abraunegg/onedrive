@@ -3,7 +3,7 @@ module util;
 
 // What does this module require to function?
 import core.memory;
-import core.stdc.errno : ENOENT, EINTR, EBUSY, EXDEV;
+import core.stdc.errno : ENOENT, EINTR, EBUSY, EXDEV, EAGAIN;
 import core.stdc.stdlib;
 import core.stdc.string;
 import core.sys.posix.pwd;
@@ -2066,95 +2066,151 @@ bool isBadCurlVersion(string curlVersion) {
     return canFind(supportedVersions, curlVersion);
 }
 
+// Is the operation a transient error?
+private bool isTransientErrno(int err) @safe nothrow {
+	// EINTR: interrupted system call
+	// EBUSY: resource busy (can be transient on some FS / mount scenarios)
+	// EAGAIN: try again (transient)
+	return err == EINTR || err == EBUSY || err == EAGAIN;
+}
+
+// Retry wrapper for getTimes()
+private bool safeGetTimes(string path, out SysTime accessTime, out SysTime modTime, string thisFunctionName) {
+	int maxAttempts = 5;
+
+	foreach (attempt; 0 .. maxAttempts) {
+		try {
+			getTimes(path, accessTime, modTime);
+			return true;
+		} catch (FileException e) {
+			// If path vanished between checks / operations, treat as non-fatal for this workflow
+			if (e.errno == ENOENT) {
+				return false;
+			}
+
+			if (isTransientErrno(e.errno)) {
+				// bounded backoff to avoid spinning
+				Thread.sleep(dur!"msecs"(10 * (attempt + 1)));
+				continue;
+			}
+
+			displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
+			return false;
+		}
+	}
+
+	displayFileSystemErrorMessage("Failed to read file timestamps after retries", thisFunctionName, path);
+	return false;
+}
+
+// Retry wrapper for setTimes()
+private bool safeSetTimes(string path, SysTime accessTime, SysTime modTime, string thisFunctionName) {
+	int maxAttempts = 5;
+
+	foreach (attempt; 0 .. maxAttempts) {
+		try {
+			setTimes(path, accessTime, modTime);
+			return true;
+		} catch (FileException e) {
+			// If the path disappeared before we could set, there's nothing useful to do
+			if (e.errno == ENOENT) {
+				return false;
+			}
+
+			if (isTransientErrno(e.errno)) {
+				// slightly longer backoff here is fine too, but keep it simple/consistent
+				Thread.sleep(dur!"msecs"(15 * (attempt + 1)));
+				continue;
+			}
+
+			displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
+			return false;
+		}
+	}
+
+	displayFileSystemErrorMessage("Failed to set file timestamps after retries", thisFunctionName, path);
+	return false;
+}
+
 // Set the timestamp of the provided path to ensure this is done in a consistent manner
 void setLocalPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) {
 	// Set this function name
-	string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
-	
+	string thisFunctionName = format("%s.%s", strip(__MODULE__), strip(getFunctionName!({})));
+
+	if (dryRun) {
+		// Keep behaviour consistent: do nothing in dry-run
+		return;
+	}
+
+	if (debugLogging) {
+		string logMessage = format("Setting 'lastAccessTime' and 'lastModificationTime' properties for: %s to %s if required", inputPath, to!string(newTimeStamp));
+		addLogEntry(logMessage, ["debug"]);
+	}
+
+	// Read existing times (with retry protection)
+	SysTime existingAccessTime;
+	SysTime existingModificationTime;
+
+	if (!safeGetTimes(inputPath, existingAccessTime, existingModificationTime, thisFunctionName)) {
+		// safeGetTimes already logged non-transient errors; ENOENT etc just returns false quietly
+		return;
+	}
+
+	if (debugLogging) {
+		addLogEntry("Existing timestamp values:", ["debug"]);
+		addLogEntry("  Access Time:       " ~ to!string(existingAccessTime), ["debug"]);
+		addLogEntry("  Modification Time: " ~ to!string(existingModificationTime), ["debug"]);
+	}
+
+	// Compare timestamps using UTC and truncated fractional seconds (OneDrive has no fractional seconds)
+	SysTime newTimeStampZeroFracSec = newTimeStamp.toUTC();
+	SysTime existingTimeStampZeroFracSec = existingModificationTime.toUTC();
+
+	newTimeStampZeroFracSec.fracSecs = Duration.zero;
+	existingTimeStampZeroFracSec.fracSecs = Duration.zero;
+
+	if (debugLogging) {
+		addLogEntry("Comparison timestamp values:", ["debug"]);
+		addLogEntry("  newTimeStampZeroFracSec =      " ~ to!string(newTimeStampZeroFracSec), ["debug"]);
+		addLogEntry("  existingTimeStampZeroFracSec = " ~ to!string(existingTimeStampZeroFracSec), ["debug"]);
+	}
+
+	// Only update if the whole-second timestamp differs
+	bool makeTimestampChange = (newTimeStampZeroFracSec != existingTimeStampZeroFracSec);
+
 	SysTime updatedModificationTime;
-	bool makeTimestampChange = false;
-	
-	// Try and set the local path timestamp, catch filesystem error
-	try {
-		// Set the correct time on the requested inputPath
-		if (!dryRun) {
-			if (debugLogging) {
-				// Generate the initial log message
-				string logMessage = format("Setting 'lastAccessTime' and 'lastModificationTime' properties for: %s to %s if required", inputPath, to!string(newTimeStamp));
-				addLogEntry(logMessage, ["debug"]);
-			}
-			
-			// Obtain the existing timestamp values
-			SysTime existingAccessTime;
-			SysTime existingModificationTime;
-			getTimes(inputPath, existingAccessTime, existingModificationTime);
-			
-			if (debugLogging) {
-				addLogEntry("Existing timestamp values:", ["debug"]);
-				addLogEntry("  Access Time:       " ~ to!string(existingAccessTime), ["debug"]);
-				addLogEntry("  Modification Time: " ~ to!string(existingModificationTime), ["debug"]);
-			}
-			
-			// Compare the requested new modified timestamp to existing local modified timestamp
-			SysTime newTimeStampZeroFracSec = newTimeStamp;
-			SysTime existingTimeStampZeroFracSec = existingModificationTime;
-			// Convert timestamps to UTC
-			newTimeStampZeroFracSec = newTimeStampZeroFracSec.toUTC();
-			existingTimeStampZeroFracSec = existingTimeStampZeroFracSec.toUTC();
-			// Drop fractional seconds on both
-			newTimeStampZeroFracSec.fracSecs = Duration.zero;
-			existingTimeStampZeroFracSec.fracSecs = Duration.zero;
-			
-			if (debugLogging) {
-				addLogEntry("Comparison timestamp values:", ["debug"]);
-				addLogEntry("  newTimeStampZeroFracSec =      " ~ to!string(newTimeStampZeroFracSec), ["debug"]);
-				addLogEntry("  existingTimeStampZeroFracSec = " ~ to!string(existingTimeStampZeroFracSec), ["debug"]);
-			}
-			
-			// Perform the comparison of the fracsec truncated timestamps
-			if (newTimeStampZeroFracSec == existingTimeStampZeroFracSec) {
-				if (debugLogging) {addLogEntry("Fractional seconds only difference in modification time; preserving existing modification time", ["debug"]);}
-				updatedModificationTime = existingModificationTime;
-			} else {
-				if (debugLogging) {addLogEntry("New timestamp is different to existing timestamp; using new modification time", ["debug"]);}
-				updatedModificationTime = newTimeStamp;
-				makeTimestampChange = true;
-			}
-			
-			// Make the timestamp change for the path provided
-			try {
-				// Function detailed here: https://dlang.org/library/std/file/set_times.html
-				// 		setTimes(path, accessTime, modificationTime)
-				// We use the provided 'updatedModificationTime' to set modificationTime:
-				//		modificationTime	Time the file/folder was last modified.
-				// We use the existing 'existingAccessTime' to set accessTime:
-				//		accessTime			Time the file/folder was last accessed.
-				if (makeTimestampChange) {
-					// new timestamp is different
-					if (debugLogging) {addLogEntry("Calling setTimes() for the given path", ["debug"]);}
-					setTimes(inputPath, existingAccessTime, updatedModificationTime);
-					if (debugLogging) {addLogEntry("Timestamp updated for this path: " ~ inputPath, ["debug"]);}
-				} else {
-					if (debugLogging) {addLogEntry("No local timestamp change required", ["debug"]);}
-				}
-			} catch (FileException e) {
-				// display the error message
-				displayFileSystemErrorMessage(e.msg, thisFunctionName, inputPath);
-			}
-			
-			SysTime newAccessTime;
-			SysTime newModificationTime;
-			getTimes(inputPath, newAccessTime, newModificationTime);
-			
-			if (debugLogging) {
-				addLogEntry("Current timestamp values post any change (if required):", ["debug"]);
-				addLogEntry("  Access Time:       " ~ to!string(newAccessTime), ["debug"]);
-				addLogEntry("  Modification Time: " ~ to!string(newModificationTime), ["debug"]);
-			}
+	if (!makeTimestampChange) {
+		if (debugLogging) {
+			addLogEntry("Fractional seconds only difference in modification time; preserving existing modification time", ["debug"]);
+			addLogEntry("No local timestamp change required", ["debug"]);
 		}
-	} catch (FileException e) {
-		// display the error message
-		displayFileSystemErrorMessage(e.msg, thisFunctionName, inputPath);
+		return;
+	}
+
+	if (debugLogging) {
+		addLogEntry("New timestamp is different to existing timestamp; using new modification time", ["debug"]);
+		addLogEntry("Calling setTimes() for the given path", ["debug"]);
+	}
+
+	updatedModificationTime = newTimeStamp;
+
+	// Apply new timestamp
+	if (!safeSetTimes(inputPath, existingAccessTime, updatedModificationTime, thisFunctionName)) {
+		// safeSetTimes logs non-transient errors; ENOENT just returns false quietly
+		return;
+	}
+
+	if (debugLogging) {
+		addLogEntry("Timestamp updated for this path: " ~ inputPath, ["debug"]);
+	}
+	
+	// Post-check to ensure timestamp is set
+	SysTime newAccessTime;
+	SysTime newModificationTime;
+	if (safeGetTimes(inputPath, newAccessTime, newModificationTime, thisFunctionName) && debugLogging) {
+		addLogEntry("Current timestamp values post any change (if required):", ["debug"]);
+		addLogEntry("  Access Time:       " ~ to!string(newAccessTime), ["debug"]);
+		addLogEntry("  Modification Time: " ~ to!string(newModificationTime), ["debug"]);
 	}
 }
 
