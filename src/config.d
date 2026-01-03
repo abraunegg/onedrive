@@ -2555,6 +2555,12 @@ class ApplicationConfig {
 			addLogEntry("ERROR: 'use_intune_sso' and 'use_device_auth' cannot be used together");
 			operationalConflictDetected = true;
 		}
+		
+		// --force and --resync cannot be used together as --resync blows away the database, thus there is no way to calculate large local deletes
+		if ((getValueBool("force")) && (getValueBool("resync"))) {
+			addLogEntry("ERROR: --force and --resync cannot be used together as there is zero way to determine that a big delete has occurred");
+			operationalConflictDetected = true;
+		}
 				
 		// Return bool value indicating if we have an operational conflict
 		return operationalConflictDetected;
