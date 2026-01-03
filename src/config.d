@@ -2558,7 +2558,7 @@ class ApplicationConfig {
 		
 		// --force and --resync cannot be used together as --resync blows away the database, thus there is no way to calculate large local deletes
 		if ((getValueBool("force")) && (getValueBool("resync"))) {
-			addLogEntry("ERROR: --force and --resync cannot be used together as there is zero way to determine that a big delete has occured");
+			addLogEntry("ERROR: --force and --resync cannot be used together as there is zero way to determine that a big delete has occurred");
 			operationalConflictDetected = true;
 		}
 				
