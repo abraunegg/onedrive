@@ -1427,7 +1427,7 @@ _**Usage Example:**_ `onedrive --sync --verbose --force`
 ### CLI Option: --force-sync
 _**Description:**_ This CLI option enables the syncing of a specific directory, using the Client Side Filtering application defaults, overriding any user application configuration.
 
-_**Usage Example:**_ `onedrive --sync --verbose --force-sync --single-directory 'Data'
+_**Usage Example:**_ `onedrive --sync --verbose --force-sync --single-directory 'Data'`
 
 > [!NOTE]
 > When this option is used, you will be presented with the following warning and risk acceptance:
