@@ -171,7 +171,28 @@ When the Docker container successfully starts:
 
 Once the 'onedrive' application is authorised, the client will automatically start monitoring your `ONEDRIVE_DATA_DIR` for data changes to be uploaded to OneDrive. Files stored on OneDrive will be downloaded to this location.
 
-If the client is working as expected, you can detach from the container with Ctrl+p, Ctrl+q.
+If the client is working as expected, you can detach from the container with CTRL+P, CTRL+Q.
+
+#### 6.1. Read-Only / Upload-Only Sync Scenarios
+If you are running the Docker container in upload-only mode and want to ensure that the OneDrive client cannot modify the original source files, the data directory must be mounted as read-only.
+
+This is controlled at the container mount level, not by ownership (chown) or permissions (chmod) inside the container.
+
+If this is your desired configuration, you must mount your 'ONEDRIVE_DATA_DIR' with read-only permissions to ensure your data source is immutable and cannot be changed. Augment the above script in the following manner:
+```bash
+export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
+export ONEDRIVE_UID=`id -u`
+export ONEDRIVE_GID=`id -g`
+mkdir -p ${ONEDRIVE_DATA_DIR}
+docker run -it --name onedrive -v onedrive_conf:/onedrive/conf \
+    -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:ro" \
+    -e "ONEDRIVE_UID=${ONEDRIVE_UID}" \
+    -e "ONEDRIVE_GID=${ONEDRIVE_GID}" \
+	-e ONEDRIVE_UPLOADONLY=1 \
+    driveone/onedrive:edge
+```
+> [!NOTE]
+> Essentially, any Docker command where you are mounting your 'ONEDRIVE_DATA_DIR', you need to append `:ro` to the `/onedrive/data` specification to ensure your data directory is mounted in Docker as read-only volume.
 
 ### 7. Running the 'onedrive' container under 'docker'
 
@@ -200,7 +221,6 @@ docker start onedrive
 docker rm -f onedrive
 ```
 
-
 ### Customising OneDrive Runtime Behaviour in Docker
 
 When running the OneDrive client inside Docker, the container **always starts** via `entrypoint.sh`, which ensures that the following arguments are added automatically:
@@ -217,6 +237,11 @@ This design guarantees that:
 
 Because these arguments are always supplied, any `sync_dir` or `confdir` values defined in the configuration file are **overridden at runtime by design**. This avoids confusion and ensures predictable behaviour. These specific paths are the bind-mounts between container and host and should **not be changed manually**.
 
+#### Default Docker volume behaviour
+By default, Docker bind mounts and volumes are mounted read-write inside the container. This means that, unless explicitly restricted, the container process may create, modify, rename, or delete files within the mounted directory, subject to normal filesystem permissions.
+
+#### Using read-only mounts
+If you want to prevent the container from modifying the mounted data (for example, in upload-only or backup-style scenarios), the bind mount must be explicitly marked as read-only using the `:ro` mount option. A read-only mount enforces immutability at the container boundary and cannot be overridden from inside the container, regardless of ownership or permissions.
 
 ### Supported ways to customise runtime behaviour
 

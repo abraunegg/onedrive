@@ -338,7 +338,7 @@ Read and understand the [known issues](#known-issues-with-installing-from-the-ab
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-|❌|✔|❌|✔|
+|❌|✔|✔|✔|
 
 #### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
@@ -365,7 +365,7 @@ Read and understand the [known issues](#known-issues-with-installing-from-the-ab
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-|❌|✔|❌|✔|
+|❌|✔|✔|✔|
 
 #### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
@@ -392,7 +392,7 @@ Read and understand the [known issues](#known-issues-with-installing-from-the-ab
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-|❌|✔|❌|✔|
+|❌|✔|✔|✔|
 
 #### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
