@@ -25,6 +25,7 @@ Aparams
 apng
 archlinux
 ARequest
+arguemnt
 armhf
 ARMv
 arsd
@@ -47,12 +48,14 @@ bak
 baus
 BBBA
 BBD
+bbuf
 bcdefghi
 beffdb
 bhref
 bindir
 bir
 blargh
+bmap
 bools
 bpozdena
 brp
@@ -67,6 +70,7 @@ bytecompile
 bytesleft
 cancelfd
 CApath
+cargs
 cattr
 cbf
 ccc
@@ -107,8 +111,12 @@ deimos
 desynchronisation
 devicecode
 devuan
+dfuse
 DHAO
 dhparams
+dirfil
+dirh
+dirhandle
 dirmask
 dlang
 dlclose
@@ -158,18 +166,22 @@ fefefe
 fexceptions
 ffat
 FFFD
+fgetattr
 fhandler
 flto
 fno
 fracsec
+fsname
 fstack
 FState
+fsyncdir
 fullchain
 fullscan
 fusefs
 gdc
 gdk
 gerror
+getdir
 getenforce
 getxattr
 gfortran
@@ -190,6 +202,7 @@ gtk
 GVariant
 hdrs
 hideonindex
+highlevel
 hnsecs
 hostport
 hotmail
@@ -281,11 +294,13 @@ libxatracker
 libxcrypt
 Lighttpd
 lintian
+listxattr
 llclose
 llsend
 lnotify
 localstatedir
 lol
+lowlevel
 lpdw
 lpfn
 lrwxrwxrwx
@@ -295,6 +310,7 @@ ltmain
 Lyncredible
 makepkg
 mangleof
+mappping
 maxfiles
 mayne
 mbr
@@ -303,6 +319,7 @@ microsoftonline
 mkbuilddir
 mno
 mnt
+mountopts
 mountpoint
 mozram
 msghdr
@@ -340,6 +357,7 @@ nobj
 nodelay
 nolan
 nomount
+nonseekable
 nosignal
 nosync
 notif
@@ -347,6 +365,7 @@ nph
 nrecords
 ntfs
 nto
+nullpath
 nuntil
 nupgrade
 nupload
@@ -385,6 +404,7 @@ pkolmann
 podman
 pollfd
 pollfds
+pollhandle
 postfields
 postfieldsize
 postun
@@ -397,6 +417,7 @@ prt
 prueba
 prw
 Pseudoblocking
+pthread
 publicsuffix
 puml
 Pwy
@@ -420,8 +441,10 @@ reauth
 Recvd
 recvfd
 redhat
+releasedir
 relocs
 relro
+removexattr
 repology
 restic
 restorecon
@@ -481,9 +504,12 @@ sooooo
 specpart
 SSLVERSION
 startuml
+statfs
 stat'ing
 statm
+stbuf
 stdc
+stdint
 stringof
 Stringz
 subobject
@@ -512,6 +538,7 @@ timerfd
 tkx
 tlsv
 trashinfo
+trunate
 Tting
 tval
 typecons
@@ -529,6 +556,8 @@ usermod
 userns
 userpass
 usl
+utimbuf
+utimens
 valgrind
 verifypeer
 vsid
@@ -540,6 +569,7 @@ weburl
 Werror
 wpath
 writefln
+writepage
 wrt
 wtf
 xbel
