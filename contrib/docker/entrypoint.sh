@@ -2,38 +2,75 @@
 
 set +H -euo pipefail
 
-: ${ONEDRIVE_UID:=$(stat /onedrive/data -c '%u')}
-: ${ONEDRIVE_GID:=$(stat /onedrive/data -c '%g')}
+# ----------------------------------------------------------------------
+# Determine how the container is being started:
+# - If started as non-root (e.g. --user 1000:1000), we must NOT attempt
+#   user/group management or chown, as those require root.
+# - If started as root, we can create/align the user and switch via gosu.
+# ----------------------------------------------------------------------
 
-# Create new group using target GID
-if ! odgroup="$(getent group "$ONEDRIVE_GID")"; then
-	odgroup='onedrive'
-	groupadd "${odgroup}" -g "$ONEDRIVE_GID"
+CONTAINER_UID="$(id -u)"
+CONTAINER_GID="$(id -g)"
+
+# Default ONEDRIVE_UID/GID:
+# - When running as non-root: default to the current UID/GID (the values Docker/Podman set)
+# - When running as root: keep existing behaviour (infer from /onedrive/data unless explicitly provided)
+if [ "${CONTAINER_UID}" -ne 0 ]; then
+	: "${ONEDRIVE_UID:=${CONTAINER_UID}}"
+	: "${ONEDRIVE_GID:=${CONTAINER_GID}}"
 else
-	odgroup=${odgroup%%:*}
+	: "${ONEDRIVE_UID:=$(stat /onedrive/data -c '%u')}"
+	: "${ONEDRIVE_GID:=$(stat /onedrive/data -c '%g')}"
 fi
 
-# Create new user using target UID
-if ! oduser="$(getent passwd "$ONEDRIVE_UID")"; then
-	oduser='onedrive'
-	useradd -m "${oduser}" -u "$ONEDRIVE_UID" -g "$ONEDRIVE_GID"
+# ----------------------------------------------------------------------
+# Root privilege handling
+# ----------------------------------------------------------------------
+if [ "${CONTAINER_UID}" -eq 0 ]; then
+	# Containers should not run the onedrive client as root by default.
+	if [ "${ONEDRIVE_RUNAS_ROOT:=0}" == "1" ]; then
+		echo "# Running container as root due to environment variable override"
+		oduser='root'
+		odgroup='root'
+	else
+		# Root container start is fine, but we will drop privileges to a non-root user.
+		echo "# Container started as root; will drop privileges to UID:GID ${ONEDRIVE_UID}:${ONEDRIVE_GID}"
+	fi
+
+	# If we are not forcing root runtime, ensure a non-root user exists for ONEDRIVE_UID/GID
+	if [ "${ONEDRIVE_RUNAS_ROOT:=0}" != "1" ]; then
+		# Create / select group for target GID
+		if ! odgroup="$(getent group "${ONEDRIVE_GID}")"; then
+			odgroup='onedrive'
+			groupadd "${odgroup}" -g "${ONEDRIVE_GID}"
+		else
+			odgroup="${odgroup%%:*}"
+		fi
+
+		# Create / select user for target UID
+		if ! oduser="$(getent passwd "${ONEDRIVE_UID}")"; then
+			oduser='onedrive'
+			useradd -m "${oduser}" -u "${ONEDRIVE_UID}" -g "${ONEDRIVE_GID}"
+		else
+			oduser="${oduser%%:*}"
+			usermod -g "${odgroup}" "${oduser}"
+		fi
+
+		echo "# Running container as user: ${oduser} (UID:GID ${ONEDRIVE_UID}:${ONEDRIVE_GID})"
+	fi
 else
-	oduser="${oduser%%:*}"
-	usermod -g "${odgroup}" "${oduser}"
+	# Non-root start (e.g. --user). Do not attempt account management or chown.
+	if [ "${ONEDRIVE_RUNAS_ROOT:=0}" == "1" ]; then
+		echo "# NOTE: ONEDRIVE_RUNAS_ROOT=1 requested, but container is not running as root; ignoring."
+	fi
+
+	echo "# Container started as non-root UID:GID ${CONTAINER_UID}:${CONTAINER_GID}"
+	echo "# Using ONEDRIVE_UID:GID ${ONEDRIVE_UID}:${ONEDRIVE_GID} (no user/group creation performed)"
 fi
 
-# Root privilege check
-# Containers should not be run as 'root', but allow via environment variable override
-if [ "${ONEDRIVE_RUNAS_ROOT:=0}" == "1" ]; then
-	echo "# Running container as root due to environment variable override"
-	oduser='root'
-	odgroup='root'
-else
-	grep -qv root <( groups "${oduser}" ) || { echo 'ROOT level privileges prohibited!'; exit 1; }
-	echo "# Running container as user: ${oduser}"
-fi
-
+# ----------------------------------------------------------------------
 # Default parameters
+# ----------------------------------------------------------------------
 ARGS=(--confdir /onedrive/conf --syncdir /onedrive/data)
 echo "# Base Args: ${ARGS[@]}"
 
@@ -188,14 +225,27 @@ if [ -n "${ONEDRIVE_THREADS:=""}" ]; then
 	ARGS=(--threads ${ONEDRIVE_THREADS} ${ARGS[@]})
 fi
 
+# Allow override of args if command-line parameters are provided
 if [ ${#} -gt 0 ]; then
 	ARGS=("${@}")
 fi
 
-# Only switch user if not running as target uid (ie. Docker)
-if [ "$ONEDRIVE_UID" = "$(id -u)" ]; then
-	echo "# Launching 'onedrive' as ${oduser}"
-	/usr/local/bin/onedrive "${ARGS[@]}"
+# ----------------------------------------------------------------------
+# Launch
+# ----------------------------------------------------------------------
+
+# If started non-root, just run directly (no gosu, no chown).
+if [ "${CONTAINER_UID}" -ne 0 ]; then
+	echo "# Launching 'onedrive' as UID:GID ${CONTAINER_UID}:${CONTAINER_GID}"
+	exec /usr/local/bin/onedrive "${ARGS[@]}"
+fi
+
+# Started as root:
+# - If ONEDRIVE_RUNAS_ROOT=1: run directly as root.
+# - Otherwise: chown writable dirs and drop to oduser via gosu.
+if [ "${ONEDRIVE_RUNAS_ROOT:=0}" == "1" ]; then
+	echo "# Launching 'onedrive' as root"
+	exec /usr/local/bin/onedrive "${ARGS[@]}"
 else
 	echo "# Changing ownership permissions on /onedrive/data and /onedrive/conf to ${oduser}:${odgroup}"
 	chown "${oduser}:${odgroup}" /onedrive/data /onedrive/conf
