@@ -166,6 +166,7 @@ fstack
 FState
 fullchain
 fullscan
+fusefs
 gdc
 gdk
 gerror
@@ -250,6 +251,7 @@ libdruntime
 libedit
 libexec
 libexecdir
+libfuse
 libgcc
 libgdk
 libgio
