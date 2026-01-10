@@ -2908,13 +2908,13 @@ fi
 	echo "$FUSE_PKG_ERRORS" >&5
 
 
-    as_fn_error $? "libfuse3 development files not found. Install fuse3 dev package (pkg-config: fuse3) or rerun with --disable-fuse" "$LINENO" 5
+	as_fn_error $? "libfuse3 development files not found. Please install fuse3-devel (Red Hat | Fedora | CentOS), libfuse3-dev (Debian | Ubuntu), fuse3 (Arch | Manjaro) or rerun with --disable-fuse" "$LINENO" 5
 
 elif test $pkg_failed = untried; then
      	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
 
-    as_fn_error $? "libfuse3 development files not found. Install fuse3 dev package (pkg-config: fuse3) or rerun with --disable-fuse" "$LINENO" 5
+	as_fn_error $? "libfuse3 development files not found. Please install fuse3-devel (Red Hat | Fedora | CentOS), libfuse3-dev (Debian | Ubuntu), fuse3 (Arch | Manjaro) or rerun with --disable-fuse" "$LINENO" 5
 
 else
 	FUSE_CFLAGS=$pkg_cv_FUSE_CFLAGS
