@@ -115,7 +115,7 @@ fi
 
 # Tell client to sync in download-only mode based on environment variable
 if [ "${ONEDRIVE_DOWNLOADONLY:=0}" == "1" ]; then
-	echo "# We are synchronizing in download-only mode"
+	echo "# We are synchronising in download-only mode"
 	echo "# Adding --download-only"
 	ARGS=(--download-only ${ARGS[@]})
 fi
@@ -129,14 +129,14 @@ fi
 
 # Tell client to sync in upload-only mode based on environment variable
 if [ "${ONEDRIVE_UPLOADONLY:=0}" == "1" ]; then
-	echo "# We are synchronizing in upload-only mode"
+	echo "# We are synchronising in upload-only mode"
 	echo "# Adding --upload-only"
 	ARGS=(--upload-only ${ARGS[@]})
 fi
 
 # Tell client to sync in no-remote-delete mode based on environment variable
 if [ "${ONEDRIVE_NOREMOTEDELETE:=0}" == "1" ]; then
-	echo "# We are synchronizing in no-remote-delete mode"
+	echo "# We are synchronising in no-remote-delete mode"
 	echo "# Adding --no-remote-delete"
 	ARGS=(--no-remote-delete ${ARGS[@]})
 fi
@@ -155,14 +155,14 @@ if [ "${ONEDRIVE_REAUTH:=0}" == "1" ]; then
 	ARGS=(--reauth ${ARGS[@]})
 fi
 
-# Tell client to utilize auth files at the provided locations based on environment variable
+# Tell client to utilise auth files at the provided locations based on environment variable
 if [ -n "${ONEDRIVE_AUTHFILES:=""}" ]; then
 	echo "# We are using auth files to perform authentication"
 	echo "# Adding --auth-files ARG"
 	ARGS=(--auth-files ${ONEDRIVE_AUTHFILES} ${ARGS[@]})
 fi
 
-# Tell client to utilize provided auth response based on environment variable
+# Tell client to utilise provided auth response based on environment variable
 if [ -n "${ONEDRIVE_AUTHRESPONSE:=""}" ]; then
 	echo "# We are providing the auth response directly to perform authentication"
 	echo "# Adding --auth-response ARG"
@@ -178,7 +178,7 @@ fi
 
 # Tell client to use sync single dir option
 if [ -n "${ONEDRIVE_SINGLE_DIRECTORY:=""}" ]; then
-	echo "# We are synchronizing in single-directory mode"
+	echo "# We are synchronising in single-directory mode"
 	echo "# Adding --single-directory ARG"
 	ARGS=(--single-directory \"${ONEDRIVE_SINGLE_DIRECTORY}\" ${ARGS[@]})
 fi
