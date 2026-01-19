@@ -102,6 +102,45 @@ To check your version, run: `onedrive --version`. Ensure you are using the curre
 
 If you are using an older version, you must upgrade to the current release or newer to receive support.
 
+## Documentation and Configuration Assistance
+OneDrive Client for Linux includes a rich set of documentation covering installation, configuration options, advanced usage, and integrations. These resources are designed to help new users get started quickly and to give experienced users full control over advanced behaviour. If you are changing configuration, running in production, or using Business/SharePoint features, you should be reading these documents. All documentation is maintained in the [`docs/`](https://github.com/abraunegg/onedrive/tree/master/docs) directory of this repository.
+
+### Getting Started
+
+#### Installation
+Learn how to install the client on various systems — from distribution packages to building from source. Please read the [Install Guide](https://github.com/abraunegg/onedrive/blob/master/docs/install.md)
+
+#### Basic Usage & Configuration
+Covers initial authentication, default settings, basic operational instructions, frequently asked 'how to' questions, and how to tailor the application configuration. Please read the [Usage Guide](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md)
+
+### Advanced Configuration
+
+#### Application Configuration Options
+Full reference for every config option (with descriptions, defaults, and examples) to customise sync behaviour precisely. Please read the [Application Configuration Options Guide](https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md)
+
+#### Advanced Usage
+Tips for creating multiple config profiles, custom sync rules, daemon setups, selective sync, dual-booting with Microsoft Windows and more. Please read the [Advanced Usage Guide](https://github.com/abraunegg/onedrive/blob/master/docs/advanced-usage.md)
+
+### Special Use Cases
+
+#### Business Shared Items
+Configuring sync for OneDrive Business shared items (files and folders). Please read the [Business Shared Items Guide](https://github.com/abraunegg/onedrive/blob/master/docs/business-shared-items.md)
+
+#### SharePoint & Office 365 Libraries
+Instructions for syncing SharePoint document libraries (Business or Education tenants). Please read the [SharePoint Library Guide](https://github.com/abraunegg/onedrive/blob/master/docs/sharepoint-libraries.md)
+
+#### National Cloud support
+Instructions for environments like Microsoft Cloud Germany or US Government cloud endpoints. Please read the [National Cloud Deployment Guide](https://github.com/abraunegg/onedrive/blob/master/docs/national-cloud-deployments.md)
+
+### Container Support
+
+#### Docker
+How to run the OneDrive client in a Docker container. Please read the [Docker Guide](https://github.com/abraunegg/onedrive/blob/master/docs/docker.md)
+
+#### Podman
+How to run the OneDrive client with Podman. Please read the [Podman Guide](https://github.com/abraunegg/onedrive/blob/master/docs/podman.md)
+
+
 ## Basic Troubleshooting Steps
 
 If you encounter any issues running the application, please follow these steps **before** raising a bug report:
@@ -183,30 +222,6 @@ Providing complete information makes it much easier to understand, reproduce, an
 > [!TIP]  
 > Reports with missing details are much harder to investigate. Sharing as much as you can up front gives the best chance of a fast and accurate fix.
 
-
-
 ## Known issues
-Refer to [docs/known-issues.md](https://github.com/abraunegg/onedrive/blob/master/docs/known-issues.md)
-
-## Documentation and Configuration Assistance
-### Installing from Distribution Packages or Building the OneDrive Client for Linux from source
-Refer to [docs/install.md](https://github.com/abraunegg/onedrive/blob/master/docs/install.md)
-
-### Configuration and Usage
-Refer to [docs/usage.md](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md)
-
-### Configure OneDrive Business Shared Items
-Refer to [docs/business-shared-items.md](https://github.com/abraunegg/onedrive/blob/master/docs/business-shared-items.md)
-
-### Configure SharePoint / Office 365 Shared Libraries (Business or Education)
-Refer to [docs/sharepoint-libraries.md](https://github.com/abraunegg/onedrive/blob/master/docs/sharepoint-libraries.md)
-
-### Configure National Cloud support
-Refer to [docs/national-cloud-deployments.md](https://github.com/abraunegg/onedrive/blob/master/docs/national-cloud-deployments.md)
-
-### Docker support
-Refer to [docs/docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/docker.md)
-
-### Podman support
-Refer to [docs/podman.md](https://github.com/abraunegg/onedrive/blob/master/docs/podman.md)
+Lists common limitations, known problems, diagnostics, and workarounds. Please read the [Known Issues Advice](https://github.com/abraunegg/onedrive/blob/master/docs/known-issues.md)
 
