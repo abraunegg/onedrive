@@ -1,4 +1,4 @@
-# Advanced Configuration of the OneDrive Free Client
+# Advanced Configuration of the OneDrive Client for Linux
 This document covers the following scenarios:
 *   [Configuring the client to use multiple OneDrive accounts / configurations](#configuring-the-client-to-use-multiple-onedrive-accounts--configurations)
 *   [Configuring the client to use multiple OneDrive accounts / configurations using Docker](#configuring-the-client-to-use-multiple-onedrive-accounts--configurations-using-docker)

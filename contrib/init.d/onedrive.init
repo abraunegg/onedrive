@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # chkconfig: 2345 20 80
-# description: Starts and stops OneDrive Free Client
+# description: Starts and stops OneDrive Client for Linux
 #
 
 # Source function library.
@@ -19,7 +19,7 @@ fi
 # Check that networking is up.
 [ ${NETWORKING} = "no" ] && exit 1
 
-APP_NAME="OneDrive Free Client"
+APP_NAME="OneDrive Client for Linux"
 STOP_TIMEOUT=${STOP_TIMEOUT-5}
 RETVAL=0
 
