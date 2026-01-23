@@ -416,13 +416,13 @@ user@hostname:~$
 >
 > Microsoft authorisation codes are single-use and short-lived, so the code you pasted is no longer redeemable.
 >
-> Common causes:
+> **Common causes:**
 > * Browser extensions / privacy tools modifying the redirect URL (for example, ad-blockers or 'remove tracking parameters' features within browsers)
 > * Copying the wrong URL (ensure you copy from the browser address bar immediately after consent)
 > * Refreshing the page or reusing the same redirect URI (codes can only be redeemed once)
 > * Waiting too long before pasting the URL back
 >
-> Remediation steps for AADSTS70000:
+> **Remediation steps for AADSTS70000:**
 > 1. Re-run: `onedrive --reauth`
 > 2. Use a private/incognito browser session or a clean browser profile
 > 3. Temporarily disable URL-filtering/privacy extensions for the Microsoft login pages (uBlock Origin / ClearURLs / Brave Shields / similar), then retry
