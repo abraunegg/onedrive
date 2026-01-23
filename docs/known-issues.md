@@ -61,3 +61,48 @@ Recommended steps to address this issue include:
 * Creating a HTTPS Debug Log during the issue and submitting a support request to Microsoft with the log for their analysis.
 
 For more in-depth SSL troubleshooting, please read: https://maulwuff.de/research/ssl-debugging.html
+
+
+## AADSTS70000 returned during initial authorisation or re-authentication
+
+**Summary:**
+During initial authentication or when running `onedrive --reauth`, the client fails with:
+```
+AADSTS70000: The provided value for the 'code' parameter is not valid
+```
+This issue is **not a client bug** and is caused by the authorisation code being invalid at the time it is redeemed.
+
+**Detailed Description:**
+
+When authenticating, the user is redirected to a Microsoft login page in their web browser. After successful consent, the browser is redirected to a URL of the form:
+```
+https://login.microsoftonline.com/common/oauth2/nativeclient?code=<value>
+```
+The user must copy this URL and paste it back into the CLI when prompted.
+
+Microsoft authorisation codes are single-use and short-lived. If the code is altered, reused, expired, or otherwise invalidated before the client redeems it, Microsoft Entra ID returns AADSTS70000.
+
+**Technical Explanation:**
+
+The most common cause is **browser-side interference** with the redirect URL before the user copies it. Privacy and security tooling (such as ad-blockers, URL sanitisation, or “remove tracking parameters” features) can modify or invalidate the `code` query parameter.
+
+Other contributing factors include:
+* Copying the wrong URL (for example, not copying directly from the browser address bar immediately after consent)
+* Refreshing the page or attempting to reuse the same redirect URI
+* Waiting too long before pasting the redirect URI back into the CLI
+
+Once an authorisation code is invalid, it **cannot** be reused or recovered.
+
+**Recommended Resolution Steps:**
+
+1. Re-run authentication using:
+```
+onedrive --reauth
+```
+2. Use a private/incognito browser session or a clean browser profile
+3. Temporarily disable browser extensions or privacy features that modify URLs for the Microsoft login pages (for example: uBlock Origin, ClearURLs, Brave Shields)
+4. Complete the browser consent flow and immediately copy the redirect URI from the address bar and paste it into the CLI
+
+**Additional Notes:**
+
+For security reasons, users should **never post full redirect URIs** (they contain sensitive authorisation codes). Any such URLs must be redacted when shared in logs, issues, or support requests.

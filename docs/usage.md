@@ -407,6 +407,26 @@ user@hostname:~$
 > [!IMPORTANT]
 > Without additional input or configuration, the OneDrive Client for Linux will automatically adhere to default application settings during synchronisation processes with Microsoft OneDrive.
 
+> [!IMPORTANT]
+> **Handling a AADSTS70000 response**
+>
+> If you paste the redirect URI back into the CLI and receive:
+> `AADSTS70000: The provided value for the 'code' parameter is not valid.`
+> this is **not a client bug**.
+>
+> Microsoft authorisation codes are single-use and short-lived, so the code you pasted is no longer redeemable.
+>
+> **Common causes:**
+> * Browser extensions / privacy tools modifying the redirect URL (for example, ad-blockers or 'remove tracking parameters' features within browsers)
+> * Copying the wrong URL (ensure you copy from the browser address bar immediately after consent)
+> * Refreshing the page or reusing the same redirect URI (codes can only be redeemed once)
+> * Waiting too long before pasting the URL back
+>
+> **Remediation steps for AADSTS70000:**
+> 1. Re-run: `onedrive --reauth`
+> 2. Use a private/incognito browser session or a clean browser profile
+> 3. Temporarily disable URL-filtering/privacy extensions for the Microsoft login pages (uBlock Origin / ClearURLs / Brave Shields / similar), then retry
+
 
 #### Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker 
 To use this method of authentication, you must add the following configuration to your 'config' file:
@@ -470,7 +490,7 @@ You will have ~15 minutes before the code expires.
 > If using a Personal Microsoft OneDrive account (e.g., @outlook.com or @hotmail.com), please complete authentication using the interactive authentication method detailed above.
 >
 > **Further Reading:**  
-> 📚 [Microsoft Documentation — OAuth 2.0 device authorization grant](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code)
+> 📚 [Microsoft Documentation — OAuth 2.0 device authorisation grant](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code)
 
 ### Display Your Applicable Runtime Configuration
 To verify the configuration that the application will use, use the following command:
