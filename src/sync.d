@@ -7249,34 +7249,89 @@ class SyncEngine {
 			// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data
 			// If 'business' accounts, if driveId == defaultDriveId, then we will have data
 			// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be a 0 value
-			if (debugLogging) {addLogEntry("Quota Details: " ~ to!string(currentDriveQuota), ["debug"]);}
 			JSONValue quota = currentDriveQuota["quota"];
 			
+			// debug output the entire 'quota' JSON response
+			if (debugLogging) {addLogEntry("Quota Details: " ~ to!string(quota), ["debug"]);}
+			
+			// Does the 'quota' JSON struct contain 'remaining' ?
 			if ("remaining" in quota) {
 				// Issue #2806
 				// If this is a negative value, quota["remaining"].integer can potentially convert to a huge positive number. Convert a different way.
 				string tempQuotaRemainingOnlineString;
 				// is quota["remaining"] an integer type?
 				if (quota["remaining"].type() == JSONType.integer) {
+					// debug logging of the 'remaining' JSON struct
+					if (debugLogging) {
+						addLogEntry("quota remaining is an integer value - using this value: " ~ to!string(quota["remaining"].integer), ["debug"]);
+					}
+				
 					// extract as integer and convert to string
 					tempQuotaRemainingOnlineString = to!string(quota["remaining"].integer);
 				} 
 				
-				// is quota["remaining"] an string type?
-				if (quota["remaining"].type() == JSONType.string) {
-					// extract as string
-					tempQuotaRemainingOnlineString = quota["remaining"].str;
+				// Is 'tempQuotaRemainingOnlineString' still empty post integer check?
+				if (tempQuotaRemainingOnlineString.empty) {
+					// debug log that 'tempQuotaRemainingOnlineString' is still empty post integer check
+					if (debugLogging) {
+						addLogEntry("tempQuotaRemainingOnlineString is still empty post integer JSON value analysis ..", ["debug"]);
+					}
+				
+					// is quota["remaining"] an string type?
+					if (quota["remaining"].type() == JSONType.string) {
+						// debug logging of the 'remaining' JSON struct
+						if (debugLogging) {
+							addLogEntry("quota remaining is an string value - using this value: " ~ to!string(quota["remaining"].str), ["debug"]);
+						}
+					
+						// extract JSON value as string
+						tempQuotaRemainingOnlineString = quota["remaining"].str;
+					}
 				}
 				
-				// Fallback
+				// Fallback if tempQuotaRemainingOnlineString is still empty 
 				if (tempQuotaRemainingOnlineString.empty) {
-					// tempQuotaRemainingOnlineString was not set, set to zero as a string
-					tempQuotaRemainingOnlineString = "0";
+					// debug log that 'tempQuotaRemainingOnlineString' is still empty
+					if (debugLogging) {
+						addLogEntry("tempQuotaRemainingOnlineString is still empty post integer and string JSON value analysis .. this means quota 'remaining' element was not a string or integer value", ["debug"]);
+					}
+					
+					// Fetch the details from cachedOnlineDriveData
+					DriveDetailsCache cachedOnlineDriveData;
+					cachedOnlineDriveData = getDriveDetails(appConfig.defaultDriveId);
+				
+					// Use cachedOnlineDriveData.quotaRemaining as this is the last value we potentially had
+					if ((cachedOnlineDriveData.quotaRemaining) > 0) {
+						// the last known quota remaining was above zero
+						if (debugLogging) {
+							addLogEntry("cachedOnlineDriveData.quotaRemaining is a positive value, using this last known value for tempQuotaRemainingOnlineString", ["debug"]);
+						}
+						
+						// set tempQuotaRemainingOnlineString to cachedOnlineDriveData.quotaRemaining
+						tempQuotaRemainingOnlineString = to!string(cachedOnlineDriveData.quotaRemaining);
+					} else {
+						if (debugLogging) {
+							addLogEntry("cachedOnlineDriveData.quotaRemaining is zero or negative value, setting tempQuotaRemainingOnlineString to zero", ["debug"]);
+						}
+						
+						// no option but to set to zero
+						tempQuotaRemainingOnlineString = "0";
+					}
+				}
+				
+				// What did we set 'tempQuotaRemainingOnlineString' to?
+				if (debugLogging) {
+					addLogEntry("tempQuotaRemainingOnlineString = " ~ tempQuotaRemainingOnlineString, ["debug"]);
 				}
 				
 				// Update quotaRemainingOnline to use the converted string value
 				quotaRemainingOnline = to!long(tempQuotaRemainingOnlineString);
-			
+				
+				// What did we set 'tempQuotaRemainingOnlineString' to?
+				if (debugLogging) {
+					addLogEntry("quotaRemainingOnline = " ~ to!string(quotaRemainingOnline), ["debug"]);
+				}
+				
 				// Set the applicable 'quotaAvailable' value
 				quotaAvailable = quotaRemainingOnline > 0;
 				
