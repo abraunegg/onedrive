@@ -7214,12 +7214,17 @@ class SyncEngine {
 			driveId = appConfig.defaultDriveId;
 		}
 		
-		// Issue #3115 - Validate driveId length
+		// Issue #3115 - Validate sourceDriveId length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
-			// Test driveId length and validation
-			// Once checked and validated, we only need to check 'driveId' if it does not match exactly 'appConfig.defaultDriveId'
-			driveId = transformToLowerCase(testProvidedDriveIdForLengthIssue(sourceDriveId));
+			// Test sourceDriveId length and validation
+			if (!sourceDriveId.empty) {
+				// We were provided a sourceDriveId - that is what we check
+				driveId = transformToLowerCase(testProvidedDriveIdForLengthIssue(sourceDriveId));
+			} else {
+				// No sourceDriveId provided - use appConfig.defaultDriveId and validate that
+				driveId = transformToLowerCase(testProvidedDriveIdForLengthIssue(appConfig.defaultDriveId));
+			}
 		}
 		
 		// Try and query the quota for the provided driveId
