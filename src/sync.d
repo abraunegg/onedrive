@@ -7186,7 +7186,7 @@ class SyncEngine {
 	}
 		
 	// Query the OneDrive API using the provided driveId to get the latest quota details
-	string[3][] getRemainingFreeSpaceOnline(string driveId) {
+	string[3][] getRemainingFreeSpaceOnline(string sourceDriveId) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -7198,21 +7198,30 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// Get the quota details for this driveId
-		// Quota details are ONLY available for the main default driveId, as the OneDrive API does not provide quota details for shared folders
+		// Get the quota details for this sourceDriveId
+		// Quota details are ONLY available for the main default sourceDriveId, as the OneDrive API does not provide quota details for shared folders
 		JSONValue currentDriveQuota;
 		bool quotaRestricted = false; // Assume quota is not restricted unless "remaining" is missing
 		bool quotaAvailable = false;
 		long quotaRemainingOnline = 0;
 		string[3][] result;
 		OneDriveApi getCurrentDriveQuotaApiInstance;
+		string driveId;
 
 		// Ensure that we have a valid driveId to query
-		if (driveId.empty) {
+		if (sourceDriveId.empty) {
 			// No 'driveId' was provided, use the application default
 			driveId = appConfig.defaultDriveId;
 		}
-
+		
+		// Issue #3115 - Validate driveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test driveId length and validation
+			// Once checked and validated, we only need to check 'driveId' if it does not match exactly 'appConfig.defaultDriveId'
+			driveId = transformToLowerCase(testProvidedDriveIdForLengthIssue(sourceDriveId));
+		}
+		
 		// Try and query the quota for the provided driveId
 		try {
 			// Create a new OneDrive API instance
