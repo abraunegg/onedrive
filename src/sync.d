@@ -7341,7 +7341,7 @@ class SyncEngine {
 				// Update quotaRemainingOnline to use the converted string value
 				quotaRemainingOnline = to!long(tempQuotaRemainingOnlineString);
 				
-				// What did we set 'tempQuotaRemainingOnlineString' to?
+				// What did we set 'quotaRemainingOnline' to?
 				if (debugLogging) {
 					addLogEntry("quotaRemainingOnline = " ~ to!string(quotaRemainingOnline), ["debug"]);
 				}
