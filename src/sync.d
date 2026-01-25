@@ -9034,6 +9034,8 @@ class SyncEngine {
 		long thisFileSize;
 		// Is there space available online
 		bool spaceAvailableOnline = false;
+		// Flag to track if there is zero data traversal
+		bool zeroDataTraversal = false;
 		
 		DriveDetailsCache cachedOnlineDriveData;
 		long calculatedSpaceOnlinePostUpload;
@@ -9177,7 +9179,6 @@ class SyncEngine {
 							
 							// Does this 'file' already exist on OneDrive?
 							try {
-							
 								// Create a new API Instance for this thread and initialise it
 								checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
 								checkFileOneDriveApiInstance.initialise();
@@ -9235,6 +9236,9 @@ class SyncEngine {
 										// As file is now removed, we have nothing to add to the local database
 										if (debugLogging) {addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);}
 									} else {
+										// No data movement, file exists online, local file matches what is online
+										zeroDataTraversal = true;
+									
 										// Save online item details to the database
 										saveItem(fileDetailsFromOneDrive);
 									}
@@ -9343,8 +9347,14 @@ class SyncEngine {
 
 		// Upload success or failure?
 		if (!uploadFailed) {
-			// Update the 'cachedOnlineDriveData' record for this 'dbItem.driveId' so that this is tracked as accurately as possible for other threads
-			updateDriveDetailsCache(parentItem.driveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSize);
+			// Did we actually upload a file - that is, potentially change the online quota available state?
+			if (!zeroDataTraversal) {
+				// Update the 'cachedOnlineDriveData' record for this 'dbItem.driveId' so that this is tracked as accurately as possible for other threads
+				updateDriveDetailsCache(parentItem.driveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSize);
+			} else {
+				// There was zero data traversal
+				if (debugLogging) {addLogEntry("No file upload, no data movement - cachedOnlineDriveData.quotaRemaining = " ~ to!string(cachedOnlineDriveData.quotaRemaining), ["debug"]);}
+			}
 		} else {
 			// Need to add this to fileUploadFailures to capture at the end
 			fileUploadFailures ~= fileToUpload;
