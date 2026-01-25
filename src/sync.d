@@ -7186,7 +7186,7 @@ class SyncEngine {
 	}
 		
 	// Query the OneDrive API using the provided driveId to get the latest quota details
-	string[3][] getRemainingFreeSpaceOnline(string driveId) {
+	string[3][] getRemainingFreeSpaceOnline(string sourceDriveId) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -7198,21 +7198,35 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// Get the quota details for this driveId
-		// Quota details are ONLY available for the main default driveId, as the OneDrive API does not provide quota details for shared folders
+		// Get the quota details for this sourceDriveId
+		// Quota details are ONLY available for the main default sourceDriveId, as the OneDrive API does not provide quota details for shared folders
 		JSONValue currentDriveQuota;
 		bool quotaRestricted = false; // Assume quota is not restricted unless "remaining" is missing
 		bool quotaAvailable = false;
 		long quotaRemainingOnline = 0;
 		string[3][] result;
 		OneDriveApi getCurrentDriveQuotaApiInstance;
+		string driveId;
 
 		// Ensure that we have a valid driveId to query
-		if (driveId.empty) {
+		if (sourceDriveId.empty) {
 			// No 'driveId' was provided, use the application default
 			driveId = appConfig.defaultDriveId;
 		}
-
+		
+		// Issue #3115 - Validate sourceDriveId length
+		// What account type is this?
+		if (appConfig.accountType == "personal") {
+			// Test sourceDriveId length and validation
+			if (!sourceDriveId.empty) {
+				// We were provided a sourceDriveId - that is what we check
+				driveId = transformToLowerCase(testProvidedDriveIdForLengthIssue(sourceDriveId));
+			} else {
+				// No sourceDriveId provided - use appConfig.defaultDriveId and validate that
+				driveId = transformToLowerCase(testProvidedDriveIdForLengthIssue(appConfig.defaultDriveId));
+			}
+		}
+		
 		// Try and query the quota for the provided driveId
 		try {
 			// Create a new OneDrive API instance
@@ -7249,34 +7263,89 @@ class SyncEngine {
 			// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data
 			// If 'business' accounts, if driveId == defaultDriveId, then we will have data
 			// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be a 0 value
-			if (debugLogging) {addLogEntry("Quota Details: " ~ to!string(currentDriveQuota), ["debug"]);}
 			JSONValue quota = currentDriveQuota["quota"];
 			
+			// debug output the entire 'quota' JSON response
+			if (debugLogging) {addLogEntry("Quota Details: " ~ to!string(quota), ["debug"]);}
+			
+			// Does the 'quota' JSON struct contain 'remaining' ?
 			if ("remaining" in quota) {
 				// Issue #2806
 				// If this is a negative value, quota["remaining"].integer can potentially convert to a huge positive number. Convert a different way.
 				string tempQuotaRemainingOnlineString;
 				// is quota["remaining"] an integer type?
 				if (quota["remaining"].type() == JSONType.integer) {
+					// debug logging of the 'remaining' JSON struct
+					if (debugLogging) {
+						addLogEntry("quota remaining is an integer value - using this value: " ~ to!string(quota["remaining"].integer), ["debug"]);
+					}
+				
 					// extract as integer and convert to string
 					tempQuotaRemainingOnlineString = to!string(quota["remaining"].integer);
 				} 
 				
-				// is quota["remaining"] an string type?
-				if (quota["remaining"].type() == JSONType.string) {
-					// extract as string
-					tempQuotaRemainingOnlineString = quota["remaining"].str;
+				// Is 'tempQuotaRemainingOnlineString' still empty post integer check?
+				if (tempQuotaRemainingOnlineString.empty) {
+					// debug log that 'tempQuotaRemainingOnlineString' is still empty post integer check
+					if (debugLogging) {
+						addLogEntry("tempQuotaRemainingOnlineString is still empty post integer JSON value analysis ..", ["debug"]);
+					}
+				
+					// is quota["remaining"] an string type?
+					if (quota["remaining"].type() == JSONType.string) {
+						// debug logging of the 'remaining' JSON struct
+						if (debugLogging) {
+							addLogEntry("quota remaining is an string value - using this value: " ~ to!string(quota["remaining"].str), ["debug"]);
+						}
+					
+						// extract JSON value as string
+						tempQuotaRemainingOnlineString = quota["remaining"].str;
+					}
 				}
 				
-				// Fallback
+				// Fallback if tempQuotaRemainingOnlineString is still empty 
 				if (tempQuotaRemainingOnlineString.empty) {
-					// tempQuotaRemainingOnlineString was not set, set to zero as a string
-					tempQuotaRemainingOnlineString = "0";
+					// debug log that 'tempQuotaRemainingOnlineString' is still empty
+					if (debugLogging) {
+						addLogEntry("tempQuotaRemainingOnlineString is still empty post integer and string JSON value analysis .. this means quota 'remaining' element was not a string or integer value", ["debug"]);
+					}
+					
+					// Fetch the details from cachedOnlineDriveData
+					DriveDetailsCache cachedOnlineDriveData;
+					cachedOnlineDriveData = getDriveDetails(appConfig.defaultDriveId);
+				
+					// Use cachedOnlineDriveData.quotaRemaining as this is the last value we potentially had
+					if ((cachedOnlineDriveData.quotaRemaining) > 0) {
+						// the last known quota remaining was above zero
+						if (debugLogging) {
+							addLogEntry("cachedOnlineDriveData.quotaRemaining is a positive value, using this last known value for tempQuotaRemainingOnlineString", ["debug"]);
+						}
+						
+						// set tempQuotaRemainingOnlineString to cachedOnlineDriveData.quotaRemaining
+						tempQuotaRemainingOnlineString = to!string(cachedOnlineDriveData.quotaRemaining);
+					} else {
+						if (debugLogging) {
+							addLogEntry("cachedOnlineDriveData.quotaRemaining is zero or negative value, setting tempQuotaRemainingOnlineString to zero", ["debug"]);
+						}
+						
+						// no option but to set to zero
+						tempQuotaRemainingOnlineString = "0";
+					}
+				}
+				
+				// What did we set 'tempQuotaRemainingOnlineString' to?
+				if (debugLogging) {
+					addLogEntry("tempQuotaRemainingOnlineString = " ~ tempQuotaRemainingOnlineString, ["debug"]);
 				}
 				
 				// Update quotaRemainingOnline to use the converted string value
 				quotaRemainingOnline = to!long(tempQuotaRemainingOnlineString);
-			
+				
+				// What did we set 'quotaRemainingOnline' to?
+				if (debugLogging) {
+					addLogEntry("quotaRemainingOnline = " ~ to!string(quotaRemainingOnline), ["debug"]);
+				}
+				
 				// Set the applicable 'quotaAvailable' value
 				quotaAvailable = quotaRemainingOnline > 0;
 				
@@ -8965,6 +9034,8 @@ class SyncEngine {
 		long thisFileSize;
 		// Is there space available online
 		bool spaceAvailableOnline = false;
+		// Flag to track if there is zero data traversal
+		bool zeroDataTraversal = false;
 		
 		DriveDetailsCache cachedOnlineDriveData;
 		long calculatedSpaceOnlinePostUpload;
@@ -9108,7 +9179,6 @@ class SyncEngine {
 							
 							// Does this 'file' already exist on OneDrive?
 							try {
-							
 								// Create a new API Instance for this thread and initialise it
 								checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
 								checkFileOneDriveApiInstance.initialise();
@@ -9166,6 +9236,9 @@ class SyncEngine {
 										// As file is now removed, we have nothing to add to the local database
 										if (debugLogging) {addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);}
 									} else {
+										// No data movement, file exists online, local file matches what is online
+										zeroDataTraversal = true;
+									
 										// Save online item details to the database
 										saveItem(fileDetailsFromOneDrive);
 									}
@@ -9274,8 +9347,14 @@ class SyncEngine {
 
 		// Upload success or failure?
 		if (!uploadFailed) {
-			// Update the 'cachedOnlineDriveData' record for this 'dbItem.driveId' so that this is tracked as accurately as possible for other threads
-			updateDriveDetailsCache(parentItem.driveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSize);
+			// Did we actually upload a file - that is, potentially change the online quota available state?
+			if (!zeroDataTraversal) {
+				// Update the 'cachedOnlineDriveData' record for this 'dbItem.driveId' so that this is tracked as accurately as possible for other threads
+				updateDriveDetailsCache(parentItem.driveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSize);
+			} else {
+				// There was zero data traversal
+				if (debugLogging) {addLogEntry("No file upload, no data movement - cachedOnlineDriveData.quotaRemaining = " ~ to!string(cachedOnlineDriveData.quotaRemaining), ["debug"]);}
+			}
 		} else {
 			// Need to add this to fileUploadFailures to capture at the end
 			fileUploadFailures ~= fileToUpload;
