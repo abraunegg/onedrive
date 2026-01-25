@@ -1851,8 +1851,12 @@ class OneDriveApi {
 					
 					// Do we need to validate the JSON response?
 					if (validateJSONResponse) {
-						if (result.type() != JSONType.object) {
-							throw new OneDriveException(0, "Caller request a non null JSON response, get null instead", response);
+						// 204 = No Content (valid success for PATCH/DELETE events)
+						// Also allow an empty response body (some Graph operations legitimately return no payload)
+						if (response.statusLine.code != 204 && response.content.length != 0) {
+							if (result.type() != JSONType.object) {
+								throw new OneDriveException(0, "Caller request a non null JSON response, get null instead", response);
+							}
 						}
 					}
 					
