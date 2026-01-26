@@ -25,7 +25,6 @@ Aparams
 apng
 archlinux
 ARequest
-arguemnt
 armhf
 ARMv
 arsd
