@@ -7208,12 +7208,6 @@ class SyncEngine {
 		OneDriveApi getCurrentDriveQuotaApiInstance;
 		string driveId;
 
-		// Ensure that we have a valid driveId to query
-		if (sourceDriveId.empty) {
-			// No 'driveId' was provided, use the application default
-			driveId = appConfig.defaultDriveId;
-		}
-		
 		// Issue #3115 - Validate sourceDriveId length
 		// What account type is this?
 		if (appConfig.accountType == "personal") {
@@ -7224,6 +7218,16 @@ class SyncEngine {
 			} else {
 				// No sourceDriveId provided - use appConfig.defaultDriveId and validate that
 				driveId = transformToLowerCase(testProvidedDriveIdForLengthIssue(appConfig.defaultDriveId));
+			}
+		} else {
+			// This is not a personal account type
+			// Ensure that we have a valid driveId to query
+			if (sourceDriveId.empty) {
+				// No 'driveId' was provided, use the application default
+				driveId = appConfig.defaultDriveId;
+			} else {
+				// A 'driveId' was provided, use the provided 'sourceDriveId'
+				driveId = sourceDriveId;
 			}
 		}
 		
