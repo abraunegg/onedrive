@@ -57,7 +57,7 @@ private void attach()
  * errors.
  *
  * The templates passes the Operations object to the lambda as the first
- * arguemnt.
+ * argument.
  */
 private auto call(alias fn)()
 {
