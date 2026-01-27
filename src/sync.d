@@ -10539,9 +10539,17 @@ class SyncEngine {
 				addLogEntry("ERROR: " ~ sanitiseJSONItem(jsonItem));
 			}
 		} else {
-			// log error
-			addLogEntry("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object that can be processed.");
-			addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
+			// Log that the provided JSON could not be processed
+			addLogEntry("ERROR: Invalid JSON object - the provided data cannot be processed or stored in the database.");
+			
+			// What level of next message is provided?
+			if (appConfig.verbosityCount == 0) {
+				// Standard error message
+				addLogEntry("ERROR: Please rerun the application with --verbose enabled to obtain additional diagnostic information.");
+			} else {
+				// verbose or debug
+				addLogEntry("ERROR: The following JSON data failed validation and could not be saved: " ~ to!string(jsonItem));
+			}
 		}
 		
 		// Display function processing time if configured to do so
