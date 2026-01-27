@@ -1002,8 +1002,12 @@ class OneDriveApi {
 	
 	// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_search
 	JSONValue searchDriveForPath(string driveId, string path) {
+		// OData string literal escaping: a single quote inside a '...' literal becomes doubled.
+		// Then URL-encode for safe transport
+		auto odataSafe = path.replace("'", "''");
+		auto encoded   = encodeComponent(odataSafe);
 		string url;
-		url = "https://graph.microsoft.com/v1.0/drives/" ~ driveId ~ "/root/search(q='" ~ encodeComponent(path) ~ "')";
+		url = "https://graph.microsoft.com/v1.0/drives/" ~ driveId ~ "/root/search(q='" ~ encoded ~ "')";
 		return get(url);
 	}
 	
