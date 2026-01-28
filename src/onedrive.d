@@ -795,14 +795,15 @@ class OneDriveApi {
 				}
 				
 				// match the authorisation code
-				auto c = matchFirst(response, r"(?:[?&]code=)([^&]+)");
+				auto c = matchFirst(strip(response), r"(?:[?&]code=)([^&]+)");
 				
 				if (c.empty) {
 					addLogEntry("An empty or invalid response uri was entered");
 					return false;
 				}
 				c.popFront(); // skip the whole match
-				redeemToken(c.front);
+				string authCode = decodeComponent(c.front);
+				redeemToken(authCode);
 				return true;
 			}
 		}
@@ -1253,7 +1254,7 @@ class OneDriveApi {
 		(*headers)["Prefer"] = "Include-Feature=AddToOneDrive";
 	}
 
-	private void redeemToken(char[] authCode) {
+	private void redeemToken(string authCode) {
 		string postData =
 			"client_id=" ~ clientId ~
 			"&redirect_uri=" ~ encodeComponent(redirectUrl) ~
