@@ -795,7 +795,8 @@ class OneDriveApi {
 				}
 				
 				// match the authorisation code
-				auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
+				auto c = matchFirst(response, r"(?:[?&]code=)([^&]+)");
+				
 				if (c.empty) {
 					addLogEntry("An empty or invalid response uri was entered");
 					return false;
@@ -1253,12 +1254,12 @@ class OneDriveApi {
 	}
 
 	private void redeemToken(char[] authCode) {
-		char[] postData =
+		string postData =
 			"client_id=" ~ clientId ~
-			"&redirect_uri=" ~ redirectUrl ~
-			"&code=" ~ authCode ~
+			"&redirect_uri=" ~ encodeComponent(redirectUrl) ~
+			"&code=" ~ encodeComponent(authCode) ~
 			"&grant_type=authorization_code";
-		acquireToken(postData);
+		acquireToken(postData.dup);
 	}
 	
 	private void acquireToken(char[] postData) {
