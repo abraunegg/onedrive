@@ -1018,7 +1018,7 @@ class OneDriveApi {
 		string[string] requestHeaders;
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		if (eTag) requestHeaders["If-Match"] = to!string(eTag);
-		return patch(url, data.toString(), requestHeaders);
+		return patch(url, data.toString(), false, requestHeaders);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delete
@@ -1158,7 +1158,7 @@ class OneDriveApi {
 		const JSONValue request = [
 			"expirationDateTime": expirationDateTime.toISOExtString()
 		];
-		return patch(url, request.toString());
+		return patch(url, request.toString(), true);
 	}
 
 	// Delete Webhook subscription
@@ -1761,8 +1761,8 @@ class OneDriveApi {
 		}, validateJSONResponse, callingFunction, lineno);
 	}
 
-	private JSONValue patch(const(char)[] url, const(char)[] patchData, string[string] requestHeaders=null, const(char)[] contentType = "application/json", string callingFunction=__FUNCTION__, int lineno=__LINE__) {
-		bool validateJSONResponse = true;
+	private JSONValue patch(const(char)[] url, const(char)[] patchData, bool validateJSONResponseInput, string[string] requestHeaders=null, const(char)[] contentType = "application/json", string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+		bool validateJSONResponse = validateJSONResponseInput;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.patch, url, false, response, requestHeaders);
 			curlEngine.setContent(contentType, patchData);
@@ -1857,8 +1857,20 @@ class OneDriveApi {
 					
 					// Do we need to validate the JSON response?
 					if (validateJSONResponse) {
-						if (result.type() != JSONType.object) {
-							throw new OneDriveException(0, "Caller request a non null JSON response, get null instead", response);
+						const code = response.statusLine.code;
+
+						// 204 = No Content is a valid success response for some Graph operations (e.g. PATCH/DELETE).
+						// In that case, there is no JSON payload to validate.
+						if (code != 204) {
+							// If caller expects JSON, an empty body is not acceptable
+							if (response.content.length == 0) {
+								throw new OneDriveException( 0, "Caller requested a JSON object response, but the response body was empty", response);
+							}
+
+							// Body is present: it must be a JSON object
+							if (result.type() != JSONType.object) {
+								throw new OneDriveException(0, "Caller requested a JSON object response, but the response was not a JSON object", response);
+							}
 						}
 					}
 					
