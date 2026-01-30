@@ -4950,9 +4950,13 @@ class SyncEngine {
 			// Everything else should remain the same .. and then save this DB record to the DB ..
 			// However, we did this, for the local modified file right before calling this function to update the online timestamp ... so .. do we need to do this again, effectively performing a double DB write for the same data?
 			if ((originItem.type != ItemType.remote) && (originItem.remoteType != ItemType.file)) {
-				// Save the response JSON
-				// Is the response a valid JSON object - validation checking done in saveItem
-				saveItem(response);
+				if (response.type() == JSONType.object) {
+					// Save the response JSON
+					saveItem(response);
+				} else {
+					// Log why we are not saving 
+					if (debugLogging) {addLogEntry("uploadLastModifiedTime: updateById returned no JSON payload (likely HTTP 204); skipping saveItem()", ["debug"]);}
+				}
 			} 
 		} catch (OneDriveException exception) {
 			// Handle a 409 - ETag does not match current item's value
@@ -10539,9 +10543,17 @@ class SyncEngine {
 				addLogEntry("ERROR: " ~ sanitiseJSONItem(jsonItem));
 			}
 		} else {
-			// log error
-			addLogEntry("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object that can be processed.");
-			addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
+			// Log that the provided JSON could not be processed
+			addLogEntry("ERROR: Invalid JSON object - the provided data cannot be processed or stored in the database.");
+			
+			// What level of next message is provided?
+			if (appConfig.verbosityCount == 0) {
+				// Standard error message
+				addLogEntry("ERROR: Please rerun the application with --verbose enabled to obtain additional diagnostic information.");
+			} else {
+				// verbose or debug
+				addLogEntry("ERROR: The following JSON data failed validation and could not be saved: " ~ to!string(jsonItem));
+			}
 		}
 		
 		// Display function processing time if configured to do so
@@ -11976,9 +11988,13 @@ class SyncEngine {
 				// Perform Garbage Collection
 				GC.collect();
 				
-				// save the move response from OneDrive in the database
-				// Is the response a valid JSON object - validation checking done in saveItem
-				saveItem(response);
+				// Save the move response from OneDrive in the database
+				if (isMoveSuccess && response.type() == JSONType.object) {
+					saveItem(response);
+				} else {
+					// Log why we are not saving
+					if (debugLogging) {addLogEntry("uploadMoveItem: skipping saveItem() (no JSON payload returned or move not successful)", ["debug"]);}
+				}
 			}
 		} else {
 			// Moved item is unwanted
