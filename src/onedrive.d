@@ -795,13 +795,15 @@ class OneDriveApi {
 				}
 				
 				// match the authorisation code
-				auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
+				auto c = matchFirst(strip(response), r"(?:[?&]code=)([^&]+)");
+				
 				if (c.empty) {
 					addLogEntry("An empty or invalid response uri was entered");
 					return false;
 				}
 				c.popFront(); // skip the whole match
-				redeemToken(c.front);
+				string authCode = decodeComponent(c.front);
+				redeemToken(authCode);
 				return true;
 			}
 		}
@@ -1002,8 +1004,12 @@ class OneDriveApi {
 	
 	// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_search
 	JSONValue searchDriveForPath(string driveId, string path) {
+		// OData string literal escaping: a single quote inside a '...' literal becomes doubled.
+		// Then URL-encode for safe transport
+		auto odataSafe = path.replace("'", "''");
+		auto encoded   = encodeComponent(odataSafe);
 		string url;
-		url = "https://graph.microsoft.com/v1.0/drives/" ~ driveId ~ "/root/search(q='" ~ encodeComponent(path) ~ "')";
+		url = "https://graph.microsoft.com/v1.0/drives/" ~ driveId ~ "/root/search(q='" ~ encoded ~ "')";
 		return get(url);
 	}
 	
@@ -1012,7 +1018,7 @@ class OneDriveApi {
 		string[string] requestHeaders;
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		if (eTag) requestHeaders["If-Match"] = to!string(eTag);
-		return patch(url, data.toString(), requestHeaders);
+		return patch(url, data.toString(), false, requestHeaders);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delete
@@ -1152,7 +1158,7 @@ class OneDriveApi {
 		const JSONValue request = [
 			"expirationDateTime": expirationDateTime.toISOExtString()
 		];
-		return patch(url, request.toString());
+		return patch(url, request.toString(), true);
 	}
 
 	// Delete Webhook subscription
@@ -1252,13 +1258,13 @@ class OneDriveApi {
 		(*headers)["Prefer"] = "Include-Feature=AddToOneDrive";
 	}
 
-	private void redeemToken(char[] authCode) {
-		char[] postData =
+	private void redeemToken(string authCode) {
+		string postData =
 			"client_id=" ~ clientId ~
-			"&redirect_uri=" ~ redirectUrl ~
-			"&code=" ~ authCode ~
+			"&redirect_uri=" ~ encodeComponent(redirectUrl) ~
+			"&code=" ~ encodeComponent(authCode) ~
 			"&grant_type=authorization_code";
-		acquireToken(postData);
+		acquireToken(postData.dup);
 	}
 	
 	private void acquireToken(char[] postData) {
@@ -1755,8 +1761,8 @@ class OneDriveApi {
 		}, validateJSONResponse, callingFunction, lineno);
 	}
 
-	private JSONValue patch(const(char)[] url, const(char)[] patchData, string[string] requestHeaders=null, const(char)[] contentType = "application/json", string callingFunction=__FUNCTION__, int lineno=__LINE__) {
-		bool validateJSONResponse = true;
+	private JSONValue patch(const(char)[] url, const(char)[] patchData, bool validateJSONResponseInput, string[string] requestHeaders=null, const(char)[] contentType = "application/json", string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+		bool validateJSONResponse = validateJSONResponseInput;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.patch, url, false, response, requestHeaders);
 			curlEngine.setContent(contentType, patchData);
@@ -1851,8 +1857,20 @@ class OneDriveApi {
 					
 					// Do we need to validate the JSON response?
 					if (validateJSONResponse) {
-						if (result.type() != JSONType.object) {
-							throw new OneDriveException(0, "Caller request a non null JSON response, get null instead", response);
+						const code = response.statusLine.code;
+
+						// 204 = No Content is a valid success response for some Graph operations (e.g. PATCH/DELETE).
+						// In that case, there is no JSON payload to validate.
+						if (code != 204) {
+							// If caller expects JSON, an empty body is not acceptable
+							if (response.content.length == 0) {
+								throw new OneDriveException( 0, "Caller requested a JSON object response, but the response body was empty", response);
+							}
+
+							// Body is present: it must be a JSON object
+							if (result.type() != JSONType.object) {
+								throw new OneDriveException(0, "Caller requested a JSON object response, but the response was not a JSON object", response);
+							}
 						}
 					}
 					

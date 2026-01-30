@@ -26,43 +26,54 @@ Designed for maximum flexibility and reliability, this powerful and highly confi
 
 .SH FEATURES
 .br
-* Compatible with OneDrive Personal and OneDrive for Business, including access to Microsoft SharePoint Libraries
+* Compatible with OneDrive Personal, OneDrive for Business, and Microsoft SharePoint Libraries
 .br
-* Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
+* Provides full support for shared folders and files across both Personal and Business accounts
 .br
-* Supports near real-time processing of online changes via either WebSockets (native support) or webhooks (manual configuration required)
-.br
-* Supports single-tenant and multi-tenant applications
-.br
-* Supports Intune Single Sign-On (SSO) authentication via the Microsoft Identity Device Broker (D-Bus interface)
-.br
-* Supports OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
-.br
-* Supports the FreeDesktop.org Trash specification, allowing locally deleted files to be safely recoverable in case of accidental online deletion
+* Supports single-tenant and multi-tenant Microsoft Entra ID environments
 .br
 * Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany, and Azure/Office 365 operated by VNET in China
 .br
-* Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
+* Supports bi-directional synchronisation (default) to keep local and remote data fully aligned
 .br
-* Protects against significant data loss on OneDrive after configuration changes
+* Supports upload-only mode to upload local changes without downloading remote changes
 .br
-* Supports a dry-run option for safe configuration testing
+* Supports download-only mode to download remote changes without uploading local changes
 .br
-* Supports interruption-tolerant uploads and downloads by resuming file transfers from the point of failure, ensuring data integrity and efficiency
+* Supports a dry-run mode for safely testing configuration changes without modifying data
+.br
+* Implements safe conflict handling to minimise data loss by creating local backups when this is determined to be the safest resolution strategy
+.br
+* Provides comprehensive rules-based client-side filtering with inclusions, exclusions, wildcard matching (*), and recursive globbing (**)
+.br
+* Allows selective synchronisation of specific files, directories, or patterns
+.br
+* Caches synchronisation state for efficient processing and improved performance on large or complex sync sets
+.br
+* Supports near real-time processing of cloud-side changes using native WebSocket support
+.br
+* Supports webhook-based online change notifications where WebSockets are unsuitable (manual configuration required)
+.br
+* Monitors local file system changes in real-time using inotify
+.br
+* Implements the FreeDesktop.org Trash specification, enabling recovery of files deleted locally due to remote deletions
+.br
+* Protects against accidental data loss following configuration changes
+.br
+* Supports interruption-tolerant uploads and downloads with automatic transfer resumption
 .br
 * Validates file transfers to ensure data integrity
 .br
-* Caches sync state for efficiency
+* Enhances synchronisation performance through multi-threaded file transfers
 .br
-* Monitors local files in real-time using inotify
+* Manages network usage through configurable bandwidth rate limiting
 .br
-* Enhanced synchronisation speed with multi-threaded file transfers
-.br
-* Manages traffic bandwidth use with rate limiting
-.br
-* Supports sending desktop alerts using libnotify
+* Supports desktop notifications for synchronisation events, warnings, and errors using libnotify
 .br
 * Provides desktop file-manager integration by registering the OneDrive folder as a sidebar location with a distinctive icon
+.br
+* Operates fully in both graphical and headless/server environments, with a graphical environment required only for Intune SSO, desktop notifications, and sidebar integration
+
 
 .SH CONFIGURATION
 By default, the OneDrive Client for Linux uses a sensible set of built-in defaults to interact with the Microsoft OneDrive service.

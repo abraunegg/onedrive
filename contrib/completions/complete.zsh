@@ -24,15 +24,18 @@ all_opts=(
   '--display-quota[Display the quota status of the client - no sync will be performed.]'
   '--display-running-config[Display options configured on application startup.]'
   '--display-sync-status[Display the sync status of the client - no sync will be performed.]'
+  '--download-file[Download a single file from Microsoft OneDrive]:file name:'
   '--download-only[Only download remote changes]'
   '--dry-run[Perform a trial sync with no changes made]'
   '--enable-logging[Enable client activity to a separate log file]'
+  '--file-fragment-size[Specify the file fragment size for large file uploads (in MB)]:MB:'
   '--force[Force the deletion of data when a '\''big delete'\'' is detected]'
   '--force-http-11[Force the use of HTTP 1.1 for all operations]'
   '--force-sync[Force a synchronization of a specific folder]'
   '--get-O365-drive-id[Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library]:site URL:'
   '--get-file-link[Display the file link of a synced file]:file name:'
   '--get-sharepoint-drive-id[Query and return the SharePoint Drive ID]:site URL:'
+  '--help[Show this help screen]'
   '--list-shared-items[List OneDrive Business Shared Items]'
   '--local-first[Synchronize from the local directory source first, before downloading changes from OneDrive.]'
   '--log-dir[Directory where logging output is saved]:log directory:_files -/'
@@ -47,6 +50,7 @@ all_opts=(
   '--reauth[Reauthenticate the client with OneDrive]'
   '--remove-directory[Remove a directory on OneDrive - no sync will be performed.]:directory name:'
   '--remove-source-files[Remove source file after upload when using --upload-only]'
+  '--remove-source-folders[Remove the local directory structure post successful file transfer when using --upload-only --remove-source-files]'
   '--resync[Forget the last saved state, perform a full sync]'
   '--resync-auth[Approve the use of performing a --resync action]'
   '--share-password[Password to protect share link]:password:'
@@ -64,12 +68,11 @@ all_opts=(
   '--sync-shared-files[Sync OneDrive Business Shared Files to the local filesystem]'
   '--syncdir[Specify the local directory used for synchronisation to OneDrive]:sync directory:_files -/'
   '--synchronize[Perform a synchronisation (deprecated)]'
+  '--threads[Number of threads to use for multi-threaded transfers]:N:'
   '--upload-only[Only upload to OneDrive, do not sync changes from OneDrive locally]'
   '--verbose[Print more details, useful for debugging (repeat for extra debugging)]'
   '--version[Print the version and exit]'
   '--with-editing-perms[Create a read-write shareable link for a file]'
 )
 
-
 _arguments -S "$all_opts[@]" && return 0
-
