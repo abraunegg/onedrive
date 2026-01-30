@@ -149,9 +149,12 @@ If you encounter any issues running the application, please follow these steps *
    Run `onedrive --version` to confirm which version you are using.  
    - Ensure you are running the latest [release](https://github.com/abraunegg/onedrive/releases).  
    - If you are already on the latest release but still experiencing issues, manually build the client from the `master` branch to test against the very latest code. This includes fixes for bugs discovered since the last tagged release.
+   - If you are using Docker or Podman, ensure you are using the 'edge' Docker Tag. Do not use the 'latest' Docker Tag.
 
 2. **Run in verbose mode**  
    Use the `--verbose` option to provide greater clarity and detailed logging about the issue you are facing.
+   
+   If you are using Docker or Podman, use the ONEDRIVE_VERBOSE environment variable to increase logging verbosity.
 
 3. **Test with IPv4 only**  
    Configure the application to use **IPv4 network connectivity only**, then retest. See the `'ip_protocol_version'` option [documentation](https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md#ip_protocol_version) for assistance.
