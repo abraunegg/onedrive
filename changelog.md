@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 *   Improve --resync warning prompt for clarity and safer operation (#3562)
 *   Updated Dockerfiles to support newer distributions and associated components (#3565)
-*   FreeBSD: Select inotify type (libc or linotify) based on FreeBSD version (#3579)
+*   FreeBSD: Select inotify type (libc or libnotify) based on FreeBSD version (#3579)
 *   Update that --force and --force-sync cannot be used with --resync (#3593)
 
 ### Fixed
