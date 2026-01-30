@@ -2,6 +2,55 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.10 - 2026-01-30
+
+### Added
+*   Implement Feature Request: Add configuration option 'disable_version_check' (#3530)
+*   Implement Feature Request: Add automatic debug logging output redaction (#3549)
+
+### Changed
+*   Improve --resync warning prompt for clarity and safer operation (#3562)
+*   Updated Dockerfiles to support newer distributions and associated components (#3565)
+*   FreeBSD: Select inotify type (libc or linotify) based on FreeBSD version (#3579)
+*   Update that --force and --force-sync cannot be used with --resync (#3593)
+
+### Fixed
+*   Fix Bug: Fix timestamp and hash evaluation to avoid unnecessary file version creation online (#3526)
+*   Fix Bug: Fix that websocket do not work with Sharepoint libraries (#3533)
+*   Fix Bug: Fix that large files fail to download due operational timeout being exceeded (#3541)
+*   Fix Bug: Fix hash functions read efficiency to support 'on-demand' development work (#3544)
+*   Fix Bug: Fix that safeBackup crashes when attempting backing up a non-existent local path (#3545)
+*   Fix Bug: Fix to that the application only performs safeBackup() on deleted items only when a hash change is detected (#3546)
+*   Fix Bug: Prevent mis-configuration where 'recycle_bin_path' is inside 'sync_dir' (#3552)
+*   Fix Bug: Harden logging initialisation: fall back to home directory when log_dir is not writeable (#3555)
+*   Fix Bug: Ensure mkdirRecurse() is correctly wrapped in try block (#3566)
+*   Fix Bug: Fix that 'remove_source_files' does not remove the source file when the file already exists in OneDrive (#3572)
+*   Fix Bug: Enhance displayFileSystemErrorMessage() to include details of the actual path (#3574)
+*   Fix Bug: Enhance downloadFileItem() to ensure greater clarity on download failures (#3575)
+*   Fix Bug: Prevent malformed 'skip_dir' / 'skip_file' rules when using multiple config entries (#3576)
+*   Fix Bug: Detect and prevent 'skip_dir' / 'skip_file' rules shadowing 'sync_list' inclusions (#3577)
+*   Fix Bug: Fix 'skip_dir' and 'skip_file' shadow detection for rooted 'sync_list' paths (#3578)
+*   Fix Bug: Fix 'skip_dir' directory exclusion by normalising input paths before matching (#3580)
+*   Fix Bug: Fix testInternetReachability() function to ensure same curl options used in a consistent manner (#3581)
+*   Fix Bug: Fix performPermanentDelete() to ensure zero content length is set (#3585)
+*   Fix Bug: Fix safeRemove() to retry on EINTR / EBUSY filesystem responses to support 'on-demand' development work (#3586)
+*   Fix Bug: Fix safeRename() to retry on EINTR / EBUSY filesystem responses to support 'on-demand' development work (#3587)
+*   Fix Bug: Fix safeBackup() to retry on EINTR / EBUSY filesystem responses to support 'on-demand' development work (#3589)
+*   Fix Bug: Fix WebSocket reconnect cleanup to prevent GC finalisation crash (#3582)
+*   Fix Bug: Fix setLocalPathTimestamp() to retry on EINTR / EBUSY filesystem responses to support 'on-demand' development work (#3591)
+*   Fix Bug: Fix incorrect handling of failed safeRename() operations to support 'on-demand' development work (#3592) 
+*   Fix Bug: Fix Docker entrypoint handling for non-root --user execution (#3602)
+*   Fix Bug: Fix getRemainingFreeSpaceOnline() and correctly handle zero data traversal events for quota tracking (#3618)
+*   Fix Bug: Fix getRemainingFreeSpaceOnline() for Business and SharePoint Accounts (#3621)
+*   Fix Bug: Fix OAuth authorisation code parsing and encoding during token redemption (#3625)
+*   Fix Bug: Fix Graph search(q=…) escaping for apostrophes (#3624)
+*   Fix Bug: Fix handling of 204 No Content responses for Microsoft Graph PATCH requests (#3620)
+
+### Updated
+*   Updated completion files to align to application functionality
+*   Updated documentation
+
+
 ## 2.5.9 - 2025-11-06
 
 ### Fixed
