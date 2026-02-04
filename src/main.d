@@ -1379,7 +1379,7 @@ int main(string[] cliArgs) {
 					auto sleepTime = nextCheckTime - currentTime;
 					if (debugLogging) {addLogEntry("Sleep for " ~ to!string(sleepTime), ["debug"]);}
 					
-					if (filesystemMonitor.initialised || webhookEnabled) {
+					if (filesystemMonitor.initialised || webhookEnabled || oneDriveSocketIo !is null) {
 
 						if (filesystemMonitor.initialised) {
 							// If local monitor is on and is waiting (previous event was not from webhook)
