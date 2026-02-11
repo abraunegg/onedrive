@@ -1784,11 +1784,16 @@ class ApplicationConfig {
 			addLogEntry();
 			addLogEntry("--------------------DEVELOPER_OPTIONS----------------------------");
 			addLogEntry("Config option 'force_children_scan'          = " ~ to!string(getValueBool("force_children_scan")));
-			addLogEntry();
+			addLogEntry("Config option 'monitor_max_loop'             = " ~ to!string(getValueLong("monitor_max_loop")));
+			addLogEntry("Config option 'display_memory'               = " ~ to!string(getValueBool("display_memory")));
+			addLogEntry("Config option 'display_sync_options'         = " ~ to!string(getValueBool("display_sync_options")));
+			addLogEntry("Config option 'display_processing_time'      = " ~ to!string(getValueBool("display_processing_time")));
 		}
 		
+		// Close out config output
 		if (getValueBool("display_running_config")) {
 			addLogEntry("-----------------------------------------------------------------");
+			addLogEntry();
 		}
 	}
 	
