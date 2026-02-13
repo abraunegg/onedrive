@@ -1033,6 +1033,8 @@ int main(string[] cliArgs) {
 								addLogEntry("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 							} else {
 								addLogEntry("ERROR: Unable to configure WebSocket support to monitor Microsoft Graph API changes in near real-time.");
+								if (debugLogging) {addLogEntry("Setting 'disable_websocket_support' to 'true' to force WebSockets to be disabled.", ["debug"]);}
+								appConfig.setValueBool("disable_websocket_support" , true);
 							}
 						} else {
 							// WebSocket Support has been disabled
@@ -1403,7 +1405,7 @@ int main(string[] cliArgs) {
 								Duration nextWebhookCheckDuration = oneDriveWebhook.getNextExpirationCheckDuration();
 								if (nextWebhookCheckDuration < sleepTime) sleepTime = nextWebhookCheckDuration;
 								notificationReceived = false;
-							} else if (!appConfig.getValueBool("disable_websocket_support") && appConfig.curlSupportsWebSockets) {
+							} else if (oneDriveSocketIo !is null && !appConfig.getValueBool("disable_websocket_support") && appConfig.curlSupportsWebSockets) {
 								Duration nextWebsocketCheckDuration = oneDriveSocketIo.getNextExpirationCheckDuration();
 								if (nextWebsocketCheckDuration < sleepTime) sleepTime = nextWebsocketCheckDuration;
 							}
@@ -1856,9 +1858,16 @@ extern(C) nothrow @nogc @system void exitViaSignalHandler(int signo) {
     if (signo == SIGSEGV) {
 		// Was SIGTERM used?
 		if (!sigtermHandlerTriggered) {
-			// No .. so most likely SIGINT (CTRL-C)
-			printf("Due to a termination signal, internal processing stopped abruptly. The application will now exit in a unclean manner.\n");
-			exit(130);
+			// No .. so most likely SIGINT (CTRL-C) - lets check
+			if (signo == SIGINT) {
+				// Yes - SIGINT was used
+				printf("Due to a termination signal, internal processing stopped abruptly. The application will now exit in a unclean manner.\n");
+				exit(130);
+			} else {
+				// Confirmed as SIGSEGV, but not SIGINT and SIGTERM not used
+				printf("FATAL: Segmentation fault (SIGSEGV). The application encountered an internal error and will now exit in a unclean manner.\n");
+				exit(139);
+			}
 		} else {
 			// High probability of being shutdown by systemd, for example: systemctl --user stop onedrive
 			// Exit in a manner that does not trigger an exit failure in systemd
