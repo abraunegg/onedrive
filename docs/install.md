@@ -142,7 +142,7 @@ You will need at least GDC version 15. If your distribution's repositories inclu
 
 #### Arch Linux | Manjaro Linux
 ```text
-sudo pacman -S git make pkg-config curl sqlite dbus ldc
+sudo pacman -S git make pkg-config curl sqlite dbus fuse3 ldc
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -158,7 +158,7 @@ CentOS 7.x and RHEL 7.x reached End of Life status on June 30th 2024 and is no l
 #### CentOS Stream 8 | CentOS Stream 9 | CentOS Stream 10
 ```text
 sudo dnf groupinstall 'Development Tools'
-sudo dnf install libcurl-devel sqlite-devel dbus-devel
+sudo dnf install libcurl-devel sqlite-devel dbus-devel fuse3-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:
@@ -175,7 +175,7 @@ Debian 10 reached the end of its five-year LTS window on September 10th 2022 and
 #### Debian 11 | Debian 12 | Debian 13 | Linux Mint Debian Edition 6 | Linux Mint Debian Edition 7 - x86_64
  ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev libfuse3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:
@@ -189,7 +189,7 @@ sudo apt install libnotify-dev
 
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev libfuse3-dev
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -202,7 +202,7 @@ sudo apt install libnotify-dev
 
 ```text
 sudo dnf group install development-tools
-sudo dnf install libcurl-devel sqlite-devel dbus-devel
+sudo dnf install libcurl-devel sqlite-devel dbus-devel fuse3-devel
 ```
 Before running the dmd install you need to check for the option 'use-keyboxd' in your gnupg common.conf file and comment it out while running the install.
 ```text
@@ -231,7 +231,7 @@ sudo dnf install libnotify-devel
 > For FreeBSD it is advisable to use the distribution provided 'ldc' package to ensure compiler consistency.
 
 ```text
-pkg install bash bash-completion gmake pkgconf autoconf automake logrotate libinotify git sqlite3 ldc
+pkg install bash bash-completion gmake pkgconf autoconf automake logrotate libinotify git sqlite3 ldc fusefs-libs3
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -246,7 +246,7 @@ sudo emerge --onlydeps net-misc/onedrive
 #### MX Linux 25
  ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev libfuse3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:
@@ -257,7 +257,7 @@ sudo apt install libnotify-dev
 #### OpenSUSE Leap | OpenSUSE Tumbleweed
 ```text
 sudo zypper refresh
-sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static dbus-1-devel
+sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static dbus-1-devel fuse3-devel
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -276,7 +276,7 @@ sudo zypper install libnotify-devel
 
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev libfuse3-dev
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -287,7 +287,7 @@ sudo apt install libnotify-dev
 
 ```text
 sudo dnf groupinstall 'Development Tools'
-sudo dnf install libcurl-devel sqlite-devel dbus-devel
+sudo dnf install libcurl-devel sqlite-devel dbus-devel fuse3-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:
@@ -318,7 +318,7 @@ Ubuntu 20.x LTS reached the end of its five-year LTS window on May 31th 2025 and
 
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev libfuse3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:
