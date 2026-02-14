@@ -49,13 +49,16 @@ To remove the Ubuntu Universe client, perform the following actions:
 sudo apt remove onedrive
 ```
 
-#### Step 1c: Remove errant systemd service file installed by Ubuntu Universe distribution package
+#### Step 1c: Remove errant systemd service file installed by Debian / Ubuntu distribution packages
 
-The Ubuntu Universe distribution packages have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated. The following is logged when you install from the Ubuntu Universe package:
+The Debian and Ubuntu distribution packages automatically create and enable a default user-level systemd service when installing the onedrive package so that the client runs automatically after authentication. During installation you may see:
+
 ```
 Created symlink /etc/systemd/user/default.target.wants/onedrive.service → /usr/lib/systemd/user/onedrive.service.
 ```
-This systemd entry is erroneous and needs to be removed. Without removing this erroneous systemd link, this increases your risk of getting the following error message:
+
+This systemd entry is not part of this project’s installation model and is introduced by Debian/Ubuntu packaging defaults. It should be removed. If left in place, it can cause the following error:
+
 ```
 Opening the item database ...
 
@@ -64,12 +67,35 @@ ERROR: onedrive application is already running - check system process list for a
 
 Waiting for all internal threads to complete before exiting application
 ```
-As the client is also built with GUI notifications enabled, every time this systemd service 'restarts' it will send a GUI notification which can spam your GUI with notifications.
+As the client is built with GUI notifications enabled, each automatic restart of this service may also spam your desktop with notifications.
 
-To remove this symbolic link for the errant systemd service, run the following command:
+To remove this symbolic link created by the distribution package, run:
+
 ```
 sudo rm /etc/systemd/user/default.target.wants/onedrive.service
 ```
+
+If this service is not removed, uninstalling the `onedrive` package may result in repeated systemd restart attempts and log entries similar to:
+```
+Feb 10 10:32:00 host systemd[USER_A]: Started onedrive.service - OneDrive Client for Linux.
+Feb 10 10:32:00 host (onedrive)[PID_A]: onedrive.service: Unable to locate executable '/usr/bin/onedrive': No such file or directory
+Feb 10 10:32:00 host (onedrive)[PID_A]: onedrive.service: Failed at step EXEC spawning /usr/bin/onedrive: No such file or directory
+Feb 10 10:32:00 host systemd[USER_A]: onedrive.service: Main process exited, code=exited, status=203/EXEC
+Feb 10 10:32:00 host systemd[USER_A]: onedrive.service: Failed with result 'exit-code'.
+Feb 10 10:32:02 host systemd[USER_B]: Started onedrive.service - OneDrive Client for Linux.
+Feb 10 10:32:02 host (onedrive)[PID_B]: onedrive.service: Unable to locate executable '/usr/bin/onedrive': No such file or directory
+Feb 10 10:32:02 host (onedrive)[PID_B]: onedrive.service: Failed at step EXEC spawning /usr/bin/onedrive: No such file or directory
+Feb 10 10:32:02 host systemd[USER_B]: onedrive.service: Main process exited, code=exited, status=203/EXEC
+Feb 10 10:32:02 host systemd[USER_B]: onedrive.service: Failed with result 'exit-code'.
+Feb 10 10:32:03 host systemd[USER_A]: onedrive.service: Scheduled restart job, restart counter is at 201.
+Feb 10 10:32:03 host systemd[USER_A]: Starting onedrive.service - OneDrive Client for Linux...
+Feb 10 10:32:05 host systemd[USER_B]: onedrive.service: Scheduled restart job, restart counter is at 105.
+Feb 10 10:32:05 host systemd[USER_B]: Starting onedrive.service - OneDrive Client for Linux...
+
+```
+
+This behaviour originates from Debian/Ubuntu packaging defaults and does not occur with the OpenSuSE Build Service packages.
+
 
 ### Step 2: Ensure your system is up-to-date
 Use a script, similar to the following to ensure your system is updated correctly:
