@@ -1,0 +1,66 @@
+name: E2E Personal (push only)
+
+on:
+  push:
+    branches-ignore:
+      - master
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  e2e_personal:
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    environment: onedrive-e2e
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          dnf -y update
+          dnf -y group install development-tools
+          dnf -y install ldc libcurl-devel sqlite-devel dbus-devel
+
+      - name: Build + local install prefix
+        run: |
+          ./configure --prefix="$PWD/.ci/prefix"
+          make -j"$(nproc)"
+          make install
+          "$PWD/.ci/prefix/bin/onedrive" --version
+
+      - name: Prepare isolated HOME
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/home-personal"
+          echo "HOME=$HOME" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$HOME/.config" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$HOME/.cache" >> "$GITHUB_ENV"
+          mkdir -p "$HOME"
+
+      - name: Inject refresh token into onedrive config
+        env:
+          REFRESH_TOKEN_PERSONAL: ${{ secrets.REFRESH_TOKEN_PERSONAL }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$XDG_CONFIG_HOME/onedrive"
+          umask 077
+          printf "%s" "$REFRESH_TOKEN_PERSONAL" > "$XDG_CONFIG_HOME/onedrive/refresh_token"
+          chmod 600 "$XDG_CONFIG_HOME/onedrive/refresh_token"
+
+      - name: Run E2E harness
+        env:
+          ONEDRIVE_BIN: ${{ github.workspace }}/.ci/prefix/bin/onedrive
+          E2E_TARGET: personal
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          bash ci/e2e/run.sh
+
+      - name: Upload E2E artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-personal
+          path: ci/e2e/out/**
