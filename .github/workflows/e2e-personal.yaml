@@ -138,13 +138,17 @@ jobs:
       - name: Post or update PR comment (sticky)
         if: steps.pr.outputs.found == 'true'
         uses: actions/github-script@v7
+        env:
+          COMMENT_MD: ${{ steps.summary.outputs.md }}
         with:
           script: |
             const { owner, repo } = context.repo;
             const issue_number = Number("${{ steps.pr.outputs.number }}");
 
             const marker = "<!-- onedrive-e2e-personal-summary -->";
-            const body = `${marker}\n${{ toJSON(steps.summary.outputs.md) }}`.slice(1, -1);
+            const md = process.env.COMMENT_MD || "⚠️ No summary text produced.";
+
+            const body = `${marker}\n${md}`;
 
             const comments = await github.rest.issues.listComments({
               owner, repo, issue_number, per_page: 100
@@ -161,5 +165,3 @@ jobs:
                 owner, repo, issue_number, body
               });
             }
-
-
