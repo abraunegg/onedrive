@@ -1,4 +1,4 @@
-name: E2E Personal (push only)
+name: E2E Personal Account Testing (push only)
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install deps
+      - name: Install Dependencies
         run: |
           dnf -y update
           dnf -y group install development-tools

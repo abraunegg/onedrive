@@ -32,8 +32,8 @@ set +e
   --resync \
   --resync-auth \
   --syncdir "$SYNC_ROOT" \
-  > "$LOG_FILE" 2>&1
-rc=$?
+  2>&1 | tee "$LOG_FILE"
+rc=${PIPESTATUS[0]}
 set -e
 
 if [ "$rc" -eq 0 ]; then
