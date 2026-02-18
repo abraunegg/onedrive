@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   e2e_personal:
@@ -64,3 +65,102 @@ jobs:
         with:
           name: e2e-personal
           path: ci/e2e/out/**
+
+  pr_comment:
+    name: Post PR summary comment
+    needs: [ e2e_personal ]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download the artifact produced by the e2e_personal job
+      - name: Download artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-personal
+          path: artifacts/e2e-personal
+
+      - name: Build markdown summary
+        id: summary
+        run: |
+          set -euo pipefail
+          f="artifacts/e2e-personal/results.json"
+          if [ ! -f "$f" ]; then
+            echo "md=⚠️ E2E ran but results.json was not found." >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          target=$(jq -r '.target // "personal"' "$f")
+          total=$(jq -r '.cases | length' "$f")
+          passed=$(jq -r '[.cases[] | select(.status=="pass")] | length' "$f")
+          failed=$(jq -r '[.cases[] | select(.status=="fail")] | length' "$f")
+
+          # Build failures list
+          failures=$(jq -r '.cases[]
+            | select(.status=="fail")
+            | "- Test Case \(.id // "????"): \(.name) — \(.reason // "no reason provided")"' "$f" || true)
+
+          md="## ${target^} Account Testing\n"
+          md+="${total} Test Cases Run  \n"
+          md+="**${passed}** Test Cases Passed  \n"
+          md+="**${failed}** Test Cases Failed  \n\n"
+
+          if [ "$failed" -gt 0 ] && [ -n "$failures" ]; then
+            md+="### ${target^} Account Test Failures\n"
+            md+="$failures\n"
+          fi
+
+          echo "md<<EOF" >> "$GITHUB_OUTPUT"
+          echo -e "$md" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Find PR associated with this commit
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = context.sha;
+
+            const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner, repo, commit_sha: sha
+            });
+
+            if (!prs.data.length) {
+              core.setOutput("found", "false");
+              return;
+            }
+
+            core.setOutput("found", "true");
+            core.setOutput("number", String(prs.data[0].number));
+
+      - name: Post or update PR comment (sticky)
+        if: steps.pr.outputs.found == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = Number("${{ steps.pr.outputs.number }}");
+
+            const marker = "<!-- onedrive-e2e-personal-summary -->";
+            const body = `${marker}\n${{ toJSON(steps.summary.outputs.md) }}`.slice(1, -1);
+
+            const comments = await github.rest.issues.listComments({
+              owner, repo, issue_number, per_page: 100
+            });
+
+            const existing = comments.data.find(c => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number, body
+              });
+            }
+
+
