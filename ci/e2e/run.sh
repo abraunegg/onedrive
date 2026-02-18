@@ -75,18 +75,25 @@ fi
 
 ###############################################
 # Test Case 0002: upload-only does not download
+# Uses separate --confdir profiles to avoid sync_dir change resync issues.
 ###############################################
 TC_ID="0002"
 TC_NAME="upload-only: uploads local changes, does not download remote-only changes"
 
 REMOTE_PREFIX="ci_e2e/${RUN_ID}/${E2E_TARGET}/upload_only"
+
 SEED_DIR="${RUNNER_TEMP:-/tmp}/seed-${E2E_TARGET}-${RUN_ID}"
 UP_DIR="${RUNNER_TEMP:-/tmp}/uploadonly-${E2E_TARGET}-${RUN_ID}"
-VERIFY_DIR="${RUNNER_TEMP:-/tmp}/verify-${E2E_TARGET}-${RUN_ID}"
+VER_DIR="${RUNNER_TEMP:-/tmp}/verify-${E2E_TARGET}-${RUN_ID}"
+
+CONF_BASE="${RUNNER_TEMP:-/tmp}/conf-${E2E_TARGET}-${RUN_ID}"
+CONF_SEED="${CONF_BASE}/seed"
+CONF_UP="${CONF_BASE}/upload"
+CONF_VER="${CONF_BASE}/verify"
 
 SEED_LOG="${OUT_DIR}/tc0002-seed.log"
 UP_LOG="${OUT_DIR}/tc0002-uploadonly.log"
-VERIFY_LOG="${OUT_DIR}/tc0002-verify.log"
+VER_LOG="${OUT_DIR}/tc0002-verify.log"
 
 REMOTE_ONLY_FILE="remote_only_${RUN_ID}.txt"
 LOCAL_ONLY_FILE="local_only_${RUN_ID}.txt"
@@ -94,68 +101,98 @@ LOCAL_ONLY_FILE="local_only_${RUN_ID}.txt"
 echo "Running test case ${TC_ID}: ${TC_NAME}"
 echo "Remote prefix: ${REMOTE_PREFIX}"
 
-rm -rf "$SEED_DIR" "$UP_DIR" "$VERIFY_DIR"
-mkdir -p "$SEED_DIR" "$UP_DIR" "$VERIFY_DIR"
+# Helper: locate the already-injected refresh token (from workflow step)
+TOKEN_SRC=""
+if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/onedrive/refresh_token" ]; then
+  TOKEN_SRC="${XDG_CONFIG_HOME:-$HOME/.config}/onedrive/refresh_token"
+elif [ -f "$HOME/.config/onedrive/refresh_token" ]; then
+  TOKEN_SRC="$HOME/.config/onedrive/refresh_token"
+fi
 
-# Step A: Create a file and upload it via the seeder dir
-# This makes it "remote-only" relative to UP_DIR (because UP_DIR has never synced yet)
-echo "Created remotely by seeder at run ${RUN_ID}" > "${SEED_DIR}/${REMOTE_ONLY_FILE}"
-
-set +e
-"$ONEDRIVE_BIN" \
-  --sync \
-  --verbose \
-  --syncdir "$SEED_DIR" \
-  --single-directory "$REMOTE_PREFIX" \
-  2>&1 | tee "$SEED_LOG"
-rc_seed=${PIPESTATUS[0]}
-set -e
-
-if [ "$rc_seed" -ne 0 ]; then
-  add_fail "$TC_ID" "$TC_NAME" "Seeder sync failed (exit code ${rc_seed})"
+if [ -z "$TOKEN_SRC" ]; then
+  add_fail "$TC_ID" "$TC_NAME" "Could not locate existing refresh_token to seed confdirs"
 else
-  # Step B: Create a local-only file in the upload-only dir
-  echo "Created locally for upload-only at run ${RUN_ID}" > "${UP_DIR}/${LOCAL_ONLY_FILE}"
+  # Clean state for this test
+  rm -rf "$SEED_DIR" "$UP_DIR" "$VER_DIR" "$CONF_BASE"
+  mkdir -p "$SEED_DIR" "$UP_DIR" "$VER_DIR"
+  mkdir -p "$CONF_SEED" "$CONF_UP" "$CONF_VER"
 
-  # Step C: Run upload-only sync. It must NOT download REMOTE_ONLY_FILE.
+  # Copy refresh_token into each confdir (confdir becomes the config root)
+  umask 077
+  cp -f "$TOKEN_SRC" "${CONF_SEED}/refresh_token"
+  cp -f "$TOKEN_SRC" "${CONF_UP}/refresh_token"
+  cp -f "$TOKEN_SRC" "${CONF_VER}/refresh_token"
+
+  ########################################################
+  # Step A: Seeder uploads a "remote-only" file
+  ########################################################
+  echo "Seeder creating remote-only file: ${REMOTE_ONLY_FILE}"
+  printf "Created by seeder at run %s\n" "$RUN_ID" > "${SEED_DIR}/${REMOTE_ONLY_FILE}"
+
   set +e
   "$ONEDRIVE_BIN" \
+    --confdir "$CONF_SEED" \
     --sync \
     --verbose \
-    --upload-only \
-    --syncdir "$UP_DIR" \
+    --syncdir "$SEED_DIR" \
     --single-directory "$REMOTE_PREFIX" \
-    2>&1 | tee "$UP_LOG"
-  rc_up=${PIPESTATUS[0]}
+    2>&1 | tee "$SEED_LOG"
+  rc_seed=${PIPESTATUS[0]}
   set -e
 
-  if [ "$rc_up" -ne 0 ]; then
-    add_fail "$TC_ID" "$TC_NAME" "Upload-only sync failed (exit code ${rc_up})"
+  if [ "$rc_seed" -ne 0 ]; then
+    add_fail "$TC_ID" "$TC_NAME" "Seeder sync failed (exit code ${rc_seed})"
   else
-    # Assertion 1: upload-only must NOT download the remote-only file
-    if [ -f "${UP_DIR}/${REMOTE_ONLY_FILE}" ]; then
+    ########################################################
+    # Step B: Uploader creates a local-only file
+    ########################################################
+    echo "Uploader creating local-only file: ${LOCAL_ONLY_FILE}"
+    printf "Created by uploader at run %s\n" "$RUN_ID" > "${UP_DIR}/${LOCAL_ONLY_FILE}"
+
+    ########################################################
+    # Step C: Run upload-only from uploader profile
+    # Must not download REMOTE_ONLY_FILE into UP_DIR.
+    ########################################################
+    set +e
+    "$ONEDRIVE_BIN" \
+      --confdir "$CONF_UP" \
+      --sync \
+      --verbose \
+      --upload-only \
+      --syncdir "$UP_DIR" \
+      --single-directory "$REMOTE_PREFIX" \
+      2>&1 | tee "$UP_LOG"
+    rc_up=${PIPESTATUS[0]}
+    set -e
+
+    if [ "$rc_up" -ne 0 ]; then
+      add_fail "$TC_ID" "$TC_NAME" "Upload-only sync failed (exit code ${rc_up})"
+    elif [ -f "${UP_DIR}/${REMOTE_ONLY_FILE}" ]; then
       add_fail "$TC_ID" "$TC_NAME" "Upload-only unexpectedly downloaded remote-only file: ${REMOTE_ONLY_FILE}"
     else
-      # Step D: Verify the local-only file exists online by doing a download-only into VERIFY_DIR
+      ########################################################
+      # Step D: Verify upload landed online using verifier
+      ########################################################
       set +e
       "$ONEDRIVE_BIN" \
+        --confdir "$CONF_VER" \
         --sync \
         --verbose \
         --download-only \
-        --syncdir "$VERIFY_DIR" \
+        --syncdir "$VER_DIR" \
         --single-directory "$REMOTE_PREFIX" \
-        2>&1 | tee "$VERIFY_LOG"
+        2>&1 | tee "$VER_LOG"
       rc_ver=${PIPESTATUS[0]}
       set -e
 
       if [ "$rc_ver" -ne 0 ]; then
         add_fail "$TC_ID" "$TC_NAME" "Verifier download-only failed (exit code ${rc_ver})"
-      elif [ ! -f "${VERIFY_DIR}/${LOCAL_ONLY_FILE}" ]; then
+      elif [ ! -f "${VER_DIR}/${LOCAL_ONLY_FILE}" ]; then
         add_fail "$TC_ID" "$TC_NAME" "Uploaded file not found online (not downloaded by verifier): ${LOCAL_ONLY_FILE}"
       else
-        # Optional log validations (soft but useful):
-        # - upload-only log should mention local file name
-        # - upload-only log should NOT mention the remote-only file name
+        # Optional log sanity checks (secondary):
+        # - UP log should mention the uploaded filename
+        # - UP log should not mention the remote-only filename
         if ! grep -Fq "$LOCAL_ONLY_FILE" "$UP_LOG"; then
           add_fail "$TC_ID" "$TC_NAME" "Upload-only log did not mention uploaded file: ${LOCAL_ONLY_FILE}"
         elif grep -Fq "$REMOTE_ONLY_FILE" "$UP_LOG"; then
@@ -167,6 +204,7 @@ else
     fi
   fi
 fi
+
 
 
 
