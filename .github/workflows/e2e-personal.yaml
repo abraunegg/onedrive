@@ -23,7 +23,7 @@ jobs:
         run: |
           dnf -y update
           dnf -y group install development-tools
-          dnf -y install ldc libcurl-devel sqlite-devel dbus-devel
+          dnf -y install ldc libcurl-devel sqlite-devel dbus-devel jq
 
       - name: Build + local install prefix
         run: |
@@ -86,8 +86,9 @@ jobs:
         id: summary
         run: |
           set -euo pipefail
-          f="artifacts/e2e-personal/results.json"
-          if [ ! -f "$f" ]; then
+
+          f="$(find artifacts/e2e-personal -name results.json -type f | head -n 1 || true)"
+          if [ -z "$f" ] || [ ! -f "$f" ]; then
             echo "md=⚠️ E2E ran but results.json was not found." >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -97,7 +98,6 @@ jobs:
           passed=$(jq -r '[.cases[] | select(.status=="pass")] | length' "$f")
           failed=$(jq -r '[.cases[] | select(.status=="fail")] | length' "$f")
 
-          # Build failures list
           failures=$(jq -r '.cases[]
             | select(.status=="fail")
             | "- Test Case \(.id // "????"): \(.name) — \(.reason // "no reason provided")"' "$f" || true)
@@ -115,7 +115,6 @@ jobs:
           echo "md<<EOF" >> "$GITHUB_OUTPUT"
           echo -e "$md" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
-
       - name: Find PR associated with this commit
         id: pr
         uses: actions/github-script@v7
