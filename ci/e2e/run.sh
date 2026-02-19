@@ -134,7 +134,8 @@ else
     --confdir "$CONF_SEED" \
     --sync \
     --verbose \
-	--verbose \
+    --resync \
+    --resync-auth \
     --syncdir "$SEED_DIR" \
     --single-directory "$REMOTE_PREFIX" \
     2>&1 | tee "$SEED_LOG"
@@ -159,7 +160,8 @@ else
       --confdir "$CONF_UP" \
       --sync \
       --verbose \
-	  --verbose \
+      --resync \
+      --resync-auth \
       --upload-only \
       --syncdir "$UP_DIR" \
       --single-directory "$REMOTE_PREFIX" \
@@ -180,7 +182,8 @@ else
         --confdir "$CONF_VER" \
         --sync \
         --verbose \
-		--verbose \
+        --resync \
+        --resync-auth \
         --download-only \
         --syncdir "$VER_DIR" \
         --single-directory "$REMOTE_PREFIX" \
