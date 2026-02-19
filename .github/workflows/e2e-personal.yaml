@@ -1,0 +1,167 @@
+name: E2E Personal Account Testing (push only)
+
+on:
+  push:
+    branches-ignore:
+      - master
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  e2e_personal:
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    environment: onedrive-e2e
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          dnf -y update
+          dnf -y group install development-tools
+          dnf -y install ldc libcurl-devel sqlite-devel dbus-devel jq
+
+      - name: Build + local install prefix
+        run: |
+          ./configure --prefix="$PWD/.ci/prefix"
+          make -j"$(nproc)"
+          make install
+          "$PWD/.ci/prefix/bin/onedrive" --version
+
+      - name: Prepare isolated HOME
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/home-personal"
+          echo "HOME=$HOME" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$HOME/.config" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$HOME/.cache" >> "$GITHUB_ENV"
+          mkdir -p "$HOME"
+
+      - name: Inject refresh token into onedrive config
+        env:
+          REFRESH_TOKEN_PERSONAL: ${{ secrets.REFRESH_TOKEN_PERSONAL }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$XDG_CONFIG_HOME/onedrive"
+          umask 077
+          printf "%s" "$REFRESH_TOKEN_PERSONAL" > "$XDG_CONFIG_HOME/onedrive/refresh_token"
+          chmod 600 "$XDG_CONFIG_HOME/onedrive/refresh_token"
+
+      - name: Run E2E harness
+        env:
+          ONEDRIVE_BIN: ${{ github.workspace }}/.ci/prefix/bin/onedrive
+          E2E_TARGET: personal
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          bash ci/e2e/run.sh
+
+      - name: Upload E2E artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-personal
+          path: ci/e2e/out/**
+
+  pr_comment:
+    name: Post PR summary comment
+    needs: [ e2e_personal ]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download the artifact produced by the e2e_personal job
+      - name: Download artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-personal
+          path: artifacts/e2e-personal
+
+      - name: Build markdown summary
+        id: summary
+        run: |
+          set -euo pipefail
+
+          f="$(find artifacts/e2e-personal -name results.json -type f | head -n 1 || true)"
+          if [ -z "$f" ] || [ ! -f "$f" ]; then
+            echo "md=⚠️ E2E ran but results.json was not found." >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          target=$(jq -r '.target // "personal"' "$f")
+          total=$(jq -r '.cases | length' "$f")
+          passed=$(jq -r '[.cases[] | select(.status=="pass")] | length' "$f")
+          failed=$(jq -r '[.cases[] | select(.status=="fail")] | length' "$f")
+
+          failures=$(jq -r '.cases[]
+            | select(.status=="fail")
+            | "- Test Case \(.id // "????"): \(.name) — \(.reason // "no reason provided")"' "$f" || true)
+
+          md="## ${target^} Account Testing\n"
+          md+="${total} Test Cases Run  \n"
+          md+="**${passed}** Test Cases Passed  \n"
+          md+="**${failed}** Test Cases Failed  \n\n"
+
+          if [ "$failed" -gt 0 ] && [ -n "$failures" ]; then
+            md+="### ${target^} Account Test Failures\n"
+            md+="$failures\n"
+          fi
+
+          echo "md<<EOF" >> "$GITHUB_OUTPUT"
+          echo -e "$md" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+      - name: Find PR associated with this commit
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = context.sha;
+
+            const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner, repo, commit_sha: sha
+            });
+
+            if (!prs.data.length) {
+              core.setOutput("found", "false");
+              return;
+            }
+
+            core.setOutput("found", "true");
+            core.setOutput("number", String(prs.data[0].number));
+
+      - name: Post or update PR comment (sticky)
+        if: steps.pr.outputs.found == 'true'
+        uses: actions/github-script@v7
+        env:
+          COMMENT_MD: ${{ steps.summary.outputs.md }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = Number("${{ steps.pr.outputs.number }}");
+
+            const marker = "<!-- onedrive-e2e-personal-summary -->";
+            const md = process.env.COMMENT_MD || "⚠️ No summary text produced.";
+
+            const body = `${marker}\n${md}`;
+
+            const comments = await github.rest.issues.listComments({
+              owner, repo, issue_number, per_page: 100
+            });
+
+            const existing = comments.data.find(c => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number, body
+              });
+            }
