@@ -447,6 +447,48 @@ string computeSHA256Hash(string path) {
 	return toHexString(hashResult).idup;
 }
 
+struct QuickXorStreamHasher {
+    private QuickXor qxor;
+    private bool started;
+
+    void start() nothrow @safe {
+        qxor.start();
+        started = true;
+    }
+
+    void update(scope const(ubyte)[] chunk) nothrow @safe {
+        if (!started) start();
+        qxor.put(chunk);
+    }
+
+    // Returns base64-encoded quickXorHash (Graph format)
+    string finishB64() {
+        auto hashResult = qxor.finish();         // ubyte[20]
+        return Base64.encode(hashResult).idup;   // allocates
+    }
+}
+
+struct SHA256StreamHasher {
+    private SHA256 sha256;
+    private bool started;
+
+    void start() nothrow @safe {
+        sha256.start();   // supported by std.digest digests
+        started = true;
+    }
+
+    void update(scope const(ubyte)[] chunk) nothrow @safe {
+        if (!started) start();
+        sha256.put(chunk);
+    }
+
+    // Returns lower-case hex string of SHA-256 digest
+    string finishHex() {
+        auto hashResult = sha256.finish();      // ubyte[32]
+        return toHexString(hashResult).idup;    // allocates
+    }
+}
+
 // Converts wildcards (*, ?) to regex
 // The changes here need to be 100% regression tested before full release
 Regex!char wild2regex(const(char)[] pattern) {
