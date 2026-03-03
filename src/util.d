@@ -3,7 +3,7 @@ module util;
 
 // What does this module require to function?
 import core.memory;
-import core.stdc.errno : ENOENT, EINTR, EBUSY, EXDEV, EAGAIN;
+import core.stdc.errno : ENOENT, EINTR, EBUSY, EXDEV, EAGAIN, EPERM, EACCES, EROFS;
 import core.stdc.stdlib;
 import core.stdc.string;
 import core.sys.posix.pwd;
@@ -2104,7 +2104,7 @@ private bool safeGetTimes(string path, out SysTime accessTime, out SysTime modTi
 }
 
 // Retry wrapper for setTimes()
-private bool safeSetTimes(string path, SysTime accessTime, SysTime modTime, string thisFunctionName) {
+private bool safeSetTimes_original(string path, SysTime accessTime, SysTime modTime, string thisFunctionName) {
 	int maxAttempts = 5;
 
 	foreach (attempt; 0 .. maxAttempts) {
@@ -2131,6 +2131,76 @@ private bool safeSetTimes(string path, SysTime accessTime, SysTime modTime, stri
 	displayFileSystemErrorMessage("Failed to set file timestamps after retries", thisFunctionName, path);
 	return false;
 }
+
+
+// Some errnos are 'expected' in the wild (permissions, RO mounts, immutable files)
+// What is this errno
+private bool isExpectedPermissionStyleErrno(int err) {
+    // Return true of this is an expected error due to permission issues
+    return err == EPERM || err == EACCES || err == EROFS;
+}
+
+
+// Retry wrapper for setTimes()
+private bool safeSetTimes(string path, SysTime accessTime, SysTime modTime, string thisFunctionName) {
+	
+	enum int maxAttempts = 5;
+	bool permissionStyleWarningShown = false;
+
+	foreach (attempt; 0 .. maxAttempts) {
+		try {
+			setTimes(path, accessTime, modTime);
+			return true;
+		} catch (FileException e) {
+			// If the path disappeared before we could set, there's nothing useful to do
+			if (e.errno == ENOENT) {
+				return false;
+			}
+
+			// Transient filesystem error: retry with backoff
+			if (isTransientErrno(e.errno)) {
+				// Log that we hit a transient error
+				addLogEntry("safeSetTimes() transient filesystem error response: " ~ e.msg ~ "\n - Attempting retry for setTimes()");
+				// Backoff and retry
+				Thread.sleep(dur!"msecs"(15 * (attempt + 1)));
+				continue;
+			}
+
+			// Non-transient: special-case common permission / RO mount errors
+			if (isExpectedPermissionStyleErrno(e.errno)) {
+				
+				// Only show a permission error message once, even though we may exit here, ensure this is only shown once per path attempt
+				if (!permissionStyleWarningShown) {
+					permissionStyleWarningShown = true;
+
+					// Display applicable message for the user regarding permission error on path
+					displayFileSystemErrorMessage(
+						e.msg ~
+						"\nNOTE: Unable to set local path timestamps (mtime/atime). The client can continue, " ~
+						"but this item may be reprocessed more often. Common causes: path ownership/permissions, " ~
+						"immutable attribute, or a filesystem/mount that disallows timestamp changes (e.g. CIFS/SMB, " ~
+						"FUSE, NTFS/exFAT, read-only mounts).",
+						thisFunctionName,
+						path
+					);
+				}
+				// It is pointless attempting a re-try in this scenario as those conditions will not change by retrying 15ms later.
+				return false;
+			}
+
+			// Everything else: preserve existing behaviour
+			displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
+			return false;
+		}
+	}
+
+	// Only reached if transient errors never resolved
+	displayFileSystemErrorMessage("Failed to set path timestamps after retries", thisFunctionName, path);
+	return false;
+}
+
+
+
 
 // Set the timestamp of the provided path to ensure this is done in a consistent manner
 void setLocalPathTimestamp(bool dryRun, string inputPath, SysTime newTimeStamp) {
