@@ -2166,8 +2166,10 @@ private bool safeSetTimes(string path, SysTime accessTime, SysTime modTime, stri
 
 			// Transient filesystem error: retry with backoff
 			if (isTransientErrno(e.errno)) {
-				// Log that we hit a transient error
-				addLogEntry("safeSetTimes() transient filesystem error response: " ~ e.msg ~ "\n - Attempting retry for setTimes()");
+				if (debugLogging) {
+					// Log that we hit a transient error when doing debugging, otherwise nothing
+					addLogEntry("safeSetTimes() transient filesystem error response: " ~ e.msg ~ "\n - Attempting retry for setTimes()", ["debug"]);
+				}
 				// Backoff and retry
 				Thread.sleep(dur!"msecs"(15 * (attempt + 1)));
 				continue;
