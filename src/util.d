@@ -1172,7 +1172,11 @@ void displayFileSystemErrorMessage(string message, string callingFunction, strin
 	if (severity == FsErrorSeverity.permission) {
 		addLogEntry();
 		addLogEntry("NOTE: Sync will continue. This file’s timestamps could not be updated because the effective user does not own the file.");
-		addLogEntry("      Fix: Run the client as the file owner, or change ownership of the sync tree so it is owned by the user running the client.");
+		addLogEntry("      Potential Fix:");
+		addLogEntry("           Run the client as the file owner, or change ownership of the sync tree so it is owned by the user running the client.");
+		addLogEntry("      Learn more about File Ownership:");
+		addLogEntry("           https://www.redhat.com/en/blog/linux-file-permissions-explained");
+		addLogEntry("           https://unix.stackexchange.com/questions/191940/difference-between-owner-root-and-ruid-euid");
 		addLogEntry();
 	}
 	
@@ -2192,7 +2196,6 @@ private bool safeSetTimes(string path, SysTime accessTime, SysTime modTime, stri
 			// The user running the client needs to be the owner of the files if the client needs to set explicit timestamps
 			// See https://github.com/abraunegg/onedrive/issues/3651 for details
 			if (isExpectedPermissionStyleErrno(e.errno)) {
-				
 				// Configure application message to display
 				string permissionErrorMessage = "Unable to set local file timestamps (mtime/atime): Operation not permitted";
 				if (e.errno == EPERM) {
@@ -2221,13 +2224,16 @@ private bool safeSetTimes(string path, SysTime accessTime, SysTime modTime, stri
 					permissionErrorMessage = permissionErrorMessage ~ extraHint;
 				}
 				
-				// Display applicable message for the user regarding permission error on path
-				displayFileSystemErrorMessage(
-					permissionErrorMessage,
-					thisFunctionName,
-					path,
-					FsErrorSeverity.permission
-				);
+				// If we are doing --verbose or --debug display this file system error
+				if (verboseLogging) {
+					// Display applicable message for the user regarding permission error on path
+					displayFileSystemErrorMessage(
+						permissionErrorMessage,
+						thisFunctionName,
+						path,
+						FsErrorSeverity.permission
+					);
+				}
 				
 				// It is pointless attempting a re-try in this scenario as those conditions will not change by retrying 15ms later.
 				return false;
