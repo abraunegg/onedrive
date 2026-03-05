@@ -141,6 +141,7 @@ envp
 eopkg
 epel
 epfd
+errnos
 eselect
 estr
 eventfd
