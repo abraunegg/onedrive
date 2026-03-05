@@ -2128,8 +2128,9 @@ private bool getPathOwnerMismatch(string path, out uint fileUid, out uint effect
 		stat_t st;
 
 		// Ensure we pass a NUL-terminated string to the C API
-		const(char)* cpath = toStringz(path);
-
+		auto fullPath = absolutePath(path);
+		const(char)* cpath = toStringz(fullPath);
+		
 		if (lstat(cpath, &st) != 0) {
 			if (debugLogging) {
 				addLogEntry("getPathOwnerMismatch(): lstat() failed for '" ~ path ~ "'", ["debug"]);
