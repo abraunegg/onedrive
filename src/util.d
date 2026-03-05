@@ -2127,22 +2127,34 @@ private bool getPathOwnerMismatch(string path, out uint fileUid, out uint effect
 	version (Posix) {
 		stat_t st;
 
-		// Ensure we pass a NUL-terminated string to the C API
-		auto fullPath = absolutePath(path);
-		const(char)* cpath = toStringz(fullPath);
-		
-		if (lstat(cpath, &st) != 0) {
-			if (debugLogging) {
-				addLogEntry("getPathOwnerMismatch(): lstat() failed for '" ~ path ~ "'", ["debug"]);
+		// Default outputs
+		fileUid = 0;
+		effectiveUid = cast(uint) geteuid();
+
+		try {
+			// absolutePath can throw; keep this helper non-throwing
+			auto fullPath = absolutePath(path);
+
+			// Ensure we pass a NUL-terminated string to the C API
+			auto cpath = toStringz(fullPath);
+
+			if (lstat(cpath, &st) != 0) {
+				if (debugLogging) {
+					addLogEntry("getPathOwnerMismatch(): lstat() failed for '" ~ path ~ "'", ["debug"]);
+				}
+				return false;
 			}
-			fileUid = 0;
-			effectiveUid = cast(uint) geteuid();
+
+			fileUid = cast(uint) st.st_uid;
+			// effectiveUid already set above
+			return fileUid != effectiveUid;
+
+		} catch (Exception e) {
+			if (debugLogging) {
+				addLogEntry("getPathOwnerMismatch(): exception for '" ~ path ~ "': " ~ e.msg, ["debug"]);
+			}
 			return false;
 		}
-
-		fileUid = cast(uint) st.st_uid;
-		effectiveUid = cast(uint) geteuid();
-		return fileUid != effectiveUid;
 	} else {
 		fileUid = 0;
 		effectiveUid = 0;
