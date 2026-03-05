@@ -2202,7 +2202,7 @@ private bool safeSetTimes(string path, SysTime accessTime, SysTime modTime, stri
 				if (e.errno == EPERM && getPathOwnerMismatch(path, fileUid, effectiveUid)) {
 					extraHint =
 						"\nThe client runtime user does not own this file. Effective UID=" ~ to!string(effectiveUid) ~ ", file owner UID=" ~ to!string(fileUid) ~ "." ~
-						"\nOn Linux, setting explicit timestamps generally requires file ownership (or CAP_FOWNER).";
+						"\nOn Unix-like systems, setting explicit file timestamps typically requires the process to be the file owner or run with sufficient privileges.";
 					
 					// Update permissionErrorMessage to add extraHint
 					permissionErrorMessage = permissionErrorMessage ~ extraHint;
