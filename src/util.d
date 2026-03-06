@@ -1193,9 +1193,6 @@ void displayFileSystemErrorMessage(string message, string callingFunction, strin
 		addLogEntry("NOTE: This error is fatal; the client cannot continue and this issue must be corrected before retrying. The client will now attempt to exit in a safe and orderly manner.");
 		addLogEntry();
 	}
-	
-	// Separate this block from surrounding log output 
-	addLogEntry();
 }
 
 // Display the POSIX Error Message
@@ -2217,7 +2214,7 @@ private bool safeSetTimes(string path, SysTime accessTime, SysTime modTime, stri
 				
 				if (e.errno == EPERM && getPathOwnerMismatch(path, fileUid, effectiveUid)) {
 					extraHint =
-						"\nThe client runtime user does not own this file. Effective UID=" ~ to!string(effectiveUid) ~ ", file owner UID=" ~ to!string(fileUid) ~ "." ~
+						"\nThe onedrive client user does not own this file. onedrive user effective UID=" ~ to!string(effectiveUid) ~ ", file owner UID=" ~ to!string(fileUid) ~ "." ~
 						"\nOn Unix-like systems, setting explicit file timestamps typically requires the process to be the file owner or run with sufficient privileges.";
 					
 					// Update permissionErrorMessage to add extraHint
