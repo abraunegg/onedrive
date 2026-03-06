@@ -7765,6 +7765,14 @@ class SyncEngine {
 			}
 		}
 				
+		// Skip symlinks as early as possible, including dangling symlinks
+		if (isSymlink(path)) {
+			if (appConfig.getValueBool("skip_symlinks")) {
+				addLogEntry("Skipping symbolic link: " ~ path);
+				return;
+			}
+		}
+		
 		// A short lived item that has already disappeared will cause an error - is the path still valid?
 		if (!exists(path)) {
 			addLogEntry("Skipping path - path has disappeared: " ~ path);
