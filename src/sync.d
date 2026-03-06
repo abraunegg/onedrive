@@ -7718,8 +7718,17 @@ class SyncEngine {
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
-	
-		// Add a processing '.'
+		
+		// Skip symlinks as early as possible, including dangling symlinks
+		if (isSymlink(path)) {
+			// Should this path be skipped?
+			if (appConfig.getValueBool("skip_symlinks")) {
+				if (verboseLogging) {addLogEntry("Skipping item - skip symbolic links configured: " ~ path, ["verbose"]);}
+				return;
+			}
+		}
+		
+		// Add a processing '.' if path exists
 		if (exists(path)) {
 			if (isDir(path)) {
 				if (!appConfig.suppressLoggingOutput) {
@@ -7764,7 +7773,7 @@ class SyncEngine {
 				return;
 			}
 		}
-				
+		
 		// A short lived item that has already disappeared will cause an error - is the path still valid?
 		if (!exists(path)) {
 			addLogEntry("Skipping path - path has disappeared: " ~ path);
