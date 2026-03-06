@@ -3,7 +3,7 @@ module util;
 
 // What does this module require to function?
 import core.memory;
-import core.stdc.errno : ENOENT, EINTR, EBUSY, EXDEV, EAGAIN;
+import core.stdc.errno : ENOENT, EINTR, EBUSY, EXDEV, EAGAIN, EPERM, EACCES, EROFS;
 import core.stdc.stdlib;
 import core.stdc.string;
 import core.sys.posix.pwd;
@@ -66,9 +66,10 @@ shared static this() {
 
 // To assist with filesystem severity issues, configure an enum that can be used
 enum FsErrorSeverity {
-    warning,
-    error,
-    fatal
+	warning,
+	error,
+	fatal,
+	permission
 }
 
 // Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario.
@@ -1108,8 +1109,9 @@ void displayFileSystemErrorMessage(string message, string callingFunction, strin
 
 	// Header prefix for logging accuracy
 	string headerPrefix = severity == FsErrorSeverity.warning ? "WARNING"
-                      : severity == FsErrorSeverity.fatal ? "FATAL"
-                      : "ERROR";
+					  : severity == FsErrorSeverity.permission ? "WARNING"
+					  : severity == FsErrorSeverity.fatal ? "FATAL"
+					  : "ERROR";
 	
 	// Filesystem logging header
 	addLogEntry(headerPrefix ~ ": The local file system returned an error with the following details:");
@@ -1156,72 +1158,83 @@ void displayFileSystemErrorMessage(string message, string callingFunction, strin
 		addLogEntry("  Error Message:     No error message available");
 	}
 
-	// Disk space diagnostics (best-effort)
-	// We intentionally probe both the current directory and the target path directory when possible.
-	try {
-		// Always check the current working directory as a baseline
-		ulong freeCwd = to!ulong(getAvailableDiskSpace("."));
-		addLogEntry("  Disk Space (CWD):  " ~ to!string(freeCwd) ~ " bytes available");
+	// Disk space diagnostics (best-effort) - if this is not a permission issue
+	if (severity != FsErrorSeverity.permission) {
+		// We intentionally probe both the current directory and the target path directory when possible.
+		try {
+			// Always check the current working directory as a baseline
+			ulong freeCwd = to!ulong(getAvailableDiskSpace("."));
+			addLogEntry("  Disk Space (CWD):  " ~ to!string(freeCwd) ~ " bytes available");
 
-		// If we have a context path, also check its parent directory when possible.
-		// We keep this conservative: if anything throws, just log the exception.
-		if (!contextPath.empty) {
-			string targetProbePath = contextPath;
+			// If we have a context path, also check its parent directory when possible.
+			// We keep this conservative: if anything throws, just log the exception.
+			if (!contextPath.empty) {
+				string targetProbePath = contextPath;
 
-			// If it's a file path, probe the parent directory (where writes/renames happen).
-			// Avoid throwing if parentDir isn't available or contextPath is weird.
-			try {
-				// std.path.dirName handles both file/dir paths; if it returns ".", keep as-is.
-				import std.path : dirName;
-				auto parent = dirName(contextPath);
-				if (!parent.empty) targetProbePath = parent;
-			} catch (Exception e) {
-				addLogEntry("  NOTE: Failed to derive parent directory from path: " ~ e.msg);
+				// If it's a file path, probe the parent directory (where writes/renames happen).
+				// Avoid throwing if parentDir isn't available or contextPath is weird.
+				try {
+					// std.path.dirName handles both file/dir paths; if it returns ".", keep as-is.
+					import std.path : dirName;
+					auto parent = dirName(contextPath);
+					if (!parent.empty) targetProbePath = parent;
+				} catch (Exception e) {
+					addLogEntry("  NOTE: Failed to derive parent directory from path: " ~ e.msg);
+				}
+
+				ulong freeTarget = to!ulong(getAvailableDiskSpace(targetProbePath));
+				addLogEntry("  Disk Space (Path): " ~ to!string(freeTarget) ~ " bytes available (parent path: " ~ targetProbePath ~ ")");
+
+				// Preserve existing behaviour: if disk space check returns 0, force exit.
+				// (Assumes getAvailableDiskSpace returns 0 on a hard failure in your implementation.)
+				if (freeTarget == 0 || freeCwd == 0) {
+					// Must force exit here, allow logging to be done
+					forceExit();
+				}
+			} else {
+				// Preserve existing behaviour: if disk space check returns 0, force exit.
+				if (freeCwd == 0) {
+					forceExit();
+				}
 			}
-
-			ulong freeTarget = to!ulong(getAvailableDiskSpace(targetProbePath));
-			addLogEntry("  Disk Space (Path): " ~ to!string(freeTarget) ~ " bytes available (parent path: " ~ targetProbePath ~ ")");
-
-			// Preserve existing behaviour: if disk space check returns 0, force exit.
-			// (Assumes getAvailableDiskSpace returns 0 on a hard failure in your implementation.)
-			if (freeTarget == 0 || freeCwd == 0) {
-				// Must force exit here, allow logging to be done
-				forceExit();
-			}
-		} else {
-			// Preserve existing behaviour: if disk space check returns 0, force exit.
-			if (freeCwd == 0) {
-				forceExit();
-			}
+		} catch (Exception e) {
+			// Handle exceptions from disk space check or type conversion
+			addLogEntry("  NOTE: Exception during disk space check: " ~ e.msg);
 		}
-	} catch (Exception e) {
-		// Handle exceptions from disk space check or type conversion
-		addLogEntry("  NOTE: Exception during disk space check: " ~ e.msg);
 	}
 	
 	// Add note for WARNING messages
-	if (headerPrefix == "WARNING") {
+	if (severity == FsErrorSeverity.warning) {
 		addLogEntry();
-		addLogEntry("NOTE: This error is non-fatal; the client will continue to operate, but this may affect future operations if not resolved");
+		addLogEntry("NOTE: This warning is non-fatal; the client will continue to operate, but this may affect future operations if not resolved");
+		addLogEntry();
+	}
+	
+	// Add note for filesystem permission messages
+	if (severity == FsErrorSeverity.permission) {
+		addLogEntry();
+		addLogEntry("NOTE: Sync will continue. This file’s timestamps could not be updated because the effective user does not own the file.");
+		addLogEntry("      Potential Fix:");
+		addLogEntry("           Run the client as the file owner, or change ownership of the sync tree so it is owned by the user running the client.");
+		addLogEntry("      Learn more about File Ownership:");
+		addLogEntry("           https://www.redhat.com/en/blog/linux-file-permissions-explained");
+		addLogEntry("           https://unix.stackexchange.com/questions/191940/difference-between-owner-root-and-ruid-euid");
 		addLogEntry();
 	}
 	
 	// Add note for ERROR messages
-	if (headerPrefix == "ERROR") {
+	if (severity == FsErrorSeverity.error) {
 		addLogEntry();
 		addLogEntry("NOTE: This error requires attention; the client may continue running, but functionality is impaired and the issue should be resolved.");
 		addLogEntry();
 	}
 	
 	// Add note for FATAL messages
-	if (headerPrefix == "FATAL") {
+	if (severity == FsErrorSeverity.fatal) {
 		addLogEntry();
 		addLogEntry("NOTE: This error is fatal; the client cannot continue and this issue must be corrected before retrying. The client will now attempt to exit in a safe and orderly manner.");
 		addLogEntry();
 	}
-	
-	// Separate this block from surrounding log output 
-	addLogEntry();
 }
 
 // Display the POSIX Error Message
@@ -2145,9 +2158,57 @@ private bool safeGetTimes(string path, out SysTime accessTime, out SysTime modTi
 	return false;
 }
 
+// Some errnos are 'expected' in the wild (permissions, RO mounts, immutable files)
+// What is this errno
+private bool isExpectedPermissionStyleErrno(int err) {
+    // Return true of this is an expected error due to permission issues
+    return err == EPERM || err == EACCES || err == EROFS;
+}
+
+// Helper function to determine path mismatch against UID|GID and process effective UID
+private bool getPathOwnerMismatch(string path, out uint fileUid, out uint effectiveUid) {
+	version (Posix) {
+		stat_t st;
+
+		// Default outputs
+		fileUid = 0;
+		effectiveUid = cast(uint) geteuid();
+
+		try {
+			// absolutePath can throw; keep this helper non-throwing
+			auto fullPath = absolutePath(path);
+
+			// Ensure we pass a NUL-terminated string to the C API
+			auto cpath = toStringz(fullPath);
+
+			if (lstat(cpath, &st) != 0) {
+				if (debugLogging) {
+					addLogEntry("getPathOwnerMismatch(): lstat() failed for '" ~ path ~ "'", ["debug"]);
+				}
+				return false;
+			}
+
+			fileUid = cast(uint) st.st_uid;
+			// effectiveUid already set above
+			return fileUid != effectiveUid;
+
+		} catch (Exception e) {
+			if (debugLogging) {
+				addLogEntry("getPathOwnerMismatch(): exception for '" ~ path ~ "': " ~ e.msg, ["debug"]);
+			}
+			return false;
+		}
+	} else {
+		fileUid = 0;
+		effectiveUid = 0;
+		return false;
+	}
+}
+
 // Retry wrapper for setTimes()
 private bool safeSetTimes(string path, SysTime accessTime, SysTime modTime, string thisFunctionName) {
-	int maxAttempts = 5;
+	
+	enum int maxAttempts = 5;
 
 	foreach (attempt; 0 .. maxAttempts) {
 		try {
@@ -2159,18 +2220,72 @@ private bool safeSetTimes(string path, SysTime accessTime, SysTime modTime, stri
 				return false;
 			}
 
+			// Transient filesystem error: retry with backoff
 			if (isTransientErrno(e.errno)) {
-				// slightly longer backoff here is fine too, but keep it simple/consistent
+				if (debugLogging) {
+					// Log that we hit a transient error when doing debugging, otherwise nothing
+					addLogEntry("safeSetTimes() transient filesystem error response: " ~ e.msg ~ "\n - Attempting retry for setTimes()", ["debug"]);
+				}
+				// Backoff and retry
 				Thread.sleep(dur!"msecs"(15 * (attempt + 1)));
 				continue;
 			}
 
+			// Non-transient: special-case common permission errors
+			// The user running the client needs to be the owner of the files if the client needs to set explicit timestamps
+			// See https://github.com/abraunegg/onedrive/issues/3651 for details
+			if (isExpectedPermissionStyleErrno(e.errno)) {
+				// Configure application message to display
+				string permissionErrorMessage = "Unable to set local file timestamps (mtime/atime): Operation not permitted";
+				if (e.errno == EPERM) {
+					permissionErrorMessage = permissionErrorMessage ~ " (EPERM)";
+				}
+				
+				if (e.errno == EACCES) {
+					permissionErrorMessage = permissionErrorMessage ~ " (EACCES)";
+				}
+				
+				if (e.errno == EROFS) {
+					permissionErrorMessage = permissionErrorMessage ~ " (EROFS)";
+				}
+				
+				// Get extra details if required
+				string extraHint;
+				uint fileUid;
+				uint effectiveUid;
+				
+				if (e.errno == EPERM && getPathOwnerMismatch(path, fileUid, effectiveUid)) {
+					extraHint =
+						"\nThe onedrive client user does not own this file. onedrive user effective UID=" ~ to!string(effectiveUid) ~ ", file owner UID=" ~ to!string(fileUid) ~ "." ~
+						"\nOn Unix-like systems, setting explicit file timestamps typically requires the process to be the file owner or run with sufficient privileges.";
+					
+					// Update permissionErrorMessage to add extraHint
+					permissionErrorMessage = permissionErrorMessage ~ extraHint;
+				}
+				
+				// If we are doing --verbose or --debug display this file system error
+				if (verboseLogging) {
+					// Display applicable message for the user regarding permission error on path
+					displayFileSystemErrorMessage(
+						permissionErrorMessage,
+						thisFunctionName,
+						path,
+						FsErrorSeverity.permission
+					);
+				}
+				
+				// It is pointless attempting a re-try in this scenario as those conditions will not change by retrying 15ms later.
+				return false;
+			}
+
+			// Everything else: preserve existing behaviour
 			displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
 			return false;
 		}
 	}
 
-	displayFileSystemErrorMessage("Failed to set file timestamps after retries", thisFunctionName, path);
+	// Only reached if transient errors never resolved
+	displayFileSystemErrorMessage("Failed to set path timestamps after retries", thisFunctionName, path);
 	return false;
 }
 
