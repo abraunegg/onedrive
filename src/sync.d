@@ -7718,8 +7718,17 @@ class SyncEngine {
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
-	
-		// Add a processing '.'
+		
+		// Skip symlinks as early as possible, including dangling symlinks
+		if (isSymlink(path)) {
+			// Should this path be skipped?
+			if (appConfig.getValueBool("skip_symlinks")) {
+				if (verboseLogging) {addLogEntry("Skipping item - skip symbolic links configured: " ~ path, ["verbose"]);}
+				return;
+			}
+		}
+		
+		// Add a processing '.' if path exists
 		if (exists(path)) {
 			if (isDir(path)) {
 				if (!appConfig.suppressLoggingOutput) {
@@ -7761,14 +7770,6 @@ class SyncEngine {
 			if (canFind(path, baseName(appConfig.configuredBusinessSharedFilesDirectoryName))) {
 				// Log why this path is being skipped
 				addLogEntry("Skipping scanning path for new files as this is reserved for OneDrive Business Shared Files: " ~ path, ["info"]);
-				return;
-			}
-		}
-				
-		// Skip symlinks as early as possible, including dangling symlinks
-		if (isSymlink(path)) {
-			if (appConfig.getValueBool("skip_symlinks")) {
-				addLogEntry("Skipping symbolic link: " ~ path);
 				return;
 			}
 		}
