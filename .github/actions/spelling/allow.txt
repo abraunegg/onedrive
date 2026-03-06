@@ -93,6 +93,7 @@ concated
 confdir
 constness
 controllen
+cpath
 crt
 Cstrip
 ctl
@@ -148,6 +149,7 @@ envp
 eopkg
 epel
 epfd
+errnos
 eselect
 estr
 eventfd
