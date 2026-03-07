@@ -502,8 +502,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 scenario_id="SL-0004",
                 description="include tree with nested exclusion",
                 sync_list=[
-                    f"/{FIXTURE_ROOT_NAME}/Documents/",
                     f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/*",
+                    f"/{FIXTURE_ROOT_NAME}/Documents/",
                 ],
                 allowed_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Documents",
@@ -523,8 +523,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 scenario_id="SL-0005",
                 description="included tree with hidden directory excluded",
                 sync_list=[
-                    f"/{FIXTURE_ROOT_NAME}/Work/",
                     "!.gradle/*",
+                    f"/{FIXTURE_ROOT_NAME}/Work/",
                 ],
                 allowed_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Work",
