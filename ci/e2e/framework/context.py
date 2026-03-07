@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -58,6 +59,47 @@ class E2EContext:
     @property
     def master_log_file(self) -> Path:
         return self.out_dir / "run.log"
+
+    @property
+    def default_onedrive_config_dir(self) -> Path:
+        """
+        Return the default OneDrive config directory created by the workflow.
+        """
+        xdg_config_home = os.environ.get("XDG_CONFIG_HOME", "").strip()
+        if xdg_config_home:
+            return Path(xdg_config_home) / "onedrive"
+
+        home = os.environ.get("HOME", "").strip()
+        if not home:
+            raise RuntimeError("Neither XDG_CONFIG_HOME nor HOME is set")
+        return Path(home) / ".config" / "onedrive"
+
+    @property
+    def default_refresh_token_path(self) -> Path:
+        return self.default_onedrive_config_dir / "refresh_token"
+
+    def ensure_refresh_token_available(self) -> None:
+        if not self.default_refresh_token_path.is_file():
+            raise RuntimeError(
+                f"Required refresh_token file not found at: {self.default_refresh_token_path}"
+            )
+
+    def bootstrap_config_dir(self, config_dir: Path) -> Path:
+        """
+        Create a usable OneDrive config directory for a test case by copying the
+        existing refresh_token into the supplied config directory.
+
+        Returns the path to the copied refresh_token.
+        """
+        self.ensure_refresh_token_available()
+        ensure_directory(config_dir)
+
+        source = self.default_refresh_token_path
+        destination = config_dir / "refresh_token"
+        shutil.copy2(source, destination)
+        os.chmod(destination, 0o600)
+
+        return destination
 
     def log(self, message: str) -> None:
         ensure_directory(self.out_dir)

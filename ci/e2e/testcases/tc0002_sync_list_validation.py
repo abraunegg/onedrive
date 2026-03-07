@@ -66,6 +66,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
             reset_directory(scenario_log_dir)
             reset_directory(config_dir)
             reset_directory(sync_root)
+            
+            copied_refresh_token = context.bootstrap_config_dir(config_dir)
 
             # Seed the local sync directory from the canonical fixture.
             shutil.copytree(fixture_root, sync_root, dirs_exist_ok=True)
@@ -110,7 +112,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     str(stdout_file),
                     str(stderr_file),
                     str(metadata_file),
+                    str(copied_refresh_token),
                 ]
+            )
+            
+            context.log(
+                f"Scenario {scenario.scenario_id} bootstrapped config dir: {config_dir}"
             )
 
             if result.returncode != 0:

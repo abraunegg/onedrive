@@ -23,6 +23,9 @@ class TestCase0001BasicResync(E2ETestCase):
     description = "Run a basic --sync --resync --resync-auth operation and capture the outcome"
 
     def run(self, context: E2EContext) -> TestResult:
+        
+        context.ensure_refresh_token_available()
+        
         case_work_dir = context.work_root / f"tc{self.case_id}"
         case_log_dir = context.logs_dir / f"tc{self.case_id}"
         state_dir = context.state_dir / f"tc{self.case_id}"
