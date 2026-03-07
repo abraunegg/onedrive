@@ -23,7 +23,7 @@ jobs:
         run: |
           dnf -y update
           dnf -y group install development-tools
-          dnf -y install ldc libcurl-devel sqlite-devel dbus-devel jq
+          dnf -y install python3 ldc libcurl-devel sqlite-devel dbus-devel jq
 
       - name: Build + local install prefix
         run: |
@@ -57,7 +57,7 @@ jobs:
           E2E_TARGET: personal
           RUN_ID: ${{ github.run_id }}
         run: |
-          bash ci/e2e/run.sh
+          python3 ci/e2e/run.py
 
       - name: Upload E2E artefacts
         if: always()
@@ -75,7 +75,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Download the artifact produced by the e2e_personal job
       - name: Download artefact
         uses: actions/download-artifact@v4
         with:
@@ -115,6 +114,7 @@ jobs:
           echo "md<<EOF" >> "$GITHUB_OUTPUT"
           echo -e "$md" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
+
       - name: Find PR associated with this commit
         id: pr
         uses: actions/github-script@v7
