@@ -10,6 +10,7 @@ from framework.context import E2EContext
 from framework.result import TestResult
 from framework.utils import ensure_directory, write_text_file
 from testcases.tc0001_basic_resync import TestCase0001BasicResync
+from testcases.tc0002_sync_list_validation import TestCase0002SyncListValidation
 
 
 def build_test_suite() -> list:
@@ -20,6 +21,7 @@ def build_test_suite() -> list:
     """
     return [
         TestCase0001BasicResync(),
+        TestCase0002SyncListValidation(),
     ]
 
 
