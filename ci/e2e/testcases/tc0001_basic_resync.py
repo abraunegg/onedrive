@@ -24,8 +24,6 @@ class TestCase0001BasicResync(E2ETestCase):
 
     def run(self, context: E2EContext) -> TestResult:
         
-        context.ensure_refresh_token_available()
-        
         case_work_dir = context.work_root / f"tc{self.case_id}"
         case_log_dir = context.logs_dir / f"tc{self.case_id}"
         state_dir = context.state_dir / f"tc{self.case_id}"
@@ -33,6 +31,8 @@ class TestCase0001BasicResync(E2ETestCase):
         reset_directory(case_work_dir)
         reset_directory(case_log_dir)
         reset_directory(state_dir)
+        
+        context.ensure_refresh_token_available()
 
         stdout_file = case_log_dir / "stdout.log"
         stderr_file = case_log_dir / "stderr.log"

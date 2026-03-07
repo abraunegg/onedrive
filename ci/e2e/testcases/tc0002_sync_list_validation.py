@@ -1,14 +1,27 @@
 from __future__ import annotations
 
+import json
+import re
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from framework.base import E2ETestCase
 from framework.context import E2EContext
-from framework.manifest import build_manifest, compare_manifest, write_manifest
+from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+
+
+FIXTURE_ROOT_NAME = "ZZ_E2E_SYNC_LIST"
+
+
+@dataclass
+class ParsedEvent:
+    event_type: str
+    raw_path: str
+    normalised_path: str
+    line: str
 
 
 @dataclass
@@ -16,22 +29,96 @@ class SyncListScenario:
     scenario_id: str
     description: str
     sync_list: list[str]
-    expected_present: list[str]
-    expected_absent: list[str]
+
+    # Paths explicitly allowed for non-skip operations.
+    allowed_exact: list[str] = field(default_factory=list)
+    allowed_prefixes: list[str] = field(default_factory=list)
+
+    # Paths explicitly forbidden for non-skip operations.
+    forbidden_exact: list[str] = field(default_factory=list)
+    forbidden_prefixes: list[str] = field(default_factory=list)
+
+    # Evidence we require to prove the scenario really exercised the rule.
+    required_processed: list[str] = field(default_factory=list)
+    required_skipped: list[str] = field(default_factory=list)
+
+    def expanded_allowed_exact(self) -> set[str]:
+        """
+        Expand allowed exact paths to include ancestor directories.
+        """
+        expanded: set[str] = set()
+
+        for item in self.allowed_exact:
+            path = item.strip("/")
+            if not path:
+                continue
+
+            parts = path.split("/")
+            for idx in range(1, len(parts) + 1):
+                expanded.add("/".join(parts[:idx]))
+
+        for prefix in self.allowed_prefixes:
+            path = prefix.strip("/")
+            if not path:
+                continue
+
+            parts = path.split("/")
+            for idx in range(1, len(parts)):
+                expanded.add("/".join(parts[:idx]))
+
+        return expanded
+
+    def path_matches_prefix(self, path: str, prefix: str) -> bool:
+        prefix = prefix.strip("/")
+        if not prefix:
+            return False
+        return path == prefix or path.startswith(prefix + "/")
+
+    def is_forbidden(self, path: str) -> bool:
+        if path in self.forbidden_exact:
+            return True
+
+        for prefix in self.forbidden_prefixes:
+            if self.path_matches_prefix(path, prefix):
+                return True
+
+        return False
+
+    def is_allowed_non_skip(self, path: str) -> bool:
+        if self.is_forbidden(path):
+            return False
+
+        if path in self.expanded_allowed_exact():
+            return True
+
+        for prefix in self.allowed_prefixes:
+            if self.path_matches_prefix(path, prefix):
+                return True
+
+        return False
 
 
 class TestCase0002SyncListValidation(E2ETestCase):
     """
     Test Case 0002: sync_list validation
 
-    This test case runs multiple isolated sync_list scenarios against a fixed
-    test fixture and reports a single overall pass/fail result back to the E2E
-    harness.
+    This validates sync_list as a policy-conformance test.
+
+    The test is considered successful when all observed sync operations
+    involving the fixture tree match the active sync_list rules.
     """
 
     case_id = "0002"
     name = "sync_list validation"
     description = "Validate sync_list behaviour across a scenario matrix"
+
+    EVENT_PATTERNS = [
+        ("skip", re.compile(r"^Skipping path - excluded by sync_list config: (.+)$")),
+        ("include_dir", re.compile(r"^Including path - included by sync_list config: (.+)$")),
+        ("include_file", re.compile(r"^Including file - included by sync_list config: (.+)$")),
+        ("upload_file", re.compile(r"^Uploading new file: (.+?) \.\.\.")),
+        ("create_remote_dir", re.compile(r"^OneDrive Client requested to create this directory online: (.+)$")),
+    ]
 
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / f"tc{self.case_id}"
@@ -45,6 +132,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
         fixture_root = case_work_dir / "fixture"
         sync_root = case_work_dir / "syncroot"
 
+        context.ensure_refresh_token_available()
         self._create_fixture_tree(fixture_root)
 
         scenarios = self._build_scenarios()
@@ -66,8 +154,11 @@ class TestCase0002SyncListValidation(E2ETestCase):
             reset_directory(scenario_log_dir)
             reset_directory(config_dir)
             reset_directory(sync_root)
-            
+
             copied_refresh_token = context.bootstrap_config_dir(config_dir)
+            context.log(
+                f"Scenario {scenario.scenario_id} bootstrapped config dir: {config_dir}"
+            )
 
             # Seed the local sync directory from the canonical fixture.
             shutil.copytree(fixture_root, sync_root, dirs_exist_ok=True)
@@ -75,9 +166,10 @@ class TestCase0002SyncListValidation(E2ETestCase):
             sync_list_path = config_dir / "sync_list"
             stdout_file = scenario_log_dir / "stdout.log"
             stderr_file = scenario_log_dir / "stderr.log"
+            metadata_file = scenario_dir / "metadata.txt"
+            events_file = scenario_dir / "events.json"
             actual_manifest_file = scenario_dir / "actual_manifest.txt"
             diff_file = scenario_dir / "diff.txt"
-            metadata_file = scenario_dir / "metadata.txt"
 
             write_text_file(sync_list_path, "\n".join(scenario.sync_list) + "\n")
 
@@ -103,6 +195,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 f"description={scenario.description}",
                 f"command={command_to_string(command)}",
                 f"returncode={result.returncode}",
+                f"config_dir={config_dir}",
+                f"refresh_token_path={copied_refresh_token}",
             ]
             write_text_file(metadata_file, "\n".join(metadata_lines) + "\n")
 
@@ -112,34 +206,56 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     str(stdout_file),
                     str(stderr_file),
                     str(metadata_file),
-                    str(copied_refresh_token),
                 ]
-            )
-            
-            context.log(
-                f"Scenario {scenario.scenario_id} bootstrapped config dir: {config_dir}"
             )
 
             if result.returncode != 0:
-                failures.append(
-                    f"{scenario.scenario_id}: onedrive exited with non-zero status {result.returncode}"
+                failure_message = (
+                    f"{scenario.scenario_id}: onedrive exited with non-zero status "
+                    f"{result.returncode}"
                 )
+                failures.append(failure_message)
+                context.log(f"Scenario {scenario.scenario_id} FAILED: {failure_message}")
                 continue
+
+            events = self._parse_events(result.stdout)
+            fixture_events = [
+                event for event in events if self._is_fixture_path(event.normalised_path)
+            ]
+
+            write_text_file(
+                events_file,
+                json.dumps(
+                    [
+                        {
+                            "event_type": event.event_type,
+                            "raw_path": event.raw_path,
+                            "normalised_path": event.normalised_path,
+                            "line": event.line,
+                        }
+                        for event in fixture_events
+                    ],
+                    indent=2,
+                )
+                + "\n",
+            )
+            all_artifacts.append(str(events_file))
 
             actual_manifest = build_manifest(sync_root)
             write_manifest(actual_manifest_file, actual_manifest)
             all_artifacts.append(str(actual_manifest_file))
 
-            diffs = compare_manifest(
-                actual_entries=actual_manifest,
-                expected_present=scenario.expected_present,
-                expected_absent=scenario.expected_absent,
-            )
+            diffs = self._validate_scenario(scenario, fixture_events)
 
             if diffs:
                 write_text_file(diff_file, "\n".join(diffs) + "\n")
                 all_artifacts.append(str(diff_file))
-                failures.append(f"{scenario.scenario_id}: " + "; ".join(diffs))
+
+                failure_message = f"{scenario.scenario_id}: " + "; ".join(diffs)
+                failures.append(failure_message)
+                context.log(f"Scenario {scenario.scenario_id} FAILED: {failure_message}")
+            else:
+                context.log(f"Scenario {scenario.scenario_id} PASSED")
 
         details = {
             "scenario_count": len(scenarios),
@@ -147,8 +263,9 @@ class TestCase0002SyncListValidation(E2ETestCase):
         }
 
         if failures:
-            reason = f"{len(failures)} of {len(scenarios)} sync_list scenarios failed: " + ", ".join(
-                failure.split(":")[0] for failure in failures
+            reason = (
+                f"{len(failures)} of {len(scenarios)} sync_list scenarios failed: "
+                + ", ".join(failure.split(":")[0] for failure in failures)
             )
             details["failures"] = failures
             return TestResult.fail_result(
@@ -166,41 +283,155 @@ class TestCase0002SyncListValidation(E2ETestCase):
             details=details,
         )
 
+    def _normalise_log_path(self, raw_path: str) -> str:
+        path = raw_path.strip()
+        if path.startswith("./"):
+            path = path[2:]
+        path = path.rstrip("/")
+        return path
+
+    def _parse_events(self, stdout: str) -> list[ParsedEvent]:
+        events: list[ParsedEvent] = []
+
+        for line in stdout.splitlines():
+            stripped = line.strip()
+
+            for event_type, pattern in self.EVENT_PATTERNS:
+                match = pattern.match(stripped)
+                if not match:
+                    continue
+
+                raw_path = match.group(1).strip()
+                normalised_path = self._normalise_log_path(raw_path)
+
+                events.append(
+                    ParsedEvent(
+                        event_type=event_type,
+                        raw_path=raw_path,
+                        normalised_path=normalised_path,
+                        line=stripped,
+                    )
+                )
+                break
+
+        return events
+
+    def _is_fixture_path(self, path: str) -> bool:
+        return path == FIXTURE_ROOT_NAME or path.startswith(FIXTURE_ROOT_NAME + "/")
+
+    def _path_matches(self, path: str, prefix: str) -> bool:
+        prefix = prefix.strip("/")
+        if not prefix:
+            return False
+        return path == prefix or path.startswith(prefix + "/")
+
+    def _find_matching_events(
+        self,
+        events: list[ParsedEvent],
+        wanted_path: str,
+        event_type: str | None = None,
+        non_skip_only: bool = False,
+    ) -> list[ParsedEvent]:
+        matches: list[ParsedEvent] = []
+
+        for event in events:
+            if event_type and event.event_type != event_type:
+                continue
+            if non_skip_only and event.event_type == "skip":
+                continue
+            if self._path_matches(event.normalised_path, wanted_path):
+                matches.append(event)
+
+        return matches
+
+    def _validate_scenario(
+        self,
+        scenario: SyncListScenario,
+        events: list[ParsedEvent],
+    ) -> list[str]:
+        diffs: list[str] = []
+
+        if not events:
+            diffs.append("No fixture-related sync_list events were captured")
+            return diffs
+
+        for event in events:
+            path = event.normalised_path
+
+            if event.event_type == "skip":
+                if scenario.is_allowed_non_skip(path):
+                    diffs.append(
+                        f"Allowed path was skipped by sync_list: {path} "
+                        f"(line: {event.line})"
+                    )
+                continue
+
+            # Non-skip operation
+            if scenario.is_forbidden(path):
+                diffs.append(
+                    f"Forbidden path was processed by sync_list: {path} "
+                    f"(line: {event.line})"
+                )
+                continue
+
+            if not scenario.is_allowed_non_skip(path):
+                diffs.append(
+                    f"Unexpected path was processed by sync_list: {path} "
+                    f"(line: {event.line})"
+                )
+
+        for required in scenario.required_processed:
+            matches = self._find_matching_events(events, required, non_skip_only=True)
+            if not matches:
+                diffs.append(
+                    f"Expected allowed processing was not observed for: {required}"
+                )
+
+        for required in scenario.required_skipped:
+            matches = self._find_matching_events(events, required, event_type="skip")
+            if not matches:
+                diffs.append(
+                    f"Expected excluded skip was not observed for: {required}"
+                )
+
+        return diffs
+
     def _create_fixture_tree(self, root: Path) -> None:
         reset_directory(root)
 
         dirs = [
-            "Backup",
-            "Blender",
-            "Documents",
-            "Documents/Notes",
-            "Documents/Notes/.config",
-            "Documents/Notes/temp123",
-            "Work",
-            "Work/ProjectA",
-            "Work/ProjectA/.gradle",
-            "Work/ProjectB",
-            "Secret_data",
-            "Random",
-            "Random/Backup",
+            FIXTURE_ROOT_NAME,
+            f"{FIXTURE_ROOT_NAME}/Backup",
+            f"{FIXTURE_ROOT_NAME}/Blender",
+            f"{FIXTURE_ROOT_NAME}/Documents",
+            f"{FIXTURE_ROOT_NAME}/Documents/Notes",
+            f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+            f"{FIXTURE_ROOT_NAME}/Documents/Notes/temp123",
+            f"{FIXTURE_ROOT_NAME}/Work",
+            f"{FIXTURE_ROOT_NAME}/Work/ProjectA",
+            f"{FIXTURE_ROOT_NAME}/Work/ProjectA/.gradle",
+            f"{FIXTURE_ROOT_NAME}/Work/ProjectB",
+            f"{FIXTURE_ROOT_NAME}/Secret_data",
+            f"{FIXTURE_ROOT_NAME}/Random",
+            f"{FIXTURE_ROOT_NAME}/Random/Backup",
         ]
 
         for rel in dirs:
             (root / rel).mkdir(parents=True, exist_ok=True)
 
         files = {
-            "Backup/root-backup.txt": "backup-root\n",
-            "Blender/scene.blend": "blend-scene\n",
-            "Documents/latest_report.docx": "latest report\n",
-            "Documents/report.pdf": "report pdf\n",
-            "Documents/Notes/keep.txt": "keep\n",
-            "Documents/Notes/.config/app.json": '{"ok": true}\n',
-            "Documents/Notes/temp123/ignored.txt": "ignored\n",
-            "Work/ProjectA/keep.txt": "project a\n",
-            "Work/ProjectA/.gradle/state.bin": "gradle\n",
-            "Work/ProjectB/latest_report.docx": "project b report\n",
-            "Secret_data/secret.txt": "secret\n",
-            "Random/Backup/nested-backup.txt": "nested backup\n",
+            f"{FIXTURE_ROOT_NAME}/Backup/root-backup.txt": "backup-root\n",
+            f"{FIXTURE_ROOT_NAME}/Blender/scene.blend": "blend-scene\n",
+            f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx": "latest report\n",
+            f"{FIXTURE_ROOT_NAME}/Documents/report.pdf": "report pdf\n",
+            f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt": "keep\n",
+            f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config/app.json": '{"ok": true}\n',
+            f"{FIXTURE_ROOT_NAME}/Documents/Notes/temp123/ignored.txt": "ignored\n",
+            f"{FIXTURE_ROOT_NAME}/Work/ProjectA/keep.txt": "project a\n",
+            f"{FIXTURE_ROOT_NAME}/Work/ProjectA/.gradle/state.bin": "gradle\n",
+            f"{FIXTURE_ROOT_NAME}/Work/ProjectB/latest_report.docx": "project b report\n",
+            f"{FIXTURE_ROOT_NAME}/Secret_data/secret.txt": "secret\n",
+            f"{FIXTURE_ROOT_NAME}/Random/Backup/nested-backup.txt": "nested backup\n",
         }
 
         for rel, content in files.items():
@@ -209,47 +440,41 @@ class TestCase0002SyncListValidation(E2ETestCase):
             path.write_text(content, encoding="utf-8")
 
     def _build_scenarios(self) -> list[SyncListScenario]:
-        """
-        First-cut scenario matrix.
-
-        These focus on download-side validation only.
-        """
         return [
             SyncListScenario(
                 scenario_id="SL-0001",
                 description="root directory include with trailing slash",
                 sync_list=[
-                    "/Backup/",
+                    f"/{FIXTURE_ROOT_NAME}/Backup/",
                 ],
-                expected_present=[
-                    "Backup",
-                    "Backup/root-backup.txt",
+                allowed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/Backup",
+                    f"{FIXTURE_ROOT_NAME}/Backup/root-backup.txt",
                 ],
-                expected_absent=[
-                    "Blender",
-                    "Blender/scene.blend",
-                    "Documents",
-                    "Work",
-                    "Secret_data",
-                    "Random",
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Backup",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/Blender",
+                    f"{FIXTURE_ROOT_NAME}/Documents",
                 ],
             ),
             SyncListScenario(
                 scenario_id="SL-0002",
                 description="root include without trailing slash",
                 sync_list=[
-                    "/Blender",
+                    f"/{FIXTURE_ROOT_NAME}/Blender",
                 ],
-                expected_present=[
-                    "Blender",
-                    "Blender/scene.blend",
+                allowed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/Blender",
+                    f"{FIXTURE_ROOT_NAME}/Blender/scene.blend",
                 ],
-                expected_absent=[
-                    "Backup",
-                    "Documents",
-                    "Work",
-                    "Secret_data",
-                    "Random",
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Blender",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/Backup",
+                    f"{FIXTURE_ROOT_NAME}/Documents",
                 ],
             ),
             SyncListScenario(
@@ -258,87 +483,79 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 sync_list=[
                     "Backup",
                 ],
-                expected_present=[
-                    "Backup",
-                    "Backup/root-backup.txt",
-                    "Random/Backup",
-                    "Random/Backup/nested-backup.txt",
+                allowed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/Backup",
+                    f"{FIXTURE_ROOT_NAME}/Backup/root-backup.txt",
+                    f"{FIXTURE_ROOT_NAME}/Random/Backup",
+                    f"{FIXTURE_ROOT_NAME}/Random/Backup/nested-backup.txt",
                 ],
-                expected_absent=[
-                    "Blender",
-                    "Documents",
-                    "Work",
-                    "Secret_data",
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Backup",
+                    f"{FIXTURE_ROOT_NAME}/Random/Backup",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/Blender",
+                    f"{FIXTURE_ROOT_NAME}/Documents",
                 ],
             ),
             SyncListScenario(
                 scenario_id="SL-0004",
                 description="include tree with nested exclusion",
                 sync_list=[
-                    "/Documents/",
-                    "!/Documents/Notes/.config/*",
+                    f"/{FIXTURE_ROOT_NAME}/Documents/",
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/*",
                 ],
-                expected_present=[
-                    "Documents",
-                    "Documents/latest_report.docx",
-                    "Documents/report.pdf",
-                    "Documents/Notes",
-                    "Documents/Notes/keep.txt",
-                    "Documents/Notes/temp123",
-                    "Documents/Notes/temp123/ignored.txt",
+                allowed_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/Documents",
                 ],
-                expected_absent=[
-                    "Documents/Notes/.config",
-                    "Documents/Notes/.config/app.json",
-                    "Backup",
-                    "Blender",
-                    "Work",
-                    "Secret_data",
-                    "Random",
+                forbidden_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                ],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Documents",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                    f"{FIXTURE_ROOT_NAME}/Backup",
                 ],
             ),
             SyncListScenario(
                 scenario_id="SL-0005",
                 description="included tree with hidden directory excluded",
                 sync_list=[
-                    "/Work/",
+                    f"/{FIXTURE_ROOT_NAME}/Work/",
                     "!.gradle/*",
                 ],
-                expected_present=[
-                    "Work",
-                    "Work/ProjectA",
-                    "Work/ProjectA/keep.txt",
-                    "Work/ProjectB",
-                    "Work/ProjectB/latest_report.docx",
+                allowed_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/Work",
                 ],
-                expected_absent=[
-                    "Work/ProjectA/.gradle",
-                    "Work/ProjectA/.gradle/state.bin",
-                    "Backup",
-                    "Blender",
-                    "Documents",
-                    "Secret_data",
-                    "Random",
+                forbidden_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/Work/ProjectA/.gradle",
+                ],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Work",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/Work/ProjectA/.gradle",
+                    f"{FIXTURE_ROOT_NAME}/Backup",
                 ],
             ),
             SyncListScenario(
                 scenario_id="SL-0006",
                 description="file-specific include inside named directory",
                 sync_list=[
-                    "Documents/latest_report.docx",
+                    f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
                 ],
-                expected_present=[
-                    "Documents",
-                    "Documents/latest_report.docx",
+                allowed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/Documents",
+                    f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
                 ],
-                expected_absent=[
-                    "Documents/report.pdf",
-                    "Documents/Notes",
-                    "Backup",
-                    "Blender",
-                    "Work",
-                    "Secret_data",
-                    "Random",
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/Documents/report.pdf",
+                    f"{FIXTURE_ROOT_NAME}/Backup",
                 ],
             ),
         ]

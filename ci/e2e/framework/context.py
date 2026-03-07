@@ -62,9 +62,6 @@ class E2EContext:
 
     @property
     def default_onedrive_config_dir(self) -> Path:
-        """
-        Return the default OneDrive config directory created by the workflow.
-        """
         xdg_config_home = os.environ.get("XDG_CONFIG_HOME", "").strip()
         if xdg_config_home:
             return Path(xdg_config_home) / "onedrive"
@@ -72,6 +69,7 @@ class E2EContext:
         home = os.environ.get("HOME", "").strip()
         if not home:
             raise RuntimeError("Neither XDG_CONFIG_HOME nor HOME is set")
+
         return Path(home) / ".config" / "onedrive"
 
     @property
@@ -86,10 +84,7 @@ class E2EContext:
 
     def bootstrap_config_dir(self, config_dir: Path) -> Path:
         """
-        Create a usable OneDrive config directory for a test case by copying the
-        existing refresh_token into the supplied config directory.
-
-        Returns the path to the copied refresh_token.
+        Copy the existing refresh_token into a per-test/per-scenario config dir.
         """
         self.ensure_refresh_token_available()
         ensure_directory(config_dir)
