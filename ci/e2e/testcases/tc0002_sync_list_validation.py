@@ -44,27 +44,18 @@ class SyncListScenario:
 
     def expanded_allowed_exact(self) -> set[str]:
         """
-        Expand allowed exact paths to include ancestor directories.
+        Return only the explicitly allowed exact paths.
+
+        Do not automatically promote ancestor/container paths to required
+        allowed paths, because sync_list processing may legitimately skip
+        container directories while still including matching descendants.
         """
         expanded: set[str] = set()
 
         for item in self.allowed_exact:
             path = item.strip("/")
-            if not path:
-                continue
-
-            parts = path.split("/")
-            for idx in range(1, len(parts) + 1):
-                expanded.add("/".join(parts[:idx]))
-
-        for prefix in self.allowed_prefixes:
-            path = prefix.strip("/")
-            if not path:
-                continue
-
-            parts = path.split("/")
-            for idx in range(1, len(parts)):
-                expanded.add("/".join(parts[:idx]))
+            if path:
+                expanded.add(path)
 
         return expanded
 
@@ -176,6 +167,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
             command = [
                 context.onedrive_bin,
                 "--sync",
+                "--verbose",
                 "--verbose",
                 "--resync",
                 "--resync-auth",
@@ -547,14 +539,13 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
                 ],
                 allowed_exact=[
-                    f"{FIXTURE_ROOT_NAME}/Documents",
                     f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
                 ],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
                 ],
                 required_skipped=[
-                    f"{FIXTURE_ROOT_NAME}/Documents/report.pdf",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes",
                     f"{FIXTURE_ROOT_NAME}/Backup",
                 ],
             ),
