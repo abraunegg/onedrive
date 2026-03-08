@@ -103,7 +103,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
     name = "sync_list validation"
     description = "Validate sync_list behaviour across a scenario matrix"
 
-        EVENT_PATTERNS = [
+    EVENT_PATTERNS = [
         (
             "skip",
             re.compile(r"^(?:DEBUG:\s+)?Skipping path - excluded by sync_list config: (.+)$"),
