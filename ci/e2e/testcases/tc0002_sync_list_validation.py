@@ -193,14 +193,22 @@ class TestCase0002SyncListValidation(E2ETestCase):
             reset_directory(sync_root)
 
             copied_refresh_token = context.bootstrap_config_dir(config_dir)
+
+            config_path = config_dir / CONFIG_FILE_NAME
+            existing_config_text = (
+                config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+            )
+            base_config_text = self._build_base_config_text(existing_config_text)
+            write_text_file(config_path, base_config_text)
+
             context.log(
                 f"Scenario {scenario.scenario_id} bootstrapped config dir: {config_dir}"
             )
+            context.log(
+                f"Scenario {scenario.scenario_id} wrote tc0002 base config: {config_path}"
+            )
 
             shutil.copytree(fixture_root, sync_root, dirs_exist_ok=True)
-
-            config_path = config_dir / CONFIG_FILE_NAME
-            base_config_text = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
 
             sync_list_path = config_dir / "sync_list"
             metadata_file = scenario_dir / "metadata.txt"
@@ -211,11 +219,19 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 f"scenario_id={scenario.scenario_id}",
                 f"description={scenario.description}",
                 f"config_dir={config_dir}",
+                f"config_path={config_path}",
                 f"refresh_token_path={copied_refresh_token}",
                 f"execution_mode={scenario.execution_mode}",
             ]
 
-            all_artifacts.extend([str(sync_list_path), str(metadata_file), str(actual_manifest_file)])
+            all_artifacts.extend(
+                [
+                    str(config_path),
+                    str(sync_list_path),
+                    str(metadata_file),
+                    str(actual_manifest_file),
+                ]
+            )
 
             if scenario.execution_mode == "cleanup_regression":
                 diffs, artifacts, extra_metadata = self._run_cleanup_regression_scenario(
@@ -284,6 +300,25 @@ class TestCase0002SyncListValidation(E2ETestCase):
             artifacts=all_artifacts,
             details=details,
         )
+
+    def _build_base_config_text(self, existing_config_text: str = "") -> str:
+        sections: list[str] = []
+
+        existing_config_text = existing_config_text.strip("\n")
+        if existing_config_text.strip():
+            sections.append(existing_config_text)
+
+        sections.append(
+            "\n".join(
+                [
+                    "# tc0002 base config",
+                    'bypass_data_preservation = "true"',
+                    'skip_file = "~*|.~*|*.tmp|*.swp|*.partial|*-safeBackup-*"',
+                ]
+            )
+        )
+
+        return "\n\n".join(sections).rstrip("\n") + "\n"
 
     def _run_standard_scenario(
         self,
