@@ -902,7 +902,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0015",
-                description="cyb3rko style complex Programming ruleset",
+                description="complex style Programming ruleset",
                 sync_list=[
                     "!build/kotlin/*",
                     "!.kotlin/*",
