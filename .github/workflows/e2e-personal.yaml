@@ -1,4 +1,4 @@
-name: E2E Personal Account Testing (push only)
+name: E2E Personal Account Testing
 
 on:
   push:
@@ -103,7 +103,7 @@ jobs:
             | "- Test Case \(.id // "????"): \(.name) — \(.reason // "no reason provided")"' "$f" || true)
 
           md="## ${target^} Account Testing\n"
-          md+="${total} Test Cases Run  \n"
+          md+="**${total}** Test Cases Run  \n"
           md+="**${passed}** Test Cases Passed  \n"
           md+="**${failed}** Test Cases Failed  \n\n"
 
