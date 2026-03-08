@@ -928,12 +928,15 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 allowed_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Backup",
                     f"{FIXTURE_ROOT_NAME}/Random/Backup",
+                    f"{FIXTURE_ROOT_NAME}/0.1.Backups",
                 ],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/Backup",
                     f"{FIXTURE_ROOT_NAME}/Backup/root-backup.txt",
                     f"{FIXTURE_ROOT_NAME}/Random/Backup",
                     f"{FIXTURE_ROOT_NAME}/Random/Backup/nested-backup.txt",
+                    f"{FIXTURE_ROOT_NAME}/0.1.Backups",
+                    f"{FIXTURE_ROOT_NAME}/0.1.Backups/archive1.bin",
                 ],
                 required_skipped=[
                     f"{FIXTURE_ROOT_NAME}/Blender",
