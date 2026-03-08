@@ -103,12 +103,29 @@ class TestCase0002SyncListValidation(E2ETestCase):
     name = "sync_list validation"
     description = "Validate sync_list behaviour across a scenario matrix"
 
-    EVENT_PATTERNS = [
-        ("skip", re.compile(r"^Skipping path - excluded by sync_list config: (.+)$")),
-        ("include_dir", re.compile(r"^Including path - included by sync_list config: (.+)$")),
-        ("include_file", re.compile(r"^Including file - included by sync_list config: (.+)$")),
-        ("upload_file", re.compile(r"^Uploading new file: (.+?) \.\.\.")),
-        ("create_remote_dir", re.compile(r"^OneDrive Client requested to create this directory online: (.+)$")),
+        EVENT_PATTERNS = [
+        (
+            "skip",
+            re.compile(r"^(?:DEBUG:\s+)?Skipping path - excluded by sync_list config: (.+)$"),
+        ),
+        (
+            "include_dir",
+            re.compile(r"^(?:DEBUG:\s+)?Including path - included by sync_list config: (.+)$"),
+        ),
+        (
+            "include_file",
+            re.compile(r"^(?:DEBUG:\s+)?Including file - included by sync_list config: (.+)$"),
+        ),
+        (
+            "upload_file",
+            re.compile(r"^(?:DEBUG:\s+)?Uploading new file: (.+?) \.\.\."),
+        ),
+        (
+            "create_remote_dir",
+            re.compile(
+                r"^(?:DEBUG:\s+)?OneDrive Client requested to create this directory online: (.+)$"
+            ),
+        ),
     ]
 
     def run(self, context: E2EContext) -> TestResult:
