@@ -7871,49 +7871,101 @@ class SyncEngine {
 							// Resolve 'Directory not empty' error when deleting local files
 							try {
 								auto directoryEntries = dirEntries(path, SpanMode.depth, false);
+								bool pathShouldBeRemoved;
+								
 								foreach (DirEntry child; directoryEntries) {
 									// set for error logging
 									currentPath = child.name;
-								
-									// what sort of child is this?
-									if (isDir(child.name)) {
-										addLogEntry("Removing local directory: " ~ child.name);
-									} else {
-										addLogEntry("Removing local file: " ~ child.name);
+									
+									// reset pathShouldBeRemoved
+									pathShouldBeRemoved = true;
+									
+									// Issue #3655: Deletion of local data where 'sync_list' is expecting this to be kept
+									// If we are in a --download-only --cleanup-local-files + using a 'sync_list' the expectation here is that matches to 'sync_list' inclusion are kept
+									// If we get to this point, we have already validated '--download-only --cleanup-local-files' so this is now just about 'sync_list' inclusion
+									
+									// Is 'sync_list' configured?
+									if (syncListConfigured) {
+										// Should this path be removed?
+										// selectiveSync.isPathExcludedViaSyncList() returns 'true' if the path is excluded, 'false' if the path is to be included
+										pathShouldBeRemoved = selectiveSync.isPathExcludedViaSyncList(child.name);
 									}
 									
-									// are we in a --dry-run scenario?
-									if (!dryRun) {
-										// No --dry-run ... process local delete
-										if (exists(child)) {
-											try {
-												attrIsDir(child.linkAttributes) ? rmdir(child.name) : safeRemove(child.name);
-											} catch (FileException e) {
-												// display the error message
-												displayFileSystemErrorMessage(e.msg, thisFunctionName, currentPath);
+									// What action should be taken?
+									if (pathShouldBeRemoved) {
+										// Path should be removed
+										// what sort of child is this?
+										if (isDir(child.name)) {
+											addLogEntry("Removing local directory: " ~ child.name);
+										} else {
+											addLogEntry("Removing local file: " ~ child.name);
+										}
+										
+										// Are we in a --dry-run scenario?
+										if (!dryRun) {
+											// No --dry-run ... process local delete
+											if (exists(child)) {
+												try {
+													attrIsDir(child.linkAttributes) ? rmdir(child.name) : safeRemove(child.name);
+												} catch (FileException e) {
+													// display the error message
+													displayFileSystemErrorMessage(e.msg, thisFunctionName, currentPath);
+												}
 											}
 										}
+									} else {
+										// Path should be retained
+										// what sort of child is this?
+										if (isDir(child.name)) {
+											addLogEntry("Local directory should be retained due to 'sync_list' inclusion: " ~ child.name);
+										} else {
+											addLogEntry("Local file should be retained due to 'sync_list' inclusion: " ~ child.name);
+										}
 									}
+									
+								
+									
+									
+									
 								}
 								// Clear directoryEntries
 								object.destroy(directoryEntries);
 								
-								// Remove the path now that it is empty of children
-								addLogEntry("Removing local directory: " ~ path);
-								// are we in a --dry-run scenario?
-								if (!dryRun) {
-									// No --dry-run ... process local delete
-									if (exists(path)) {
-									
-										try {
-											rmdirRecurse(path);
-										} catch (FileException e) {
-											// display the error message
-											displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
-										}
-										
-									}
+								bool parentalPathShouldBeRemoved = true;
+								
+								// Is 'sync_list' configured?
+								if (syncListConfigured) {
+									parentalPathShouldBeRemoved = selectiveSync.isPathExcludedViaSyncList(path);
 								}
+								
+								// What action should be taken?
+								if (parentalPathShouldBeRemoved) {
+								
+									// Remove the parental path now that it is empty of children
+									addLogEntry("Removing local directory: " ~ path);
+									// are we in a --dry-run scenario?
+									if (!dryRun) {
+										// No --dry-run ... process local delete
+										if (exists(path)) {
+										
+											try {
+												rmdirRecurse(path);
+											} catch (FileException e) {
+												// display the error message
+												displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
+											}
+											
+										}
+									}
+								} else {
+									// Path needs to be retained
+									addLogEntry("Local directory should be retained due to 'sync_list' inclusion: " ~ path);
+								
+								
+								
+								}
+								
+								
 							} catch (FileException e) {
 								// display the error message
 								displayFileSystemErrorMessage(e.msg, thisFunctionName, currentPath);
