@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -385,9 +386,6 @@ class TestCase0002SyncListValidation(E2ETestCase):
             path = event.normalised_path
 
             if event.event_type == "skip":
-                # Do not fail just because a container path was skipped.
-                # The logs show sync_list may skip parent/container directories
-                # while still including matching descendants beneath them.
                 continue
 
             if scenario.is_forbidden(path):
@@ -418,6 +416,52 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 )
 
         return diffs
+
+    def _safe_name_fragment(self, value: str) -> str:
+        return re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_").lower() or "root"
+
+    def _dummy_filename_for_dir(self, rel_dir: str) -> str:
+        """
+        Generate a stable, unique filename for a directory.
+        """
+        fragment = self._safe_name_fragment(rel_dir.replace("/", "_"))
+        extensions = [".bin", ".dat", ".cache", ".blob"]
+        ext = extensions[len(fragment) % len(extensions)]
+        return f"zz_e2e_{fragment}{ext}"
+
+    def _write_random_file(self, path: Path, size_bytes: int = 50 * 1024) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(os.urandom(size_bytes))
+
+    def _ensure_every_directory_has_direct_file(
+        self,
+        root: Path,
+        dirs: list[str],
+        existing_files: dict[str, str],
+    ) -> None:
+        """
+        Ensure every created directory has at least one direct file inside it.
+
+        If a directory already has a direct child file defined in existing_files,
+        do nothing for that directory. Otherwise add a 50 KiB random dummy file.
+        """
+        dirs_set = {d.strip("/") for d in dirs}
+
+        dirs_with_direct_files: set[str] = set()
+        for rel_file in existing_files.keys():
+            rel_file = rel_file.strip("/")
+            parent = str(Path(rel_file).parent).replace("\\", "/")
+            if parent == ".":
+                parent = ""
+            dirs_with_direct_files.add(parent)
+
+        for rel_dir in sorted(dirs_set):
+            if rel_dir in dirs_with_direct_files:
+                continue
+
+            dummy_name = self._dummy_filename_for_dir(rel_dir)
+            dummy_path = root / rel_dir / dummy_name
+            self._write_random_file(dummy_path)
 
     def _create_fixture_tree(self, root: Path) -> None:
         reset_directory(root)
@@ -544,6 +588,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
 
+        self._ensure_every_directory_has_direct_file(root, dirs, files)
+
     def _build_scenarios(self) -> list[SyncListScenario]:
         return [
             SyncListScenario(
@@ -552,12 +598,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 sync_list=[
                     f"/{FIXTURE_ROOT_NAME}/Backup/",
                 ],
-                allowed_exact=[
+                allowed_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Backup",
-                    f"{FIXTURE_ROOT_NAME}/Backup/root-backup.txt",
                 ],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/Backup",
+                    f"{FIXTURE_ROOT_NAME}/Backup/root-backup.txt",
                 ],
                 required_skipped=[
                     f"{FIXTURE_ROOT_NAME}/Blender",
@@ -570,12 +616,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 sync_list=[
                     f"/{FIXTURE_ROOT_NAME}/Blender",
                 ],
-                allowed_exact=[
+                allowed_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Blender",
-                    f"{FIXTURE_ROOT_NAME}/Blender/scene.blend",
                 ],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/Blender",
+                    f"{FIXTURE_ROOT_NAME}/Blender/scene.blend",
                 ],
                 required_skipped=[
                     f"{FIXTURE_ROOT_NAME}/Backup",
@@ -588,15 +634,15 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 sync_list=[
                     "Backup",
                 ],
-                allowed_exact=[
+                allowed_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/Backup",
+                    f"{FIXTURE_ROOT_NAME}/Random/Backup",
+                ],
+                required_processed=[
                     f"{FIXTURE_ROOT_NAME}/Backup",
                     f"{FIXTURE_ROOT_NAME}/Backup/root-backup.txt",
                     f"{FIXTURE_ROOT_NAME}/Random/Backup",
                     f"{FIXTURE_ROOT_NAME}/Random/Backup/nested-backup.txt",
-                ],
-                required_processed=[
-                    f"{FIXTURE_ROOT_NAME}/Backup",
-                    f"{FIXTURE_ROOT_NAME}/Random/Backup",
                 ],
                 required_skipped=[
                     f"{FIXTURE_ROOT_NAME}/Blender",
