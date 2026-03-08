@@ -15,6 +15,7 @@ from framework.utils import command_to_string, reset_directory, run_command, wri
 
 
 FIXTURE_ROOT_NAME = "ZZ_E2E_SYNC_LIST"
+CONFIG_FILE_NAME = "config"
 
 
 @dataclass
@@ -31,17 +32,26 @@ class SyncListScenario:
     description: str
     sync_list: list[str]
 
-    # Paths explicitly allowed for non-skip operations.
+    # Standard policy validation rules
     allowed_exact: list[str] = field(default_factory=list)
     allowed_prefixes: list[str] = field(default_factory=list)
-
-    # Paths explicitly forbidden for non-skip operations.
     forbidden_exact: list[str] = field(default_factory=list)
     forbidden_prefixes: list[str] = field(default_factory=list)
-
-    # Evidence required to prove the scenario exercised the rule correctly.
     required_processed: list[str] = field(default_factory=list)
     required_skipped: list[str] = field(default_factory=list)
+
+    # Execution mode
+    execution_mode: str = "single"
+
+    # Phase-specific config overrides
+    phase1_config_overrides: list[str] = field(default_factory=list)
+    phase2_config_overrides: list[str] = field(default_factory=list)
+
+    # Cleanup regression expectations
+    expected_present_after: list[str] = field(default_factory=list)
+    expected_absent_after: list[str] = field(default_factory=list)
+    required_removed: list[str] = field(default_factory=list)
+    forbidden_removed: list[str] = field(default_factory=list)
 
     def path_matches_prefix(self, path: str, prefix: str) -> bool:
         prefix = prefix.strip("/")
@@ -62,10 +72,6 @@ class SyncListScenario:
         return False
 
     def is_allowed_non_skip(self, path: str) -> bool:
-        """
-        Determine whether a path is explicitly allowed to appear in a non-skip
-        event such as include/upload/create.
-        """
         path = path.strip("/")
 
         if self.is_forbidden(path):
@@ -81,14 +87,6 @@ class SyncListScenario:
         return False
 
     def is_allowed_container(self, path: str) -> bool:
-        """
-        Allow container paths that may legitimately appear in logs even when the
-        real rule target is a descendant path.
-
-        Examples:
-        - ZZ_E2E_SYNC_LIST
-        - ZZ_E2E_SYNC_LIST/Documents
-        """
         path = path.strip("/")
 
         if path == FIXTURE_ROOT_NAME:
@@ -112,9 +110,11 @@ class TestCase0002SyncListValidation(E2ETestCase):
     Test Case 0002: sync_list validation
 
     This validates sync_list as a policy-conformance test.
+    The Issue #3655 scenarios additionally reproduce the reported lifecycle:
 
-    The test is considered successful when all observed sync operations
-    involving the fixture tree match the active sync_list rules.
+    1. Seed the entire fixture tree remotely with no sync_list restrictions.
+    2. Re-run with download_only + cleanup_local_files + issue-style sync_list.
+    3. Validate both debug log decisions and final local filesystem state.
     """
 
     case_id = "0002"
@@ -143,6 +143,17 @@ class TestCase0002SyncListValidation(E2ETestCase):
             re.compile(
                 r"^(?:DEBUG:\s+)?OneDrive Client requested to create this directory online: (.+)$"
             ),
+        ),
+    ]
+
+    REMOVAL_PATTERNS = [
+        (
+            "remove_local_file",
+            re.compile(r"^(?:DEBUG:\s+)?Removing local file: (.+)$"),
+        ),
+        (
+            "remove_local_dir",
+            re.compile(r"^(?:DEBUG:\s+)?Removing local directory: (.+)$"),
         ),
     ]
 
@@ -186,93 +197,57 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 f"Scenario {scenario.scenario_id} bootstrapped config dir: {config_dir}"
             )
 
-            # Seed the local sync directory from the canonical fixture.
             shutil.copytree(fixture_root, sync_root, dirs_exist_ok=True)
 
+            config_path = config_dir / CONFIG_FILE_NAME
+            base_config_text = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+
             sync_list_path = config_dir / "sync_list"
-            stdout_file = scenario_log_dir / "stdout.log"
-            stderr_file = scenario_log_dir / "stderr.log"
             metadata_file = scenario_dir / "metadata.txt"
-            events_file = scenario_dir / "events.json"
             actual_manifest_file = scenario_dir / "actual_manifest.txt"
             diff_file = scenario_dir / "diff.txt"
-
-            write_text_file(sync_list_path, "\n".join(scenario.sync_list) + "\n")
-
-            command = [
-                context.onedrive_bin,
-                "--sync",
-                "--verbose",
-                "--verbose",
-                "--resync",
-                "--resync-auth",
-                "--syncdir",
-                str(sync_root),
-                "--confdir",
-                str(config_dir),
-            ]
-
-            result = run_command(command, cwd=context.repo_root)
-
-            write_text_file(stdout_file, result.stdout)
-            write_text_file(stderr_file, result.stderr)
 
             metadata_lines = [
                 f"scenario_id={scenario.scenario_id}",
                 f"description={scenario.description}",
-                f"command={command_to_string(command)}",
-                f"returncode={result.returncode}",
                 f"config_dir={config_dir}",
                 f"refresh_token_path={copied_refresh_token}",
+                f"execution_mode={scenario.execution_mode}",
             ]
+
+            all_artifacts.extend([str(sync_list_path), str(metadata_file), str(actual_manifest_file)])
+
+            if scenario.execution_mode == "cleanup_regression":
+                diffs, artifacts, extra_metadata = self._run_cleanup_regression_scenario(
+                    context=context,
+                    scenario=scenario,
+                    sync_root=sync_root,
+                    config_dir=config_dir,
+                    config_path=config_path,
+                    base_config_text=base_config_text,
+                    sync_list_path=sync_list_path,
+                    scenario_dir=scenario_dir,
+                    scenario_log_dir=scenario_log_dir,
+                )
+            else:
+                diffs, artifacts, extra_metadata = self._run_standard_scenario(
+                    context=context,
+                    scenario=scenario,
+                    sync_root=sync_root,
+                    config_dir=config_dir,
+                    config_path=config_path,
+                    base_config_text=base_config_text,
+                    sync_list_path=sync_list_path,
+                    scenario_dir=scenario_dir,
+                    scenario_log_dir=scenario_log_dir,
+                )
+
+            all_artifacts.extend(artifacts)
+            metadata_lines.extend(extra_metadata)
             write_text_file(metadata_file, "\n".join(metadata_lines) + "\n")
-
-            all_artifacts.extend(
-                [
-                    str(sync_list_path),
-                    str(stdout_file),
-                    str(stderr_file),
-                    str(metadata_file),
-                ]
-            )
-
-            if result.returncode != 0:
-                failure_message = (
-                    f"{scenario.scenario_id}: onedrive exited with non-zero status "
-                    f"{result.returncode}"
-                )
-                failures.append(failure_message)
-                context.log(f"Scenario {scenario.scenario_id} FAILED: {failure_message}")
-                continue
-
-            events = self._parse_events(result.stdout)
-            fixture_events = [
-                event for event in events if self._is_fixture_path(event.normalised_path)
-            ]
-
-            write_text_file(
-                events_file,
-                json.dumps(
-                    [
-                        {
-                            "event_type": event.event_type,
-                            "raw_path": event.raw_path,
-                            "normalised_path": event.normalised_path,
-                            "line": event.line,
-                        }
-                        for event in fixture_events
-                    ],
-                    indent=2,
-                )
-                + "\n",
-            )
-            all_artifacts.append(str(events_file))
 
             actual_manifest = build_manifest(sync_root)
             write_manifest(actual_manifest_file, actual_manifest)
-            all_artifacts.append(str(actual_manifest_file))
-
-            diffs = self._validate_scenario(scenario, fixture_events)
 
             if diffs:
                 write_text_file(diff_file, "\n".join(diffs) + "\n")
@@ -310,10 +285,230 @@ class TestCase0002SyncListValidation(E2ETestCase):
             details=details,
         )
 
+    def _run_standard_scenario(
+        self,
+        context: E2EContext,
+        scenario: SyncListScenario,
+        sync_root: Path,
+        config_dir: Path,
+        config_path: Path,
+        base_config_text: str,
+        sync_list_path: Path,
+        scenario_dir: Path,
+        scenario_log_dir: Path,
+    ) -> tuple[list[str], list[str], list[str]]:
+        artifacts: list[str] = []
+        metadata: list[str] = []
+
+        self._write_config_with_overrides(config_path, base_config_text, scenario.phase2_config_overrides)
+        self._write_sync_list(sync_list_path, scenario.sync_list)
+
+        stdout_file = scenario_log_dir / "stdout.log"
+        stderr_file = scenario_log_dir / "stderr.log"
+        events_file = scenario_dir / "events.json"
+
+        command = self._build_sync_command(context, sync_root, config_dir)
+        result = run_command(command, cwd=context.repo_root)
+
+        write_text_file(stdout_file, result.stdout)
+        write_text_file(stderr_file, result.stderr)
+        artifacts.extend([str(stdout_file), str(stderr_file), str(events_file)])
+        metadata.extend(
+            [
+                f"command={command_to_string(command)}",
+                f"returncode={result.returncode}",
+            ]
+        )
+
+        if result.returncode != 0:
+            return [
+                f"onedrive exited with non-zero status {result.returncode}"
+            ], artifacts, metadata
+
+        events = self._parse_events(result.stdout)
+        fixture_events = [event for event in events if self._is_fixture_path(event.normalised_path)]
+
+        write_text_file(
+            events_file,
+            json.dumps(
+                [
+                    {
+                        "event_type": event.event_type,
+                        "raw_path": event.raw_path,
+                        "normalised_path": event.normalised_path,
+                        "line": event.line,
+                    }
+                    for event in fixture_events
+                ],
+                indent=2,
+            )
+            + "\n",
+        )
+
+        diffs = self._validate_scenario(scenario, fixture_events)
+        return diffs, artifacts, metadata
+
+    def _run_cleanup_regression_scenario(
+        self,
+        context: E2EContext,
+        scenario: SyncListScenario,
+        sync_root: Path,
+        config_dir: Path,
+        config_path: Path,
+        base_config_text: str,
+        sync_list_path: Path,
+        scenario_dir: Path,
+        scenario_log_dir: Path,
+    ) -> tuple[list[str], list[str], list[str]]:
+        artifacts: list[str] = []
+        metadata: list[str] = []
+        diffs: list[str] = []
+
+        phase1_stdout = scenario_log_dir / "phase1_stdout.log"
+        phase1_stderr = scenario_log_dir / "phase1_stderr.log"
+        phase1_manifest = scenario_dir / "phase1_manifest.txt"
+        phase2_stdout = scenario_log_dir / "phase2_stdout.log"
+        phase2_stderr = scenario_log_dir / "phase2_stderr.log"
+        phase2_events_file = scenario_dir / "phase2_events.json"
+        phase2_removals_file = scenario_dir / "phase2_removals.json"
+        pre_cleanup_manifest = scenario_dir / "pre_cleanup_manifest.txt"
+        post_cleanup_manifest = scenario_dir / "post_cleanup_manifest.txt"
+
+        artifacts.extend(
+            [
+                str(phase1_stdout),
+                str(phase1_stderr),
+                str(phase1_manifest),
+                str(phase2_stdout),
+                str(phase2_stderr),
+                str(phase2_events_file),
+                str(phase2_removals_file),
+                str(pre_cleanup_manifest),
+                str(post_cleanup_manifest),
+            ]
+        )
+
+        # Phase 1: unrestricted seed to create the full remote dataset.
+        self._write_config_with_overrides(config_path, base_config_text, scenario.phase1_config_overrides)
+        if sync_list_path.exists():
+            sync_list_path.unlink()
+
+        phase1_command = self._build_sync_command(context, sync_root, config_dir)
+        phase1_result = run_command(phase1_command, cwd=context.repo_root)
+        write_text_file(phase1_stdout, phase1_result.stdout)
+        write_text_file(phase1_stderr, phase1_result.stderr)
+        metadata.extend(
+            [
+                f"phase1_command={command_to_string(phase1_command)}",
+                f"phase1_returncode={phase1_result.returncode}",
+            ]
+        )
+
+        if phase1_result.returncode != 0:
+            diffs.append(f"Phase 1 unrestricted seed failed with status {phase1_result.returncode}")
+            return diffs, artifacts, metadata
+
+        write_manifest(phase1_manifest, build_manifest(sync_root))
+        write_manifest(pre_cleanup_manifest, build_manifest(sync_root))
+
+        # Phase 2: issue-style restrictive cleanup.
+        self._write_config_with_overrides(config_path, base_config_text, scenario.phase2_config_overrides)
+        self._write_sync_list(sync_list_path, scenario.sync_list)
+
+        phase2_command = self._build_sync_command(context, sync_root, config_dir)
+        phase2_result = run_command(phase2_command, cwd=context.repo_root)
+        write_text_file(phase2_stdout, phase2_result.stdout)
+        write_text_file(phase2_stderr, phase2_result.stderr)
+        metadata.extend(
+            [
+                f"phase2_command={command_to_string(phase2_command)}",
+                f"phase2_returncode={phase2_result.returncode}",
+            ]
+        )
+
+        if phase2_result.returncode != 0:
+            diffs.append(f"Phase 2 cleanup validation failed with status {phase2_result.returncode}")
+            return diffs, artifacts, metadata
+
+        phase2_events = self._parse_events(phase2_result.stdout)
+        fixture_events = [event for event in phase2_events if self._is_fixture_path(event.normalised_path)]
+        removals = self._parse_removals(phase2_result.stdout)
+        fixture_removals = [event for event in removals if self._is_fixture_path(event.normalised_path)]
+
+        write_text_file(
+            phase2_events_file,
+            json.dumps(
+                [
+                    {
+                        "event_type": event.event_type,
+                        "raw_path": event.raw_path,
+                        "normalised_path": event.normalised_path,
+                        "line": event.line,
+                    }
+                    for event in fixture_events
+                ],
+                indent=2,
+            )
+            + "\n",
+        )
+        write_text_file(
+            phase2_removals_file,
+            json.dumps(
+                [
+                    {
+                        "event_type": event.event_type,
+                        "raw_path": event.raw_path,
+                        "normalised_path": event.normalised_path,
+                        "line": event.line,
+                    }
+                    for event in fixture_removals
+                ],
+                indent=2,
+            )
+            + "\n",
+        )
+        write_manifest(post_cleanup_manifest, build_manifest(sync_root))
+
+        diffs.extend(self._validate_scenario(scenario, fixture_events))
+        diffs.extend(self._validate_cleanup_expectations(scenario, sync_root, fixture_removals))
+
+        return diffs, artifacts, metadata
+
+    def _build_sync_command(self, context: E2EContext, sync_root: Path, config_dir: Path) -> list[str]:
+        return [
+            context.onedrive_bin,
+            "--sync",
+            "--verbose",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--syncdir",
+            str(sync_root),
+            "--confdir",
+            str(config_dir),
+        ]
+
+    def _write_config_with_overrides(
+        self,
+        config_path: Path,
+        base_config_text: str,
+        overrides: list[str],
+    ) -> None:
+        text = base_config_text.rstrip("\n")
+        if overrides:
+            text += "\n\n# tc0002 scenario overrides\n" + "\n".join(overrides)
+        if text and not text.endswith("\n"):
+            text += "\n"
+        write_text_file(config_path, text)
+
+    def _write_sync_list(self, sync_list_path: Path, sync_list: list[str]) -> None:
+        write_text_file(sync_list_path, "\n".join(sync_list) + "\n")
+
     def _normalise_log_path(self, raw_path: str) -> str:
         path = raw_path.strip()
         if path.startswith("./"):
             path = path[2:]
+        path = path.replace("\\", "/")
         path = path.rstrip("/")
         return path
 
@@ -342,6 +537,31 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 break
 
         return events
+
+    def _parse_removals(self, stdout: str) -> list[ParsedEvent]:
+        removals: list[ParsedEvent] = []
+
+        for line in stdout.splitlines():
+            stripped = line.strip()
+
+            for event_type, pattern in self.REMOVAL_PATTERNS:
+                match = pattern.match(stripped)
+                if not match:
+                    continue
+
+                raw_path = match.group(1).strip()
+                normalised_path = self._normalise_log_path(raw_path)
+                removals.append(
+                    ParsedEvent(
+                        event_type=event_type,
+                        raw_path=raw_path,
+                        normalised_path=normalised_path,
+                        line=stripped,
+                    )
+                )
+                break
+
+        return removals
 
     def _is_fixture_path(self, path: str) -> bool:
         return path == FIXTURE_ROOT_NAME or path.startswith(FIXTURE_ROOT_NAME + "/")
@@ -417,13 +637,38 @@ class TestCase0002SyncListValidation(E2ETestCase):
 
         return diffs
 
+    def _validate_cleanup_expectations(
+        self,
+        scenario: SyncListScenario,
+        sync_root: Path,
+        removals: list[ParsedEvent],
+    ) -> list[str]:
+        diffs: list[str] = []
+
+        for rel_path in scenario.expected_present_after:
+            if not (sync_root / rel_path).exists():
+                diffs.append(f"Expected path missing after cleanup: {rel_path}")
+
+        for rel_path in scenario.expected_absent_after:
+            if (sync_root / rel_path).exists():
+                diffs.append(f"Excluded path still exists after cleanup: {rel_path}")
+
+        for rel_path in scenario.required_removed:
+            matches = self._find_matching_events(removals, rel_path)
+            if not matches:
+                diffs.append(f"Expected local removal not observed for: {rel_path}")
+
+        for rel_path in scenario.forbidden_removed:
+            matches = self._find_matching_events(removals, rel_path)
+            if matches:
+                diffs.append(f"Unexpected local removal observed for: {rel_path}")
+
+        return diffs
+
     def _safe_name_fragment(self, value: str) -> str:
         return re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_").lower() or "root"
 
     def _dummy_filename_for_dir(self, rel_dir: str) -> str:
-        """
-        Generate a stable, unique filename for a directory.
-        """
         fragment = self._safe_name_fragment(rel_dir.replace("/", "_"))
         extensions = [".bin", ".dat", ".cache", ".blob"]
         ext = extensions[len(fragment) % len(extensions)]
@@ -439,12 +684,6 @@ class TestCase0002SyncListValidation(E2ETestCase):
         dirs: list[str],
         existing_files: dict[str, str],
     ) -> None:
-        """
-        Ensure every created directory has at least one direct file inside it.
-
-        If a directory already has a direct child file defined in existing_files,
-        do nothing for that directory. Otherwise add a 50 KiB random dummy file.
-        """
         dirs_set = {d.strip("/") for d in dirs}
 
         dirs_with_direct_files: set[str] = set()
@@ -471,8 +710,11 @@ class TestCase0002SyncListValidation(E2ETestCase):
             f"{FIXTURE_ROOT_NAME}/Backup",
             f"{FIXTURE_ROOT_NAME}/Blender",
             f"{FIXTURE_ROOT_NAME}/Documents",
+            f"{FIXTURE_ROOT_NAME}/Documents/.Libraries",
+            f"{FIXTURE_ROOT_NAME}/Documents/.Templates",
             f"{FIXTURE_ROOT_NAME}/Documents/Notes",
             f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+            f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
             f"{FIXTURE_ROOT_NAME}/Documents/Notes/temp123",
             f"{FIXTURE_ROOT_NAME}/Work",
             f"{FIXTURE_ROOT_NAME}/Work/ProjectA",
@@ -481,6 +723,18 @@ class TestCase0002SyncListValidation(E2ETestCase):
             f"{FIXTURE_ROOT_NAME}/Secret_data",
             f"{FIXTURE_ROOT_NAME}/Random",
             f"{FIXTURE_ROOT_NAME}/Random/Backup",
+            f"{FIXTURE_ROOT_NAME}/Wallpapers",
+            f"{FIXTURE_ROOT_NAME}/0.1.Backups",
+            f"{FIXTURE_ROOT_NAME}/1.0.Resources",
+            f"{FIXTURE_ROOT_NAME}/Projects",
+            f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+            f"{FIXTURE_ROOT_NAME}/Projects/Audio/Samples",
+            f"{FIXTURE_ROOT_NAME}/Projects/Video",
+            f"{FIXTURE_ROOT_NAME}/Projects/Video/Renders",
+            f"{FIXTURE_ROOT_NAME}/Projects/Code",
+            f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ",
+            f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
+            f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source",
             f"{FIXTURE_ROOT_NAME}/Programming",
             f"{FIXTURE_ROOT_NAME}/Programming/Projects",
             f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android",
@@ -545,14 +799,26 @@ class TestCase0002SyncListValidation(E2ETestCase):
             f"{FIXTURE_ROOT_NAME}/Blender/scene.blend": "blend-scene\n",
             f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx": "latest report\n",
             f"{FIXTURE_ROOT_NAME}/Documents/report.pdf": "report pdf\n",
+            f"{FIXTURE_ROOT_NAME}/Documents/.Libraries/library-index.txt": "libraries\n",
+            f"{FIXTURE_ROOT_NAME}/Documents/.Templates/base-template.dotx": "template\n",
             f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt": "keep\n",
             f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config/app.json": '{"ok": true}\n',
+            f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash/old.txt": "old\n",
             f"{FIXTURE_ROOT_NAME}/Documents/Notes/temp123/ignored.txt": "ignored\n",
             f"{FIXTURE_ROOT_NAME}/Work/ProjectA/keep.txt": "project a\n",
             f"{FIXTURE_ROOT_NAME}/Work/ProjectA/.gradle/state.bin": "gradle\n",
             f"{FIXTURE_ROOT_NAME}/Work/ProjectB/latest_report.docx": "project b report\n",
             f"{FIXTURE_ROOT_NAME}/Secret_data/secret.txt": "secret\n",
             f"{FIXTURE_ROOT_NAME}/Random/Backup/nested-backup.txt": "nested backup\n",
+            f"{FIXTURE_ROOT_NAME}/Wallpapers/wallpaper1.jpg": "wallpaper\n",
+            f"{FIXTURE_ROOT_NAME}/0.1.Backups/archive1.bin": "archive\n",
+            f"{FIXTURE_ROOT_NAME}/1.0.Resources/resource1.dat": "resource\n",
+            f"{FIXTURE_ROOT_NAME}/Projects/Audio/song.wav": "audio\n",
+            f"{FIXTURE_ROOT_NAME}/Projects/Audio/Samples/sample.wav": "sample\n",
+            f"{FIXTURE_ROOT_NAME}/Projects/Video/movie.mp4": "video\n",
+            f"{FIXTURE_ROOT_NAME}/Projects/Video/Renders/render.mov": "render\n",
+            f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav": "export wav\n",
+            f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt": "source\n",
             f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App1/build/output.apk": "android app1 build\n",
             f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App1/build/intermediates/classes.dex": "classes dex\n",
             f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App1/.cxx/tmp/native.o": "native object\n",
@@ -595,12 +861,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
             SyncListScenario(
                 scenario_id="SL-0001",
                 description="root directory include with trailing slash",
-                sync_list=[
-                    f"/{FIXTURE_ROOT_NAME}/Backup/",
-                ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Backup",
-                ],
+                sync_list=[f"/{FIXTURE_ROOT_NAME}/Backup/"],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Backup"],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/Backup",
                     f"{FIXTURE_ROOT_NAME}/Backup/root-backup.txt",
@@ -613,12 +875,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
             SyncListScenario(
                 scenario_id="SL-0002",
                 description="root include without trailing slash",
-                sync_list=[
-                    f"/{FIXTURE_ROOT_NAME}/Blender",
-                ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Blender",
-                ],
+                sync_list=[f"/{FIXTURE_ROOT_NAME}/Blender"],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Blender"],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/Blender",
                     f"{FIXTURE_ROOT_NAME}/Blender/scene.blend",
@@ -631,9 +889,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
             SyncListScenario(
                 scenario_id="SL-0003",
                 description="non-root include by name",
-                sync_list=[
-                    "Backup",
-                ],
+                sync_list=["Backup"],
                 allowed_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Backup",
                     f"{FIXTURE_ROOT_NAME}/Random/Backup",
@@ -656,12 +912,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/*",
                     f"/{FIXTURE_ROOT_NAME}/Documents/",
                 ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Documents",
-                ],
-                forbidden_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
-                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents"],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
                     f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
@@ -674,16 +926,9 @@ class TestCase0002SyncListValidation(E2ETestCase):
             SyncListScenario(
                 scenario_id="SL-0005",
                 description="included tree with hidden directory excluded",
-                sync_list=[
-                    "!.gradle/*",
-                    f"/{FIXTURE_ROOT_NAME}/Work/",
-                ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Work",
-                ],
-                forbidden_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Work/ProjectA/.gradle",
-                ],
+                sync_list=["!.gradle/*", f"/{FIXTURE_ROOT_NAME}/Work/"],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Work"],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Work/ProjectA/.gradle"],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/Work/ProjectA/keep.txt",
                     f"{FIXTURE_ROOT_NAME}/Work/ProjectB/latest_report.docx",
@@ -696,15 +941,9 @@ class TestCase0002SyncListValidation(E2ETestCase):
             SyncListScenario(
                 scenario_id="SL-0006",
                 description="file-specific include inside named directory",
-                sync_list=[
-                    f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
-                ],
-                allowed_exact=[
-                    f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
-                ],
-                required_processed=[
-                    f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
-                ],
+                sync_list=[f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx"],
+                allowed_exact=[f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx"],
+                required_processed=[f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx"],
                 required_skipped=[
                     f"{FIXTURE_ROOT_NAME}/Documents/Notes",
                     f"{FIXTURE_ROOT_NAME}/Backup",
@@ -713,12 +952,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
             SyncListScenario(
                 scenario_id="SL-0007",
                 description="rooted include of Programming tree",
-                sync_list=[
-                    f"/{FIXTURE_ROOT_NAME}/Programming",
-                ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Programming",
-                ],
+                sync_list=[f"/{FIXTURE_ROOT_NAME}/Programming"],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Programming"],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App1/src/main.kt",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Web/Site1/src/index.ts",
@@ -736,9 +971,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"!/{FIXTURE_ROOT_NAME}/Programming/Projects/Android/**/build/*",
                     f"/{FIXTURE_ROOT_NAME}/Programming",
                 ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Programming",
-                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Programming"],
                 forbidden_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App1/build",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App2/build",
@@ -759,9 +992,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"!/{FIXTURE_ROOT_NAME}/Programming/Projects/Android/**/.cxx/*",
                     f"/{FIXTURE_ROOT_NAME}/Programming",
                 ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Programming",
-                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Programming"],
                 forbidden_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App1/.cxx",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App2/.cxx",
@@ -782,9 +1013,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"!/{FIXTURE_ROOT_NAME}/Programming/Projects/Web/**/build/*",
                     f"/{FIXTURE_ROOT_NAME}/Programming",
                 ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Programming",
-                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Programming"],
                 forbidden_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Web/Site1/build",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Web/Site2/build",
@@ -801,61 +1030,31 @@ class TestCase0002SyncListValidation(E2ETestCase):
             SyncListScenario(
                 scenario_id="SL-0011",
                 description="exclude .gradle anywhere and include Programming",
-                sync_list=[
-                    "!.gradle/*",
-                    f"/{FIXTURE_ROOT_NAME}/Programming",
-                ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Programming",
-                ],
-                forbidden_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Programming/Projects/Java/Project1/.gradle",
-                ],
-                required_processed=[
-                    f"{FIXTURE_ROOT_NAME}/Programming/Projects/Java/Project1/src/Main.java",
-                ],
-                required_skipped=[
-                    f"{FIXTURE_ROOT_NAME}/Programming/Projects/Java/Project1/.gradle",
-                ],
+                sync_list=["!.gradle/*", f"/{FIXTURE_ROOT_NAME}/Programming"],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Programming"],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Programming/Projects/Java/Project1/.gradle"],
+                required_processed=[f"{FIXTURE_ROOT_NAME}/Programming/Projects/Java/Project1/src/Main.java"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/Programming/Projects/Java/Project1/.gradle"],
             ),
             SyncListScenario(
                 scenario_id="SL-0012",
                 description="exclude build/kotlin anywhere and include Programming",
-                sync_list=[
-                    "!build/kotlin/*",
-                    f"/{FIXTURE_ROOT_NAME}/Programming",
-                ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Programming",
-                ],
-                forbidden_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Programming/Projects/Java/Project1/build/kotlin",
-                ],
-                required_processed=[
-                    f"{FIXTURE_ROOT_NAME}/Programming/Projects/Java/Project1/src/Main.java",
-                ],
-                required_skipped=[
-                    f"{FIXTURE_ROOT_NAME}/Programming/Projects/Java/Project1/build/kotlin",
-                ],
+                sync_list=["!build/kotlin/*", f"/{FIXTURE_ROOT_NAME}/Programming"],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Programming"],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Programming/Projects/Java/Project1/build/kotlin"],
+                required_processed=[f"{FIXTURE_ROOT_NAME}/Programming/Projects/Java/Project1/src/Main.java"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/Programming/Projects/Java/Project1/build/kotlin"],
             ),
             SyncListScenario(
                 scenario_id="SL-0013",
                 description="exclude .venv and venv anywhere and include Programming",
-                sync_list=[
-                    "!.venv/*",
-                    "!venv/*",
-                    f"/{FIXTURE_ROOT_NAME}/Programming",
-                ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Programming",
-                ],
+                sync_list=["!.venv/*", "!venv/*", f"/{FIXTURE_ROOT_NAME}/Programming"],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Programming"],
                 forbidden_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Python/Tool1/.venv",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Python/Tool1/venv",
                 ],
-                required_processed=[
-                    f"{FIXTURE_ROOT_NAME}/Programming/Projects/Python/Tool1/src/main.py",
-                ],
+                required_processed=[f"{FIXTURE_ROOT_NAME}/Programming/Projects/Python/Tool1/src/main.py"],
                 required_skipped=[
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Python/Tool1/.venv",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Python/Tool1/venv",
@@ -873,9 +1072,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     "!.cache/*",
                     f"/{FIXTURE_ROOT_NAME}/Programming",
                 ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Programming",
-                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Programming"],
                 forbidden_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Python/Tool1/__pycache__",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Node/App1/node_modules",
@@ -920,9 +1117,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"!/{FIXTURE_ROOT_NAME}/Programming/Projects/Web/**/build/*",
                     f"/{FIXTURE_ROOT_NAME}/Programming",
                 ],
-                allowed_prefixes=[
-                    f"{FIXTURE_ROOT_NAME}/Programming",
-                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Programming"],
                 forbidden_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App1/build",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App2/build",
@@ -1061,9 +1256,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Work",
                     f"{FIXTURE_ROOT_NAME}/Backup",
                 ],
-                allowed_exact=[
-                    f"{FIXTURE_ROOT_NAME}/Blender/scene.blend",
-                ],
+                allowed_exact=[f"{FIXTURE_ROOT_NAME}/Blender/scene.blend"],
                 forbidden_prefixes=[
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App1/build",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App1/.cxx",
@@ -1112,6 +1305,284 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Idea/App1/.idea/caches",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Misc/App1/.cache",
                     f"{FIXTURE_ROOT_NAME}/Secret_data",
+                ],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0018",
+                description="Issue #3655 exact trailing slash configuration with cleanup validation",
+                execution_mode="cleanup_regression",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/",
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.trash/",
+                    f"!/{FIXTURE_ROOT_NAME}/Projects/Audio/",
+                    f"!/{FIXTURE_ROOT_NAME}/Projects/Video/",
+                    f"/{FIXTURE_ROOT_NAME}/Projects/",
+                    f"/{FIXTURE_ROOT_NAME}/Documents/.Libraries/",
+                    f"/{FIXTURE_ROOT_NAME}/Documents/.Templates/",
+                    f"/{FIXTURE_ROOT_NAME}/Documents/Notes/",
+                    f"/{FIXTURE_ROOT_NAME}/Wallpapers/",
+                    f"/{FIXTURE_ROOT_NAME}/0.1.Backups/",
+                    f"/{FIXTURE_ROOT_NAME}/1.0.Resources/",
+                ],
+                allowed_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/Projects",
+                    f"{FIXTURE_ROOT_NAME}/Documents/.Libraries",
+                    f"{FIXTURE_ROOT_NAME}/Documents/.Templates",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes",
+                    f"{FIXTURE_ROOT_NAME}/Wallpapers",
+                    f"{FIXTURE_ROOT_NAME}/0.1.Backups",
+                    f"{FIXTURE_ROOT_NAME}/1.0.Resources",
+                ],
+                forbidden_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                ],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/.Libraries/library-index.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/.Templates/base-template.dotx",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
+                    f"{FIXTURE_ROOT_NAME}/Wallpapers/wallpaper1.jpg",
+                    f"{FIXTURE_ROOT_NAME}/0.1.Backups/archive1.bin",
+                    f"{FIXTURE_ROOT_NAME}/1.0.Resources/resource1.dat",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                ],
+                phase1_config_overrides=[
+                    'download_only = "false"',
+                    'cleanup_local_files = "false"',
+                ],
+                phase2_config_overrides=[
+                    'download_only = "true"',
+                    'cleanup_local_files = "true"',
+                ],
+                expected_present_after=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/.Libraries/library-index.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/.Templates/base-template.dotx",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
+                    f"{FIXTURE_ROOT_NAME}/Wallpapers/wallpaper1.jpg",
+                    f"{FIXTURE_ROOT_NAME}/0.1.Backups/archive1.bin",
+                    f"{FIXTURE_ROOT_NAME}/1.0.Resources/resource1.dat",
+                ],
+                expected_absent_after=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio/song.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video/movie.mp4",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config/app.json",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash/old.txt",
+                ],
+                required_removed=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
+                ],
+                forbidden_removed=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
+                    f"{FIXTURE_ROOT_NAME}/Wallpapers/wallpaper1.jpg",
+                ],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0019",
+                description="Issue #3655 no trailing slash workaround with cleanup validation",
+                execution_mode="cleanup_regression",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
+                    f"!/{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"!/{FIXTURE_ROOT_NAME}/Projects/Video",
+                    f"/{FIXTURE_ROOT_NAME}/Projects",
+                    f"/{FIXTURE_ROOT_NAME}/Documents/.Libraries",
+                    f"/{FIXTURE_ROOT_NAME}/Documents/.Templates",
+                    f"/{FIXTURE_ROOT_NAME}/Documents/Notes",
+                    f"/{FIXTURE_ROOT_NAME}/Wallpapers",
+                    f"/{FIXTURE_ROOT_NAME}/0.1.Backups",
+                    f"/{FIXTURE_ROOT_NAME}/1.0.Resources",
+                ],
+                allowed_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/Projects",
+                    f"{FIXTURE_ROOT_NAME}/Documents/.Libraries",
+                    f"{FIXTURE_ROOT_NAME}/Documents/.Templates",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes",
+                    f"{FIXTURE_ROOT_NAME}/Wallpapers",
+                    f"{FIXTURE_ROOT_NAME}/0.1.Backups",
+                    f"{FIXTURE_ROOT_NAME}/1.0.Resources",
+                ],
+                forbidden_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                ],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/.Libraries/library-index.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/.Templates/base-template.dotx",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
+                    f"{FIXTURE_ROOT_NAME}/Wallpapers/wallpaper1.jpg",
+                    f"{FIXTURE_ROOT_NAME}/0.1.Backups/archive1.bin",
+                    f"{FIXTURE_ROOT_NAME}/1.0.Resources/resource1.dat",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                ],
+                phase1_config_overrides=[
+                    'download_only = "false"',
+                    'cleanup_local_files = "false"',
+                ],
+                phase2_config_overrides=[
+                    'download_only = "true"',
+                    'cleanup_local_files = "true"',
+                ],
+                expected_present_after=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/.Libraries/library-index.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/.Templates/base-template.dotx",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
+                    f"{FIXTURE_ROOT_NAME}/Wallpapers/wallpaper1.jpg",
+                    f"{FIXTURE_ROOT_NAME}/0.1.Backups/archive1.bin",
+                    f"{FIXTURE_ROOT_NAME}/1.0.Resources/resource1.dat",
+                ],
+                expected_absent_after=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio/song.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video/movie.mp4",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config/app.json",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash/old.txt",
+                ],
+                required_removed=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
+                ],
+                forbidden_removed=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
+                    f"{FIXTURE_ROOT_NAME}/Wallpapers/wallpaper1.jpg",
+                ],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0020",
+                description="Focused trailing slash Projects regression for sibling path survival",
+                execution_mode="cleanup_regression",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/Projects/Audio/",
+                    f"!/{FIXTURE_ROOT_NAME}/Projects/Video/",
+                    f"/{FIXTURE_ROOT_NAME}/Projects/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Projects"],
+                forbidden_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                ],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                ],
+                phase1_config_overrides=[
+                    'download_only = "false"',
+                    'cleanup_local_files = "false"',
+                ],
+                phase2_config_overrides=[
+                    'download_only = "true"',
+                    'cleanup_local_files = "true"',
+                ],
+                expected_present_after=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
+                ],
+                expected_absent_after=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                ],
+                required_removed=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                ],
+                forbidden_removed=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                ],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0021",
+                description="Focused no trailing slash Projects regression for sibling path survival",
+                execution_mode="cleanup_regression",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"!/{FIXTURE_ROOT_NAME}/Projects/Video",
+                    f"/{FIXTURE_ROOT_NAME}/Projects",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Projects"],
+                forbidden_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                ],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                ],
+                phase1_config_overrides=[
+                    'download_only = "false"',
+                    'cleanup_local_files = "false"',
+                ],
+                phase2_config_overrides=[
+                    'download_only = "true"',
+                    'cleanup_local_files = "true"',
+                ],
+                expected_present_after=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
+                ],
+                expected_absent_after=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                ],
+                required_removed=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                ],
+                forbidden_removed=[
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                 ],
             ),
         ]
