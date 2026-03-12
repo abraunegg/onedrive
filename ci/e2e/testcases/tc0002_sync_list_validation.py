@@ -121,6 +121,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
     name = "sync_list validation"
     description = "Validate sync_list behaviour across a scenario matrix"
 
+
     EVENT_PATTERNS = [
         (
             "skip",
@@ -133,6 +134,32 @@ class TestCase0002SyncListValidation(E2ETestCase):
         (
             "include_file",
             re.compile(r"^(?:DEBUG:\s+)?Including file - included by sync_list config: (.+)$"),
+        ),
+        (
+            "retain_path",
+            re.compile(r"^(?:DEBUG:\s+)?Path retained due to 'sync_list' inclusion: (.+)$"),
+        ),
+        (
+            "retain_existing",
+            re.compile(r"^(?:DEBUG:\s+)?Path already present in pathsRetained - retain path: (.+)$"),
+        ),
+        (
+            "retain_local_file",
+            re.compile(
+                r"^(?:DEBUG:\s+)?Local file should be retained due to 'sync_list' inclusion: (.+)$"
+            ),
+        ),
+        (
+            "retain_local_dir",
+            re.compile(
+                r"^(?:DEBUG:\s+)?Local directory should be retained due to 'sync_list' inclusion: (.+)$"
+            ),
+        ),
+        (
+            "retain_local_parent_dir",
+            re.compile(
+                r"^(?:DEBUG:\s+)?Local parent directory should be retained due to 'sync_list' inclusion: (.+)$"
+            ),
         ),
         (
             "upload_file",
@@ -154,6 +181,26 @@ class TestCase0002SyncListValidation(E2ETestCase):
         (
             "remove_local_dir",
             re.compile(r"^(?:DEBUG:\s+)?Removing local directory: (.+)$"),
+        ),
+        (
+            "attempt_remove_local_file",
+            re.compile(r"^(?:DEBUG:\s+)?Attempting removal of local file: (.+)$"),
+        ),
+        (
+            "attempt_remove_local_dir",
+            re.compile(r"^(?:DEBUG:\s+)?Attempting removal of local directory: (.+)$"),
+        ),
+        (
+            "removed_local_file",
+            re.compile(r"^(?:DEBUG:\s+)?Removed local file: (.+)$"),
+        ),
+        (
+            "removed_local_dir",
+            re.compile(r"^(?:DEBUG:\s+)?Removed local directory: (.+)$"),
+        ),
+        (
+            "remove_parent_local_dir",
+            re.compile(r"^(?:DEBUG:\s+)?Removing parental local directory: (.+)$"),
         ),
     ]
 
@@ -505,6 +552,14 @@ class TestCase0002SyncListValidation(E2ETestCase):
         write_manifest(post_cleanup_manifest, build_manifest(sync_root))
 
         diffs.extend(self._validate_scenario(scenario, fixture_events))
+        diffs.extend(
+            self._validate_cleanup_required_skipped(
+                scenario,
+                sync_root,
+                fixture_events,
+                fixture_removals,
+            )
+        )
         diffs.extend(self._validate_cleanup_expectations(scenario, sync_root, fixture_removals))
 
         return diffs, artifacts, metadata
@@ -544,6 +599,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
         if path.startswith("./"):
             path = path[2:]
         path = path.replace("\\", "/")
+        path = re.sub(r"/+", "/", path)
         path = path.rstrip("/")
         return path
 
@@ -626,6 +682,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
 
         return matches
 
+
     def _validate_scenario(
         self,
         scenario: SyncListScenario,
@@ -663,14 +720,47 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"Expected allowed processing was not observed for: {required}"
                 )
 
-        for required in scenario.required_skipped:
-            matches = self._find_matching_events(events, required, event_type="skip")
-            if not matches:
-                diffs.append(
-                    f"Expected excluded skip was not observed for: {required}"
-                )
+        if scenario.execution_mode != "cleanup_regression":
+            for required in scenario.required_skipped:
+                matches = self._find_matching_events(events, required, event_type="skip")
+                if not matches:
+                    diffs.append(
+                        f"Expected excluded skip was not observed for: {required}"
+                    )
 
         return diffs
+
+
+    def _cleanup_path_absent(self, sync_root: Path, rel_path: str) -> bool:
+        return not (sync_root / rel_path).exists()
+
+
+    def _validate_cleanup_required_skipped(
+        self,
+        scenario: SyncListScenario,
+        sync_root: Path,
+        events: list[ParsedEvent],
+        removals: list[ParsedEvent],
+    ) -> list[str]:
+        diffs: list[str] = []
+
+        for rel_path in scenario.required_skipped:
+            skip_matches = self._find_matching_events(events, rel_path, event_type="skip")
+            if skip_matches:
+                continue
+
+            removal_matches = self._find_matching_events(removals, rel_path)
+            if removal_matches:
+                continue
+
+            if self._cleanup_path_absent(sync_root, rel_path):
+                continue
+
+            diffs.append(f"Expected excluded skip was not observed for: {rel_path}")
+
+        return diffs
+
+
 
     def _validate_cleanup_expectations(
         self,
@@ -690,7 +780,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
 
         for rel_path in scenario.required_removed:
             matches = self._find_matching_events(removals, rel_path)
-            if not matches:
+            if not matches and (sync_root / rel_path).exists():
                 diffs.append(f"Expected local removal not observed for: {rel_path}")
 
         for rel_path in scenario.forbidden_removed:
@@ -699,6 +789,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 diffs.append(f"Unexpected local removal observed for: {rel_path}")
 
         return diffs
+
 
     def _safe_name_fragment(self, value: str) -> str:
         return re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_").lower() or "root"

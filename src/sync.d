@@ -8415,7 +8415,7 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 		
-		if (debugLogging) {addLogEntry("Path not found in database after exhausing all driveId entries: " ~ searchPath, ["debug"]);}
+		if (debugLogging) {addLogEntry("Path not found in database after exhausting all driveId entries: " ~ searchPath, ["debug"]);}
 		return false; // Return false if path is not found in any drive
 	}
 	
