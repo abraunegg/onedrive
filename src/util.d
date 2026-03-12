@@ -2373,3 +2373,9 @@ string regexEscape(string s) {
 void markLocalWrite() {
     lastLocalWrite = MonoTime.currTime();
 }
+
+bool hasPrefix(string[] pathsRetained, string prefix) {
+    return pathsRetained.any!(p => p.startsWith(prefix));
+}
+
+
