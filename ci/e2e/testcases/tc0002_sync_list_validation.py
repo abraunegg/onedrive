@@ -1457,15 +1457,11 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0023",
-                description="sync_root_files true with rooted Projects include and root file processing",
+                description="sync_root_files true does not retain non-root sibling files under fixture when only Projects is included",
                 sync_list=[
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Video",
                     f"/{FIXTURE_ROOT_NAME}/Projects",
-                ],
-                allowed_exact=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                 ],
                 allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Projects"],
                 forbidden_prefixes=[
@@ -1473,12 +1469,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
                 required_processed=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
                 ],
                 required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/README.txt",
+                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                     f"{FIXTURE_ROOT_NAME}/Backup",
@@ -1487,16 +1483,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0024",
-                description="cleanup regression with sync_root_files true retains root files while pruning excluded Projects subtrees",
+                description="cleanup regression with sync_root_files true prunes non-included sibling files and excluded Projects subtrees",
                 execution_mode="cleanup_regression",
                 sync_list=[
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Video",
                     f"/{FIXTURE_ROOT_NAME}/Projects",
-                ],
-                allowed_exact=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                 ],
                 allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Projects"],
                 forbidden_prefixes=[
@@ -1504,12 +1496,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
                 required_processed=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
                 ],
                 required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/README.txt",
+                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
@@ -1524,25 +1516,26 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     'sync_root_files = "true"',
                 ],
                 expected_present_after=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
                 ],
                 expected_absent_after=[
+                    f"{FIXTURE_ROOT_NAME}/README.txt",
+                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
                 required_removed=[
+                    f"{FIXTURE_ROOT_NAME}/README.txt",
+                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
                 forbidden_removed=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
                 ],
             ),
             SyncListScenario(
