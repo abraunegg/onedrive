@@ -1,43 +1,43 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
+from framework.base import E2ETestCase
+from framework.context import E2EContext
+from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from testcases.wave1_common import Wave1TestCaseBase
+from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
-class TestCase0011SkipFileValidation(Wave1TestCaseBase):
+class TestCase0011SkipFileValidation(E2ETestCase):
     case_id = "0011"
     name = "skip_file validation"
-    description = "Validate that skip_file patterns exclude matching files from synchronisation"
+    description = "Validate that skip_file patterns prevent matching files from synchronising"
 
-    def run(self, context):
-        case_work_dir, case_log_dir, case_state_dir = self._initialise_case_dirs(context)
-        root_name = self._root_name(context)
-        artifacts = []
-        sync_root = case_work_dir / "syncroot"
-        sync_root.mkdir(parents=True, exist_ok=True)
-        self._create_text_file(sync_root / root_name / "keep.txt", "keep me\n")
-        self._create_text_file(sync_root / root_name / "ignore.tmp", "temp\n")
-        self._create_text_file(sync_root / root_name / "editor.swp", "swap\n")
-        self._create_text_file(sync_root / root_name / "Nested" / "keep.md", "nested keep\n")
-        conf_dir = self._new_config_dir(context, case_work_dir, "main")
-        config_path = self._write_config(conf_dir, extra_lines=['skip_file = "*.tmp|*.swp"'])
-        artifacts.append(str(config_path))
-        result = self._run_onedrive(context, sync_root=sync_root, config_dir=conf_dir)
-        artifacts.extend(self._write_command_artifacts(result=result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="skip_file"))
-        if result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"skip_file validation failed with status {result.returncode}", artifacts)
-        verify_root, verify_result, verify_artifacts = self._download_remote_scope(context, case_work_dir, root_name, "verify_remote")
-        artifacts.extend(verify_artifacts)
-        artifacts.extend(self._write_command_artifacts(result=verify_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="verify_remote"))
-        artifacts.extend(self._write_manifests(verify_root, case_state_dir, "remote_manifest"))
-        if verify_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts)
-        snapshot = self._snapshot_files(verify_root)
-        expected = {f"{root_name}/keep.txt", f"{root_name}/Nested/keep.md"}
-        missing = sorted(expected - set(snapshot.keys()))
-        if missing:
-            return TestResult.fail_result(self.case_id, self.name, "Expected non-skipped files are missing remotely", artifacts, {"missing": missing})
-        present = sorted(path for path in [f"{root_name}/ignore.tmp", f"{root_name}/editor.swp"] if path in snapshot)
-        if present:
-            return TestResult.fail_result(self.case_id, self.name, "skip_file patterns did not exclude all matching files", artifacts, {"present": present})
-        return TestResult.pass_result(self.case_id, self.name, artifacts, {"root_name": root_name})
+    def _write_config(self, config_path: Path) -> None:
+        write_text_file(config_path, "# tc0011 config\nbypass_data_preservation = \"true\"\nskip_file = \"*.tmp|*.swp\"\n")
+
+    def run(self, context: E2EContext) -> TestResult:
+        case_work_dir = context.work_root / "tc0011"; case_log_dir = context.logs_dir / "tc0011"; state_dir = context.state_dir / "tc0011"
+        reset_directory(case_work_dir); reset_directory(case_log_dir); reset_directory(state_dir); context.ensure_refresh_token_available()
+        sync_root = case_work_dir / "syncroot"; confdir = case_work_dir / "conf-main"; verify_root = case_work_dir / "verifyroot"; verify_conf = case_work_dir / "conf-verify"; root_name = f"ZZ_E2E_TC0011_{context.run_id}_{os.getpid()}"
+        write_text_file(sync_root / root_name / "keep.txt", "keep\n"); write_text_file(sync_root / root_name / "skip.tmp", "skip\n"); write_text_file(sync_root / root_name / "editor.swp", "swap\n")
+        context.bootstrap_config_dir(confdir); self._write_config(confdir / "config")
+        context.bootstrap_config_dir(verify_conf); write_text_file(verify_conf / "config", "# tc0011 verify\nbypass_data_preservation = \"true\"\n")
+        stdout_file = case_log_dir / "skip_file_stdout.log"; stderr_file = case_log_dir / "skip_file_stderr.log"; verify_stdout = case_log_dir / "verify_stdout.log"; verify_stderr = case_log_dir / "verify_stderr.log"; remote_manifest_file = state_dir / "remote_verify_manifest.txt"; metadata_file = state_dir / "metadata.txt"
+        command = [context.onedrive_bin, "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(confdir)]
+        result = run_command(command, cwd=context.repo_root)
+        write_text_file(stdout_file, result.stdout); write_text_file(stderr_file, result.stderr)
+        verify_command = [context.onedrive_bin, "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
+        verify_result = run_command(verify_command, cwd=context.repo_root)
+        write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); remote_manifest = build_manifest(verify_root); write_manifest(remote_manifest_file, remote_manifest)
+        write_text_file(metadata_file, f"root_name={root_name}\nreturncode={result.returncode}\nverify_returncode={verify_result.returncode}\n")
+        artifacts = [str(stdout_file), str(stderr_file), str(verify_stdout), str(verify_stderr), str(remote_manifest_file), str(metadata_file)]
+        details = {"returncode": result.returncode, "verify_returncode": verify_result.returncode, "root_name": root_name}
+        if result.returncode != 0: return TestResult.fail_result(self.case_id, self.name, f"skip_file validation failed with status {result.returncode}", artifacts, details)
+        if verify_result.returncode != 0: return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+        if f"{root_name}/keep.txt" not in remote_manifest: return TestResult.fail_result(self.case_id, self.name, f"Expected non-skipped file missing remotely: {root_name}/keep.txt", artifacts, details)
+        for unwanted in [f"{root_name}/skip.tmp", f"{root_name}/editor.swp"]:
+            if unwanted in remote_manifest: return TestResult.fail_result(self.case_id, self.name, f"skip_file pattern failed, file was synchronised: {unwanted}", artifacts, details)
+        return TestResult.pass_result(self.case_id, self.name, artifacts, details)

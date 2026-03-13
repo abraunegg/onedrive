@@ -1,58 +1,103 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
+from framework.base import E2ETestCase
+from framework.context import E2EContext
+from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from testcases.wave1_common import Wave1TestCaseBase
+from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
-class TestCase0005ForceSyncOverride(Wave1TestCaseBase):
+class TestCase0005ForceSyncOverride(E2ETestCase):
     case_id = "0005"
     name = "force-sync override"
-    description = "Validate that --force-sync overrides skip_dir when using --single-directory"
+    description = "Validate that --force-sync overrides skip_dir for blocked single-directory sync"
 
-    def run(self, context):
-        case_work_dir, case_log_dir, case_state_dir = self._initialise_case_dirs(context)
-        root_name = self._root_name(context)
-        artifacts = []
+    def _write_config(self, config_path: Path, blocked_dir: str) -> None:
+        write_text_file(config_path, f"# tc0005 config\nbypass_data_preservation = \"true\"\nskip_dir = \"{blocked_dir}\"\n")
 
-        seed_root = case_work_dir / "seed-syncroot"
-        seed_root.mkdir(parents=True, exist_ok=True)
-        self._create_text_file(seed_root / root_name / "Blocked" / "blocked.txt", "blocked remote file\n")
-        seed_conf = self._new_config_dir(context, case_work_dir, "seed")
-        config_path = self._write_config(seed_conf)
-        artifacts.append(str(config_path))
-        seed_result = self._run_onedrive(context, sync_root=seed_root, config_dir=seed_conf)
-        artifacts.extend(self._write_command_artifacts(result=seed_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="seed"))
-        if seed_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote seed failed with status {seed_result.returncode}", artifacts)
+    def run(self, context: E2EContext) -> TestResult:
+        case_work_dir = context.work_root / "tc0005"
+        case_log_dir = context.logs_dir / "tc0005"
+        state_dir = context.state_dir / "tc0005"
+        reset_directory(case_work_dir)
+        reset_directory(case_log_dir)
+        reset_directory(state_dir)
+        context.ensure_refresh_token_available()
 
-        no_force_root = case_work_dir / "no-force-syncroot"
-        no_force_root.mkdir(parents=True, exist_ok=True)
-        no_force_conf = self._new_config_dir(context, case_work_dir, "no-force")
-        config_path = self._write_config(no_force_conf, extra_lines=['skip_dir = "Blocked"'])
-        artifacts.append(str(config_path))
-        no_force_result = self._run_onedrive(context, sync_root=no_force_root, config_dir=no_force_conf, extra_args=["--download-only", "--single-directory", f"{root_name}/Blocked"])
-        artifacts.extend(self._write_command_artifacts(result=no_force_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="no_force"))
-        if no_force_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Blocked single-directory sync without --force-sync failed with status {no_force_result.returncode}", artifacts)
-        if (no_force_root / root_name / "Blocked" / "blocked.txt").exists():
-            return TestResult.fail_result(self.case_id, self.name, "Blocked content was downloaded without --force-sync", artifacts)
+        sync_root = case_work_dir / "syncroot"
+        confdir = case_work_dir / "conf-seed"
+        verify_root = case_work_dir / "verifyroot"
+        verify_confdir = case_work_dir / "conf-verify"
 
-        force_root = case_work_dir / "force-syncroot"
-        force_root.mkdir(parents=True, exist_ok=True)
-        force_conf = self._new_config_dir(context, case_work_dir, "force")
-        config_path = self._write_config(force_conf, extra_lines=['skip_dir = "Blocked"'])
-        artifacts.append(str(config_path))
-        force_result = self._run_onedrive(
-            context,
-            sync_root=force_root,
-            config_dir=force_conf,
-            extra_args=["--download-only", "--single-directory", f"{root_name}/Blocked", "--force-sync"],
-            input_text="Y\n",
-        )
-        artifacts.extend(self._write_command_artifacts(result=force_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="force"))
-        artifacts.extend(self._write_manifests(force_root, case_state_dir, "force_manifest"))
-        if force_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Blocked single-directory sync with --force-sync failed with status {force_result.returncode}", artifacts)
-        if not (force_root / root_name / "Blocked" / "blocked.txt").exists():
-            return TestResult.fail_result(self.case_id, self.name, "Blocked content was not downloaded with --force-sync", artifacts)
-        return TestResult.pass_result(self.case_id, self.name, artifacts, {"root_name": root_name})
+        blocked_dir = f"ZZ_E2E_TC0005_BLOCKED_{context.run_id}_{os.getpid()}"
+        write_text_file(sync_root / blocked_dir / "allowed_via_force.txt", "force\n")
+
+        context.bootstrap_config_dir(confdir)
+        self._write_config(confdir / "config", blocked_dir)
+        context.bootstrap_config_dir(verify_confdir)
+        write_text_file(verify_confdir / "config", "# tc0005 verify\nbypass_data_preservation = \"true\"\n")
+
+        stdout_file = case_log_dir / "seed_stdout.log"
+        stderr_file = case_log_dir / "seed_stderr.log"
+        verify_stdout = case_log_dir / "verify_stdout.log"
+        verify_stderr = case_log_dir / "verify_stderr.log"
+        remote_manifest_file = state_dir / "remote_verify_manifest.txt"
+        metadata_file = state_dir / "seed_metadata.txt"
+
+        command = [
+            context.onedrive_bin,
+            "--sync",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            blocked_dir,
+            "--force-sync",
+            "--syncdir",
+            str(sync_root),
+            "--confdir",
+            str(confdir),
+        ]
+        result = run_command(command, cwd=context.repo_root, input_text="Y\n")
+        write_text_file(stdout_file, result.stdout)
+        write_text_file(stderr_file, result.stderr)
+
+        verify_command = [
+            context.onedrive_bin,
+            "--sync",
+            "--verbose",
+            "--download-only",
+            "--resync",
+            "--resync-auth",
+            "--syncdir",
+            str(verify_root),
+            "--confdir",
+            str(verify_confdir),
+        ]
+        verify_result = run_command(verify_command, cwd=context.repo_root)
+        write_text_file(verify_stdout, verify_result.stdout)
+        write_text_file(verify_stderr, verify_result.stderr)
+        remote_manifest = build_manifest(verify_root)
+        write_manifest(remote_manifest_file, remote_manifest)
+
+        write_text_file(metadata_file, "\n".join([
+            f"blocked_dir={blocked_dir}",
+            f"command={command_to_string(command)}",
+            f"returncode={result.returncode}",
+            f"verify_returncode={verify_result.returncode}",
+        ]) + "\n")
+
+        artifacts = [str(stdout_file), str(stderr_file), str(verify_stdout), str(verify_stderr), str(remote_manifest_file), str(metadata_file)]
+        details = {"command": command, "returncode": result.returncode, "verify_returncode": verify_result.returncode, "blocked_dir": blocked_dir}
+
+        if result.returncode != 0:
+            return TestResult.fail_result(self.case_id, self.name, f"Blocked single-directory sync with --force-sync failed with status {result.returncode}", artifacts, details)
+        if verify_result.returncode != 0:
+            return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+        if f"{blocked_dir}/allowed_via_force.txt" not in remote_manifest:
+            return TestResult.fail_result(self.case_id, self.name, f"--force-sync did not synchronise blocked path: {blocked_dir}/allowed_via_force.txt", artifacts, details)
+
+        return TestResult.pass_result(self.case_id, self.name, artifacts, details)

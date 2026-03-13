@@ -1,43 +1,42 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
+from framework.base import E2ETestCase
+from framework.context import E2EContext
+from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from testcases.wave1_common import Wave1TestCaseBase
+from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
-class TestCase0015SkipSymlinksValidation(Wave1TestCaseBase):
+class TestCase0015SkipSymlinksValidation(E2ETestCase):
     case_id = "0015"
     name = "skip_symlinks validation"
-    description = "Validate that symbolic links are excluded when skip_symlinks is enabled"
+    description = "Validate that skip_symlinks prevents symbolic links from synchronising"
 
-    def run(self, context):
-        case_work_dir, case_log_dir, case_state_dir = self._initialise_case_dirs(context)
-        root_name = self._root_name(context)
-        artifacts = []
-        sync_root = case_work_dir / "syncroot"
-        sync_root.mkdir(parents=True, exist_ok=True)
-        target_file = sync_root / root_name / "real.txt"
-        self._create_text_file(target_file, "real content\n")
-        symlink_path = sync_root / root_name / "real-link.txt"
-        symlink_path.parent.mkdir(parents=True, exist_ok=True)
-        os.symlink("real.txt", symlink_path)
-        conf_dir = self._new_config_dir(context, case_work_dir, "main")
-        config_path = self._write_config(conf_dir, extra_lines=['skip_symlinks = "true"'])
-        artifacts.append(str(config_path))
-        artifacts.append(self._write_json_artifact(case_state_dir / "local_snapshot_pre.json", self._snapshot_files(sync_root)))
-        result = self._run_onedrive(context, sync_root=sync_root, config_dir=conf_dir)
-        artifacts.extend(self._write_command_artifacts(result=result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="skip_symlinks"))
-        if result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"skip_symlinks validation failed with status {result.returncode}", artifacts)
-        verify_root, verify_result, verify_artifacts = self._download_remote_scope(context, case_work_dir, root_name, "verify_remote")
-        artifacts.extend(verify_artifacts)
-        artifacts.extend(self._write_command_artifacts(result=verify_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="verify_remote"))
-        if verify_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts)
-        snapshot = self._snapshot_files(verify_root)
-        if f"{root_name}/real.txt" not in snapshot:
-            return TestResult.fail_result(self.case_id, self.name, "Real file is missing remotely", artifacts)
-        if f"{root_name}/real-link.txt" in snapshot:
-            return TestResult.fail_result(self.case_id, self.name, "Symbolic link was unexpectedly synchronised", artifacts)
-        return TestResult.pass_result(self.case_id, self.name, artifacts, {"root_name": root_name})
+    def _write_config(self, config_path: Path) -> None:
+        write_text_file(config_path, "# tc0015 config\nbypass_data_preservation = \"true\"\nskip_symlinks = \"true\"\n")
+
+    def run(self, context: E2EContext) -> TestResult:
+        case_work_dir = context.work_root / "tc0015"; case_log_dir = context.logs_dir / "tc0015"; state_dir = context.state_dir / "tc0015"
+        reset_directory(case_work_dir); reset_directory(case_log_dir); reset_directory(state_dir); context.ensure_refresh_token_available()
+        sync_root = case_work_dir / "syncroot"; confdir = case_work_dir / "conf-main"; verify_root = case_work_dir / "verifyroot"; verify_conf = case_work_dir / "conf-verify"; root_name = f"ZZ_E2E_TC0015_{context.run_id}_{os.getpid()}"
+        target = sync_root / root_name / "real.txt"; write_text_file(target, "real\n"); link = sync_root / root_name / "linked.txt"; link.parent.mkdir(parents=True, exist_ok=True); link.symlink_to(target.name)
+        context.bootstrap_config_dir(confdir); self._write_config(confdir / "config")
+        context.bootstrap_config_dir(verify_conf); write_text_file(verify_conf / "config", "# verify\nbypass_data_preservation = \"true\"\n")
+        stdout_file = case_log_dir / "skip_symlinks_stdout.log"; stderr_file = case_log_dir / "skip_symlinks_stderr.log"; verify_stdout = case_log_dir / "verify_stdout.log"; verify_stderr = case_log_dir / "verify_stderr.log"; remote_manifest_file = state_dir / "remote_verify_manifest.txt"; metadata_file = state_dir / "metadata.txt"
+        command = [context.onedrive_bin, "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(confdir)]
+        result = run_command(command, cwd=context.repo_root)
+        write_text_file(stdout_file, result.stdout); write_text_file(stderr_file, result.stderr)
+        verify_command = [context.onedrive_bin, "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
+        verify_result = run_command(verify_command, cwd=context.repo_root)
+        write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); remote_manifest = build_manifest(verify_root); write_manifest(remote_manifest_file, remote_manifest)
+        write_text_file(metadata_file, f"root_name={root_name}\nreturncode={result.returncode}\nverify_returncode={verify_result.returncode}\n")
+        artifacts = [str(stdout_file), str(stderr_file), str(verify_stdout), str(verify_stderr), str(remote_manifest_file), str(metadata_file)]
+        details = {"returncode": result.returncode, "verify_returncode": verify_result.returncode, "root_name": root_name}
+        if result.returncode != 0: return TestResult.fail_result(self.case_id, self.name, f"skip_symlinks validation failed with status {result.returncode}", artifacts, details)
+        if verify_result.returncode != 0: return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+        if f"{root_name}/real.txt" not in remote_manifest: return TestResult.fail_result(self.case_id, self.name, "Regular file missing after skip_symlinks processing", artifacts, details)
+        if f"{root_name}/linked.txt" in remote_manifest: return TestResult.fail_result(self.case_id, self.name, "Symbolic link was unexpectedly synchronised", artifacts, details)
+        return TestResult.pass_result(self.case_id, self.name, artifacts, details)

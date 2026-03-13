@@ -1,70 +1,75 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
+from framework.base import E2ETestCase
+from framework.context import E2EContext
+from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from testcases.wave1_common import Wave1TestCaseBase
+from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
-class TestCase0012SkipDirValidation(Wave1TestCaseBase):
+class TestCase0012SkipDirValidation(E2ETestCase):
     case_id = "0012"
     name = "skip_dir validation"
-    description = "Validate loose and strict skip_dir matching behaviour"
+    description = "Validate skip_dir loose matching and skip_dir_strict_match behaviour"
 
-    def run(self, context):
-        case_work_dir, case_log_dir, case_state_dir = self._initialise_case_dirs(context)
-        root_name = self._root_name(context)
-        artifacts = []
-        failures = []
+    def _write_config(self, config_path: Path, skip_dir_value: str, strict: bool) -> None:
+        lines = ["# tc0012 config", "bypass_data_preservation = \"true\"", f"skip_dir = \"{skip_dir_value}\""]
+        if strict:
+            lines.append("skip_dir_strict_match = \"true\"")
+        write_text_file(config_path, "\n".join(lines) + "\n")
 
-        loose_root = case_work_dir / "loose-syncroot"
-        loose_root.mkdir(parents=True, exist_ok=True)
-        self._create_text_file(loose_root / root_name / "project" / "build" / "out.bin", "skip me\n")
-        self._create_text_file(loose_root / root_name / "build" / "root.bin", "skip me too\n")
-        self._create_text_file(loose_root / root_name / "project" / "src" / "app.txt", "keep me\n")
-        loose_conf = self._new_config_dir(context, case_work_dir, "loose")
-        config_path = self._write_config(loose_conf, extra_lines=['skip_dir = "build"', 'skip_dir_strict_match = "false"'])
-        artifacts.append(str(config_path))
-        loose_result = self._run_onedrive(context, sync_root=loose_root, config_dir=loose_conf)
-        artifacts.extend(self._write_command_artifacts(result=loose_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="loose_match"))
-        if loose_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Loose skip_dir scenario failed with status {loose_result.returncode}", artifacts)
-        verify_root, verify_result, verify_artifacts = self._download_remote_scope(context, case_work_dir, root_name, "loose_remote")
-        artifacts.extend(verify_artifacts)
-        artifacts.extend(self._write_command_artifacts(result=verify_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="loose_verify"))
-        if verify_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Loose skip_dir verification failed with status {verify_result.returncode}", artifacts)
-        loose_snapshot = self._snapshot_files(verify_root)
-        if f"{root_name}/project/src/app.txt" not in loose_snapshot:
-            failures.append("Loose matching did not retain non-build content")
-        for forbidden in [f"{root_name}/project/build/out.bin", f"{root_name}/build/root.bin"]:
-            if forbidden in loose_snapshot:
-                failures.append(f"Loose matching did not exclude {forbidden}")
+    def _run_loose(self, context: E2EContext, case_log_dir: Path, all_artifacts: list[str], failures: list[str]) -> None:
+        scenario_root = context.work_root / "tc0012" / "loose_match"; scenario_state = context.state_dir / "tc0012" / "loose_match"
+        reset_directory(scenario_root); reset_directory(scenario_state)
+        sync_root = scenario_root / "syncroot"; confdir = scenario_root / "conf-loose"; verify_root = scenario_root / "verifyroot"; verify_conf = scenario_root / "conf-verify-loose"
+        root = f"ZZ_E2E_TC0012_LOOSE_{context.run_id}_{os.getpid()}"
+        write_text_file(sync_root / root / "Cache" / "top.txt", "skip top\n")
+        write_text_file(sync_root / root / "App" / "Cache" / "nested.txt", "skip nested\n")
+        write_text_file(sync_root / root / "Keep" / "ok.txt", "ok\n")
+        context.bootstrap_config_dir(confdir); self._write_config(confdir / "config", "Cache", False)
+        context.bootstrap_config_dir(verify_conf); write_text_file(verify_conf / "config", "# verify\nbypass_data_preservation = \"true\"\n")
+        stdout_file = case_log_dir / "loose_match_stdout.log"; stderr_file = case_log_dir / "loose_match_stderr.log"; verify_stdout = case_log_dir / "loose_match_verify_stdout.log"; verify_stderr = case_log_dir / "loose_match_verify_stderr.log"; manifest_file = scenario_state / "remote_verify_manifest.txt"
+        result = run_command([context.onedrive_bin, "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(confdir)], cwd=context.repo_root)
+        write_text_file(stdout_file, result.stdout); write_text_file(stderr_file, result.stderr)
+        verify_result = run_command([context.onedrive_bin, "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)], cwd=context.repo_root)
+        write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); manifest = build_manifest(verify_root); write_manifest(manifest_file, manifest)
+        all_artifacts.extend([str(stdout_file), str(stderr_file), str(verify_stdout), str(verify_stderr), str(manifest_file)])
+        if result.returncode != 0: failures.append(f"Loose skip_dir scenario failed with status {result.returncode}"); return
+        if verify_result.returncode != 0: failures.append(f"Loose skip_dir verification failed with status {verify_result.returncode}"); return
+        if f"{root}/Keep/ok.txt" not in manifest: failures.append("Loose skip_dir scenario did not synchronise expected non-skipped content")
+        for unwanted in [f"{root}/Cache/top.txt", f"{root}/App/Cache/nested.txt"]:
+            if unwanted in manifest: failures.append(f"Loose skip_dir scenario unexpectedly synchronised skipped directory content: {unwanted}")
 
-        strict_scope = f"{root_name}_STRICT"
-        strict_root = case_work_dir / "strict-syncroot"
-        strict_root.mkdir(parents=True, exist_ok=True)
-        self._create_text_file(strict_root / strict_scope / "project" / "build" / "skip.bin", "skip strict\n")
-        self._create_text_file(strict_root / strict_scope / "other" / "build" / "keep.bin", "keep strict\n")
-        self._create_text_file(strict_root / strict_scope / "other" / "src" / "keep.txt", "keep strict txt\n")
-        strict_conf = self._new_config_dir(context, case_work_dir, "strict")
-        config_path = self._write_config(strict_conf, extra_lines=[f'skip_dir = "{strict_scope}/project/build"', 'skip_dir_strict_match = "true"'])
-        artifacts.append(str(config_path))
-        strict_result = self._run_onedrive(context, sync_root=strict_root, config_dir=strict_conf)
-        artifacts.extend(self._write_command_artifacts(result=strict_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="strict_match"))
-        if strict_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Strict skip_dir scenario failed with status {strict_result.returncode}", artifacts)
-        strict_verify_root, strict_verify_result, strict_verify_artifacts = self._download_remote_scope(context, case_work_dir, strict_scope, "strict_remote")
-        artifacts.extend(strict_verify_artifacts)
-        artifacts.extend(self._write_command_artifacts(result=strict_verify_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="strict_verify"))
-        if strict_verify_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Strict skip_dir verification failed with status {strict_verify_result.returncode}", artifacts)
-        strict_snapshot = self._snapshot_files(strict_verify_root)
-        if f"{strict_scope}/project/build/skip.bin" in strict_snapshot:
-            failures.append("Strict matching did not exclude the targeted full path")
-        for required in [f"{strict_scope}/other/build/keep.bin", f"{strict_scope}/other/src/keep.txt"]:
-            if required not in strict_snapshot:
-                failures.append(f"Strict matching excluded unexpected content: {required}")
-        artifacts.extend(self._write_manifests(verify_root, case_state_dir, "loose_manifest"))
-        artifacts.extend(self._write_manifests(strict_verify_root, case_state_dir, "strict_manifest"))
-        if failures:
-            return TestResult.fail_result(self.case_id, self.name, "; ".join(failures), artifacts, {"failure_count": len(failures)})
-        return TestResult.pass_result(self.case_id, self.name, artifacts, {"root_name": root_name, "strict_scope": strict_scope})
+    def _run_strict(self, context: E2EContext, case_log_dir: Path, all_artifacts: list[str], failures: list[str]) -> None:
+        scenario_root = context.work_root / "tc0012" / "strict_match"; scenario_state = context.state_dir / "tc0012" / "strict_match"
+        reset_directory(scenario_root); reset_directory(scenario_state)
+        sync_root = scenario_root / "syncroot"; confdir = scenario_root / "conf-strict"; verify_root = scenario_root / "verifyroot"; verify_conf = scenario_root / "conf-verify-strict"
+        root = f"ZZ_E2E_TC0012_STRICT_{context.run_id}_{os.getpid()}"
+        write_text_file(sync_root / root / "Cache" / "top.txt", "top should remain\n")
+        write_text_file(sync_root / root / "App" / "Cache" / "nested.txt", "nested should skip\n")
+        write_text_file(sync_root / root / "Keep" / "ok.txt", "ok\n")
+        context.bootstrap_config_dir(confdir); self._write_config(confdir / "config", f"{root}/App/Cache", True)
+        context.bootstrap_config_dir(verify_conf); write_text_file(verify_conf / "config", "# verify\nbypass_data_preservation = \"true\"\n")
+        stdout_file = case_log_dir / "strict_match_stdout.log"; stderr_file = case_log_dir / "strict_match_stderr.log"; verify_stdout = case_log_dir / "strict_match_verify_stdout.log"; verify_stderr = case_log_dir / "strict_match_verify_stderr.log"; manifest_file = scenario_state / "remote_verify_manifest.txt"
+        result = run_command([context.onedrive_bin, "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(confdir)], cwd=context.repo_root)
+        write_text_file(stdout_file, result.stdout); write_text_file(stderr_file, result.stderr)
+        verify_result = run_command([context.onedrive_bin, "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)], cwd=context.repo_root)
+        write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); manifest = build_manifest(verify_root); write_manifest(manifest_file, manifest)
+        all_artifacts.extend([str(stdout_file), str(stderr_file), str(verify_stdout), str(verify_stderr), str(manifest_file)])
+        if result.returncode != 0: failures.append(f"Strict skip_dir scenario failed with status {result.returncode}"); return
+        if verify_result.returncode != 0: failures.append(f"Strict skip_dir verification failed with status {verify_result.returncode}"); return
+        if f"{root}/Keep/ok.txt" not in manifest: failures.append("Strict skip_dir scenario did not synchronise expected non-skipped content")
+        if f"{root}/Cache/top.txt" not in manifest: failures.append("Strict skip_dir scenario incorrectly skipped top-level Cache directory")
+        if f"{root}/App/Cache/nested.txt" in manifest: failures.append("Strict skip_dir scenario unexpectedly synchronised strict-matched directory content")
+
+    def run(self, context: E2EContext) -> TestResult:
+        case_log_dir = context.logs_dir / "tc0012"; reset_directory(case_log_dir); context.ensure_refresh_token_available()
+        all_artifacts = []; failures = []
+        self._run_loose(context, case_log_dir, all_artifacts, failures)
+        self._run_strict(context, case_log_dir, all_artifacts, failures)
+        details = {"failures": failures}
+        if failures: return TestResult.fail_result(self.case_id, self.name, "; ".join(failures), all_artifacts, details)
+        return TestResult.pass_result(self.case_id, self.name, all_artifacts, details)
