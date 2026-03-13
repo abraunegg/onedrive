@@ -765,10 +765,11 @@ class ClientSideFiltering {
 			addLogEntry("[F]excludeWildcardMatched = " ~ to!string(excludeWildcardMatched), ["debug"]);
 		}
 		
-		// If any of these exclude match items is true, then finalResult has to be flagged as true
-		if ((exclude) || (excludeExactMatch) || (excludeParentMatched) || (excludeAnywhereMatched) || (excludeWildcardMatched)) {
+		// Only force exclusion if an exclusion rule actually matched this path
+		if (excludeExactMatch || excludeParentMatched || excludeAnywhereMatched || excludeWildcardMatched) {
 			finalResult = true;
 		}
+		
 		
 		// Final Result
 		if (finalResult) {
