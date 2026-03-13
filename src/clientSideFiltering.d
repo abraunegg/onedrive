@@ -240,10 +240,6 @@ class ClientSideFiltering {
 	// Match against 'sync_list' only
 	bool isPathExcludedViaSyncList(string path) {
 		// Are there 'sync_list' rules to process?
-		
-		//addLogEntry("isPathExcludedViaSyncList Input Path = " ~ path);
-		
-		
 		if (count(syncListRules) > 0) {
 			// Perform 'sync_list' rule testing on the given path
 			return isPathExcluded(path);
@@ -770,15 +766,9 @@ class ClientSideFiltering {
 		}
 		
 		// If any of these exclude match items is true, then finalResult has to be flagged as true
-		//if ((exclude) || (excludeExactMatch) || (excludeParentMatched) || (excludeAnywhereMatched) || (excludeWildcardMatched)) {
-		//	finalResult = true;
-		//}
-		
-		// Only force exclusion if an exclusion rule actually matched this path
-		if (excludeExactMatch || excludeParentMatched || excludeAnywhereMatched || excludeWildcardMatched) {
+		if ((exclude) || (excludeExactMatch) || (excludeParentMatched) || (excludeAnywhereMatched) || (excludeWildcardMatched)) {
 			finalResult = true;
 		}
-		
 		
 		// Final Result
 		if (finalResult) {
