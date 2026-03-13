@@ -1,6 +1,6 @@
 # End to End Testing of OneDrive Client for Linux
 
-[![End to End Testing](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal.yaml/badge.svg?branch=master)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
+[![End to End Testing](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
 
 | Test Case | Description | Details |
 |:---|:---|:---|
