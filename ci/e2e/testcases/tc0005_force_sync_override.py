@@ -18,8 +18,8 @@ class TestCase0005ForceSyncOverride(Wave1TestCaseBase):
         seed_root.mkdir(parents=True, exist_ok=True)
         self._create_text_file(seed_root / root_name / "Blocked" / "blocked.txt", "blocked remote file\n")
         seed_conf = self._new_config_dir(context, case_work_dir, "seed")
-        config_path, sync_list_path = self._write_config(seed_conf, sync_list_entries=[f"/{root_name}"])
-        artifacts.extend([str(config_path), str(sync_list_path)])
+        config_path = self._write_config(seed_conf)
+        artifacts.append(str(config_path))
         seed_result = self._run_onedrive(context, sync_root=seed_root, config_dir=seed_conf)
         artifacts.extend(self._write_command_artifacts(result=seed_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="seed"))
         if seed_result.returncode != 0:
@@ -28,8 +28,8 @@ class TestCase0005ForceSyncOverride(Wave1TestCaseBase):
         no_force_root = case_work_dir / "no-force-syncroot"
         no_force_root.mkdir(parents=True, exist_ok=True)
         no_force_conf = self._new_config_dir(context, case_work_dir, "no-force")
-        config_path, sync_list_path = self._write_config(no_force_conf, extra_lines=['skip_dir = "Blocked"'], sync_list_entries=[f"/{root_name}"])
-        artifacts.extend([str(config_path), str(sync_list_path)])
+        config_path = self._write_config(no_force_conf, extra_lines=['skip_dir = "Blocked"'])
+        artifacts.append(str(config_path))
         no_force_result = self._run_onedrive(context, sync_root=no_force_root, config_dir=no_force_conf, extra_args=["--download-only", "--single-directory", f"{root_name}/Blocked"])
         artifacts.extend(self._write_command_artifacts(result=no_force_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="no_force"))
         if no_force_result.returncode != 0:
@@ -40,9 +40,15 @@ class TestCase0005ForceSyncOverride(Wave1TestCaseBase):
         force_root = case_work_dir / "force-syncroot"
         force_root.mkdir(parents=True, exist_ok=True)
         force_conf = self._new_config_dir(context, case_work_dir, "force")
-        config_path, sync_list_path = self._write_config(force_conf, extra_lines=['skip_dir = "Blocked"'], sync_list_entries=[f"/{root_name}"])
-        artifacts.extend([str(config_path), str(sync_list_path)])
-        force_result = self._run_onedrive(context, sync_root=force_root, config_dir=force_conf, extra_args=["--download-only", "--single-directory", f"{root_name}/Blocked", "--force-sync"])
+        config_path = self._write_config(force_conf, extra_lines=['skip_dir = "Blocked"'])
+        artifacts.append(str(config_path))
+        force_result = self._run_onedrive(
+            context,
+            sync_root=force_root,
+            config_dir=force_conf,
+            extra_args=["--download-only", "--single-directory", f"{root_name}/Blocked", "--force-sync"],
+            input_text="Y\n",
+        )
         artifacts.extend(self._write_command_artifacts(result=force_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="force"))
         artifacts.extend(self._write_manifests(force_root, case_state_dir, "force_manifest"))
         if force_result.returncode != 0:

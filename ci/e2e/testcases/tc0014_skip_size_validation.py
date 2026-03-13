@@ -18,9 +18,9 @@ class TestCase0014SkipSizeValidation(Wave1TestCaseBase):
         self._create_binary_file(sync_root / root_name / "small.bin", 128 * 1024)
         self._create_binary_file(sync_root / root_name / "large.bin", 2 * 1024 * 1024)
         conf_dir = self._new_config_dir(context, case_work_dir, "main")
-        config_path, sync_list_path = self._write_config(conf_dir, extra_lines=['skip_size = "1"'], sync_list_entries=[f"/{root_name}"])
-        artifacts.extend([str(config_path), str(sync_list_path)])
-        result = self._run_onedrive(context, sync_root=sync_root, config_dir=conf_dir)
+        config_path = self._write_config(conf_dir, extra_lines=['skip_size = "1"'])
+        artifacts.append(str(config_path))
+        result = self._run_onedrive(context, sync_root=sync_root, config_dir=conf_dir, extra_args=["--single-directory", root_name])
         artifacts.extend(self._write_command_artifacts(result=result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="skip_size"))
         if result.returncode != 0:
             return TestResult.fail_result(self.case_id, self.name, f"skip_size validation failed with status {result.returncode}", artifacts)

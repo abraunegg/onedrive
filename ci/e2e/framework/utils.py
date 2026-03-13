@@ -49,6 +49,7 @@ def run_command(
     command: list[str],
     cwd: Path | None = None,
     env: dict[str, str] | None = None,
+    input_text: str | None = None,
 ) -> CommandResult:
     merged_env = os.environ.copy()
     if env:
@@ -64,6 +65,7 @@ def run_command(
         encoding="utf-8",
         errors="replace",
         check=False,
+        input=input_text,
     )
 
     return CommandResult(

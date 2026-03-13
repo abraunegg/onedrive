@@ -21,8 +21,8 @@ class TestCase0003DryRunValidation(Wave1TestCaseBase):
         self._create_binary_file(seed_root / root_name / "Data" / "payload.bin", 64 * 1024)
 
         seed_config_dir = self._new_config_dir(context, case_work_dir, "seed")
-        config_path, sync_list_path = self._write_config(seed_config_dir, sync_list_entries=[f"/{root_name}"])
-        artifacts.extend([str(config_path), str(sync_list_path)])
+        config_path = self._write_config(seed_config_dir)
+        artifacts.append(str(config_path))
         seed_result = self._run_onedrive(context, sync_root=seed_root, config_dir=seed_config_dir)
         artifacts.extend(self._write_command_artifacts(result=seed_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="seed"))
         artifacts.extend(self._write_manifests(seed_root, case_state_dir, "seed_local"))
@@ -37,8 +37,8 @@ class TestCase0003DryRunValidation(Wave1TestCaseBase):
         artifacts.append(self._write_json_artifact(case_state_dir / "pre_snapshot.json", pre_snapshot))
 
         dry_config_dir = self._new_config_dir(context, case_work_dir, "dryrun")
-        config_path, sync_list_path = self._write_config(dry_config_dir, sync_list_entries=[f"/{root_name}"])
-        artifacts.extend([str(config_path), str(sync_list_path)])
+        config_path = self._write_config(dry_config_dir)
+        artifacts.append(str(config_path))
         dry_result = self._run_onedrive(context, sync_root=dry_root, config_dir=dry_config_dir, extra_args=["--dry-run"])
         artifacts.extend(self._write_command_artifacts(result=dry_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="dry_run"))
         post_snapshot = self._snapshot_files(dry_root)

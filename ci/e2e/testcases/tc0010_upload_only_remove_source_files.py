@@ -18,8 +18,8 @@ class TestCase0010UploadOnlyRemoveSourceFiles(Wave1TestCaseBase):
         source_file = sync_root / root_name / "Source" / "upload_and_remove.txt"
         self._create_text_file(source_file, "remove after upload\n")
         conf_dir = self._new_config_dir(context, case_work_dir, "upload")
-        config_path, sync_list_path = self._write_config(conf_dir, extra_lines=['remove_source_files = "true"'], sync_list_entries=[f"/{root_name}"])
-        artifacts.extend([str(config_path), str(sync_list_path)])
+        config_path = self._write_config(conf_dir, extra_lines=['remove_source_files = "true"'])
+        artifacts.append(str(config_path))
         result = self._run_onedrive(context, sync_root=sync_root, config_dir=conf_dir, extra_args=["--upload-only"])
         artifacts.extend(self._write_command_artifacts(result=result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="upload_only_remove_source"))
         artifacts.extend(self._write_manifests(sync_root, case_state_dir, "local_after"))

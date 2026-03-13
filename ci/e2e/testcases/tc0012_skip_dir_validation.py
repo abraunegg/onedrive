@@ -21,8 +21,8 @@ class TestCase0012SkipDirValidation(Wave1TestCaseBase):
         self._create_text_file(loose_root / root_name / "build" / "root.bin", "skip me too\n")
         self._create_text_file(loose_root / root_name / "project" / "src" / "app.txt", "keep me\n")
         loose_conf = self._new_config_dir(context, case_work_dir, "loose")
-        config_path, sync_list_path = self._write_config(loose_conf, extra_lines=['skip_dir = "build"', 'skip_dir_strict_match = "false"'], sync_list_entries=[f"/{root_name}"])
-        artifacts.extend([str(config_path), str(sync_list_path)])
+        config_path = self._write_config(loose_conf, extra_lines=['skip_dir = "build"', 'skip_dir_strict_match = "false"'])
+        artifacts.append(str(config_path))
         loose_result = self._run_onedrive(context, sync_root=loose_root, config_dir=loose_conf)
         artifacts.extend(self._write_command_artifacts(result=loose_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="loose_match"))
         if loose_result.returncode != 0:
@@ -46,8 +46,8 @@ class TestCase0012SkipDirValidation(Wave1TestCaseBase):
         self._create_text_file(strict_root / strict_scope / "other" / "build" / "keep.bin", "keep strict\n")
         self._create_text_file(strict_root / strict_scope / "other" / "src" / "keep.txt", "keep strict txt\n")
         strict_conf = self._new_config_dir(context, case_work_dir, "strict")
-        config_path, sync_list_path = self._write_config(strict_conf, extra_lines=[f'skip_dir = "{strict_scope}/project/build"', 'skip_dir_strict_match = "true"'], sync_list_entries=[f"/{strict_scope}"])
-        artifacts.extend([str(config_path), str(sync_list_path)])
+        config_path = self._write_config(strict_conf, extra_lines=[f'skip_dir = "{strict_scope}/project/build"', 'skip_dir_strict_match = "true"'])
+        artifacts.append(str(config_path))
         strict_result = self._run_onedrive(context, sync_root=strict_root, config_dir=strict_conf)
         artifacts.extend(self._write_command_artifacts(result=strict_result, log_dir=case_log_dir, state_dir=case_state_dir, phase_name="strict_match"))
         if strict_result.returncode != 0:

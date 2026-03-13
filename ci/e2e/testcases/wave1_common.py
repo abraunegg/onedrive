@@ -18,12 +18,14 @@ from framework.utils import (
 )
 
 CONFIG_FILE_NAME = "config"
-SYNC_LIST_FILE_NAME = "sync_list"
 
 
 class Wave1TestCaseBase(E2ETestCase):
     """
     Shared helper base for Wave 1 E2E test cases.
+
+    Important design rule: Wave 1 test cases must not use sync_list.
+    TC0002 is the sole owner of sync_list validation.
     """
 
     def _safe_run_id(self, context: E2EContext) -> str:
@@ -53,25 +55,19 @@ class Wave1TestCaseBase(E2ETestCase):
         config_dir: Path,
         *,
         extra_lines: Iterable[str] | None = None,
-        sync_list_entries: Iterable[str] | None = None,
-    ) -> tuple[Path, Path | None]:
+    ) -> Path:
         config_path = config_dir / CONFIG_FILE_NAME
-        sync_list_path: Path | None = None
 
         lines = [
             f"# tc{self.case_id} generated config",
             'bypass_data_preservation = "true"',
-            'monitor_interval = "5"',
+            'monitor_interval = 5',
         ]
         if extra_lines:
             lines.extend(list(extra_lines))
         write_text_file(config_path, "\n".join(lines) + "\n")
 
-        if sync_list_entries is not None:
-            sync_list_path = config_dir / SYNC_LIST_FILE_NAME
-            write_text_file(sync_list_path, "\n".join(sync_list_entries) + "\n")
-
-        return config_path, sync_list_path
+        return config_path
 
     def _run_onedrive(
         self,
@@ -82,6 +78,7 @@ class Wave1TestCaseBase(E2ETestCase):
         extra_args: list[str] | None = None,
         use_resync: bool = True,
         use_resync_auth: bool = True,
+        input_text: str | None = None,
     ):
         command = [context.onedrive_bin, "--sync", "--verbose"]
         if use_resync:
@@ -93,7 +90,7 @@ class Wave1TestCaseBase(E2ETestCase):
             command.extend(extra_args)
 
         context.log(f"Executing Test Case {self.case_id}: {command_to_string(command)}")
-        return run_command(command, cwd=context.repo_root)
+        return run_command(command, cwd=context.repo_root, input_text=input_text)
 
     def _write_command_artifacts(
         self,
@@ -183,18 +180,15 @@ class Wave1TestCaseBase(E2ETestCase):
         verify_root = case_work_dir / f"verify-{name}"
         reset_directory(verify_root)
         config_dir = self._new_config_dir(context, case_work_dir, f"verify-{name}")
-        config_path, sync_list_path = self._write_config(
+        config_path = self._write_config(
             config_dir,
             extra_lines=extra_config_lines,
-            sync_list_entries=[f"/{scope_root}"],
         )
         result = self._run_onedrive(
             context,
             sync_root=verify_root,
             config_dir=config_dir,
-            extra_args=["--download-only"] + (extra_args or []),
+            extra_args=["--download-only", "--single-directory", scope_root] + (extra_args or []),
         )
         artifacts = [str(config_path)]
-        if sync_list_path:
-            artifacts.append(str(sync_list_path))
         return verify_root, result, artifacts
