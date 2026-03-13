@@ -118,6 +118,8 @@ class SyncEngine {
 	string[] fileUploadFailures;
 	// List of path names changed online, but not changed locally when using --dry-run
 	string[] pathsRenamed;
+	// List of path names retained when using --download-only --cleanup-local-files + using a 'sync_list'
+	string[] pathsRetained;
 	// List of paths that were a POSIX case-insensitive match, thus could not be created online
 	string[] posixViolationPaths;
 	// List of local paths, that, when using the OneDrive Business Shared Folders feature, then disabling it, folder still exists locally and online
@@ -1047,6 +1049,7 @@ class SyncEngine {
 		interruptedDownloadFiles = [];
 		pathsToCreateOnline = [];
 		databaseItemsToDeleteOnline = [];
+		pathsRetained = [];
 		
 		// Perform Garbage Collection on this destroyed curl engine
 		GC.collect();
@@ -2538,8 +2541,12 @@ class SyncEngine {
 						if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (rootName(newItemPath) == "") ) {
 							// This is a file
 							// We are configured to sync all files in the root
-							// This is a file in the logical root
+							// This is a file in the logical configured root
 							unwanted = false;
+							// Log that we are retaining this file and why
+							if (verboseLogging) {
+								addLogEntry("Path retained due to 'sync_root_files' override for logical root file: " ~ newItemPath, ["verbose"]);
+							}
 						} else {
 							// path is unwanted - excluded by 'sync_list'
 							unwanted = true;
@@ -7866,64 +7873,157 @@ class SyncEngine {
 							addPathToCreateOnline(path);
 						} else {
 							// we need to clean up this directory
-							addLogEntry("Removing local directory as --download-only & --cleanup-local-files configured");
+							if (verboseLogging) {addLogEntry("Attempting removal of local directory as --download-only & --cleanup-local-files configured", ["verbose"]);}
+							
 							// Remove any children of this path if they still exist
 							// Resolve 'Directory not empty' error when deleting local files
 							try {
-								auto directoryEntries = dirEntries(path, SpanMode.depth, false);
+								// the cleanup code should only operate on the immediate children of the current directory
+								auto directoryEntries = dirEntries(path, SpanMode.shallow);
+
 								foreach (DirEntry child; directoryEntries) {
-									// set for error logging
-									currentPath = child.name;
-								
-									// what sort of child is this?
-									if (isDir(child.name)) {
-										addLogEntry("Removing local directory: " ~ child.name);
-									} else {
-										addLogEntry("Removing local file: " ~ child.name);
+									// Normalise the child path once and use it consistently everywhere
+									string normalisedChildPath = ensureStartsWithDotSlash(buildNormalizedPath(child.name));
+
+									// Default action is to remove unless a retention condition is met
+									bool pathShouldBeRemoved = true;
+
+									// 1. If this path was already retained earlier, never delete it
+									if (canFind(pathsRetained, normalisedChildPath)) {
+										pathShouldBeRemoved = false;
+										if (verboseLogging) {addLogEntry("Path already marked for retention - retaining path: " ~ normalisedChildPath, ["verbose"]);}
 									}
+
+									// 2. If not already retained, evaluate via sync_list
+									if (pathShouldBeRemoved && syncListConfigured) {
+										// selectiveSync.isPathExcludedViaSyncList() returns:
+										//   true  = excluded by sync_list
+										//   false = included / must be retained
+										if (!selectiveSync.isPathExcludedViaSyncList(child.name)) {
+											pathShouldBeRemoved = false;
+											if (verboseLogging) {addLogEntry("Path retained due to 'sync_list' inclusion: " ~ normalisedChildPath, ["verbose"]);}
+										}
+									}
+
+									// What action should be taken?
+									if (pathShouldBeRemoved) {
+										// Path should be removed
+										if (isDir(child.name)) {
+											if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ normalisedChildPath, ["verbose"]);}
+										} else {
+											if (verboseLogging) {addLogEntry("Attempting removal of local file: " ~ normalisedChildPath, ["verbose"]);}
+										}
+
+										// Are we in a --dry-run scenario?
+										if (!dryRun) {
+											// No --dry-run ... process local delete
+											if (exists(child.name)) {
+												try {
+													if (attrIsDir(child.linkAttributes)) {
+														rmdir(child.name);
+														// Log removal
+														if (verboseLogging) {addLogEntry("Removed local directory: " ~ normalisedChildPath, ["verbose"]);}
+													} else {
+														safeRemove(child.name);
+														// Log removal
+														if (verboseLogging) {addLogEntry("Removed local file: " ~ normalisedChildPath, ["verbose"]);}
+													}
+												} catch (FileException e) {
+													displayFileSystemErrorMessage(e.msg, thisFunctionName, normalisedChildPath);
+												}
+											}
+										}
+									} else {
+										// Path should be retained
+										if (isDir(child.name)) {
+											if (verboseLogging) {addLogEntry("Local directory should be retained due to 'sync_list' inclusion: " ~ child.name, ["verbose"]);}
+										} else {
+											if (verboseLogging) {addLogEntry("Local file should be retained due to 'sync_list' inclusion: " ~ child.name, ["verbose"]);}
+										}
+
+										// Add this path to the retention list if not already present
+										if (!canFind(pathsRetained, normalisedChildPath)) {
+											pathsRetained ~= normalisedChildPath;
+										}
+
+										// Child retained, do not perform any further delete logic for this child
+										continue;
+									}
+								}
+
+								// Clear directoryEntries
+								object.destroy(directoryEntries);
+
+								// Determine whether the parent path itself should be removed
+								bool parentalPathShouldBeRemoved = true;
+								string normalisedParentPath = ensureStartsWithDotSlash(buildNormalizedPath(path));
+								string parentPrefix = normalisedParentPath ~ "/";
+
+								// 1. sync_list evaluation for the parent path itself
+								if (syncListConfigured) {
+									// selectiveSync.isPathExcludedViaSyncList() returns:
+									//   true  = excluded by sync_list
+									//   false = included / must be retained
+									if (!selectiveSync.isPathExcludedViaSyncList(path)) {
+										parentalPathShouldBeRemoved = false;
+										if (verboseLogging) {addLogEntry("Parent path retained due to 'sync_list' inclusion: " ~ path, ["verbose"]);}
+									}
+								}
+
+								// 2. If parent path exists in the database, it must be retained
+								if (parentalPathShouldBeRemoved && pathFoundInDatabase(normalisedParentPath)) {
+									parentalPathShouldBeRemoved = false;
+									if (verboseLogging) {addLogEntry("Parent path found in database - retain path: " ~ normalisedParentPath, ["verbose"]);}
+								}
+
+								// 3. If any retained path is this parent or is beneath this parent, retain the parent
+								if (parentalPathShouldBeRemoved) {
+									foreach (retainedPath; pathsRetained) {
+										if ((retainedPath == normalisedParentPath) || retainedPath.startsWith(parentPrefix)) {
+											parentalPathShouldBeRemoved = false;
+											if (verboseLogging) {addLogEntry("Parent path retained because child path is retained: " ~ retainedPath, ["verbose"]);}
+											break;
+										}
+									}
+								}
+
+								// What action should be taken?
+								if (parentalPathShouldBeRemoved) {
+									// Remove the parental path now that it is empty of children
+									if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ path, ["verbose"]);}
 									
 									// are we in a --dry-run scenario?
 									if (!dryRun) {
 										// No --dry-run ... process local delete
-										if (exists(child)) {
+										if (exists(path)) {
 											try {
-												attrIsDir(child.linkAttributes) ? rmdir(child.name) : safeRemove(child.name);
+												rmdirRecurse(path);
+												if (verboseLogging) {addLogEntry("Removed local directory: " ~ path, ["verbose"]);}
+												
 											} catch (FileException e) {
-												// display the error message
-												displayFileSystemErrorMessage(e.msg, thisFunctionName, currentPath);
+												displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
 											}
 										}
 									}
-								}
-								// Clear directoryEntries
-								object.destroy(directoryEntries);
-								
-								// Remove the path now that it is empty of children
-								addLogEntry("Removing local directory: " ~ path);
-								// are we in a --dry-run scenario?
-								if (!dryRun) {
-									// No --dry-run ... process local delete
-									if (exists(path)) {
-									
-										try {
-											rmdirRecurse(path);
-										} catch (FileException e) {
-											// display the error message
-											displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
-										}
-										
+								} else {
+									// Path needs to be retained
+									if (verboseLogging) {addLogEntry("Local parent directory should be retained due to 'sync_list' inclusion: " ~ path, ["verbose"]);}
+
+									// Add the parent path to the retention list if not already present
+									if (!canFind(pathsRetained, normalisedParentPath)) {
+										pathsRetained ~= normalisedParentPath;
 									}
 								}
 							} catch (FileException e) {
 								// display the error message
 								displayFileSystemErrorMessage(e.msg, thisFunctionName, currentPath);
-								
+
 								// Display function processing time if configured to do so
 								if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 									// Combine module name & running Function
 									displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 								}
-								
+
 								// return as there was an error
 								return;
 							}
@@ -8007,15 +8107,50 @@ class SyncEngine {
 										newLocalFilesToUploadToOneDrive ~= path;
 									}
 								}
-								
 							} else {
-								// we need to clean up this file
-								addLogEntry("Removing local file as --download-only & --cleanup-local-files configured");
-								// are we in a --dry-run scenario?
-								addLogEntry("Removing local file: " ~ path);
-								if (!dryRun) {
-									// No --dry-run ... process local file delete
-									safeRemove(path);
+								// Normalise the file path once and use it consistently everywhere
+								string normalisedFilePath = ensureStartsWithDotSlash(buildNormalizedPath(path));
+
+								// Default action is to remove unless a retention condition is met
+								bool pathShouldBeRemoved = true;
+
+								// 1. If this path was already retained earlier, never delete it
+								if (canFind(pathsRetained, normalisedFilePath)) {
+									pathShouldBeRemoved = false;
+									if (verboseLogging) {addLogEntry("Path already marked for retention - retaining path: " ~ normalisedFilePath, ["verbose"]);}
+								}
+
+								// 2. If not already retained, evaluate via sync_list
+								if (pathShouldBeRemoved && syncListConfigured) {
+									// selectiveSync.isPathExcludedViaSyncList() returns:
+									//   true  = excluded by sync_list
+									//   false = included / must be retained
+									if (!selectiveSync.isPathExcludedViaSyncList(path)) {
+										pathShouldBeRemoved = false;
+										if (verboseLogging) {addLogEntry("Path retained due to 'sync_list' inclusion: " ~ normalisedFilePath, ["verbose"]);}
+									}
+								}
+
+								// What action should be taken?
+								if (pathShouldBeRemoved) {
+									// we need to clean up this file
+									if (verboseLogging) {addLogEntry("Attempting removal of local file as --download-only & --cleanup-local-files configured", ["verbose"]);}
+									// are we in a --dry-run scenario?
+									if (verboseLogging) {addLogEntry("Attempting removal of local file: " ~ normalisedFilePath, ["verbose"]);}
+									if (!dryRun) {
+										// No --dry-run ... process local file delete
+										safeRemove(path);
+										// Log removal
+										if (verboseLogging) {addLogEntry("Removed local file: " ~ normalisedFilePath, ["verbose"]);}
+									}
+								} else {
+									// Path should be retained
+									if (verboseLogging) {addLogEntry("Local file should be retained due to 'sync_list' inclusion: " ~ normalisedFilePath, ["verbose"]);}
+									
+									// Add this path to the retention list if not already present
+									if (!canFind(pathsRetained, normalisedFilePath)) {
+										pathsRetained ~= normalisedFilePath;
+									}
 								}
 							}
 						}
@@ -8200,6 +8335,15 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
+		// Normalise input IF required
+		if (!startsWith(searchPath, "./")) {
+			if (searchPath != ".") {
+				// Log that the path needs normalising
+				if (debugLogging) {addLogEntry("searchPath does not start with './' ... searchPath needs normalising", ["debug"]);}
+				searchPath = ensureStartsWithDotSlash(buildNormalizedPath(searchPath));
+			}
+		}
+		
 		// Check if this path in the database
 		Item databaseItem;
 		if (debugLogging) {addLogEntry("Search DB for this path: " ~ searchPath, ["debug"]);}
@@ -8214,6 +8358,7 @@ class SyncEngine {
 					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 				}
 				
+				if (debugLogging) {addLogEntry("Path found in database - early exit", ["debug"]);}
 				return true; // Early exit on finding the path in the DB
 			}
 		}
@@ -8224,6 +8369,7 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 		
+		if (debugLogging) {addLogEntry("Path not found in database after exhausting all driveId entries: " ~ searchPath, ["debug"]);}
 		return false; // Return false if path is not found in any drive
 	}
 	
