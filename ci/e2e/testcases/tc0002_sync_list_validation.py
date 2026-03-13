@@ -162,6 +162,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
         ),
         (
+            "retain_sync_root_file",
+            re.compile(
+                r"^(?:DEBUG:\s+)?Path retained due to 'sync_root_files' override for logical root file: (.+)$"
+            ),
+        ),
+        (
             "upload_file",
             re.compile(r"^(?:DEBUG:\s+)?Uploading new file: (.+?) \.\.\."),
         ),
@@ -1457,11 +1463,15 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0023",
-                description="sync_root_files true does not retain non-root sibling files under fixture when only Projects is included",
+                description="sync_root_files true retains logical root files alongside included Projects subtree",
                 sync_list=[
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Video",
                     f"/{FIXTURE_ROOT_NAME}/Projects",
+                ],
+                allowed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/README.txt",
+                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                 ],
                 allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Projects"],
                 forbidden_prefixes=[
@@ -1469,12 +1479,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
                 required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/README.txt",
+                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
                 ],
                 required_skipped=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                     f"{FIXTURE_ROOT_NAME}/Backup",
