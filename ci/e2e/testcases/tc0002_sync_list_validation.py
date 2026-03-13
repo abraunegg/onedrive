@@ -575,7 +575,6 @@ class TestCase0002SyncListValidation(E2ETestCase):
             context.onedrive_bin,
             "--sync",
             "--verbose",
-            "--verbose",
             "--resync",
             "--resync-auth",
             "--syncdir",
