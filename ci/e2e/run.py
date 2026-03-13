@@ -11,6 +11,20 @@ from framework.result import TestResult
 from framework.utils import ensure_directory, write_text_file
 from testcases.tc0001_basic_resync import TestCase0001BasicResync
 from testcases.tc0002_sync_list_validation import TestCase0002SyncListValidation
+from testcases.tc0003_dry_run_validation import TestCase0003DryRunValidation
+from testcases.tc0004_single_directory_sync import TestCase0004SingleDirectorySync
+from testcases.tc0005_force_sync_override import TestCase0005ForceSyncOverride
+from testcases.tc0006_download_only import TestCase0006DownloadOnly
+from testcases.tc0007_download_only_cleanup_local_files import TestCase0007DownloadOnlyCleanupLocalFiles
+from testcases.tc0008_upload_only import TestCase0008UploadOnly
+from testcases.tc0009_upload_only_no_remote_delete import TestCase0009UploadOnlyNoRemoteDelete
+from testcases.tc0010_upload_only_remove_source_files import TestCase0010UploadOnlyRemoveSourceFiles
+from testcases.tc0011_skip_file_validation import TestCase0011SkipFileValidation
+from testcases.tc0012_skip_dir_validation import TestCase0012SkipDirValidation
+from testcases.tc0013_skip_dotfiles_validation import TestCase0013SkipDotfilesValidation
+from testcases.tc0014_skip_size_validation import TestCase0014SkipSizeValidation
+from testcases.tc0015_skip_symlinks_validation import TestCase0015SkipSymlinksValidation
+from testcases.tc0016_check_nosync_validation import TestCase0016CheckNosyncValidation
 
 
 def build_test_suite() -> list:
@@ -22,6 +36,20 @@ def build_test_suite() -> list:
     return [
         TestCase0001BasicResync(),
         TestCase0002SyncListValidation(),
+        TestCase0003DryRunValidation(),
+        TestCase0004SingleDirectorySync(),
+        TestCase0005ForceSyncOverride(),
+        TestCase0006DownloadOnly(),
+        TestCase0007DownloadOnlyCleanupLocalFiles(),
+        TestCase0008UploadOnly(),
+        TestCase0009UploadOnlyNoRemoteDelete(),
+        TestCase0010UploadOnlyRemoveSourceFiles(),
+        TestCase0011SkipFileValidation(),
+        TestCase0012SkipDirValidation(),
+        TestCase0013SkipDotfilesValidation(),
+        TestCase0014SkipSizeValidation(),
+        TestCase0015SkipSymlinksValidation(),
+        TestCase0016CheckNosyncValidation(),
     ]
 
 
