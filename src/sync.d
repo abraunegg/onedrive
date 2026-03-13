@@ -2541,8 +2541,12 @@ class SyncEngine {
 						if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (rootName(newItemPath) == "") ) {
 							// This is a file
 							// We are configured to sync all files in the root
-							// This is a file in the logical root
+							// This is a file in the logical configured root
 							unwanted = false;
+							// Log that we are retaining this file and why
+							if (verboseLogging) {
+								addLogEntry("Path retained due to 'sync_root_files' override for logical root file: " ~ newItemPath, ["verbose"]);
+							}
 						} else {
 							// path is unwanted - excluded by 'sync_list'
 							unwanted = true;
