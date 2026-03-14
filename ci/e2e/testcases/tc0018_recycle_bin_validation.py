@@ -15,13 +15,19 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
     name = "recycle bin validation"
     description = "Validate that online deletions are moved into a FreeDesktop-compliant recycle bin when enabled"
 
-    def _write_seed_config(self, config_path: Path) -> None:
-        write_text_file(config_path, "# tc0018 seed config\n" 'bypass_data_preservation = "true"\n')
+    def _write_seed_config(self, config_path: Path, sync_dir: Path) -> None:
+        write_text_file(
+            config_path,
+            "# tc0018 seed config\n"
+            f'sync_dir = "{sync_dir}"\n'
+            'bypass_data_preservation = "true"\n',
+        )
 
-    def _write_cleanup_config(self, config_path: Path, recycle_bin_path: Path) -> None:
+    def _write_cleanup_config(self, config_path: Path, sync_dir: Path, recycle_bin_path: Path) -> None:
         write_text_file(
             config_path,
             "# tc0018 cleanup config\n"
+            f'sync_dir = "{sync_dir}"\n'
             'bypass_data_preservation = "true"\n'
             'cleanup_local_files = "true"\n'
             'download_only = "true"\n'
@@ -33,6 +39,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         case_work_dir = context.work_root / "tc0018"
         case_log_dir = context.logs_dir / "tc0018"
         state_dir = context.state_dir / "tc0018"
+
         reset_directory(case_work_dir)
         reset_directory(case_log_dir)
         reset_directory(state_dir)
@@ -47,17 +54,24 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         recycle_bin_root = case_work_dir / "RecycleBin"
         root_name = f"ZZ_E2E_TC0018_{context.run_id}_{os.getpid()}"
 
+        reset_directory(sync_root)
+        reset_directory(verify_root)
+        reset_directory(recycle_bin_root)
+
         write_text_file(sync_root / root_name / "Keep" / "keep.txt", "keep\n")
         write_text_file(sync_root / root_name / "OldData" / "old.txt", "old\n")
 
         context.bootstrap_config_dir(conf_seed)
-        self._write_seed_config(conf_seed / "config")
+        self._write_seed_config(conf_seed / "config", sync_root)
+
         context.bootstrap_config_dir(conf_cleanup)
-        self._write_cleanup_config(conf_cleanup / "config", recycle_bin_root)
+        self._write_cleanup_config(conf_cleanup / "config", sync_root, recycle_bin_root)
+
         context.bootstrap_config_dir(conf_remove)
-        self._write_seed_config(conf_remove / "config")
+        self._write_seed_config(conf_remove / "config", sync_root)
+
         context.bootstrap_config_dir(conf_verify)
-        self._write_seed_config(conf_verify / "config")
+        self._write_seed_config(conf_verify / "config", verify_root)
 
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"
@@ -84,7 +98,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             "--single-directory",
             root_name,
             "--confdir",
-            str(conf_remove),
+            str(conf_seed),
         ]
         context.log(f"Executing Test Case {self.case_id} seed: {command_to_string(seed_command)}")
         seed_result = run_command(seed_command, cwd=context.repo_root)
@@ -99,8 +113,9 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             "--remove-directory",
             f"{root_name}/OldData",
             "--confdir",
-            str(conf_seed),
+            str(conf_remove),
         ]
+        context.log(f"Executing Test Case {self.case_id} remove: {command_to_string(remove_command)}")
         remove_result = run_command(remove_command, cwd=context.repo_root)
         write_text_file(remove_stdout, remove_result.stdout)
         write_text_file(remove_stderr, remove_result.stderr)
@@ -118,6 +133,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             "--confdir",
             str(conf_cleanup),
         ]
+        context.log(f"Executing Test Case {self.case_id} cleanup: {command_to_string(cleanup_command)}")
         cleanup_result = run_command(cleanup_command, cwd=context.repo_root)
         write_text_file(cleanup_stdout, cleanup_result.stdout)
         write_text_file(cleanup_stderr, cleanup_result.stderr)
@@ -136,6 +152,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             "--confdir",
             str(conf_verify),
         ]
+        context.log(f"Executing Test Case {self.case_id} verify: {command_to_string(verify_command)}")
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout)
         write_text_file(verify_stderr, verify_result.stderr)
@@ -143,6 +160,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         recycle_manifest = build_manifest(recycle_bin_root)
         remote_manifest = build_manifest(verify_root)
         local_manifest = build_manifest(sync_root)
+
         write_manifest(recycle_manifest_file, recycle_manifest)
         write_manifest(remote_manifest_file, remote_manifest)
         write_manifest(local_manifest_file, local_manifest)
@@ -153,6 +171,13 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
                 [
                     f"case_id={self.case_id}",
                     f"root_name={root_name}",
+                    f"sync_root={sync_root}",
+                    f"verify_root={verify_root}",
+                    f"recycle_bin_root={recycle_bin_root}",
+                    f"seed_confdir={conf_seed}",
+                    f"remove_confdir={conf_remove}",
+                    f"cleanup_confdir={conf_cleanup}",
+                    f"verify_confdir={conf_verify}",
                     f"seed_returncode={seed_result.returncode}",
                     f"remove_returncode={remove_result.returncode}",
                     f"cleanup_returncode={cleanup_result.returncode}",
@@ -185,29 +210,96 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         }
 
         if seed_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote seed failed with status {seed_result.returncode}", artifacts, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote seed failed with status {seed_result.returncode}",
+                artifacts,
+                details,
+            )
+
         if remove_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Online directory removal failed with status {remove_result.returncode}", artifacts, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"Online directory removal failed with status {remove_result.returncode}",
+                artifacts,
+                details,
+            )
+
         if cleanup_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Recycle bin cleanup sync failed with status {cleanup_result.returncode}", artifacts, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"Recycle bin cleanup sync failed with status {cleanup_result.returncode}",
+                artifacts,
+                details,
+            )
+
         if verify_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote verification failed with status {verify_result.returncode}",
+                artifacts,
+                details,
+            )
 
         if (sync_root / root_name / "OldData").exists():
-            return TestResult.fail_result(self.case_id, self.name, "OldData still exists locally after online deletion cleanup", artifacts, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "OldData still exists locally after online deletion cleanup",
+                artifacts,
+                details,
+            )
+
         if not (sync_root / root_name / "Keep" / "keep.txt").is_file():
-            return TestResult.fail_result(self.case_id, self.name, "Keep file is missing locally after recycle bin processing", artifacts, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "Keep file is missing locally after recycle bin processing",
+                artifacts,
+                details,
+            )
 
         recycle_has_file = any(path.endswith("old.txt") for path in recycle_manifest)
         recycle_has_info = any(path.endswith(".trashinfo") for path in recycle_manifest)
+
         if not recycle_has_file:
-            return TestResult.fail_result(self.case_id, self.name, "Deleted content was not moved into the configured recycle bin", artifacts, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "Deleted content was not moved into the configured recycle bin",
+                artifacts,
+                details,
+            )
+
         if not recycle_has_info:
-            return TestResult.fail_result(self.case_id, self.name, "Recycle bin metadata .trashinfo file was not created", artifacts, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "Recycle bin metadata .trashinfo file was not created",
+                artifacts,
+                details,
+            )
 
         if f"{root_name}/Keep/keep.txt" not in remote_manifest:
-            return TestResult.fail_result(self.case_id, self.name, "Keep file is missing online after recycle bin processing", artifacts, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "Keep file is missing online after recycle bin processing",
+                artifacts,
+                details,
+            )
+
         if any(entry == f"{root_name}/OldData" or entry.startswith(f"{root_name}/OldData/") for entry in remote_manifest):
-            return TestResult.fail_result(self.case_id, self.name, "OldData still exists online after explicit online removal", artifacts, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "OldData still exists online after explicit online removal",
+                artifacts,
+                details,
+            )
 
         return TestResult.pass_result(self.case_id, self.name, artifacts, details)
