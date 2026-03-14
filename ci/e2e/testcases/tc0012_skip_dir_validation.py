@@ -32,9 +32,9 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         context.bootstrap_config_dir(confdir); self._write_config(confdir / "config", "Cache", False)
         context.bootstrap_config_dir(verify_conf); write_text_file(verify_conf / "config", "# verify\nbypass_data_preservation = \"true\"\n")
         stdout_file = case_log_dir / "loose_match_stdout.log"; stderr_file = case_log_dir / "loose_match_stderr.log"; verify_stdout = case_log_dir / "loose_match_verify_stdout.log"; verify_stderr = case_log_dir / "loose_match_verify_stderr.log"; manifest_file = scenario_state / "remote_verify_manifest.txt"
-        result = run_command([context.onedrive_bin, "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(confdir)], cwd=context.repo_root)
+        result = run_command([context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(confdir)], cwd=context.repo_root)
         write_text_file(stdout_file, result.stdout); write_text_file(stderr_file, result.stderr)
-        verify_result = run_command([context.onedrive_bin, "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)], cwd=context.repo_root)
+        verify_result = run_command([context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)], cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); manifest = build_manifest(verify_root); write_manifest(manifest_file, manifest)
         all_artifacts.extend([str(stdout_file), str(stderr_file), str(verify_stdout), str(verify_stderr), str(manifest_file)])
         if result.returncode != 0: failures.append(f"Loose skip_dir scenario failed with status {result.returncode}"); return
@@ -54,9 +54,9 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         context.bootstrap_config_dir(confdir); self._write_config(confdir / "config", f"{root}/App/Cache", True)
         context.bootstrap_config_dir(verify_conf); write_text_file(verify_conf / "config", "# verify\nbypass_data_preservation = \"true\"\n")
         stdout_file = case_log_dir / "strict_match_stdout.log"; stderr_file = case_log_dir / "strict_match_stderr.log"; verify_stdout = case_log_dir / "strict_match_verify_stdout.log"; verify_stderr = case_log_dir / "strict_match_verify_stderr.log"; manifest_file = scenario_state / "remote_verify_manifest.txt"
-        result = run_command([context.onedrive_bin, "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(confdir)], cwd=context.repo_root)
+        result = run_command([context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(confdir)], cwd=context.repo_root)
         write_text_file(stdout_file, result.stdout); write_text_file(stderr_file, result.stderr)
-        verify_result = run_command([context.onedrive_bin, "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)], cwd=context.repo_root)
+        verify_result = run_command([context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)], cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); manifest = build_manifest(verify_root); write_manifest(manifest_file, manifest)
         all_artifacts.extend([str(stdout_file), str(stderr_file), str(verify_stdout), str(verify_stderr), str(manifest_file)])
         if result.returncode != 0: failures.append(f"Strict skip_dir scenario failed with status {result.returncode}"); return

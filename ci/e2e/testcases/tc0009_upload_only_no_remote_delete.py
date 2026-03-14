@@ -27,14 +27,14 @@ class TestCase0009UploadOnlyNoRemoteDelete(E2ETestCase):
         context.bootstrap_config_dir(upload_conf); self._write_config(upload_conf / "config")
         context.bootstrap_config_dir(verify_conf); self._write_config(verify_conf / "config")
         seed_stdout = case_log_dir / "seed_stdout.log"; seed_stderr = case_log_dir / "seed_stderr.log"; upload_stdout = case_log_dir / "upload_only_stdout.log"; upload_stderr = case_log_dir / "upload_only_stderr.log"; verify_stdout = case_log_dir / "verify_stdout.log"; verify_stderr = case_log_dir / "verify_stderr.log"; remote_manifest_file = state_dir / "remote_verify_manifest.txt"; metadata_file = state_dir / "seed_metadata.txt"
-        seed_command = [context.onedrive_bin, "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(seed_conf)]
+        seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(seed_conf)]
         seed_result = run_command(seed_command, cwd=context.repo_root)
         write_text_file(seed_stdout, seed_result.stdout); write_text_file(seed_stderr, seed_result.stderr)
         if keep_file.exists(): keep_file.unlink()
-        upload_command = [context.onedrive_bin, "--sync", "--verbose", "--upload-only", "--no-remote-delete", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(upload_conf)]
+        upload_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--upload-only", "--no-remote-delete", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(upload_conf)]
         upload_result = run_command(upload_command, cwd=context.repo_root)
         write_text_file(upload_stdout, upload_result.stdout); write_text_file(upload_stderr, upload_result.stderr)
-        verify_command = [context.onedrive_bin, "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
+        verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); remote_manifest = build_manifest(verify_root); write_manifest(remote_manifest_file, remote_manifest)
         write_text_file(metadata_file, "\n".join([f"root_name={root_name}", f"seed_returncode={seed_result.returncode}", f"upload_returncode={upload_result.returncode}", f"verify_returncode={verify_result.returncode}"]) + "\n")

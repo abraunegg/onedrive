@@ -26,10 +26,10 @@ class TestCase0006DownloadOnly(E2ETestCase):
         context.bootstrap_config_dir(seed_conf); self._write_config(seed_conf / "config")
         context.bootstrap_config_dir(download_conf); self._write_config(download_conf / "config")
         seed_stdout = case_log_dir / "seed_stdout.log"; seed_stderr = case_log_dir / "seed_stderr.log"; dl_stdout = case_log_dir / "download_stdout.log"; dl_stderr = case_log_dir / "download_stderr.log"; local_manifest_file = state_dir / "download_manifest.txt"; metadata_file = state_dir / "seed_metadata.txt"
-        seed_command = [context.onedrive_bin, "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(seed_root), "--confdir", str(seed_conf)]
+        seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(seed_root), "--confdir", str(seed_conf)]
         seed_result = run_command(seed_command, cwd=context.repo_root)
         write_text_file(seed_stdout, seed_result.stdout); write_text_file(seed_stderr, seed_result.stderr)
-        download_command = [context.onedrive_bin, "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(download_root), "--confdir", str(download_conf)]
+        download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(download_root), "--confdir", str(download_conf)]
         download_result = run_command(download_command, cwd=context.repo_root)
         write_text_file(dl_stdout, download_result.stdout); write_text_file(dl_stderr, download_result.stderr); local_manifest = build_manifest(download_root); write_manifest(local_manifest_file, local_manifest)
         write_text_file(metadata_file, "\n".join([f"root_name={root_name}", f"seed_command={command_to_string(seed_command)}", f"seed_returncode={seed_result.returncode}", f"download_command={command_to_string(download_command)}", f"download_returncode={download_result.returncode}"]) + "\n")

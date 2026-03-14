@@ -25,6 +25,14 @@ from testcases.tc0013_skip_dotfiles_validation import TestCase0013SkipDotfilesVa
 from testcases.tc0014_skip_size_validation import TestCase0014SkipSizeValidation
 from testcases.tc0015_skip_symlinks_validation import TestCase0015SkipSymlinksValidation
 from testcases.tc0016_check_nosync_validation import TestCase0016CheckNosyncValidation
+from testcases.tc0017_check_nomount_validation import TestCase0017CheckNomountValidation
+from testcases.tc0018_recycle_bin_validation import TestCase0018RecycleBinValidation
+from testcases.tc0019_logging_and_running_config import TestCase0019LoggingAndRunningConfig
+from testcases.tc0020_monitor_mode_validation import TestCase0020MonitorModeValidation
+from testcases.tc0021_resumable_transfers_validation import TestCase0021ResumableTransfersValidation
+from testcases.tc0022_local_first_validation import TestCase0022LocalFirstValidation
+from testcases.tc0023_bypass_data_preservation_validation import TestCase0023BypassDataPreservationValidation
+from testcases.tc0024_big_delete_safeguard_validation import TestCase0024BigDeleteSafeguardValidation
 
 
 def build_test_suite() -> list:
@@ -50,6 +58,14 @@ def build_test_suite() -> list:
         TestCase0014SkipSizeValidation(),
         TestCase0015SkipSymlinksValidation(),
         TestCase0016CheckNosyncValidation(),
+        TestCase0017CheckNomountValidation(),
+        TestCase0018RecycleBinValidation(),
+        TestCase0019LoggingAndRunningConfig(),
+        TestCase0020MonitorModeValidation(),
+        TestCase0021ResumableTransfersValidation(),
+        TestCase0022LocalFirstValidation(),
+        TestCase0023BypassDataPreservationValidation(),
+        TestCase0024BigDeleteSafeguardValidation(),
     ]
 
 

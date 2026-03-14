@@ -26,11 +26,11 @@ class TestCase0007DownloadOnlyCleanupLocalFiles(E2ETestCase):
         context.bootstrap_config_dir(seed_conf); self._write_config(seed_conf / "config")
         context.bootstrap_config_dir(cleanup_conf); self._write_config(cleanup_conf / "config")
         seed_stdout = case_log_dir / "seed_stdout.log"; seed_stderr = case_log_dir / "seed_stderr.log"; cleanup_stdout = case_log_dir / "cleanup_stdout.log"; cleanup_stderr = case_log_dir / "cleanup_stderr.log"; post_manifest_file = state_dir / "post_cleanup_manifest.txt"; metadata_file = state_dir / "seed_metadata.txt"
-        seed_command = [context.onedrive_bin, "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(seed_conf)]
+        seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(seed_conf)]
         seed_result = run_command(seed_command, cwd=context.repo_root)
         write_text_file(seed_stdout, seed_result.stdout); write_text_file(seed_stderr, seed_result.stderr)
         stale = sync_root / root_name / "stale-local.txt"; write_text_file(stale, "stale\n")
-        cleanup_command = [context.onedrive_bin, "--sync", "--verbose", "--download-only", "--cleanup-local-files", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(cleanup_conf)]
+        cleanup_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--cleanup-local-files", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(cleanup_conf)]
         cleanup_result = run_command(cleanup_command, cwd=context.repo_root)
         write_text_file(cleanup_stdout, cleanup_result.stdout); write_text_file(cleanup_stderr, cleanup_result.stderr); post_manifest = build_manifest(sync_root); write_manifest(post_manifest_file, post_manifest)
         write_text_file(metadata_file, "\n".join([f"root_name={root_name}", f"seed_returncode={seed_result.returncode}", f"cleanup_returncode={cleanup_result.returncode}"]) + "\n")
