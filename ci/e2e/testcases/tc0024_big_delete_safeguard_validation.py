@@ -60,7 +60,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         remote_manifest_file = state_dir / "remote_verify_manifest.txt"
         metadata_file = state_dir / "metadata.txt"
 
-        seed_command = [context.onedrive_bin, "--display-running-config", "--upload-only", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(seed_root), "--confdir", str(conf_seed)]
+        seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(seed_root), "--confdir", str(conf_seed)]
         seed_result = run_command(seed_command, cwd=context.repo_root)
         write_text_file(seed_stdout, seed_result.stdout)
         write_text_file(seed_stderr, seed_result.stderr)
@@ -70,7 +70,17 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         write_text_file(download_stdout, download_result.stdout)
         write_text_file(download_stderr, download_result.stderr)
 
-        shutil.rmtree(local_root / root_name / "BigDelete")
+        target_delete_path = local_root / root_name / "BigDelete"
+        if not target_delete_path.exists():
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "Expected BigDelete path was not downloaded before delete phase",
+                [str(seed_stdout), str(seed_stderr), str(download_stdout), str(download_stderr), str(metadata_file)],
+                {"seed_returncode": seed_result.returncode, "download_returncode": download_result.returncode, "root_name": root_name},
+            )
+
+        shutil.rmtree(target_delete_path)
 
         blocked_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_local)]
         blocked_result = run_command(blocked_command, cwd=context.repo_root)

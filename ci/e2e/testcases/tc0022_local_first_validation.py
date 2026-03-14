@@ -66,7 +66,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         remote_manifest_file = state_dir / "remote_verify_manifest.txt"
         metadata_file = state_dir / "metadata.txt"
 
-        seed_command = [context.onedrive_bin, "--display-running-config", "--upload-only", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(seed_root), "--confdir", str(conf_seed)]
+        seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(seed_root), "--confdir", str(conf_seed)]
         seed_result = run_command(seed_command, cwd=context.repo_root)
         write_text_file(seed_stdout, seed_result.stdout)
         write_text_file(seed_stderr, seed_result.stderr)
@@ -78,7 +78,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
 
         write_text_file(local_root / relative_file, "local wins because local_first is enabled\n")
 
-        remote_command = [context.onedrive_bin, "--display-running-config", "--upload-only", "--verbose", "--single-directory", root_name, "--syncdir", str(remote_update_root), "--confdir", str(conf_remote)]
+        remote_command = [context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose", "--single-directory", root_name, "--syncdir", str(remote_update_root), "--confdir", str(conf_remote)]
         remote_result = run_command(remote_command, cwd=context.repo_root)
         write_text_file(remote_stdout, remote_result.stdout)
         write_text_file(remote_stderr, remote_result.stderr)

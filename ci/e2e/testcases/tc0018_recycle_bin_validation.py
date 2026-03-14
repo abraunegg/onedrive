@@ -72,6 +72,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         seed_command = [
             context.onedrive_bin,
             "--display-running-config",
+            "--sync",
             "--upload-only",
             "--verbose",
             "--resync",

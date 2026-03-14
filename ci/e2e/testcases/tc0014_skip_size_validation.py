@@ -16,7 +16,7 @@ class TestCase0014SkipSizeValidation(E2ETestCase):
     description = "Validate that skip_size prevents oversized files from synchronising"
 
     def _write_config(self, config_path: Path) -> None:
-        write_text_file(config_path, "# tc0014 config\nbypass_data_preservation = \"true\"\ndebug_logging = \"true\"\nenable_logging = \"true\"\nskip_size = \"1\"\n")
+        write_text_file(config_path, "# tc0014 config\nbypass_data_preservation = \"true\"\nenable_logging = \"true\"\nskip_size = \"1\"\n")
 
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / "tc0014"; case_log_dir = context.logs_dir / "tc0014"; state_dir = context.state_dir / "tc0014"

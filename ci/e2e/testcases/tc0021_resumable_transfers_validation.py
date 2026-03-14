@@ -65,6 +65,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         command = [
             context.onedrive_bin,
             "--display-running-config",
+            "--sync",
             "--upload-only",
             "--verbose",
             "--resync",
