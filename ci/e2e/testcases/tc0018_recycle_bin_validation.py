@@ -15,12 +15,11 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
     name = "recycle bin validation"
     description = "Validate that online deletions are moved into a FreeDesktop-compliant recycle bin when enabled"
 
-    def _write_seed_config(self, config_path: Path, sync_dir: Path) -> None:
+    def _write_base_config(self, config_path: Path, sync_dir: Path) -> None:
         write_text_file(
             config_path,
-            "# tc0018 seed config\n"
-            f'sync_dir = "{sync_dir}"\n'
-            'bypass_data_preservation = "true"\n',
+            "# tc0018 base config\n"
+            f'sync_dir = "{sync_dir}"\n',
         )
 
     def _write_cleanup_config(self, config_path: Path, sync_dir: Path, recycle_bin_path: Path) -> None:
@@ -28,7 +27,6 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             config_path,
             "# tc0018 cleanup config\n"
             f'sync_dir = "{sync_dir}"\n'
-            'bypass_data_preservation = "true"\n'
             'cleanup_local_files = "true"\n'
             'download_only = "true"\n'
             'use_recycle_bin = "true"\n'
@@ -46,32 +44,36 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         context.ensure_refresh_token_available()
 
         sync_root = case_work_dir / "syncroot"
-        conf_seed = case_work_dir / "conf-seed"
-        conf_cleanup = case_work_dir / "conf-cleanup"
-        conf_remove = case_work_dir / "conf-remove"
         verify_root = case_work_dir / "verifyroot"
-        conf_verify = case_work_dir / "conf-verify"
         recycle_bin_root = case_work_dir / "RecycleBin"
+
+        conf_seed = case_work_dir / "conf-seed"
+        conf_remove = case_work_dir / "conf-remove"
+        conf_cleanup = case_work_dir / "conf-cleanup"
+        conf_verify = case_work_dir / "conf-verify"
+
         root_name = f"ZZ_E2E_TC0018_{context.run_id}_{os.getpid()}"
 
         reset_directory(sync_root)
         reset_directory(verify_root)
         reset_directory(recycle_bin_root)
 
+        # Seed local content
         write_text_file(sync_root / root_name / "Keep" / "keep.txt", "keep\n")
         write_text_file(sync_root / root_name / "OldData" / "old.txt", "old\n")
 
+        # Per-phase configs
         context.bootstrap_config_dir(conf_seed)
-        self._write_seed_config(conf_seed / "config", sync_root)
+        self._write_base_config(conf_seed / "config", sync_root)
+
+        context.bootstrap_config_dir(conf_remove)
+        self._write_base_config(conf_remove / "config", sync_root)
 
         context.bootstrap_config_dir(conf_cleanup)
         self._write_cleanup_config(conf_cleanup / "config", sync_root, recycle_bin_root)
 
-        context.bootstrap_config_dir(conf_remove)
-        self._write_seed_config(conf_remove / "config", sync_root)
-
         context.bootstrap_config_dir(conf_verify)
-        self._write_seed_config(conf_verify / "config", verify_root)
+        self._write_base_config(conf_verify / "config", verify_root)
 
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"
@@ -81,6 +83,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         cleanup_stderr = case_log_dir / "cleanup_stderr.log"
         verify_stdout = case_log_dir / "verify_stdout.log"
         verify_stderr = case_log_dir / "verify_stderr.log"
+
         recycle_manifest_file = state_dir / "recycle_manifest.txt"
         remote_manifest_file = state_dir / "remote_verify_manifest.txt"
         local_manifest_file = state_dir / "local_manifest_after_cleanup.txt"
@@ -245,6 +248,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
                 details,
             )
 
+        # Local result checks
         if (sync_root / root_name / "OldData").exists():
             return TestResult.fail_result(
                 self.case_id,
@@ -263,6 +267,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
                 details,
             )
 
+        # Recycle bin result checks
         recycle_has_file = any(path.endswith("old.txt") for path in recycle_manifest)
         recycle_has_info = any(path.endswith(".trashinfo") for path in recycle_manifest)
 
@@ -284,6 +289,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
                 details,
             )
 
+        # Remote result checks
         if f"{root_name}/Keep/keep.txt" not in remote_manifest:
             return TestResult.fail_result(
                 self.case_id,
