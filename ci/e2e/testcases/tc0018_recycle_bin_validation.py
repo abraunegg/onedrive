@@ -83,8 +83,6 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             "--resync-auth",
             "--single-directory",
             root_name,
-            "--syncdir",
-            str(sync_root),
             "--confdir",
             str(conf_remove),
         ]
@@ -100,8 +98,6 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             "--verbose",
             "--remove-directory",
             f"{root_name}/OldData",
-            "--syncdir",
-            str(sync_root),
             "--confdir",
             str(conf_seed),
         ]
@@ -119,8 +115,6 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             "--cleanup-local-files",
             "--single-directory",
             root_name,
-            "--syncdir",
-            str(sync_root),
             "--confdir",
             str(conf_cleanup),
         ]
@@ -139,8 +133,6 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             "--resync-auth",
             "--single-directory",
             root_name,
-            "--syncdir",
-            str(verify_root),
             "--confdir",
             str(conf_verify),
         ]
