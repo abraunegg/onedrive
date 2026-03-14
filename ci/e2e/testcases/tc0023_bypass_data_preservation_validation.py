@@ -61,24 +61,24 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
         final_stderr = case_log_dir / "final_sync_stderr.log"
         metadata_file = state_dir / "metadata.txt"
 
-        seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(seed_root), "--confdir", str(conf_seed)]
+        seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(seed_root), "--confdir", str(conf_seed)]
         seed_result = run_command(seed_command, cwd=context.repo_root)
         write_text_file(seed_stdout, seed_result.stdout)
         write_text_file(seed_stderr, seed_result.stderr)
 
-        download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_download)]
+        download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_download)]
         download_result = run_command(download_command, cwd=context.repo_root)
         write_text_file(download_stdout, download_result.stdout)
         write_text_file(download_stderr, download_result.stderr)
 
         write_text_file(local_root / relative_file, "local conflicting content\n")
 
-        remote_command = [context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose", "--single-directory", root_name, "--syncdir", str(remote_update_root), "--confdir", str(conf_remote)]
+        remote_command = [context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose", "--verbose", "--single-directory", root_name, "--syncdir", str(remote_update_root), "--confdir", str(conf_remote)]
         remote_result = run_command(remote_command, cwd=context.repo_root)
         write_text_file(remote_stdout, remote_result.stdout)
         write_text_file(remote_stderr, remote_result.stderr)
 
-        final_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_bypass)]
+        final_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--verbose", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_bypass)]
         final_result = run_command(final_command, cwd=context.repo_root)
         write_text_file(final_stdout, final_result.stdout)
         write_text_file(final_stderr, final_result.stderr)

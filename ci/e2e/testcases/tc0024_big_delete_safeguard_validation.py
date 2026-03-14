@@ -66,12 +66,12 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         remote_manifest_file = state_dir / "remote_verify_manifest.txt"
         metadata_file = state_dir / "metadata.txt"
 
-        seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(seed_root), "--confdir", str(conf_seed)]
+        seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(seed_root), "--confdir", str(conf_seed)]
         seed_result = run_command(seed_command, cwd=context.repo_root)
         write_text_file(seed_stdout, seed_result.stdout)
         write_text_file(seed_stderr, seed_result.stderr)
 
-        download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_download)]
+        download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_download)]
         download_result = run_command(download_command, cwd=context.repo_root)
         write_text_file(download_stdout, download_result.stdout)
         write_text_file(download_stderr, download_result.stderr)
@@ -85,17 +85,17 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
 
         shutil.rmtree(target)
 
-        blocked_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_blocked)]
+        blocked_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--verbose", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_blocked)]
         blocked_result = run_command(blocked_command, cwd=context.repo_root)
         write_text_file(blocked_stdout, blocked_result.stdout)
         write_text_file(blocked_stderr, blocked_result.stderr)
 
-        forced_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--force", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_forced)]
+        forced_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--verbose", "--force", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_forced)]
         forced_result = run_command(forced_command, cwd=context.repo_root)
         write_text_file(forced_stdout, forced_result.stdout)
         write_text_file(forced_stderr, forced_result.stderr)
 
-        verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(verify_root), "--confdir", str(conf_verify)]
+        verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(verify_root), "--confdir", str(conf_verify)]
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout)
         write_text_file(verify_stderr, verify_result.stderr)
