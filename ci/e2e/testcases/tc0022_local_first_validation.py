@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 
 from framework.base import E2ETestCase
-from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
+from framework.context import E2EContext
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
@@ -35,8 +35,9 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         remote_update_root = case_work_dir / "remoteupdateroot"
         verify_root = case_work_dir / "verifyroot"
         conf_seed = case_work_dir / "conf-seed"
-        conf_local = case_work_dir / "conf-local"
+        conf_download = case_work_dir / "conf-download"
         conf_remote = case_work_dir / "conf-remote"
+        conf_localfirst = case_work_dir / "conf-localfirst"
         conf_verify = case_work_dir / "conf-verify"
         root_name = f"ZZ_E2E_TC0022_{context.run_id}_{os.getpid()}"
         relative_file = f"{root_name}/conflict.txt"
@@ -46,10 +47,12 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
 
         context.bootstrap_config_dir(conf_seed)
         self._write_default_config(conf_seed / "config")
-        context.bootstrap_config_dir(conf_local)
-        self._write_local_first_config(conf_local / "config")
+        context.bootstrap_config_dir(conf_download)
+        self._write_default_config(conf_download / "config")
         context.bootstrap_config_dir(conf_remote)
         self._write_default_config(conf_remote / "config")
+        context.bootstrap_config_dir(conf_localfirst)
+        self._write_local_first_config(conf_localfirst / "config")
         context.bootstrap_config_dir(conf_verify)
         self._write_default_config(conf_verify / "config")
 
@@ -67,11 +70,12 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         metadata_file = state_dir / "metadata.txt"
 
         seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(seed_root), "--confdir", str(conf_seed)]
+        context.log(f"Executing Test Case {self.case_id} seed: {command_to_string(seed_command)}")
         seed_result = run_command(seed_command, cwd=context.repo_root)
         write_text_file(seed_stdout, seed_result.stdout)
         write_text_file(seed_stderr, seed_result.stderr)
 
-        download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_local)]
+        download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_download)]
         download_result = run_command(download_command, cwd=context.repo_root)
         write_text_file(download_stdout, download_result.stdout)
         write_text_file(download_stderr, download_result.stderr)
@@ -83,7 +87,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         write_text_file(remote_stdout, remote_result.stdout)
         write_text_file(remote_stderr, remote_result.stderr)
 
-        final_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_local)]
+        final_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_localfirst)]
         final_result = run_command(final_command, cwd=context.repo_root)
         write_text_file(final_stdout, final_result.stdout)
         write_text_file(final_stderr, final_result.stderr)

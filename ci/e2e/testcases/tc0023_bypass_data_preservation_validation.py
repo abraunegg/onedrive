@@ -33,8 +33,9 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
         local_root = case_work_dir / "localroot"
         remote_update_root = case_work_dir / "remoteupdateroot"
         conf_seed = case_work_dir / "conf-seed"
-        conf_local = case_work_dir / "conf-local"
+        conf_download = case_work_dir / "conf-download"
         conf_remote = case_work_dir / "conf-remote"
+        conf_bypass = case_work_dir / "conf-bypass"
         root_name = f"ZZ_E2E_TC0023_{context.run_id}_{os.getpid()}"
         relative_file = f"{root_name}/conflict.txt"
 
@@ -43,10 +44,12 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
 
         context.bootstrap_config_dir(conf_seed)
         self._write_default_config(conf_seed / "config")
-        context.bootstrap_config_dir(conf_local)
-        self._write_bypass_config(conf_local / "config")
+        context.bootstrap_config_dir(conf_download)
+        self._write_default_config(conf_download / "config")
         context.bootstrap_config_dir(conf_remote)
         self._write_default_config(conf_remote / "config")
+        context.bootstrap_config_dir(conf_bypass)
+        self._write_bypass_config(conf_bypass / "config")
 
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"
@@ -63,7 +66,7 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
         write_text_file(seed_stdout, seed_result.stdout)
         write_text_file(seed_stderr, seed_result.stderr)
 
-        download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_local)]
+        download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_download)]
         download_result = run_command(download_command, cwd=context.repo_root)
         write_text_file(download_stdout, download_result.stdout)
         write_text_file(download_stderr, download_result.stderr)
@@ -75,7 +78,7 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
         write_text_file(remote_stdout, remote_result.stdout)
         write_text_file(remote_stderr, remote_result.stderr)
 
-        final_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_local)]
+        final_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_bypass)]
         final_result = run_command(final_command, cwd=context.repo_root)
         write_text_file(final_stdout, final_result.stdout)
         write_text_file(final_stderr, final_result.stderr)

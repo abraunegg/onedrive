@@ -32,7 +32,9 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         local_root = case_work_dir / "localroot"
         verify_root = case_work_dir / "verifyroot"
         conf_seed = case_work_dir / "conf-seed"
-        conf_local = case_work_dir / "conf-local"
+        conf_download = case_work_dir / "conf-download"
+        conf_blocked = case_work_dir / "conf-blocked"
+        conf_forced = case_work_dir / "conf-forced"
         conf_verify = case_work_dir / "conf-verify"
         root_name = f"ZZ_E2E_TC0024_{context.run_id}_{os.getpid()}"
 
@@ -42,8 +44,12 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
 
         context.bootstrap_config_dir(conf_seed)
         self._write_config(conf_seed / "config")
-        context.bootstrap_config_dir(conf_local)
-        self._write_config(conf_local / "config")
+        context.bootstrap_config_dir(conf_download)
+        self._write_config(conf_download / "config")
+        context.bootstrap_config_dir(conf_blocked)
+        self._write_config(conf_blocked / "config")
+        context.bootstrap_config_dir(conf_forced)
+        self._write_config(conf_forced / "config")
         context.bootstrap_config_dir(conf_verify)
         self._write_config(conf_verify / "config")
 
@@ -65,29 +71,26 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         write_text_file(seed_stdout, seed_result.stdout)
         write_text_file(seed_stderr, seed_result.stderr)
 
-        download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_local)]
+        download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_download)]
         download_result = run_command(download_command, cwd=context.repo_root)
         write_text_file(download_stdout, download_result.stdout)
         write_text_file(download_stderr, download_result.stderr)
 
-        target_delete_path = local_root / root_name / "BigDelete"
-        if not target_delete_path.exists():
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "Expected BigDelete path was not downloaded before delete phase",
-                [str(seed_stdout), str(seed_stderr), str(download_stdout), str(download_stderr), str(metadata_file)],
-                {"seed_returncode": seed_result.returncode, "download_returncode": download_result.returncode, "root_name": root_name},
-            )
+        target = local_root / root_name / "BigDelete"
+        if not target.exists():
+            write_text_file(metadata_file, f"case_id={self.case_id}\nroot_name={root_name}\nseed_returncode={seed_result.returncode}\ndownload_returncode={download_result.returncode}\nblocked_returncode=-1\nforced_returncode=-1\nverify_returncode=-1\n")
+            artifacts = [str(seed_stdout), str(seed_stderr), str(download_stdout), str(download_stderr), str(metadata_file)]
+            details = {"seed_returncode": seed_result.returncode, "download_returncode": download_result.returncode, "root_name": root_name}
+            return TestResult.fail_result(self.case_id, self.name, "Expected BigDelete path was not downloaded before delete phase", artifacts, details)
 
-        shutil.rmtree(target_delete_path)
+        shutil.rmtree(target)
 
-        blocked_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_local)]
+        blocked_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_blocked)]
         blocked_result = run_command(blocked_command, cwd=context.repo_root)
         write_text_file(blocked_stdout, blocked_result.stdout)
         write_text_file(blocked_stderr, blocked_result.stderr)
 
-        forced_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--force", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_local)]
+        forced_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--force", "--single-directory", root_name, "--syncdir", str(local_root), "--confdir", str(conf_forced)]
         forced_result = run_command(forced_command, cwd=context.repo_root)
         write_text_file(forced_stdout, forced_result.stdout)
         write_text_file(forced_stderr, forced_result.stderr)

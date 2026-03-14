@@ -41,6 +41,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         sync_root = case_work_dir / "syncroot"
         conf_seed = case_work_dir / "conf-seed"
         conf_cleanup = case_work_dir / "conf-cleanup"
+        conf_remove = case_work_dir / "conf-remove"
         verify_root = case_work_dir / "verifyroot"
         conf_verify = case_work_dir / "conf-verify"
         recycle_bin_root = case_work_dir / "RecycleBin"
@@ -53,6 +54,8 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         self._write_seed_config(conf_seed / "config")
         context.bootstrap_config_dir(conf_cleanup)
         self._write_cleanup_config(conf_cleanup / "config", recycle_bin_root)
+        context.bootstrap_config_dir(conf_remove)
+        self._write_seed_config(conf_remove / "config")
         context.bootstrap_config_dir(conf_verify)
         self._write_seed_config(conf_verify / "config")
 
@@ -82,7 +85,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             "--syncdir",
             str(sync_root),
             "--confdir",
-            str(conf_seed),
+            str(conf_remove),
         ]
         context.log(f"Executing Test Case {self.case_id} seed: {command_to_string(seed_command)}")
         seed_result = run_command(seed_command, cwd=context.repo_root)
