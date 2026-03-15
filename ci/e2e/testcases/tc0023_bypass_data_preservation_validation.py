@@ -1,0 +1,239 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from framework.base import E2ETestCase
+from framework.context import E2EContext
+from framework.result import TestResult
+from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+
+
+class TestCase0023BypassDataPreservationValidation(E2ETestCase):
+    case_id = "0023"
+    name = "bypass_data_preservation validation"
+    description = "Validate that bypass_data_preservation suppresses safe-backup preservation during conflict resolution"
+
+    def _write_config(self, config_path: Path, sync_dir: Path, bypass_data_preservation: bool = False) -> None:
+        content = (
+            "# tc0023 config\n"
+            f'sync_dir = "{sync_dir}"\n'
+        )
+        if bypass_data_preservation:
+            content += 'bypass_data_preservation = "true"\n'
+        write_text_file(config_path, content)
+
+    def run(self, context: E2EContext) -> TestResult:
+        case_work_dir = context.work_root / "tc0023"
+        case_log_dir = context.logs_dir / "tc0023"
+        state_dir = context.state_dir / "tc0023"
+
+        reset_directory(case_work_dir)
+        reset_directory(case_log_dir)
+        reset_directory(state_dir)
+        context.ensure_refresh_token_available()
+
+        seed_root = case_work_dir / "seedroot"
+        local_root = case_work_dir / "localroot"
+        remote_update_root = case_work_dir / "remoteupdateroot"
+
+        conf_seed = case_work_dir / "conf-seed"
+        conf_local = case_work_dir / "conf-local"
+        conf_remote = case_work_dir / "conf-remote"
+
+        root_name = f"ZZ_E2E_TC0023_{context.run_id}_{os.getpid()}"
+        relative_file = f"{root_name}/conflict.txt"
+
+        reset_directory(seed_root)
+        reset_directory(local_root)
+        reset_directory(remote_update_root)
+
+        # Initial remote seed content
+        write_text_file(seed_root / relative_file, "base\n")
+
+        # Remote content that should overwrite the local conflicting edit when
+        # bypass_data_preservation is enabled
+        expected_remote_content = "remote conflicting content\n"
+        write_text_file(remote_update_root / relative_file, expected_remote_content)
+
+        context.bootstrap_config_dir(conf_seed)
+        self._write_config(conf_seed / "config", seed_root)
+
+        context.bootstrap_config_dir(conf_local)
+        self._write_config(conf_local / "config", local_root)
+
+        context.bootstrap_config_dir(conf_remote)
+        self._write_config(conf_remote / "config", remote_update_root)
+
+        seed_stdout = case_log_dir / "seed_stdout.log"
+        seed_stderr = case_log_dir / "seed_stderr.log"
+        download_stdout = case_log_dir / "download_stdout.log"
+        download_stderr = case_log_dir / "download_stderr.log"
+        remote_stdout = case_log_dir / "remote_update_stdout.log"
+        remote_stderr = case_log_dir / "remote_update_stderr.log"
+        final_stdout = case_log_dir / "final_sync_stdout.log"
+        final_stderr = case_log_dir / "final_sync_stderr.log"
+        metadata_file = state_dir / "metadata.txt"
+
+        seed_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--upload-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_seed),
+        ]
+        context.log(f"Executing Test Case {self.case_id} seed: {command_to_string(seed_command)}")
+        seed_result = run_command(seed_command, cwd=context.repo_root)
+        write_text_file(seed_stdout, seed_result.stdout)
+        write_text_file(seed_stderr, seed_result.stderr)
+
+        download_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--download-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_local),
+        ]
+        context.log(f"Executing Test Case {self.case_id} download: {command_to_string(download_command)}")
+        download_result = run_command(download_command, cwd=context.repo_root)
+        write_text_file(download_stdout, download_result.stdout)
+        write_text_file(download_stderr, download_result.stderr)
+
+        # Create the local conflicting edit before the remote update so the
+        # remote version becomes the newer winning content.
+        local_file = local_root / relative_file
+        write_text_file(local_file, "local conflicting content\n")
+
+        remote_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--upload-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_remote),
+        ]
+        context.log(f"Executing Test Case {self.case_id} remote update: {command_to_string(remote_command)}")
+        remote_result = run_command(remote_command, cwd=context.repo_root)
+        write_text_file(remote_stdout, remote_result.stdout)
+        write_text_file(remote_stderr, remote_result.stderr)
+
+        # Reuse the same local DB / delta state, but now enable bypass behaviour
+        self._write_config(conf_local / "config", local_root, bypass_data_preservation=True)
+
+        final_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_local),
+        ]
+        context.log(f"Executing Test Case {self.case_id} final sync: {command_to_string(final_command)}")
+        final_result = run_command(final_command, cwd=context.repo_root)
+        write_text_file(final_stdout, final_result.stdout)
+        write_text_file(final_stderr, final_result.stderr)
+
+        local_content = local_file.read_text(encoding="utf-8") if local_file.is_file() else ""
+
+        safe_backup_files = sorted(
+            str(path.relative_to(local_root))
+            for path in local_root.rglob("*safeBackup*")
+            if path.is_file()
+        )
+
+        write_text_file(
+            metadata_file,
+            "\n".join(
+                [
+                    f"case_id={self.case_id}",
+                    f"root_name={root_name}",
+                    f"seed_root={seed_root}",
+                    f"local_root={local_root}",
+                    f"remote_update_root={remote_update_root}",
+                    f"seed_confdir={conf_seed}",
+                    f"local_confdir={conf_local}",
+                    f"remote_confdir={conf_remote}",
+                    f"seed_returncode={seed_result.returncode}",
+                    f"download_returncode={download_result.returncode}",
+                    f"remote_returncode={remote_result.returncode}",
+                    f"final_returncode={final_result.returncode}",
+                    f"local_content={local_content!r}",
+                    f"safe_backup_files={safe_backup_files!r}",
+                ]
+            )
+            + "\n",
+        )
+
+        artifacts = [
+            str(seed_stdout),
+            str(seed_stderr),
+            str(download_stdout),
+            str(download_stderr),
+            str(remote_stdout),
+            str(remote_stderr),
+            str(final_stdout),
+            str(final_stderr),
+            str(metadata_file),
+        ]
+        details = {
+            "seed_returncode": seed_result.returncode,
+            "download_returncode": download_result.returncode,
+            "remote_returncode": remote_result.returncode,
+            "final_returncode": final_result.returncode,
+            "root_name": root_name,
+            "safe_backup_count": len(safe_backup_files),
+        }
+
+        for label, rc in [
+            ("seed", seed_result.returncode),
+            ("download", download_result.returncode),
+            ("remote update", remote_result.returncode),
+            ("final sync", final_result.returncode),
+        ]:
+            if rc != 0:
+                return TestResult.fail_result(
+                    self.case_id,
+                    self.name,
+                    f"{label} phase failed with status {rc}",
+                    artifacts,
+                    details,
+                )
+
+        if local_content != expected_remote_content:
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "Local content was not overwritten by the remote conflicting content when bypass_data_preservation was enabled",
+                artifacts,
+                details,
+            )
+
+        if safe_backup_files:
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "Safe-backup files were created despite bypass_data_preservation being enabled",
+                artifacts,
+                details,
+            )
+
+        return TestResult.pass_result(self.case_id, self.name, artifacts, details)

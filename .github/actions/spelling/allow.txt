@@ -444,6 +444,7 @@ rsnapshot
 rsv
 rtud
 rul
+ruleset
 runstatedir
 runsvdir
 Ruppe
