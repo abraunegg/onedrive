@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 
 from framework.base import E2ETestCase
@@ -44,13 +43,15 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         conf_verify = case_work_dir / "conf-verify"
 
         root_name = f"ZZ_E2E_TC0024_{context.run_id}_{os.getpid()}"
+        delete_files = [f"Delete0{idx}.txt" for idx in range(1, 6)]
 
         reset_directory(seed_root)
         reset_directory(local_root)
         reset_directory(verify_root)
 
-        for idx in range(1, 6):
-            write_text_file(seed_root / root_name / "BigDelete" / f"file{idx}.txt", f"file {idx}\n")
+        # Seed multiple top-level delete candidates.
+        for filename in delete_files:
+            write_text_file(seed_root / root_name / filename, f"{filename}\n")
         write_text_file(seed_root / root_name / "Keep" / "keep.txt", "keep\n")
 
         context.bootstrap_config_dir(conf_seed)
@@ -72,6 +73,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         forced_stderr = case_log_dir / "forced_stderr.log"
         verify_stdout = case_log_dir / "verify_stdout.log"
         verify_stderr = case_log_dir / "verify_stderr.log"
+        blocked_verify_manifest_file = state_dir / "blocked_verify_manifest.txt"
         remote_manifest_file = state_dir / "remote_verify_manifest.txt"
         metadata_file = state_dir / "metadata.txt"
 
@@ -113,8 +115,13 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         write_text_file(download_stdout, download_result.stdout)
         write_text_file(download_stderr, download_result.stderr)
 
-        target = local_root / root_name / "BigDelete"
-        if not target.exists():
+        # Confirm the delete candidates were downloaded locally.
+        missing_local = [
+            filename
+            for filename in delete_files
+            if not (local_root / root_name / filename).is_file()
+        ]
+        if missing_local:
             write_text_file(
                 metadata_file,
                 "\n".join(
@@ -123,9 +130,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                         f"root_name={root_name}",
                         f"seed_returncode={seed_result.returncode}",
                         f"download_returncode={download_result.returncode}",
-                        "blocked_returncode=-1",
-                        "forced_returncode=-1",
-                        "verify_returncode=-1",
+                        f"missing_local={missing_local!r}",
                     ]
                 )
                 + "\n",
@@ -145,12 +150,16 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
-                "Expected BigDelete path was not downloaded before delete phase",
+                "Expected delete candidate files were not downloaded before delete phase",
                 artifacts,
                 details,
             )
 
-        shutil.rmtree(target)
+        # Delete multiple top-level files so the safeguard sees > threshold candidates.
+        for filename in delete_files:
+            candidate = local_root / root_name / filename
+            if candidate.exists():
+                candidate.unlink()
 
         blocked_command = [
             context.onedrive_bin,
@@ -167,6 +176,35 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         blocked_result = run_command(blocked_command, cwd=context.repo_root)
         write_text_file(blocked_stdout, blocked_result.stdout)
         write_text_file(blocked_stderr, blocked_result.stderr)
+
+        blocked_output = (blocked_result.stdout + "\n" + blocked_result.stderr).lower()
+
+        # Verify after blocked sync using a fresh config to ensure the remote side
+        # was not modified before acknowledgement.
+        reset_directory(verify_root)
+        blocked_verify_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--verbose",
+            "--download-only",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_verify),
+        ]
+        context.log(f"Executing Test Case {self.case_id} blocked verify: {command_to_string(blocked_verify_command)}")
+        blocked_verify_result = run_command(blocked_verify_command, cwd=context.repo_root)
+
+        # Reuse the same files for the final verify logs to avoid adding extra artifacts.
+        write_text_file(verify_stdout, blocked_verify_result.stdout)
+        write_text_file(verify_stderr, blocked_verify_result.stderr)
+
+        blocked_remote_manifest = build_manifest(verify_root)
+        write_manifest(blocked_verify_manifest_file, blocked_remote_manifest)
 
         forced_command = [
             context.onedrive_bin,
@@ -185,6 +223,8 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         write_text_file(forced_stdout, forced_result.stdout)
         write_text_file(forced_stderr, forced_result.stderr)
 
+        # Final clean verify after --force.
+        reset_directory(verify_root)
         verify_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -207,8 +247,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         remote_manifest = build_manifest(verify_root)
         write_manifest(remote_manifest_file, remote_manifest)
 
-        blocked_output = (blocked_result.stdout + "\n" + blocked_result.stderr).lower()
-
         write_text_file(
             metadata_file,
             "\n".join(
@@ -224,8 +262,10 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                     f"seed_returncode={seed_result.returncode}",
                     f"download_returncode={download_result.returncode}",
                     f"blocked_returncode={blocked_result.returncode}",
+                    f"blocked_verify_returncode={blocked_verify_result.returncode}",
                     f"forced_returncode={forced_result.returncode}",
                     f"verify_returncode={verify_result.returncode}",
+                    f"delete_files={delete_files!r}",
                 ]
             )
             + "\n",
@@ -242,6 +282,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             str(forced_stderr),
             str(verify_stdout),
             str(verify_stderr),
+            str(blocked_verify_manifest_file),
             str(remote_manifest_file),
             str(metadata_file),
         ]
@@ -249,6 +290,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "seed_returncode": seed_result.returncode,
             "download_returncode": download_result.returncode,
             "blocked_returncode": blocked_result.returncode,
+            "blocked_verify_returncode": blocked_verify_result.returncode,
             "forced_returncode": forced_result.returncode,
             "verify_returncode": verify_result.returncode,
             "root_name": root_name,
@@ -257,6 +299,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         for label, rc in [
             ("seed", seed_result.returncode),
             ("download", download_result.returncode),
+            ("blocked verify", blocked_verify_result.returncode),
             ("forced sync", forced_result.returncode),
             ("verify", verify_result.returncode),
         ]:
@@ -269,15 +312,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                     details,
                 )
 
-        if blocked_result.returncode == 0 and "big delete" not in blocked_output:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "Big delete safeguard did not trigger before forced acknowledgement",
-                artifacts,
-                details,
-            )
-
+        # Blocked sync must emit the safeguard warning / acknowledgement requirement.
         if "big delete" not in blocked_output and "--force" not in blocked_output:
             return TestResult.fail_result(
                 self.case_id,
@@ -287,14 +322,27 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        if any(entry == f"{root_name}/BigDelete" or entry.startswith(f"{root_name}/BigDelete/") for entry in remote_manifest):
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "BigDelete content still exists online after acknowledged forced delete",
-                artifacts,
-                details,
-            )
+        # Before --force, the remote delete candidates must still exist.
+        for filename in delete_files:
+            if f"{root_name}/{filename}" not in blocked_remote_manifest:
+                return TestResult.fail_result(
+                    self.case_id,
+                    self.name,
+                    "Remote delete candidates were modified before forced acknowledgement",
+                    artifacts,
+                    details,
+                )
+
+        # After --force, the delete candidates must be gone remotely.
+        for filename in delete_files:
+            if f"{root_name}/{filename}" in remote_manifest:
+                return TestResult.fail_result(
+                    self.case_id,
+                    self.name,
+                    f"{filename} still exists online after acknowledged forced delete",
+                    artifacts,
+                    details,
+                )
 
         if f"{root_name}/Keep/keep.txt" not in remote_manifest:
             return TestResult.fail_result(
