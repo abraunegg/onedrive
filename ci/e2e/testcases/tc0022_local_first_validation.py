@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 from framework.base import E2ETestCase
@@ -19,7 +20,6 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         content = (
             "# tc0022 config\n"
             f'sync_dir = "{sync_dir}"\n'
-            'bypass_data_preservation = "true"\n'
         )
         if local_first:
             content += 'local_first = "true"\n'
@@ -119,8 +119,6 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         write_text_file(download_stdout, download_result.stdout)
         write_text_file(download_stderr, download_result.stderr)
 
-        write_text_file(local_root / relative_file, "local wins because local_first is enabled\n")
-
         remote_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -140,7 +138,18 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         write_text_file(remote_stdout, remote_result.stdout)
         write_text_file(remote_stderr, remote_result.stderr)
 
-        # Reuse the same local-side state, but enable local_first for the conflict resolution phase
+        # Ensure the local edit is definitively later than the remote update.
+        # This is critical so the final sync actually exercises local_first.
+        time.sleep(2)
+
+        local_file = local_root / relative_file
+        expected = "local wins because local_first is enabled\n"
+        write_text_file(local_file, expected)
+
+        now = time.time()
+        os.utime(local_file, (now, now))
+
+        # Reuse the same local DB / delta state, but enable local_first
         self._write_config(conf_local / "config", local_root, local_first=True)
 
         final_command = [
@@ -205,6 +214,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                     f"verify_returncode={verify_result.returncode}",
                     f"local_content={local_content!r}",
                     f"remote_content={remote_content!r}",
+                    f"local_mtime={local_file.stat().st_mtime if local_file.exists() else 0}",
                 ]
             )
             + "\n",
@@ -248,8 +258,6 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                     artifacts,
                     details,
                 )
-
-        expected = "local wins because local_first is enabled\n"
 
         if local_content != expected:
             return TestResult.fail_result(
