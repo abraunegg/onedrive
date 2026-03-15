@@ -59,11 +59,11 @@ def build_test_suite() -> list:
         #TestCase0015SkipSymlinksValidation(),
         #TestCase0016CheckNosyncValidation(),
         #TestCase0017CheckNomountValidation(),
-        TestCase0018RecycleBinValidation(),
+        #TestCase0018RecycleBinValidation(),
         #TestCase0019LoggingAndRunningConfig(),
         #TestCase0020MonitorModeValidation(),
         #TestCase0021ResumableTransfersValidation(),
-        #TestCase0022LocalFirstValidation(),
+        TestCase0022LocalFirstValidation(),
         #TestCase0023BypassDataPreservationValidation(),
         #TestCase0024BigDeleteSafeguardValidation(),
     ]
