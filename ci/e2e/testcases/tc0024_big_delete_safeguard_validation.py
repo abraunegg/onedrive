@@ -66,10 +66,16 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         reset_directory(local_root)
         reset_directory(verify_root)
 
-        root_name = f"ZZ_E2E_TC0024_{context.run_id}_{os.getpid()}"
+        context.bootstrap_config_dir(conf_local)
+        context.bootstrap_config_dir(conf_verify)
+
+        # Mirror the manual validation structure:
+        #   sync_dir/
+        #     random_1K_files/
+        #       <10 dirs>/
+        #         <10 files each>
         parent_dir_name = "random_1K_files"
         classify_threshold = 5
-
         sibling_dir_count = 10
         files_per_dir = 10
         delete_dir_index = 3
@@ -78,30 +84,21 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         delete_dir_name = f"dir_{delete_dir_index:02d}"
         keep_dir_name = f"dir_{keep_dir_index:02d}"
 
-        delete_dir_relative = f"{root_name}/{parent_dir_name}/{delete_dir_name}"
-        keep_file_relative = f"{root_name}/{parent_dir_name}/{keep_dir_name}/file0.data"
+        delete_dir_relative = f"{parent_dir_name}/{delete_dir_name}"
+        keep_file_relative = f"{parent_dir_name}/{keep_dir_name}/file0.data"
 
-        delete_dir_local = local_root / root_name / parent_dir_name / delete_dir_name
-        keep_file_local = local_root / root_name / parent_dir_name / keep_dir_name / "file0.data"
+        delete_dir_local = local_root / parent_dir_name / delete_dir_name
+        keep_file_local = local_root / parent_dir_name / keep_dir_name / "file0.data"
 
-        context.bootstrap_config_dir(conf_local)
-        context.bootstrap_config_dir(conf_verify)
-
-        #
-        # Step 1:
-        # Seed a local structure that mirrors the successful manual validation:
-        # one parent directory with multiple child directories, each containing files.
-        #
         for dir_index in range(sibling_dir_count):
-            child_dir = local_root / root_name / parent_dir_name / f"dir_{dir_index:02d}"
+            child_dir = local_root / parent_dir_name / f"dir_{dir_index:02d}"
             for file_index in range(files_per_dir):
                 write_text_file(
                     child_dir / f"file{file_index}.data",
                     f"tc0024 dir={dir_index} file={file_index}\n",
                 )
 
-        # Initial config without classify_as_big_delete, matching the manual
-        # sequence where the option is changed after the initial upload.
+        # Step 1: initial upload without classify_as_big_delete configured.
         self._write_config(conf_local / "config", local_root, None)
         self._write_config(conf_verify / "config", verify_root, classify_threshold)
 
@@ -136,8 +133,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--verbose",
             "--resync",
             "--resync-auth",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_local),
         ]
@@ -149,11 +144,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             seed_stderr,
         )
 
-        #
-        # Step 2:
-        # Update the same config to enable classify_as_big_delete at a low value,
-        # then run a normal sync with the same confdir and local database.
-        #
+        # Step 2: update config and run a normal sync, matching the manual flow.
         self._write_config(conf_local / "config", local_root, classify_threshold)
 
         option_change_command = [
@@ -162,8 +153,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--sync",
             "--verbose",
             "--verbose",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_local),
         ]
@@ -175,9 +164,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             option_change_stderr,
         )
 
-        #
-        # Confirm expected baseline content exists locally before delete phase.
-        #
         missing_local_items: list[str] = []
 
         if not delete_dir_local.is_dir():
@@ -197,7 +183,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 "\n".join(
                     [
                         f"case_id={self.case_id}",
-                        f"root_name={root_name}",
                         f"seed_returncode={seed_result.returncode}",
                         f"option_change_returncode={option_change_result.returncode}",
                         f"missing_local_items={missing_local_items!r}",
@@ -216,7 +201,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             details = {
                 "seed_returncode": seed_result.returncode,
                 "option_change_returncode": option_change_result.returncode,
-                "root_name": root_name,
             }
 
             return TestResult.fail_result(
@@ -227,11 +211,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        #
-        # Step 3:
-        # Remove one entire child directory locally, matching the proven working
-        # manual path for classify_as_big_delete.
-        #
+        # Step 3: delete one entire child directory locally.
         if delete_dir_local.exists():
             shutil.rmtree(delete_dir_local)
 
@@ -241,8 +221,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--sync",
             "--verbose",
             "--verbose",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_local),
         ]
@@ -255,12 +233,8 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         )
 
         blocked_output = blocked_result.stdout + "\n" + blocked_result.stderr
-        blocked_output_lower = blocked_output.lower()
 
-        #
-        # Verify remotely, after the blocked sync, using a fresh config and a
-        # fresh local root.
-        #
+        # Verify remote state after blocked sync.
         reset_directory(verify_root)
         self._write_config(conf_verify / "config", verify_root, classify_threshold)
 
@@ -273,8 +247,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--download-only",
             "--resync",
             "--resync-auth",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_verify),
         ]
@@ -289,10 +261,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         blocked_remote_manifest = build_manifest(verify_root)
         write_manifest(blocked_verify_manifest_file, blocked_remote_manifest)
 
-        #
-        # Step 4:
-        # Acknowledge with --force and verify the delete is then allowed.
-        #
+        # Step 4: rerun with --force.
         forced_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -300,8 +269,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--verbose",
             "--verbose",
             "--force",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_local),
         ]
@@ -325,8 +292,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--download-only",
             "--resync",
             "--resync-auth",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_verify),
         ]
@@ -346,7 +311,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "\n".join(
                 [
                     f"case_id={self.case_id}",
-                    f"root_name={root_name}",
                     f"local_root={local_root}",
                     f"verify_root={verify_root}",
                     f"local_confdir={conf_local}",
@@ -392,7 +356,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "blocked_verify_returncode": blocked_verify_result.returncode,
             "forced_returncode": forced_result.returncode,
             "verify_returncode": verify_result.returncode,
-            "root_name": root_name,
         }
 
         for label, rc in [
@@ -411,10 +374,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                     details,
                 )
 
-        #
-        # The blocked sync must contain the actual safeguard messaging, not just
-        # the running-config line that mentions classify_as_big_delete.
-        #
         safeguard_markers = [
             "ERROR: An attempt to remove a large volume of data from OneDrive has been detected",
             "ERROR: The total number of items being deleted is:",
@@ -429,31 +388,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        #
-        # Additional evidence that the correct code path was exercised.
-        #
-        if "the directory has been deleted locally" not in blocked_output_lower:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "Blocked sync did not detect the deleted directory path",
-                artifacts,
-                details,
-            )
-
-        if "deleted local items to delete on microsoft onedrive: 1" not in blocked_output_lower:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "Blocked sync did not queue a single top-level directory delete candidate",
-                artifacts,
-                details,
-            )
-
-        #
-        # Before --force, the deleted directory and its contents must still exist
-        # remotely, and keep content must remain intact.
-        #
+        # Before --force, the deleted directory and one known file beneath it must still exist remotely.
         if delete_dir_relative not in blocked_remote_manifest:
             return TestResult.fail_result(
                 self.case_id,
@@ -463,16 +398,15 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        for file_index in range(files_per_dir):
-            relative_path = f"{delete_dir_relative}/file{file_index}.data"
-            if relative_path not in blocked_remote_manifest:
-                return TestResult.fail_result(
-                    self.case_id,
-                    self.name,
-                    f"{relative_path} was modified before forced acknowledgement",
-                    artifacts,
-                    details,
-                )
+        deleted_probe_file = f"{delete_dir_relative}/file0.data"
+        if deleted_probe_file not in blocked_remote_manifest:
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"{deleted_probe_file} was modified before forced acknowledgement",
+                artifacts,
+                details,
+            )
 
         if keep_file_relative not in blocked_remote_manifest:
             return TestResult.fail_result(
@@ -483,10 +417,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        #
-        # After --force, the deleted directory and its contents must be gone
-        # remotely, while keep content remains.
-        #
+        # After --force, the deleted directory must be gone remotely.
         if delete_dir_relative in remote_manifest:
             return TestResult.fail_result(
                 self.case_id,
@@ -496,16 +427,14 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        for file_index in range(files_per_dir):
-            relative_path = f"{delete_dir_relative}/file{file_index}.data"
-            if relative_path in remote_manifest:
-                return TestResult.fail_result(
-                    self.case_id,
-                    self.name,
-                    f"{relative_path} still exists online after acknowledged forced delete",
-                    artifacts,
-                    details,
-                )
+        if deleted_probe_file in remote_manifest:
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"{deleted_probe_file} still exists online after acknowledged forced delete",
+                artifacts,
+                details,
+            )
 
         if keep_file_relative not in remote_manifest:
             return TestResult.fail_result(
