@@ -64,8 +64,8 @@ def build_test_suite() -> list:
         #TestCase0020MonitorModeValidation(),
         #TestCase0021ResumableTransfersValidation(),
         #TestCase0022LocalFirstValidation(),
-        TestCase0023BypassDataPreservationValidation(),
-        #TestCase0024BigDeleteSafeguardValidation(),
+        #TestCase0023BypassDataPreservationValidation(),
+        TestCase0024BigDeleteSafeguardValidation(),
     ]
 
 
