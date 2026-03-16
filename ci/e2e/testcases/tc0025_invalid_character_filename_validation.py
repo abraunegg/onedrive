@@ -15,11 +15,18 @@ class TestCase0025InvalidCharacterFilenameValidation(E2ETestCase):
     name = "invalid character filename validation"
     description = "Validate invalid filename characters are blocked while valid sibling files still synchronise"
 
-    def _write_config(self, config_path: Path) -> None:
+    def _write_config(self, config_path: Path, sync_dir: Path) -> None:
         write_text_file(
             config_path,
-            "# tc0025 config\n"
-            'bypass_data_preservation = "true"\n',
+            "\n".join(
+                [
+                    "# tc0025 config",
+                    f'sync_dir = "{sync_dir}"',
+                    'bypass_data_preservation = "true"',
+                    'classify_as_big_delete = "1000"',
+                ]
+            )
+            + "\n",
         )
 
     def _create_binary_file(self, path: Path, size_kb: int = 8) -> None:
@@ -62,8 +69,8 @@ class TestCase0025InvalidCharacterFilenameValidation(E2ETestCase):
         context.bootstrap_config_dir(confdir)
         context.bootstrap_config_dir(verify_conf)
 
-        self._write_config(confdir / "config")
-        self._write_config(verify_conf / "config")
+        self._write_config(confdir / "config", sync_root)
+        self._write_config(verify_conf / "config", verify_root)
 
         root_name = f"ZZ_E2E_TC0025_{context.run_id}_{os.getpid()}"
 
@@ -81,10 +88,6 @@ class TestCase0025InvalidCharacterFilenameValidation(E2ETestCase):
             f"{root_name}/includes ? in the filename",
             f"{root_name}/includes * in the filename",
         ]
-
-        # Do not include ':' because POSIX filesystems allow it and Microsoft Graph /
-        # OneDrive handling is different enough that it is better validated separately.
-        # Start TC0025 with the clearly invalid cross-platform troublemakers first.
 
         for rel_path in valid_files + invalid_files:
             self._create_binary_file(sync_root / rel_path, size_kb=8)
@@ -108,8 +111,6 @@ class TestCase0025InvalidCharacterFilenameValidation(E2ETestCase):
             "--verbose",
             "--resync",
             "--resync-auth",
-            "--syncdir",
-            str(sync_root),
             "--confdir",
             str(confdir),
         ]
@@ -126,8 +127,6 @@ class TestCase0025InvalidCharacterFilenameValidation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
-            "--syncdir",
-            str(sync_root),
             "--confdir",
             str(confdir),
         ]
@@ -147,8 +146,6 @@ class TestCase0025InvalidCharacterFilenameValidation(E2ETestCase):
             "--download-only",
             "--resync",
             "--resync-auth",
-            "--syncdir",
-            str(verify_root),
             "--confdir",
             str(verify_conf),
         ]
@@ -236,6 +233,30 @@ class TestCase0025InvalidCharacterFilenameValidation(E2ETestCase):
                     self.case_id,
                     self.name,
                     f"Invalid filename was synchronised remotely: {unwanted}",
+                    artifacts,
+                    details,
+                )
+
+        expected_skip_markers = [
+            'Skipping item - invalid name (Microsoft Naming Convention): ./'
+            + f"{root_name}/includes < in the filename",
+            'Skipping item - invalid name (Microsoft Naming Convention): ./'
+            + f"{root_name}/includes > in the filename",
+            'Skipping item - invalid name (Microsoft Naming Convention): ./'
+            + f'{root_name}/includes " in the filename',
+            'Skipping item - invalid name (Microsoft Naming Convention): ./'
+            + f"{root_name}/includes | in the filename",
+            'Skipping item - invalid name (Microsoft Naming Convention): ./'
+            + f"{root_name}/includes ? in the filename",
+            'Skipping item - invalid name (Microsoft Naming Convention): ./'
+            + f"{root_name}/includes * in the filename",
+        ]
+        for marker in expected_skip_markers:
+            if marker not in combined_output:
+                return TestResult.fail_result(
+                    self.case_id,
+                    self.name,
+                    f"Expected invalid filename skip marker not found: {marker}",
                     artifacts,
                     details,
                 )
