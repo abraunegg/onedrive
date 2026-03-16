@@ -5763,6 +5763,7 @@ class SyncEngine {
 					long thisFileSize = getSize(localFilePath);
 					if (thisFileSize >= fileSizeLimit) {
 						if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_size config: " ~ localFilePath ~ " (" ~ to!string(thisFileSize/2^^20) ~ " MB)", ["verbose"]);}
+						clientSideRuleExcludesPath = true;
 					}
 				}
 			}
