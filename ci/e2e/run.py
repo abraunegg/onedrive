@@ -34,6 +34,7 @@ from testcases.tc0022_local_first_validation import TestCase0022LocalFirstValida
 from testcases.tc0023_bypass_data_preservation_validation import TestCase0023BypassDataPreservationValidation
 from testcases.tc0024_big_delete_safeguard_validation import TestCase0024BigDeleteSafeguardValidation
 from testcases.tc0025_invalid_character_filename_validation import TestCase0025InvalidCharacterFilenameValidation
+from testcases.tc0026_reserved_device_name_validation import TestCase0026ReservedDeviceNameValidation
 
 
 def build_test_suite() -> list:
@@ -68,6 +69,7 @@ def build_test_suite() -> list:
         #TestCase0023BypassDataPreservationValidation(),
         #TestCase0024BigDeleteSafeguardValidation(),
         TestCase0025InvalidCharacterFilenameValidation(),
+        TestCase0026ReservedDeviceNameValidation(),
     ]
 
 
