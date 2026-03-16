@@ -5,6 +5,7 @@
 [![Test Build](https://github.com/abraunegg/onedrive/actions/workflows/testbuild.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/testbuild.yaml)
 [![e2e Testing Personal](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
 [![e2e Testing Business](https://github.com/abraunegg/onedrive/actions/workflows/e2e-business.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
+
 [![Build Docker Images](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
 
@@ -170,7 +171,11 @@ If you encounter any issues running the application, please follow these steps *
    - See [Compatibility with curl](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#compatibility-with-curl) for details on curl bugs that impact this client.  
    - Refer to the official [cURL Releases](https://curl.se/docs/releases.html) page for version information.
 
-6. **Open a new issue**  
+6. **Perform a --resync**
+   In some cases, a `--resync` is needed to ensure your data is correctly synced. This option instructs the client to delete its local state database and fully rebuild it from the current online OneDrive contents. This is a powerful recovery and re-alignment action that should be used sparingly and with care.
+   - See [Performing a --resync](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#performing-a---resync) for further details.
+
+7. **Open a new issue**  
    If the problem persists after completing the steps above, proceed to **Reporting an Issue or Bug** below and open a new issue with the requested details and logs.
 
 
