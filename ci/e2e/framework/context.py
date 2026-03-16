@@ -101,3 +101,23 @@ class E2EContext:
         line = f"[{timestamp_now()}] {message}\n"
         print(line, end="")
         write_text_file_append(self.master_log_file, line)
+    
+    @property
+    def default_sync_dir(self) -> Path:
+        home = os.environ.get("HOME", "").strip()
+        if not home:
+            raise RuntimeError("HOME is not set")
+        return Path(home) / "OneDrive"
+
+    @property
+    def suite_cleanup_config_dir(self) -> Path:
+        return self.work_root / "suite-cleanup-conf"
+
+    @property
+    def suite_cleanup_log_dir(self) -> Path:
+        return self.logs_dir / "_suite_cleanup"
+        
+    def bootstrap_suite_cleanup_config_dir(self) -> Path:
+        if self.suite_cleanup_config_dir.exists():
+            shutil.rmtree(self.suite_cleanup_config_dir)
+        return self.bootstrap_config_dir(self.suite_cleanup_config_dir)

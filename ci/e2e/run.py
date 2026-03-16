@@ -8,7 +8,7 @@ from pathlib import Path
 
 from framework.context import E2EContext
 from framework.result import TestResult
-from framework.utils import ensure_directory, write_text_file
+from framework.utils import ensure_directory, perform_full_account_cleanup, write_text_file
 from testcases.tc0001_basic_resync import TestCase0001BasicResync
 from testcases.tc0002_sync_list_validation import TestCase0002SyncListValidation
 from testcases.tc0003_dry_run_validation import TestCase0003DryRunValidation
@@ -98,6 +98,43 @@ def main() -> int:
     ensure_directory(context.logs_dir)
     ensure_directory(context.state_dir)
     ensure_directory(context.work_root)
+
+    context.bootstrap_suite_cleanup_config_dir()
+
+    context.log("Starting suite-wide cleanup of local and remote OneDrive content")
+
+    cleanup_ok, cleanup_reason, cleanup_artifacts, cleanup_details = perform_full_account_cleanup(
+        onedrive_bin=context.onedrive_bin,
+        repo_root=context.repo_root,
+        config_dir=context.suite_cleanup_config_dir,
+        sync_dir=context.default_sync_dir,
+        log_dir=context.suite_cleanup_log_dir,
+    )
+
+    if not cleanup_ok:
+        context.log(f"Suite cleanup FAILED: {cleanup_reason}")
+
+        results = {
+            "target": context.e2e_target,
+            "run_id": context.run_id,
+            "cases": [
+                {
+                    "id": "0000",
+                    "name": "suite cleanup",
+                    "status": "fail",
+                    "reason": cleanup_reason,
+                    "artifacts": cleanup_artifacts,
+                    "details": cleanup_details,
+                }
+            ],
+        }
+
+        results_file = context.out_dir / "results.json"
+        results_json = json.dumps(results, indent=2, sort_keys=False)
+        write_text_file(results_file, results_json)
+        return 1
+
+    context.log("Suite-wide cleanup completed successfully")
 
     context.log(
         f"Initialising E2E framework for target='{context.e2e_target}', "
