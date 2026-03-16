@@ -15,7 +15,7 @@ jobs:
   e2e_business:
     runs-on: ubuntu-latest
     container: fedora:latest
-    environment: onedrive-e2e
+    environment: e2e-business
 
     steps:
       - uses: actions/checkout@v4
