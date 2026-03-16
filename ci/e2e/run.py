@@ -36,6 +36,7 @@ from testcases.tc0024_big_delete_safeguard_validation import TestCase0024BigDele
 from testcases.tc0025_invalid_character_filename_validation import TestCase0025InvalidCharacterFilenameValidation
 from testcases.tc0026_reserved_device_name_validation import TestCase0026ReservedDeviceNameValidation
 from testcases.tc0027_whitespace_trailing_dot_validation import TestCase0027WhitespaceTrailingDotValidation
+from testcases.tc0028_control_character_non_utf8_filename_validation import TestCase0028ControlCharacterNonUtf8FilenameValidation
 
 
 def build_test_suite() -> list:
@@ -72,6 +73,7 @@ def build_test_suite() -> list:
         TestCase0025InvalidCharacterFilenameValidation(),
         TestCase0026ReservedDeviceNameValidation(),
         TestCase0027WhitespaceTrailingDotValidation(),
+        TestCase0028ControlCharacterNonUtf8FilenameValidation(),
     ]
 
 
