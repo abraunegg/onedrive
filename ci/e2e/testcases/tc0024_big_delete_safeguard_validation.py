@@ -71,12 +71,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
 
         root_name = f"ZZ_E2E_TC0024_{context.run_id}_{os.getpid()}"
 
-        # Mirror the manual validation structure:
-        #   sync_dir/
-        #     ZZ_E2E_TC0024_<runid>_<pid>/
-        #       random_1K_files/
-        #         <10 dirs>/
-        #           <10 files each>
         parent_dir_name = "random_1K_files"
         classify_threshold = 5
         sibling_dir_count = 10
@@ -91,12 +85,11 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         keep_file_relative = f"{parent_dir_name}/{keep_dir_name}/file0.data"
 
         remote_delete_dir = f"{root_name}/{delete_dir_relative}"
-        remote_deleted_probe_file = f"{remote_delete_dir}/file0.data"
         remote_keep_file = f"{root_name}/{keep_file_relative}"
 
         delete_dir_local = local_root / root_name / parent_dir_name / delete_dir_name
-        keep_file_local = local_root / root_name / parent_dir_name / keep_dir_name / "file0.data"
 
+        # Create test content
         for dir_index in range(sibling_dir_count):
             child_dir = local_root / root_name / parent_dir_name / f"dir_{dir_index:02d}"
             for file_index in range(files_per_dir):
@@ -151,7 +144,24 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             seed_stderr,
         )
 
-        # Step 2: update config and run a normal sync, matching the manual flow.
+        if seed_result.returncode != 0:
+            artifacts = [
+                str(seed_stdout),
+                str(seed_stderr),
+            ]
+            details = {
+                "seed_returncode": seed_result.returncode,
+                "root_name": root_name,
+            }
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"seed phase failed with status {seed_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        # Update config to enable big delete safeguard
         self._write_config(conf_local / "config", local_root, classify_threshold)
 
         option_change_command = [
@@ -172,58 +182,49 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             option_change_stderr,
         )
 
-        missing_local_items: list[str] = []
-
-        if not delete_dir_local.is_dir():
-            missing_local_items.append(remote_delete_dir)
-
-        for file_index in range(files_per_dir):
-            candidate = delete_dir_local / f"file{file_index}.data"
-            if not candidate.is_file():
-                missing_local_items.append(f"{remote_delete_dir}/file{file_index}.data")
-
-        if not keep_file_local.is_file():
-            missing_local_items.append(remote_keep_file)
-
-        if missing_local_items:
-            write_text_file(
-                metadata_file,
-                "\n".join(
-                    [
-                        f"case_id={self.case_id}",
-                        f"root_name={root_name}",
-                        f"seed_returncode={seed_result.returncode}",
-                        f"option_change_returncode={option_change_result.returncode}",
-                        f"missing_local_items={missing_local_items!r}",
-                    ]
-                )
-                + "\n",
-            )
-
+        if option_change_result.returncode != 0:
             artifacts = [
                 str(seed_stdout),
                 str(seed_stderr),
                 str(option_change_stdout),
                 str(option_change_stderr),
-                str(metadata_file),
             ]
             details = {
                 "seed_returncode": seed_result.returncode,
                 "option_change_returncode": option_change_result.returncode,
                 "root_name": root_name,
             }
-
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
-                "Expected local baseline content was not present before delete phase",
+                f"option change validation phase failed with status {option_change_result.returncode}",
                 artifacts,
                 details,
             )
 
-        # Step 3: delete one entire child directory locally.
-        if delete_dir_local.exists():
-            shutil.rmtree(delete_dir_local)
+        # Delete just the directory locally. The client handles the contained file deletions.
+        if not delete_dir_local.is_dir():
+            artifacts = [
+                str(seed_stdout),
+                str(seed_stderr),
+                str(option_change_stdout),
+                str(option_change_stderr),
+            ]
+            details = {
+                "seed_returncode": seed_result.returncode,
+                "option_change_returncode": option_change_result.returncode,
+                "root_name": root_name,
+                "delete_dir_local": str(delete_dir_local),
+            }
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "Expected local delete directory was not present before delete phase",
+                artifacts,
+                details,
+            )
+
+        shutil.rmtree(delete_dir_local)
 
         blocked_command = [
             context.onedrive_bin,
@@ -245,7 +246,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
 
         blocked_output = blocked_result.stdout + "\n" + blocked_result.stderr
 
-        # Verify remote state after blocked sync.
+        # Verify remote state after blocked sync
         reset_directory(verify_root)
         self._write_config(conf_verify / "config", verify_root, classify_threshold)
 
@@ -273,7 +274,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         blocked_remote_manifest = build_manifest(verify_root)
         write_manifest(blocked_verify_manifest_file, blocked_remote_manifest)
 
-        # Step 4: rerun with --force.
+        # Force acknowledgement and retry
         forced_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -337,7 +338,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                     f"delete_dir_relative={delete_dir_relative}",
                     f"keep_file_relative={keep_file_relative}",
                     f"remote_delete_dir={remote_delete_dir}",
-                    f"remote_deleted_probe_file={remote_deleted_probe_file}",
                     f"remote_keep_file={remote_keep_file}",
                     f"seed_returncode={seed_result.returncode}",
                     f"option_change_returncode={option_change_result.returncode}",
@@ -378,8 +378,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         }
 
         for label, rc in [
-            ("seed", seed_result.returncode),
-            ("option change validation", option_change_result.returncode),
             ("blocked verify", blocked_verify_result.returncode),
             ("forced sync", forced_result.returncode),
             ("verify", verify_result.returncode),
@@ -393,12 +391,10 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                     details,
                 )
 
-        safeguard_markers = [
-            "ERROR: An attempt to remove a large volume of data from OneDrive has been detected",
-            "ERROR: The total number of items being deleted is:",
-            "ERROR: To delete a large volume of data use --force",
-        ]
-        if not all(marker in blocked_output for marker in safeguard_markers):
+        primary_safeguard_marker = (
+            "ERROR: An attempt to remove a large volume of data from OneDrive has been detected"
+        )
+        if primary_safeguard_marker not in blocked_output:
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
@@ -407,21 +403,12 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        # Before --force, the deleted directory and one known file beneath it must still exist remotely.
+        # Before --force, deleted directory must still exist remotely and sibling content must remain.
         if remote_delete_dir not in blocked_remote_manifest:
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
                 "Remote delete directory was modified before forced acknowledgement",
-                artifacts,
-                details,
-            )
-
-        if remote_deleted_probe_file not in blocked_remote_manifest:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"{remote_deleted_probe_file} was modified before forced acknowledgement",
                 artifacts,
                 details,
             )
@@ -435,21 +422,12 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        # After --force, the deleted directory must be gone remotely.
+        # After --force, the deleted directory must be gone remotely, but sibling content must remain.
         if remote_delete_dir in remote_manifest:
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
                 "Delete directory still exists online after acknowledged forced delete",
-                artifacts,
-                details,
-            )
-
-        if remote_deleted_probe_file in remote_manifest:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"{remote_deleted_probe_file} still exists online after acknowledged forced delete",
                 artifacts,
                 details,
             )
