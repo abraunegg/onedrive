@@ -651,7 +651,7 @@ bool multiGlobMatch(const(char)[] path, const(char)[] pattern) {
 }
 
 // Does the path pass the Microsoft restriction and limitations about naming files and folders
-bool isValidName_original(string path) {
+bool isValidName(string path) {
 	// Restriction and limitations about windows naming files and folders
 	// https://msdn.microsoft.com/en-us/library/aa365247
 	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
@@ -706,98 +706,6 @@ bool isValidName_original(string path) {
 
     return true;
 }
-
-// =========================================
-
-
-// Check if the provided item name is a reserved Microsoft / Windows device name
-// This must catch both:
-//   - exact reserved names, e.g. "CON"
-//   - reserved names followed by an extension, e.g. "CON.txt", "NUL.tar.gz"
-// Microsoft documents that reserved names remain invalid even when followed by an extension.
-bool isReservedMicrosoftName(string itemName, const(bool[string]) disallowedSet) {
-	// Ensure case-insensitive comparisons
-	string candidate = itemName.toLower();
-
-	// Exact match
-	if (disallowedSet.get(candidate, false)) {
-		return true;
-	}
-
-	// Reserved device names followed by an extension, e.g. "CON.txt"
-	auto firstDot = countUntil(candidate, ".");
-	if (firstDot > 0) {
-		string deviceRoot = candidate[0 .. firstDot];
-		if (disallowedSet.get(deviceRoot, false)) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
-
-// Does the path pass the Microsoft restriction and limitations about naming files and folders
-bool isValidName(string path) {
-	// Restriction and limitations about windows naming files and folders
-	// https://msdn.microsoft.com/en-us/library/aa365247
-	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
-	
-    if (path == ".") {
-        return true;
-    }
-
-    string itemName = baseName(path).toLower(); // Ensure case-insensitivity
-
-    // Check for explicitly disallowed names
-	// https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us#invalidfilefoldernames
-	string[] disallowedNames = [
-        ".lock", "desktop.ini", "CON", "PRN", "AUX", "NUL",
-        "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-        "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
-    ];
-
-    // Creating an associative array for faster lookup
-    bool[string] disallowedSet;
-    foreach (name; disallowedNames) {
-        disallowedSet[name.toLower()] = true; // Normalise to lowercase
-    }
-
-    if (isReservedMicrosoftName(itemName, disallowedSet) || itemName.startsWith("~$") || canFind(itemName, "_vti_")) {
-        return false;
-    }
-
-	// Regular expression for invalid patterns
-	// https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us#invalidcharacters
-	// Leading whitespace and trailing whitespace
-	// Invalid characters
-	// Trailing dot '.' (not documented above) , however see issue https://github.com/abraunegg/onedrive/issues/2678
-	
-	//auto invalidNameReg = ctRegex!(`^\s.*|^.*[\s\.]$|.*[<>:"\|\?*/\\].*`); - original to remove at some point
-	auto invalidNameReg = ctRegex!(`^\s+|\s$|\.$|[<>:"\|\?*/\\]`); // revised 25/3/2024
-	// - ^\s+ matches one or more whitespace characters at the start of the string. The + ensures we match one or more whitespaces, making it more efficient than .* for detecting leading whitespaces.
-	// - \s$ matches a whitespace character at the end of the string. This is more precise than [\s\.]$ because we'll handle the dot separately.
-	// -  \.$ specifically matches a dot character at the end of the string, addressing the requirement to catch trailing dots as invalid.
-	// - [<>:"\|\?*/\\] matches any single instance of the specified invalid characters: ", *, :, <, >, ?, /, \, |
-
-	auto matchResult = match(itemName, invalidNameReg);
-    if (!matchResult.empty) {
-        return false;
-    }
-
-    // Determine if the path is at the root level, if yes, check that 'forms' is not the first folder
-	auto segments = pathSplitter(path).array;
-    if (segments.length <= 2 && segments.back.toLower() == "forms") { // Check only the last segment, convert to lower as OneDrive is not POSIX compliant, easier to compare
-        return false;
-    }
-
-    return true;
-}
-
-
-
-// =========================================
-
 
 // Does the path contain any bad whitespace characters
 bool containsBadWhiteSpace(string path) {
