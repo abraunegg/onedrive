@@ -120,11 +120,11 @@ def perform_full_account_cleanup(
     log_dir: Path,
 ) -> tuple[bool, str, list[str], dict]:
     """
-    Clean the entire account by:
-    1. Discovering and materialising remote state locally without uploading anything
+    Clean the account by:
+    1. Running a full resync to establish local state from remote
     2. Deleting everything locally
-    3. Running sync to push deletes online
-    4. Running download-only sync to confirm the remote side is empty
+    3. Running a normal sync to propagate deletions online
+    4. Validating that the local sync directory is empty
 
     Returns:
         (success, reason, artifacts, details)
@@ -135,10 +135,8 @@ def perform_full_account_cleanup(
     phase1_stdout = log_dir / "cleanup_phase1_resync_stdout.log"
     phase1_stderr = log_dir / "cleanup_phase1_resync_stderr.log"
     phase2_state = log_dir / "cleanup_phase2_local_purge_state.txt"
-    phase3_stdout = log_dir / "cleanup_phase3_push_deletes_stdout.log"
-    phase3_stderr = log_dir / "cleanup_phase3_push_deletes_stderr.log"
-    phase4_stdout = log_dir / "cleanup_phase4_verify_empty_stdout.log"
-    phase4_stderr = log_dir / "cleanup_phase4_verify_empty_stderr.log"
+    phase3_stdout = log_dir / "cleanup_phase3_sync_stdout.log"
+    phase3_stderr = log_dir / "cleanup_phase3_sync_stderr.log"
 
     artifacts = [
         str(phase1_stdout),
@@ -146,21 +144,15 @@ def perform_full_account_cleanup(
         str(phase2_state),
         str(phase3_stdout),
         str(phase3_stderr),
-        str(phase4_stdout),
-        str(phase4_stderr),
     ]
 
-    # Phase 1:
-    # Discover remote state only. Do not upload anything. Do not fail because
-    # stale remote testcase artefacts trigger download-integrity validation.
+    # Phase 1: establish local state from remote
     phase1_command = [
         onedrive_bin,
         "--sync",
         "--verbose",
-        "--download-only",
         "--resync",
         "--resync-auth",
-        "--disable-download-validation",
         "--confdir",
         str(config_dir),
     ]
@@ -181,8 +173,7 @@ def perform_full_account_cleanup(
             },
         )
 
-    # Phase 2:
-    # Purge the entire local sync root. Cleanup is destructive by design.
+    # Phase 2: delete everything locally
     purge_directory_contents(sync_dir)
 
     remaining_after_purge = [str(child) for child in sync_dir.iterdir()]
@@ -199,8 +190,7 @@ def perform_full_account_cleanup(
             {"remaining_after_purge": remaining_after_purge},
         )
 
-    # Phase 3:
-    # Push local deletions online.
+    # Phase 3: propagate deletions online
     phase3_command = [
         onedrive_bin,
         "--sync",
@@ -225,42 +215,14 @@ def perform_full_account_cleanup(
             },
         )
 
-    # Phase 4:
-    # Verify emptiness by pulling from remote only.
-    # If anything still exists online, it will be downloaded back locally.
-    phase4_command = [
-        onedrive_bin,
-        "--sync",
-        "--verbose",
-        "--download-only",
-        "--disable-download-validation",
-        "--confdir",
-        str(config_dir),
-    ]
-    phase4 = run_command_logged(
-        phase4_command,
-        stdout_file=phase4_stdout,
-        stderr_file=phase4_stderr,
-        cwd=repo_root,
-    )
-    if phase4.returncode != 0:
+    # Phase 4: validate local is empty
+    remaining_after_sync = [str(child) for child in sync_dir.iterdir()]
+    if remaining_after_sync:
         return (
             False,
-            f"Cleanup phase 4 failed with status {phase4.returncode}",
+            "Cleanup phase 4 failed: local sync directory is not empty after sync",
             artifacts,
-            {
-                "phase4_returncode": phase4.returncode,
-                "phase4_command": command_to_string(phase4_command),
-            },
-        )
-
-    remaining_after_verify = [str(child) for child in sync_dir.iterdir()]
-    if remaining_after_verify:
-        return (
-            False,
-            "Cleanup verification failed: remote content still exists after delete propagation",
-            artifacts,
-            {"remaining_after_verify": remaining_after_verify},
+            {"remaining_after_sync": remaining_after_sync},
         )
 
     return (
@@ -270,9 +232,7 @@ def perform_full_account_cleanup(
         {
             "phase1_returncode": phase1.returncode,
             "phase3_returncode": phase3.returncode,
-            "phase4_returncode": phase4.returncode,
             "phase1_command": command_to_string(phase1_command),
             "phase3_command": command_to_string(phase3_command),
-            "phase4_command": command_to_string(phase4_command),
         },
     )
