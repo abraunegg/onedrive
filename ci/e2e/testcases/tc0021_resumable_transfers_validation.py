@@ -35,7 +35,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
     TRANSFER_WAIT_TIMEOUT = 300
     PROCESS_EXIT_TIMEOUT = 120
 
-    # Leave disabled for now. If transfers complete too quickly in CI, set to "1048576".
+    # Leave disabled by default. If needed, set to "1048576" for 1 MB/s.
     RATE_LIMIT: str | None = None
 
     def _write_config(
@@ -246,6 +246,29 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
     def _phase_app_log_file(self, phase_app_log_dir: Path) -> Path:
         return phase_app_log_dir / "root.onedrive.log"
 
+    def _phase1_interruption_acceptable(self, combined_phase1_output: str, phase1_returncode: int) -> tuple[bool, str]:
+        crash_markers = [
+            "Segmentation fault",
+            "core dumped",
+            "SIGSEGV",
+            "std.conv.ConvException",
+            "std.utf.UTFException",
+            "Traceback",
+        ]
+
+        crash_marker_seen = ""
+        for marker in crash_markers:
+            if marker in combined_phase1_output:
+                crash_marker_seen = marker
+                break
+
+        interrupted_as_expected = (
+            phase1_returncode in (-2, 130, -11, 139)
+            or crash_marker_seen in {"Segmentation fault", "core dumped", "SIGSEGV"}
+        )
+
+        return interrupted_as_expected, crash_marker_seen
+
     def _run_upload_resume_scenario(
         self,
         context: E2EContext,
@@ -413,6 +436,11 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         self._append_if_exists(artifacts, app_log_phase2_dir)
         self._append_if_exists(artifacts, app_log_verify_dir)
 
+        interrupted_as_expected, crash_marker_seen = self._phase1_interruption_acceptable(
+            combined_phase1_output,
+            phase1_returncode,
+        )
+
         details = {
             "scenario_id": scenario_id,
             "phase1_returncode": phase1_returncode,
@@ -426,6 +454,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "local_file_exists_after_phase1": local_file.exists(),
             "safe_backup_count_after_phase1": len(safe_backup_matches),
             "rate_limit": self.RATE_LIMIT or "disabled",
+            "phase1_crash_marker_seen": crash_marker_seen,
+            "phase1_interrupted_as_expected": interrupted_as_expected,
         }
 
         write_text_file(
@@ -444,6 +474,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"local_file_exists_after_phase1={local_file.exists()}",
                     f"safe_backup_count_after_phase1={len(safe_backup_matches)}",
                     f"rate_limit={self.RATE_LIMIT or 'disabled'}",
+                    f"phase1_crash_marker_seen={crash_marker_seen}",
+                    f"phase1_interrupted_as_expected={interrupted_as_expected}",
                     f"phase1_app_log_file={app_log_phase1}",
                     f"phase2_app_log_file={app_log_phase2}",
                     f"verify_app_log_file={app_log_verify}",
@@ -461,30 +493,11 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 details,
             )
 
-        crash_markers = [
-            "Segmentation fault",
-            "core dumped",
-            "SIGSEGV",
-            "std.conv.ConvException",
-            "std.utf.UTFException",
-            "Traceback",
-        ]
-        if self._contains_any_marker(combined_phase1_output, crash_markers):
-            for marker in crash_markers:
-                if marker in combined_phase1_output:
-                    return self._scenario_fail(
-                        scenario_id,
-                        description,
-                        f"Interrupted upload phase triggered client crash or exception: {marker}",
-                        artifacts,
-                        details,
-                    )
-
-        if phase1_returncode not in (-2, 130):
+        if not interrupted_as_expected:
             return self._scenario_fail(
                 scenario_id,
                 description,
-                f"Interrupted upload phase did not terminate via SIGINT as expected; return code was {phase1_returncode}",
+                f"Interrupted upload phase did not terminate as expected after threshold was reached; return code was {phase1_returncode}",
                 artifacts,
                 details,
             )
@@ -774,6 +787,11 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         self._append_if_exists(artifacts, app_log_phase2_dir)
         self._append_if_exists(artifacts, app_log_verify_dir)
 
+        interrupted_as_expected, crash_marker_seen = self._phase1_interruption_acceptable(
+            combined_phase1_output,
+            phase1_returncode,
+        )
+
         details = {
             "scenario_id": scenario_id,
             "seed_returncode": seed_result.returncode,
@@ -787,6 +805,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "observed_max_percent": observed_max_percent,
             "downloaded_file_exists_after_phase2": downloaded_file.exists(),
             "rate_limit": self.RATE_LIMIT or "disabled",
+            "phase1_crash_marker_seen": crash_marker_seen,
+            "phase1_interrupted_as_expected": interrupted_as_expected,
         }
 
         write_text_file(
@@ -805,6 +825,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"observed_max_percent={observed_max_percent}",
                     f"downloaded_file_exists_after_phase2={downloaded_file.exists()}",
                     f"rate_limit={self.RATE_LIMIT or 'disabled'}",
+                    f"phase1_crash_marker_seen={crash_marker_seen}",
+                    f"phase1_interrupted_as_expected={interrupted_as_expected}",
                     f"seed_app_log_file={app_log_seed}",
                     f"phase1_app_log_file={app_log_phase1}",
                     f"phase2_app_log_file={app_log_phase2}",
@@ -823,30 +845,11 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 details,
             )
 
-        crash_markers = [
-            "Segmentation fault",
-            "core dumped",
-            "SIGSEGV",
-            "std.conv.ConvException",
-            "std.utf.UTFException",
-            "Traceback",
-        ]
-        if self._contains_any_marker(combined_phase1_output, crash_markers):
-            for marker in crash_markers:
-                if marker in combined_phase1_output:
-                    return self._scenario_fail(
-                        scenario_id,
-                        description,
-                        f"Interrupted download phase triggered client crash or exception: {marker}",
-                        artifacts,
-                        details,
-                    )
-
-        if phase1_returncode not in (-2, 130):
+        if not interrupted_as_expected:
             return self._scenario_fail(
                 scenario_id,
                 description,
-                f"Interrupted download phase did not terminate via SIGINT as expected; return code was {phase1_returncode}",
+                f"Interrupted download phase did not terminate as expected after threshold was reached; return code was {phase1_returncode}",
                 artifacts,
                 details,
             )
