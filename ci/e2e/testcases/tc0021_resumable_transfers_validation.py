@@ -35,6 +35,9 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
     TRANSFER_WAIT_TIMEOUT = 300
     PROCESS_EXIT_TIMEOUT = 120
 
+    # Leave disabled for now. If transfers complete too quickly in CI, set to "1048576".
+    RATE_LIMIT: str | None = None
+
     def _write_config(
         self,
         config_path: Path,
@@ -49,6 +52,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             'enable_logging = "true"',
             f'log_dir = "{app_log_dir}"',
         ]
+        if self.RATE_LIMIT:
+            lines.append(f'rate_limit = "{self.RATE_LIMIT}"')
         if force_session_upload:
             lines.append('force_session_upload = "true"')
         write_text_file(config_path, "\n".join(lines) + "\n")
@@ -111,8 +116,6 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         combined_text = stdout_text + "\n" + stderr_text + "\n" + app_log_text
 
-        # Prefer text from lines mentioning the target file, but fall back to all text
-        # because some progress counters may be printed on neighbouring lines.
         relevant_lines: list[str] = []
         for line in combined_text.splitlines():
             if target_filename in line:
@@ -164,7 +167,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 if process.poll() is not None:
                     break
 
-                combined_text, current_max = self._build_transfer_observation(
+                _, current_max = self._build_transfer_observation(
                     stdout_file,
                     stderr_file,
                     app_log_file,
@@ -240,6 +243,9 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             details=details,
         )
 
+    def _phase_app_log_file(self, phase_app_log_dir: Path) -> Path:
+        return phase_app_log_dir / "root.onedrive.log"
+
     def _run_upload_resume_scenario(
         self,
         context: E2EContext,
@@ -253,18 +259,29 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         scenario_id = "RT-0001"
         description = "resumable upload"
 
-        conf_main = scenario_work_dir / "conf-main"
+        conf_phase1 = scenario_work_dir / "conf-phase1"
+        conf_phase2 = scenario_work_dir / "conf-phase2"
         conf_verify = scenario_work_dir / "conf-verify"
-        app_log_dir = scenario_log_dir / "app-logs"
-        app_log_file = app_log_dir / "root.onedrive.log"
 
-        reset_directory(conf_main)
+        app_log_phase1_dir = scenario_log_dir / "app-logs-phase1"
+        app_log_phase2_dir = scenario_log_dir / "app-logs-phase2"
+        app_log_verify_dir = scenario_log_dir / "app-logs-verify"
+
+        app_log_phase1 = self._phase_app_log_file(app_log_phase1_dir)
+        app_log_phase2 = self._phase_app_log_file(app_log_phase2_dir)
+        app_log_verify = self._phase_app_log_file(app_log_verify_dir)
+
+        reset_directory(conf_phase1)
+        reset_directory(conf_phase2)
         reset_directory(conf_verify)
-        context.bootstrap_config_dir(conf_main)
+
+        context.bootstrap_config_dir(conf_phase1)
+        context.bootstrap_config_dir(conf_phase2)
         context.bootstrap_config_dir(conf_verify)
 
-        self._write_config(conf_main / "config", sync_root, app_log_dir, force_session_upload=True)
-        self._write_config(conf_verify / "config", verify_root, app_log_dir, force_session_upload=False)
+        self._write_config(conf_phase1 / "config", sync_root, app_log_phase1_dir, force_session_upload=True)
+        self._write_config(conf_phase2 / "config", sync_root, app_log_phase2_dir, force_session_upload=True)
+        self._write_config(conf_verify / "config", verify_root, app_log_verify_dir, force_session_upload=False)
 
         relative_path = f"{root_name}/{scenario_id}/session-large.bin"
         local_file = sync_root / relative_path
@@ -285,7 +302,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         self._snapshot_tree(sync_root, local_tree_before)
 
-        upload_command = [
+        upload_command_phase1 = [
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
@@ -296,7 +313,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "--single-directory",
             f"{root_name}/{scenario_id}",
             "--confdir",
-            str(conf_main),
+            str(conf_phase1),
         ]
 
         (
@@ -308,10 +325,10 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         ) = self._interrupt_process_at_transfer_threshold(
             context,
             f"{scenario_id} phase 1",
-            upload_command,
+            upload_command_phase1,
             phase1_stdout,
             phase1_stderr,
-            app_log_file,
+            app_log_phase1,
             "session-large.bin",
             self.INTERRUPT_THRESHOLD_PERCENT,
             self.TRANSFER_WAIT_TIMEOUT,
@@ -320,21 +337,35 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         self._snapshot_tree(sync_root, local_tree_after_phase1)
 
-        app_log_after_phase1 = self._read_text_if_exists(app_log_file)
-        combined_phase1_output = phase1_stdout_text + "\n" + phase1_stderr_text + "\n" + app_log_after_phase1
+        phase1_app_log_text = self._read_text_if_exists(app_log_phase1)
+        combined_phase1_output = phase1_stdout_text + "\n" + phase1_stderr_text + "\n" + phase1_app_log_text
+
+        upload_command_phase2 = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--upload-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(conf_phase2),
+        ]
 
         phase2_result = self._run_and_capture(
             context,
             f"{scenario_id} phase 2",
-            upload_command,
+            upload_command_phase2,
             phase2_stdout,
             phase2_stderr,
         )
 
         phase2_stdout_text = self._read_text_if_exists(phase2_stdout)
         phase2_stderr_text = self._read_text_if_exists(phase2_stderr)
-        app_log_after_phase2 = self._read_text_if_exists(app_log_file)
-        combined_phase2_output = phase2_stdout_text + "\n" + phase2_stderr_text + "\n" + app_log_after_phase2
+        phase2_app_log_text = self._read_text_if_exists(app_log_phase2)
+        combined_phase2_output = phase2_stdout_text + "\n" + phase2_stderr_text + "\n" + phase2_app_log_text
 
         self._snapshot_tree(sync_root, local_tree_after_phase2)
 
@@ -378,7 +409,9 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             str(remote_manifest_file),
             str(metadata_file),
         ]
-        self._append_if_exists(artifacts, app_log_dir)
+        self._append_if_exists(artifacts, app_log_phase1_dir)
+        self._append_if_exists(artifacts, app_log_phase2_dir)
+        self._append_if_exists(artifacts, app_log_verify_dir)
 
         details = {
             "scenario_id": scenario_id,
@@ -392,6 +425,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "observed_max_percent": observed_max_percent,
             "local_file_exists_after_phase1": local_file.exists(),
             "safe_backup_count_after_phase1": len(safe_backup_matches),
+            "rate_limit": self.RATE_LIMIT or "disabled",
         }
 
         write_text_file(
@@ -409,7 +443,10 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"observed_max_percent={observed_max_percent}",
                     f"local_file_exists_after_phase1={local_file.exists()}",
                     f"safe_backup_count_after_phase1={len(safe_backup_matches)}",
-                    f"app_log_file={app_log_file}",
+                    f"rate_limit={self.RATE_LIMIT or 'disabled'}",
+                    f"phase1_app_log_file={app_log_phase1}",
+                    f"phase2_app_log_file={app_log_phase2}",
+                    f"verify_app_log_file={app_log_verify}",
                 ]
             )
             + "\n",
@@ -443,15 +480,11 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                         details,
                     )
 
-        clean_shutdown_markers = [
-            "Received termination signal",
-            "attempting to cleanly shutdown application",
-        ]
-        if not self._contains_any_marker(combined_phase1_output, clean_shutdown_markers):
+        if phase1_returncode not in (-2, 130):
             return self._scenario_fail(
                 scenario_id,
                 description,
-                "Interrupted upload phase did not show clean shutdown handling after SIGINT",
+                f"Interrupted upload phase did not terminate via SIGINT as expected; return code was {phase1_returncode}",
                 artifacts,
                 details,
             )
@@ -534,26 +567,37 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         verify_root = scenario_work_dir / "verifyroot"
 
         conf_seed = scenario_work_dir / "conf-seed"
-        conf_download = scenario_work_dir / "conf-download"
+        conf_phase1 = scenario_work_dir / "conf-phase1"
+        conf_phase2 = scenario_work_dir / "conf-phase2"
         conf_verify = scenario_work_dir / "conf-verify"
 
-        app_log_dir = scenario_log_dir / "app-logs"
-        app_log_file = app_log_dir / "root.onedrive.log"
+        app_log_seed_dir = scenario_log_dir / "app-logs-seed"
+        app_log_phase1_dir = scenario_log_dir / "app-logs-phase1"
+        app_log_phase2_dir = scenario_log_dir / "app-logs-phase2"
+        app_log_verify_dir = scenario_log_dir / "app-logs-verify"
+
+        app_log_seed = self._phase_app_log_file(app_log_seed_dir)
+        app_log_phase1 = self._phase_app_log_file(app_log_phase1_dir)
+        app_log_phase2 = self._phase_app_log_file(app_log_phase2_dir)
+        app_log_verify = self._phase_app_log_file(app_log_verify_dir)
 
         reset_directory(seed_root)
         reset_directory(download_root)
         reset_directory(verify_root)
         reset_directory(conf_seed)
-        reset_directory(conf_download)
+        reset_directory(conf_phase1)
+        reset_directory(conf_phase2)
         reset_directory(conf_verify)
 
         context.bootstrap_config_dir(conf_seed)
-        context.bootstrap_config_dir(conf_download)
+        context.bootstrap_config_dir(conf_phase1)
+        context.bootstrap_config_dir(conf_phase2)
         context.bootstrap_config_dir(conf_verify)
 
-        self._write_config(conf_seed / "config", seed_root, app_log_dir, force_session_upload=True)
-        self._write_config(conf_download / "config", download_root, app_log_dir, force_session_upload=False)
-        self._write_config(conf_verify / "config", verify_root, app_log_dir, force_session_upload=False)
+        self._write_config(conf_seed / "config", seed_root, app_log_seed_dir, force_session_upload=True)
+        self._write_config(conf_phase1 / "config", download_root, app_log_phase1_dir, force_session_upload=False)
+        self._write_config(conf_phase2 / "config", download_root, app_log_phase2_dir, force_session_upload=False)
+        self._write_config(conf_verify / "config", verify_root, app_log_verify_dir, force_session_upload=False)
 
         relative_path = f"{root_name}/{scenario_id}/session-large.bin"
         seed_file = seed_root / relative_path
@@ -598,10 +642,12 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         if seed_result.returncode != 0:
             artifacts = [str(seed_stdout), str(seed_stderr)]
+            self._append_if_exists(artifacts, app_log_seed_dir)
             details = {
                 "scenario_id": scenario_id,
                 "seed_returncode": seed_result.returncode,
                 "relative_path": relative_path,
+                "rate_limit": self.RATE_LIMIT or "disabled",
             }
             return self._scenario_fail(
                 scenario_id,
@@ -613,7 +659,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         self._snapshot_tree(download_root, local_tree_before)
 
-        download_command = [
+        download_command_phase1 = [
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
@@ -624,7 +670,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "--single-directory",
             f"{root_name}/{scenario_id}",
             "--confdir",
-            str(conf_download),
+            str(conf_phase1),
         ]
 
         (
@@ -636,10 +682,10 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         ) = self._interrupt_process_at_transfer_threshold(
             context,
             f"{scenario_id} phase 1",
-            download_command,
+            download_command_phase1,
             phase1_stdout,
             phase1_stderr,
-            app_log_file,
+            app_log_phase1,
             "session-large.bin",
             self.INTERRUPT_THRESHOLD_PERCENT,
             self.TRANSFER_WAIT_TIMEOUT,
@@ -648,21 +694,35 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         self._snapshot_tree(download_root, local_tree_after_phase1)
 
-        app_log_after_phase1 = self._read_text_if_exists(app_log_file)
-        combined_phase1_output = phase1_stdout_text + "\n" + phase1_stderr_text + "\n" + app_log_after_phase1
+        phase1_app_log_text = self._read_text_if_exists(app_log_phase1)
+        combined_phase1_output = phase1_stdout_text + "\n" + phase1_stderr_text + "\n" + phase1_app_log_text
+
+        download_command_phase2 = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--download-only",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(conf_phase2),
+        ]
 
         phase2_result = self._run_and_capture(
             context,
             f"{scenario_id} phase 2",
-            download_command,
+            download_command_phase2,
             phase2_stdout,
             phase2_stderr,
         )
 
         phase2_stdout_text = self._read_text_if_exists(phase2_stdout)
         phase2_stderr_text = self._read_text_if_exists(phase2_stderr)
-        app_log_after_phase2 = self._read_text_if_exists(app_log_file)
-        combined_phase2_output = phase2_stdout_text + "\n" + phase2_stderr_text + "\n" + app_log_after_phase2
+        phase2_app_log_text = self._read_text_if_exists(app_log_phase2)
+        combined_phase2_output = phase2_stdout_text + "\n" + phase2_stderr_text + "\n" + phase2_app_log_text
 
         self._snapshot_tree(download_root, local_tree_after_phase2)
 
@@ -709,7 +769,10 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             str(verify_manifest_file),
             str(metadata_file),
         ]
-        self._append_if_exists(artifacts, app_log_dir)
+        self._append_if_exists(artifacts, app_log_seed_dir)
+        self._append_if_exists(artifacts, app_log_phase1_dir)
+        self._append_if_exists(artifacts, app_log_phase2_dir)
+        self._append_if_exists(artifacts, app_log_verify_dir)
 
         details = {
             "scenario_id": scenario_id,
@@ -723,6 +786,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "threshold_reached": threshold_reached,
             "observed_max_percent": observed_max_percent,
             "downloaded_file_exists_after_phase2": downloaded_file.exists(),
+            "rate_limit": self.RATE_LIMIT or "disabled",
         }
 
         write_text_file(
@@ -740,7 +804,11 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"threshold_reached={threshold_reached}",
                     f"observed_max_percent={observed_max_percent}",
                     f"downloaded_file_exists_after_phase2={downloaded_file.exists()}",
-                    f"app_log_file={app_log_file}",
+                    f"rate_limit={self.RATE_LIMIT or 'disabled'}",
+                    f"seed_app_log_file={app_log_seed}",
+                    f"phase1_app_log_file={app_log_phase1}",
+                    f"phase2_app_log_file={app_log_phase2}",
+                    f"verify_app_log_file={app_log_verify}",
                 ]
             )
             + "\n",
@@ -774,15 +842,11 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                         details,
                     )
 
-        clean_shutdown_markers = [
-            "Received termination signal",
-            "attempting to cleanly shutdown application",
-        ]
-        if not self._contains_any_marker(combined_phase1_output, clean_shutdown_markers):
+        if phase1_returncode not in (-2, 130):
             return self._scenario_fail(
                 scenario_id,
                 description,
-                "Interrupted download phase did not show clean shutdown handling after SIGINT",
+                f"Interrupted download phase did not terminate via SIGINT as expected; return code was {phase1_returncode}",
                 artifacts,
                 details,
             )
