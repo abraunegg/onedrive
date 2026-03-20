@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import signal
 import subprocess
 import time
@@ -30,7 +31,9 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
     description = "Validate interrupted upload and download recovery for resumable transfers"
 
     LARGE_FILE_SIZE = 100 * 1024 * 1024
-    RATE_LIMIT = "262144"
+    INTERRUPT_THRESHOLD_PERCENT = 15.0
+    TRANSFER_WAIT_TIMEOUT = 300
+    PROCESS_EXIT_TIMEOUT = 120
 
     def _write_config(
         self,
@@ -45,7 +48,6 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             'bypass_data_preservation = "true"',
             'enable_logging = "true"',
             f'log_dir = "{app_log_dir}"',
-            f'rate_limit = "{self.RATE_LIMIT}"',
         ]
         if force_session_upload:
             lines.append('force_session_upload = "true"')
@@ -82,17 +84,68 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             if remainder:
                 fp.write(chunk[:remainder])
 
-    def _interrupt_process_and_capture(
+    def _contains_any_marker(self, text: str, markers: list[str]) -> bool:
+        return any(marker in text for marker in markers)
+
+    def _extract_max_progress_percent(self, text: str) -> float:
+        max_percent = 0.0
+        for match in re.finditer(r"(?P<percent>\d{1,3}(?:\.\d+)?)\s*%", text):
+            try:
+                value = float(match.group("percent"))
+            except ValueError:
+                continue
+            if 0.0 <= value <= 100.0 and value > max_percent:
+                max_percent = value
+        return max_percent
+
+    def _build_transfer_observation(
+        self,
+        stdout_file: Path,
+        stderr_file: Path,
+        app_log_file: Path,
+        target_filename: str,
+    ) -> tuple[str, float]:
+        stdout_text = self._read_text_if_exists(stdout_file)
+        stderr_text = self._read_text_if_exists(stderr_file)
+        app_log_text = self._read_text_if_exists(app_log_file)
+
+        combined_text = stdout_text + "\n" + stderr_text + "\n" + app_log_text
+
+        # Prefer text from lines mentioning the target file, but fall back to all text
+        # because some progress counters may be printed on neighbouring lines.
+        relevant_lines: list[str] = []
+        for line in combined_text.splitlines():
+            if target_filename in line:
+                relevant_lines.append(line)
+
+        relevant_text = "\n".join(relevant_lines)
+        max_percent = 0.0
+
+        if relevant_text:
+            max_percent = self._extract_max_progress_percent(relevant_text)
+
+        if max_percent == 0.0:
+            max_percent = self._extract_max_progress_percent(combined_text)
+
+        return combined_text, max_percent
+
+    def _interrupt_process_at_transfer_threshold(
         self,
         context: E2EContext,
         label: str,
         command: list[str],
         stdout_file: Path,
         stderr_file: Path,
-        interrupt_delay: int = 5,
-        wait_timeout: int = 60,
-    ) -> tuple[int, str, str]:
+        app_log_file: Path,
+        target_filename: str,
+        threshold_percent: float,
+        wait_timeout: int,
+        exit_timeout: int,
+    ) -> tuple[int, str, str, bool, float]:
         context.log(f"Executing Test Case {self.case_id} {label}: {command_to_string(command)}")
+
+        threshold_reached = False
+        observed_max_percent = 0.0
 
         with stdout_file.open("w", encoding="utf-8") as stdout_fp, stderr_file.open(
             "w", encoding="utf-8"
@@ -104,17 +157,42 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 stderr=stderr_fp,
                 text=True,
             )
-            time.sleep(interrupt_delay)
-            process.send_signal(signal.SIGINT)
+
+            start_time = time.time()
+
+            while True:
+                if process.poll() is not None:
+                    break
+
+                combined_text, current_max = self._build_transfer_observation(
+                    stdout_file,
+                    stderr_file,
+                    app_log_file,
+                    target_filename,
+                )
+                if current_max > observed_max_percent:
+                    observed_max_percent = current_max
+
+                if current_max >= threshold_percent:
+                    threshold_reached = True
+                    process.send_signal(signal.SIGINT)
+                    break
+
+                if (time.time() - start_time) > wait_timeout:
+                    process.send_signal(signal.SIGINT)
+                    break
+
+                time.sleep(1)
+
             try:
-                process.wait(timeout=wait_timeout)
+                process.wait(timeout=exit_timeout)
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=30)
 
         stdout_text = self._read_text_if_exists(stdout_file)
         stderr_text = self._read_text_if_exists(stderr_file)
-        return process.returncode, stdout_text, stderr_text
+        return process.returncode, stdout_text, stderr_text, threshold_reached, observed_max_percent
 
     def _run_and_capture(
         self,
@@ -129,9 +207,6 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         write_text_file(stdout_file, result.stdout)
         write_text_file(stderr_file, result.stderr)
         return result
-
-    def _contains_any_marker(self, text: str, markers: list[str]) -> bool:
-        return any(marker in text for marker in markers)
 
     def _scenario_fail(
         self,
@@ -225,24 +300,29 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             str(conf_main),
         ]
 
-        phase1_returncode, phase1_stdout_text, phase1_stderr_text = self._interrupt_process_and_capture(
+        (
+            phase1_returncode,
+            phase1_stdout_text,
+            phase1_stderr_text,
+            threshold_reached,
+            observed_max_percent,
+        ) = self._interrupt_process_at_transfer_threshold(
             context,
             f"{scenario_id} phase 1",
             upload_command,
             phase1_stdout,
             phase1_stderr,
+            app_log_file,
+            "session-large.bin",
+            self.INTERRUPT_THRESHOLD_PERCENT,
+            self.TRANSFER_WAIT_TIMEOUT,
+            self.PROCESS_EXIT_TIMEOUT,
         )
 
         self._snapshot_tree(sync_root, local_tree_after_phase1)
 
         app_log_after_phase1 = self._read_text_if_exists(app_log_file)
-        combined_phase1_output = (
-            phase1_stdout_text
-            + "\n"
-            + phase1_stderr_text
-            + "\n"
-            + app_log_after_phase1
-        )
+        combined_phase1_output = phase1_stdout_text + "\n" + phase1_stderr_text + "\n" + app_log_after_phase1
 
         phase2_result = self._run_and_capture(
             context,
@@ -255,13 +335,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         phase2_stdout_text = self._read_text_if_exists(phase2_stdout)
         phase2_stderr_text = self._read_text_if_exists(phase2_stderr)
         app_log_after_phase2 = self._read_text_if_exists(app_log_file)
-        combined_phase2_output = (
-            phase2_stdout_text
-            + "\n"
-            + phase2_stderr_text
-            + "\n"
-            + app_log_after_phase2
-        )
+        combined_phase2_output = phase2_stdout_text + "\n" + phase2_stderr_text + "\n" + app_log_after_phase2
 
         self._snapshot_tree(sync_root, local_tree_after_phase2)
 
@@ -315,6 +389,9 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "verify_returncode": verify_result.returncode,
             "relative_path": relative_path,
             "large_size": self.LARGE_FILE_SIZE,
+            "interrupt_threshold_percent": self.INTERRUPT_THRESHOLD_PERCENT,
+            "threshold_reached": threshold_reached,
+            "observed_max_percent": observed_max_percent,
             "local_file_exists_after_phase1": local_file.exists(),
             "safe_backup_count_after_phase1": len(safe_backup_matches),
         }
@@ -329,6 +406,9 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"verify_returncode={verify_result.returncode}",
                     f"relative_path={relative_path}",
                     f"large_size={self.LARGE_FILE_SIZE}",
+                    f"interrupt_threshold_percent={self.INTERRUPT_THRESHOLD_PERCENT}",
+                    f"threshold_reached={threshold_reached}",
+                    f"observed_max_percent={observed_max_percent}",
                     f"local_file_exists_after_phase1={local_file.exists()}",
                     f"safe_backup_count_after_phase1={len(safe_backup_matches)}",
                     f"app_log_file={app_log_file}",
@@ -336,6 +416,15 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             )
             + "\n",
         )
+
+        if not threshold_reached:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Interrupted upload phase never reached {self.INTERRUPT_THRESHOLD_PERCENT}% transfer progress before shutdown; observed maximum was {observed_max_percent:.2f}%",
+                artifacts,
+                details,
+            )
 
         crash_markers = [
             "Segmentation fault",
@@ -542,24 +631,29 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             str(conf_download),
         ]
 
-        phase1_returncode, phase1_stdout_text, phase1_stderr_text = self._interrupt_process_and_capture(
+        (
+            phase1_returncode,
+            phase1_stdout_text,
+            phase1_stderr_text,
+            threshold_reached,
+            observed_max_percent,
+        ) = self._interrupt_process_at_transfer_threshold(
             context,
             f"{scenario_id} phase 1",
             download_command,
             phase1_stdout,
             phase1_stderr,
+            app_log_file,
+            "session-large.bin",
+            self.INTERRUPT_THRESHOLD_PERCENT,
+            self.TRANSFER_WAIT_TIMEOUT,
+            self.PROCESS_EXIT_TIMEOUT,
         )
 
         self._snapshot_tree(download_root, local_tree_after_phase1)
 
         app_log_after_phase1 = self._read_text_if_exists(app_log_file)
-        combined_phase1_output = (
-            phase1_stdout_text
-            + "\n"
-            + phase1_stderr_text
-            + "\n"
-            + app_log_after_phase1
-        )
+        combined_phase1_output = phase1_stdout_text + "\n" + phase1_stderr_text + "\n" + app_log_after_phase1
 
         phase2_result = self._run_and_capture(
             context,
@@ -572,13 +666,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         phase2_stdout_text = self._read_text_if_exists(phase2_stdout)
         phase2_stderr_text = self._read_text_if_exists(phase2_stderr)
         app_log_after_phase2 = self._read_text_if_exists(app_log_file)
-        combined_phase2_output = (
-            phase2_stdout_text
-            + "\n"
-            + phase2_stderr_text
-            + "\n"
-            + app_log_after_phase2
-        )
+        combined_phase2_output = phase2_stdout_text + "\n" + phase2_stderr_text + "\n" + app_log_after_phase2
 
         self._snapshot_tree(download_root, local_tree_after_phase2)
 
@@ -636,6 +724,9 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "verify_returncode": verify_result.returncode,
             "relative_path": relative_path,
             "large_size": self.LARGE_FILE_SIZE,
+            "interrupt_threshold_percent": self.INTERRUPT_THRESHOLD_PERCENT,
+            "threshold_reached": threshold_reached,
+            "observed_max_percent": observed_max_percent,
             "downloaded_file_exists_after_phase2": downloaded_file.exists(),
         }
 
@@ -650,12 +741,24 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"verify_returncode={verify_result.returncode}",
                     f"relative_path={relative_path}",
                     f"large_size={self.LARGE_FILE_SIZE}",
+                    f"interrupt_threshold_percent={self.INTERRUPT_THRESHOLD_PERCENT}",
+                    f"threshold_reached={threshold_reached}",
+                    f"observed_max_percent={observed_max_percent}",
                     f"downloaded_file_exists_after_phase2={downloaded_file.exists()}",
                     f"app_log_file={app_log_file}",
                 ]
             )
             + "\n",
         )
+
+        if not threshold_reached:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Interrupted download phase never reached {self.INTERRUPT_THRESHOLD_PERCENT}% transfer progress before shutdown; observed maximum was {observed_max_percent:.2f}%",
+                artifacts,
+                details,
+            )
 
         crash_markers = [
             "Segmentation fault",
