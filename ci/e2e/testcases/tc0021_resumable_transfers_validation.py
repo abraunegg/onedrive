@@ -606,13 +606,26 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 details,
             )
 
+        # Prepare a clean local download state before phase1.
+        # This is the only point in TC0021 where resync/resync-auth should be used.
+        reset_directory(download_root)
+
+        items_db = conf_dir / "items.sqlite3"
+        items_db_wal = conf_dir / "items.sqlite3-wal"
+        items_db_shm = conf_dir / "items.sqlite3-shm"
+        for db_file in (items_db, items_db_wal, items_db_shm):
+            if db_file.exists():
+                db_file.unlink()
+
         self._snapshot_tree(download_root, local_tree_before)
 
-        download_command = [
+        download_command_phase1 = [
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
             "--verbose",
+            "--resync",
+            "--resync-auth",
             "--single-directory",
             f"{root_name}/{scenario_id}",
             "--confdir",
@@ -628,7 +641,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         ) = self._interrupt_process_at_transfer_threshold(
             context,
             f"{scenario_id} phase 1",
-            download_command,
+            download_command_phase1,
             phase1_stdout,
             phase1_stderr,
             app_log_file,
@@ -643,10 +656,21 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         phase1_app_log_text = self._read_text_if_exists(app_log_file)
         combined_phase1_output = phase1_stdout_text + "\n" + phase1_stderr_text + "\n" + phase1_app_log_text
 
+        download_command_phase2 = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(conf_dir),
+        ]
+
         phase2_result = self._run_and_capture(
             context,
             f"{scenario_id} phase 2",
-            download_command,
+            download_command_phase2,
             phase2_stdout,
             phase2_stderr,
         )
