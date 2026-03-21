@@ -35,8 +35,9 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
     TRANSFER_WAIT_TIMEOUT = 300
     PROCESS_EXIT_TIMEOUT = 120
 
-    # Leave disabled by default. If needed, set to "1048576".
-    RATE_LIMIT: str | None = None
+    # Apply a 10 MB/s rate limit for both upload and download scenarios
+    # so that the phase1 interrupt lands during an active resumable transfer.
+    RATE_LIMIT: str | None = "10485760"
 
     def _write_config(
         self,
