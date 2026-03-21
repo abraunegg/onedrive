@@ -13126,40 +13126,66 @@ class SyncEngine {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
-		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		string thisFunctionName = format("%s.%s", strip(__MODULE__), strip(getFunctionName!({})));
+
 		// Only set this if we are generating performance processing times
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			functionStartTime = Clock.currTime();
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
-	
-		// Scan the filesystem for the files we are interested in, build up interruptedDownloadFiles array
-		foreach (resumeDownloadFile; dirEntries(appConfig.configDirName, "resume_download.*", SpanMode.shallow)) {
-			// calculate the full path
-			string tempPath = buildNormalizedPath(buildPath(appConfig.configDirName, resumeDownloadFile));
-			
-			
-			JSONValue resumeFileData = readText(tempPath).parseJSON();
-			addLogEntry("Removing interrupted download file due to --resync for: " ~ resumeFileData["originalFilename"].str, ["info"]);
-			string resumeFilename = resumeFileData["downloadFilename"].str;
-			
+
+		// Scan the filesystem for the files we are interested in
+		foreach (resumeDownloadEntry; dirEntries(appConfig.configDirName, "resume_download.*", SpanMode.shallow)) {
+			string tempPath = buildNormalizedPath(resumeDownloadEntry.name);
+
+			string originalFilename = "<unknown>";
+			string resumeFilename = "";
+
+			try {
+				string rawJson = readText(tempPath);
+				JSONValue resumeFileData = rawJson.parseJSON();
+
+				// Ensure the JSON root is an object before attempting key access
+				if (resumeFileData.type != JSONType.object) {
+					addLogEntry("Ignoring invalid interrupted download metadata file during --resync as JSON root is not an object: " ~ tempPath, ["warning"]);
+				} else {
+					// Safely extract originalFilename if present and of the expected type
+					if ("originalFilename" in resumeFileData.object && resumeFileData["originalFilename"].type == JSONType.string) {
+						originalFilename = resumeFileData["originalFilename"].str;
+					}
+
+					addLogEntry("Removing interrupted download file due to --resync for: " ~ originalFilename, ["info"]);
+
+					// Safely extract downloadFilename if present and of the expected type
+					if ("downloadFilename" in resumeFileData.object && resumeFileData["downloadFilename"].type == JSONType.string) {
+						resumeFilename = resumeFileData["downloadFilename"].str;
+					} else {
+						addLogEntry("Interrupted download metadata file is missing valid 'downloadFilename': " ~ tempPath, ["warning"]);
+					}
+				}
+			} catch (Exception e) {
+				addLogEntry("Unable to parse interrupted download metadata file during --resync: " ~ tempPath ~ " - " ~ e.msg, ["warning"]);
+			}
+
 			// Process removal
 			if (!dryRun) {
-				// remove the .partial file
-				safeRemove(resumeFilename);
-				// remove the resume_download. file
+				// Only remove the .partial file if we successfully obtained a filename
+				if (!resumeFilename.empty) {
+					safeRemove(resumeFilename);
+				}
+
+				// Always remove the metadata file itself during --resync
 				safeRemove(tempPath);
 			}
 		}
-		
+
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-	
+		
 	// Process interrupted 'session_upload' files
 	void processInterruptedSessionUploads() {
 		// Function Start Time
