@@ -5343,10 +5343,22 @@ class SyncEngine {
 											// Correct timestamp
 											uploadLastModifiedTime(dbItem, dbItem.driveId, dbItem.id, localModifiedTime.toUTC(), dbItem.eTag);
 										} else {
-											// Log what is being done
-											if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with an older local timestamp - correcting local timestamp", ["verbose"]);}
-											// Set the timestamp, logging and error handling done within function
-											setLocalPathTimestamp(dryRun, localFilePath, dbItem.mtime);
+											// Issue #3666
+											// When using --upload-only & --local-first we must ensure that the database reflects the local timestamp as the OneDrive API may skew the timestamp
+											if ((appConfig.getValueBool("upload_only")) && (appConfig.getValueBool("local_first"))) {
+												// Need to correct the database data
+												// Log what is being done
+												if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with different database timestamp - correcting database timestamp", ["verbose"]);}
+												// dbItem.mtime needs to be updated to be the local timestamp
+												dbItem.mtime = localModifiedTime.toUTC();
+												itemDB.upsert(dbItem);
+											} else {
+												// Not a --upload-only & --local-first scenario
+												// Log what is being done
+												if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with an older local timestamp - correcting local timestamp", ["verbose"]);}
+												// Set the timestamp, logging and error handling done within function
+												setLocalPathTimestamp(dryRun, localFilePath, dbItem.mtime);
+											}
 										}
 									} else {
 										// Remote file, remote values need to be used, we may not even have permission to change timestamp, update local file
@@ -7033,10 +7045,19 @@ class SyncEngine {
 				useSimpleUpload = true;
 			}
 			
+			// Issue #3666
+			// When using --upload-only & --local-first we must ensure that Microsoft OneDrive is consuming the local file Timestamp
+			// We can guarantee this in part by forcing a session upload, which includes in the upload-session data the local file timestamp
+			if ((appConfig.getValueBool("upload_only")) && (appConfig.getValueBool("local_first"))) {
+				// Forcing session upload
+				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (modified) due to 'upload_only' and 'local_first'", ["debug"]);}
+				useSimpleUpload = false;
+			}
+			
 			// Use Session Upload regardless
 			if (appConfig.getValueBool("force_session_upload")) {
 				// Forcing session upload
-				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (modified)", ["debug"]);}
+				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (modified) due to 'force_session_upload'", ["debug"]);}
 				useSimpleUpload = false;
 			}
 			
@@ -9567,10 +9588,19 @@ class SyncEngine {
 				useSimpleUpload = true;
 			}
 			
+			// Issue #3666
+			// When using --upload-only & --local-first we must ensure that Microsoft OneDrive is consuming the local file Timestamp
+			// We can guarantee this in part by forcing a session upload, which includes in the upload-session data the local file timestamp
+			if ((appConfig.getValueBool("upload_only")) && (appConfig.getValueBool("local_first"))) {
+				// Forcing session upload
+				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (newfile) due to 'upload_only' and 'local_first'", ["debug"]);}
+				useSimpleUpload = false;
+			}
+			
 			// Use Session Upload regardless
 			if (appConfig.getValueBool("force_session_upload")) {
 				// Forcing session upload
-				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (newfile)", ["debug"]);}
+				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (newfile) due to 'force_session_upload'", ["debug"]);}
 				useSimpleUpload = false;
 			}
 			
