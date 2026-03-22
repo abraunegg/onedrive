@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 from framework.base import E2ETestCase
@@ -12,7 +13,7 @@ from framework.utils import command_to_string, reset_directory, run_command, wri
 class TestCase0023BypassDataPreservationValidation(E2ETestCase):
     case_id = "0023"
     name = "bypass_data_preservation validation"
-    description = "Validate that bypass_data_preservation suppresses safe-backup preservation during conflict resolution"
+    description = "Validate that bypass_data_preservation suppresses safe-backup preservation during resync conflict resolution"
 
     def _write_config(self, config_path: Path, sync_dir: Path, bypass_data_preservation: bool = False) -> None:
         content = (
@@ -35,26 +36,21 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
 
         seed_root = case_work_dir / "seedroot"
         local_root = case_work_dir / "localroot"
-        remote_update_root = case_work_dir / "remoteupdateroot"
 
         conf_seed = case_work_dir / "conf-seed"
         conf_local = case_work_dir / "conf-local"
-        conf_remote = case_work_dir / "conf-remote"
 
         root_name = f"ZZ_E2E_TC0023_{context.run_id}_{os.getpid()}"
         relative_file = f"{root_name}/conflict.txt"
 
         reset_directory(seed_root)
         reset_directory(local_root)
-        reset_directory(remote_update_root)
 
-        # Initial remote seed content
-        write_text_file(seed_root / relative_file, "base\n")
+        original_remote_content = "base\n"
+        local_conflicting_content = "local conflicting content\n"
 
-        # Remote content that should overwrite the local conflicting edit when
-        # bypass_data_preservation is enabled
-        expected_remote_content = "remote conflicting content\n"
-        write_text_file(remote_update_root / relative_file, expected_remote_content)
+        # Seed the remote with the original content
+        write_text_file(seed_root / relative_file, original_remote_content)
 
         context.bootstrap_config_dir(conf_seed)
         self._write_config(conf_seed / "config", seed_root)
@@ -62,15 +58,10 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
         context.bootstrap_config_dir(conf_local)
         self._write_config(conf_local / "config", local_root)
 
-        context.bootstrap_config_dir(conf_remote)
-        self._write_config(conf_remote / "config", remote_update_root)
-
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"
         download_stdout = case_log_dir / "download_stdout.log"
         download_stderr = case_log_dir / "download_stderr.log"
-        remote_stdout = case_log_dir / "remote_update_stdout.log"
-        remote_stderr = case_log_dir / "remote_update_stderr.log"
         final_stdout = case_log_dir / "final_sync_stdout.log"
         final_stderr = case_log_dir / "final_sync_stderr.log"
         metadata_file = state_dir / "metadata.txt"
@@ -111,30 +102,59 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
         write_text_file(download_stdout, download_result.stdout)
         write_text_file(download_stderr, download_result.stderr)
 
-        # Create the local conflicting edit before the remote update so the
-        # remote version becomes the newer winning content.
         local_file = local_root / relative_file
-        write_text_file(local_file, "local conflicting content\n")
+        if not local_file.is_file():
+            artifacts = [
+                str(seed_stdout),
+                str(seed_stderr),
+                str(download_stdout),
+                str(download_stderr),
+            ]
+            details = {
+                "seed_returncode": seed_result.returncode,
+                "download_returncode": download_result.returncode,
+                "root_name": root_name,
+            }
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "Initial download phase did not create the expected local file",
+                artifacts,
+                details,
+            )
 
-        remote_command = [
-            context.onedrive_bin,
-            "--display-running-config",
-            "--sync",
-            "--upload-only",
-            "--verbose",
-            "--resync",
-            "--resync-auth",
-            "--single-directory",
-            root_name,
-            "--confdir",
-            str(conf_remote),
-        ]
-        context.log(f"Executing Test Case {self.case_id} remote update: {command_to_string(remote_command)}")
-        remote_result = run_command(remote_command, cwd=context.repo_root)
-        write_text_file(remote_stdout, remote_result.stdout)
-        write_text_file(remote_stderr, remote_result.stderr)
+        initial_local_content = local_file.read_text(encoding="utf-8")
+        if initial_local_content != original_remote_content:
+            artifacts = [
+                str(seed_stdout),
+                str(seed_stderr),
+                str(download_stdout),
+                str(download_stderr),
+            ]
+            details = {
+                "seed_returncode": seed_result.returncode,
+                "download_returncode": download_result.returncode,
+                "root_name": root_name,
+                "initial_local_content": initial_local_content,
+            }
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "Initial download phase did not produce the expected baseline file content",
+                artifacts,
+                details,
+            )
 
-        # Reuse the same local DB / delta state, but now enable bypass behaviour
+        # Ensure the local conflicting edit has a clearly newer local timestamp.
+        # This helps force the resync path to treat the local file as modified
+        # relative to the unchanged online copy.
+        time.sleep(2)
+        write_text_file(local_file, local_conflicting_content)
+        os.utime(local_file, None)
+
+        # Re-write the local config to enable bypass behaviour. The final sync
+        # must use --resync so the known local DB state is discarded and the
+        # client evaluates the local modified file against the existing remote file.
         self._write_config(conf_local / "config", local_root, bypass_data_preservation=True)
 
         final_command = [
@@ -142,6 +162,7 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
+            "--resync",
             "--single-directory",
             root_name,
             "--confdir",
@@ -152,7 +173,7 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
         write_text_file(final_stdout, final_result.stdout)
         write_text_file(final_stderr, final_result.stderr)
 
-        local_content = local_file.read_text(encoding="utf-8") if local_file.is_file() else ""
+        final_local_content = local_file.read_text(encoding="utf-8") if local_file.is_file() else ""
 
         safe_backup_files = sorted(
             str(path.relative_to(local_root))
@@ -168,15 +189,14 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
                     f"root_name={root_name}",
                     f"seed_root={seed_root}",
                     f"local_root={local_root}",
-                    f"remote_update_root={remote_update_root}",
                     f"seed_confdir={conf_seed}",
                     f"local_confdir={conf_local}",
-                    f"remote_confdir={conf_remote}",
                     f"seed_returncode={seed_result.returncode}",
                     f"download_returncode={download_result.returncode}",
-                    f"remote_returncode={remote_result.returncode}",
                     f"final_returncode={final_result.returncode}",
-                    f"local_content={local_content!r}",
+                    f"initial_local_content={initial_local_content!r}",
+                    f"local_conflicting_content={local_conflicting_content!r}",
+                    f"final_local_content={final_local_content!r}",
                     f"safe_backup_files={safe_backup_files!r}",
                 ]
             )
@@ -188,8 +208,6 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
             str(seed_stderr),
             str(download_stdout),
             str(download_stderr),
-            str(remote_stdout),
-            str(remote_stderr),
             str(final_stdout),
             str(final_stderr),
             str(metadata_file),
@@ -197,7 +215,6 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
         details = {
             "seed_returncode": seed_result.returncode,
             "download_returncode": download_result.returncode,
-            "remote_returncode": remote_result.returncode,
             "final_returncode": final_result.returncode,
             "root_name": root_name,
             "safe_backup_count": len(safe_backup_files),
@@ -206,7 +223,6 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
         for label, rc in [
             ("seed", seed_result.returncode),
             ("download", download_result.returncode),
-            ("remote update", remote_result.returncode),
             ("final sync", final_result.returncode),
         ]:
             if rc != 0:
@@ -218,11 +234,13 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
                     details,
                 )
 
-        if local_content != expected_remote_content:
+        # With bypass_data_preservation enabled, the unchanged online version
+        # should overwrite the locally modified file during the resync.
+        if final_local_content != original_remote_content:
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
-                "Local content was not overwritten by the remote conflicting content when bypass_data_preservation was enabled",
+                "Local content was not overwritten by the remote file when bypass_data_preservation was enabled",
                 artifacts,
                 details,
             )
