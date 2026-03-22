@@ -128,6 +128,10 @@ class TestCase0002SyncListValidation(E2ETestCase):
             re.compile(r"^(?:DEBUG:\s+)?Skipping path - excluded by sync_list config: (.+)$"),
         ),
         (
+            "skip",
+            re.compile(r"^(?:DEBUG:\s+)?Skipping file - excluded by sync_list config: (.+)$"),
+        ),
+        (
             "include_dir",
             re.compile(r"^(?:DEBUG:\s+)?Including path - included by sync_list config: (.+)$"),
         ),
@@ -141,7 +145,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
         ),
         (
             "retain_existing",
-            re.compile(r"^(?:DEBUG:\s+)?Path already present in pathsRetained - retain path: (.+)$"),
+            re.compile(r"^(?:DEBUG:\s+)?Path already marked for retention - retaining path: (.+)$"),
         ),
         (
             "retain_local_file",
@@ -210,6 +214,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
         ),
     ]
 
+    def _refresh_tree_mtimes(self, root: Path) -> None:
+        now = None
+        for path in sorted(root.rglob("*"), reverse=True):
+            os.utime(path, now)
+        os.utime(root, now)
+
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / f"tc{self.case_id}"
         case_log_dir = context.logs_dir / f"tc{self.case_id}"
@@ -262,6 +272,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
             )
 
             shutil.copytree(fixture_root, sync_root, dirs_exist_ok=True)
+            
+            self._refresh_tree_mtimes(sync_root)
 
             sync_list_path = config_dir / "sync_list"
             metadata_file = scenario_dir / "metadata.txt"
