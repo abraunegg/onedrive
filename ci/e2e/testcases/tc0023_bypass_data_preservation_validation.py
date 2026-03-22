@@ -163,6 +163,7 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
             "--sync",
             "--verbose",
             "--resync",
+            "--resync-auth",
             "--single-directory",
             root_name,
             "--confdir",
