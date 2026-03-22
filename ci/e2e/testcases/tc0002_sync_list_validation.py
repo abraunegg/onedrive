@@ -1062,6 +1062,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
             SyncListScenario(
                 scenario_id="SL-0004",
                 description="include tree with nested exclusion",
+                execution_mode="cleanup_regression",
                 sync_list=[
                     f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/*",
                     f"/{FIXTURE_ROOT_NAME}/Documents/",
@@ -1075,6 +1076,14 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 required_skipped=[
                     f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
                     f"{FIXTURE_ROOT_NAME}/Backup",
+                ],
+                phase1_config_overrides=[
+                    'download_only = "false"',
+                    'cleanup_local_files = "false"',
+                ],
+                phase2_config_overrides=[
+                    'download_only = "true"',
+                    'cleanup_local_files = "false"',
                 ],
             ),
             SyncListScenario(
@@ -1321,6 +1330,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
             SyncListScenario(
                 scenario_id="SL-0016",
                 description="massive mixed rule set across Programming Documents and Work",
+                execution_mode="cleanup_regression",
                 sync_list=[
                     "!build/kotlin/*",
                     "!.gradle/*",
@@ -1376,6 +1386,14 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Next/App1/.next",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Misc/App1/.cache",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Python/Tool1/__pycache__",
+                ],
+                phase1_config_overrides=[
+                    'download_only = "false"',
+                    'cleanup_local_files = "false"',
+                ],
+                phase2_config_overrides=[
+                    'download_only = "true"',
+                    'cleanup_local_files = "false"',
                 ],
             ),
             SyncListScenario(
@@ -1475,6 +1493,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
             SyncListScenario(
                 scenario_id="SL-0023",
                 description="sync_root_files true retains logical root files alongside included Projects subtree",
+                execution_mode="cleanup_regression",
                 sync_list=[
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Video",
@@ -1502,7 +1521,16 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                     f"{FIXTURE_ROOT_NAME}/Backup",
                 ],
-                phase2_config_overrides=['sync_root_files = "true"'],
+                phase1_config_overrides=[
+                    'download_only = "false"',
+                    'cleanup_local_files = "false"',
+                    'sync_root_files = "true"',
+                ],
+                phase2_config_overrides=[
+                    'download_only = "true"',
+                    'cleanup_local_files = "false"',
+                    'sync_root_files = "true"',
+                ],
             ),
             SyncListScenario(
                 scenario_id="SL-0024",
