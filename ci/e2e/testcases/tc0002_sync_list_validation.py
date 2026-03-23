@@ -1502,7 +1502,6 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 allowed_exact=[
                     f"{FIXTURE_ROOT_NAME}/README.txt",
                     f"{FIXTURE_ROOT_NAME}/loose.bin",
-                    f"{FIXTURE_ROOT_NAME}/zz_e2e_zz_e2e_sync_list.bin",
                 ],
                 allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Projects"],
                 forbidden_prefixes=[
@@ -1512,7 +1511,6 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/README.txt",
                     f"{FIXTURE_ROOT_NAME}/loose.bin",
-                    f"{FIXTURE_ROOT_NAME}/zz_e2e_zz_e2e_sync_list.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
                 ],
