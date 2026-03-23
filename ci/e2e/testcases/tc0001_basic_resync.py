@@ -41,17 +41,15 @@ class TestCase0001BasicResync(E2ETestCase):
         reset_directory(conf_dir)
 
         context.ensure_refresh_token_available()
+        context.bootstrap_config_dir(conf_dir)
 
         stdout_file = case_log_dir / "stdout.log"
         stderr_file = case_log_dir / "stderr.log"
         metadata_file = state_dir / "metadata.txt"
 
-        # Build a per-test config so that any optional base config, including
-        # SharePoint-specific drive_id data sourced from config.sharepoint,
-        # is materialised into the runtime config used by this testcase.
         write_onedrive_config(
-            conf_dir,
-            sync_dir=sync_root,
+            conf_dir / "config",
+            "# tc0001 config\n",
         )
 
         command = [
