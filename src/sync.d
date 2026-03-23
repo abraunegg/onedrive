@@ -5343,10 +5343,22 @@ class SyncEngine {
 											// Correct timestamp
 											uploadLastModifiedTime(dbItem, dbItem.driveId, dbItem.id, localModifiedTime.toUTC(), dbItem.eTag);
 										} else {
-											// Log what is being done
-											if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with an older local timestamp - correcting local timestamp", ["verbose"]);}
-											// Set the timestamp, logging and error handling done within function
-											setLocalPathTimestamp(dryRun, localFilePath, dbItem.mtime);
+											// Issue #3666
+											// When using --upload-only & --local-first we must ensure that the database reflects the local timestamp as the OneDrive API may skew the timestamp
+											if ((appConfig.getValueBool("upload_only")) && (appConfig.getValueBool("local_first"))) {
+												// Need to correct the database data
+												// Log what is being done
+												if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with different database timestamp - correcting database timestamp", ["verbose"]);}
+												// dbItem.mtime needs to be updated to be the local timestamp
+												dbItem.mtime = localModifiedTime.toUTC();
+												itemDB.upsert(dbItem);
+											} else {
+												// Not a --upload-only & --local-first scenario
+												// Log what is being done
+												if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with an older local timestamp - correcting local timestamp", ["verbose"]);}
+												// Set the timestamp, logging and error handling done within function
+												setLocalPathTimestamp(dryRun, localFilePath, dbItem.mtime);
+											}
 										}
 									} else {
 										// Remote file, remote values need to be used, we may not even have permission to change timestamp, update local file
@@ -7033,10 +7045,19 @@ class SyncEngine {
 				useSimpleUpload = true;
 			}
 			
+			// Issue #3666
+			// When using --upload-only & --local-first we must ensure that Microsoft OneDrive is consuming the local file Timestamp
+			// We can guarantee this in part by forcing a session upload, which includes in the upload-session data the local file timestamp
+			if ((appConfig.getValueBool("upload_only")) && (appConfig.getValueBool("local_first"))) {
+				// Forcing session upload
+				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (modified) due to 'upload_only' and 'local_first'", ["debug"]);}
+				useSimpleUpload = false;
+			}
+			
 			// Use Session Upload regardless
 			if (appConfig.getValueBool("force_session_upload")) {
 				// Forcing session upload
-				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (modified)", ["debug"]);}
+				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (modified) due to 'force_session_upload'", ["debug"]);}
 				useSimpleUpload = false;
 			}
 			
@@ -9567,10 +9588,19 @@ class SyncEngine {
 				useSimpleUpload = true;
 			}
 			
+			// Issue #3666
+			// When using --upload-only & --local-first we must ensure that Microsoft OneDrive is consuming the local file Timestamp
+			// We can guarantee this in part by forcing a session upload, which includes in the upload-session data the local file timestamp
+			if ((appConfig.getValueBool("upload_only")) && (appConfig.getValueBool("local_first"))) {
+				// Forcing session upload
+				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (newfile) due to 'upload_only' and 'local_first'", ["debug"]);}
+				useSimpleUpload = false;
+			}
+			
 			// Use Session Upload regardless
 			if (appConfig.getValueBool("force_session_upload")) {
 				// Forcing session upload
-				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (newfile)", ["debug"]);}
+				if (debugLogging) {addLogEntry("Forcing to perform upload using a session (newfile) due to 'force_session_upload'", ["debug"]);}
 				useSimpleUpload = false;
 			}
 			
@@ -13126,40 +13156,66 @@ class SyncEngine {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
-		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		string thisFunctionName = format("%s.%s", strip(__MODULE__), strip(getFunctionName!({})));
+
 		// Only set this if we are generating performance processing times
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			functionStartTime = Clock.currTime();
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
-	
-		// Scan the filesystem for the files we are interested in, build up interruptedDownloadFiles array
-		foreach (resumeDownloadFile; dirEntries(appConfig.configDirName, "resume_download.*", SpanMode.shallow)) {
-			// calculate the full path
-			string tempPath = buildNormalizedPath(buildPath(appConfig.configDirName, resumeDownloadFile));
-			
-			
-			JSONValue resumeFileData = readText(tempPath).parseJSON();
-			addLogEntry("Removing interrupted download file due to --resync for: " ~ resumeFileData["originalFilename"].str, ["info"]);
-			string resumeFilename = resumeFileData["downloadFilename"].str;
-			
+
+		// Scan the filesystem for the files we are interested in
+		foreach (resumeDownloadEntry; dirEntries(appConfig.configDirName, "resume_download.*", SpanMode.shallow)) {
+			string tempPath = buildNormalizedPath(resumeDownloadEntry.name);
+
+			string originalFilename = "<unknown>";
+			string resumeFilename = "";
+
+			try {
+				string rawJson = readText(tempPath);
+				JSONValue resumeFileData = rawJson.parseJSON();
+
+				// Ensure the JSON root is an object before attempting key access
+				if (resumeFileData.type != JSONType.object) {
+					addLogEntry("Ignoring invalid interrupted download metadata file during --resync as JSON root is not an object: " ~ tempPath, ["warning"]);
+				} else {
+					// Safely extract originalFilename if present and of the expected type
+					if ("originalFilename" in resumeFileData.object && resumeFileData["originalFilename"].type == JSONType.string) {
+						originalFilename = resumeFileData["originalFilename"].str;
+					}
+
+					addLogEntry("Removing interrupted download file due to --resync for: " ~ originalFilename, ["info"]);
+
+					// Safely extract downloadFilename if present and of the expected type
+					if ("downloadFilename" in resumeFileData.object && resumeFileData["downloadFilename"].type == JSONType.string) {
+						resumeFilename = resumeFileData["downloadFilename"].str;
+					} else {
+						addLogEntry("Interrupted download metadata file is missing valid 'downloadFilename': " ~ tempPath, ["warning"]);
+					}
+				}
+			} catch (Exception e) {
+				addLogEntry("Unable to parse interrupted download metadata file during --resync: " ~ tempPath ~ " - " ~ e.msg, ["warning"]);
+			}
+
 			// Process removal
 			if (!dryRun) {
-				// remove the .partial file
-				safeRemove(resumeFilename);
-				// remove the resume_download. file
+				// Only remove the .partial file if we successfully obtained a filename
+				if (!resumeFilename.empty) {
+					safeRemove(resumeFilename);
+				}
+
+				// Always remove the metadata file itself during --resync
 				safeRemove(tempPath);
 			}
 		}
-		
+
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-	
+		
 	// Process interrupted 'session_upload' files
 	void processInterruptedSessionUploads() {
 		// Function Start Time
