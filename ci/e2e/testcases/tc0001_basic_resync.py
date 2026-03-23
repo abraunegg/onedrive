@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
+from framework.utils import (
+    command_to_string,
+    reset_directory,
+    run_command,
+    write_onedrive_config,
+    write_text_file,
+)
 
 
 class TestCase0001BasicResync(E2ETestCase):
@@ -23,20 +27,32 @@ class TestCase0001BasicResync(E2ETestCase):
     description = "Run a basic --sync --resync --resync-auth operation and capture the outcome"
 
     def run(self, context: E2EContext) -> TestResult:
-        
         case_work_dir = context.work_root / f"tc{self.case_id}"
         case_log_dir = context.logs_dir / f"tc{self.case_id}"
         state_dir = context.state_dir / f"tc{self.case_id}"
 
+        sync_root = case_work_dir / "syncroot"
+        conf_dir = case_work_dir / "conf-main"
+
         reset_directory(case_work_dir)
         reset_directory(case_log_dir)
         reset_directory(state_dir)
-        
+        reset_directory(sync_root)
+        reset_directory(conf_dir)
+
         context.ensure_refresh_token_available()
 
         stdout_file = case_log_dir / "stdout.log"
         stderr_file = case_log_dir / "stderr.log"
         metadata_file = state_dir / "metadata.txt"
+
+        # Build a per-test config so that any optional base config, including
+        # SharePoint-specific drive_id data sourced from config.sharepoint,
+        # is materialised into the runtime config used by this testcase.
+        write_onedrive_config(
+            conf_dir,
+            sync_dir=sync_root,
+        )
 
         command = [
             context.onedrive_bin,
@@ -44,6 +60,10 @@ class TestCase0001BasicResync(E2ETestCase):
             "--verbose",
             "--resync",
             "--resync-auth",
+            "--syncdir",
+            str(sync_root),
+            "--confdir",
+            str(conf_dir),
         ]
 
         context.log(
@@ -60,6 +80,8 @@ class TestCase0001BasicResync(E2ETestCase):
             f"name={self.name}",
             f"command={command_to_string(command)}",
             f"returncode={result.returncode}",
+            f"sync_root={sync_root}",
+            f"conf_dir={conf_dir}",
         ]
         write_text_file(metadata_file, "\n".join(metadata_lines) + "\n")
 
@@ -72,6 +94,8 @@ class TestCase0001BasicResync(E2ETestCase):
         details = {
             "command": command,
             "returncode": result.returncode,
+            "sync_root": str(sync_root),
+            "conf_dir": str(conf_dir),
         }
 
         if result.returncode != 0:

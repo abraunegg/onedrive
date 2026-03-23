@@ -57,8 +57,9 @@ jobs:
           ONEDRIVE_BIN: ${{ github.workspace }}/.ci/prefix/bin/onedrive
           E2E_TARGET: personal
           RUN_ID: ${{ github.run_id }}
+          PYTHONUNBUFFERED: "1"
         run: |
-          python3 ci/e2e/run.py
+          python3 -u ci/e2e/run.py
 
       - name: Upload E2E artefacts
         if: always()
