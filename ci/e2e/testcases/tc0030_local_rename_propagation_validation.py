@@ -7,7 +7,13 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
+from framework.utils import (
+    command_to_string,
+    reset_directory,
+    run_command,
+    write_onedrive_config,
+    write_text_file,
+)
 
 
 class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
@@ -24,6 +30,12 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             ),
         )
 
+    def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
+        write_text_file(
+            metadata_file,
+            "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+        )
+
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / "tc0030"
         case_log_dir = context.logs_dir / "tc0030"
@@ -36,15 +48,19 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
 
         local_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
+
+        conf_seed = case_work_dir / "conf-seed"
         conf_main = case_work_dir / "conf-main"
         conf_verify = case_work_dir / "conf-verify"
 
         reset_directory(local_root)
         reset_directory(verify_root)
 
+        context.bootstrap_config_dir(conf_seed)
         context.bootstrap_config_dir(conf_main)
         context.bootstrap_config_dir(conf_verify)
 
+        self._write_config(conf_seed / "config")
         self._write_config(conf_main / "config")
         self._write_config(conf_verify / "config")
 
@@ -84,6 +100,11 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             "root_name": root_name,
             "old_relative": old_relative,
             "new_relative": new_relative,
+            "seed_conf_dir": str(conf_seed),
+            "main_conf_dir": str(conf_main),
+            "verify_conf_dir": str(conf_verify),
+            "local_root": str(local_root),
+            "verify_root": str(verify_root),
         }
 
         # Phase 1: seed the remote with the original filename
@@ -93,8 +114,8 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
-            "--verbose",
             "--upload-only",
+            "--verbose",
             "--resync",
             "--resync-auth",
             "--single-directory",
@@ -102,7 +123,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             "--syncdir",
             str(local_root),
             "--confdir",
-            str(conf_main),
+            str(conf_seed),
         ]
         context.log(f"Executing Test Case {self.case_id} phase1: {command_to_string(phase1_command)}")
         phase1_result = run_command(phase1_command, cwd=context.repo_root)
@@ -111,10 +132,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         details["phase1_returncode"] = phase1_result.returncode
 
         if phase1_result.returncode != 0:
-            write_text_file(
-                metadata_file,
-                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-            )
+            self._write_metadata(metadata_file, details)
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
@@ -123,14 +141,46 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        # Phase 2: rename the local file and run a normal sync to propagate the new state
+        if not old_local_path.is_file():
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "initial local file is missing after seed phase",
+                artifacts,
+                details,
+            )
+
+        # Phase 2: rename the local file and propagate using a fresh runtime config/state
         old_local_path.rename(new_local_path)
+
+        if old_local_path.exists():
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "local old filename still exists immediately after rename",
+                artifacts,
+                details,
+            )
+
+        if not new_local_path.is_file():
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "local renamed file does not exist immediately after rename",
+                artifacts,
+                details,
+            )
 
         phase2_command = [
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
             "--verbose",
+            "--resync",
+            "--resync-auth",
             "--single-directory",
             root_name,
             "--syncdir",
@@ -145,40 +195,11 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         details["phase2_returncode"] = phase2_result.returncode
 
         if phase2_result.returncode != 0:
-            write_text_file(
-                metadata_file,
-                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-            )
+            self._write_metadata(metadata_file, details)
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
                 f"rename propagation phase failed with status {phase2_result.returncode}",
-                artifacts,
-                details,
-            )
-
-        if old_local_path.exists():
-            write_text_file(
-                metadata_file,
-                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-            )
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "local old filename still exists after rename propagation phase",
-                artifacts,
-                details,
-            )
-
-        if not new_local_path.is_file():
-            write_text_file(
-                metadata_file,
-                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-            )
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "local renamed file does not exist after rename propagation phase",
                 artifacts,
                 details,
             )
@@ -188,8 +209,8 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
-            "--verbose",
             "--download-only",
+            "--verbose",
             "--resync",
             "--resync-auth",
             "--single-directory",
@@ -210,16 +231,16 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
 
         verified_old_path = verify_root / old_relative
         verified_new_path = verify_root / new_relative
-        verified_content = verified_new_path.read_text(encoding="utf-8") if verified_new_path.is_file() else ""
 
         details["verified_old_exists"] = verified_old_path.exists()
         details["verified_new_exists"] = verified_new_path.exists()
+
+        verified_content = ""
+        if verified_new_path.is_file():
+            verified_content = verified_new_path.read_text(encoding="utf-8")
         details["verified_content"] = verified_content
 
-        write_text_file(
-            metadata_file,
-            "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-        )
+        self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
             return TestResult.fail_result(

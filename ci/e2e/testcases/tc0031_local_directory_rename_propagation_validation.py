@@ -7,7 +7,13 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
+from framework.utils import (
+    command_to_string,
+    reset_directory,
+    run_command,
+    write_onedrive_config,
+    write_text_file,
+)
 
 
 class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
@@ -24,6 +30,12 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             ),
         )
 
+    def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
+        write_text_file(
+            metadata_file,
+            "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+        )
+
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / "tc0031"
         case_log_dir = context.logs_dir / "tc0031"
@@ -36,15 +48,19 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
 
         local_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
+
+        conf_seed = case_work_dir / "conf-seed"
         conf_main = case_work_dir / "conf-main"
         conf_verify = case_work_dir / "conf-verify"
 
         reset_directory(local_root)
         reset_directory(verify_root)
 
+        context.bootstrap_config_dir(conf_seed)
         context.bootstrap_config_dir(conf_main)
         context.bootstrap_config_dir(conf_verify)
 
+        self._write_config(conf_seed / "config")
         self._write_config(conf_main / "config")
         self._write_config(conf_verify / "config")
 
@@ -91,6 +107,11 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "root_name": root_name,
             "source_dir_relative": source_dir_relative,
             "renamed_dir_relative": renamed_dir_relative,
+            "seed_conf_dir": str(conf_seed),
+            "main_conf_dir": str(conf_main),
+            "verify_conf_dir": str(conf_verify),
+            "local_root": str(local_root),
+            "verify_root": str(verify_root),
         }
 
         # Phase 1: seed the remote with the original directory tree
@@ -101,8 +122,8 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
-            "--verbose",
             "--upload-only",
+            "--verbose",
             "--resync",
             "--resync-auth",
             "--single-directory",
@@ -110,7 +131,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "--syncdir",
             str(local_root),
             "--confdir",
-            str(conf_main),
+            str(conf_seed),
         ]
         context.log(f"Executing Test Case {self.case_id} phase1: {command_to_string(phase1_command)}")
         phase1_result = run_command(phase1_command, cwd=context.repo_root)
@@ -119,10 +140,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         details["phase1_returncode"] = phase1_result.returncode
 
         if phase1_result.returncode != 0:
-            write_text_file(
-                metadata_file,
-                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-            )
+            self._write_metadata(metadata_file, details)
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
@@ -131,14 +149,46 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        # Phase 2: rename the entire local directory tree and propagate
+        if not source_dir.is_dir():
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "initial local source directory is missing after seed phase",
+                artifacts,
+                details,
+            )
+
+        # Phase 2: rename the entire local directory tree and propagate using a fresh runtime config/state
         source_dir.rename(renamed_dir)
+
+        if source_dir.exists():
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "local original directory still exists immediately after rename",
+                artifacts,
+                details,
+            )
+
+        if not renamed_dir.is_dir():
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "local renamed directory does not exist immediately after rename",
+                artifacts,
+                details,
+            )
 
         phase2_command = [
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
             "--verbose",
+            "--resync",
+            "--resync-auth",
             "--single-directory",
             root_name,
             "--syncdir",
@@ -153,40 +203,11 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         details["phase2_returncode"] = phase2_result.returncode
 
         if phase2_result.returncode != 0:
-            write_text_file(
-                metadata_file,
-                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-            )
+            self._write_metadata(metadata_file, details)
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
                 f"directory rename propagation phase failed with status {phase2_result.returncode}",
-                artifacts,
-                details,
-            )
-
-        if source_dir.exists():
-            write_text_file(
-                metadata_file,
-                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-            )
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "local original directory still exists after rename propagation phase",
-                artifacts,
-                details,
-            )
-
-        if not renamed_dir.is_dir():
-            write_text_file(
-                metadata_file,
-                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-            )
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "local renamed directory does not exist after rename propagation phase",
                 artifacts,
                 details,
             )
@@ -196,8 +217,8 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
-            "--verbose",
             "--download-only",
+            "--verbose",
             "--resync",
             "--resync-auth",
             "--single-directory",
@@ -218,10 +239,10 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
 
         verify_old_dir = verify_root / source_dir_relative
         verify_new_dir = verify_root / renamed_dir_relative
-        verify_new_file_1 = verify_root / renamed_file_1_relative
-        verify_new_file_2 = verify_root / renamed_file_2_relative
         verify_old_file_1 = verify_root / source_file_1_relative
         verify_old_file_2 = verify_root / source_file_2_relative
+        verify_new_file_1 = verify_root / renamed_file_1_relative
+        verify_new_file_2 = verify_root / renamed_file_2_relative
 
         details["verify_old_dir_exists"] = verify_old_dir.exists()
         details["verify_new_dir_exists"] = verify_new_dir.exists()
@@ -229,13 +250,18 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         details["verify_old_file_2_exists"] = verify_old_file_2.exists()
         details["verify_new_file_1_exists"] = verify_new_file_1.exists()
         details["verify_new_file_2_exists"] = verify_new_file_2.exists()
-        details["verify_new_file_1_content"] = verify_new_file_1.read_text(encoding="utf-8") if verify_new_file_1.is_file() else ""
-        details["verify_new_file_2_content"] = verify_new_file_2.read_text(encoding="utf-8") if verify_new_file_2.is_file() else ""
 
-        write_text_file(
-            metadata_file,
-            "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-        )
+        verify_new_file_1_content = ""
+        verify_new_file_2_content = ""
+        if verify_new_file_1.is_file():
+            verify_new_file_1_content = verify_new_file_1.read_text(encoding="utf-8")
+        if verify_new_file_2.is_file():
+            verify_new_file_2_content = verify_new_file_2.read_text(encoding="utf-8")
+
+        details["verify_new_file_1_content"] = verify_new_file_1_content
+        details["verify_new_file_2_content"] = verify_new_file_2_content
+
+        self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
             return TestResult.fail_result(
@@ -268,7 +294,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
-                f"remote verification is missing renamed directory file: {renamed_file_1_relative}",
+                f"remote verification is missing renamed top-level file: {renamed_file_1_relative}",
                 artifacts,
                 details,
             )
@@ -282,7 +308,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        if verify_new_file_1.read_text(encoding="utf-8") != file1_content:
+        if verify_new_file_1_content != file1_content:
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
@@ -291,7 +317,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        if verify_new_file_2.read_text(encoding="utf-8") != file2_content:
+        if verify_new_file_2_content != file2_content:
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
