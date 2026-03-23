@@ -63,9 +63,12 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         actual_content = path.read_text(encoding="utf-8")
         actual_mtime = int(path.stat().st_mtime)
 
+        details[f"{phase_name}_actual_content"] = actual_content
+        details[f"{phase_name}_actual_mtime"] = actual_mtime
+        details[f"{phase_name}_expected_content"] = expected_content
+        details[f"{phase_name}_expected_mtime"] = expected_mtime
+
         if actual_content != expected_content:
-            details[f"{phase_name}_actual_content"] = actual_content
-            details[f"{phase_name}_expected_content"] = expected_content
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
@@ -75,8 +78,6 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
             )
 
         if actual_mtime != expected_mtime:
-            details[f"{phase_name}_actual_mtime"] = actual_mtime
-            details[f"{phase_name}_expected_mtime"] = expected_mtime
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
@@ -85,6 +86,53 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
                 details,
             )
 
+        return None
+
+    def _assert_no_download_activity(
+        self,
+        stdout_text: str,
+        phase_name: str,
+        artifacts: list[str],
+        details: dict[str, object],
+    ) -> TestResult | None:
+        unexpected_markers = [
+            "Downloading file:",
+            "Creating local directory",
+        ]
+        for marker in unexpected_markers:
+            if marker in stdout_text:
+                details[f"{phase_name}_unexpected_download_marker"] = marker
+                return TestResult.fail_result(
+                    self.case_id,
+                    self.name,
+                    f"{phase_name} showed unexpected download-side local reconciliation activity in upload-only mode",
+                    artifacts,
+                    details,
+                )
+        return None
+
+    def _assert_no_upload_activity(
+        self,
+        stdout_text: str,
+        phase_name: str,
+        artifacts: list[str],
+        details: dict[str, object],
+    ) -> TestResult | None:
+        unexpected_markers = [
+            "Uploading new file:",
+            "Uploading modified file:",
+            "Uploading file:",
+        ]
+        for marker in unexpected_markers:
+            if marker in stdout_text:
+                details[f"{phase_name}_unexpected_upload_marker"] = marker
+                return TestResult.fail_result(
+                    self.case_id,
+                    self.name,
+                    f"{phase_name} unexpectedly attempted another upload despite no local changes",
+                    artifacts,
+                    details,
+                )
         return None
 
     def run(self, context: E2EContext) -> TestResult:
@@ -117,10 +165,6 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
             "This file is uploaded again with a newer local timestamp.\n"
         )
 
-        write_text_file(local_file, initial_content)
-        self._set_file_mtime(local_file, self.FIXED_MTIME_INITIAL)
-        initial_before = self._file_stat_snapshot(local_file)
-
         phase1_stdout = case_log_dir / "phase1_initial_upload_stdout.log"
         phase1_stderr = case_log_dir / "phase1_initial_upload_stderr.log"
         phase2_stdout = case_log_dir / "phase2_modified_upload_stdout.log"
@@ -128,6 +172,25 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         phase3_stdout = case_log_dir / "phase3_noop_sync_stdout.log"
         phase3_stderr = case_log_dir / "phase3_noop_sync_stderr.log"
         metadata_file = state_dir / "metadata.txt"
+
+        artifacts = [
+            str(phase1_stdout),
+            str(phase1_stderr),
+            str(phase2_stdout),
+            str(phase2_stderr),
+            str(phase3_stdout),
+            str(phase3_stderr),
+            str(metadata_file),
+        ]
+        details: dict[str, object] = {
+            "root_name": root_name,
+            "relative_file": relative_file,
+        }
+
+        # Phase 1: create the initial file, set a fixed local timestamp, and upload it.
+        write_text_file(local_file, initial_content)
+        self._set_file_mtime(local_file, self.FIXED_MTIME_INITIAL)
+        phase1_before = self._file_stat_snapshot(local_file)
 
         phase1_command = [
             context.onedrive_bin,
@@ -147,10 +210,54 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         phase1_result = run_command(phase1_command, cwd=context.repo_root)
         write_text_file(phase1_stdout, phase1_result.stdout)
         write_text_file(phase1_stderr, phase1_result.stderr)
-
         phase1_after = self._file_stat_snapshot(local_file)
 
-        # Phase 2: change local content, set a newer fixed local timestamp, upload again
+        details["phase1_returncode"] = phase1_result.returncode
+        details["phase1_before"] = phase1_before
+        details["phase1_after"] = phase1_after
+
+        if phase1_result.returncode != 0:
+            write_text_file(
+                metadata_file,
+                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+            )
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"initial upload phase failed with status {phase1_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        failure = self._assert_no_download_activity(
+            phase1_result.stdout,
+            "Initial upload phase",
+            artifacts,
+            details,
+        )
+        if failure is not None:
+            write_text_file(
+                metadata_file,
+                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+            )
+            return failure
+
+        failure = self._assert_local_file_state(
+            local_file,
+            initial_content,
+            self.FIXED_MTIME_INITIAL,
+            "Initial upload phase",
+            artifacts,
+            details,
+        )
+        if failure is not None:
+            write_text_file(
+                metadata_file,
+                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+            )
+            return failure
+
+        # Phase 2: modify the local file, set a newer fixed local timestamp, and upload again.
         time.sleep(2)
         write_text_file(local_file, updated_content)
         self._set_file_mtime(local_file, self.FIXED_MTIME_UPDATED)
@@ -172,10 +279,54 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         phase2_result = run_command(phase2_command, cwd=context.repo_root)
         write_text_file(phase2_stdout, phase2_result.stdout)
         write_text_file(phase2_stderr, phase2_result.stderr)
-
         phase2_after = self._file_stat_snapshot(local_file)
 
-        # Phase 3: run again with no local changes; the local file must remain untouched
+        details["phase2_returncode"] = phase2_result.returncode
+        details["phase2_before"] = phase2_before
+        details["phase2_after"] = phase2_after
+
+        if phase2_result.returncode != 0:
+            write_text_file(
+                metadata_file,
+                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+            )
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"modified upload phase failed with status {phase2_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        failure = self._assert_no_download_activity(
+            phase2_result.stdout,
+            "Modified upload phase",
+            artifacts,
+            details,
+        )
+        if failure is not None:
+            write_text_file(
+                metadata_file,
+                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+            )
+            return failure
+
+        failure = self._assert_local_file_state(
+            local_file,
+            updated_content,
+            self.FIXED_MTIME_UPDATED,
+            "Modified upload phase",
+            artifacts,
+            details,
+        )
+        if failure is not None:
+            write_text_file(
+                metadata_file,
+                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+            )
+            return failure
+
+        # Phase 3: run again with no local changes; the local file must remain untouched.
         time.sleep(2)
         phase3_before = self._file_stat_snapshot(local_file)
 
@@ -195,103 +346,36 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         phase3_result = run_command(phase3_command, cwd=context.repo_root)
         write_text_file(phase3_stdout, phase3_result.stdout)
         write_text_file(phase3_stderr, phase3_result.stderr)
-
         phase3_after = self._file_stat_snapshot(local_file)
 
-        artifacts = [
-            str(phase1_stdout),
-            str(phase1_stderr),
-            str(phase2_stdout),
-            str(phase2_stderr),
-            str(phase3_stdout),
-            str(phase3_stderr),
-            str(metadata_file),
-        ]
-        details: dict[str, object] = {
-            "root_name": root_name,
-            "relative_file": relative_file,
-            "phase1_returncode": phase1_result.returncode,
-            "phase2_returncode": phase2_result.returncode,
-            "phase3_returncode": phase3_result.returncode,
-            "phase1_before": initial_before,
-            "phase1_after": phase1_after,
-            "phase2_before": phase2_before,
-            "phase2_after": phase2_after,
-            "phase3_before": phase3_before,
-            "phase3_after": phase3_after,
-        }
+        details["phase3_returncode"] = phase3_result.returncode
+        details["phase3_before"] = phase3_before
+        details["phase3_after"] = phase3_after
 
-        write_text_file(
-            metadata_file,
-            "\n".join(
-                [
-                    f"case_id={self.case_id}",
-                    f"root_name={root_name}",
-                    f"relative_file={relative_file}",
-                    f"phase1_returncode={phase1_result.returncode}",
-                    f"phase2_returncode={phase2_result.returncode}",
-                    f"phase3_returncode={phase3_result.returncode}",
-                    f"phase1_before={initial_before!r}",
-                    f"phase1_after={phase1_after!r}",
-                    f"phase2_before={phase2_before!r}",
-                    f"phase2_after={phase2_after!r}",
-                    f"phase3_before={phase3_before!r}",
-                    f"phase3_after={phase3_after!r}",
-                ]
+        if phase3_result.returncode != 0:
+            write_text_file(
+                metadata_file,
+                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
             )
-            + "\n",
-        )
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"no-op sync phase failed with status {phase3_result.returncode}",
+                artifacts,
+                details,
+            )
 
-        for label, result in [
-            ("initial upload phase", phase1_result),
-            ("modified upload phase", phase2_result),
-            ("no-op sync phase", phase3_result),
-        ]:
-            if result.returncode != 0:
-                return TestResult.fail_result(
-                    self.case_id,
-                    self.name,
-                    f"{label} failed with status {result.returncode}",
-                    artifacts,
-                    details,
-                )
-
-        # Upload-only mode should not perform download actions back to the local filesystem.
-        for label, stdout_text in [
-            ("phase1", phase1_result.stdout),
-            ("phase2", phase2_result.stdout),
-            ("phase3", phase3_result.stdout),
-        ]:
-            if "Downloading file:" in stdout_text or "Creating local directory" in stdout_text:
-                details[f"{label}_unexpected_download_activity"] = True
-                return TestResult.fail_result(
-                    self.case_id,
-                    self.name,
-                    f"{label} showed unexpected download-side local reconciliation activity in upload-only mode",
-                    artifacts,
-                    details,
-                )
-
-        failure = self._assert_local_file_state(
-            local_file,
-            initial_content,
-            self.FIXED_MTIME_INITIAL,
-            "Initial upload phase",
+        failure = self._assert_no_download_activity(
+            phase3_result.stdout,
+            "No-op sync phase",
             artifacts,
             details,
         )
         if failure is not None:
-            return failure
-
-        failure = self._assert_local_file_state(
-            local_file,
-            updated_content,
-            self.FIXED_MTIME_UPDATED,
-            "Modified upload phase",
-            artifacts,
-            details,
-        )
-        if failure is not None:
+            write_text_file(
+                metadata_file,
+                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+            )
             return failure
 
         failure = self._assert_local_file_state(
@@ -303,22 +387,28 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
             details,
         )
         if failure is not None:
+            write_text_file(
+                metadata_file,
+                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+            )
             return failure
 
-        # Phase 3 should not upload again when nothing changed locally.
-        phase3_upload_markers = [
-            "Uploading new file:",
-            "Uploading modified file:",
-            "Uploading file:",
-        ]
-        if any(marker in phase3_result.stdout for marker in phase3_upload_markers):
-            details["phase3_unexpected_upload_activity"] = True
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "No-op sync phase unexpectedly attempted another upload despite no local changes",
-                artifacts,
-                details,
+        failure = self._assert_no_upload_activity(
+            phase3_result.stdout,
+            "No-op sync phase",
+            artifacts,
+            details,
+        )
+        if failure is not None:
+            write_text_file(
+                metadata_file,
+                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
             )
+            return failure
+
+        write_text_file(
+            metadata_file,
+            "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+        )
 
         return TestResult.pass_result(self.case_id, self.name, artifacts, details)
