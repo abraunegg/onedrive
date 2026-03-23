@@ -54,8 +54,8 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         reset_directory(local_root)
         reset_directory(verify_root)
 
-        context.bootstrap_config_dir(conf_main)
-        context.bootstrap_config_dir(conf_verify)
+        context.prepare_minimal_config_dir(conf_main)
+        context.prepare_minimal_config_dir(conf_verify)
 
         self._write_config(conf_main / "config")
         self._write_config(conf_verify / "config")
@@ -102,6 +102,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             "verify_root": str(verify_root),
         }
 
+        # Phase 1: create initial state and upload original file
         write_text_file(old_local_path, initial_content)
 
         phase1_command = [
@@ -142,6 +143,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
+        # Phase 2: rename locally and push using the same runtime state
         old_local_path.rename(new_local_path)
 
         if old_local_path.exists():
@@ -192,6 +194,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
+        # Phase 3: verify final remote state using a separate clean config dir
         verify_command = [
             context.onedrive_bin,
             "--display-running-config",

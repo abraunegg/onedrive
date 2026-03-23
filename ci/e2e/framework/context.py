@@ -102,6 +102,31 @@ class E2EContext:
 
         return destination
 
+    def prepare_minimal_config_dir(self, config_dir: Path) -> Path:
+        """
+        Create a brand new per-test config dir containing only the refresh_token.
+
+        This is used by testcases that require pristine application state creation
+        on first run, while still allowing the client itself to generate any backup
+        config files, hashes, databases, and other runtime state as needed.
+
+        Unlike bootstrap_config_dir(), this does not pre-seed a config file or copy
+        any other existing runtime artefacts.
+        """
+        self.ensure_refresh_token_available()
+
+        if config_dir.exists():
+            shutil.rmtree(config_dir)
+
+        ensure_directory(config_dir)
+
+        source = self.default_refresh_token_path
+        destination = config_dir / "refresh_token"
+        shutil.copy2(source, destination)
+        os.chmod(destination, 0o600)
+
+        return destination
+    
     def log(self, message: str) -> None:
         ensure_directory(self.out_dir)
         line = f"[{timestamp_now()}] {message}\n"
