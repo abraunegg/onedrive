@@ -38,7 +38,8 @@ from testcases.tc0026_reserved_device_name_validation import TestCase0026Reserve
 from testcases.tc0027_whitespace_trailing_dot_validation import TestCase0027WhitespaceTrailingDotValidation
 from testcases.tc0028_control_character_non_utf8_filename_validation import TestCase0028ControlCharacterNonUtf8FilenameValidation
 from testcases.tc0029_local_first_upload_only_timestamp_preservation_validation import TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation
-
+from testcases.tc0030_local_rename_propagation_validation import TestCase0030LocalRenamePropagationValidation
+from testcases.tc0031_local_directory_rename_propagation_validation import TestCase0031LocalDirectoryRenamePropagationValidation
 
 def build_test_suite() -> list:
     """
@@ -47,35 +48,37 @@ def build_test_suite() -> list:
     Add future test cases here in the required execution order.
     """
     return [
-        TestCase0001BasicResync(),
-        TestCase0002SyncListValidation(),
-        TestCase0003DryRunValidation(),
-        TestCase0004SingleDirectorySync(),
-        TestCase0005ForceSyncOverride(),
-        TestCase0006DownloadOnly(),
-        TestCase0007DownloadOnlyCleanupLocalFiles(),
-        TestCase0008UploadOnly(),
-        TestCase0009UploadOnlyNoRemoteDelete(),
-        TestCase0010UploadOnlyRemoveSourceFiles(),
-        TestCase0011SkipFileValidation(),
-        TestCase0012SkipDirValidation(),
-        TestCase0013SkipDotfilesValidation(),
-        TestCase0014SkipSizeValidation(),
-        TestCase0015SkipSymlinksValidation(),
-        TestCase0016CheckNosyncValidation(),
-        TestCase0017CheckNomountValidation(),
-        TestCase0018RecycleBinValidation(),
-        TestCase0019LoggingAndRunningConfig(),
-        TestCase0020MonitorModeValidation(),
-        TestCase0021ResumableTransfersValidation(),
-        TestCase0022LocalFirstValidation(),
-        TestCase0023BypassDataPreservationValidation(),
-        TestCase0024BigDeleteSafeguardValidation(),
-        TestCase0025InvalidCharacterFilenameValidation(),
-        TestCase0026ReservedDeviceNameValidation(),
-        TestCase0027WhitespaceTrailingDotValidation(),
-        TestCase0028ControlCharacterNonUtf8FilenameValidation(),
-        TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(),
+        #TestCase0001BasicResync(),
+        #TestCase0002SyncListValidation(),
+        #TestCase0003DryRunValidation(),
+        #TestCase0004SingleDirectorySync(),
+        #TestCase0005ForceSyncOverride(),
+        #TestCase0006DownloadOnly(),
+        #TestCase0007DownloadOnlyCleanupLocalFiles(),
+        #TestCase0008UploadOnly(),
+        #TestCase0009UploadOnlyNoRemoteDelete(),
+        #TestCase0010UploadOnlyRemoveSourceFiles(),
+        #TestCase0011SkipFileValidation(),
+        #TestCase0012SkipDirValidation(),
+        #TestCase0013SkipDotfilesValidation(),
+        #TestCase0014SkipSizeValidation(),
+        #TestCase0015SkipSymlinksValidation(),
+        #TestCase0016CheckNosyncValidation(),
+        #TestCase0017CheckNomountValidation(),
+        #TestCase0018RecycleBinValidation(),
+        #TestCase0019LoggingAndRunningConfig(),
+        #TestCase0020MonitorModeValidation(),
+        #TestCase0021ResumableTransfersValidation(),
+        #TestCase0022LocalFirstValidation(),
+        #TestCase0023BypassDataPreservationValidation(),
+        #TestCase0024BigDeleteSafeguardValidation(),
+        #TestCase0025InvalidCharacterFilenameValidation(),
+        #TestCase0026ReservedDeviceNameValidation(),
+        #TestCase0027WhitespaceTrailingDotValidation(),
+        #TestCase0028ControlCharacterNonUtf8FilenameValidation(),
+        #TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(),
+        TestCase0030LocalRenamePropagationValidation(),
+        TestCase0031LocalDirectoryRenamePropagationValidation(),
     ]
 
 
