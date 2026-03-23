@@ -21,6 +21,7 @@ Before reading this document, please ensure you are running application version 
   - [Client Documentation](#client-documentation)
   - [Increasing application logging level](#increasing-application-logging-level)
   - [Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive](#using-client-side-filtering-rules-to-determine-what-should-be-synced-with-microsoft-onedrive)
+  - [Why 'Server Side Filtering' is not possible with Microsoft OneDrive](#why-server-side-filtering-is-not-possible-with-microsoft-onedrive)
   - [Testing your configuration](#testing-your-configuration)
   - [Performing a sync with Microsoft OneDrive](#performing-a-sync-with-microsoft-onedrive)
   - [Performing a single directory synchronisation with Microsoft OneDrive](#performing-a-single-directory-synchronisation-with-microsoft-onedrive)
@@ -724,6 +725,12 @@ These configurable options and the 'sync_list' file provide users with the flexi
 
 > [!IMPORTANT]
 > After changing any Client Side Filtering rule, you must perform a full re-synchronisation by using `--resync`.
+
+### Why 'Server Side Filtering' is not possible with Microsoft OneDrive
+
+It is important to understand that all filtering performed by this client (including `sync_list`) is client-side filtering. Microsoft OneDrive and the Microsoft Graph API do not support server-side selective sync or the ability to apply include/exclude rules when retrieving data. The client must first enumerate the remote filesystem to understand its structure and state, and only then apply filtering rules locally to determine what should be synchronised. This behaviour is expected and is a direct result of platform limitations, not a defect in the client.
+
+For further details please read the [server-side filtering limitations](server-side-filtering-limitations.md) documentation.
 
 ### Testing your configuration
 You can test your configuration by utilising the `--dry-run` CLI option. No files will be downloaded, uploaded, or removed; however, the application will display what 'would' have occurred. For example:
