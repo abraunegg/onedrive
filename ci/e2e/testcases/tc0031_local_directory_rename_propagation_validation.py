@@ -48,19 +48,15 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
 
         local_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
-
-        conf_seed = case_work_dir / "conf-seed"
         conf_main = case_work_dir / "conf-main"
         conf_verify = case_work_dir / "conf-verify"
 
         reset_directory(local_root)
         reset_directory(verify_root)
 
-        context.bootstrap_config_dir(conf_seed)
         context.bootstrap_config_dir(conf_main)
         context.bootstrap_config_dir(conf_verify)
 
-        self._write_config(conf_seed / "config")
         self._write_config(conf_main / "config")
         self._write_config(conf_verify / "config")
 
@@ -107,14 +103,12 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "root_name": root_name,
             "source_dir_relative": source_dir_relative,
             "renamed_dir_relative": renamed_dir_relative,
-            "seed_conf_dir": str(conf_seed),
             "main_conf_dir": str(conf_main),
             "verify_conf_dir": str(conf_verify),
             "local_root": str(local_root),
             "verify_root": str(verify_root),
         }
 
-        # Phase 1: seed the remote with the original directory tree
         write_text_file(source_file_1, file1_content)
         write_text_file(source_file_2, file2_content)
 
@@ -122,7 +116,6 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
-            "--upload-only",
             "--verbose",
             "--resync",
             "--resync-auth",
@@ -131,7 +124,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "--syncdir",
             str(local_root),
             "--confdir",
-            str(conf_seed),
+            str(conf_main),
         ]
         context.log(f"Executing Test Case {self.case_id} phase1: {command_to_string(phase1_command)}")
         phase1_result = run_command(phase1_command, cwd=context.repo_root)
@@ -159,7 +152,6 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        # Phase 2: rename the entire local directory tree and propagate using a fresh runtime config/state
         source_dir.rename(renamed_dir)
 
         if source_dir.exists():
@@ -187,8 +179,6 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
-            "--resync",
-            "--resync-auth",
             "--single-directory",
             root_name,
             "--syncdir",
@@ -212,7 +202,6 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        # Phase 3: clean verify from remote state
         verify_command = [
             context.onedrive_bin,
             "--display-running-config",

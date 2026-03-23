@@ -50,3 +50,6 @@ SharePoint end-to-end testing uses the same complete automated test suite as Per
 | 0027 | Whitespace and trailing dot validation | - Personal<br>- Business<br>- SharePoint | This test validates that trailing whitespace and trailing dot names are blocked while valid sibling files still synchronise |
 | 0028 | Control character and non-UTF8 filename validation | - Personal<br>- Business<br>- SharePoint | This test validates that control characters and non-UTF8 filenames are safely skipped without client crash while valid sibling files still synchronise |
 | 0029 | Upload-only + Local First sync validation | - Personal<br>- Business<br>- SharePoint | This test validates that `--local-first --upload-only` uploads local content without rewriting local file timestamps from Microsoft API response data |
+| 0030 | Local rename propagation validation | - Personal<br>- Business<br>- SharePoint | This test validates that renaming a local file is correctly propagated to remote state |
+| 0031 | Local directory rename propagation validation | - Personal<br>- Business<br>- SharePoint | This test validates that renaming a local directory tree is correctly propagated to remote state |
+
