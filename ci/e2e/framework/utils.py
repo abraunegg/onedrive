@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import base64
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -272,3 +273,39 @@ def write_onedrive_config(path: Path, content: str) -> None:
     """
     base_config_text = get_optional_base_config_text()
     write_text_file(path, base_config_text + content)
+
+
+def compute_quickxor_hash_bytes(data: bytes) -> str:
+    """
+    Compute Microsoft QuickXorHash and return the same base64 string style used
+    by the OneDrive client for .config.hash and .sync_list.hash files.
+
+    This implementation is sufficient for small text config files used by the
+    E2E harness.
+    """
+    width_bits = 160
+    shift = 11
+    cell_count = width_bits // 8
+    out = [0] * cell_count
+
+    for i, b in enumerate(data):
+        bit_index = (i * shift) % width_bits
+        byte_index = bit_index // 8
+        bit_offset = bit_index % 8
+
+        value = b & 0xFF
+
+        out[byte_index] ^= (value << bit_offset) & 0xFF
+        if bit_offset > 0:
+            out[(byte_index + 1) % cell_count] ^= (value >> (8 - bit_offset)) & 0xFF
+
+    length = len(data)
+    for i in range(8):
+        out[cell_count - 8 + i] ^= (length >> (8 * i)) & 0xFF
+
+    return base64.b64encode(bytes(out)).decode("ascii")
+
+
+def compute_quickxor_hash_file(path: Path) -> str:
+    return compute_quickxor_hash_bytes(path.read_bytes())
+

@@ -5,7 +5,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from framework.utils import ensure_directory, get_optional_base_config_text, timestamp_now, write_text_file, write_text_file_append
+from framework.utils import ensure_directory, get_optional_base_config_text, timestamp_now, write_text_file, write_text_file_append, compute_quickxor_hash_file
 
 
 @dataclass
@@ -102,16 +102,17 @@ class E2EContext:
 
         return destination
 
-    def prepare_minimal_config_dir(self, config_dir: Path) -> Path:
+    def prepare_minimal_config_dir(self, config_dir: Path, config_text: str) -> Path:
         """
-        Create a brand new per-test config dir containing only the refresh_token.
+        Create a clean, runtime-ready OneDrive config dir containing only the
+        minimum artefacts required for the client to start without immediately
+        demanding a --resync.
 
-        This is used by testcases that require pristine application state creation
-        on first run, while still allowing the client itself to generate any backup
-        config files, hashes, databases, and other runtime state as needed.
-
-        Unlike bootstrap_config_dir(), this does not pre-seed a config file or copy
-        any other existing runtime artefacts.
+        Files created:
+        - refresh_token
+        - config
+        - .config.backup
+        - .config.hash
         """
         self.ensure_refresh_token_available()
 
@@ -120,12 +121,23 @@ class E2EContext:
 
         ensure_directory(config_dir)
 
-        source = self.default_refresh_token_path
-        destination = config_dir / "refresh_token"
-        shutil.copy2(source, destination)
-        os.chmod(destination, 0o600)
+        refresh_token_destination = config_dir / "refresh_token"
+        shutil.copy2(self.default_refresh_token_path, refresh_token_destination)
+        os.chmod(refresh_token_destination, 0o600)
 
-        return destination
+        config_path = config_dir / "config"
+        config_path.write_text(config_text, encoding="utf-8")
+        os.chmod(config_path, 0o600)
+
+        backup_path = config_dir / ".config.backup"
+        backup_path.write_text(config_text, encoding="utf-8")
+        os.chmod(backup_path, 0o600)
+
+        hash_path = config_dir / ".config.hash"
+        hash_path.write_text(compute_quickxor_hash_file(config_path), encoding="utf-8")
+        os.chmod(hash_path, 0o600)
+
+        return config_path
     
     def log(self, message: str) -> None:
         ensure_directory(self.out_dir)
