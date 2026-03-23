@@ -109,8 +109,6 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
-            "--resync",
-            "--resync-auth",
             "--single-directory",
             root_name,
             "--syncdir",
