@@ -37,6 +37,7 @@ from testcases.tc0025_invalid_character_filename_validation import TestCase0025I
 from testcases.tc0026_reserved_device_name_validation import TestCase0026ReservedDeviceNameValidation
 from testcases.tc0027_whitespace_trailing_dot_validation import TestCase0027WhitespaceTrailingDotValidation
 from testcases.tc0028_control_character_non_utf8_filename_validation import TestCase0028ControlCharacterNonUtf8FilenameValidation
+from testcases.tc0029_local_first_upload_only_timestamp_preservation_validation import TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation
 
 
 def build_test_suite() -> list:
@@ -74,6 +75,7 @@ def build_test_suite() -> list:
         TestCase0026ReservedDeviceNameValidation(),
         TestCase0027WhitespaceTrailingDotValidation(),
         TestCase0028ControlCharacterNonUtf8FilenameValidation(),
+        TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(),
     ]
 
 
