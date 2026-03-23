@@ -8,7 +8,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
@@ -27,7 +27,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             f'sync_dir = "{sync_dir}"',
             f'classify_as_big_delete = "{classify_as_big_delete}"',
         ]
-        write_text_file(config_path, "\n".join(config_lines) + "\n")
+        write_onedrive_config(config_path, "\n".join(config_lines) + "\n")
 
     def _run_and_capture(
         self,

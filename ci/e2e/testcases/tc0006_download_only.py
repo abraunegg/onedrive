@@ -7,7 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0006DownloadOnly(E2ETestCase):
@@ -16,7 +16,7 @@ class TestCase0006DownloadOnly(E2ETestCase):
     description = "Validate that download-only populates local content from remote data"
 
     def _write_config(self, config_path: Path) -> None:
-        write_text_file(config_path, "# tc0006 config\nbypass_data_preservation = \"true\"\n")
+        write_onedrive_config(config_path, "# tc0006 config\nbypass_data_preservation = \"true\"\n")
 
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / "tc0006"; case_log_dir = context.logs_dir / "tc0006"; state_dir = context.state_dir / "tc0006"

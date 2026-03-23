@@ -7,7 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0025InvalidCharacterFilenameValidation(E2ETestCase):
@@ -16,7 +16,7 @@ class TestCase0025InvalidCharacterFilenameValidation(E2ETestCase):
     description = "Validate invalid filename characters are blocked while valid sibling files still synchronise"
 
     def _write_config(self, config_path: Path, sync_dir: Path) -> None:
-        write_text_file(
+        write_onedrive_config(
             config_path,
             "\n".join(
                 [

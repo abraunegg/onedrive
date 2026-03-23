@@ -12,7 +12,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 @dataclass
@@ -53,7 +53,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         ]
         if self.RATE_LIMIT:
             lines.append(f'rate_limit = "{self.RATE_LIMIT}"')
-        write_text_file(config_path, "\n".join(lines) + "\n")
+        write_onedrive_config(config_path, "\n".join(lines) + "\n")
 
     def _read_text_if_exists(self, path: Path) -> str:
         if not path.exists():

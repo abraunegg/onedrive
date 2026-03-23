@@ -7,7 +7,7 @@ from pathlib import Path
 from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCase):
@@ -30,7 +30,7 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
             'cleanup_local_files = "false"\n'
             'bypass_data_preservation = "false"\n'
         )
-        write_text_file(config_path, content)
+        write_onedrive_config(config_path, content)
 
     def _set_file_mtime(self, path: Path, epoch_seconds: int) -> None:
         os.utime(path, (epoch_seconds, epoch_seconds))

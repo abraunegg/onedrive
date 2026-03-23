@@ -10,7 +10,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0020MonitorModeValidation(E2ETestCase):
@@ -19,7 +19,7 @@ class TestCase0020MonitorModeValidation(E2ETestCase):
     description = "Validate that monitor mode uploads local changes without manually re-running --sync"
 
     def _write_config(self, config_path: Path, app_log_dir: Path) -> None:
-        write_text_file(
+        write_onedrive_config(
             config_path,
             "# tc0020 config\n"
             'bypass_data_preservation = "true"\n'
@@ -50,7 +50,7 @@ class TestCase0020MonitorModeValidation(E2ETestCase):
         context.bootstrap_config_dir(confdir)
         self._write_config(confdir / "config", app_log_dir)
         context.bootstrap_config_dir(verify_conf)
-        write_text_file(verify_conf / "config", "# tc0020 verify\n" 'bypass_data_preservation = "true"\n')
+        write_onedrive_config(verify_conf / "config", "# tc0020 verify\n" 'bypass_data_preservation = "true"\n')
 
         stdout_file = case_log_dir / "monitor_stdout.log"
         stderr_file = case_log_dir / "monitor_stderr.log"

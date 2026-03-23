@@ -7,7 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0003DryRunValidation(E2ETestCase):
@@ -19,7 +19,7 @@ class TestCase0003DryRunValidation(E2ETestCase):
         return f"ZZ_E2E_TC0003_{context.run_id}_{os.getpid()}"
 
     def _write_config(self, config_path: Path) -> None:
-        write_text_file(config_path, "# tc0003 config\nbypass_data_preservation = \"true\"\n")
+        write_onedrive_config(config_path, "# tc0003 config\nbypass_data_preservation = \"true\"\n")
 
     def _bootstrap_confdir(self, context: E2EContext, confdir: Path) -> Path:
         copied_refresh_token = context.bootstrap_config_dir(confdir)

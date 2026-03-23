@@ -7,7 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0018RecycleBinValidation(E2ETestCase):
@@ -16,14 +16,14 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
     description = "Validate that online deletions are moved into a FreeDesktop-compliant recycle bin when enabled"
 
     def _write_runtime_base_config(self, config_path: Path, sync_dir: Path) -> None:
-        write_text_file(
+        write_onedrive_config(
             config_path,
             "# tc0018 runtime base config\n"
             f'sync_dir = "{sync_dir}"\n',
         )
 
     def _write_runtime_cleanup_config(self, config_path: Path, sync_dir: Path, recycle_bin_path: Path) -> None:
-        write_text_file(
+        write_onedrive_config(
             config_path,
             "# tc0018 runtime cleanup config\n"
             f'sync_dir = "{sync_dir}"\n'
@@ -34,7 +34,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         )
 
     def _write_verify_config(self, config_path: Path, sync_dir: Path) -> None:
-        write_text_file(
+        write_onedrive_config(
             config_path,
             "# tc0018 verify config\n"
             f'sync_dir = "{sync_dir}"\n',

@@ -5,7 +5,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from framework.utils import ensure_directory, timestamp_now, write_text_file_append
+from framework.utils import ensure_directory, get_optional_base_config_text, timestamp_now, write_text_file, write_text_file_append
 
 
 @dataclass
@@ -85,6 +85,8 @@ class E2EContext:
     def bootstrap_config_dir(self, config_dir: Path) -> Path:
         """
         Copy the existing refresh_token into a per-test/per-scenario config dir.
+        If a base config.sharepoint exists, seed config with that content so all
+        SharePoint scenarios inherit drive_id by default.
         """
         self.ensure_refresh_token_available()
         ensure_directory(config_dir)
@@ -93,6 +95,10 @@ class E2EContext:
         destination = config_dir / "refresh_token"
         shutil.copy2(source, destination)
         os.chmod(destination, 0o600)
+
+        base_config_text = get_optional_base_config_text()
+        if base_config_text:
+            write_text_file(config_dir / "config", base_config_text)
 
         return destination
 

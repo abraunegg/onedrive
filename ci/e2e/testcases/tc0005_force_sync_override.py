@@ -7,7 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0005ForceSyncOverride(E2ETestCase):
@@ -16,7 +16,7 @@ class TestCase0005ForceSyncOverride(E2ETestCase):
     description = "Validate that --force-sync overrides skip_dir for blocked single-directory sync"
 
     def _write_config(self, config_path: Path, blocked_dir: str) -> None:
-        write_text_file(config_path, f"# tc0005 config\nbypass_data_preservation = \"true\"\nskip_dir = \"{blocked_dir}\"\n")
+        write_onedrive_config(config_path, f"# tc0005 config\nbypass_data_preservation = \"true\"\nskip_dir = \"{blocked_dir}\"\n")
 
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / "tc0005"
@@ -38,7 +38,7 @@ class TestCase0005ForceSyncOverride(E2ETestCase):
         context.bootstrap_config_dir(confdir)
         self._write_config(confdir / "config", blocked_dir)
         context.bootstrap_config_dir(verify_confdir)
-        write_text_file(verify_confdir / "config", "# tc0005 verify\nbypass_data_preservation = \"true\"\n")
+        write_onedrive_config(verify_confdir / "config", "# tc0005 verify\nbypass_data_preservation = \"true\"\n")
 
         stdout_file = case_log_dir / "seed_stdout.log"
         stderr_file = case_log_dir / "seed_stderr.log"

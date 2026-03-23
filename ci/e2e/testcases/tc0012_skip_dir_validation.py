@@ -7,7 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0012SkipDirValidation(E2ETestCase):
@@ -19,7 +19,7 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         lines = ["# tc0012 config", "bypass_data_preservation = \"true\"", f"skip_dir = \"{skip_dir_value}\""]
         if strict:
             lines.append("skip_dir_strict_match = \"true\"")
-        write_text_file(config_path, "\n".join(lines) + "\n")
+        write_onedrive_config(config_path, "\n".join(lines) + "\n")
 
     def _run_loose(self, context: E2EContext, case_log_dir: Path, all_artifacts: list[str], failures: list[str]) -> None:
         scenario_root = context.work_root / "tc0012" / "loose_match"; scenario_state = context.state_dir / "tc0012" / "loose_match"
@@ -30,7 +30,7 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         write_text_file(sync_root / root / "App" / "Cache" / "nested.txt", "skip nested\n")
         write_text_file(sync_root / root / "Keep" / "ok.txt", "ok\n")
         context.bootstrap_config_dir(confdir); self._write_config(confdir / "config", "Cache", False)
-        context.bootstrap_config_dir(verify_conf); write_text_file(verify_conf / "config", "# verify\nbypass_data_preservation = \"true\"\n")
+        context.bootstrap_config_dir(verify_conf); write_onedrive_config(verify_conf / "config", "# verify\nbypass_data_preservation = \"true\"\n")
         stdout_file = case_log_dir / "loose_match_stdout.log"; stderr_file = case_log_dir / "loose_match_stderr.log"; verify_stdout = case_log_dir / "loose_match_verify_stdout.log"; verify_stderr = case_log_dir / "loose_match_verify_stderr.log"; manifest_file = scenario_state / "remote_verify_manifest.txt"
         result = run_command([context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(confdir)], cwd=context.repo_root)
         write_text_file(stdout_file, result.stdout); write_text_file(stderr_file, result.stderr)
@@ -52,7 +52,7 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         write_text_file(sync_root / root / "App" / "Cache" / "nested.txt", "nested should skip\n")
         write_text_file(sync_root / root / "Keep" / "ok.txt", "ok\n")
         context.bootstrap_config_dir(confdir); self._write_config(confdir / "config", f"{root}/App/Cache", True)
-        context.bootstrap_config_dir(verify_conf); write_text_file(verify_conf / "config", "# verify\nbypass_data_preservation = \"true\"\n")
+        context.bootstrap_config_dir(verify_conf); write_onedrive_config(verify_conf / "config", "# verify\nbypass_data_preservation = \"true\"\n")
         stdout_file = case_log_dir / "strict_match_stdout.log"; stderr_file = case_log_dir / "strict_match_stderr.log"; verify_stdout = case_log_dir / "strict_match_verify_stdout.log"; verify_stderr = case_log_dir / "strict_match_verify_stderr.log"; manifest_file = scenario_state / "remote_verify_manifest.txt"
         result = run_command([context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(confdir)], cwd=context.repo_root)
         write_text_file(stdout_file, result.stdout); write_text_file(stderr_file, result.stderr)

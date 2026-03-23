@@ -6,7 +6,7 @@ from pathlib import Path
 from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0019LoggingAndRunningConfig(E2ETestCase):
@@ -15,7 +15,7 @@ class TestCase0019LoggingAndRunningConfig(E2ETestCase):
     description = "Validate custom log_dir output and display-running-config visibility"
 
     def _write_config(self, config_path: Path, app_log_dir: Path) -> None:
-        write_text_file(
+        write_onedrive_config(
             config_path,
             "# tc0019 config\n"
             'bypass_data_preservation = "true"\n'

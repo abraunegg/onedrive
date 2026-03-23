@@ -8,7 +8,7 @@ from framework.base import E2ETestCase
 from framework.manifest import build_manifest, write_manifest
 from framework.context import E2EContext
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0022LocalFirstValidation(E2ETestCase):
@@ -23,7 +23,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         )
         if local_first:
             content += 'local_first = "true"\n'
-        write_text_file(config_path, content)
+        write_onedrive_config(config_path, content)
 
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / "tc0022"

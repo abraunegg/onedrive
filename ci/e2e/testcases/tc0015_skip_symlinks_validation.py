@@ -7,7 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0015SkipSymlinksValidation(E2ETestCase):
@@ -16,7 +16,7 @@ class TestCase0015SkipSymlinksValidation(E2ETestCase):
     description = "Validate that skip_symlinks prevents symbolic links from synchronising"
 
     def _write_config(self, config_path: Path) -> None:
-        write_text_file(config_path, "# tc0015 config\nbypass_data_preservation = \"true\"\nskip_symlinks = \"true\"\n")
+        write_onedrive_config(config_path, "# tc0015 config\nbypass_data_preservation = \"true\"\nskip_symlinks = \"true\"\n")
 
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / "tc0015"; case_log_dir = context.logs_dir / "tc0015"; state_dir = context.state_dir / "tc0015"
@@ -24,7 +24,7 @@ class TestCase0015SkipSymlinksValidation(E2ETestCase):
         sync_root = case_work_dir / "syncroot"; confdir = case_work_dir / "conf-main"; verify_root = case_work_dir / "verifyroot"; verify_conf = case_work_dir / "conf-verify"; root_name = f"ZZ_E2E_TC0015_{context.run_id}_{os.getpid()}"
         target = sync_root / root_name / "real.txt"; write_text_file(target, "real\n"); link = sync_root / root_name / "linked.txt"; link.parent.mkdir(parents=True, exist_ok=True); link.symlink_to(target.name)
         context.bootstrap_config_dir(confdir); self._write_config(confdir / "config")
-        context.bootstrap_config_dir(verify_conf); write_text_file(verify_conf / "config", "# verify\nbypass_data_preservation = \"true\"\n")
+        context.bootstrap_config_dir(verify_conf); write_onedrive_config(verify_conf / "config", "# verify\nbypass_data_preservation = \"true\"\n")
         stdout_file = case_log_dir / "skip_symlinks_stdout.log"; stderr_file = case_log_dir / "skip_symlinks_stderr.log"; verify_stdout = case_log_dir / "verify_stdout.log"; verify_stderr = case_log_dir / "verify_stderr.log"; remote_manifest_file = state_dir / "remote_verify_manifest.txt"; metadata_file = state_dir / "metadata.txt"
         command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(confdir)]
         result = run_command(command, cwd=context.repo_root)

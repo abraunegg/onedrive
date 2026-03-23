@@ -236,3 +236,39 @@ def perform_full_account_cleanup(
             "phase3_command": command_to_string(phase3_command),
         },
     )
+
+def default_onedrive_config_dir_from_env() -> Path:
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    if xdg_config_home:
+        return Path(xdg_config_home) / "onedrive"
+
+    home = os.environ.get("HOME", "").strip()
+    if not home:
+        raise RuntimeError("Neither XDG_CONFIG_HOME nor HOME is set")
+
+    return Path(home) / ".config" / "onedrive"
+
+
+def get_optional_base_config_text() -> str:
+    """
+    Return the optional base config content used to seed SharePoint-specific
+    configuration such as drive_id. For personal/business testing this returns
+    an empty string.
+    """
+    base_config_path = default_onedrive_config_dir_from_env() / "config.sharepoint"
+    if not base_config_path.is_file():
+        return ""
+
+    text = base_config_path.read_text(encoding="utf-8")
+    if text and not text.endswith("\n"):
+        text += "\n"
+    return text
+
+
+def write_onedrive_config(path: Path, content: str) -> None:
+    """
+    Write a test config file, automatically prepending any optional base config
+    such as SharePoint drive_id settings from config.sharepoint.
+    """
+    base_config_text = get_optional_base_config_text()
+    write_text_file(path, base_config_text + content)
