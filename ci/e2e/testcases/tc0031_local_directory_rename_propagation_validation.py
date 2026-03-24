@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import time
 from pathlib import Path
 
 from framework.base import E2ETestCase
@@ -58,15 +57,14 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
 
         source_file_1_relative = f"{source_dir_relative}/top-level.txt"
         source_file_2_relative = f"{source_dir_relative}/Nested/child.txt"
-
         renamed_file_1_relative = f"{renamed_dir_relative}/top-level.txt"
         renamed_file_2_relative = f"{renamed_dir_relative}/Nested/child.txt"
 
         source_file_1 = local_root / source_file_1_relative
         source_file_2 = local_root / source_file_2_relative
 
-        file1_content = "TC0031 top level file\n"
-        file2_content = "TC0031 nested child file\n"
+        file1_content = "top\n"
+        file2_content = "child\n"
 
         phase1_stdout = case_log_dir / "phase1_seed_stdout.log"
         phase1_stderr = case_log_dir / "phase1_seed_stderr.log"
@@ -96,20 +94,18 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "verify_conf_dir": str(conf_verify),
             "local_root": str(local_root),
             "verify_root": str(verify_root),
-            "post_phase2_settle_seconds": 10,
         }
 
         write_text_file(source_file_1, file1_content)
         write_text_file(source_file_2, file2_content)
 
+        # Match the proven standalone reproduction as closely as possible.
         phase1_command = [
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
             "--verbose",
             "--verbose",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_main),
         ]
@@ -145,8 +141,6 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "--sync",
             "--verbose",
             "--verbose",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_main),
         ]
@@ -155,17 +149,13 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         write_text_file(phase2_stdout, phase2_result.stdout)
         write_text_file(phase2_stderr, phase2_result.stderr)
         details["phase2_returncode"] = phase2_result.returncode
+        details["phase2_deleted_old_directory_online"] = f"Deleting item from Microsoft OneDrive: {root_name}/SourceDirectory" in phase2_result.stdout
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
             return TestResult.fail_result(
                 self.case_id, self.name, f"directory rename propagation phase failed with status {phase2_result.returncode}", artifacts, details
             )
-
-        context.log(
-            f"Executing Test Case {self.case_id}: waiting {details['post_phase2_settle_seconds']} seconds before verify to allow remote state to settle"
-        )
-        time.sleep(int(details["post_phase2_settle_seconds"]))
 
         verify_command = [
             context.onedrive_bin,
