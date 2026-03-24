@@ -105,7 +105,6 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
-            "--verbose",
             "--confdir",
             str(conf_main),
         ]
@@ -140,7 +139,6 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
-            "--verbose",
             "--confdir",
             str(conf_main),
         ]
@@ -162,7 +160,6 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--download-only",
-            "--verbose",
             "--verbose",
             "--resync",
             "--resync-auth",
