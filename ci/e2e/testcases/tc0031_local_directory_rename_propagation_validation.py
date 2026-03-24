@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 from framework.base import E2ETestCase
@@ -19,7 +20,6 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         return (
             "# tc0031 config\n"
             f'sync_dir = "{sync_dir}"\n'
-            'bypass_data_preservation = "true"\n'
         )
 
     def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
@@ -96,6 +96,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "verify_conf_dir": str(conf_verify),
             "local_root": str(local_root),
             "verify_root": str(verify_root),
+            "post_phase2_settle_seconds": 10,
         }
 
         write_text_file(source_file_1, file1_content)
@@ -160,6 +161,11 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             return TestResult.fail_result(
                 self.case_id, self.name, f"directory rename propagation phase failed with status {phase2_result.returncode}", artifacts, details
             )
+
+        context.log(
+            f"Executing Test Case {self.case_id}: waiting {details['post_phase2_settle_seconds']} seconds before verify to allow remote state to settle"
+        )
+        time.sleep(int(details["post_phase2_settle_seconds"]))
 
         verify_command = [
             context.onedrive_bin,
