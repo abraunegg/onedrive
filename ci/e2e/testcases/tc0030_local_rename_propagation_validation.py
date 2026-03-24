@@ -15,9 +15,10 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
     name = "local rename propagation validation"
     description = "Validate that renaming a local file is correctly propagated to remote state"
 
-    def _config_text(self) -> str:
+    def _config_text(self, sync_dir: Path) -> str:
         return (
             "# tc0030 config\n"
+            f'sync_dir = "{sync_dir}"\n'
             'bypass_data_preservation = "true"\n'
         )
 
@@ -45,8 +46,8 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         reset_directory(local_root)
         reset_directory(verify_root)
 
-        context.prepare_minimal_config_dir(conf_main, self._config_text())
-        context.prepare_minimal_config_dir(conf_verify, self._config_text())
+        context.prepare_minimal_config_dir(conf_main, self._config_text(local_root))
+        context.prepare_minimal_config_dir(conf_verify, self._config_text(verify_root))
 
         root_name = f"ZZ_E2E_TC0030_{context.run_id}_{os.getpid()}"
         old_relative = f"{root_name}/original-name.txt"
@@ -100,8 +101,6 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             "--verbose",
             "--single-directory",
             root_name,
-            "--syncdir",
-            str(local_root),
             "--confdir",
             str(conf_main),
         ]
@@ -139,8 +138,6 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             "--verbose",
             "--single-directory",
             root_name,
-            "--syncdir",
-            str(local_root),
             "--confdir",
             str(conf_main),
         ]
@@ -167,8 +164,6 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             "--resync-auth",
             "--single-directory",
             root_name,
-            "--syncdir",
-            str(verify_root),
             "--confdir",
             str(conf_verify),
         ]
