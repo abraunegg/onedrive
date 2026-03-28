@@ -105,13 +105,16 @@ class E2EContext:
         """
         Validate a generated runtime config dir so target-specific bootstrap
         mistakes fail immediately and explicitly.
+        Only SharePoint requires a seeded config containing drive_id.
         """
-        config_path = config_dir / "config"
-        if not config_path.is_file():
-            raise RuntimeError(f"Generated config file is missing: {config_path}")
-
         if self.e2e_target != "sharepoint":
             return
+
+        config_path = config_dir / "config"
+        if not config_path.is_file():
+            raise RuntimeError(
+                f"SharePoint target requested but generated config file is missing: {config_path}"
+            )
 
         config_text = config_path.read_text(encoding="utf-8")
         drive_id = self._extract_config_value(config_text, "drive_id")
