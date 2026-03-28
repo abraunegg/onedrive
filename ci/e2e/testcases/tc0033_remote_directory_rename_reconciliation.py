@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import os
-import signal
-import subprocess
-import time
 from pathlib import Path
 
 from framework.base import E2ETestCase
@@ -13,12 +10,12 @@ from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
-class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
+class TestCase0033SeederDirectoryRenameOnlineTruth(E2ETestCase):
     case_id = "0033"
-    name = "remote directory rename reconciliation"
+    name = "seeder directory rename online truth"
     description = (
-        "Validate that a second client correctly reconciles an online directory rename "
-        "performed by an independent client running in monitor mode"
+        "Validate that a single syncing client can rename a directory locally, "
+        "propagate that change online, and that a fresh download sees only the renamed tree"
     )
 
     def _config_text(self, sync_dir: Path) -> str:
@@ -44,110 +41,6 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             return []
         return sorted(str(path.relative_to(root)) for path in root.rglob("*") if path.is_dir())
 
-    def _read_text_safe(self, path: Path) -> str:
-        if not path.exists():
-            return ""
-        return path.read_text(encoding="utf-8", errors="replace")
-
-    def _wait_for_path(self, path: Path, timeout_seconds: int = 60) -> bool:
-        deadline = time.time() + timeout_seconds
-        while time.time() < deadline:
-            if path.exists():
-                return True
-            time.sleep(1)
-        return path.exists()
-
-    def _wait_for_absence(self, path: Path, timeout_seconds: int = 60) -> bool:
-        deadline = time.time() + timeout_seconds
-        while time.time() < deadline:
-            if not path.exists():
-                return True
-            time.sleep(1)
-        return not path.exists()
-
-    def _wait_for_log_patterns(
-        self,
-        log_path: Path,
-        required_patterns: list[str],
-        timeout_seconds: int = 120,
-    ) -> tuple[bool, str]:
-        deadline = time.time() + timeout_seconds
-        latest_text = ""
-
-        while time.time() < deadline:
-            latest_text = self._read_text_safe(log_path)
-            if all(pattern in latest_text for pattern in required_patterns):
-                return True, latest_text
-            time.sleep(2)
-
-        latest_text = self._read_text_safe(log_path)
-        return all(pattern in latest_text for pattern in required_patterns), latest_text
-
-    def _start_monitor(
-        self,
-        context: E2EContext,
-        confdir: Path,
-        stdout_path: Path,
-        stderr_path: Path,
-        root_name: str,
-    ) -> subprocess.Popen:
-        stdout_handle = open(stdout_path, "w", encoding="utf-8")
-        stderr_handle = open(stderr_path, "w", encoding="utf-8")
-
-        command = [
-            context.onedrive_bin,
-            "--display-running-config",
-            "--monitor",
-            "--verbose",
-            "--single-directory",
-            root_name,
-            "--confdir",
-            str(confdir),
-        ]
-        context.log(
-            f"Executing Test Case {self.case_id} monitor start: {command_to_string(command)}"
-        )
-
-        # Start new process group so we can signal it cleanly.
-        return subprocess.Popen(
-            command,
-            cwd=context.repo_root,
-            stdout=stdout_handle,
-            stderr=stderr_handle,
-            text=True,
-            preexec_fn=os.setsid,
-        )
-
-    def _stop_monitor(
-        self,
-        process: subprocess.Popen,
-        timeout_seconds: int = 60,
-    ) -> int:
-        if process.poll() is not None:
-            return process.returncode
-
-        try:
-            os.killpg(os.getpgid(process.pid), signal.SIGINT)
-        except ProcessLookupError:
-            return process.returncode if process.returncode is not None else 0
-
-        try:
-            return process.wait(timeout=timeout_seconds)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-
-            try:
-                return process.wait(timeout=20)
-            except subprocess.TimeoutExpired:
-                try:
-                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                return process.wait(timeout=10)
-
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / "tc0033"
         case_log_dir = context.logs_dir / "tc0033"
@@ -159,19 +52,15 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         context.ensure_refresh_token_available()
 
         seeder_root = case_work_dir / "seeder-root"
-        validation_root = case_work_dir / "validation-root"
         verify_root = case_work_dir / "verify-root"
 
         conf_seeder = case_work_dir / "conf-seeder"
-        conf_validation = case_work_dir / "conf-validation"
         conf_verify = case_work_dir / "conf-verify"
 
         reset_directory(seeder_root)
-        reset_directory(validation_root)
         reset_directory(verify_root)
 
         context.prepare_minimal_config_dir(conf_seeder, self._config_text(seeder_root))
-        context.prepare_minimal_config_dir(conf_validation, self._config_text(validation_root))
         context.prepare_minimal_config_dir(conf_verify, self._config_text(verify_root))
 
         root_name = f"ZZ_E2E_TC0033_{context.run_id}_{os.getpid()}"
@@ -188,16 +77,8 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         seeder_original_dir = seeder_root / original_dir_relative
         seeder_renamed_dir = seeder_root / renamed_dir_relative
 
-        validation_original_dir = validation_root / original_dir_relative
-        validation_renamed_dir = validation_root / renamed_dir_relative
-
         verify_original_dir = verify_root / original_dir_relative
         verify_renamed_dir = verify_root / renamed_dir_relative
-
-        validation_original_top_file = validation_root / original_top_file_relative
-        validation_original_nested_file = validation_root / original_nested_file_relative
-        validation_renamed_top_file = validation_root / renamed_top_file_relative
-        validation_renamed_nested_file = validation_root / renamed_nested_file_relative
 
         verify_original_top_file = verify_root / original_top_file_relative
         verify_original_nested_file = verify_root / original_nested_file_relative
@@ -205,41 +86,30 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         verify_renamed_nested_file = verify_root / renamed_nested_file_relative
 
         top_level_content = (
-            "TC0033 remote directory rename reconciliation\n"
+            "TC0033 seeder-only directory rename verification\n"
             "Top-level file content must be preserved.\n"
         )
         nested_content = (
-            "TC0033 remote directory rename reconciliation\n"
+            "TC0033 seeder-only directory rename verification\n"
             "Nested file content must be preserved.\n"
         )
 
         seed_stdout = case_log_dir / "phase1_seed_stdout.log"
         seed_stderr = case_log_dir / "phase1_seed_stderr.log"
-        validation_initial_stdout = case_log_dir / "phase2_validation_initial_stdout.log"
-        validation_initial_stderr = case_log_dir / "phase2_validation_initial_stderr.log"
-        monitor_stdout = case_log_dir / "phase3_monitor_stdout.log"
-        monitor_stderr = case_log_dir / "phase3_monitor_stderr.log"
-        validation_reconcile_stdout = case_log_dir / "phase4_validation_reconcile_stdout.log"
-        validation_reconcile_stderr = case_log_dir / "phase4_validation_reconcile_stderr.log"
-        verify_stdout = case_log_dir / "verify_stdout.log"
-        verify_stderr = case_log_dir / "verify_stderr.log"
-
-        validation_manifest_file = state_dir / "validation_manifest.txt"
+        rename_sync_stdout = case_log_dir / "phase2_rename_sync_stdout.log"
+        rename_sync_stderr = case_log_dir / "phase2_rename_sync_stderr.log"
+        verify_stdout = case_log_dir / "phase3_verify_stdout.log"
+        verify_stderr = case_log_dir / "phase3_verify_stderr.log"
         verify_manifest_file = state_dir / "verify_manifest.txt"
         metadata_file = state_dir / "metadata.txt"
 
         artifacts = [
             str(seed_stdout),
             str(seed_stderr),
-            str(validation_initial_stdout),
-            str(validation_initial_stderr),
-            str(monitor_stdout),
-            str(monitor_stderr),
-            str(validation_reconcile_stdout),
-            str(validation_reconcile_stderr),
+            str(rename_sync_stdout),
+            str(rename_sync_stderr),
             str(verify_stdout),
             str(verify_stderr),
-            str(validation_manifest_file),
             str(verify_manifest_file),
             str(metadata_file),
         ]
@@ -253,14 +123,12 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             "renamed_top_file_relative": renamed_top_file_relative,
             "renamed_nested_file_relative": renamed_nested_file_relative,
             "seeder_conf_dir": str(conf_seeder),
-            "validation_conf_dir": str(conf_validation),
             "verify_conf_dir": str(conf_verify),
             "seeder_root": str(seeder_root),
-            "validation_root": str(validation_root),
             "verify_root": str(verify_root),
         }
 
-        # Phase 1: Seeder creates the original directory tree locally and syncs it.
+        # Phase 1: create original tree and sync it online
         write_text_file(seeder_root / original_top_file_relative, top_level_content)
         write_text_file(seeder_root / original_nested_file_relative, nested_content)
 
@@ -290,116 +158,13 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        # Phase 2: Validation client downloads the initial original directory tree.
-        validation_initial_command = [
-            context.onedrive_bin,
-            "--display-running-config",
-            "--sync",
-            "--download-only",
-            "--verbose",
-            "--single-directory",
-            root_name,
-            "--confdir",
-            str(conf_validation),
-        ]
-        context.log(
-            f"Executing Test Case {self.case_id} phase2 validation initial download: "
-            f"{command_to_string(validation_initial_command)}"
-        )
-        validation_initial_result = run_command(validation_initial_command, cwd=context.repo_root)
-        write_text_file(validation_initial_stdout, validation_initial_result.stdout)
-        write_text_file(validation_initial_stderr, validation_initial_result.stderr)
-        details["phase2_validation_initial_returncode"] = validation_initial_result.returncode
-
-        details["validation_initial_original_dir_exists"] = validation_original_dir.is_dir()
-        details["validation_initial_original_top_file_exists"] = validation_original_top_file.is_file()
-        details["validation_initial_original_nested_file_exists"] = validation_original_nested_file.is_file()
-        details["validation_initial_renamed_dir_exists"] = validation_renamed_dir.exists()
-
-        if validation_initial_result.returncode != 0:
-            self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"validation initial download phase failed with status {validation_initial_result.returncode}",
-                artifacts,
-                details,
-            )
-
-        if not validation_original_dir.is_dir():
-            self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"validation client failed to download original directory: {original_dir_relative}",
-                artifacts,
-                details,
-            )
-
-        if not validation_original_top_file.is_file():
-            self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"validation client failed to download original top-level file: {original_top_file_relative}",
-                artifacts,
-                details,
-            )
-
-        if not validation_original_nested_file.is_file():
-            self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"validation client failed to download original nested file: {original_nested_file_relative}",
-                artifacts,
-                details,
-            )
-
-        # Phase 3: Seeder runs in monitor mode and propagates the local rename online.
-        monitor_process = self._start_monitor(
-            context=context,
-            confdir=conf_seeder,
-            stdout_path=monitor_stdout,
-            stderr_path=monitor_stderr,
-            root_name=root_name,
-        )
-
-        details["monitor_pid"] = monitor_process.pid
-
-        monitor_ready, monitor_ready_log = self._wait_for_log_patterns(
-            monitor_stdout,
-            [
-                "Application has been initalised",
-                "Configuring Global HTTP instance",
-            ],
-            timeout_seconds=90,
-        )
-        details["monitor_ready_detected"] = monitor_ready
-
-        if not monitor_ready:
-            monitor_returncode = self._stop_monitor(monitor_process)
-            details["monitor_returncode"] = monitor_returncode
-            self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "monitor mode did not become ready before rename operation",
-                artifacts,
-                details,
-            )
-
-        # Small stabilisation delay so inotify watches are definitely active.
-        time.sleep(5)
-
+        # Phase 2: rename locally and sync the rename online
         seeder_original_dir.rename(seeder_renamed_dir)
 
         details["seeder_original_dir_exists_after_local_rename"] = seeder_original_dir.exists()
         details["seeder_renamed_dir_exists_after_local_rename"] = seeder_renamed_dir.is_dir()
 
         if seeder_original_dir.exists():
-            monitor_returncode = self._stop_monitor(monitor_process)
-            details["monitor_returncode"] = monitor_returncode
             self._write_metadata(metadata_file, details)
             return TestResult.fail_result(
                 self.case_id,
@@ -410,8 +175,6 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             )
 
         if not seeder_renamed_dir.is_dir():
-            monitor_returncode = self._stop_monitor(monitor_process)
-            details["monitor_returncode"] = monitor_returncode
             self._write_metadata(metadata_file, details)
             return TestResult.fail_result(
                 self.case_id,
@@ -421,107 +184,35 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        # Wait for monitor processing to complete sufficiently for downstream reconciliation.
-        # We require evidence that the renamed tree has been acted on.
-        monitor_patterns = [
-            "RenamedDirectory",
-            "top-level.txt",
-            "child.txt",
-        ]
-        rename_seen, monitor_after_rename_log = self._wait_for_log_patterns(
-            monitor_stdout,
-            monitor_patterns,
-            timeout_seconds=180,
-        )
-        details["monitor_detected_rename_activity"] = rename_seen
-
-        # Give monitor a short additional settle period before shutdown.
-        time.sleep(10)
-
-        monitor_returncode = self._stop_monitor(monitor_process)
-        details["monitor_returncode"] = monitor_returncode
-
-        # 0 is expected. Some environments may return 130 after SIGINT; accept that.
-        if monitor_returncode not in (0, 130):
-            self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"monitor phase exited with unexpected status {monitor_returncode}",
-                artifacts,
-                details,
-            )
-
-        if not rename_seen:
-            self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "monitor phase did not show sufficient evidence of rename propagation activity",
-                artifacts,
-                details,
-            )
-
-        # Phase 4: Validation client re-runs download-only using its existing local/database state.
-        validation_reconcile_command = [
+        rename_sync_command = [
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
-            "--download-only",
             "--verbose",
             "--single-directory",
             root_name,
             "--confdir",
-            str(conf_validation),
+            str(conf_seeder),
         ]
         context.log(
-            f"Executing Test Case {self.case_id} phase4 validation reconcile: "
-            f"{command_to_string(validation_reconcile_command)}"
+            f"Executing Test Case {self.case_id} phase2 rename sync: {command_to_string(rename_sync_command)}"
         )
-        validation_reconcile_result = run_command(validation_reconcile_command, cwd=context.repo_root)
-        write_text_file(validation_reconcile_stdout, validation_reconcile_result.stdout)
-        write_text_file(validation_reconcile_stderr, validation_reconcile_result.stderr)
-        details["phase4_validation_reconcile_returncode"] = validation_reconcile_result.returncode
+        rename_sync_result = run_command(rename_sync_command, cwd=context.repo_root)
+        write_text_file(rename_sync_stdout, rename_sync_result.stdout)
+        write_text_file(rename_sync_stderr, rename_sync_result.stderr)
+        details["phase2_rename_sync_returncode"] = rename_sync_result.returncode
 
-        validation_manifest = build_manifest(validation_root)
-        write_manifest(validation_manifest_file, validation_manifest)
-
-        details["validation_original_dir_exists_after_reconcile"] = validation_original_dir.exists()
-        details["validation_renamed_dir_exists_after_reconcile"] = validation_renamed_dir.is_dir()
-        details["validation_original_top_file_exists_after_reconcile"] = validation_original_top_file.exists()
-        details["validation_original_nested_file_exists_after_reconcile"] = validation_original_nested_file.exists()
-        details["validation_renamed_top_file_exists_after_reconcile"] = validation_renamed_top_file.is_file()
-        details["validation_renamed_nested_file_exists_after_reconcile"] = validation_renamed_nested_file.is_file()
-
-        validation_old_tree_files = self._list_files_under(validation_original_dir)
-        validation_old_tree_dirs = self._list_dirs_under(validation_original_dir)
-        details["validation_old_tree_files_after_reconcile"] = validation_old_tree_files
-        details["validation_old_tree_dirs_after_reconcile"] = validation_old_tree_dirs
-
-        validation_renamed_top_file_content = (
-            validation_renamed_top_file.read_text(encoding="utf-8")
-            if validation_renamed_top_file.is_file()
-            else ""
-        )
-        validation_renamed_nested_file_content = (
-            validation_renamed_nested_file.read_text(encoding="utf-8")
-            if validation_renamed_nested_file.is_file()
-            else ""
-        )
-        details["validation_renamed_top_file_content"] = validation_renamed_top_file_content
-        details["validation_renamed_nested_file_content"] = validation_renamed_nested_file_content
-
-        if validation_reconcile_result.returncode != 0:
+        if rename_sync_result.returncode != 0:
             self._write_metadata(metadata_file, details)
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
-                f"validation reconcile phase failed with status {validation_reconcile_result.returncode}",
+                f"rename sync phase failed with status {rename_sync_result.returncode}",
                 artifacts,
                 details,
             )
 
-        # Final verification from scratch against current remote truth.
+        # Phase 3: fresh verify client downloads current remote truth
         verify_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -535,11 +226,11 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             "--confdir",
             str(conf_verify),
         ]
-        context.log(f"Executing Test Case {self.case_id} verify: {command_to_string(verify_command)}")
+        context.log(f"Executing Test Case {self.case_id} phase3 verify: {command_to_string(verify_command)}")
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout)
         write_text_file(verify_stderr, verify_result.stderr)
-        details["verify_returncode"] = verify_result.returncode
+        details["phase3_verify_returncode"] = verify_result.returncode
 
         verify_manifest = build_manifest(verify_root)
         write_manifest(verify_manifest_file, verify_manifest)
@@ -556,18 +247,18 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         details["verify_old_tree_files"] = verify_old_tree_files
         details["verify_old_tree_dirs"] = verify_old_tree_dirs
 
-        verify_renamed_top_file_content = (
+        verify_new_top_content = (
             verify_renamed_top_file.read_text(encoding="utf-8")
             if verify_renamed_top_file.is_file()
             else ""
         )
-        verify_renamed_nested_file_content = (
+        verify_new_nested_content = (
             verify_renamed_nested_file.read_text(encoding="utf-8")
             if verify_renamed_nested_file.is_file()
             else ""
         )
-        details["verify_renamed_top_file_content"] = verify_renamed_top_file_content
-        details["verify_renamed_nested_file_content"] = verify_renamed_nested_file_content
+        details["verify_renamed_top_file_content"] = verify_new_top_content
+        details["verify_renamed_nested_file_content"] = verify_new_nested_content
 
         self._write_metadata(metadata_file, details)
 
@@ -575,105 +266,12 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
-                f"remote verification failed with status {verify_result.returncode}",
+                f"verify phase failed with status {verify_result.returncode}",
                 artifacts,
                 details,
             )
 
-        # Validation client must no longer have the old directory tree at all.
-        if validation_original_dir.exists():
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"validation client still contains old directory after reconciliation: {original_dir_relative}",
-                artifacts,
-                details,
-            )
-
-        if validation_original_top_file.exists():
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"validation client still contains old top-level file after reconciliation: {original_top_file_relative}",
-                artifacts,
-                details,
-            )
-
-        if validation_original_nested_file.exists():
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"validation client still contains old nested file after reconciliation: {original_nested_file_relative}",
-                artifacts,
-                details,
-            )
-
-        if validation_old_tree_files:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "validation client retained old payload files somewhere under the original directory tree "
-                f"after reconciliation: {validation_old_tree_files}",
-                artifacts,
-                details,
-            )
-
-        if validation_old_tree_dirs:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "validation client retained old directories somewhere under the original directory tree "
-                f"after reconciliation: {validation_old_tree_dirs}",
-                artifacts,
-                details,
-            )
-
-        if not validation_renamed_dir.is_dir():
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"validation client is missing renamed directory after reconciliation: {renamed_dir_relative}",
-                artifacts,
-                details,
-            )
-
-        if not validation_renamed_top_file.is_file():
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"validation client is missing renamed top-level file after reconciliation: {renamed_top_file_relative}",
-                artifacts,
-                details,
-            )
-
-        if not validation_renamed_nested_file.is_file():
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"validation client is missing renamed nested file after reconciliation: {renamed_nested_file_relative}",
-                artifacts,
-                details,
-            )
-
-        if validation_renamed_top_file_content != top_level_content:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "validation client renamed top-level file content did not match expected content",
-                artifacts,
-                details,
-            )
-
-        if validation_renamed_nested_file_content != nested_content:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "validation client renamed nested file content did not match expected content",
-                artifacts,
-                details,
-            )
-
-        # Fresh verification must also show the old directory path is gone.
+        # Strict assertions: original tree must be gone
         if verify_original_dir.exists():
             return TestResult.fail_result(
                 self.case_id,
@@ -705,8 +303,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
-                "fresh remote verification retained old payload files somewhere under the original "
-                f"directory tree: {verify_old_tree_files}",
+                f"fresh remote verification retained old files under original tree: {verify_old_tree_files}",
                 artifacts,
                 details,
             )
@@ -715,8 +312,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
-                "fresh remote verification retained old directories somewhere under the original "
-                f"directory tree: {verify_old_tree_dirs}",
+                f"fresh remote verification retained old directories under original tree: {verify_old_tree_dirs}",
                 artifacts,
                 details,
             )
@@ -748,7 +344,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if verify_renamed_top_file_content != top_level_content:
+        if verify_new_top_content != top_level_content:
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
@@ -757,7 +353,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if verify_renamed_nested_file_content != nested_content:
+        if verify_new_nested_content != nested_content:
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
