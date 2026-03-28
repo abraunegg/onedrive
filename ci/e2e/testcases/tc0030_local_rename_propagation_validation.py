@@ -7,7 +7,14 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import (
+    command_to_string,
+    compute_quickxor_hash_file,
+    reset_directory,
+    run_command,
+    write_onedrive_config,
+    write_text_file,
+)
 
 
 class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
@@ -15,12 +22,23 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
     name = "local rename propagation validation"
     description = "Validate that renaming a local file is correctly propagated to remote state"
 
-    def _config_text(self, sync_dir: Path) -> str:
-        return (
+    def _write_config(self, config_dir: Path, sync_dir: Path) -> None:
+        config_path = config_dir / "config"
+        backup_path = config_dir / ".config.backup"
+        hash_path = config_dir / ".config.hash"
+
+        config_text = (
             "# tc0030 config\n"
             f'sync_dir = "{sync_dir}"\n'
             'bypass_data_preservation = "true"\n'
         )
+
+        write_onedrive_config(config_path, config_text)
+        write_onedrive_config(backup_path, config_text)
+        hash_path.write_text(compute_quickxor_hash_file(config_path), encoding="utf-8")
+        os.chmod(config_path, 0o600)
+        os.chmod(backup_path, 0o600)
+        os.chmod(hash_path, 0o600)
 
     def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
         write_text_file(
@@ -46,8 +64,11 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         reset_directory(local_root)
         reset_directory(verify_root)
 
-        context.prepare_minimal_config_dir(conf_main, self._config_text(local_root))
-        context.prepare_minimal_config_dir(conf_verify, self._config_text(verify_root))
+        context.prepare_minimal_config_dir(conf_main, "")
+        context.prepare_minimal_config_dir(conf_verify, "")
+
+        self._write_config(conf_main, local_root)
+        self._write_config(conf_verify, verify_root)
 
         root_name = f"ZZ_E2E_TC0030_{context.run_id}_{os.getpid()}"
         old_relative = f"{root_name}/original-name.txt"

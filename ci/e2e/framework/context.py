@@ -82,6 +82,44 @@ class E2EContext:
                 f"Required refresh_token file not found at: {self.default_refresh_token_path}"
             )
 
+    def _extract_config_value(self, config_text: str, key: str) -> str:
+        for raw_line in config_text.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+
+            lhs, rhs = line.split("=", 1)
+            if lhs.strip() != key:
+                continue
+
+            value = rhs.strip()
+            if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+                value = value[1:-1]
+            return value.strip()
+
+        return ""
+
+    def validate_generated_config_dir(self, config_dir: Path) -> None:
+        """
+        Validate a generated runtime config dir so target-specific bootstrap
+        mistakes fail immediately and explicitly.
+        """
+        config_path = config_dir / "config"
+        if not config_path.is_file():
+            raise RuntimeError(f"Generated config file is missing: {config_path}")
+
+        if self.e2e_target != "sharepoint":
+            return
+
+        config_text = config_path.read_text(encoding="utf-8")
+        drive_id = self._extract_config_value(config_text, "drive_id")
+        if not drive_id:
+            raise RuntimeError(
+                f"SharePoint target requested but generated config has empty or missing drive_id: {config_path}"
+            )
+
     def bootstrap_config_dir(self, config_dir: Path) -> Path:
         """
         Copy the existing refresh_token into a per-test/per-scenario config dir.
@@ -99,7 +137,9 @@ class E2EContext:
         base_config_text = get_optional_base_config_text()
         if base_config_text:
             write_text_file(config_dir / "config", base_config_text)
+            os.chmod(config_dir / "config", 0o600)
 
+        self.validate_generated_config_dir(config_dir)
         return destination
 
     def prepare_minimal_config_dir(self, config_dir: Path, config_text: str) -> Path:
@@ -125,26 +165,29 @@ class E2EContext:
         shutil.copy2(self.default_refresh_token_path, refresh_token_destination)
         os.chmod(refresh_token_destination, 0o600)
 
+        full_config_text = get_optional_base_config_text() + config_text
+
         config_path = config_dir / "config"
-        config_path.write_text(config_text, encoding="utf-8")
+        config_path.write_text(full_config_text, encoding="utf-8")
         os.chmod(config_path, 0o600)
 
         backup_path = config_dir / ".config.backup"
-        backup_path.write_text(config_text, encoding="utf-8")
+        backup_path.write_text(full_config_text, encoding="utf-8")
         os.chmod(backup_path, 0o600)
 
         hash_path = config_dir / ".config.hash"
         hash_path.write_text(compute_quickxor_hash_file(config_path), encoding="utf-8")
         os.chmod(hash_path, 0o600)
 
+        self.validate_generated_config_dir(config_dir)
         return config_path
-    
+
     def log(self, message: str) -> None:
         ensure_directory(self.out_dir)
         line = f"[{timestamp_now()}] {message}\n"
         print(line, end="")
         write_text_file_append(self.master_log_file, line)
-    
+
     @property
     def default_sync_dir(self) -> Path:
         home = os.environ.get("HOME", "").strip()
@@ -159,7 +202,7 @@ class E2EContext:
     @property
     def suite_cleanup_log_dir(self) -> Path:
         return self.logs_dir / "_suite_cleanup"
-        
+
     def bootstrap_suite_cleanup_config_dir(self) -> Path:
         if self.suite_cleanup_config_dir.exists():
             shutil.rmtree(self.suite_cleanup_config_dir)

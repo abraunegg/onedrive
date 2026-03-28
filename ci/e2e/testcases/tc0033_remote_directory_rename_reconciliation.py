@@ -7,7 +7,14 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import (
+    command_to_string,
+    compute_quickxor_hash_file,
+    reset_directory,
+    run_command,
+    write_onedrive_config,
+    write_text_file,
+)
 
 
 class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
@@ -18,11 +25,22 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         "reconciles a remote directory rename propagated by another synchronising client"
     )
 
-    def _config_text(self, sync_dir: Path) -> str:
-        return (
+    def _write_config(self, config_dir: Path, sync_dir: Path) -> None:
+        config_path = config_dir / "config"
+        backup_path = config_dir / ".config.backup"
+        hash_path = config_dir / ".config.hash"
+
+        config_text = (
             "# tc0033 config\n"
             f'sync_dir = "{sync_dir}"\n'
         )
+
+        write_onedrive_config(config_path, config_text)
+        write_onedrive_config(backup_path, config_text)
+        hash_path.write_text(compute_quickxor_hash_file(config_path), encoding="utf-8")
+        os.chmod(config_path, 0o600)
+        os.chmod(backup_path, 0o600)
+        os.chmod(hash_path, 0o600)
 
     def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
         write_text_file(
@@ -62,9 +80,13 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         reset_directory(validator_root)
         reset_directory(verify_root)
 
-        context.prepare_minimal_config_dir(conf_seeder, self._config_text(seeder_root))
-        context.prepare_minimal_config_dir(conf_validator, self._config_text(validator_root))
-        context.prepare_minimal_config_dir(conf_verify, self._config_text(verify_root))
+        context.prepare_minimal_config_dir(conf_seeder, "")
+        context.prepare_minimal_config_dir(conf_validator, "")
+        context.prepare_minimal_config_dir(conf_verify, "")
+
+        self._write_config(conf_seeder, seeder_root)
+        self._write_config(conf_validator, validator_root)
+        self._write_config(conf_verify, verify_root)
 
         root_name = f"ZZ_E2E_TC0033_{context.run_id}_{os.getpid()}"
         source_dir_relative = f"{root_name}/SourceDirectory"
