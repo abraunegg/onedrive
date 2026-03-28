@@ -82,11 +82,11 @@ def build_test_suite() -> list:
         #TestCase0027WhitespaceTrailingDotValidation(),
         #TestCase0028ControlCharacterNonUtf8FilenameValidation(),
         #TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(),
-        #TestCase0030LocalRenamePropagationValidation(),
-        #TestCase0031LocalDirectoryRenamePropagationValidation(),
+        TestCase0030LocalRenamePropagationValidation(),
+        TestCase0031LocalDirectoryRenamePropagationValidation(),
         TestCase0032RemoteRenameReconciliation(),
-        #TestCase0033RemoteDirectoryRenameReconciliation(),
         
+        #TestCase0033RemoteDirectoryRenameReconciliation(),
         TestCase0033SeederDirectoryRenameOnlineTruth(),
         
     ]
