@@ -41,9 +41,7 @@ from testcases.tc0029_local_first_upload_only_timestamp_preservation_validation 
 from testcases.tc0030_local_rename_propagation_validation import TestCase0030LocalRenamePropagationValidation
 from testcases.tc0031_local_directory_rename_propagation_validation import TestCase0031LocalDirectoryRenamePropagationValidation
 from testcases.tc0032_remote_rename_reconciliation import TestCase0032RemoteRenameReconciliation
-#from testcases.tc0033_remote_directory_rename_reconciliation import TestCase0033RemoteDirectoryRenameReconciliation
-from testcases.tc0033_remote_directory_rename_reconciliation import TestCase0033SeederDirectoryRenameOnlineTruth
-
+from testcases.tc0033_remote_directory_rename_reconciliation import TestCase0033RemoteDirectoryRenameReconciliation
 
 
 def build_test_suite() -> list:
@@ -85,10 +83,7 @@ def build_test_suite() -> list:
         TestCase0030LocalRenamePropagationValidation(),
         TestCase0031LocalDirectoryRenamePropagationValidation(),
         TestCase0032RemoteRenameReconciliation(),
-        
-        #TestCase0033RemoteDirectoryRenameReconciliation(),
-        TestCase0033SeederDirectoryRenameOnlineTruth(),
-        
+        TestCase0033RemoteDirectoryRenameReconciliation(),
     ]
 
 
