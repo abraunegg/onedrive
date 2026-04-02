@@ -65,69 +65,31 @@ class LogBuffer {
 		this.flushThread.start();
 	}
 	
-	~this() {
-		if (!isRunning) {		
-			if (exitHandlerTriggered) {
-				bufferLock.unlock();	
-			}
-		}
-	}
-		
 	// Terminate Logging
 	void terminateLogging() {
-		synchronized {
-			// join all threads
-			thread_joinAll();
-			
+		synchronized(bufferLock) {
 			if (!isRunning) {
 				return; // Prevent multiple shutdowns
 			}
-			
+
 			// flag that we are no longer running due to shutting down
 			isRunning = false;
 			condReady.notifyAll(); // Wake up all waiting threads
 		}
 
-		// Wait for the flush thread to finish outside of the synchronized block to avoid deadlocks
-		if (flushThread.isRunning()) {
+		// Wait for the flush thread to finish outside of the lock to avoid deadlocks
+		if ((flushThread !is null) && flushThread.isRunning()) {
 			flushThread.join(true);
 		}
-		
-		// Flush any remaining logs
-		flushBuffer();
-		
-		// Sleep for a while to avoid busy-waiting
-		Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
-		
-		// Exit scopes
-		scope(exit) {
-			if (bufferLock !is null) {
-				bufferLock.lock();
-			}
-			
-			scope(exit) {
-				if (bufferLock !is null) {
-					bufferLock.unlock();
-					object.destroy(bufferLock);
-					bufferLock = null;
-				}
-			}
-		}
 
-		scope(failure) {
-			if (bufferLock !is null) {
-				bufferLock.lock();	
-			}
-			
-			scope(exit) {
-				if (bufferLock !is null) {
-					bufferLock.unlock();
-					object.destroy(bufferLock);
-					bufferLock = null;
-				}
-			}
-		}
+		// Final flush of stdout only
+		stdout.flush();
+
+		// Release references only - do not destroy the mutex during shutdown
+		condReady = null;
+		flushThread = null;
 	}
+	
 	
 	// Flush the logging buffer
 	private void flushBuffer() {
