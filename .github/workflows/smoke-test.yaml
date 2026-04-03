@@ -58,16 +58,15 @@ jobs:
             ldc \
             libcurl4-openssl-dev \
             libsqlite3-dev \
-            systemd-dev \
+            libsystemd-dev \
             libdbus-1-dev
 
       - name: Build client
         shell: bash
         run: |
           set -euo pipefail
-          ./configure --prefix="$GITHUB_WORKSPACE/.smoke-prefix"
+          ./configure
           make -j"$(nproc)"
-          make install
 
       - name: Prepare smoke configuration
         shell: bash
@@ -93,7 +92,7 @@ jobs:
 
           TESTROOT="$RUNNER_TEMP/onedrive-smoke"
           LOGFILE="$TESTROOT/monitor.log"
-          BIN="$GITHUB_WORKSPACE/.smoke-prefix/bin/onedrive"
+          BIN="$GITHUB_WORKSPACE/onedrive"
 
           "$BIN" --confdir="$TESTROOT/config" --monitor --verbose >"$LOGFILE" 2>&1 &
           PID=$!
@@ -232,9 +231,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./configure --prefix="$GITHUB_WORKSPACE/.smoke-prefix"
+          ./configure
           make -j"$(nproc)"
-          make install
 
       - name: Prepare smoke configuration
         shell: bash
@@ -260,7 +258,7 @@ jobs:
 
           TESTROOT="/tmp/onedrive-smoke"
           LOGFILE="$TESTROOT/monitor.log"
-          BIN="$GITHUB_WORKSPACE/.smoke-prefix/bin/onedrive"
+          BIN="$GITHUB_WORKSPACE/onedrive"
 
           "$BIN" --confdir="$TESTROOT/config" --monitor --verbose >"$LOGFILE" 2>&1 &
           PID=$!
