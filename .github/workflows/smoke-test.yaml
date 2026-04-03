@@ -30,14 +30,16 @@ jobs:
       SMOKE_REFRESH_TOKEN: ${{ secrets.SMOKE_PERSONAL_REFRESH_TOKEN }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository with full history and tags
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Validate secret is present
         shell: bash
         run: |
           set -euo pipefail
-
           if [ -z "${SMOKE_REFRESH_TOKEN:-}" ]; then
             echo "SMOKE_PERSONAL_REFRESH_TOKEN is not configured"
             exit 1
@@ -47,23 +49,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
             pkg-config \
+            git \
+            curl \
             ldc \
             libcurl4-openssl-dev \
             libsqlite3-dev \
-            libnotify-dev \
-            libdbus-1-dev \
-            zlib1g-dev
+            systemd-dev \
+            libdbus-1-dev
 
       - name: Build client
         shell: bash
         run: |
           set -euo pipefail
-
           ./configure --prefix="$GITHUB_WORKSPACE/.smoke-prefix"
           make -j"$(nproc)"
           make install
@@ -108,6 +109,8 @@ jobs:
               RC=$?
               set -e
               echo "Early exit code: $RC"
+              echo "----- monitor.log -----"
+              cat "$LOGFILE" || true
               exit 1
             fi
 
@@ -127,6 +130,8 @@ jobs:
             set +e
             wait "$PID"
             set -e
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
             exit 1
           fi
 
@@ -142,16 +147,22 @@ jobs:
 
           if grep -Eqi 'sigsegv|segmentation fault|aborting|pthread_mutex_destroy failed' "$LOGFILE"; then
             echo "Fatal shutdown pattern detected"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
             exit 1
           fi
 
           if [ "$RC" -eq 139 ]; then
             echo "SIGSEGV exit detected"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
             exit 1
           fi
 
           if [ "$RC" -ne 0 ] && [ "$RC" -ne 130 ]; then
             echo "Unexpected exit code: $RC"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
             exit 1
           fi
 
@@ -186,14 +197,16 @@ jobs:
       SMOKE_REFRESH_TOKEN: ${{ secrets.SMOKE_PERSONAL_REFRESH_TOKEN }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository with full history and tags
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Validate secret is present
         shell: bash
         run: |
           set -euo pipefail
-
           if [ -z "${SMOKE_REFRESH_TOKEN:-}" ]; then
             echo "SMOKE_PERSONAL_REFRESH_TOKEN is not configured"
             exit 1
@@ -203,17 +216,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           dnf -y update
-          dnf -y groupinstall "Development Tools"
+          dnf -y group install development-tools
           dnf -y install \
+            git \
+            curl \
             ldc \
-            pkgconf-pkg-config \
             libcurl-devel \
             sqlite-devel \
-            libnotify-devel \
             dbus-devel \
-            make \
             which \
             procps-ng
 
@@ -221,7 +232,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           ./configure --prefix="$GITHUB_WORKSPACE/.smoke-prefix"
           make -j"$(nproc)"
           make install
@@ -266,6 +276,8 @@ jobs:
               RC=$?
               set -e
               echo "Early exit code: $RC"
+              echo "----- monitor.log -----"
+              cat "$LOGFILE" || true
               exit 1
             fi
 
@@ -285,6 +297,8 @@ jobs:
             set +e
             wait "$PID"
             set -e
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
             exit 1
           fi
 
@@ -300,16 +314,22 @@ jobs:
 
           if grep -Eqi 'sigsegv|segmentation fault|aborting|pthread_mutex_destroy failed' "$LOGFILE"; then
             echo "Fatal shutdown pattern detected"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
             exit 1
           fi
 
           if [ "$RC" -eq 139 ]; then
             echo "SIGSEGV exit detected"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
             exit 1
           fi
 
           if [ "$RC" -ne 0 ] && [ "$RC" -ne 130 ]; then
             echo "Unexpected exit code: $RC"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
             exit 1
           fi
 
