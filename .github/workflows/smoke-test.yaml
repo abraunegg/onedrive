@@ -66,7 +66,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./configure
+          ./configure --enable-debug
           make -j"$(nproc)"
 
       - name: Prepare smoke configuration
@@ -217,63 +217,28 @@ jobs:
           set -euo pipefail
 
           TESTROOT="$RUNNER_TEMP/onedrive-smoke"
-          GDBLOG="$TESTROOT/gdb.log"
           GDBCONSOLE="$TESTROOT/gdb-console.log"
           GDBMONITOR="$TESTROOT/monitor-gdb.log"
           GDBWRAPPER="$TESTROOT/run-under-gdb.sh"
 
-          rm -f "$GDBLOG" "$GDBCONSOLE" "$GDBMONITOR"
+          rm -f "$GDBCONSOLE" "$GDBMONITOR"
 
           echo "Starting gdb diagnostic rerun"
 
-          gdb -q \
-            -x "$GITHUB_WORKSPACE/.github/gdb/smoke-monitor.gdb" \
-            --args /usr/bin/env bash "$GDBWRAPPER" \
-            >"$GDBCONSOLE" 2>&1 &
-          GDBPID=$!
-
-          echo "Started gdb PID: $GDBPID"
-
-          READY=0
-          for _ in $(seq 1 180); do
-            if ! kill -0 "$GDBPID" 2>/dev/null; then
-              echo "gdb exited before reaching steady state"
-              break
-            fi
-
-            if [ -f "$GDBMONITOR" ] && grep -Fq "Sync with Microsoft OneDrive is complete" "$GDBMONITOR"; then
-              READY=1
-              break
-            fi
-
-            sleep 5
-          done
-
-          if [ "$READY" -eq 1 ]; then
-            INFERIOR_PID="$(pgrep -f "$GITHUB_WORKSPACE/onedrive --confdir=$TESTROOT/config --monitor --verbose" | head -n1 || true)"
-            if [ -n "$INFERIOR_PID" ]; then
-              echo "Sending SIGINT to inferior PID $INFERIOR_PID"
-              kill -INT "$INFERIOR_PID" || true
-            else
-              echo "Unable to determine inferior PID during gdb rerun"
-            fi
-          else
-            echo "gdb rerun did not reach steady state before timeout"
-          fi
+          export SMOKE_GDB_MONITOR_LOG="$GDBMONITOR"
+          export SMOKE_GDB_READY_TIMEOUT="900"
 
           set +e
-          timeout 180s bash -c 'while kill -0 '"$GDBPID"' 2>/dev/null; do sleep 1; done'
-          WAIT_RC=$?
+          gdb -q -batch \
+            -x "$GITHUB_WORKSPACE/.github/gdb/smoke-monitor.gdb" \
+            --args /usr/bin/env bash "$GDBWRAPPER" \
+            >"$GDBCONSOLE" 2>&1
+          GDBRC=$?
           set -e
 
-          echo "GDB wait result: $WAIT_RC"
-
-          if kill -0 "$GDBPID" 2>/dev/null; then
-            echo "gdb still running; terminating"
-            kill -TERM "$GDBPID" 2>/dev/null || true
-            sleep 5
-            kill -KILL "$GDBPID" 2>/dev/null || true
-          fi
+          echo "gdb exit code: $GDBRC"
+          echo "----- gdb-console.log -----"
+          cat "$GDBCONSOLE" || true
 
       - name: Upload logs
         if: always()
@@ -340,7 +305,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./configure
+          ./configure --enable-debug
           make -j"$(nproc)"
 
       - name: Prepare smoke configuration
@@ -491,63 +456,28 @@ jobs:
           set -euo pipefail
 
           TESTROOT="/tmp/onedrive-smoke"
-          GDBLOG="$TESTROOT/gdb.log"
           GDBCONSOLE="$TESTROOT/gdb-console.log"
           GDBMONITOR="$TESTROOT/monitor-gdb.log"
           GDBWRAPPER="$TESTROOT/run-under-gdb.sh"
 
-          rm -f "$GDBLOG" "$GDBCONSOLE" "$GDBMONITOR"
+          rm -f "$GDBCONSOLE" "$GDBMONITOR"
 
           echo "Starting gdb diagnostic rerun"
 
-          gdb -q \
-            -x "$GITHUB_WORKSPACE/.github/gdb/smoke-monitor.gdb" \
-            --args /usr/bin/env bash "$GDBWRAPPER" \
-            >"$GDBCONSOLE" 2>&1 &
-          GDBPID=$!
-
-          echo "Started gdb PID: $GDBPID"
-
-          READY=0
-          for _ in $(seq 1 180); do
-            if ! kill -0 "$GDBPID" 2>/dev/null; then
-              echo "gdb exited before reaching steady state"
-              break
-            fi
-
-            if [ -f "$GDBMONITOR" ] && grep -Fq "Sync with Microsoft OneDrive is complete" "$GDBMONITOR"; then
-              READY=1
-              break
-            fi
-
-            sleep 5
-          done
-
-          if [ "$READY" -eq 1 ]; then
-            INFERIOR_PID="$(pgrep -f "$GITHUB_WORKSPACE/onedrive --confdir=$TESTROOT/config --monitor --verbose" | head -n1 || true)"
-            if [ -n "$INFERIOR_PID" ]; then
-              echo "Sending SIGINT to inferior PID $INFERIOR_PID"
-              kill -INT "$INFERIOR_PID" || true
-            else
-              echo "Unable to determine inferior PID during gdb rerun"
-            fi
-          else
-            echo "gdb rerun did not reach steady state before timeout"
-          fi
+          export SMOKE_GDB_MONITOR_LOG="$GDBMONITOR"
+          export SMOKE_GDB_READY_TIMEOUT="900"
 
           set +e
-          timeout 180s bash -c 'while kill -0 '"$GDBPID"' 2>/dev/null; do sleep 1; done'
-          WAIT_RC=$?
+          gdb -q -batch \
+            -x "$GITHUB_WORKSPACE/.github/gdb/smoke-monitor.gdb" \
+            --args /usr/bin/env bash "$GDBWRAPPER" \
+            >"$GDBCONSOLE" 2>&1
+          GDBRC=$?
           set -e
 
-          echo "GDB wait result: $WAIT_RC"
-
-          if kill -0 "$GDBPID" 2>/dev/null; then
-            echo "gdb still running; terminating"
-            kill -TERM "$GDBPID" 2>/dev/null || true
-            sleep 5
-            kill -KILL "$GDBPID" 2>/dev/null || true
-          fi
+          echo "gdb exit code: $GDBRC"
+          echo "----- gdb-console.log -----"
+          cat "$GDBCONSOLE" || true
 
       - name: Upload logs
         if: always()
