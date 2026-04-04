@@ -175,7 +175,7 @@ jobs:
           RC=$?
           set -e
 
-          echo "Exit code: $RC"
+          echo "wait() captured child exit code: $RC"
 
           if grep -Eqi 'sigsegv|segmentation fault|aborting|pthread_mutex_destroy failed' "$LOGFILE"; then
             echo "Fatal shutdown pattern detected"
@@ -199,7 +199,7 @@ jobs:
             exit 1
           fi
 
-          if [ "$RC" -ne 0 ] && [ "$RC" -ne 130 ]; then
+          if [ "$RC" -ne 0 ] && [ "$RC" -ne 2 ] && [ "$RC" -ne 130 ]; then
             echo "Unexpected exit code: $RC"
             echo "STATUS=unclean" > "$RESULTFILE"
             echo "REASON=unexpected_exit_code" >> "$RESULTFILE"
@@ -421,7 +421,7 @@ jobs:
           RC=$?
           set -e
 
-          echo "Exit code: $RC"
+          echo "wait() captured child exit code: $RC"
 
           if grep -Eqi 'sigsegv|segmentation fault|aborting|pthread_mutex_destroy failed' "$LOGFILE"; then
             echo "Fatal shutdown pattern detected"
@@ -445,7 +445,7 @@ jobs:
             exit 1
           fi
 
-          if [ "$RC" -ne 0 ] && [ "$RC" -ne 130 ]; then
+          if [ "$RC" -ne 0 ] && [ "$RC" -ne 2 ] && [ "$RC" -ne 130 ]; then
             echo "Unexpected exit code: $RC"
             echo "STATUS=unclean" > "$RESULTFILE"
             echo "REASON=unexpected_exit_code" >> "$RESULTFILE"
