@@ -1,0 +1,501 @@
+name: Smoke Test
+
+on:
+  push:
+    branches:
+      - master
+      - feature/**
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-monitor-exit:
+    name: Ubuntu ${{ matrix.ubuntu }} monitor clean exit
+    runs-on: ${{ matrix.ubuntu }}
+    timeout-minutes: 45
+    environment:
+      name: smoke-test
+      deployment: false
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu:
+          - ubuntu-22.04
+          - ubuntu-24.04
+
+    env:
+      SMOKE_REFRESH_TOKEN: ${{ secrets.SMOKE_PERSONAL_REFRESH_TOKEN }}
+
+    steps:
+      - name: Checkout repository with full history and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate secret is present
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SMOKE_REFRESH_TOKEN:-}" ]; then
+            echo "SMOKE_PERSONAL_REFRESH_TOKEN is not configured"
+            exit 1
+          fi
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            git \
+            curl \
+            ldc \
+            gdb \
+            libcurl4-openssl-dev \
+            libsqlite3-dev \
+            libsystemd-dev \
+            libdbus-1-dev
+
+      - name: Enable debuginfod for gdb
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'DEBUGINFOD_URLS=https://debuginfod.ubuntu.com' >> "$GITHUB_ENV"
+
+      - name: Build client
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./configure --enable-debug
+          make -j"$(nproc)"
+
+      - name: Prepare smoke configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TESTROOT="$RUNNER_TEMP/onedrive-smoke"
+          rm -rf "$TESTROOT"
+          mkdir -p "$TESTROOT/config" "$TESTROOT/syncdir"
+
+          cat > "$TESTROOT/config/config" <<EOF
+          monitor_interval = "300"
+          sync_dir = "$TESTROOT/syncdir"
+          threads = "1"
+          EOF
+
+          printf '%s' "$SMOKE_REFRESH_TOKEN" > "$TESTROOT/config/refresh_token"
+          chmod 600 "$TESTROOT/config/refresh_token"
+
+      - name: Prepare gdb wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TESTROOT="$RUNNER_TEMP/onedrive-smoke"
+          BIN="$GITHUB_WORKSPACE/onedrive"
+
+          cat > "$TESTROOT/run-under-gdb.sh" <<EOF
+          #!/usr/bin/env bash
+          exec "$BIN" --confdir="$TESTROOT/config" --monitor --verbose --verbose >"$TESTROOT/monitor-gdb.log" 2>&1
+          EOF
+
+          chmod +x "$TESTROOT/run-under-gdb.sh"
+
+      - name: Run monitor smoke test
+        id: smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TESTROOT="$RUNNER_TEMP/onedrive-smoke"
+          LOGFILE="$TESTROOT/monitor.log"
+          RESULTFILE="$TESTROOT/smoke-result.env"
+          BIN="$GITHUB_WORKSPACE/onedrive"
+
+          rm -f "$RESULTFILE"
+
+          "$BIN" --confdir="$TESTROOT/config" --monitor --verbose >"$LOGFILE" 2>&1 &
+          PID=$!
+
+          echo "Started PID: $PID"
+
+          READY=0
+          for _ in $(seq 1 180); do
+            if ! kill -0 "$PID" 2>/dev/null; then
+              echo "Process exited before reaching steady state"
+              set +e
+              wait "$PID"
+              RC=$?
+              set -e
+              echo "STATUS=unclean" > "$RESULTFILE"
+              echo "REASON=early_exit" >> "$RESULTFILE"
+              echo "RC=$RC" >> "$RESULTFILE"
+              echo "smoke_status=unclean" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+
+            if grep -Fq "Sync with Microsoft OneDrive is complete" "$LOGFILE"; then
+              READY=1
+              break
+            fi
+
+            sleep 5
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            echo "Timed out waiting for steady-state monitor completion"
+            kill -TERM "$PID" 2>/dev/null || true
+            sleep 5
+            kill -KILL "$PID" 2>/dev/null || true
+            set +e
+            wait "$PID"
+            RC=$?
+            set -e
+            echo "STATUS=unclean" > "$RESULTFILE"
+            echo "REASON=timeout_waiting_for_monitor_idle" >> "$RESULTFILE"
+            echo "RC=$RC" >> "$RESULTFILE"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
+            echo "smoke_status=unclean" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "Steady state reached; sending SIGINT"
+          kill -INT "$PID"
+
+          set +e
+          wait "$PID"
+          RC=$?
+          set -e
+
+          echo "wait() captured child exit code: $RC"
+
+          if grep -Eqi 'sigsegv|segmentation fault|aborting|pthread_mutex_destroy failed' "$LOGFILE"; then
+            echo "Fatal shutdown pattern detected"
+            echo "STATUS=unclean" > "$RESULTFILE"
+            echo "REASON=fatal_pattern_in_log" >> "$RESULTFILE"
+            echo "RC=$RC" >> "$RESULTFILE"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
+            echo "smoke_status=unclean" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ "$RC" -eq 139 ]; then
+            echo "SIGSEGV exit detected"
+            echo "STATUS=unclean" > "$RESULTFILE"
+            echo "REASON=sigsegv_exit_code" >> "$RESULTFILE"
+            echo "RC=$RC" >> "$RESULTFILE"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
+            echo "smoke_status=unclean" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ "$RC" -ne 0 ] && [ "$RC" -ne 2 ] && [ "$RC" -ne 130 ]; then
+            echo "Unexpected exit code: $RC"
+            echo "STATUS=unclean" > "$RESULTFILE"
+            echo "REASON=unexpected_exit_code" >> "$RESULTFILE"
+            echo "RC=$RC" >> "$RESULTFILE"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
+            echo "smoke_status=unclean" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "STATUS=clean" > "$RESULTFILE"
+          echo "REASON=clean_exit" >> "$RESULTFILE"
+          echo "RC=$RC" >> "$RESULTFILE"
+          echo "Clean shutdown verified"
+          echo "smoke_status=clean" >> "$GITHUB_OUTPUT"
+
+      - name: Run gdb diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TESTROOT="$RUNNER_TEMP/onedrive-smoke"
+          GDBCONSOLE="$TESTROOT/gdb-console.log"
+          GDBMONITOR="$TESTROOT/monitor-gdb.log"
+          GDBWRAPPER="$TESTROOT/run-under-gdb.sh"
+
+          rm -f "$GDBCONSOLE" "$GDBMONITOR"
+
+          echo "Starting gdb diagnostic rerun"
+
+          export SMOKE_GDB_MONITOR_LOG="$GDBMONITOR"
+          export SMOKE_GDB_READY_TIMEOUT="900"
+
+          set +e
+          gdb -q -batch \
+            -x "$GITHUB_WORKSPACE/.github/gdb/smoke-monitor.gdb" \
+            --args /usr/bin/env bash "$GDBWRAPPER" \
+            >"$GDBCONSOLE" 2>&1
+          GDBRC=$?
+          set -e
+
+          echo "gdb exit code: $GDBRC"
+          echo "----- gdb-console.log -----"
+          cat "$GDBCONSOLE" || true
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-monitor-${{ matrix.ubuntu }}-logs
+          path: ${{ runner.temp }}/onedrive-smoke/
+          if-no-files-found: warn
+
+  fedora-monitor-exit:
+    name: Fedora ${{ matrix.fedora }} monitor clean exit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment:
+      name: smoke-test
+      deployment: false
+    strategy:
+      fail-fast: false
+      matrix:
+        fedora:
+          - "42"
+          - "43"
+
+    container:
+      image: fedora:${{ matrix.fedora }}
+
+    env:
+      SMOKE_REFRESH_TOKEN: ${{ secrets.SMOKE_PERSONAL_REFRESH_TOKEN }}
+
+    steps:
+      - name: Checkout repository with full history and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate secret is present
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SMOKE_REFRESH_TOKEN:-}" ]; then
+            echo "SMOKE_PERSONAL_REFRESH_TOKEN is not configured"
+            exit 1
+          fi
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          dnf -y update
+          dnf -y group install development-tools
+          dnf -y install \
+            git \
+            curl \
+            ldc \
+            gdb \
+            libcurl-devel \
+            sqlite-devel \
+            dbus-devel \
+            which \
+            procps-ng \
+            dnf-plugins-core
+
+      - name: Install core debuginfo packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          dnf -y debuginfo-install glibc libcurl sqlite systemd || true
+
+      - name: Build client
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./configure --enable-debug
+          make -j"$(nproc)"
+
+      - name: Prepare smoke configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TESTROOT="/tmp/onedrive-smoke"
+          rm -rf "$TESTROOT"
+          mkdir -p "$TESTROOT/config" "$TESTROOT/syncdir"
+
+          cat > "$TESTROOT/config/config" <<EOF
+          monitor_interval = "300"
+          sync_dir = "$TESTROOT/syncdir"
+          threads = "1"
+          EOF
+
+          printf '%s' "$SMOKE_REFRESH_TOKEN" > "$TESTROOT/config/refresh_token"
+          chmod 600 "$TESTROOT/config/refresh_token"
+
+      - name: Prepare gdb wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TESTROOT="/tmp/onedrive-smoke"
+          BIN="$GITHUB_WORKSPACE/onedrive"
+
+          cat > "$TESTROOT/run-under-gdb.sh" <<EOF
+          #!/usr/bin/env bash
+          exec "$BIN" --confdir="$TESTROOT/config" --monitor --verbose --verbose >"$TESTROOT/monitor-gdb.log" 2>&1
+          EOF
+
+          chmod +x "$TESTROOT/run-under-gdb.sh"
+
+      - name: Run monitor smoke test
+        id: smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TESTROOT="/tmp/onedrive-smoke"
+          LOGFILE="$TESTROOT/monitor.log"
+          RESULTFILE="$TESTROOT/smoke-result.env"
+          BIN="$GITHUB_WORKSPACE/onedrive"
+
+          rm -f "$RESULTFILE"
+
+          "$BIN" --confdir="$TESTROOT/config" --monitor --verbose >"$LOGFILE" 2>&1 &
+          PID=$!
+
+          echo "Started PID: $PID"
+
+          READY=0
+          for _ in $(seq 1 180); do
+            if ! kill -0 "$PID" 2>/dev/null; then
+              echo "Process exited before reaching steady state"
+              set +e
+              wait "$PID"
+              RC=$?
+              set -e
+              echo "STATUS=unclean" > "$RESULTFILE"
+              echo "REASON=early_exit" >> "$RESULTFILE"
+              echo "RC=$RC" >> "$RESULTFILE"
+              echo "smoke_status=unclean" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+
+            if grep -Fq "Sync with Microsoft OneDrive is complete" "$LOGFILE"; then
+              READY=1
+              break
+            fi
+
+            sleep 5
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            echo "Timed out waiting for steady-state monitor completion"
+            kill -TERM "$PID" 2>/dev/null || true
+            sleep 5
+            kill -KILL "$PID" 2>/dev/null || true
+            set +e
+            wait "$PID"
+            RC=$?
+            set -e
+            echo "STATUS=unclean" > "$RESULTFILE"
+            echo "REASON=timeout_waiting_for_monitor_idle" >> "$RESULTFILE"
+            echo "RC=$RC" >> "$RESULTFILE"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
+            echo "smoke_status=unclean" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "Steady state reached; sending SIGINT"
+          kill -INT "$PID"
+
+          set +e
+          wait "$PID"
+          RC=$?
+          set -e
+
+          echo "wait() captured child exit code: $RC"
+
+          if grep -Eqi 'sigsegv|segmentation fault|aborting|pthread_mutex_destroy failed' "$LOGFILE"; then
+            echo "Fatal shutdown pattern detected"
+            echo "STATUS=unclean" > "$RESULTFILE"
+            echo "REASON=fatal_pattern_in_log" >> "$RESULTFILE"
+            echo "RC=$RC" >> "$RESULTFILE"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
+            echo "smoke_status=unclean" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ "$RC" -eq 139 ]; then
+            echo "SIGSEGV exit detected"
+            echo "STATUS=unclean" > "$RESULTFILE"
+            echo "REASON=sigsegv_exit_code" >> "$RESULTFILE"
+            echo "RC=$RC" >> "$RESULTFILE"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
+            echo "smoke_status=unclean" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ "$RC" -ne 0 ] && [ "$RC" -ne 2 ] && [ "$RC" -ne 130 ]; then
+            echo "Unexpected exit code: $RC"
+            echo "STATUS=unclean" > "$RESULTFILE"
+            echo "REASON=unexpected_exit_code" >> "$RESULTFILE"
+            echo "RC=$RC" >> "$RESULTFILE"
+            echo "----- monitor.log -----"
+            cat "$LOGFILE" || true
+            echo "smoke_status=unclean" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "STATUS=clean" > "$RESULTFILE"
+          echo "REASON=clean_exit" >> "$RESULTFILE"
+          echo "RC=$RC" >> "$RESULTFILE"
+          echo "Clean shutdown verified"
+          echo "smoke_status=clean" >> "$GITHUB_OUTPUT"
+
+      - name: Run gdb diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TESTROOT="/tmp/onedrive-smoke"
+          GDBCONSOLE="$TESTROOT/gdb-console.log"
+          GDBMONITOR="$TESTROOT/monitor-gdb.log"
+          GDBWRAPPER="$TESTROOT/run-under-gdb.sh"
+
+          rm -f "$GDBCONSOLE" "$GDBMONITOR"
+
+          echo "Starting gdb diagnostic rerun"
+
+          export SMOKE_GDB_MONITOR_LOG="$GDBMONITOR"
+          export SMOKE_GDB_READY_TIMEOUT="900"
+
+          set +e
+          gdb -q -batch \
+            -x "$GITHUB_WORKSPACE/.github/gdb/smoke-monitor.gdb" \
+            --args /usr/bin/env bash "$GDBWRAPPER" \
+            >"$GDBCONSOLE" 2>&1
+          GDBRC=$?
+          set -e
+
+          echo "gdb exit code: $GDBRC"
+          echo "----- gdb-console.log -----"
+          cat "$GDBCONSOLE" || true
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-monitor-fedora-${{ matrix.fedora }}-logs
+          path: /tmp/onedrive-smoke/
+          if-no-files-found: warn
