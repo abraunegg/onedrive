@@ -60,6 +60,8 @@ commands
   silent
   printf "\n===== breakpoint hit: abort =====\n"
   info program
+  printf "\n===== threads =====\n"
+  info threads
   printf "\n===== thread apply all bt =====\n"
   thread apply all bt
   printf "\n===== thread apply all bt full =====\n"
@@ -75,6 +77,8 @@ run
 
 printf "\n===== inferior stopped =====\n"
 info program
+printf "\n===== threads =====\n"
+info threads
 printf "\n===== thread apply all bt =====\n"
 thread apply all bt
 printf "\n===== thread apply all bt full =====\n"
