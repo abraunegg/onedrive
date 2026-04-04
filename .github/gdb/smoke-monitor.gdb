@@ -1,16 +1,21 @@
 set pagination off
 set confirm off
 set print thread-events off
+set print pretty on
+set print frame-arguments all
 set breakpoint pending on
 set backtrace limit 256
+set debuginfod enabled on
 
-# Common noise
+# Ignore common runtime noise
 handle SIGPIPE nostop noprint pass
 handle SIGALRM nostop noprint pass
 handle SIGVTALRM nostop noprint pass
 handle SIGPROF nostop noprint pass
+handle SIGUSR1 nostop noprint pass
+handle SIGUSR2 nostop noprint pass
 
-# glibc / NPTL internal signals often seen on Linux
+# Ignore glibc/NPTL internal signals
 handle SIG32 nostop noprint pass
 handle SIG33 nostop noprint pass
 handle SIG34 nostop noprint pass
@@ -44,26 +49,37 @@ handle SIG61 nostop noprint pass
 handle SIG62 nostop noprint pass
 handle SIG63 nostop noprint pass
 
-# Crash signals
+# Important crash signals
 handle SIGSEGV stop print pass
 handle SIGABRT stop print pass
-handle SIGILL  stop print pass
-handle SIGFPE  stop print pass
+handle SIGILL stop print pass
+handle SIGFPE stop print pass
 
-# We want SIGINT delivered to the inferior, not to interrupt gdb itself
+# SIGINT should go to the inferior, not stop gdb itself
 handle SIGINT nostop noprint pass
 
 define dump_state
   printf "\n===== inferior stopped =====\n"
   info program
+
+  printf "\n===== bt =====\n"
+  bt
+
+  printf "\n===== bt full =====\n"
+  bt full
+
   printf "\n===== threads =====\n"
   info threads
+
   printf "\n===== thread apply all bt =====\n"
   thread apply all bt
+
   printf "\n===== thread apply all bt full =====\n"
   thread apply all bt full
+
   printf "\n===== registers =====\n"
   info registers
+
   printf "\n===== shared libraries =====\n"
   info sharedlibrary
 end
@@ -136,18 +152,18 @@ def controller():
                 with open(logfile, "r", errors="replace") as fh:
                     data = fh.read()
                 if needle in data:
-                    gdb.write("\\n===== controller: steady state detected =====\\n")
-                    gdb.write("===== controller: sending SIGINT to inferior pid %d =====\\n" % pid)
+                    gdb.write("\n===== controller: steady state detected =====\n")
+                    gdb.write("===== controller: sending SIGINT to inferior pid %d =====\n" % pid)
                     os.kill(pid, signal.SIGINT)
                     return
             except FileNotFoundError:
                 pass
             except Exception as exc:
-                gdb.write("\\n===== controller: logfile read error: %s =====\\n" % exc)
+                gdb.write("\n===== controller: logfile read error: %s =====\n" % exc)
 
         time.sleep(poll_s)
 
-    gdb.write("\\n===== controller: timeout waiting for steady state; no SIGINT sent =====\\n")
+    gdb.write("\n===== controller: timeout waiting for steady state; no SIGINT sent =====\n")
 
 threading.Thread(target=controller, daemon=True).start()
 end

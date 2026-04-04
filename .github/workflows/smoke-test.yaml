@@ -62,6 +62,12 @@ jobs:
             libsystemd-dev \
             libdbus-1-dev
 
+      - name: Enable debuginfod for gdb
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'DEBUGINFOD_URLS=https://debuginfod.ubuntu.com' >> "$GITHUB_ENV"
+
       - name: Build client
         shell: bash
         run: |
@@ -97,7 +103,7 @@ jobs:
 
           cat > "$TESTROOT/run-under-gdb.sh" <<EOF
           #!/usr/bin/env bash
-          exec "$BIN" --confdir="$TESTROOT/config" --monitor --verbose >"$TESTROOT/monitor-gdb.log" 2>&1
+          exec "$BIN" --confdir="$TESTROOT/config" --monitor --verbose --verbose >"$TESTROOT/monitor-gdb.log" 2>&1
           EOF
 
           chmod +x "$TESTROOT/run-under-gdb.sh"
@@ -299,7 +305,14 @@ jobs:
             sqlite-devel \
             dbus-devel \
             which \
-            procps-ng
+            procps-ng \
+            dnf-plugins-core
+
+      - name: Install core debuginfo packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          dnf -y debuginfo-install glibc libcurl sqlite systemd || true
 
       - name: Build client
         shell: bash
@@ -336,7 +349,7 @@ jobs:
 
           cat > "$TESTROOT/run-under-gdb.sh" <<EOF
           #!/usr/bin/env bash
-          exec "$BIN" --confdir="$TESTROOT/config" --monitor --verbose >"$TESTROOT/monitor-gdb.log" 2>&1
+          exec "$BIN" --confdir="$TESTROOT/config" --monitor --verbose --verbose >"$TESTROOT/monitor-gdb.log" 2>&1
           EOF
 
           chmod +x "$TESTROOT/run-under-gdb.sh"
