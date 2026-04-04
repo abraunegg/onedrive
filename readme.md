@@ -4,7 +4,6 @@
 
 [![Test Build](https://github.com/abraunegg/onedrive/actions/workflows/testbuild.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/testbuild.yaml)
 [![Smoke Test](https://github.com/abraunegg/onedrive/actions/workflows/smoke-test.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/smoke-test.yaml)
-
 [![Build Docker Images](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
 
