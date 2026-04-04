@@ -65,74 +65,38 @@ class LogBuffer {
 		this.flushThread.start();
 	}
 	
-	~this() {
-		if (!isRunning) {		
-			if (exitHandlerTriggered) {
-				bufferLock.unlock();	
-			}
-		}
-	}
-		
 	// Terminate Logging
 	void terminateLogging() {
-		synchronized {
-			// join all threads
-			thread_joinAll();
-			
+		synchronized(bufferLock) {
 			if (!isRunning) {
 				return; // Prevent multiple shutdowns
 			}
-			
+
 			// flag that we are no longer running due to shutting down
 			isRunning = false;
 			condReady.notifyAll(); // Wake up all waiting threads
 		}
 
-		// Wait for the flush thread to finish outside of the synchronized block to avoid deadlocks
-		if (flushThread.isRunning()) {
+		// Wait for the flush thread to finish outside of the lock to avoid deadlocks
+		if ((flushThread !is null) && flushThread.isRunning()) {
 			flushThread.join(true);
 		}
-		
-		// Flush any remaining logs
-		flushBuffer();
-		
-		// Sleep for a while to avoid busy-waiting
-		Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
-		
-		// Exit scopes
-		scope(exit) {
-			if (bufferLock !is null) {
-				bufferLock.lock();
-			}
-			
-			scope(exit) {
-				if (bufferLock !is null) {
-					bufferLock.unlock();
-					object.destroy(bufferLock);
-					bufferLock = null;
-				}
-			}
-		}
 
-		scope(failure) {
-			if (bufferLock !is null) {
-				bufferLock.lock();	
-			}
-			
-			scope(exit) {
-				if (bufferLock !is null) {
-					bufferLock.unlock();
-					object.destroy(bufferLock);
-					bufferLock = null;
-				}
-			}
-		}
+		// Final flush of stdout only
+		stdout.flush();
+
+		// Release references only
+		condReady = null;
+		flushThread = null;
 	}
+	
 	
 	// Flush the logging buffer
 	private void flushBuffer() {
-		while (isRunning) {
-			flush();
+		while (true) {
+			if (!flush()) {
+				break;
+			}
 		}
 		stdout.flush();
 	}
@@ -143,6 +107,11 @@ class LogBuffer {
 		auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
 		
 		synchronized(bufferLock) {
+			// Do not accept new log messages once shutdown has started
+			if (!isRunning) {
+				return;
+			}
+
 			foreach (level; levels) {
 				// Normal application output
 				if (!debugLogging) {
@@ -186,16 +155,20 @@ class LogBuffer {
 	}
 
 	// Flush the logging buffer
-	private void flush() {
+	private bool flush() {
 		string[3][] messages;
 		synchronized(bufferLock) {
-			if (isRunning) {
-				while (buffer.empty && isRunning) { // buffer is empty and logging is still active
-					condReady.wait();
-				}
-				messages = buffer;
-				buffer.length = 0;
+			while (buffer.empty && isRunning) { // buffer is empty and logging is still active
+				condReady.wait();
 			}
+
+			// If shutdown has started and there is nothing left to write, exit the flush thread
+			if (buffer.empty && !isRunning) {
+				return false;
+			}
+
+			messages = buffer;
+			buffer.length = 0;
 		}
 
 		// Are there messages to process?
@@ -228,6 +201,8 @@ class LogBuffer {
 			// Clear Messages
 			messages.length = 0;
 		}
+
+		return true;
 	}
 }
 

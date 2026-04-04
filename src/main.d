@@ -3,7 +3,7 @@ module main;
 
 // What does this module require to function?
 import core.memory;
-import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
+import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit, _Exit;
 import core.sys.posix.signal;
 import core.thread;
 import core.time;
@@ -1862,16 +1862,16 @@ extern(C) nothrow @nogc @system void exitViaSignalHandler(int signo) {
 			if (signo == SIGINT) {
 				// Yes - SIGINT was used
 				printf("Due to a termination signal, internal processing stopped abruptly. The application will now exit in a unclean manner.\n");
-				exit(130);
+				_Exit(130);
 			} else {
 				// Confirmed as SIGSEGV, but not SIGINT and SIGTERM not used
 				printf("FATAL: Segmentation fault (SIGSEGV). The application encountered an internal error and will now exit in a unclean manner.\n");
-				exit(139);
+				_Exit(139);
 			}
 		} else {
 			// High probability of being shutdown by systemd, for example: systemctl --user stop onedrive
 			// Exit in a manner that does not trigger an exit failure in systemd
-			exit(0);
+			_Exit(0);
 		}
 	}
 	
@@ -1902,7 +1902,7 @@ extern(C) nothrow @nogc @system void exitViaSignalHandler(int signo) {
 			// writeln("Exception during shutdown: " ~ e.msg);
 		}
 		// Exit the process with the provided exit code
-		exit(signo);
+		_Exit(signo);
 	}
 }
 
