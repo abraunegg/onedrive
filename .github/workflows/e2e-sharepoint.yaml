@@ -15,7 +15,9 @@ jobs:
   e2e_sharepoint:
     runs-on: ubuntu-latest
     container: fedora:latest
-    environment: e2e-sharepoint
+    environment:
+      name: e2e-sharepoint
+      deployment: false    
 
     steps:
       - uses: actions/checkout@v4

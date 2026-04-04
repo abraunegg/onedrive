@@ -15,7 +15,9 @@ jobs:
   e2e_personal:
     runs-on: ubuntu-latest
     container: fedora:latest
-    environment: onedrive-e2e
+    environment:
+      name: onedrive-e2e
+      deployment: false
 
     steps:
       - uses: actions/checkout@v4

@@ -15,8 +15,10 @@ jobs:
   e2e_business:
     runs-on: ubuntu-latest
     container: fedora:latest
-    environment: e2e-business
-
+    environment:
+      name: e2e-business
+      deployment: false
+    
     steps:
       - uses: actions/checkout@v4
 
