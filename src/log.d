@@ -85,7 +85,7 @@ class LogBuffer {
 		// Final flush of stdout only
 		stdout.flush();
 
-		// Release references only - do not destroy the mutex during shutdown
+		// Release references only
 		condReady = null;
 		flushThread = null;
 	}
@@ -93,8 +93,10 @@ class LogBuffer {
 	
 	// Flush the logging buffer
 	private void flushBuffer() {
-		while (isRunning) {
-			flush();
+		while (true) {
+			if (!flush()) {
+				break;
+			}
 		}
 		stdout.flush();
 	}
@@ -105,6 +107,11 @@ class LogBuffer {
 		auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
 		
 		synchronized(bufferLock) {
+			// Do not accept new log messages once shutdown has started
+			if (!isRunning) {
+				return;
+			}
+
 			foreach (level; levels) {
 				// Normal application output
 				if (!debugLogging) {
@@ -148,16 +155,20 @@ class LogBuffer {
 	}
 
 	// Flush the logging buffer
-	private void flush() {
+	private bool flush() {
 		string[3][] messages;
 		synchronized(bufferLock) {
-			if (isRunning) {
-				while (buffer.empty && isRunning) { // buffer is empty and logging is still active
-					condReady.wait();
-				}
-				messages = buffer;
-				buffer.length = 0;
+			while (buffer.empty && isRunning) { // buffer is empty and logging is still active
+				condReady.wait();
 			}
+
+			// If shutdown has started and there is nothing left to write, exit the flush thread
+			if (buffer.empty && !isRunning) {
+				return false;
+			}
+
+			messages = buffer;
+			buffer.length = 0;
 		}
 
 		// Are there messages to process?
@@ -190,6 +201,8 @@ class LogBuffer {
 			// Clear Messages
 			messages.length = 0;
 		}
+
+		return true;
 	}
 }
 
