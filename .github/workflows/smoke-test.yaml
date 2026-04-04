@@ -13,7 +13,6 @@ permissions:
 
 jobs:
   ubuntu-monitor-exit:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Ubuntu ${{ matrix.ubuntu }} monitor clean exit
     runs-on: ${{ matrix.ubuntu }}
     timeout-minutes: 45
@@ -253,7 +252,6 @@ jobs:
           exit 1
 
   fedora-monitor-exit:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Fedora ${{ matrix.fedora }} monitor clean exit
     runs-on: ubuntu-24.04
     timeout-minutes: 45
