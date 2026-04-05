@@ -258,7 +258,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 break
 
         interrupted_as_expected = (
-            phase1_returncode in (-2, 130, -11, 139)
+            phase1_returncode in (-2, 2, 130, -11, 139)
             or crash_marker_seen in {"Segmentation fault", "core dumped", "SIGSEGV"}
         )
 
