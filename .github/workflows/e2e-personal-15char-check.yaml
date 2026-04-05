@@ -67,7 +67,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-personal
+          name: e2e-personal-15char-check
           path: ci/e2e/out/**
 
   pr_comment:
@@ -82,15 +82,15 @@ jobs:
       - name: Download artefact
         uses: actions/download-artifact@v4
         with:
-          name: e2e-personal
-          path: artifacts/e2e-personal
+          name: e2e-personal-15char-check
+          path: artifacts/e2e-personal-15char-check
 
       - name: Build markdown summary
         id: summary
         run: |
           set -euo pipefail
 
-          f="$(find artifacts/e2e-personal -name results.json -type f | head -n 1 || true)"
+          f="$(find artifacts/e2e-personal-15char-check -name results.json -type f | head -n 1 || true)"
           if [ -z "$f" ] || [ ! -f "$f" ]; then
             echo "md=⚠️ E2E ran but results.json was not found." >> "$GITHUB_OUTPUT"
             exit 0

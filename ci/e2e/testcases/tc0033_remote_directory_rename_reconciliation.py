@@ -58,6 +58,17 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             return []
         return sorted(str(path.relative_to(root)) for path in root.rglob("*") if path.is_dir())
 
+    def _extract_deleted_remote_paths(self, stdout: str) -> list[str]:
+        prefix = "Deleting item from Microsoft OneDrive: "
+        deleted_paths: list[str] = []
+
+        for line in stdout.splitlines():
+            line = line.strip()
+            if line.startswith(prefix):
+                deleted_paths.append(line[len(prefix):].strip())
+
+        return deleted_paths
+
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / "tc0033"
         case_log_dir = context.logs_dir / "tc0033"
@@ -125,10 +136,12 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         phase2_validator_initial_stderr = case_log_dir / "phase2_validator_initial_stderr.log"
         phase3_rename_stdout = case_log_dir / "phase3_directory_rename_stdout.log"
         phase3_rename_stderr = case_log_dir / "phase3_directory_rename_stderr.log"
-        phase4_validator_reconcile_stdout = case_log_dir / "phase4_validator_reconcile_stdout.log"
-        phase4_validator_reconcile_stderr = case_log_dir / "phase4_validator_reconcile_stderr.log"
+        phase3_converge_stdout = case_log_dir / "phase3_converge_stdout.log"
+        phase3_converge_stderr = case_log_dir / "phase3_converge_stderr.log"
         verify_stdout = case_log_dir / "verify_stdout.log"
         verify_stderr = case_log_dir / "verify_stderr.log"
+        phase4_validator_reconcile_stdout = case_log_dir / "phase4_validator_reconcile_stdout.log"
+        phase4_validator_reconcile_stderr = case_log_dir / "phase4_validator_reconcile_stderr.log"
         validator_manifest_file = state_dir / "validator_manifest.txt"
         verify_manifest_file = state_dir / "verify_manifest.txt"
         metadata_file = state_dir / "metadata.txt"
@@ -140,10 +153,12 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             str(phase2_validator_initial_stderr),
             str(phase3_rename_stdout),
             str(phase3_rename_stderr),
-            str(phase4_validator_reconcile_stdout),
-            str(phase4_validator_reconcile_stderr),
+            str(phase3_converge_stdout),
+            str(phase3_converge_stderr),
             str(verify_stdout),
             str(verify_stderr),
+            str(phase4_validator_reconcile_stdout),
+            str(phase4_validator_reconcile_stderr),
             str(validator_manifest_file),
             str(verify_manifest_file),
             str(metadata_file),
@@ -298,9 +313,13 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         write_text_file(phase3_rename_stdout, phase3_result.stdout)
         write_text_file(phase3_rename_stderr, phase3_result.stderr)
         details["phase3_returncode"] = phase3_result.returncode
-        details["phase3_deleted_old_directory_online"] = (
-            f"Deleting item from Microsoft OneDrive: {root_name}/SourceDirectory" in phase3_result.stdout
-        )
+
+        phase3_deleted_paths = self._extract_deleted_remote_paths(phase3_result.stdout)
+        details["phase3_deleted_remote_paths"] = phase3_deleted_paths
+        details["phase3_deleted_old_root_exact"] = source_dir_relative in phase3_deleted_paths
+        details["phase3_deleted_old_nested_exact"] = f"{source_dir_relative}/Nested" in phase3_deleted_paths
+        details["phase3_deleted_old_file_1_exact"] = source_file_1_relative in phase3_deleted_paths
+        details["phase3_deleted_old_file_2_exact"] = source_file_2_relative in phase3_deleted_paths
 
         if phase3_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -312,7 +331,182 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        # Phase 4: Validator re-runs download-only against its existing local/database state.
+        # Phase 3b: Run a second seeder sync pass to converge any residual remote state.
+        phase3_converge_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--confdir",
+            str(conf_seeder),
+        ]
+        context.log(
+            f"Executing Test Case {self.case_id} phase3 converge sync: "
+            f"{command_to_string(phase3_converge_command)}"
+        )
+        phase3_converge_result = run_command(phase3_converge_command, cwd=context.repo_root)
+        write_text_file(phase3_converge_stdout, phase3_converge_result.stdout)
+        write_text_file(phase3_converge_stderr, phase3_converge_result.stderr)
+        details["phase3_converge_returncode"] = phase3_converge_result.returncode
+
+        phase3_converge_deleted_paths = self._extract_deleted_remote_paths(phase3_converge_result.stdout)
+        details["phase3_converge_deleted_remote_paths"] = phase3_converge_deleted_paths
+        details["phase3_converge_deleted_old_root_exact"] = source_dir_relative in phase3_converge_deleted_paths
+        details["phase3_converge_deleted_old_nested_exact"] = (
+            f"{source_dir_relative}/Nested" in phase3_converge_deleted_paths
+        )
+
+        if phase3_converge_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"directory rename convergence phase failed with status {phase3_converge_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        # Verify remote truth independently before judging validator reconciliation.
+        verify_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--download-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_verify),
+        ]
+        context.log(f"Executing Test Case {self.case_id} verify remote truth: {command_to_string(verify_command)}")
+        verify_result = run_command(verify_command, cwd=context.repo_root)
+        write_text_file(verify_stdout, verify_result.stdout)
+        write_text_file(verify_stderr, verify_result.stderr)
+        details["verify_returncode"] = verify_result.returncode
+
+        verify_manifest = build_manifest(verify_root)
+        write_manifest(verify_manifest_file, verify_manifest)
+
+        details["verify_source_dir_exists"] = verify_source_dir.exists()
+        details["verify_renamed_dir_exists"] = verify_renamed_dir.exists()
+        details["verify_source_file_1_exists"] = verify_source_file_1.exists()
+        details["verify_source_file_2_exists"] = verify_source_file_2.exists()
+        details["verify_renamed_file_1_exists"] = verify_renamed_file_1.exists()
+        details["verify_renamed_file_2_exists"] = verify_renamed_file_2.exists()
+
+        verify_old_tree_files = self._list_files_under(verify_source_dir)
+        verify_old_tree_dirs = self._list_dirs_under(verify_source_dir)
+        details["verify_old_tree_files"] = verify_old_tree_files
+        details["verify_old_tree_dirs"] = verify_old_tree_dirs
+
+        verify_new_file_1_content = (
+            verify_renamed_file_1.read_text(encoding="utf-8")
+            if verify_renamed_file_1.is_file()
+            else ""
+        )
+        verify_new_file_2_content = (
+            verify_renamed_file_2.read_text(encoding="utf-8")
+            if verify_renamed_file_2.is_file()
+            else ""
+        )
+        details["verify_renamed_file_1_content"] = verify_new_file_1_content
+        details["verify_renamed_file_2_content"] = verify_new_file_2_content
+
+        if verify_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"remote verification failed with status {verify_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        # Remote truth assertions: the old tree must be fully absent before validator is judged.
+        if verify_source_dir.exists() or verify_source_file_1.exists() or verify_source_file_2.exists():
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"remote rename propagation incomplete: original directory tree still exists online: {source_dir_relative}",
+                artifacts,
+                details,
+            )
+
+        if verify_old_tree_files:
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"remote rename propagation incomplete: old files still exist online under original directory tree: {verify_old_tree_files}",
+                artifacts,
+                details,
+            )
+
+        if verify_old_tree_dirs:
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"remote rename propagation incomplete: old directories still exist online under original directory tree: {verify_old_tree_dirs}",
+                artifacts,
+                details,
+            )
+
+        if not verify_renamed_dir.is_dir():
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"remote verification is missing renamed directory: {renamed_dir_relative}",
+                artifacts,
+                details,
+            )
+
+        if not verify_renamed_file_1.is_file():
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"remote verification is missing renamed top-level file: {renamed_file_1_relative}",
+                artifacts,
+                details,
+            )
+
+        if not verify_renamed_file_2.is_file():
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"remote verification is missing renamed nested file: {renamed_file_2_relative}",
+                artifacts,
+                details,
+            )
+
+        if verify_new_file_1_content != file1_content:
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "remote verification renamed top-level file content did not match expected content",
+                artifacts,
+                details,
+            )
+
+        if verify_new_file_2_content != file2_content:
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "remote verification renamed nested file content did not match expected content",
+                artifacts,
+                details,
+            )
+
+        # Phase 4: Validator re-runs download-only against its existing local/database state,
+        # but only after remote truth has been proven clean.
         phase4_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -361,8 +555,9 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         details["validator_renamed_file_1_content"] = validator_new_file_1_content
         details["validator_renamed_file_2_content"] = validator_new_file_2_content
 
+        self._write_metadata(metadata_file, details)
+
         if phase4_result.returncode != 0:
-            self._write_metadata(metadata_file, details)
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
@@ -371,66 +566,6 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        # Verify: fresh client downloads current remote truth independently.
-        verify_command = [
-            context.onedrive_bin,
-            "--display-running-config",
-            "--sync",
-            "--download-only",
-            "--verbose",
-            "--resync",
-            "--resync-auth",
-            "--single-directory",
-            root_name,
-            "--confdir",
-            str(conf_verify),
-        ]
-        context.log(f"Executing Test Case {self.case_id} verify: {command_to_string(verify_command)}")
-        verify_result = run_command(verify_command, cwd=context.repo_root)
-        write_text_file(verify_stdout, verify_result.stdout)
-        write_text_file(verify_stderr, verify_result.stderr)
-        details["verify_returncode"] = verify_result.returncode
-
-        verify_manifest = build_manifest(verify_root)
-        write_manifest(verify_manifest_file, verify_manifest)
-
-        details["verify_source_dir_exists"] = verify_source_dir.exists()
-        details["verify_renamed_dir_exists"] = verify_renamed_dir.exists()
-        details["verify_source_file_1_exists"] = verify_source_file_1.exists()
-        details["verify_source_file_2_exists"] = verify_source_file_2.exists()
-        details["verify_renamed_file_1_exists"] = verify_renamed_file_1.exists()
-        details["verify_renamed_file_2_exists"] = verify_renamed_file_2.exists()
-
-        verify_old_tree_files = self._list_files_under(verify_source_dir)
-        verify_old_tree_dirs = self._list_dirs_under(verify_source_dir)
-        details["verify_old_tree_files"] = verify_old_tree_files
-        details["verify_old_tree_dirs"] = verify_old_tree_dirs
-
-        verify_new_file_1_content = (
-            verify_renamed_file_1.read_text(encoding="utf-8")
-            if verify_renamed_file_1.is_file()
-            else ""
-        )
-        verify_new_file_2_content = (
-            verify_renamed_file_2.read_text(encoding="utf-8")
-            if verify_renamed_file_2.is_file()
-            else ""
-        )
-        details["verify_renamed_file_1_content"] = verify_new_file_1_content
-        details["verify_renamed_file_2_content"] = verify_new_file_2_content
-
-        self._write_metadata(metadata_file, details)
-
-        if verify_result.returncode != 0:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"remote verification failed with status {verify_result.returncode}",
-                artifacts,
-                details,
-            )
-
-        # Validator assertions: existing-state client must reconcile cleanly.
         if validator_source_dir.exists() or validator_source_file_1.exists() or validator_source_file_2.exists():
             return TestResult.fail_result(
                 self.case_id,
@@ -499,79 +634,6 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 self.case_id,
                 self.name,
                 "validator renamed nested file content did not match expected content",
-                artifacts,
-                details,
-            )
-
-        # Verify assertions: fresh remote truth must also be correct.
-        if verify_source_dir.exists() or verify_source_file_1.exists() or verify_source_file_2.exists():
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"remote verification still contains original directory tree: {source_dir_relative}",
-                artifacts,
-                details,
-            )
-
-        if verify_old_tree_files:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"remote verification retained old files under original directory tree: {verify_old_tree_files}",
-                artifacts,
-                details,
-            )
-
-        if verify_old_tree_dirs:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"remote verification retained old directories under original directory tree: {verify_old_tree_dirs}",
-                artifacts,
-                details,
-            )
-
-        if not verify_renamed_dir.is_dir():
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"remote verification is missing renamed directory: {renamed_dir_relative}",
-                artifacts,
-                details,
-            )
-
-        if not verify_renamed_file_1.is_file():
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"remote verification is missing renamed top-level file: {renamed_file_1_relative}",
-                artifacts,
-                details,
-            )
-
-        if not verify_renamed_file_2.is_file():
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                f"remote verification is missing renamed nested file: {renamed_file_2_relative}",
-                artifacts,
-                details,
-            )
-
-        if verify_new_file_1_content != file1_content:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "remote verification renamed top-level file content did not match expected content",
-                artifacts,
-                details,
-            )
-
-        if verify_new_file_2_content != file2_content:
-            return TestResult.fail_result(
-                self.case_id,
-                self.name,
-                "remote verification renamed nested file content did not match expected content",
                 artifacts,
                 details,
             )
