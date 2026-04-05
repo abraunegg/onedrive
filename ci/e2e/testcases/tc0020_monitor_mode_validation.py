@@ -29,6 +29,27 @@ class TestCase0020MonitorModeValidation(E2ETestCase):
             'monitor_fullscan_frequency = "1"\n',
         )
 
+    def _wait_for_initial_sync_complete(
+        self,
+        stdout_file: Path,
+        timeout_seconds: int = 120,
+        poll_interval: float = 0.5,
+    ) -> bool:
+        deadline = time.time() + timeout_seconds
+        success_marker = "Sync with Microsoft OneDrive is complete"
+
+        while time.time() < deadline:
+            if stdout_file.exists():
+                try:
+                    content = stdout_file.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    content = ""
+                if success_marker in content:
+                    return True
+            time.sleep(poll_interval)
+
+        return False
+
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / "tc0020"
         case_log_dir = context.logs_dir / "tc0020"
@@ -83,9 +104,12 @@ class TestCase0020MonitorModeValidation(E2ETestCase):
                 stderr=stderr_fp,
                 text=True,
             )
-            time.sleep(8)
-            write_text_file(sync_root / root_name / "monitor-added.txt", "added while monitor mode was running\n")
-            time.sleep(12)
+
+            initial_sync_complete = self._wait_for_initial_sync_complete(stdout_file)
+            if initial_sync_complete:
+                write_text_file(sync_root / root_name / "monitor-added.txt", "added while monitor mode was running\n")
+                time.sleep(12)
+
             process.send_signal(signal.SIGINT)
             try:
                 process.wait(timeout=30)
@@ -122,6 +146,7 @@ class TestCase0020MonitorModeValidation(E2ETestCase):
                     f"root_name={root_name}",
                     f"monitor_returncode={process.returncode}",
                     f"verify_returncode={verify_result.returncode}",
+                    f"initial_sync_complete={initial_sync_complete}",
                 ]
             ) + "\n",
         )
@@ -133,7 +158,17 @@ class TestCase0020MonitorModeValidation(E2ETestCase):
             "monitor_returncode": process.returncode,
             "verify_returncode": verify_result.returncode,
             "root_name": root_name,
+            "initial_sync_complete": initial_sync_complete,
         }
+
+        if not initial_sync_complete:
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "Monitor mode did not complete the initial sync within the expected time",
+                artifacts,
+                details,
+            )
 
         if verify_result.returncode != 0:
             return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
