@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     container: fedora:latest
     environment:
-      name: onedrive-e2e
+      name: e2e-personal
       deployment: false
 
     steps:
