@@ -126,7 +126,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
             "verify_root": str(verify_root),
         }
 
-        # Phase 1: seed original state with source file and destination anchor.
+        # Phase 1: seed original state with source file and destination anchor
         write_text_file(local_source_path, initial_content)
         write_text_file(local_anchor_path, anchor_content)
 
@@ -156,7 +156,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 details,
             )
 
-        # Phase 2: move the file locally between directories, without renaming it.
+        # Phase 2: move the file locally between directories without renaming it
         local_destination_path.parent.mkdir(parents=True, exist_ok=True)
         local_source_path.rename(local_destination_path)
 
@@ -210,7 +210,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 details,
             )
 
-        # Phase 3: verify remote truth from a fresh client.
+        # Phase 3: verify remote truth from a fresh client
         verify_command = [
             context.onedrive_bin,
             "--display-running-config",
