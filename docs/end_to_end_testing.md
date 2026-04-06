@@ -54,3 +54,6 @@ SharePoint end-to-end testing uses the same complete automated test suite as Per
 | 0031 | Local directory rename propagation validation | - Personal<br>- Business<br>- SharePoint | This test validates that renaming a local directory tree is correctly propagated to remote state |
 | 0032 | Remote file rename reconciliation | - Personal<br>- Business<br>- SharePoint | This test validates that a stale local client correctly reconciles a remote-side file rename without leaving stale local leftovers |
 | 0033 | remote directory rename reconciliation | - Personal<br>- Business<br>- SharePoint | This test validates that a second client with existing local and database state correctly reconciles a remote directory rename propagated by another synchronising client |
+| 0034 | Local move between directories validation | - Personal<br>- Business<br>- SharePoint | This test validates that moving a local file from one directory to another is correctly propagated to remote state |
+| 0035 | Remote move between directories reconciliation | - Personal<br>- Business<br>- SharePoint | This test validates that a stale local client correctly reconciles a remote-side file move between directories without leaving stale local file leftovers |
+
