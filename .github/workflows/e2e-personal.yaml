@@ -1,4 +1,4 @@
-name: E2E Personal Account Testing
+name: E2E Testing - Personal Account
 
 on:
   push:

@@ -1,4 +1,4 @@
-name: E2E Business Account Testing
+name: E2E Testing - Business Account
 
 on:
   push:
