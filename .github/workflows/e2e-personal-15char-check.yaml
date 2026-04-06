@@ -1,4 +1,4 @@
-name: E2E Testing - Personal Account: 15 Character driveId Check
+name: E2E Testing - Personal Account with 15 Character driveId Check
 
 on:
   push:
