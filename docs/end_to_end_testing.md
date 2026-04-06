@@ -58,3 +58,10 @@ SharePoint end-to-end testing uses the same complete automated test suite as Per
 | 0034 | Local move between directories validation | - Personal<br>- Business<br>- SharePoint | This test validates that moving a local file from one directory to another is correctly propagated to remote state |
 | 0035 | Remote move between directories reconciliation | - Personal<br>- Business<br>- SharePoint | This test validates that a stale local client correctly reconciles a remote-side file move between directories without leaving stale local file leftovers |
 
+### Contributing Additional Test Cases
+
+While this end-to-end test suite provides broad and comprehensive coverage of the OneDrive Client for Linux, it is not exhaustive. Real-world usage continues to surface new edge cases, behaviours, and scenarios that may not yet be represented here. 
+
+If you identify a gap in coverage, encounter a scenario that is not currently validated, or believe an existing test case could be improved, contributions are strongly encouraged. Please feel free to raise a discussion outlining the scenario, or ideally develop and submit a new test case via a pull request following the existing test framework structure. 
+
+Community contributions play a critical role in strengthening the reliability and robustness of the client, and all well-defined additions are welcomed.
