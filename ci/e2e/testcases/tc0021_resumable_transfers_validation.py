@@ -35,9 +35,12 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
     TRANSFER_WAIT_TIMEOUT = 300
     PROCESS_EXIT_TIMEOUT = 120
 
-    # Apply a 10 MB/s rate limit for both upload and download scenarios
-    # so that the phase1 interrupt lands during an active resumable transfer.
-    RATE_LIMIT: str | None = "10485760"
+    # Use 1 MB/s to deliberately slow both upload and download so the 15% threshold
+    # is reached with ample time to deliver SIGINT before the transfer can complete.
+    RATE_LIMIT: str | None = "1048576"
+
+    # Poll frequently to reduce brittleness caused by buffered log writes.
+    TRANSFER_POLL_INTERVAL_SECONDS = 0.25
 
     def _write_config(
         self,
@@ -183,7 +186,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     process.send_signal(signal.SIGINT)
                     break
 
-                time.sleep(1)
+                time.sleep(self.TRANSFER_POLL_INTERVAL_SECONDS)
 
             try:
                 process.wait(timeout=exit_timeout)
@@ -264,6 +267,41 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         return interrupted_as_expected, crash_marker_seen
 
+    def _target_transfer_completed_in_phase1(
+        self,
+        combined_phase1_output: str,
+        target_filename: str,
+        transfer_kind: str,
+    ) -> bool:
+        for line in combined_phase1_output.splitlines():
+            if target_filename not in line:
+                continue
+
+            line_lower = line.lower()
+
+            if transfer_kind == "upload":
+                if "upload" in line_lower and "done" in line_lower:
+                    return True
+            elif transfer_kind == "download":
+                if "download" in line_lower and "done" in line_lower:
+                    return True
+
+        return False
+
+    def _find_resumable_state_files(self, conf_dir: Path, patterns: list[str]) -> list[str]:
+        matches: list[str] = []
+        for pattern in patterns:
+            for path in sorted(conf_dir.glob(pattern)):
+                if path.is_file():
+                    matches.append(str(path))
+        return matches
+
+    def _write_resumable_state_listing(self, output: Path, resumable_files: list[str]) -> None:
+        if resumable_files:
+            write_text_file(output, "\n".join(resumable_files) + "\n")
+        else:
+            write_text_file(output, "")
+
     def _run_upload_resume_scenario(
         self,
         context: E2EContext,
@@ -309,6 +347,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         local_tree_after_phase1 = scenario_state_dir / "local_tree_after_phase1.txt"
         local_tree_after_phase2 = scenario_state_dir / "local_tree_after_phase2.txt"
         remote_manifest_file = scenario_state_dir / "remote_verify_manifest.txt"
+        resumable_state_file = scenario_state_dir / "phase1_resumable_state_files.txt"
         metadata_file = scenario_state_dir / "metadata.txt"
 
         self._snapshot_tree(sync_root, local_tree_before)
@@ -347,6 +386,21 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         phase1_app_log_text = self._read_text_if_exists(app_log_file)
         combined_phase1_output = phase1_stdout_text + "\n" + phase1_stderr_text + "\n" + phase1_app_log_text
+
+        phase1_completed_transfer = self._target_transfer_completed_in_phase1(
+            combined_phase1_output,
+            "session-large.bin",
+            "upload",
+        )
+
+        resumable_state_files = self._find_resumable_state_files(
+            conf_dir,
+            [
+                "session_upload*",
+                "session_upload.*",
+            ],
+        )
+        self._write_resumable_state_listing(resumable_state_file, resumable_state_files)
 
         phase2_result = self._run_and_capture(
             context,
@@ -404,6 +458,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             str(local_tree_after_phase1),
             str(local_tree_after_phase2),
             str(remote_manifest_file),
+            str(resumable_state_file),
             str(metadata_file),
         ]
         self._append_if_exists(artifacts, app_log_dir)
@@ -419,6 +474,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "interrupt_threshold_percent": self.INTERRUPT_THRESHOLD_PERCENT,
             "threshold_reached": threshold_reached,
             "observed_max_percent": observed_max_percent,
+            "phase1_transfer_completed": phase1_completed_transfer,
+            "phase1_resumable_state_files": resumable_state_files,
             "phase1_crash_marker_seen": crash_marker_seen,
             "phase1_interrupted_as_expected": interrupted_as_expected,
             "rate_limit": self.RATE_LIMIT or "disabled",
@@ -439,6 +496,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"interrupt_threshold_percent={self.INTERRUPT_THRESHOLD_PERCENT}",
                     f"threshold_reached={threshold_reached}",
                     f"observed_max_percent={observed_max_percent}",
+                    f"phase1_transfer_completed={phase1_completed_transfer}",
+                    f"phase1_resumable_state_files={len(resumable_state_files)}",
                     f"phase1_crash_marker_seen={crash_marker_seen}",
                     f"phase1_interrupted_as_expected={interrupted_as_expected}",
                     f"rate_limit={self.RATE_LIMIT or 'disabled'}",
@@ -458,11 +517,29 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 details,
             )
 
+        if phase1_completed_transfer:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Interrupted upload phase completed the target file transfer before SIGINT landed, so no resumable upload state was guaranteed",
+                artifacts,
+                details,
+            )
+
         if not interrupted_as_expected:
             return self._scenario_fail(
                 scenario_id,
                 description,
                 f"Interrupted upload phase did not terminate as expected after threshold was reached; return code was {phase1_returncode}",
+                artifacts,
+                details,
+            )
+
+        if not resumable_state_files:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Interrupted upload phase did not leave resumable upload session state on disk",
                 artifacts,
                 details,
             )
@@ -570,6 +647,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         local_tree_after_phase2 = scenario_state_dir / "local_tree_after_phase2.txt"
         local_tree_after_verify = scenario_state_dir / "local_tree_after_verify.txt"
         verify_manifest_file = scenario_state_dir / "verify_manifest.txt"
+        resumable_state_file = scenario_state_dir / "phase1_resumable_state_files.txt"
         metadata_file = scenario_state_dir / "metadata.txt"
 
         seed_command = [
@@ -607,8 +685,6 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 details,
             )
 
-        # Prepare a clean local download state before phase1.
-        # This is the only point in TC0021 where resync/resync-auth should be used.
         reset_directory(download_root)
 
         items_db = conf_dir / "items.sqlite3"
@@ -656,6 +732,21 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         phase1_app_log_text = self._read_text_if_exists(app_log_file)
         combined_phase1_output = phase1_stdout_text + "\n" + phase1_stderr_text + "\n" + phase1_app_log_text
+
+        phase1_completed_transfer = self._target_transfer_completed_in_phase1(
+            combined_phase1_output,
+            "session-large.bin",
+            "download",
+        )
+
+        resumable_state_files = self._find_resumable_state_files(
+            conf_dir,
+            [
+                "resume_download*",
+                "resume_download.*",
+            ],
+        )
+        self._write_resumable_state_listing(resumable_state_file, resumable_state_files)
 
         download_command_phase2 = [
             context.onedrive_bin,
@@ -729,6 +820,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             str(local_tree_after_phase2),
             str(local_tree_after_verify),
             str(verify_manifest_file),
+            str(resumable_state_file),
             str(metadata_file),
         ]
         self._append_if_exists(artifacts, seed_app_log_dir)
@@ -746,6 +838,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "interrupt_threshold_percent": self.INTERRUPT_THRESHOLD_PERCENT,
             "threshold_reached": threshold_reached,
             "observed_max_percent": observed_max_percent,
+            "phase1_transfer_completed": phase1_completed_transfer,
+            "phase1_resumable_state_files": resumable_state_files,
             "downloaded_file_exists_after_phase2": downloaded_file.exists(),
             "phase1_crash_marker_seen": crash_marker_seen,
             "phase1_interrupted_as_expected": interrupted_as_expected,
@@ -768,6 +862,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"interrupt_threshold_percent={self.INTERRUPT_THRESHOLD_PERCENT}",
                     f"threshold_reached={threshold_reached}",
                     f"observed_max_percent={observed_max_percent}",
+                    f"phase1_transfer_completed={phase1_completed_transfer}",
+                    f"phase1_resumable_state_files={len(resumable_state_files)}",
                     f"downloaded_file_exists_after_phase2={downloaded_file.exists()}",
                     f"phase1_crash_marker_seen={crash_marker_seen}",
                     f"phase1_interrupted_as_expected={interrupted_as_expected}",
@@ -788,11 +884,29 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 details,
             )
 
+        if phase1_completed_transfer:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Interrupted download phase completed the target file transfer before SIGINT landed, so no resumable download state was guaranteed",
+                artifacts,
+                details,
+            )
+
         if not interrupted_as_expected:
             return self._scenario_fail(
                 scenario_id,
                 description,
                 f"Interrupted download phase did not terminate as expected after threshold was reached; return code was {phase1_returncode}",
+                artifacts,
+                details,
+            )
+
+        if not resumable_state_files:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Interrupted download phase did not leave resumable download state on disk",
                 artifacts,
                 details,
             )
