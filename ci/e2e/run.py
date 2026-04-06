@@ -42,9 +42,8 @@ from testcases.tc0030_local_rename_propagation_validation import TestCase0030Loc
 from testcases.tc0031_local_directory_rename_propagation_validation import TestCase0031LocalDirectoryRenamePropagationValidation
 from testcases.tc0032_remote_rename_reconciliation import TestCase0032RemoteRenameReconciliation
 from testcases.tc0033_remote_directory_rename_reconciliation import TestCase0033RemoteDirectoryRenameReconciliation
-
 from testcases.tc0034_local_move_between_directories_validation import TestCase0034LocalMoveBetweenDirectoriesValidation
-
+from testcases.tc0035_remote_move_between_directories_reconciliation import TestCase0035RemoteMoveBetweenDirectoriesReconciliation
 
 def build_test_suite() -> list:
     """
@@ -87,6 +86,7 @@ def build_test_suite() -> list:
         #TestCase0032RemoteRenameReconciliation(),
         #TestCase0033RemoteDirectoryRenameReconciliation(),
         TestCase0034LocalMoveBetweenDirectoriesValidation(),
+        TestCase0035RemoteMoveBetweenDirectoriesReconciliation(),
     ]
 
 
