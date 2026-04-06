@@ -44,6 +44,7 @@ from testcases.tc0032_remote_rename_reconciliation import TestCase0032RemoteRena
 from testcases.tc0033_remote_directory_rename_reconciliation import TestCase0033RemoteDirectoryRenameReconciliation
 from testcases.tc0034_local_move_between_directories_validation import TestCase0034LocalMoveBetweenDirectoriesValidation
 from testcases.tc0035_remote_move_between_directories_reconciliation import TestCase0035RemoteMoveBetweenDirectoriesReconciliation
+from testcases.tc0036_overwrite_replace_existing_file_content_validation import TestCase0036OverwriteReplaceExistingFileContentValidation
 
 def build_test_suite() -> list:
     """
@@ -87,6 +88,7 @@ def build_test_suite() -> list:
         #TestCase0033RemoteDirectoryRenameReconciliation(),
         TestCase0034LocalMoveBetweenDirectoriesValidation(),
         TestCase0035RemoteMoveBetweenDirectoriesReconciliation(),
+        TestCase0036OverwriteReplaceExistingFileContentValidation(),
     ]
 
 
