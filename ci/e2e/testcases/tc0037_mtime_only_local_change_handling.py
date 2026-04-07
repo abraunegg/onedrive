@@ -1,370 +1,403 @@
 from __future__ import annotations
 
-import json
 import os
-import shutil
-import subprocess
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
 
-from framework import E2EContext, E2ETestCase, TestResult
+from framework.base import E2ETestCase
+from framework.context import E2EContext
+from framework.manifest import build_manifest, write_manifest
+from framework.result import TestResult
+from framework.utils import (
+    command_to_string,
+    compute_quickxor_hash_file,
+    reset_directory,
+    run_command,
+    write_onedrive_config,
+    write_text_file,
+)
 
 
 class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
-    """
-    tc0037 — mtime-only local change handling
+    case_id = "0037"
+    name = "mtime-only local change handling"
+    description = (
+        "Validate that changing only the local modification timestamp of an existing "
+        "file does not cause unintended content upload or remote state change"
+    )
 
-    Create a file, upload it, then modify only the local mtime without changing
-    content. Validate that:
-      * sync completes successfully
-      * no duplicate / backup / conflict artefacts are created
-      * remote content remains unchanged
-      * remote mtime does not move forward purely because the local mtime changed
-      * the second sync does not attempt a content upload for the touched file
-    """
+    def _write_config(self, config_dir: Path, sync_dir: Path) -> None:
+        config_path = config_dir / "config"
+        backup_path = config_dir / ".config.backup"
+        hash_path = config_dir / ".config.hash"
 
-    TEST_ID = "0037"
-    TEST_NAME = "mtime-only local change handling"
+        config_text = (
+            "# tc0037 config\n"
+            f'sync_dir = "{sync_dir}"\n'
+            'bypass_data_preservation = "true"\n'
+        )
+
+        write_onedrive_config(config_path, config_text)
+        write_onedrive_config(backup_path, config_text)
+        hash_path.write_text(compute_quickxor_hash_file(config_path), encoding="utf-8")
+        os.chmod(config_path, 0o600)
+        os.chmod(backup_path, 0o600)
+        os.chmod(hash_path, 0o600)
+
+    def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
+        write_text_file(
+            metadata_file,
+            "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+        )
 
     def run(self, context: E2EContext) -> TestResult:
-        artifacts: List[str] = []
+        case_work_dir = context.work_root / "tc0037"
+        case_log_dir = context.logs_dir / "tc0037"
+        state_dir = context.state_dir / "tc0037"
 
-        try:
-            testcase_root = Path(context.test_root) / "tc0037"
-            seeder_root = testcase_root / "seeder"
-            verifier_before_root = testcase_root / "verifier_before"
-            verifier_after_root = testcase_root / "verifier_after"
+        reset_directory(case_work_dir)
+        reset_directory(case_log_dir)
+        reset_directory(state_dir)
+        context.ensure_refresh_token_available()
 
-            self._reset_dir(testcase_root)
-            self._reset_dir(seeder_root)
-            self._reset_dir(verifier_before_root)
-            self._reset_dir(verifier_after_root)
+        local_root = case_work_dir / "syncroot"
+        verify_initial_root = case_work_dir / "verify-initial-root"
+        verify_final_root = case_work_dir / "verify-final-root"
 
-            seeder_sync_dir = seeder_root / "sync_dir"
-            verifier_before_sync_dir = verifier_before_root / "sync_dir"
-            verifier_after_sync_dir = verifier_after_root / "sync_dir"
+        conf_main = case_work_dir / "conf-main"
+        conf_verify_initial = case_work_dir / "conf-verify-initial"
+        conf_verify_final = case_work_dir / "conf-verify-final"
 
-            seeder_sync_dir.mkdir(parents=True, exist_ok=True)
-            verifier_before_sync_dir.mkdir(parents=True, exist_ok=True)
-            verifier_after_sync_dir.mkdir(parents=True, exist_ok=True)
+        reset_directory(local_root)
+        reset_directory(verify_initial_root)
+        reset_directory(verify_final_root)
 
-            target_relpath = Path("mtime-only.txt")
-            seeder_target = seeder_sync_dir / target_relpath
-            verifier_before_target = verifier_before_sync_dir / target_relpath
-            verifier_after_target = verifier_after_sync_dir / target_relpath
+        context.prepare_minimal_config_dir(conf_main, "")
+        context.prepare_minimal_config_dir(conf_verify_initial, "")
+        context.prepare_minimal_config_dir(conf_verify_final, "")
 
-            initial_content = (
-                "tc0037 baseline file content\n"
-                "This file is intentionally unchanged after initial upload.\n"
-                "Only the local mtime will be modified.\n"
-            )
+        self._write_config(conf_main, local_root)
+        self._write_config(conf_verify_initial, verify_initial_root)
+        self._write_config(conf_verify_final, verify_final_root)
 
-            seeder_target.write_text(initial_content, encoding="utf-8")
+        root_name = f"ZZ_E2E_TC0037_{context.run_id}_{os.getpid()}"
+        relative_path = f"{root_name}/mtime-only.txt"
 
-            seeder_config_dir = seeder_root / "config"
-            verifier_before_config_dir = verifier_before_root / "config"
-            verifier_after_config_dir = verifier_after_root / "config"
+        local_file_path = local_root / relative_path
+        verify_initial_file_path = verify_initial_root / relative_path
+        verify_final_file_path = verify_final_root / relative_path
 
-            self._write_config(
-                context=context,
-                config_dir=seeder_config_dir,
-                sync_dir=seeder_sync_dir,
-                extra_config_lines=[],
-            )
-            self._write_config(
-                context=context,
-                config_dir=verifier_before_config_dir,
-                sync_dir=verifier_before_sync_dir,
-                extra_config_lines=[],
-            )
-            self._write_config(
-                context=context,
-                config_dir=verifier_after_config_dir,
-                sync_dir=verifier_after_sync_dir,
-                extra_config_lines=[],
-            )
-
-            #
-            # Phase 1: upload baseline file
-            #
-            rc, stdout, stderr = self._run_onedrive(
-                context=context,
-                config_dir=seeder_config_dir,
-                extra_args=["--sync", "--verbose"],
-            )
-            artifacts.extend(
-                self._write_phase_artifacts(
-                    testcase_root,
-                    "phase1_seed_upload",
-                    rc,
-                    stdout,
-                    stderr,
-                )
-            )
-            if rc != 0:
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    f"{self.TEST_NAME} — initial upload failed with exit code {rc}",
-                    artifacts=artifacts,
-                )
-
-            #
-            # Phase 2: fresh verifier downloads remote baseline state
-            #
-            rc, stdout, stderr = self._run_onedrive(
-                context=context,
-                config_dir=verifier_before_config_dir,
-                extra_args=["--sync", "--download-only", "--resync", "--resync-auth", "--verbose"],
-            )
-            artifacts.extend(
-                self._write_phase_artifacts(
-                    testcase_root,
-                    "phase2_verify_remote_baseline",
-                    rc,
-                    stdout,
-                    stderr,
-                )
-            )
-            if rc != 0:
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    f"{self.TEST_NAME} — baseline verifier download failed with exit code {rc}",
-                    artifacts=artifacts,
-                )
-
-            if not verifier_before_target.exists():
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    f"{self.TEST_NAME} — baseline verifier did not download {target_relpath}",
-                    artifacts=artifacts,
-                )
-
-            baseline_remote_content = verifier_before_target.read_text(encoding="utf-8")
-            if baseline_remote_content != initial_content:
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    f"{self.TEST_NAME} — baseline verifier content mismatch for {target_relpath}",
-                    artifacts=artifacts,
-                )
-
-            baseline_remote_mtime = int(verifier_before_target.stat().st_mtime)
-
-            #
-            # Phase 3: touch local file only - no content change
-            #
-            touched_local_mtime = baseline_remote_mtime + 300
-            os.utime(seeder_target, (touched_local_mtime, touched_local_mtime))
-
-            local_content_after_touch = seeder_target.read_text(encoding="utf-8")
-            if local_content_after_touch != initial_content:
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    f"{self.TEST_NAME} — local file content changed unexpectedly after mtime touch",
-                    artifacts=artifacts,
-                )
-
-            #
-            # Phase 4: normal sync after mtime-only change
-            #
-            rc, stdout, stderr = self._run_onedrive(
-                context=context,
-                config_dir=seeder_config_dir,
-                extra_args=["--sync", "--verbose"],
-            )
-            artifacts.extend(
-                self._write_phase_artifacts(
-                    testcase_root,
-                    "phase4_sync_after_mtime_touch",
-                    rc,
-                    stdout,
-                    stderr,
-                )
-            )
-            if rc != 0:
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    f"{self.TEST_NAME} — sync after mtime-only touch failed with exit code {rc}",
-                    artifacts=artifacts,
-                )
-
-            upload_indicators = [
-                f"Uploading new file {target_relpath.name}",
-                f"Uploading differences of {target_relpath.name}",
-                f"Uploading file {target_relpath.name}",
-            ]
-            combined_log = f"{stdout}\n{stderr}"
-            matched_upload_indicators = [
-                indicator for indicator in upload_indicators if indicator in combined_log
-            ]
-            if matched_upload_indicators:
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    (
-                        f"{self.TEST_NAME} — mtime-only change triggered upload behaviour "
-                        f"for {target_relpath}: {', '.join(matched_upload_indicators)}"
-                    ),
-                    artifacts=artifacts,
-                )
-
-            unexpected_local_entries = self._find_unexpected_entries(
-                seeder_sync_dir,
-                allowed_relative_paths={str(target_relpath)},
-            )
-            if unexpected_local_entries:
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    (
-                        f"{self.TEST_NAME} — unexpected local artefacts created after mtime-only sync: "
-                        f"{', '.join(unexpected_local_entries)}"
-                    ),
-                    artifacts=artifacts,
-                )
-
-            #
-            # Phase 5: fresh verifier downloads final remote state
-            #
-            rc, stdout, stderr = self._run_onedrive(
-                context=context,
-                config_dir=verifier_after_config_dir,
-                extra_args=["--sync", "--download-only", "--resync", "--resync-auth", "--verbose"],
-            )
-            artifacts.extend(
-                self._write_phase_artifacts(
-                    testcase_root,
-                    "phase5_verify_remote_final_state",
-                    rc,
-                    stdout,
-                    stderr,
-                )
-            )
-            if rc != 0:
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    f"{self.TEST_NAME} — final verifier download failed with exit code {rc}",
-                    artifacts=artifacts,
-                )
-
-            if not verifier_after_target.exists():
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    f"{self.TEST_NAME} — final verifier did not download {target_relpath}",
-                    artifacts=artifacts,
-                )
-
-            final_remote_content = verifier_after_target.read_text(encoding="utf-8")
-            if final_remote_content != initial_content:
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    f"{self.TEST_NAME} — remote content changed after mtime-only local touch",
-                    artifacts=artifacts,
-                )
-
-            final_remote_mtime = int(verifier_after_target.stat().st_mtime)
-
-            if final_remote_mtime >= touched_local_mtime:
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    (
-                        f"{self.TEST_NAME} — remote mtime moved forward to {final_remote_mtime} "
-                        f"after local mtime-only touch at {touched_local_mtime}"
-                    ),
-                    artifacts=artifacts,
-                )
-
-            if abs(final_remote_mtime - baseline_remote_mtime) > 2:
-                return TestResult.fail_result(
-                    self.TEST_ID,
-                    (
-                        f"{self.TEST_NAME} — remote mtime changed unexpectedly: "
-                        f"baseline={baseline_remote_mtime}, final={final_remote_mtime}"
-                    ),
-                    artifacts=artifacts,
-                )
-
-            metadata = {
-                "testcase": self.TEST_ID,
-                "target_relpath": str(target_relpath),
-                "baseline_remote_mtime": baseline_remote_mtime,
-                "touched_local_mtime": touched_local_mtime,
-                "final_remote_mtime": final_remote_mtime,
-                "baseline_remote_content_length": len(baseline_remote_content),
-                "final_remote_content_length": len(final_remote_content),
-            }
-            metadata_path = testcase_root / "tc0037_metadata.json"
-            metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8")
-            artifacts.append(str(metadata_path))
-
-            return TestResult.pass_result(
-                self.TEST_ID,
-                (
-                    f"{self.TEST_NAME} — mtime-only local change was ignored as expected; "
-                    f"content remained unchanged and remote mtime was not updated"
-                ),
-                artifacts=artifacts,
-            )
-
-        except Exception as exc:
-            return TestResult.fail_result(
-                self.TEST_ID,
-                f"{self.TEST_NAME} — unhandled exception: {exc}",
-                artifacts=artifacts,
-            )
-
-    def _run_onedrive(
-        self,
-        context: E2EContext,
-        config_dir: Path,
-        extra_args: List[str],
-    ) -> Tuple[int, str, str]:
-        command = [str(context.onedrive_path), "--confdir", str(config_dir)]
-        command.extend(extra_args)
-
-        completed = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
+        initial_content = (
+            "TC0037 mtime-only local change handling\n"
+            "This file content must remain unchanged.\n"
+            "Only the local modification timestamp is altered.\n"
         )
-        return completed.returncode, completed.stdout, completed.stderr
 
-    def _write_phase_artifacts(
-        self,
-        testcase_root: Path,
-        phase_name: str,
-        returncode: int,
-        stdout: str,
-        stderr: str,
-    ) -> List[str]:
-        phase_dir = testcase_root / "artifacts" / phase_name
-        phase_dir.mkdir(parents=True, exist_ok=True)
+        phase1_stdout = case_log_dir / "phase1_seed_stdout.log"
+        phase1_stderr = case_log_dir / "phase1_seed_stderr.log"
+        verify_initial_stdout = case_log_dir / "phase2_verify_initial_stdout.log"
+        verify_initial_stderr = case_log_dir / "phase2_verify_initial_stderr.log"
+        phase3_stdout = case_log_dir / "phase3_touch_sync_stdout.log"
+        phase3_stderr = case_log_dir / "phase3_touch_sync_stderr.log"
+        verify_final_stdout = case_log_dir / "phase4_verify_final_stdout.log"
+        verify_final_stderr = case_log_dir / "phase4_verify_final_stderr.log"
+        verify_initial_manifest_file = state_dir / "verify_initial_manifest.txt"
+        verify_final_manifest_file = state_dir / "verify_final_manifest.txt"
+        metadata_file = state_dir / "metadata.txt"
 
-        stdout_path = phase_dir / "stdout.log"
-        stderr_path = phase_dir / "stderr.log"
-        rc_path = phase_dir / "returncode.txt"
+        artifacts = [
+            str(phase1_stdout),
+            str(phase1_stderr),
+            str(verify_initial_stdout),
+            str(verify_initial_stderr),
+            str(phase3_stdout),
+            str(phase3_stderr),
+            str(verify_final_stdout),
+            str(verify_final_stderr),
+            str(verify_initial_manifest_file),
+            str(verify_final_manifest_file),
+            str(metadata_file),
+        ]
 
-        stdout_path.write_text(stdout, encoding="utf-8")
-        stderr_path.write_text(stderr, encoding="utf-8")
-        rc_path.write_text(str(returncode), encoding="utf-8")
+        details: dict[str, object] = {
+            "root_name": root_name,
+            "relative_path": relative_path,
+            "main_conf_dir": str(conf_main),
+            "verify_initial_conf_dir": str(conf_verify_initial),
+            "verify_final_conf_dir": str(conf_verify_final),
+            "local_root": str(local_root),
+            "verify_initial_root": str(verify_initial_root),
+            "verify_final_root": str(verify_final_root),
+        }
 
-        return [str(stdout_path), str(stderr_path), str(rc_path)]
+        # Phase 1: seed initial file content
+        write_text_file(local_file_path, initial_content)
 
-    def _find_unexpected_entries(self, root: Path, allowed_relative_paths: set[str]) -> List[str]:
-        unexpected: List[str] = []
+        phase1_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_main),
+        ]
+        context.log(f"Executing Test Case {self.case_id} phase1: {command_to_string(phase1_command)}")
+        phase1_result = run_command(phase1_command, cwd=context.repo_root)
+        write_text_file(phase1_stdout, phase1_result.stdout)
+        write_text_file(phase1_stderr, phase1_result.stderr)
+        details["phase1_returncode"] = phase1_result.returncode
 
-        for path in sorted(root.rglob("*")):
-            if path.is_dir():
-                continue
-            rel = str(path.relative_to(root))
-            if rel not in allowed_relative_paths:
-                unexpected.append(rel)
+        if phase1_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"seed phase failed with status {phase1_result.returncode}",
+                artifacts,
+                details,
+            )
 
-        return unexpected
+        # Phase 2: establish remote baseline from a fresh verification client
+        verify_initial_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--download-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_verify_initial),
+        ]
+        context.log(f"Executing Test Case {self.case_id} phase2 verify initial: {command_to_string(verify_initial_command)}")
+        verify_initial_result = run_command(verify_initial_command, cwd=context.repo_root)
+        write_text_file(verify_initial_stdout, verify_initial_result.stdout)
+        write_text_file(verify_initial_stderr, verify_initial_result.stderr)
+        details["verify_initial_returncode"] = verify_initial_result.returncode
 
-    def _reset_dir(self, path: Path) -> None:
-        if path.exists():
-            shutil.rmtree(path)
-        path.mkdir(parents=True, exist_ok=True)
+        verify_initial_manifest = build_manifest(verify_initial_root)
+        write_manifest(verify_initial_manifest_file, verify_initial_manifest)
+        details["verify_initial_manifest"] = verify_initial_manifest
+        details["verify_initial_file_exists"] = verify_initial_file_path.is_file()
+
+        baseline_verified_content = (
+            verify_initial_file_path.read_text(encoding="utf-8")
+            if verify_initial_file_path.is_file()
+            else ""
+        )
+        details["baseline_verified_content"] = baseline_verified_content
+
+        baseline_verified_mtime_ns = (
+            verify_initial_file_path.stat().st_mtime_ns
+            if verify_initial_file_path.is_file()
+            else -1
+        )
+        details["baseline_verified_mtime_ns"] = baseline_verified_mtime_ns
+
+        if verify_initial_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"initial remote verification failed with status {verify_initial_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        if not verify_initial_file_path.is_file():
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"initial remote verification is missing expected file: {relative_path}",
+                artifacts,
+                details,
+            )
+
+        if baseline_verified_content != initial_content:
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "initial remote verification content did not match seeded content",
+                artifacts,
+                details,
+            )
+
+        # Phase 3: change only the local mtime and sync again
+        local_mtime_before_touch_ns = local_file_path.stat().st_mtime_ns
+        details["local_mtime_before_touch_ns"] = local_mtime_before_touch_ns
+
+        time.sleep(2)
+        os.utime(local_file_path, None)
+
+        local_mtime_after_touch_ns = local_file_path.stat().st_mtime_ns
+        details["local_mtime_after_touch_ns"] = local_mtime_after_touch_ns
+        details["local_touch_advanced_mtime"] = local_mtime_after_touch_ns > local_mtime_before_touch_ns
+
+        local_content_after_touch = local_file_path.read_text(encoding="utf-8")
+        details["local_content_after_touch"] = local_content_after_touch
+
+        if local_content_after_touch != initial_content:
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "local file content changed unexpectedly after mtime-only touch",
+                artifacts,
+                details,
+            )
+
+        if local_mtime_after_touch_ns <= local_mtime_before_touch_ns:
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "local file modification timestamp did not advance after touch operation",
+                artifacts,
+                details,
+            )
+
+        phase3_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_main),
+        ]
+        context.log(f"Executing Test Case {self.case_id} phase3: {command_to_string(phase3_command)}")
+        phase3_result = run_command(phase3_command, cwd=context.repo_root)
+        write_text_file(phase3_stdout, phase3_result.stdout)
+        write_text_file(phase3_stderr, phase3_result.stderr)
+        details["phase3_returncode"] = phase3_result.returncode
+
+        phase3_combined_output = phase3_result.stdout + "\n" + phase3_result.stderr
+        upload_markers = [
+            f"Uploading new file {relative_path}",
+            f"Uploading file {relative_path}",
+            f"Uploading differences of {relative_path}",
+            "Uploading new file",
+            "Uploading differences of",
+        ]
+        matched_upload_markers = [marker for marker in upload_markers if marker in phase3_combined_output]
+        details["matched_upload_markers"] = matched_upload_markers
+
+        if phase3_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"mtime-only sync phase failed with status {phase3_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        # Phase 4: verify remote truth again from a fresh client
+        verify_final_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--download-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_verify_final),
+        ]
+        context.log(f"Executing Test Case {self.case_id} phase4 verify final: {command_to_string(verify_final_command)}")
+        verify_final_result = run_command(verify_final_command, cwd=context.repo_root)
+        write_text_file(verify_final_stdout, verify_final_result.stdout)
+        write_text_file(verify_final_stderr, verify_final_result.stderr)
+        details["verify_final_returncode"] = verify_final_result.returncode
+
+        verify_final_manifest = build_manifest(verify_final_root)
+        write_manifest(verify_final_manifest_file, verify_final_manifest)
+        details["verify_final_manifest"] = verify_final_manifest
+        details["verify_final_file_exists"] = verify_final_file_path.is_file()
+
+        final_verified_content = (
+            verify_final_file_path.read_text(encoding="utf-8")
+            if verify_final_file_path.is_file()
+            else ""
+        )
+        details["final_verified_content"] = final_verified_content
+
+        final_verified_mtime_ns = (
+            verify_final_file_path.stat().st_mtime_ns
+            if verify_final_file_path.is_file()
+            else -1
+        )
+        details["final_verified_mtime_ns"] = final_verified_mtime_ns
+
+        expected_manifest = [
+            root_name,
+            relative_path,
+        ]
+        details["expected_manifest"] = expected_manifest
+
+        self._write_metadata(metadata_file, details)
+
+        if verify_final_result.returncode != 0:
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"final remote verification failed with status {verify_final_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        if matched_upload_markers:
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"mtime-only local change triggered upload behaviour: {matched_upload_markers}",
+                artifacts,
+                details,
+            )
+
+        if not verify_final_file_path.is_file():
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                f"final remote verification is missing expected file: {relative_path}",
+                artifacts,
+                details,
+            )
+
+        if final_verified_content != initial_content:
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "final verified file content did not match the original content after mtime-only local change",
+                artifacts,
+                details,
+            )
+
+        if verify_final_manifest != expected_manifest:
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "final remote verification manifest did not match the expected single-file structure after mtime-only local change",
+                artifacts,
+                details,
+            )
+
+        if baseline_verified_mtime_ns != final_verified_mtime_ns:
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "remote file modification timestamp changed after an mtime-only local touch",
+                artifacts,
+                details,
+            )
+
+        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
