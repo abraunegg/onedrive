@@ -198,7 +198,7 @@ class SyncEngine {
 	// How many items have been processed for the active operation
 	long processedCount;
 	// Are we creating a simulated /delta response? This is critically important in terms of how we 'update' the database
-	bool generateSimulatedDeltaResponse = false;
+	bool generatedSimulatedDeltaResponse = false;
 	// Store the latest DeltaLink
 	string latestDeltaLink;
 	// Struct of containing the deltaLink details
@@ -1179,8 +1179,8 @@ class SyncEngine {
 		jsonItemsToProcess = [];
 		processedCount = 0;
 		
-		// Reset generateSimulatedDeltaResponse
-		generateSimulatedDeltaResponse = false;
+		// Reset generatedSimulatedDeltaResponse
+		generatedSimulatedDeltaResponse = false;
 		
 		// Reset Shared Folder Flags for 'sync_list' processing
 		sharedFolderDeltaGeneration = false;
@@ -1219,7 +1219,7 @@ class SyncEngine {
 		//     the net effect of this, is that the valid local files we want to keep, are actually deleted ...... not desirable
 		if ((singleDirectoryScope) || (nationalCloudDeployment) || (cleanupLocalFiles)) {
 			// Generate a simulated /delta response so that we correctly capture the current online state, less any 'online' delete and replace activity
-			generateSimulatedDeltaResponse = true;
+			generatedSimulatedDeltaResponse = true;
 		}
 		
 		// Shared Folders, by nature of where that path has been shared with us, we cannot use /delta against that path, as this queries the entire 'other persons' drive:
@@ -1233,7 +1233,7 @@ class SyncEngine {
 			// When using 'sync_list' we need to do this
 			sharedFolderDeltaGeneration = true;
 			currentSharedFolderName = sharedFolderName;
-			generateSimulatedDeltaResponse = true;
+			generatedSimulatedDeltaResponse = true;
 		}
 		
 		// Reset latestDeltaLink & deltaLinkCache
@@ -1245,7 +1245,7 @@ class SyncEngine {
 		GC.collect();
 				
 		// What /delta query do we use?
-		if (!generateSimulatedDeltaResponse) {
+		if (!generatedSimulatedDeltaResponse) {
 			// This should be the majority default pathway application use
 			
 			// Do we need to perform a Full Scan True Up? Is 'appConfig.fullScanTrueUpRequired' set to 'true'?
@@ -1922,7 +1922,7 @@ class SyncEngine {
 			// We only do this if we did not generate a /delta response, as generateDeltaResponse() performs the checkJSONAgainstClientSideFiltering()
 			// against elements as it is building the /delta compatible response
 			// If we blindly just 'check again' all JSON responses then there is potentially double JSON processing going on if we used generateDeltaResponse()
-			if (!generateSimulatedDeltaResponse) {
+			if (!generatedSimulatedDeltaResponse) {
 				// Did we already exclude?
 				if (!discardDeltaJSONItem) {
 					// Check applicability against 'skip_file', 'skip_dir' and 'sync_list'
@@ -2669,10 +2669,21 @@ class SyncEngine {
 					string existingItemPath = computeItemPath(queryDriveID, queryParentID) ~ "/" ~ existingDatabaseItem.name;
 					if (debugLogging) {addLogEntry("existingItemPath calculated full path is: " ~ existingItemPath, ["debug"]);}
 					
-					// Ensure that this path exists if this is an 'existing' database item
+					// Ensure that this path exists if this is an 'existing' database item entry exists
 					if (existingDatabaseItem.type == ItemType.dir) {
+						// At this point, we have a JSON received from the Graph API for a directory.
+						// We also currently have this directory in the cache database
+						
+						// If the folder does not exist locally but is already known in the database,
+						// only recreate it immediately when processing a real Graph /delta response.
+						// When processing a simulated /delta response, defer to the reconciliation
+						// phase so previously synced but locally deleted items can be handled correctly.
 						if (!exists(existingItemPath)) {
-							handleLocalDirectoryCreation(existingDatabaseItem, existingItemPath, onedriveJSONItem);
+							// Path does not exist locally, but exists in database
+							if (!generatedSimulatedDeltaResponse) {
+								// We did not generate a simulated /delta response ... 
+								handleLocalDirectoryCreation(existingDatabaseItem, existingItemPath, onedriveJSONItem);
+							}
 						}
 					}
 					
@@ -3535,7 +3546,7 @@ class SyncEngine {
 					// - When using --download-only --cleanup-local-files
 				
 					// Is the last modified timestamp in the DB the same as the API data or are we running an operational mode where we simulated the /delta response?
-					if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generateSimulatedDeltaResponse)) {
+					if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generatedSimulatedDeltaResponse)) {
 						// Save this item in the database
 						
 						// Issue #3115 - Personal Account Shared Folder
@@ -3583,7 +3594,7 @@ class SyncEngine {
 			// - When using --download-only --cleanup-local-files
 		
 			// Is the last modified timestamp in the DB the same as the API data or are we running an operational mode where we simulated the /delta response?
-			if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generateSimulatedDeltaResponse)) {
+			if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generatedSimulatedDeltaResponse)) {
 				// Database update needed for this item because our local record is out-of-date
 				
 				// Issue #3115 - Personal Account Shared Folder
