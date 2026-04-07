@@ -51,6 +51,40 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
             "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
         )
 
+    def _write_tree_snapshot(self, root: Path, output_file: Path) -> None:
+        lines: list[str] = []
+
+        if not root.exists():
+            lines.append(f"MISSING {root}")
+            write_text_file(output_file, "\n".join(lines) + "\n")
+            return
+
+        lines.append(f"ROOT {root}")
+
+        for current_root, dirnames, filenames in os.walk(root):
+            dirnames.sort()
+            filenames.sort()
+
+            current_path = Path(current_root)
+            rel_root = current_path.relative_to(root)
+
+            if rel_root == Path("."):
+                lines.append(".")
+            else:
+                lines.append(str(rel_root) + "/")
+
+            for dirname in dirnames:
+                child = current_path / dirname
+                child_rel = child.relative_to(root)
+                lines.append(f"DIR  {child_rel}/")
+
+            for filename in filenames:
+                child = current_path / filename
+                child_rel = child.relative_to(root)
+                lines.append(f"FILE {child_rel}")
+
+        write_text_file(output_file, "\n".join(lines) + "\n")
+
     def run(self, context: E2EContext) -> TestResult:
         case_work_dir = context.work_root / "tc0039"
         case_log_dir = context.logs_dir / "tc0039"
@@ -120,6 +154,8 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
 
         verify_create_manifest_file = state_dir / "verify_create_manifest.txt"
         verify_cleanup_manifest_file = state_dir / "verify_cleanup_manifest.txt"
+        local_tree_before_phase3_file = state_dir / "local_tree_before_phase3.txt"
+        local_manifest_before_phase3_file = state_dir / "local_manifest_before_phase3.txt"
         metadata_file = state_dir / "metadata.txt"
 
         artifacts = [
@@ -133,6 +169,8 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
             str(phase4_stderr),
             str(verify_create_manifest_file),
             str(verify_cleanup_manifest_file),
+            str(local_tree_before_phase3_file),
+            str(local_manifest_before_phase3_file),
             str(metadata_file),
         ]
 
@@ -302,6 +340,18 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
         details["local_nested_empty_exists_after_cleanup_prep"] = local_nested_empty_path.exists()
         details["local_anchor_exists_after_cleanup_prep"] = local_anchor_path.is_file()
 
+        expected_local_before_phase3_manifest = [
+            root_name,
+            anchor_relative,
+        ]
+        details["expected_local_before_phase3_manifest"] = expected_local_before_phase3_manifest
+
+        local_manifest_before_phase3 = build_manifest(local_root)
+        write_manifest(local_manifest_before_phase3_file, local_manifest_before_phase3)
+        self._write_tree_snapshot(local_root, local_tree_before_phase3_file)
+
+        details["local_manifest_before_phase3"] = local_manifest_before_phase3
+
         if (
             local_empty_dir_path.exists()
             or local_nested_parent_path.exists()
@@ -322,6 +372,16 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
                 self.case_id,
                 self.name,
                 "local anchor file is missing before cleanup sync",
+                artifacts,
+                details,
+            )
+
+        if sorted(local_manifest_before_phase3) != sorted(expected_local_before_phase3_manifest):
+            self._write_metadata(metadata_file, details)
+            return TestResult.fail_result(
+                self.case_id,
+                self.name,
+                "local filesystem manifest before cleanup sync did not match expected structure",
                 artifacts,
                 details,
             )
