@@ -22,8 +22,8 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
     name = "empty directory handling"
     description = (
         "Validate creation, sync, verification, and cleanup behaviour for "
-        "empty directories so that directory-only state is handled correctly "
-        "without leaving stale folders behind"
+        "empty directories, including nested empty directories, to ensure "
+        "directory-only state is created and removed correctly"
     )
 
     def _write_config(self, config_dir: Path, sync_dir: Path) -> None:
@@ -174,7 +174,6 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
-            "--verbose",
             "--single-directory",
             root_name,
             "--confdir",
@@ -204,7 +203,6 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--download-only",
-            "--verbose",
             "--verbose",
             "--resync",
             "--resync-auth",
@@ -279,7 +277,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
                 details,
             )
 
-        if verify_create_manifest != expected_creation_manifest:
+        if sorted(verify_create_manifest) != sorted(expected_creation_manifest):
             self._write_metadata(metadata_file, details)
             return TestResult.fail_result(
                 self.case_id,
@@ -302,7 +300,11 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
         details["local_nested_empty_exists_after_cleanup_prep"] = local_nested_empty_path.exists()
         details["local_anchor_exists_after_cleanup_prep"] = local_anchor_path.is_file()
 
-        if local_empty_dir_path.exists() or local_nested_parent_path.exists() or local_nested_empty_path.exists():
+        if (
+            local_empty_dir_path.exists()
+            or local_nested_parent_path.exists()
+            or local_nested_empty_path.exists()
+        ):
             self._write_metadata(metadata_file, details)
             return TestResult.fail_result(
                 self.case_id,
@@ -326,7 +328,6 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
-            "--verbose",
             "--verbose",
             "--single-directory",
             root_name,
@@ -363,7 +364,6 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--download-only",
-            "--verbose",
             "--verbose",
             "--resync",
             "--resync-auth",
@@ -435,7 +435,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
                 details,
             )
 
-        if verify_cleanup_manifest != expected_cleanup_manifest:
+        if sorted(verify_cleanup_manifest) != sorted(expected_cleanup_manifest):
             return TestResult.fail_result(
                 self.case_id,
                 self.name,
