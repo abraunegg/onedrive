@@ -235,7 +235,10 @@ class TestCase0002SyncListValidation(E2ETestCase):
         context.ensure_refresh_token_available()
         self._create_fixture_tree(fixture_root)
 
-        scenarios = self._build_scenarios()
+        scenarios = [
+            scenario for scenario in self._build_scenarios()
+            if context.should_run_scenario(self.case_id, scenario.scenario_id)
+        ]
 
         failures: list[str] = []
         all_artifacts: list[str] = []
@@ -342,7 +345,9 @@ class TestCase0002SyncListValidation(E2ETestCase):
 
         details = {
             "scenario_count": len(scenarios),
+            "executed_scenario_ids": [scenario.scenario_id for scenario in scenarios],
             "failed_scenarios": len(failures),
+            "failed_scenario_ids": [failure.split(":", 1)[0] for failure in failures],
         }
 
         if failures:

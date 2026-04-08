@@ -1,19 +1,70 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from framework.utils import ensure_directory, get_optional_base_config_text, timestamp_now, write_text_file, write_text_file_append, compute_quickxor_hash_file
+from framework.utils import (
+    compute_quickxor_hash_file,
+    ensure_directory,
+    get_optional_base_config_text,
+    timestamp_now,
+    write_text_file,
+    write_text_file_append,
+)
+
+
+def _normalise_case_id(value: str) -> str:
+    text = value.strip()
+    if not text:
+        return ""
+    if text.lower().startswith("tc"):
+        text = text[2:]
+    if text.isdigit() and len(text) <= 4:
+        text = text.zfill(4)
+    return text
+
+
+def _parse_case_filter_env(raw: str) -> set[str]:
+    selected: set[str] = set()
+    for token in raw.split(","):
+        case_id = _normalise_case_id(token)
+        if case_id:
+            selected.add(case_id)
+    return selected
+
+
+def _parse_scenario_filter_env(raw: str) -> dict[str, set[str]]:
+    if not raw.strip():
+        return {}
+
+    decoded = json.loads(raw)
+    parsed: dict[str, set[str]] = {}
+
+    for raw_case_id, raw_scenarios in decoded.items():
+        case_id = _normalise_case_id(str(raw_case_id))
+        if not case_id:
+            continue
+
+        scenario_ids: set[str] = set()
+        for scenario_id in raw_scenarios:
+            scenario_text = str(scenario_id).strip()
+            if scenario_text:
+                scenario_ids.add(scenario_text)
+
+        if scenario_ids:
+            parsed[case_id] = scenario_ids
+
+    return parsed
 
 
 @dataclass
 class E2EContext:
-    """
-    Runtime context for the E2E framework.
-    """
+    """Runtime context for the E2E framework."""
 
+    real_onedrive_bin: str
     onedrive_bin: str
     e2e_target: str
     run_id: str
@@ -23,6 +74,12 @@ class E2EContext:
     logs_dir: Path
     state_dir: Path
     work_root: Path
+
+    debug_enabled: bool = False
+    skip_suite_cleanup: bool = False
+    run_label: str = "primary"
+    selected_case_ids: set[str] = field(default_factory=set)
+    selected_scenarios: dict[str, set[str]] = field(default_factory=dict)
 
     @classmethod
     def from_environment(cls) -> "E2EContext":
@@ -38,14 +95,29 @@ class E2EContext:
             raise RuntimeError("Environment variable RUN_ID must be set")
 
         repo_root = Path.cwd()
+
+        output_subdir = os.environ.get("E2E_OUTPUT_SUBDIR", "").strip()
         out_dir = repo_root / "ci" / "e2e" / "out"
+        if output_subdir:
+            out_dir = out_dir / output_subdir
+
         logs_dir = out_dir / "logs"
         state_dir = out_dir / "state"
 
         runner_temp = os.environ.get("RUNNER_TEMP", "/tmp").strip()
         work_root = Path(runner_temp) / f"onedrive-e2e-{e2e_target}"
+        if output_subdir:
+            safe_subdir = output_subdir.replace("/", "_")
+            work_root = work_root / safe_subdir
+
+        debug_enabled = os.environ.get("E2E_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
+        skip_suite_cleanup = os.environ.get("E2E_SKIP_SUITE_CLEANUP", "").strip().lower() in {"1", "true", "yes", "on"}
+        run_label = os.environ.get("E2E_RUN_LABEL", "").strip() or "primary"
+        selected_case_ids = _parse_case_filter_env(os.environ.get("E2E_SELECTED_CASES", ""))
+        selected_scenarios = _parse_scenario_filter_env(os.environ.get("E2E_SELECTED_SCENARIOS_JSON", ""))
 
         return cls(
+            real_onedrive_bin=onedrive_bin,
             onedrive_bin=onedrive_bin,
             e2e_target=e2e_target,
             run_id=run_id,
@@ -54,6 +126,11 @@ class E2EContext:
             logs_dir=logs_dir,
             state_dir=state_dir,
             work_root=work_root,
+            debug_enabled=debug_enabled,
+            skip_suite_cleanup=skip_suite_cleanup,
+            run_label=run_label,
+            selected_case_ids=selected_case_ids,
+            selected_scenarios=selected_scenarios,
         )
 
     @property
@@ -76,11 +153,45 @@ class E2EContext:
     def default_refresh_token_path(self) -> Path:
         return self.default_onedrive_config_dir / "refresh_token"
 
+    def prepare_runtime(self) -> None:
+        ensure_directory(self.out_dir)
+        ensure_directory(self.logs_dir)
+        ensure_directory(self.state_dir)
+        ensure_directory(self.work_root)
+
+        if not self.debug_enabled:
+            return
+
+        wrapper_path = self.work_root / "onedrive-debug-wrapper.sh"
+        wrapper_content = (
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            f"REAL_BIN={json.dumps(self.real_onedrive_bin)}\n"
+            "exec \"${REAL_BIN}\" --verbose \"$@\"\n"
+        )
+        write_text_file(wrapper_path, wrapper_content)
+        os.chmod(wrapper_path, 0o755)
+        self.onedrive_bin = str(wrapper_path)
+
     def ensure_refresh_token_available(self) -> None:
         if not self.default_refresh_token_path.is_file():
             raise RuntimeError(
                 f"Required refresh_token file not found at: {self.default_refresh_token_path}"
             )
+
+    def should_run_case(self, case_id: str) -> bool:
+        if not self.selected_case_ids:
+            return True
+        return _normalise_case_id(case_id) in self.selected_case_ids
+
+    def selected_scenarios_for_case(self, case_id: str) -> set[str]:
+        return set(self.selected_scenarios.get(_normalise_case_id(case_id), set()))
+
+    def should_run_scenario(self, case_id: str, scenario_id: str) -> bool:
+        selected = self.selected_scenarios_for_case(case_id)
+        if not selected:
+            return True
+        return scenario_id in selected
 
     def _extract_config_value(self, config_text: str, key: str) -> str:
         for raw_line in config_text.splitlines():

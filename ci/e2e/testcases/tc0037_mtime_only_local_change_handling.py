@@ -514,6 +514,10 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             },
         ]
 
+        scenarios = [
+            scenario for scenario in scenarios if context.should_run_scenario(self.case_id, scenario["scenario_id"])
+        ]
+
         failed_scenarios: list[str] = []
 
         for scenario in scenarios:
@@ -535,6 +539,9 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
 
             if not passed:
                 failed_scenarios.append(scenario["scenario_id"])
+
+        details["executed_scenario_ids"] = [scenario["scenario_id"] for scenario in scenarios]
+        details["failed_scenario_ids"] = list(failed_scenarios)
 
         summary_file = state_dir / "scenario-summary.txt"
         write_text_file(

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -49,12 +51,8 @@ from testcases.tc0037_mtime_only_local_change_handling import TestCase0037MtimeO
 from testcases.tc0038_delete_and_recreate_with_same_name_validation import TestCase0038DeleteAndRecreateWithSameNameValidation
 from testcases.tc0039_empty_directory_handling_validation import TestCase0039EmptyDirectoryHandling
 
-def build_test_suite() -> list:
-    """
-    Return the ordered list of E2E test cases to execute.
 
-    Add future test cases here in the required execution order.
-    """
+def build_test_suite() -> list:
     return [
         TestCase0001BasicResync(),
         TestCase0002SyncListValidation(),
@@ -98,11 +96,56 @@ def build_test_suite() -> list:
     ]
 
 
+def _normalise_case_id(value: str) -> str:
+    text = value.strip()
+    if not text:
+        return ""
+    if text.lower().startswith("tc"):
+        text = text[2:]
+    if text.isdigit() and len(text) <= 4:
+        text = text.zfill(4)
+    return text
+
+
+def _apply_cli_overrides(args: argparse.Namespace) -> None:
+    if args.debug:
+        os.environ["E2E_DEBUG"] = "1"
+    if args.skip_suite_cleanup:
+        os.environ["E2E_SKIP_SUITE_CLEANUP"] = "1"
+    if args.output_subdir:
+        os.environ["E2E_OUTPUT_SUBDIR"] = args.output_subdir
+    if args.run_label:
+        os.environ["E2E_RUN_LABEL"] = args.run_label
+
+    if args.case_id:
+        selected: list[str] = []
+        for raw_value in args.case_id:
+            for token in raw_value.split(","):
+                case_id = _normalise_case_id(token)
+                if case_id:
+                    selected.append(case_id)
+        if selected:
+            os.environ["E2E_SELECTED_CASES"] = ",".join(sorted(set(selected)))
+
+    if args.scenario:
+        mapping: dict[str, set[str]] = {}
+        for raw_value in args.scenario:
+            case_part, separator, scenario_part = raw_value.partition(":")
+            if separator != ":":
+                raise RuntimeError(f"Invalid --scenario value '{raw_value}'. Expected CASE:SCENARIO[,SCENARIO]")
+            case_id = _normalise_case_id(case_part)
+            if not case_id:
+                raise RuntimeError(f"Invalid case id in --scenario value '{raw_value}'")
+            mapping.setdefault(case_id, set())
+            for token in scenario_part.split(","):
+                scenario_id = token.strip()
+                if scenario_id:
+                    mapping[case_id].add(scenario_id)
+        if mapping:
+            os.environ["E2E_SELECTED_SCENARIOS_JSON"] = json.dumps({key: sorted(value) for key, value in mapping.items()}, sort_keys=True)
+
+
 def result_to_actions_case(result: TestResult) -> dict:
-    """
-    Convert the internal TestResult into the JSON structure expected by the
-    GitHub Actions workflow summary/reporting logic.
-    """
     output = {
         "id": result.case_id,
         "name": result.name,
@@ -121,59 +164,86 @@ def result_to_actions_case(result: TestResult) -> dict:
     return output
 
 
+def _build_metadata(context: E2EContext, selected_case_ids: list[str], executed_case_ids: list[str]) -> dict:
+    return {
+        "target": context.e2e_target,
+        "run_id": context.run_id,
+        "run_label": context.run_label,
+        "debug_enabled": context.debug_enabled,
+        "skip_suite_cleanup": context.skip_suite_cleanup,
+        "selected_case_ids": selected_case_ids,
+        "selected_scenarios": {case_id: sorted(values) for case_id, values in sorted(context.selected_scenarios.items())},
+        "executed_case_ids": executed_case_ids,
+    }
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Run OneDrive E2E test cases")
+    parser.add_argument("--case-id", action="append", help="Run only the specified case id(s). Supports comma-separated values.")
+    parser.add_argument("--scenario", action="append", help="Run only the specified scenario(s) for a case. Format: CASE:SCENARIO[,SCENARIO]")
+    parser.add_argument("--debug", action="store_true", help="Rerun with debug verbosity enabled")
+    parser.add_argument("--skip-suite-cleanup", action="store_true", help="Skip initial full-account cleanup")
+    parser.add_argument("--output-subdir", help="Write results into ci/e2e/out/<subdir>")
+    parser.add_argument("--run-label", help="Logical label for this run (for metadata/logging)")
+    args = parser.parse_args()
+
+    _apply_cli_overrides(args)
     context = E2EContext.from_environment()
-    ensure_directory(context.out_dir)
-    ensure_directory(context.logs_dir)
-    ensure_directory(context.state_dir)
-    ensure_directory(context.work_root)
+    context.prepare_runtime()
 
-    context.bootstrap_suite_cleanup_config_dir()
+    selected_case_ids = sorted(context.selected_case_ids)
+    cases_to_run = [testcase for testcase in build_test_suite() if context.should_run_case(testcase.case_id)]
+    executed_case_ids = [testcase.case_id for testcase in cases_to_run]
 
-    context.log("Starting suite-wide cleanup of local and remote OneDrive content")
+    suite_metadata = _build_metadata(context, selected_case_ids, executed_case_ids)
 
-    cleanup_ok, cleanup_reason, cleanup_artifacts, cleanup_details = perform_full_account_cleanup(
-        onedrive_bin=context.onedrive_bin,
-        repo_root=context.repo_root,
-        config_dir=context.suite_cleanup_config_dir,
-        sync_dir=context.default_sync_dir,
-        log_dir=context.suite_cleanup_log_dir,
-    )
+    if not context.skip_suite_cleanup:
+        context.bootstrap_suite_cleanup_config_dir()
+        context.log("Starting suite-wide cleanup of local and remote OneDrive content")
 
-    if not cleanup_ok:
-        context.log(f"Suite cleanup FAILED: {cleanup_reason}")
+        cleanup_ok, cleanup_reason, cleanup_artifacts, cleanup_details = perform_full_account_cleanup(
+            onedrive_bin=context.onedrive_bin,
+            repo_root=context.repo_root,
+            config_dir=context.suite_cleanup_config_dir,
+            sync_dir=context.default_sync_dir,
+            log_dir=context.suite_cleanup_log_dir,
+        )
 
-        results = {
-            "target": context.e2e_target,
-            "run_id": context.run_id,
-            "cases": [
-                {
-                    "id": "0000",
-                    "name": "suite cleanup",
-                    "status": "fail",
-                    "reason": cleanup_reason,
-                    "artifacts": cleanup_artifacts,
-                    "details": cleanup_details,
-                }
-            ],
-        }
+        if not cleanup_ok:
+            context.log(f"Suite cleanup FAILED: {cleanup_reason}")
 
-        results_file = context.out_dir / "results.json"
-        results_json = json.dumps(results, indent=2, sort_keys=False)
-        write_text_file(results_file, results_json)
-        return 1
+            results = {
+                **suite_metadata,
+                "cases": [
+                    {
+                        "id": "0000",
+                        "name": "suite cleanup",
+                        "status": "fail",
+                        "reason": cleanup_reason,
+                        "artifacts": cleanup_artifacts,
+                        "details": cleanup_details,
+                    }
+                ],
+            }
 
-    context.log("Suite-wide cleanup completed successfully")
+            results_file = context.out_dir / "results.json"
+            results_json = json.dumps(results, indent=2, sort_keys=False)
+            write_text_file(results_file, results_json)
+            return 1
+
+        context.log("Suite-wide cleanup completed successfully")
+    else:
+        context.log("Skipping suite-wide cleanup because E2E_SKIP_SUITE_CLEANUP is enabled")
 
     context.log(
         f"Initialising E2E framework for target='{context.e2e_target}', "
-        f"run_id='{context.run_id}'"
+        f"run_id='{context.run_id}', run_label='{context.run_label}', debug_enabled={context.debug_enabled}"
     )
 
     cases = []
     failed = False
 
-    for testcase in build_test_suite():
+    for testcase in cases_to_run:
         context.log(f"Starting test case {testcase.case_id}: {testcase.name}")
 
         try:
@@ -181,17 +251,14 @@ def main() -> int:
 
             if result.case_id != testcase.case_id:
                 raise RuntimeError(
-                    f"Test case returned mismatched case_id: "
-                    f"expected '{testcase.case_id}', got '{result.case_id}'"
+                    f"Test case returned mismatched case_id: expected '{testcase.case_id}', got '{result.case_id}'"
                 )
 
             cases.append(result_to_actions_case(result))
 
             if result.status != "pass":
                 failed = True
-                context.log(
-                    f"Test case {testcase.case_id} FAILED: {result.reason or 'no reason provided'}"
-                )
+                context.log(f"Test case {testcase.case_id} FAILED: {result.reason or 'no reason provided'}")
             else:
                 context.log(f"Test case {testcase.case_id} PASSED")
 
@@ -211,15 +278,12 @@ def main() -> int:
                 status="fail",
                 reason=f"Unhandled exception: {exc}",
                 artifacts=[str(error_log)],
-                details={
-                    "exception_type": type(exc).__name__,
-                },
+                details={"exception_type": type(exc).__name__},
             )
             cases.append(result_to_actions_case(failure_result))
 
     results = {
-        "target": context.e2e_target,
-        "run_id": context.run_id,
+        **suite_metadata,
         "cases": cases,
     }
 

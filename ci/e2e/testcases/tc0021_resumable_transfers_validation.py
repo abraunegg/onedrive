@@ -998,17 +998,18 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         results: list[ScenarioResult] = []
 
-        results.append(
-            self._run_upload_resume_scenario(
-                context,
-                root_name,
-                upload_sync_root,
-                upload_verify_root,
-                upload_work_dir,
-                upload_log_dir,
-                upload_state_dir,
+        if context.should_run_scenario(self.case_id, "RT-0001"):
+            results.append(
+                self._run_upload_resume_scenario(
+                    context,
+                    root_name,
+                    upload_sync_root,
+                    upload_verify_root,
+                    upload_work_dir,
+                    upload_log_dir,
+                    upload_state_dir,
+                )
             )
-        )
 
         download_work_dir = case_work_dir / "rt0002-download"
         download_log_dir = case_log_dir / "rt0002-download"
@@ -1018,19 +1019,25 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         reset_directory(download_log_dir)
         reset_directory(download_state_dir)
 
-        results.append(
-            self._run_download_resume_scenario(
-                context,
-                root_name,
-                download_work_dir,
-                download_log_dir,
-                download_state_dir,
+        if context.should_run_scenario(self.case_id, "RT-0002"):
+            results.append(
+                self._run_download_resume_scenario(
+                    context,
+                    root_name,
+                    download_work_dir,
+                    download_log_dir,
+                    download_state_dir,
+                )
             )
-        )
 
         failed = [result for result in results if not result.passed]
         artifacts: list[str] = []
-        details: dict = {"root_name": root_name, "scenario_results": {}}
+        details: dict = {
+            "root_name": root_name,
+            "executed_scenario_ids": [result.scenario_id for result in results],
+            "failed_scenario_ids": [result.scenario_id for result in failed],
+            "scenario_results": {},
+        }
 
         for result in results:
             if result.artifacts:
