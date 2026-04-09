@@ -63,6 +63,25 @@ jobs:
         run: |
           python3 -u ci/e2e/run.py
 
+      - name: Debug rerun failed E2E cases
+        if: always()
+        env:
+          ONEDRIVE_BIN: ${{ github.workspace }}/.ci/prefix/bin/onedrive
+          E2E_TARGET: personal
+          RUN_ID: ${{ github.run_id }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -euo pipefail
+          if [ -f ci/e2e/out/results.json ]; then
+            python3 -u ci/e2e/rerun_failures.py \
+              --results ci/e2e/out/results.json \
+              --output-subdir debug-rerun \
+              --run-label debug-rerun \
+              --skip-suite-cleanup
+          else
+            echo "No primary results.json found; skipping debug rerun"
+          fi
+
       - name: Upload E2E artefacts
         if: always()
         uses: actions/upload-artifact@v4
