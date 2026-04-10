@@ -446,20 +446,15 @@ Intune SSO via Microsoft Identity Broker dbus session usage criteria met - will 
 > [!IMPORTANT]
 > **Intune Authentication – Required Component Versions**
 > 
-> | Component                     | RedHat Enterprise Linux                  | Ubuntu 24.04                     |
-> |------------------------------|-------------------------------------------|----------------------------------|
-> | Microsoft Edge               | microsoft-edge-stable-<version>.x86_64    | microsoft-edge-stable <version>   |
-> | Microsoft Identity Broker    | microsoft-identity-broker-<version>.x86_64| microsoft-identity-broker <version> |
-> | Intune Portal (Company Portal)| microsoft-intune-portal-<version>.x86_64 | microsoft-intune-portal <version> |
-> | msal (if packaged separately)| msal-<version>                            | msal <version>                   |
-> | dbus                         | dbus-<version>                            | dbus <version>                   |
-> | dbus-daemon                  | dbus-daemon-<version>                     | dbus-daemon <version>            |
-> | libsecret                    | libsecret-<version>                       | libsecret-1-0 <version>          |
-> | gnome-keyring (if used)      | gnome-keyring-<version>                   | gnome-keyring <version>          |
-> | curl / libcurl               | libcurl-<version>                         | libcurl4 <version>               |
-> | openssl                      | openssl-<version>                         | openssl <version>                |
+> | Component                    | RedHat Enterprise Linux 9.x                  | Ubuntu 24.04                     |
+> |------------------------------|----------------------------------------------|----------------------------------|
+> | Microsoft Edge               | microsoft-edge-stable-146.0.3856.97-1.x86_64 | microsoft-edge-stable <version>   |
+> | Microsoft Identity Broker    | microsoft-identity-broker-3.0.1-1.el9.x86_64 | microsoft-identity-broker <version> |
+> | Intune Portal                | intune-portal-1.2603.31-1.el9.x86_64         | microsoft-intune-portal <version> |
+> | dbus                         | dbus-1.12.20-8.el9.x86_64                    | dbus <version>                   |
+> | dbus-broker                  | dbus-broker-28-7.el9.x86_64                  | dbus-daemon <version>            |
 >
-> Microsoft Intune last tested and validated with the above versions 10 April 2026
+> Microsoft Intune integration tested and validated with the above versions on: **10 April 2026**
 
 #### OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
 To use this method of authentication, you must add the following configuration to your 'config' file:
