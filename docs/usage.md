@@ -393,7 +393,6 @@ The application has been successfully authorised, but no extra command options h
 Please use 'onedrive --help' for further assistance in regards to running this application.
 
 user@hostname:~$ 
-
 ```
 
 **Interactive OAuth2 Authentication Process Illustrated:**
@@ -441,8 +440,26 @@ Client has been configured to use Intune SSO via Microsoft Identity Broker dbus 
 Intune SSO via Microsoft Identity Broker dbus session usage criteria met - will attempt to authenticate via Intune
 ...
 ```
-> [!NOTE]
-> The installation and configuration of Intune for your platform is beyond the scope of this documentation.
+> [!IMPORTANT]
+> The installation and configuration of Microsoft Intune for your platform is beyond the scope of this documentation.
+
+> [!IMPORTANT]
+> **Intune Authentication – Required Component Versions**
+> 
+> | Component                     | RedHat Enterprise Linux                  | Ubuntu 24.04                     |
+> |------------------------------|-------------------------------------------|----------------------------------|
+> | Microsoft Edge               | microsoft-edge-stable-<version>.x86_64    | microsoft-edge-stable <version>   |
+> | Microsoft Identity Broker    | microsoft-identity-broker-<version>.x86_64| microsoft-identity-broker <version> |
+> | Intune Portal (Company Portal)| microsoft-intune-portal-<version>.x86_64 | microsoft-intune-portal <version> |
+> | msal (if packaged separately)| msal-<version>                            | msal <version>                   |
+> | dbus                         | dbus-<version>                            | dbus <version>                   |
+> | dbus-daemon                  | dbus-daemon-<version>                     | dbus-daemon <version>            |
+> | libsecret                    | libsecret-<version>                       | libsecret-1-0 <version>          |
+> | gnome-keyring (if used)      | gnome-keyring-<version>                   | gnome-keyring <version>          |
+> | curl / libcurl               | libcurl-<version>                         | libcurl4 <version>               |
+> | openssl                      | openssl-<version>                         | openssl <version>                |
+>
+> Microsoft Intune last tested and validated with the above versions 10 April 2026
 
 #### OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
 To use this method of authentication, you must add the following configuration to your 'config' file:
