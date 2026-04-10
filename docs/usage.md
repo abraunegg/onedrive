@@ -393,7 +393,6 @@ The application has been successfully authorised, but no extra command options h
 Please use 'onedrive --help' for further assistance in regards to running this application.
 
 user@hostname:~$ 
-
 ```
 
 **Interactive OAuth2 Authentication Process Illustrated:**
@@ -441,8 +440,22 @@ Client has been configured to use Intune SSO via Microsoft Identity Broker dbus 
 Intune SSO via Microsoft Identity Broker dbus session usage criteria met - will attempt to authenticate via Intune
 ...
 ```
-> [!NOTE]
-> The installation and configuration of Intune for your platform is beyond the scope of this documentation.
+> [!IMPORTANT]
+> **Intune Authentication – Required Component Versions**
+> 
+> | Component                    | RedHat Enterprise Linux 9.x                  | Ubuntu 24.04                          |
+> |:-----------------------------|:---------------------------------------------|:--------------------------------------|
+> | Microsoft Edge               | microsoft-edge-stable-146.0.3856.97-1.x86_64 | microsoft-edge-stable 146.0.3856.97-1 |
+> | Microsoft Identity Broker    | microsoft-identity-broker-3.0.1-1.el9.x86_64 | microsoft-identity-broker 3.0.1-noble |
+> | Intune Portal                | intune-portal-1.2603.31-1.el9.x86_64         | intune-portal 1.2603.31-noble         |
+> | dbus                         | dbus-1.12.20-8.el9.x86_64                    | dbus 1.14.10-4ubuntu4.1               |
+> | dbus-broker                  | dbus-broker-28-7.el9.x86_64                  | dbus-daemon 1.14.10-4ubuntu4.1        |
+>
+> Microsoft Intune integration tested and validated with the above distributions and package versions on: **10 April 2026**
+
+> [!IMPORTANT]
+> The installation and configuration of Microsoft Intune for your platform is beyond the scope of this documentation.
+
 
 #### OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
 To use this method of authentication, you must add the following configuration to your 'config' file:

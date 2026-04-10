@@ -215,18 +215,22 @@ int main(string[] cliArgs) {
 	// This is ONLY possible on Linux, not FreeBSD or other platforms
 	version (linux) {
 		if (appConfig.getValueBool("use_intune_sso")) {
-			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
-			addLogEntry("Client has been configured to use Intune SSO via Microsoft Identity Broker dbus session - checking usage criteria");
-			// We need to check that the available dbus is actually available
-			if(wait_for_broker()) {
-				// Usage criteria met, will attempt to use Intune SSO via dbus
-				addLogEntry("Intune SSO via Microsoft Identity Broker dbus session usage criteria met - will attempt to authenticate via Intune");
-			} else {
-				// Microsoft Identity Broker dbus is not available
-				addLogEntry();
-				addLogEntry("Required Microsoft Identity Broker dbus capability not found - disabling authentication via Intune SSO");
-				addLogEntry();
-				appConfig.setValueBool("use_intune_sso" , false);
+			// If we are performing a --logout we should not be performing any check
+			if (!appConfig.getValueBool("logout")) {
+				// We are not performing a --logout
+				// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
+				addLogEntry("Client has been configured to use Intune SSO via Microsoft Identity Broker dbus session - checking usage criteria");
+				// We need to check that the available dbus is actually available
+				if(wait_for_broker()) {
+					// Usage criteria met, will attempt to use Intune SSO via dbus
+					addLogEntry("Intune SSO via Microsoft Identity Broker dbus session usage criteria met - will attempt to authenticate via Intune");
+				} else {
+					// Microsoft Identity Broker dbus is not available
+					addLogEntry();
+					addLogEntry("Required Microsoft Identity Broker dbus capability not found - disabling authentication via Intune SSO");
+					addLogEntry();
+					appConfig.setValueBool("use_intune_sso" , false);
+				}
 			}
 		}
 	} else {
