@@ -341,7 +341,7 @@ BrokerCallResult call_broker_method(string methodName, string requestJson, int t
         char* responseStr = null;
         dbus_message_iter_get_basic(iter, &responseStr);
 
-        // Copy the returned string before unref'ing the reply message.
+        // Copy the returned string before unreferencing the reply message
         string jsonResponse;
         if (responseStr !is null) {
             jsonResponse = fromStringz(responseStr).idup;
