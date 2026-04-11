@@ -480,6 +480,7 @@ scgi
 scl
 sdlang
 Searchmonkey
+segv
 semanage
 sendfd
 setsebool
@@ -552,6 +553,7 @@ ultotal
 undefiened
 unistd
 unittests
+upn
 urlify
 userinfo
 usermod
@@ -565,6 +567,7 @@ verifypeer
 vsid
 vti
 wal
+Wds
 websockets
 webtemplate
 weburl
