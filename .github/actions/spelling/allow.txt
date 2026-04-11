@@ -455,6 +455,7 @@ scgi
 scl
 sdlang
 Searchmonkey
+segv
 semanage
 sendfd
 setsebool
@@ -535,6 +536,7 @@ verifypeer
 vsid
 vti
 wal
+Wds
 websockets
 webtemplate
 weburl

@@ -67,14 +67,17 @@ class LogBuffer {
 	
 	// Terminate Logging
 	void terminateLogging() {
-		synchronized(bufferLock) {
+		// lock
+		bufferLock.lock();
+		try {
 			if (!isRunning) {
 				return; // Prevent multiple shutdowns
 			}
-
 			// flag that we are no longer running due to shutting down
 			isRunning = false;
 			condReady.notifyAll(); // Wake up all waiting threads
+		} finally {
+			bufferLock.unlock();
 		}
 
 		// Wait for the flush thread to finish outside of the lock to avoid deadlocks
@@ -89,8 +92,7 @@ class LogBuffer {
 		condReady = null;
 		flushThread = null;
 	}
-	
-	
+		
 	// Flush the logging buffer
 	private void flushBuffer() {
 		while (true) {
@@ -100,13 +102,14 @@ class LogBuffer {
 		}
 		stdout.flush();
 	}
-	
+
 	// Add the message received to the buffer for logging
 	void logThisMessage(string message, string[] levels = ["info"]) {
 		// Generate the timestamp for this log entry
 		auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
 		
-		synchronized(bufferLock) {
+		bufferLock.lock();
+		try {
 			// Do not accept new log messages once shutdown has started
 			if (!isRunning) {
 				return;
@@ -137,6 +140,8 @@ class LogBuffer {
 			}
 			// Notify thread to wake up
 			condReady.notify();
+		} finally {
+			bufferLock.unlock();
 		}
 	}
 		
@@ -157,7 +162,9 @@ class LogBuffer {
 	// Flush the logging buffer
 	private bool flush() {
 		string[3][] messages;
-		synchronized(bufferLock) {
+
+		bufferLock.lock();
+		try {
 			while (buffer.empty && isRunning) { // buffer is empty and logging is still active
 				condReady.wait();
 			}
@@ -169,6 +176,8 @@ class LogBuffer {
 
 			messages = buffer;
 			buffer.length = 0;
+		} finally {
+			bufferLock.unlock();
 		}
 
 		// Are there messages to process?
@@ -216,16 +225,24 @@ void initialiseLogging(bool verboseLogging = false, bool debugLogging = false) {
 void shutdownLogging() {
 	if (logBuffer !is null) {
 		// Terminate logging in a safe manner
-		logBuffer.terminateLogging();
+		auto lb = logBuffer;
+		lb.terminateLogging();
 		logBuffer = null;
 	}
 }
 
 // Function to add a log entry with multiple levels
 void addLogEntry(string message = "", string[] levels = ["info"]) {
-	// we can only add a log line if we are running ... 
-	if (isRunning) {
-		logBuffer.logThisMessage(message, levels);
+	auto lb = logBuffer;
+	// we can only add a log line if we are running ...
+	if ((lb !is null) && isRunning) {
+		lb.logThisMessage(message, levels);
+	} else {
+		// log that we tried to add a log message but it was dropped
+		stderr.writeln("TRACE log.d: addLogEntry dropped message; lb=", cast(void*) lb,
+			" isRunning=", isRunning,
+			" thread=", Thread.getThis(),
+			" msg=", message);
 	}
 }
 
