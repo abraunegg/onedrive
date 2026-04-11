@@ -11,7 +11,6 @@ import std.algorithm.searching;
 import core.stdc.stdlib;
 import std.json;
 import std.conv;
-import core.sync.mutex;
 
 // What other modules that we have created do we need to import?
 import sqlite;
@@ -241,11 +240,11 @@ final class ItemDatabase {
 	string selectRemoteTypeByRemoteDriveIdStmt;
 	string deleteItemByIdStmt;
 	bool databaseInitialised = false;
-	private Mutex databaseLock;
+	private Object databaseLock;
 	
 	this(string filename) {
-		// Initialise the mutex
-		databaseLock = new Mutex();
+		// Initialise the database monitor used to serialise all database access
+		databaseLock = new Object();
 		
 		db = Database(filename);
 		int dbVersion;

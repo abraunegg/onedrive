@@ -30,15 +30,15 @@ import clientSideFiltering;
 
 // Relevant inotify events
 version(FreeBSD) {
-     private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE;
+	 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE;
 } else {
-     private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
+	 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
 }
 
 class MonitorException: ErrnoException {
-    @safe this(string msg, string file = __FILE__, size_t line = __LINE__) {
-        super(msg, file, line);
-    }
+	@safe this(string msg, string file = __FILE__, size_t line = __LINE__) {
+		super(msg, file, line);
+	}
 }
 
 class MonitorBackgroundWorker {
@@ -160,7 +160,7 @@ class MonitorBackgroundWorker {
 
 void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid) {
 	try {
-    	worker.watch(callerTid);
+		worker.watch(callerTid);
 	} catch (OwnerTerminated error) {
 		// caller is terminated
 		worker.shutdown();
@@ -349,16 +349,22 @@ final class Monitor {
 		if(!initialised)
 			return;
 		initialised = false;
-		// Release all resources
-		synchronized(inotifyMutex) {
-			// Interrupt the worker to allow removal of inotify watch descriptors
-			worker.interrupt();
-			// Remove all the inotify watch descriptors
-			removeAll();
-			// Notify the worker that the monitor has been shutdown
-			worker.interrupt();
-			send(false);
+
+		// Interrupt the worker to allow removal of inotify watch descriptors
+		worker.interrupt();
+
+		// Remove all the inotify watch descriptors
+		removeAll();
+
+		// Notify the worker that the monitor has been shutdown
+		worker.interrupt();
+		send(false);
+
+		inotifyMutex.lock();
+		try {
 			wdToDirName = null;
+		} finally {
+			inotifyMutex.unlock();
 		}
 	}
 
@@ -449,7 +455,12 @@ final class Monitor {
 			if (debugLogging) {addLogEntry("Calling worker.addInotifyWatch() for this dirname: " ~ dirname, ["debug"]);}
 			int wd = worker.addInotifyWatch(dirname);
 			if (wd > 0) {
-				wdToDirName[wd] = buildNormalizedPath(dirname) ~ "/";
+				inotifyMutex.lock();
+				try {
+					wdToDirName[wd] = buildNormalizedPath(dirname) ~ "/";
+				} finally {
+					inotifyMutex.unlock();
+				}
 			}
 			
 			// if this is a directory, recursively add this path
@@ -509,8 +520,12 @@ final class Monitor {
 	// Remove a watch descriptor
 	private void removeAll() {
 		string[int] copy;
-		synchronized(inotifyMutex) {
+
+		inotifyMutex.lock();
+		try {
 			copy = wdToDirName.dup; // Make a thread-safe copy
+		} finally {
+			inotifyMutex.unlock();
 		}
 
 		// Loop through the watch descriptors and remove
@@ -520,32 +535,68 @@ final class Monitor {
 	}
 
 	private void remove(int wd) {
-		assert(wd in wdToDirName);
-		
-		synchronized(inotifyMutex) {
-			int ret = worker.removeInotifyWatch(wd);
+		string dirname;
+		int ret;
+
+		inotifyMutex.lock();
+		try {
+			assert(wd in wdToDirName);
+			dirname = wdToDirName[wd];
+			ret = worker.removeInotifyWatch(wd);
 			if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
-			if (verboseLogging) {addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ to!string(wdToDirName[wd]), ["verbose"]);}
 			wdToDirName.remove(wd);
+		} finally {
+			inotifyMutex.unlock();
 		}
+
+		if (verboseLogging) {addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ dirname, ["verbose"]);}
 	}
 
 	// Remove the watch descriptors associated to the given path
 	private void remove(const(char)[] path) {
+		string[] matchingPaths;
+		int[] matchingWds;
+
 		path ~= "/";
-		foreach (wd, dirname; wdToDirName) {
-			if (dirname.startsWith(path)) {
-				int ret = worker.removeInotifyWatch(wd);
-				if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
-				wdToDirName.remove(wd);
-				if (verboseLogging) {addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ dirname, ["verbose"]);}
+
+		inotifyMutex.lock();
+		try {
+			foreach (wd, dirname; wdToDirName) {
+				if (dirname.startsWith(path)) {
+					matchingWds ~= wd;
+					matchingPaths ~= dirname;
+				}
 			}
+		} finally {
+			inotifyMutex.unlock();
+		}
+
+		foreach (idx, wd; matchingWds) {
+			int ret = worker.removeInotifyWatch(wd);
+			if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
+
+			inotifyMutex.lock();
+			try {
+				wdToDirName.remove(wd);
+			} finally {
+				inotifyMutex.unlock();
+			}
+
+			if (verboseLogging) {addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ matchingPaths[idx], ["verbose"]);}
 		}
 	}
 
 	// Return the file path from an inotify event
 	private string getPath(const(inotify_event)* event) {
-		string path = wdToDirName[event.wd];
+		string path;
+
+		inotifyMutex.lock();
+		try {
+			path = wdToDirName[event.wd];
+		} finally {
+			inotifyMutex.unlock();
+		}
+
 		if (event.len > 0) path ~= fromStringz(event.name.ptr);
 		if (debugLogging) {addLogEntry("inotify path event for: " ~ path, ["debug"]);}
 		return path;
@@ -618,7 +669,12 @@ final class Monitor {
 					// skip events that need to be ignored
 					if (event.mask & IN_IGNORED) {
 						// forget the directory associated to the watch descriptor
-						wdToDirName.remove(event.wd);
+						inotifyMutex.lock();
+						try {
+							wdToDirName.remove(event.wd);
+						} finally {
+							inotifyMutex.unlock();
+						}
 						goto skip;
 					} else if (event.mask & IN_Q_OVERFLOW) {
 						throw new MonitorException("inotify queue overflow: some events may be lost");

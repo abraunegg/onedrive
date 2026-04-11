@@ -3,8 +3,9 @@ module main;
 
 // What does this module require to function?
 import core.memory;
-import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit, _Exit;
+import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.sys.posix.signal;
+import core.sys.posix.unistd : write, _exit, STDERR_FILENO;
 import core.thread;
 import core.time;
 import std.algorithm;
@@ -62,6 +63,9 @@ bool performFileSystemMonitoring = false;
 bool performDatabaseVacuum = true;
 // Flag if SIGTERM is used
 bool sigtermHandlerTriggered = false;
+// Preserve the signal that initiated shutdown so the final process exit code is correct
+int terminationSignal = 0;
+int requestedExitCode = EXIT_SUCCESS;
 
 int main(string[] cliArgs) {
 	// Application Start Time - used during monitor loop to detail how long it has been running for
@@ -108,6 +112,10 @@ int main(string[] cliArgs) {
 		performSynchronisedExitProcess("exitScope");
 		// Setup signal handling for the exit scope
 		setupExitScopeSignalHandler();
+		// Preserve signal-driven exit semantics after orderly shutdown completes
+		if (shutdownRequested()) {
+			exit(requestedExitCode);
+		}
 	}
 	
 	scope(failure) {
@@ -117,6 +125,10 @@ int main(string[] cliArgs) {
 		performSynchronisedExitProcess("failureScope");
 		// Setup signal handling for the exit scope
 		setupExitScopeSignalHandler();
+		// Preserve signal-driven exit semantics after orderly shutdown completes
+		if (shutdownRequested()) {
+			exit(requestedExitCode);
+		}
 	}
 	
 	// Read in application options as passed in
@@ -1179,6 +1191,11 @@ int main(string[] cliArgs) {
 			MonoTime lastGitHubCheckTime = MonoTime.currTime();
 			
 			while (performFileSystemMonitoring) {
+				if (shutdownRequested()) {
+					addShutdownTelemetry("monitor loop detected shutdown request before processing new work");
+					performFileSystemMonitoring = false;
+					break;
+				}
 				// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file - the disk may have been ejected ..
 				checkForNoMountScenario();
 			
@@ -1394,7 +1411,10 @@ int main(string[] cliArgs) {
 							// Not only is this really bad application behaviour, for this client, this means the application is constantly writing to disk, thus attempting to upload file changes.
 							// Unfortunately Obsidian on Linux does not provide a built-in way to disable atomic saves or switch to a backup-copy method via configuration.
 							if (appConfig.getValueBool("delay_inotify_processing")) {
-								Thread.sleep(dur!("seconds")(to!int(appConfig.getValueLong("inotify_delay"))));
+								if (sleepInterruptibly(dur!("seconds")(to!int(appConfig.getValueLong("inotify_delay"))), "delay_inotify_processing sleep")) {
+									performFileSystemMonitoring = false;
+									break;
+								}
 							}
 							
 							// Start the filesystem monitor (inotify) worker and wait for inotify event
@@ -1418,11 +1438,13 @@ int main(string[] cliArgs) {
 						// ALWAYS wait for FS worker, but only track webhook/websocket if NOT '--upload-only'
 						int res = 1;
 						bool onlineSignal = false;
+						bool shutdownDetectedDuringWait = false;
 
-						if (appConfig.getValueBool("upload_only")) {
-							receiveTimeout(sleepTime, (int msg) { res = msg; });
-						} else {
-							receiveTimeout(sleepTime, (int msg) { res = msg; }, (ulong _) { onlineSignal = true; });
+						shutdownDetectedDuringWait = waitForMonitorEventsInterruptibly(sleepTime, appConfig.getValueBool("upload_only"), res, onlineSignal);
+						if (shutdownDetectedDuringWait) {
+							performFileSystemMonitoring = false;
+							addShutdownTelemetry("monitor wait exited early due to shutdown request");
+							break;
 						}
 
 						// Debug logging of worker status
@@ -1493,7 +1515,11 @@ int main(string[] cliArgs) {
 						}
 					} else {
 						// no hooks available, nothing to check
-						Thread.sleep(sleepTime);
+						if (sleepInterruptibly(sleepTime, "monitor idle sleep")) {
+							performFileSystemMonitoring = false;
+							addShutdownTelemetry("monitor idle sleep exited early due to shutdown request");
+							break;
+						}
 					}
 				}
 			}
@@ -1854,60 +1880,117 @@ void setupSignalHandler() {
 
 // Catch SIGINT (CTRL-C), SIGTERM (kill) and SIGSEGV (invalid memory access), handle rapid repeat CTRL-C presses
 extern(C) nothrow @nogc @system void exitViaSignalHandler(int signo) {
+	enum firstSignalMsg = "
+Received termination signal, attempting to cleanly shutdown application
+";
+	enum repeatSignalMsg = "
+Termination signal received again, forcing immediate exit
+";
+	enum segvMsg = "
+FATAL: Segmentation fault (SIGSEGV). The application encountered an internal error and will now exit in an unclean manner.
+";
 
 	// Update global exitHandlerTriggered flag so that objects that depend on this know we are shutting down
 	exitHandlerTriggered = true;
-	
-	// Catch the generation of SIGSEV post SIGINT or SIGTERM event
-    if (signo == SIGSEGV) {
-		// Was SIGTERM used?
-		if (!sigtermHandlerTriggered) {
-			// No .. so most likely SIGINT (CTRL-C) - lets check
-			if (signo == SIGINT) {
-				// Yes - SIGINT was used
-				printf("Due to a termination signal, internal processing stopped abruptly. The application will now exit in a unclean manner.\n");
-				_Exit(130);
-			} else {
-				// Confirmed as SIGSEGV, but not SIGINT and SIGTERM not used
-				printf("FATAL: Segmentation fault (SIGSEGV). The application encountered an internal error and will now exit in a unclean manner.\n");
-				_Exit(139);
-			}
-		} else {
-			// High probability of being shutdown by systemd, for example: systemctl --user stop onedrive
-			// Exit in a manner that does not trigger an exit failure in systemd
-			_Exit(0);
-		}
-	}
-	
+	performFileSystemMonitoring = false;
+	terminationSignal = signo;
+
 	if (signo == SIGTERM) {
 		// systemd will use SIGTERM to terminate a running process
 		sigtermHandlerTriggered = true;
+		requestedExitCode = 0;
+	} else if (signo == SIGINT) {
+		requestedExitCode = 130;
+	} else {
+		requestedExitCode = 128 + signo;
+	}
+
+	// SIGSEGV is fatal - do not attempt a complex shutdown path from the signal handler
+	if (signo == SIGSEGV) {
+		requestedExitCode = 139;
+		write(STDERR_FILENO, segvMsg.ptr, segvMsg.length);
+		_exit(requestedExitCode);
 	}
 
 	if (shutdownInProgress) {
-		return;  // Ignore subsequent presses
-	} else {
-		// Disable logging suppression
-		appConfig.suppressLoggingOutput = false;
-		// Flag we are shutting down
-		shutdownInProgress = true;
-		
-		try {
-			assumeNoGC ( () {
-				// Log that a termination signal was caught
-				addLogEntry("\nReceived termination signal, attempting to cleanly shutdown application");
-				// Try and shutdown in a safe and synchronised manner
-				performSynchronisedExitProcess("SIGINT-SIGTERM-HANDLER");
-			})();
-		} catch (Exception e) {
-			// Any output here will cause a GC allocation
-			// - Error: `@nogc` function `main.exitHandler` cannot call non-@nogc function `std.stdio.writeln!string.writeln`
-			// - Error: cannot use operator `~` in `@nogc` function `main.exitHandler`
-			// writeln("Exception during shutdown: " ~ e.msg);
-		}
-		// Exit the process with the provided exit code
-		_Exit(signo);
+		write(STDERR_FILENO, repeatSignalMsg.ptr, repeatSignalMsg.length);
+		_exit(requestedExitCode);
 	}
+
+	shutdownInProgress = true;
+	write(STDERR_FILENO, firstSignalMsg.ptr, firstSignalMsg.length);
+}
+
+bool shutdownRequested() {
+	return shutdownInProgress || exitHandlerTriggered;
+}
+
+void addShutdownTelemetry(string message) {
+	addLogEntry("SHUTDOWN TRACE: " ~ message, ["debug"]);
+}
+
+bool sleepInterruptibly(Duration totalSleep, string reason) {
+	immutable auto sleepPollInterval = dur!"seconds"(1);
+	auto remaining = totalSleep;
+
+	while (remaining > Duration.zero) {
+		if (shutdownRequested()) {
+			addShutdownTelemetry(reason ~ " interrupted due to shutdown request");
+			return true;
+		}
+
+		auto sleepSlice = (remaining > sleepPollInterval) ? sleepPollInterval : remaining;
+		Thread.sleep(sleepSlice);
+		remaining -= sleepSlice;
+	}
+
+	return shutdownRequested();
+}
+
+bool waitForMonitorEventsInterruptibly(Duration totalWait, bool uploadOnly, ref int workerStatus, ref bool onlineSignal) {
+	immutable auto waitPollInterval  = dur!"seconds"(1);
+	auto remaining = totalWait;
+
+	while (remaining > Duration.zero) {
+		if (shutdownRequested()) {
+			addShutdownTelemetry("receiveTimeout wait interrupted due to shutdown request");
+			return true;
+		}
+
+		auto waitSlice = (remaining > waitPollInterval) ? waitPollInterval : remaining;
+		bool workerMessageReceived = false;
+		bool onlineSignalReceived = false;
+
+		if (uploadOnly) {
+			receiveTimeout(waitSlice, (int msg) {
+				workerStatus = msg;
+				workerMessageReceived = true;
+			});
+		} else {
+			receiveTimeout(waitSlice,
+				(int msg) {
+					workerStatus = msg;
+					workerMessageReceived = true;
+				},
+				(ulong _) {
+					onlineSignal = true;
+					onlineSignalReceived = true;
+				}
+			);
+		}
+
+		if (workerMessageReceived || onlineSignalReceived) {
+			return false;
+		}
+		remaining -= waitSlice;
+	}
+
+	if (shutdownRequested()) {
+		addShutdownTelemetry("receiveTimeout wait completed with shutdown request pending");
+		return true;
+	}
+
+	return false;
 }
 
 // Handle application exit
@@ -1917,6 +2000,8 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 		try {
 			// Log who called this function
 			if (debugLogging) {addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);}
+			addShutdownTelemetry("performSynchronisedExitProcess entered by scope: " ~ (scopeCaller.length ? scopeCaller : "unknown"));
+			addShutdownTelemetry("planned final exit code: " ~ to!string(requestedExitCode) ~ ", termination signal: " ~ to!string(terminationSignal));
 			// Remove Desktop integration
 			if(performFileSystemMonitoring) {
 				// Was desktop integration enabled?
@@ -1925,6 +2010,7 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 					attemptFileManagerIntegrationRemoval();
 				}
 			}
+			
 			// Shutdown the OneDrive Webhook instance
 			shutdownOneDriveWebhook();
 			// Shutdown the OneDrive WebSocket instance
@@ -1932,10 +2018,8 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			// Shutdown any local filesystem monitoring
 			shutdownFilesystemMonitor();
 			// Shutdown the sync engine
-			if (scopeCaller == "SIGINT-SIGTERM-HANDLER") {
-				// Wait for all parallel jobs that depend on the database being available to complete
-				addLogEntry("Waiting for any existing upload|download process to complete");
-			}
+			// Wait for all parallel jobs that depend on the database being available to complete
+			addLogEntry("Waiting for any existing upload|download process to complete");
 			shutdownSyncEngine();
 			// Release all CurlEngine instances
 			releaseAllCurlInstances();
