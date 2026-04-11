@@ -492,6 +492,18 @@ class OneDriveApi {
 		// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
 		if (appConfig.getValueBool("use_intune_sso")) {
 			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
+			if (appConfig.intuneAccountDetails.empty) {
+				if (exists(appConfig.intuneAccountDetailsFilePath)) {
+					try {
+						appConfig.intuneAccountDetails = strip(readText(appConfig.intuneAccountDetailsFilePath));
+					} catch (FileException exception) {
+						displayFileSystemErrorMessage(exception.msg, "OneDriveApi.generateNewAccessToken", appConfig.intuneAccountDetailsFilePath);
+					}
+				}
+				if (appConfig.intuneAccountDetails.empty) {
+					appConfig.intuneAccountDetails = recoverIntuneAccountDataFromBroker(true);
+				}
+			}
 			// Do we have a saved account file?
 			if (!exists(appConfig.intuneAccountDetailsFilePath)) {
 				// No file exists locally
@@ -504,7 +516,7 @@ class OneDriveApi {
 					// - accessToken
 					// - account
 					// - expiresOn
-					if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
+					if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasUsableIntuneAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
 						// Details exist
 						processIntuneResponse(intuneBrokerJSONData);
 						// Return that we are authenticated
@@ -530,8 +542,7 @@ class OneDriveApi {
 						// No .. remove the file and perform the interactive authentication
 						safeRemove(appConfig.intuneAccountDetailsFilePath);
 						// Attempt interactive authentication
-						authorise();
-						return true;
+						return authorise();
 					} else {
 						// We have loaded some Intune Account details, try and use them
 						auto intuneAuthResult = acquire_token_silently(appConfig.intuneAccountDetails, appConfig.getValueString("application_id"));
@@ -540,17 +551,31 @@ class OneDriveApi {
 						if ((intuneBrokerJSONData.type() == JSONType.object)) {
 							// Does the JSON data have the required authentication elements:
 							// - accessToken
-							// - account
+							// - account (embedded or recoverable via broker)
 							// - expiresOn
-							if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
+							if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasUsableIntuneAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
 								// Details exist
 								processIntuneResponse(intuneBrokerJSONData);
 								// Return that we are authenticated
 								return true;
 							} else {
-								// no ... expected values not available
-								addLogEntry("Required JSON elements are not present in the Intune JSON response");
-								return false;
+								// Broker 3.x can return an error payload for silent auth even when account details are valid.
+								// Fall back to the interactive broker flow rather than hard failing.
+								if (debugLogging) {addLogEntry("Cached Intune silent authentication failed or returned an incomplete broker token response - falling back to interactive Intune authentication", ["debug"]);}
+								auto interactiveAuthResult = acquire_token_interactive(appConfig.getValueString("application_id"));
+								JSONValue interactiveBrokerJSONData = interactiveAuthResult.brokerTokenResponse;
+								if ((interactiveBrokerJSONData.type() == JSONType.object)) {
+									if ((hasAccessTokenData(interactiveBrokerJSONData)) && (hasUsableIntuneAccountData(interactiveBrokerJSONData)) && (hasExpiresOn(interactiveBrokerJSONData))) {
+										processIntuneResponse(interactiveBrokerJSONData);
+										return true;
+									} else {
+										addLogEntry("Required JSON elements are not present in the Intune JSON response");
+										return false;
+									}
+								} else {
+									addLogEntry("Invalid JSON Intune JSON response when attempting fallback interactive authentication");
+									return false;
+								}
 							}
 						} else {
 							// No .. remove the file and perform the interactive authentication
@@ -809,6 +834,52 @@ class OneDriveApi {
 		}
 	}
 	
+	// Does the Intune broker JSON already contain an 'account' object, or can we recover one from the broker?
+	bool hasUsableIntuneAccountData(JSONValue intuneBrokerJSONData) {
+		// Existing broker response already contains an account object
+		if (intuneBrokerJSONData.type() == JSONType.object) {
+			if (("account" in intuneBrokerJSONData.object) !is null) {
+				auto accountPtr = "account" in intuneBrokerJSONData.object;
+				if (accountPtr !is null) {
+					if ((*accountPtr).type() == JSONType.object) {
+						return true;
+					}
+				}
+			}
+		}
+
+		// Attempt to recover account details from the broker
+		string recoveredAccountJson = recoverIntuneAccountDataFromBroker();
+		return !recoveredAccountJson.empty;
+	}
+
+	// Recover broker account details for reuse when brokerTokenResponse does not embed "account"
+	string recoverIntuneAccountDataFromBroker(bool forceBrokerRefresh = false) {
+		// If requested, always refresh account details from the live broker state
+		if (!forceBrokerRefresh) {
+			// If we already have valid cached account details in memory, reuse them
+			if (!appConfig.intuneAccountDetails.empty) {
+				return appConfig.intuneAccountDetails;
+			}
+		}
+
+		// Ask the broker for the cached account
+		string recoveredAccountJson = get_first_broker_account_json(appConfig.getValueString("application_id"));
+		if (!recoveredAccountJson.empty) {
+			if (debugLogging) {
+				if (forceBrokerRefresh) {
+					addLogEntry("Refreshed Intune account details from Microsoft Identity Broker", ["debug"]);
+				} else {
+					addLogEntry("Recovered Intune account details from Microsoft Identity Broker", ["debug"]);
+				}
+			}
+			appConfig.intuneAccountDetails = recoveredAccountJson;
+			return recoveredAccountJson;
+		}
+
+		return "";
+	}
+
 	// Process Intune JSON response data
 	void processIntuneResponse(JSONValue intuneBrokerJSONData) {
 		// Set this function name
@@ -829,8 +900,25 @@ class OneDriveApi {
 		// Do we print the current access token
 		debugOutputAccessToken();
 		
-		// In order to support silent renewal of the access token, when the access token expires, we must store the Intune account data
-		appConfig.intuneAccountDetails = to!string(intuneBrokerJSONData["account"]);
+		// In order to support silent renewal of the access token, store the Intune account data.
+		// Broker 3.0.1 interactive responses may not embed an "account" object, so recover it from the broker if needed.
+		if (("account" in intuneBrokerJSONData.object) !is null) {
+			appConfig.intuneAccountDetails = to!string(intuneBrokerJSONData["account"]);
+			if (debugLogging) {
+				addLogEntry("Using embedded Intune account details from brokerTokenResponse", ["debug"]);
+			}
+		} else {
+			if (debugLogging) {
+				addLogEntry("No embedded Intune account details present in brokerTokenResponse - recovering from Microsoft Identity Broker", ["debug"]);
+			}
+			appConfig.intuneAccountDetails = recoverIntuneAccountDataFromBroker(true);
+		}
+
+		// If we still do not have account details, do not write an empty file
+		if (appConfig.intuneAccountDetails.empty) {
+			addLogEntry("Unable to recover Intune account details required for future silent authentication");
+			return;
+		}
 		
 		// try and update the 'intune_account' file on disk for reuse later
 		try {
@@ -1412,14 +1500,25 @@ class OneDriveApi {
 			if ((intuneBrokerJSONData.type() == JSONType.object)) {
 				// Does the JSON data have the required renewal elements:
 				// - accessToken
-				// - account
+				// - account (embedded or recoverable via broker)
 				// - expiresOn
-				if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
+				if ((hasAccessTokenData(intuneBrokerJSONData)) && (hasUsableIntuneAccountData(intuneBrokerJSONData)) && (hasExpiresOn(intuneBrokerJSONData))) {
 					// Details exist
 					processIntuneResponse(intuneBrokerJSONData);
 				} else {
-					// no ... expected values not available
-					addLogEntry("Required Intune JSON elements are not present in the Intune JSON response");
+					// Broker 3.x can return an error payload for silent renewal; fall back to interactive broker auth.
+					if (debugLogging) {addLogEntry("Silent Intune access token renewal failed or returned an incomplete broker token response - falling back to interactive Intune authentication", ["debug"]);}
+					auto interactiveAuthResult = acquire_token_interactive(appConfig.getValueString("application_id"));
+					JSONValue interactiveBrokerJSONData = interactiveAuthResult.brokerTokenResponse;
+					if ((interactiveBrokerJSONData.type() == JSONType.object)) {
+						if ((hasAccessTokenData(interactiveBrokerJSONData)) && (hasUsableIntuneAccountData(interactiveBrokerJSONData)) && (hasExpiresOn(interactiveBrokerJSONData))) {
+							processIntuneResponse(interactiveBrokerJSONData);
+						} else {
+							addLogEntry("Required Intune JSON elements are not present in the Intune JSON response");
+						}
+					} else {
+						addLogEntry("Invalid Intune JSON response when attempting fallback interactive access token renewal");
+					}
 				}
 			} else {
 				// Not a valid JSON response
