@@ -856,7 +856,7 @@ class SyncEngine {
 			&& appConfig.getValueBool("monitor")
 			&& appConfig.getValueLong("monitor_fullscan_frequency") > 0
 			&& !appConfig.fullScanTrueUpRequired
-			&& !generateSimulatedDeltaResponse;
+			&& !generatedSimulatedDeltaResponse;
 	}
 	
 	// Perform a sync of the OneDrive Account
