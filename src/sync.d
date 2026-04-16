@@ -3155,7 +3155,7 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("Requested local path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);}
 					mkdirRecurse(newItemPath);
 					
-					// Log that the creation was successful
+					// Log that the local directory creation was successful
 					if (verboseLogging) {addLogEntry("Created local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
 					
 					// Has the user disabled the setting of filesystem permissions?
@@ -3182,7 +3182,7 @@ class SyncEngine {
 					displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath);
 				}
 			} else {
-				// Log that creation is not occuring due to --dry-run
+				// Log that the local directory creation is not occurring due to --dry-run
 				if (verboseLogging) {addLogEntry("DRY-RUN: Not creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
 				// we dont create the directory, but we need to track that we 'faked it'
 				idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
