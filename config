@@ -100,6 +100,10 @@
 ## This configuration option controls how often a full scan of your data is performed in monitor mode.
 #monitor_fullscan_frequency = "12"
 
+## Authoritative cleanup policy in --monitor mode when using --download-only --cleanup-local-files.
+## Valid values: monitor_and_signal | monitor_interval | monitor_fullscan_frequency
+#monitor_authoritative_sync = "monitor_fullscan_frequency"
+
 ## This setting determines how often the sync loop runs in --monitor mode.
 #monitor_interval = "300"
 

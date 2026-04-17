@@ -1606,6 +1606,10 @@ void oneDriveOnlineCallback() {
 	// If we are doing --upload-only however .. we need to 'ignore' online change
 	if (!appConfig.getValueBool("upload_only")) {
 		// We are not doing an --upload-only scenario .. sync online change --> local
+		appConfig.monitorSyncTriggeredByApiSignal = true;
+		scope(exit) {
+			appConfig.monitorSyncTriggeredByApiSignal = false;
+		}
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
 	}
 	if (appConfig.getValueBool("monitor")) {

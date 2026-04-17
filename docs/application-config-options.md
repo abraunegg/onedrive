@@ -40,6 +40,7 @@ Before reading this document, please ensure you are running application version 
   - [local_first](#local_first)
   - [log_dir](#log_dir)
   - [max_curl_idle](#max_curl_idle)
+  - [monitor_authoritative_sync](#monitor_authoritative_sync)
   - [monitor_fullscan_frequency](#monitor_fullscan_frequency)
   - [monitor_interval](#monitor_interval)
   - [monitor_log_frequency](#monitor_log_frequency)
@@ -214,7 +215,7 @@ _**CLI Option Use:**_ `--cleanup-local-files`
 > This configuration option can only be used with `--download-only`. It cannot be used with any other application option.
 
 > [!NOTE]
-> In `--monitor` mode, when `monitor_fullscan_frequency` is greater than `0`, local deletion cleanup for `--download-only --cleanup-local-files` is performed on the configured full-scan cadence. Between those authoritative cleanup passes, remote creates and updates are still processed, but online deletions can remain locally until the next full-scan cycle.
+> In `--monitor` mode, authoritative cleanup cadence for `--download-only --cleanup-local-files` is configured by `monitor_authoritative_sync`.
 
 ### connect_timeout
 _**Description:**_ This configuration setting manages the TCP connection timeout duration in seconds for HTTPS connections to Microsoft OneDrive when using the curl library (CURLOPT_CONNECTTIMEOUT).
@@ -564,6 +565,32 @@ _**CLI Option Use:**_ *None - this is a config file option only*
 > [!IMPORTANT]
 > It is strongly recommended not to modify this setting without conducting thorough network testing. Changing this option may lead to unexpected behaviour or connectivity issues, especially if upstream network devices handle idle connections in non-standard ways.
 
+### monitor_authoritative_sync
+_**Description:**_ This configuration option controls the authoritative cleanup behavior in `--monitor` mode when using `--download-only --cleanup-local-files`.
+
+_**Value Type:**_ String
+
+_**Default Value:**_ `monitor_fullscan_frequency`
+
+_**Config Example:**_ `monitor_authoritative_sync = "monitor_fullscan_frequency"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+_**Valid Values:**_
+```
+monitor_and_signal
+monitor_interval
+monitor_fullscan_frequency
+```
+
+> [!NOTE]
+> This option is only applicable when using `--monitor --download-only --cleanup-local-files`. In all other scenarios, this setting is ignored.
+
+> [!NOTE]
+> `monitor_and_signal` performs authoritative cleanup on each monitor interval and each API signal.
+> `monitor_interval` performs authoritative cleanup on each monitor interval only.
+> `monitor_fullscan_frequency` performs authoritative cleanup based on `monitor_fullscan_frequency` cadence and is the default.
+
 ### monitor_fullscan_frequency
 _**Description:**_ This configuration option controls the number of 'monitor_interval' iterations between when a full scan of your data is performed to ensure data integrity and consistency.
 
@@ -579,7 +606,7 @@ _**CLI Option Use:**_ `--monitor-fullscan-frequency '24'`
 > By default without configuration, 'monitor_fullscan_frequency' is set to 12. In this default state, this means that a full scan is performed every 'monitor_interval' x 'monitor_fullscan_frequency' = 3600 seconds. This setting is only applicable when running in `--monitor` mode. Setting this configuration option to '0' will *disable* the full scan of your data online.
 
 > [!NOTE]
-> When using `--download-only --cleanup-local-files` in `--monitor` mode, this setting also controls how often authoritative local delete cleanup is performed. If the value is greater than `0`, remote delete convergence is eventually consistent and can lag until the next full-scan interval. If set to `0`, authoritative cleanup is performed every monitor sync cycle.
+> This setting controls cleanup cadence only when `monitor_authoritative_sync = "monitor_fullscan_frequency"` in `--monitor --download-only --cleanup-local-files` mode. A value greater than `0` defers authoritative cleanup to that cadence; `0` makes cleanup authoritative on every monitor sync cycle.
 
 ### monitor_interval
 _**Description:**_ This configuration setting determines how often the synchronisation loops run in --monitor mode, measured in seconds. When this time period elapses, the client will check for online changes in Microsoft OneDrive, conduct integrity checks on local data and scan the local 'sync_dir' to identify any new content that hasn't been uploaded yet.

@@ -142,7 +142,7 @@ By default, the client uses Microsoft Graph’s `/delta` to retrieve changes eff
 ### When the client deliberately generates a delta
 * Some national cloud deployments where a needed delta endpoint/feature isn’t available. Capabilities differ by resource and cloud; when a required delta isn’t available, we walk the tree and synthesise the change set.
 * The use of `--single-directory` scope. A naïve drive-level /delta can include changes outside your intended scope. Generating a delta ensures only the in-scope subtree is considered.
-* The use of `--download-only --cleanup-local-files`. Raw /delta may replay online delete/replace churn that would remove valid local files you intend to keep. The client therefore uses generated delta for authoritative cleanup passes. In `--monitor` mode with `monitor_fullscan_frequency > 0`, fast monitor passes use native `/delta` and defer local delete cleanup until the next authoritative full-scan pass.
+* The use of `--download-only --cleanup-local-files`. Raw /delta may replay online delete/replace churn that would remove valid local files you intend to keep. The client therefore uses generated delta for authoritative cleanup passes. In `--monitor` mode, the authoritative cadence is controlled by `monitor_authoritative_sync` and may defer local delete cleanup between authoritative passes.
 * The use of 'Shared Folders'. Calling `/delta` on a shared path can be rooted at the owner’s drive, so your filters may not match what you see as “the shared folder”. Generated delta walks the shared subtree and normalises paths so the queue reflects what’s truly shared with you.
 
 ## File conflict handling - default operational modes

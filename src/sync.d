@@ -840,12 +840,29 @@ class SyncEngine {
 			return true;
 		}
 
-		// If monitor_fullscan_frequency is disabled, preserve current always-authoritative behavior.
+		// This policy is only meaningful for --monitor --download-only --cleanup-local-files.
+		if (!appConfig.getValueBool("download_only")) {
+			return true;
+		}
+
+		string policy = appConfig.getValueString("monitor_authoritative_sync");
+
+		// Mode 1: authoritative cleanup on each monitor interval and API signal.
+		if (policy == "monitor_and_signal") {
+			return true;
+		}
+
+		// Mode 2: authoritative cleanup on each monitor interval only.
+		if (policy == "monitor_interval") {
+			return !appConfig.monitorSyncTriggeredByApiSignal;
+		}
+
+		// Mode 3 (default): authoritative cleanup on monitor_fullscan_frequency cadence.
+		// If cadence is disabled, preserve always-authoritative behavior.
 		if (appConfig.getValueLong("monitor_fullscan_frequency") == 0) {
 			return true;
 		}
 
-		// In monitor mode, only run authoritative cleanup on the configured full-scan interval.
 		return appConfig.fullScanTrueUpRequired;
 	}
 
