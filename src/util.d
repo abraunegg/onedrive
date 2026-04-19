@@ -49,6 +49,8 @@ import curlEngine;
 __gshared string deviceName;
 // Global flag for SIGINT (CTRL-C) and SIGTERM (kill) state
 __gshared bool exitHandlerTriggered = false;
+// Global flag to indicate file transfers are occuring
+__gshared bool fileTransferInProgress = false;
 // Global variable for when we last uploaded something or made an online change from a local inotify event
 __gshared MonoTime lastLocalWrite;
 
