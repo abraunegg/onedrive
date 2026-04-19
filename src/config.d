@@ -522,6 +522,8 @@ class ApplicationConfig {
 		// - Enabling this option will add function processing times to the console output
 		// - This then enables tracking of where the application is spending most amount of time when processing data when users have questions re performance
 		boolValues["display_processing_time"] = false;
+		// force the abort of session file transfer
+		boolValues["force_xfer_abort"] = false;
 		
 		// Function variables
 		string configDirBase;
@@ -1788,6 +1790,7 @@ class ApplicationConfig {
 			addLogEntry("Config option 'display_memory'               = " ~ to!string(getValueBool("display_memory")));
 			addLogEntry("Config option 'display_sync_options'         = " ~ to!string(getValueBool("display_sync_options")));
 			addLogEntry("Config option 'display_processing_time'      = " ~ to!string(getValueBool("display_processing_time")));
+			addLogEntry("Config option 'force_xfer_abort'             = " ~ to!string(getValueBool("force_xfer_abort")));
 		}
 		
 		// Close out config output
