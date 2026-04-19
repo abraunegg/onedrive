@@ -1289,6 +1289,7 @@ class SyncEngine {
 			getDeltaDataOneDriveApiInstance.initialise();
 
 			// Get the /delta changes via the OneDrive API
+			// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need this while loop
 			while (true) {
 				// Check if exitHandlerTriggered is true
 				if (exitHandlerTriggered) {
@@ -2103,7 +2104,14 @@ class SyncEngine {
 		long batchElementCount = array.length;
 		MonoTime jsonProcessingStartTime;
 
+		// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need to check the event in the foreach loop
 		foreach (i, onedriveJSONItem; array.enumerate) {
+			// Check if exitHandlerTriggered is true
+			if (exitHandlerTriggered) {
+				// break out of the 'while (true)' loop
+				break;
+			}
+		
 			// Use the JSON elements rather can computing a DB struct via makeItem()
 			long elementCount = i +1;
 			jsonProcessingStartTime = MonoTime.currTime();
@@ -2715,6 +2723,13 @@ class SyncEngine {
 			processedCount++;
 		}
 		
+		// Was exitHandlerTriggered flagged
+		if (exitHandlerTriggered) {
+			// exitHandlerTriggered triggered
+			if (debugLogging) {addLogEntry("Not processing further JSON items due to application exit request", ["debug"]);}
+			return;
+		}
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -2760,13 +2775,19 @@ class SyncEngine {
 			idsToDelete = [];
 		}
 		
-		// Are there any items to download post fetching and processing the /delta data?
-		if (!fileJSONItemsToDownload.empty) {
-			// There are elements to download
-			addLogEntry("Number of items to download from Microsoft OneDrive: " ~ to!string(fileJSONItemsToDownload.length));
-			downloadOneDriveItems();
-			// Cleanup array memory
-			fileJSONItemsToDownload = [];
+		// Was exitHandlerTriggered flagged
+		if (!exitHandlerTriggered) {
+			// Are there any items to download post fetching and processing the /delta data?
+			if (!fileJSONItemsToDownload.empty) {
+				// There are elements to download
+				addLogEntry("Number of items to download from Microsoft OneDrive: " ~ to!string(fileJSONItemsToDownload.length));
+				downloadOneDriveItems();
+				// Cleanup array memory
+				fileJSONItemsToDownload = [];
+			}
+		} else {
+			// exitHandlerTriggered triggered
+			if (debugLogging) {addLogEntry("Not processing items to download due to application exit request", ["debug"]);}
 		}
 		
 		// Are there any skipped items still?
@@ -2775,13 +2796,19 @@ class SyncEngine {
 			skippedItems.clear();
 		}
 		
-		// If deltaLinkCache.latestDeltaLink is not empty, update the deltaLink in the database for this driveId so that we can reuse this now that jsonItemsToProcess has been fully processed
-		if (!deltaLinkCache.latestDeltaLink.empty) {
-			if (debugLogging) {addLogEntry("Updating completed deltaLink for driveID " ~ deltaLinkCache.driveId ~ " in DB to: " ~ deltaLinkCache.latestDeltaLink, ["debug"]);}
-			itemDB.setDeltaLink(deltaLinkCache.driveId, deltaLinkCache.itemId, deltaLinkCache.latestDeltaLink);
-			
-			// Now that the DB is updated, when we perform the last examination of the most recent online data, cache this so this can be obtained this from memory
-			cacheLatestDeltaLink(deltaLinkInfo, deltaLinkCache.driveId, deltaLinkCache.latestDeltaLink);		
+		// Was exitHandlerTriggered flagged
+		if (!exitHandlerTriggered) {
+			// If deltaLinkCache.latestDeltaLink is not empty, update the deltaLink in the database for this driveId so that we can reuse this now that jsonItemsToProcess has been fully processed
+			if (!deltaLinkCache.latestDeltaLink.empty) {
+				if (debugLogging) {addLogEntry("Updating completed deltaLink for driveID " ~ deltaLinkCache.driveId ~ " in DB to: " ~ deltaLinkCache.latestDeltaLink, ["debug"]);}
+				itemDB.setDeltaLink(deltaLinkCache.driveId, deltaLinkCache.itemId, deltaLinkCache.latestDeltaLink);
+				
+				// Now that the DB is updated, when we perform the last examination of the most recent online data, cache this so this can be obtained this from memory
+				cacheLatestDeltaLink(deltaLinkInfo, deltaLinkCache.driveId, deltaLinkCache.latestDeltaLink);		
+			}
+		} else {
+			// exitHandlerTriggered triggered
+			if (debugLogging) {addLogEntry("Not updating deltaLink due to application exit request to preserve prior deltaLink state", ["debug"]);}
 		}
 		
 		// Display function processing time if configured to do so
@@ -3623,6 +3650,16 @@ class SyncEngine {
 		}
 	}
 	
+	// Compute path from JSON
+	string computePathFromJSON(JSONValue onedriveJSONItem){
+		// Data from JSON file
+		string downloadItemName = onedriveJSONItem["name"].str;
+		string downloadDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+		string downloadParentId = onedriveJSONItem["parentReference"]["id"].str;
+		string newItemPath = computeItemPath(downloadDriveId, downloadParentId) ~ "/" ~ downloadItemName;
+		return newItemPath;
+	}
+		
 	// Download new/changed file items as identified
 	void downloadOneDriveItems() {
 		// Function Start Time
@@ -3635,11 +3672,19 @@ class SyncEngine {
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
-	
+		
+		// Was exitHandlerTriggered flagged
+		if (exitHandlerTriggered) {
+			// exitHandlerTriggered triggered
+			if (debugLogging) {addLogEntry("Not processing items to download due to application exit request", ["debug"]);}
+			return;
+		}
+		
 		// Lets deal with all the JSON items that need to be downloaded in a batch process
 		size_t batchSize = to!int(appConfig.getValueLong("threads"));
 		long batchCount = (fileJSONItemsToDownload.length + batchSize - 1) / batchSize;
 		long batchesProcessed = 0;
+		string[] filesDownloaded;
 		
 		// Transfer order
 		string transferOrder = appConfig.getValueString("transfer_order");
@@ -3663,10 +3708,51 @@ class SyncEngine {
 		}
 		
 		// Process fileJSONItemsToDownload
+		// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need to check the event in the foreach loop
 		foreach (chunk; fileJSONItemsToDownload.chunks(batchSize)) {
+			// There are files to transfer
+			fileTransferInProgress = true;
+		
+			// Check if exitHandlerTriggered is true
+			if (exitHandlerTriggered) {
+				// break out of the foreach loop
+				break;
+			}
+		
 			// send an array containing 'appConfig.getValueLong("threads")' JSON items to download
 			downloadOneDriveItemsInParallel(chunk);
+			
+			// Track attempted uploads. The 'chunks' are JSON entries, so we need to extract the path from the JSON elements
+			foreach (onedriveJSONItem; chunk) {
+				filesDownloaded ~= computePathFromJSON(onedriveJSONItem);
+			}
 		}
+		
+		// Was exitHandlerTriggered flagged
+		if (exitHandlerTriggered) {
+			// exitHandlerTriggered triggered
+			if (debugLogging) {addLogEntry("Aborting further file download due to application exit request", ["debug"]);}
+			
+			// Need to add this to fileDownloadFailures to capture at the end
+			bool[string] downloadedSet;
+			foreach (file; filesDownloaded) {
+				downloadedSet[file] = true;
+			}
+			
+			// Find files that were meant to be downloaded, but were not tracked as downloaded
+			foreach (onedriveJSONItem; fileJSONItemsToDownload) {
+				string file = computePathFromJSON(onedriveJSONItem);
+				if (file !in downloadedSet) {
+					fileDownloadFailures ~= file;
+				}
+			}
+		}
+		
+		// Update global flag that file transfers are complete
+		fileTransferInProgress = false;
+		
+		// Clear filesDownloaded
+		filesDownloaded = [];
 		
 		// For this set of items, perform a DB PASSIVE checkpoint
 		itemDB.performCheckpoint("PASSIVE");
@@ -4081,21 +4167,35 @@ class SyncEngine {
 							}
 						}	// end of (!disableDownloadValidation)
 					} else {
-						// File does not exist locally ... so the download failed
-						if ((verboseLogging)||(debugLogging)) {
-							// If we are doing verbose logging, 
-							addLogEntry("ERROR: Download failed (file not present after download): " ~ newItemPath ~ " | expectedSize=" ~ to!string(jsonFileSize) ~ " | resumeOffset=" ~ to!string(resumeOffset), ["verbose"]);
+					
+						// Was exitHandlerTriggered flagged
+						if (!exitHandlerTriggered) {
+							// File does not exist locally ... so the download failed
+							if ((verboseLogging)||(debugLogging)) {
+								// If we are doing verbose logging, 
+								addLogEntry("ERROR: Download failed (file not present after download): " ~ newItemPath ~ " | expectedSize=" ~ to!string(jsonFileSize) ~ " | resumeOffset=" ~ to!string(resumeOffset), ["verbose"]);
+							} else {
+								addLogEntry("ERROR: File failed to download. Re-run with --verbose for additional diagnostic information to assist with troubleshooting.");
+							}
+							
+							// Was this item previously in-sync with the local system?
+							// We previously searched for the file in the DB, we need to use that record
+							if (fileFoundInDB) {
+								// Purge DB record so that the deleted local file does not cause an online deletion
+								// In a --dry-run scenario, this is being done against a DB copy
+								addLogEntry("Removing existing DB record due to failed file download.");
+								itemDB.deleteById(databaseItem.driveId, databaseItem.id);
+							}
 						} else {
-							addLogEntry("ERROR: File failed to download. Re-run with --verbose for additional diagnostic information to assist with troubleshooting.");
-						}
-						
-						// Was this item previously in-sync with the local system?
-						// We previously searched for the file in the DB, we need to use that record
-						if (fileFoundInDB) {
-							// Purge DB record so that the deleted local file does not cause an online deletion
-							// In a --dry-run scenario, this is being done against a DB copy
-							addLogEntry("Removing existing DB record due to failed file download.");
-							itemDB.deleteById(databaseItem.driveId, databaseItem.id);
+							// exitHandlerTriggered triggered
+							if (appConfig.getValueBool("force_xfer_abort")) {
+								// this is force abort
+								if ((verboseLogging)||(debugLogging)) {
+									// add log message
+									addLogEntry("Download aborted: " ~ newItemPath, ["verbose"]);
+							
+								}
+							}
 						}
 						
 						// Flag that the download failed
@@ -4133,24 +4233,27 @@ class SyncEngine {
 					writeXattrData(newItemPath, onedriveJSONItem);
 				}
 			} else {
-				// Output to the user that the file download failed
-				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!", ["info", "notify"]);
-				
-				// Add the path to a list of items that failed to download
-				if (!canFind(fileDownloadFailures, newItemPath)) {
-					fileDownloadFailures ~= newItemPath; // Add newItemPath if it's not already present
-				}
-				
-				// Since the file download failed:
-				// - The file should not exist locally
-				// - The download identifiers should not exist in the local database
-				if (!exists(newItemPath)) {
-					// The local path does not exist
-					if (itemDB.idInLocalDatabase(downloadDriveId, downloadItemId)) {
-						// Since the path does not exist, but the driveId and itemId exists in the database, when we do the DB consistency check, we will think this file has been 'deleted'
-						// The driveId and itemId online exists in our database - it needs to be removed so this does not occur
-						addLogEntry("Removing existing DB record due to failed file download.");
-						itemDB.deleteById(downloadDriveId, downloadItemId);
+				// Was exitHandlerTriggered flagged
+				if (!exitHandlerTriggered) {
+					// Output to the user that the file download failed
+					addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!", ["info", "notify"]);
+					
+					// Add the path to a list of items that failed to download
+					if (!canFind(fileDownloadFailures, newItemPath)) {
+						fileDownloadFailures ~= newItemPath; // Add newItemPath if it's not already present
+					}
+					
+					// Since the file download failed:
+					// - The file should not exist locally
+					// - The download identifiers should not exist in the local database
+					if (!exists(newItemPath)) {
+						// The local path does not exist
+						if (itemDB.idInLocalDatabase(downloadDriveId, downloadItemId)) {
+							// Since the path does not exist, but the driveId and itemId exists in the database, when we do the DB consistency check, we will think this file has been 'deleted'
+							// The driveId and itemId online exists in our database - it needs to be removed so this does not occur
+							addLogEntry("Removing existing DB record due to failed file download.");
+							itemDB.deleteById(downloadDriveId, downloadItemId);
+						}
 					}
 				}
 			}
@@ -5028,6 +5131,15 @@ class SyncEngine {
 		SysTime functionStartTime;
 		string logKey;
 		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		
+		// Was exitHandlerTriggered flagged?
+		// We should not run this function if the user triggered a SIGINT (CTRL-C) and SIGTERM (kill) event
+		if (exitHandlerTriggered) {
+			// exitHandlerTriggered triggered
+			if (debugLogging) {addLogEntry("Not performing a database consistency and integrity check on locally stored data due to application exit request", ["debug"]);}
+			return;
+		}
+		
 		// Only set this if we are generating performance processing times
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			functionStartTime = Clock.currTime();
@@ -7485,6 +7597,13 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
+		// Was exitHandlerTriggered flagged
+		if (exitHandlerTriggered) {
+			// exitHandlerTriggered triggered
+			if (debugLogging) {addLogEntry("Not scanning the local filesystem for local changes due to application exit request", ["debug"]);}
+			return;	
+		}
+				
 		// To improve logging output for this function, what is the 'logical path' we are scanning for file & folder differences?
 		string logPath;
 		if (path == ".") {
@@ -7660,13 +7779,30 @@ class SyncEngine {
 		// Now that all the paths have been rationalised and potential duplicate creation requests filtered out, create the paths online
 		if (debugLogging) {addLogEntry("uniquePathsToCreateOnline = " ~ to!string(uniquePathsToCreateOnline), ["debug"]);}
 		
-		// For each path in the array, attempt to create this online
-		foreach (onlinePathToCreate; uniquePathsToCreateOnline) {
-			try {
-				// Try and create the required path online
-				createDirectoryOnline(onlinePathToCreate);
-			} catch (Exception e) {
-				addLogEntry("ERROR: Failed to create directory online: " ~ onlinePathToCreate ~ " => " ~ e.msg);
+		// Are there paths to create online?
+		if (uniquePathsToCreateOnline.length > 0) {
+			
+			// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need to check the event in the foreach loop
+			// For each path in the array, attempt to create this online
+			foreach (onlinePathToCreate; uniquePathsToCreateOnline) {
+				// Check if exitHandlerTriggered is true
+				if (exitHandlerTriggered) {
+					// break out of the 'foreach' loop
+					break;
+				}
+			
+				try {
+					// Try and create the required path online
+					createDirectoryOnline(onlinePathToCreate);
+				} catch (Exception e) {
+					addLogEntry("ERROR: Failed to create directory online: " ~ onlinePathToCreate ~ " => " ~ e.msg);
+				}
+			}
+			
+			// Was exitHandlerTriggered flagged
+			if (exitHandlerTriggered) {
+				// exitHandlerTriggered triggered
+				if (debugLogging) {addLogEntry("not creating further directories online due to application exit request", ["debug"]);}
 			}
 		}
 		
@@ -7692,6 +7828,12 @@ class SyncEngine {
 
 		// Are there any new local items to upload?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
+			// Check if exitHandlerTriggered is true
+			if (exitHandlerTriggered) {
+				// exitHandlerTriggered triggered
+				return;
+			}
+	
 			// There are elements to upload
 			addLogEntry("New items to upload to Microsoft OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length) );
 			
@@ -7734,9 +7876,6 @@ class SyncEngine {
 			
 			// Perform the upload
 			uploadNewLocalFileItems();
-			
-			// Cleanup array memory after uploading all files
-			newLocalFilesToUploadToOneDrive = [];
 		}
 		
 		// Display function processing time if configured to do so
@@ -8992,7 +9131,7 @@ class SyncEngine {
 		string nextLink;
 		bool directoryFoundOnline = false;
 		
-		// To handle ^c events, we need this Code
+		// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need this while loop
 		while (true) {
 			// Check if exitHandlerTriggered is true
 			if (exitHandlerTriggered) {
@@ -9127,6 +9266,7 @@ class SyncEngine {
 		size_t batchSize = to!int(appConfig.getValueLong("threads"));
 		long batchCount = (newLocalFilesToUploadToOneDrive.length + batchSize - 1) / batchSize;
 		long batchesProcessed = 0;
+		string[] filesUploaded;
 		
 		// Transfer order
 		string transferOrder = appConfig.getValueString("transfer_order");
@@ -9156,11 +9296,52 @@ class SyncEngine {
 			}
 		}
 		
+		// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need to check the event in the foreach loop
 		// Process newLocalFilesToUploadToOneDrive
 		foreach (chunk; newLocalFilesToUploadToOneDrive.chunks(batchSize)) {
+			// There are files to transfer
+			fileTransferInProgress = true;
+		
+			// Check if exitHandlerTriggered is true
+			if (exitHandlerTriggered) {
+				// break out of the 'foreach' loop
+				break;
+			}
+		
 			// send an array containing 'appConfig.getValueLong("threads")' local files to upload
 			uploadNewLocalFileItemsInParallel(chunk);
+			
+			// Track attempted uploads
+			filesUploaded ~= chunk;
 		}
+		
+		// Was exitHandlerTriggered flagged
+		if (exitHandlerTriggered) {
+			// exitHandlerTriggered triggered
+			if (debugLogging) {addLogEntry("Aborting further file upload due to application exit request", ["debug"]);}
+			
+			// Need to add this to fileUploadFailures to capture at the end
+			bool[string] uploadedSet;
+			foreach (file; filesUploaded) {
+				uploadedSet[file] = true;
+			}
+			
+			// Find files that were meant to be uploaded, but were not tracked as uploaded
+			foreach (file; newLocalFilesToUploadToOneDrive) {
+				if (file !in uploadedSet) {
+					fileUploadFailures ~= file;
+				}
+			}
+		} else {
+			// Cleanup array memory after uploading all files
+			newLocalFilesToUploadToOneDrive = [];
+		}
+			
+		// Update global flag that file transfers are complete
+		fileTransferInProgress = false;
+		
+		// Clear filesUploaded
+		filesUploaded = [];
 		
 		// For this set of items, perform a DB PASSIVE checkpoint
 		itemDB.performCheckpoint("PASSIVE");
@@ -9719,11 +9900,18 @@ class SyncEngine {
 							// Try and perform the upload session
 							uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSize, uploadSessionData, threadUploadSessionFilePath);
 							
-							if (uploadResponse.type() == JSONType.object) {
-								uploadFailed = false;
-								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
+							// Was exitHandlerTriggered flagged
+							if (!exitHandlerTriggered) {
+								// exitHandlerTriggered triggered
+								if (uploadResponse.type() == JSONType.object) {
+									uploadFailed = false;
+									addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
+								} else {
+									addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
+									uploadFailed = true;
+								}
 							} else {
-								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
+								// Flag that this upload failed
 								uploadFailed = true;
 							}
 						} catch (OneDriveException exception) {
@@ -9732,7 +9920,6 @@ class SyncEngine {
 							// Display what the error is
 							addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-							
 						}
 					} else {
 						// No Upload URL or nextExpectedRanges or localPath .. not a valid JSON we can use
@@ -10223,18 +10410,28 @@ class SyncEngine {
 				uploadResponse = null;
 				return uploadResponse;
 			}
+			
+			// Handle SIGINT (CTRL-C) and SIGTERM (kill) events + 'force_xfer_abort'
+			if ((exitHandlerTriggered) && (appConfig.getValueBool("force_xfer_abort"))) {
+				// exitHandlerTriggered triggered + 'force_xfer_abort' is enabled
+				if (debugLogging) {addLogEntry("Aborting session file upload due to application exit request + 'force_xfer_abort'", ["debug"]);}
+				break;
+			}
 		}
 
-		// Upload complete
-		long end_unix_time = Clock.currTime.toUnixTime();
-		auto upload_duration = cast(int)(end_unix_time - start_unix_time);
-		dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
-		etaString = format!"| DONE in %02d:%02d:%02d"(h, m, s);
-		addLogEntry(uploadLogEntry ~ "100% " ~ etaString, ["consoleOnly"]);
+		// Was exitHandlerTriggered flagged
+		if (!exitHandlerTriggered) {
+			// Session upload should be complete
+			long end_unix_time = Clock.currTime.toUnixTime();
+			auto upload_duration = cast(int)(end_unix_time - start_unix_time);
+			dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
+			etaString = format!"| DONE in %02d:%02d:%02d"(h, m, s);
+			addLogEntry(uploadLogEntry ~ "100% " ~ etaString, ["consoleOnly"]);
 
-		// Remove session file if it exists		
-		if (exists(threadUploadSessionFilePath)) {
-			safeRemove(threadUploadSessionFilePath);
+			// Remove session file if it exists		
+			if (exists(threadUploadSessionFilePath)) {
+				safeRemove(threadUploadSessionFilePath);
+			}
 		}
 
 		// Display function processing time if configured to do so
@@ -10992,11 +11189,27 @@ class SyncEngine {
 		bool logFailures(string[] failures, string operation) {
 			if (failures.empty) return false;
 
+			// Add blank line to separate this log output clearly
 			addLogEntry();
-			addLogEntry("Failed items to " ~ operation ~ " to/from Microsoft OneDrive: " ~ to!string(failures.length));
+			
+			// Was exitHandlerTriggered flagged
+			if (!exitHandlerTriggered) {
+				// exitHandlerTriggered not triggered
+				addLogEntry("Failed items to " ~ operation ~ " to/from Microsoft OneDrive: " ~ to!string(failures.length));
+			} else {
+				// exitHandlerTriggered triggered
+				addLogEntry("Items not " ~ operation ~ "ed from Microsoft OneDrive before shutdown completed: " ~ to!string(failures.length));
+			}
 
 			foreach (failedFile; failures) {
-				addLogEntry("Failed to " ~ operation ~ ": " ~ failedFile, ["info", "notify"]);
+				// Was exitHandlerTriggered flagged
+				if (!exitHandlerTriggered) {
+					// exitHandlerTriggered not triggered
+					addLogEntry("Failed to " ~ operation ~ ": " ~ failedFile, ["info", "notify"]);
+				} else {
+					// exitHandlerTriggered triggered
+					addLogEntry("Not " ~ operation ~ "ed: " ~ failedFile, ["info", "notify"]);
+				}
 
 				foreach (searchDriveId; onlineDriveDetails.keys) {
 					Item dbItem;
@@ -11235,6 +11448,7 @@ class SyncEngine {
 		}
 		
 		// For each child object, query the OneDrive API
+		// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need this while loop
 		while (true) {
 			// Check if exitHandlerTriggered is true
 			if (exitHandlerTriggered) {
@@ -11406,6 +11620,7 @@ class SyncEngine {
 			}
 		}
 		
+		// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need this while loop
 		while (true) {
 			// Check if exitHandlerTriggered is true
 			if (exitHandlerTriggered) {
@@ -11717,6 +11932,7 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("This parent directory is a remote object this next path will be on a remote drive", ["debug"]);}
 					
 					// For this parentDetails.driveId, parentDetails.id object, query the OneDrive API for it's children
+					// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need this while loop
 					while (true) {
 						// Check if exitHandlerTriggered is true
 						if (exitHandlerTriggered) {
@@ -12349,6 +12565,7 @@ class SyncEngine {
 		addLogEntry();
 		addLogEntry("Office 365 Library Name Query: " ~ sharepointLibraryNameToQuery);
 		
+		// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need this while loop
 		while (true) {
 			// Check if exitHandlerTriggered is true
 			if (exitHandlerTriggered) {
@@ -12616,6 +12833,7 @@ class SyncEngine {
 		getDeltaDataOneDriveApiInstance = new OneDriveApi(appConfig);
 		getDeltaDataOneDriveApiInstance.initialise();
 		
+		// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need this while loop
 		while (true) {
 			// Check if exitHandlerTriggered is true
 			if (exitHandlerTriggered) {
@@ -14128,6 +14346,7 @@ class SyncEngine {
 		checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
 		checkFileOneDriveApiInstance.initialise();
 		
+		// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need this while loop
 		while (true) {
 			// Check if exitHandlerTriggered is true
 			if (exitHandlerTriggered) {

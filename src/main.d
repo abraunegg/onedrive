@@ -1702,16 +1702,23 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			// If we are not doing a 'force_children_scan' perform a true-up
 			// 'force_children_scan' is used when using /children rather than /delta and it is not efficient to re-run this exact same process twice
 			if (!appConfig.getValueBool("force_children_scan")) {
-				// Perform the final true up scan to ensure we have correctly replicated the current online state locally
-				if (!appConfig.suppressLoggingOutput) {
-					addLogEntry("Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process");
-				}
-				// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'
-				// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
-				syncEngineInstance.syncOneDriveAccountToLocalDisk();
-				if (appConfig.getValueBool("monitor")) {
-					// Cancel out any inotify events from downloading data
-					processInotifyEvents(false);
+				// Was exitHandlerTriggered flagged
+				if (!exitHandlerTriggered) {
+					// Perform the final true up scan to ensure we have correctly replicated the current online state locally
+					if (!appConfig.suppressLoggingOutput) {
+						addLogEntry("Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process");
+					}
+					// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'
+					// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
+					syncEngineInstance.syncOneDriveAccountToLocalDisk();
+					if (appConfig.getValueBool("monitor")) {
+						// Cancel out any inotify events from downloading data
+						processInotifyEvents(false);
+					}
+				} else {
+					// exitHandlerTriggered triggered
+					if (debugLogging) {addLogEntry("Not performing a last examination of online data due to application exit request", ["debug"]);}
+					return;
 				}
 			}
 		}
@@ -1755,18 +1762,45 @@ void displaySyncOutcome() {
 	if (!syncEngineInstance.syncFailures) {
 		// No download or upload issues
 		if (!appConfig.getValueBool("monitor")) addLogEntry(); // Add an additional line break so that this is clear when using --sync
-		addLogEntry("Sync with Microsoft OneDrive is complete");
+		// Was exitHandlerTriggered flagged
+		if (!exitHandlerTriggered) {
+			// Normal exit
+			addLogEntry("Sync with Microsoft OneDrive is complete");
+		} else {
+			// Interrupted exit
+			addLogEntry("Sync with Microsoft OneDrive was interrupted (" ~ getTerminationSignalName() ~ ") before completion");
+		}
 	} else {
 		addLogEntry();
-		addLogEntry("Sync with Microsoft OneDrive has completed, however there are items that failed to sync.");
+		// Was exitHandlerTriggered flagged
+		if (!exitHandlerTriggered) {
+			addLogEntry("Sync with Microsoft OneDrive has completed, however there are items that failed to sync.");
+		} else {
+			addLogEntry("Sync with Microsoft OneDrive was interrupted before completion.");
+		}
 		// Due to how the OneDrive API works 'changes' such as add new files online, rename files online, delete files online are only sent once when using the /delta API call.
 		// That we failed to download it, we need to track that, and then issue a --resync to download any of these failed files .. unfortunate, but there is no easy way here
+		// Download Failures
 		if (!syncEngineInstance.fileDownloadFailures.empty) {
-			addLogEntry("To fix any download failures you may need to perform a --resync to ensure this system is correctly synced with your Microsoft OneDrive Account");
+			if (!exitHandlerTriggered) {
+				addLogEntry("To fix any download failures you may need to perform a --resync to ensure this system is correctly synced with your Microsoft OneDrive Account");
+			} else {
+				addLogEntry("Some items were not downloaded before shutdown completed.");
+			}
 		}
+		// Upload Failures
 		if (!syncEngineInstance.fileUploadFailures.empty) {
-			addLogEntry("To fix any upload failures you may need to perform a --resync to ensure this system is correctly synced with your Microsoft OneDrive Account");
+			if (!exitHandlerTriggered) {
+				addLogEntry("To fix any upload failures you may need to perform a --resync to ensure this system is correctly synced with your Microsoft OneDrive Account");
+			} else {
+				addLogEntry("Some items were not uploaded before shutdown completed.");
+			}
 		}
+		// exitHandlerTriggered specific message
+		if (exitHandlerTriggered) {
+			addLogEntry("Re-run the client to resume syncing. If items remain out of sync afterwards, you may need to perform a --resync.");
+		}
+		
 		// So that from a logging perspective these messages are clear, add a line break in
 		addLogEntry();
 	}
@@ -1883,6 +1917,9 @@ extern(C) nothrow @nogc @system void exitViaSignalHandler(int signo) {
 	enum firstSignalMsg = "
 Received termination signal, attempting to cleanly shutdown application
 ";
+	enum inflightTransferMsg = "
+Attempting to complete in-flight file transfers before attempting shutdown
+";	
 	enum repeatSignalMsg = "
 Termination signal received again, forcing immediate exit
 ";
@@ -1919,6 +1956,11 @@ FATAL: Segmentation fault (SIGSEGV). The application encountered an internal err
 
 	shutdownInProgress = true;
 	write(STDERR_FILENO, firstSignalMsg.ptr, firstSignalMsg.length);
+	
+	// Are there in-flight transfers
+	if (fileTransferInProgress) {
+		write(STDERR_FILENO, inflightTransferMsg.ptr, inflightTransferMsg.length);
+	}
 }
 
 bool shutdownRequested() {
@@ -2018,8 +2060,6 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			// Shutdown any local filesystem monitoring
 			shutdownFilesystemMonitor();
 			// Shutdown the sync engine
-			// Wait for all parallel jobs that depend on the database being available to complete
-			addLogEntry("Waiting for any existing upload|download process to complete");
 			shutdownSyncEngine();
 			// Release all CurlEngine instances
 			releaseAllCurlInstances();
@@ -2034,6 +2074,20 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 		} catch (Exception e) {
             addLogEntry("Error during performStandardExitProcess: " ~ e.toString(), ["error"]);
         }
+	}
+}
+
+// Convert signal value into name
+string getTerminationSignalName() {
+	switch (terminationSignal) {
+		case SIGINT:
+			return "SIGINT";
+		case SIGTERM:
+			return "SIGTERM";
+		case SIGSEGV:
+			return "SIGSEGV";
+		default:
+			return "UNKNOWN";
 	}
 }
 
