@@ -11358,6 +11358,12 @@ class SyncEngine {
 		string nextLink;
 		OneDriveApi generateDeltaResponseOneDriveApiInstance;
 		
+		// Check if exitHandlerTriggered is true
+		if (exitHandlerTriggered) {
+			// exitHandlerTriggered triggered
+			return selfGeneratedDeltaResponse;
+		}
+		
 		// Was a path to query passed in?
 		if (pathToQuery.empty) {
 			// Will query for the 'root'
