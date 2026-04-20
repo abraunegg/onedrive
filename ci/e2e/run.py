@@ -50,7 +50,7 @@ from testcases.tc0036_overwrite_replace_existing_file_content_validation import 
 from testcases.tc0037_mtime_only_local_change_handling import TestCase0037MtimeOnlyLocalChangeHandling
 from testcases.tc0038_delete_and_recreate_with_same_name_validation import TestCase0038DeleteAndRecreateWithSameNameValidation
 from testcases.tc0039_empty_directory_handling_validation import TestCase0039EmptyDirectoryHandling
-
+from testcases.tc0040_nested_tree_rename_and_delete_stress_validation import TestCase0040NestedTreeRenameAndDeleteStressValidation
 
 def build_test_suite() -> list:
     return [
@@ -74,10 +74,10 @@ def build_test_suite() -> list:
         #TestCase0018RecycleBinValidation(),
         #TestCase0019LoggingAndRunningConfig(),
         #TestCase0020MonitorModeValidation(),
-        TestCase0021ResumableTransfersValidation(),
+        #TestCase0021ResumableTransfersValidation(),
         #TestCase0022LocalFirstValidation(),
         #TestCase0023BypassDataPreservationValidation(),
-        TestCase0024BigDeleteSafeguardValidation(),
+        #TestCase0024BigDeleteSafeguardValidation(),
         #TestCase0025InvalidCharacterFilenameValidation(),
         #TestCase0026ReservedDeviceNameValidation(),
         #TestCase0027WhitespaceTrailingDotValidation(),
@@ -93,6 +93,7 @@ def build_test_suite() -> list:
         #TestCase0037MtimeOnlyLocalChangeHandling(),
         #TestCase0038DeleteAndRecreateWithSameNameValidation(),
         #TestCase0039EmptyDirectoryHandling(),
+        TestCase0040NestedTreeRenameAndDeleteStressValidation(),
     ]
 
 

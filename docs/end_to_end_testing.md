@@ -57,6 +57,13 @@ SharePoint end-to-end testing uses the same complete automated test suite as Per
 | 0033 | remote directory rename reconciliation | - Personal<br>- Business<br>- SharePoint | This test validates that a second client with existing local and database state correctly reconciles a remote directory rename propagated by another synchronising client |
 | 0034 | Local move between directories validation | - Personal<br>- Business<br>- SharePoint | This test validates that moving a local file from one directory to another is correctly propagated to remote state |
 | 0035 | Remote move between directories reconciliation | - Personal<br>- Business<br>- SharePoint | This test validates that a stale local client correctly reconciles a remote-side file move between directories without leaving stale local file leftovers |
+| 0036 | Overwrite / replace existing file content validation | - Personal<br>- Business<br>- SharePoint | This test validates that replacing the contents of an existing local file with the same name correctly updates remote content without leaving stale content or metadata confusion |
+| 0037 | mtime-only local change handling | - Personal<br>- Business<br>- SharePoint | This test validates that mtime-only local file changes across direct upload, automatic session upload for files larger than 4 MiB, and forced session upload behaviour without changing file content |
+| 0038 | Delete and recreate with same name validation | - Personal<br>- Business<br>- SharePoint | This test validates that deleting a file, syncing that deletion, then recreating a different file with the same name correctly results in the final remote and local state without stale item-id or state database issues |
+| 0039 | Empty directory handling | - Personal<br>- Business<br>- SharePoint | This test validates that creation, sync, verification, and cleanup behaviour for empty directories, including nested empty directories, to ensure directory-only state is created and removed correctly |
+| 0040 | Nested tree rename and delete stress validation | - Personal<br>- Business<br>- SharePoint | Validate a combined nested-tree mutation scenario involving multiple renames, one deletion, and one new file creation before a single sync, ensuring the final remote and fresh-download state is correct with no stale paths left behind |
+
+
 
 ### Contributing Additional Test Cases
 
