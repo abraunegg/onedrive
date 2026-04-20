@@ -61,8 +61,20 @@ SharePoint end-to-end testing uses the same complete automated test suite as Per
 | 0037 | mtime-only local change handling | - Personal<br>- Business<br>- SharePoint | This test validates that mtime-only local file changes across direct upload, automatic session upload for files larger than 4 MiB, and forced session upload behaviour without changing file content |
 | 0038 | Delete and recreate with same name validation | - Personal<br>- Business<br>- SharePoint | This test validates that deleting a file, syncing that deletion, then recreating a different file with the same name correctly results in the final remote and local state without stale item-id or state database issues |
 | 0039 | Empty directory handling | - Personal<br>- Business<br>- SharePoint | This test validates that creation, sync, verification, and cleanup behaviour for empty directories, including nested empty directories, to ensure directory-only state is created and removed correctly |
-| 0040 | Nested tree rename and delete stress validation | - Personal<br>- Business<br>- SharePoint | Validate a combined nested-tree mutation scenario involving multiple renames, one deletion, and one new file creation before a single sync, ensuring the final remote and fresh-download state is correct with no stale paths left behind |
-
+| 0040 | Nested tree rename and delete stress validation | - Personal<br>- Business<br>- SharePoint | This test validates that a combined nested-tree mutation scenario involving multiple renames, one deletion, and one new file creation before a single sync, ensuring the final remote and fresh-download state is correct with no stale paths left behind |
+| 0041 | Monitor mode local create upload | - Personal<br>- Business<br>- SharePoint | This test validates starting --monitor, create a local file, and validate it uploads without restarting the client |
+| 0042 | Monitor mode local modify upload | - Personal<br>- Business<br>- SharePoint | This test validates modifying an existing local file under --monitor and validate the update propagates |
+| 0043 | Monitor mode local delete propagation | - Personal<br>- Business<br>- SharePoint | This test validates deleting a local file under --monitor and validate the remote delete occurs as expected |
+| 0044 | Monitor mode local rename propagation | - Personal<br>- Business<br>- SharePoint | This test validates renaming a local file while --monitor is active and validates correct behaviour |
+| 0045 | Monitor mode local directory create propagation | - Personal<br>- Business<br>- SharePoint | This test validates creating a new local directory and child file under --monitor and validate the remote state |
+| 0046 | Monitor mode local directory rename propagation | - Personal<br>- Business<br>- SharePoint | This test validates renaming a populated local directory while --monitor is active and validate the final remote state |
+| 0047 | Monitor mode local directory delete propagation | - Personal<br>- Business<br>- SharePoint | This test validates deleting a populated local directory tree under --monitor and validate the remote delete |
+| 0048 | Monitor mode burst local file creates | - Personal<br>- Business<br>- SharePoint | This test rapidly create multiple local files under --monitor and validate they all upload correctly |
+| 0049 | Monitor mode mixed burst operations | - Personal<br>- Business<br>- SharePoint | This test performs create, modify, delete, and rename operations in one burst under --monitor and validate the final state |
+| 0050 | Monitor mode nested file create inside new directory | - Personal<br>- Business<br>- SharePoint | This test creates a nested directory tree and deep file under --monitor and validate the remote state |
+| 0051 | Monitor mode mtime-only local change handling | - Personal<br>- Business<br>- SharePoint | This test touches an existing local file under --monitor without changing content and validate that no new upload occurs |
+| 0052 | Monitor mode large file create session upload | - Personal<br>- Business<br>- SharePoint | This test creates a large file under --monitor and validate session upload behaviour and remote integrity |
+| 0053 | Monitor mode rename then modify | - Personal<br>- Business<br>- SharePoint | This test renames a file and then modify the renamed file under --monitor and validate the final remote state |
 
 
 ### Contributing Additional Test Cases

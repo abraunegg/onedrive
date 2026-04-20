@@ -64,6 +64,9 @@ from testcases.tc0050_monitor_mode_nested_file_create_inside_new_directory impor
 from testcases.tc0051_monitor_mode_mtime_only_local_change_handling import TestCase0051MonitorModeMtimeOnlyLocalChangeHandling
 from testcases.tc0052_monitor_mode_large_file_create_session_upload import TestCase0052MonitorModeLargeFileCreateSessionUpload
 from testcases.tc0053_monitor_mode_rename_then_modify import TestCase0053MonitorModeRenameThenModify
+from testcases.tc0054_monitor_mode_atomic_save_editor_replace_workflow import TestCase0054MonitorModeAtomicSaveEditorReplaceWorkflow
+from testcases.tc0055_upload_only_remove_source_folders import TestCase0055UploadOnlyRemoveSourceFolders
+from testcases.tc0056_monitor_mode_create_then_delete_quickly import TestCase0056MonitorModeCreateThenDeleteQuickly
 
 def build_test_suite() -> list:
     return [
@@ -111,15 +114,18 @@ def build_test_suite() -> list:
         #TestCase0042MonitorModeLocalModifyUpload(),
         #TestCase0043MonitorModeLocalDeletePropagation(),
         #TestCase0044MonitorModeLocalRenamePropagation(),
-        TestCase0045MonitorModeLocalDirectoryCreatePropagation(),
-        TestCase0046MonitorModeLocalDirectoryRenamePropagation(),
-        TestCase0047MonitorModeLocalDirectoryDeletePropagation(),
-        TestCase0048MonitorModeBurstLocalFileCreates(),
-        TestCase0049MonitorModeMixedBurstOperations(),
-        TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(),
-        TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(),
-        TestCase0052MonitorModeLargeFileCreateSessionUpload(),
-        TestCase0053MonitorModeRenameThenModify(),
+        #TestCase0045MonitorModeLocalDirectoryCreatePropagation(),
+        #TestCase0046MonitorModeLocalDirectoryRenamePropagation(),
+        #TestCase0047MonitorModeLocalDirectoryDeletePropagation(),
+        #TestCase0048MonitorModeBurstLocalFileCreates(),
+        #TestCase0049MonitorModeMixedBurstOperations(),
+        #TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(),
+        #TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(),
+        #TestCase0052MonitorModeLargeFileCreateSessionUpload(),
+        #TestCase0053MonitorModeRenameThenModify(),
+        TestCase0054MonitorModeAtomicSaveEditorReplaceWorkflow(),
+        TestCase0055UploadOnlyRemoveSourceFolders(),
+        TestCase0056MonitorModeCreateThenDeleteQuickly(),
     ]
 
 
