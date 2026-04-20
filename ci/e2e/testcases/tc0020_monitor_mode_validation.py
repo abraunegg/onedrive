@@ -51,13 +51,14 @@ class TestCase0020MonitorModeValidation(E2ETestCase):
         return False
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0020"
-        case_log_dir = context.logs_dir / "tc0020"
-        state_dir = context.state_dir / "tc0020"
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0020",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         confdir = case_work_dir / "conf-main"
@@ -162,7 +163,7 @@ class TestCase0020MonitorModeValidation(E2ETestCase):
         }
 
         if not initial_sync_complete:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Monitor mode did not complete the initial sync within the expected time",
@@ -171,9 +172,9 @@ class TestCase0020MonitorModeValidation(E2ETestCase):
             )
 
         if verify_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
 
         if f"{root_name}/monitor-added.txt" not in remote_manifest:
-            return TestResult.fail_result(self.case_id, self.name, "Monitor mode did not upload the file created while the process was running", artifacts, details)
+            return self.fail_result(self.case_id, self.name, "Monitor mode did not upload the file created while the process was running", artifacts, details)
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

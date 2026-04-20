@@ -51,14 +51,14 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
         )
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0032"
-        case_log_dir = context.logs_dir / "tc0032"
-        state_dir = context.state_dir / "tc0032"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0032",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         seed_root = case_work_dir / "seedroot"
         stale_root = case_work_dir / "staleroot"
@@ -152,7 +152,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
         if seed_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"seed phase failed with status {seed_result.returncode}",
@@ -178,7 +178,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
         if not stale_old_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "stale snapshot did not preserve original local file before reconciliation",
@@ -192,7 +192,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
         if seed_old_path.exists():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "seed local old filename still exists immediately after rename",
@@ -202,7 +202,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
         if not seed_new_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "seed local renamed file does not exist immediately after rename",
@@ -228,7 +228,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
         if remote_rename_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote rename propagation phase failed with status {remote_rename_result.returncode}",
@@ -265,7 +265,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
         if stale_sync_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"stale reconciliation phase failed with status {stale_sync_result.returncode}",
@@ -304,7 +304,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification failed with status {verify_result.returncode}",
@@ -313,7 +313,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             )
 
         if stale_old_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"stale client still contains old filename after reconciliation: {old_relative}",
@@ -322,7 +322,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             )
 
         if not stale_new_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"stale client is missing renamed file after reconciliation: {new_relative}",
@@ -331,7 +331,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             )
 
         if stale_new_content != initial_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "stale client renamed file content did not match expected content after reconciliation",
@@ -340,7 +340,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             )
 
         if verify_old_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"fresh remote verification still contains old filename: {old_relative}",
@@ -349,7 +349,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             )
 
         if not verify_new_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"fresh remote verification is missing renamed file: {new_relative}",
@@ -358,7 +358,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             )
 
         if verify_new_content != initial_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "fresh remote verification file content did not match expected content",
@@ -366,4 +366,4 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

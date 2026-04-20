@@ -23,13 +23,14 @@ class TestCase0017CheckNomountValidation(E2ETestCase):
         )
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0017"
-        case_log_dir = context.logs_dir / "tc0017"
-        state_dir = context.state_dir / "tc0017"
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0017",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         confdir = case_work_dir / "conf-main"
@@ -85,7 +86,7 @@ class TestCase0017CheckNomountValidation(E2ETestCase):
         combined_output = (result.stdout + "\n" + result.stderr).lower()
 
         if result.returncode == 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "check_nomount did not abort synchronisation when .nosync existed in the sync_dir mount point",
@@ -94,7 +95,7 @@ class TestCase0017CheckNomountValidation(E2ETestCase):
             )
 
         if ".nosync file found" not in combined_output and "aborting synchronization process to safeguard data" not in combined_output:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "check_nomount did not emit the expected .nosync safeguard message",
@@ -102,4 +103,4 @@ class TestCase0017CheckNomountValidation(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

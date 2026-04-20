@@ -52,13 +52,14 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
         )
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0038"
-        case_log_dir = context.logs_dir / "tc0038"
-        state_dir = context.state_dir / "tc0038"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0038",
+            ensure_refresh_token=False,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         context.ensure_refresh_token_available()
 
@@ -159,7 +160,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
 
         if phase1_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"seed phase failed with status {phase1_result.returncode}",
@@ -176,7 +177,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
 
         if local_target_path.exists():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local target file still exists immediately after delete",
@@ -186,7 +187,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
 
         if not local_anchor_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local anchor file is missing immediately after delete phase preparation",
@@ -214,7 +215,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"delete propagation phase failed with status {phase2_result.returncode}",
@@ -233,7 +234,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
 
         if not local_target_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local target file does not exist immediately after recreate",
@@ -261,7 +262,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
 
         if phase3_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"recreate propagation phase failed with status {phase3_result.returncode}",
@@ -315,7 +316,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification failed with status {verify_result.returncode}",
@@ -324,7 +325,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
             )
 
         if not verify_anchor_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification is missing anchor file: {anchor_relative}",
@@ -333,7 +334,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
             )
 
         if not verify_target_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification is missing recreated file: {target_relative}",
@@ -342,7 +343,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
             )
 
         if verified_target_content != recreated_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "verified file content did not match the recreated content after delete/recreate cycle",
@@ -351,7 +352,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
             )
 
         if verified_target_content == initial_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "verified file content still matches the initial content after delete/recreate cycle",
@@ -360,7 +361,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
             )
 
         if verify_manifest != expected_manifest:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "remote verification manifest did not match the expected final structure after delete/recreate cycle",
@@ -368,4 +369,4 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

@@ -475,14 +475,14 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         return (True, f"{scenario_id} passed", details)
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0037"
-        case_log_dir = context.logs_dir / "tc0037"
-        state_dir = context.state_dir / "tc0037"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0037",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         artifacts: list[str] = []
         details: dict[str, object] = {}
@@ -559,7 +559,7 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         artifacts.append(str(metadata_file))
 
         if failed_scenarios:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"{len(failed_scenarios)} of {len(scenarios)} mtime-only scenarios failed: {', '.join(failed_scenarios)}",
@@ -567,4 +567,4 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

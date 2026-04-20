@@ -19,8 +19,12 @@ class TestCase0014SkipSizeValidation(E2ETestCase):
         write_onedrive_config(config_path, "# tc0014 config\nbypass_data_preservation = \"true\"\nenable_logging = \"true\"\nskip_size = \"1\"\n")
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0014"; case_log_dir = context.logs_dir / "tc0014"; state_dir = context.state_dir / "tc0014"
-        reset_directory(case_work_dir); reset_directory(case_log_dir); reset_directory(state_dir); context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0014",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir; case_log_dir = layout.log_dir; state_dir = layout.state_dir
         sync_root = case_work_dir / "syncroot"; confdir = case_work_dir / "conf-main"; verify_root = case_work_dir / "verifyroot"; verify_conf = case_work_dir / "conf-verify"; root_name = f"ZZ_E2E_TC0014_{context.run_id}_{os.getpid()}"; app_log_dir = case_log_dir / "app-logs"
         write_text_file(sync_root / root_name / "small.bin", "a" * 16384)
         big_path = sync_root / root_name / "large.bin"; big_path.parent.mkdir(parents=True, exist_ok=True); big_path.write_bytes(b"B" * (2 * 1024 * 1024))
@@ -41,8 +45,8 @@ class TestCase0014SkipSizeValidation(E2ETestCase):
         if app_log_dir.exists():
             artifacts.append(str(app_log_dir))
         details = {"returncode": result.returncode, "verify_returncode": verify_result.returncode, "root_name": root_name, "large_size": big_path.stat().st_size, "large_size_mb_decimal": round(big_path.stat().st_size / 1000 / 1000, 3), "large_size_mib_binary": round(big_path.stat().st_size / 1024 / 1024, 3), "skip_size": 1}
-        if result.returncode != 0: return TestResult.fail_result(self.case_id, self.name, f"skip_size validation failed with status {result.returncode}", artifacts, details)
-        if verify_result.returncode != 0: return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
-        if f"{root_name}/small.bin" not in remote_manifest: return TestResult.fail_result(self.case_id, self.name, "Small file missing after skip_size processing", artifacts, details)
-        if f"{root_name}/large.bin" in remote_manifest: return TestResult.fail_result(self.case_id, self.name, "Large file exceeded configured skip_size threshold but was synchronised; review display-running-config output and debug logs", artifacts, details)
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        if result.returncode != 0: return self.fail_result(self.case_id, self.name, f"skip_size validation failed with status {result.returncode}", artifacts, details)
+        if verify_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+        if f"{root_name}/small.bin" not in remote_manifest: return self.fail_result(self.case_id, self.name, "Small file missing after skip_size processing", artifacts, details)
+        if f"{root_name}/large.bin" in remote_manifest: return self.fail_result(self.case_id, self.name, "Large file exceeded configured skip_size threshold but was synchronised; review display-running-config output and debug logs", artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

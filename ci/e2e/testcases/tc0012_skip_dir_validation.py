@@ -66,10 +66,15 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         if f"{root}/App/Cache/nested.txt" in manifest: failures.append("Strict skip_dir scenario unexpectedly synchronised strict-matched directory content")
 
     def run(self, context: E2EContext) -> TestResult:
-        case_log_dir = context.logs_dir / "tc0012"; reset_directory(case_log_dir); context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0012",
+            ensure_refresh_token=True,
+        )
+        case_log_dir = layout.log_dir
         all_artifacts = []; failures = []
         self._run_loose(context, case_log_dir, all_artifacts, failures)
         self._run_strict(context, case_log_dir, all_artifacts, failures)
         details = {"failures": failures}
-        if failures: return TestResult.fail_result(self.case_id, self.name, "; ".join(failures), all_artifacts, details)
-        return TestResult.pass_result(self.case_id, self.name, all_artifacts, details)
+        if failures: return self.fail_result(self.case_id, self.name, "; ".join(failures), all_artifacts, details)
+        return self.pass_result(self.case_id, self.name, all_artifacts, details)

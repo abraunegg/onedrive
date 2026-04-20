@@ -52,13 +52,14 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
         )
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0040"
-        case_log_dir = context.logs_dir / "tc0040"
-        state_dir = context.state_dir / "tc0040"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0040",
+            ensure_refresh_token=False,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         context.ensure_refresh_token_available()
 
@@ -217,7 +218,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
 
         if phase1_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"seed phase failed with status {phase1_result.returncode}",
@@ -256,7 +257,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
 
         if local_original_parent_dir_path.exists():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local original parent directory still exists immediately after mutation",
@@ -266,7 +267,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
 
         if local_original_nested_dir_path.exists():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local original nested directory still exists immediately after mutation",
@@ -276,7 +277,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
 
         if local_original_file_gamma_path.exists():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local original gamma filename still exists immediately after mutation",
@@ -286,7 +287,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
 
         if local_deleted_file_beta_path.exists():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local beta file still exists immediately after delete mutation",
@@ -296,7 +297,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
 
         if not local_renamed_parent_dir_path.is_dir():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local renamed parent directory is missing immediately after mutation",
@@ -306,7 +307,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
 
         if not local_renamed_nested_dir_path.is_dir():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local renamed nested directory is missing immediately after mutation",
@@ -316,7 +317,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
 
         if not local_renamed_file_alpha_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local alpha file is missing after parent and nested directory renames",
@@ -326,7 +327,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
 
         if not local_renamed_file_gamma_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local renamed gamma file is missing immediately after mutation",
@@ -336,7 +337,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
 
         if not local_new_file_delta_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local new delta file is missing immediately after mutation",
@@ -364,7 +365,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"mutation propagation phase failed with status {phase2_result.returncode}",
@@ -435,7 +436,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification failed with status {verify_result.returncode}",
@@ -444,7 +445,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if not verify_anchor_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"verification is missing anchor file: {anchor_relative}",
@@ -453,7 +454,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if verify_original_parent_dir_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"verification still contains original parent directory: {original_parent_dir_relative}",
@@ -462,7 +463,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if verify_original_nested_dir_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"verification still contains original nested directory: {original_nested_dir_relative}",
@@ -471,7 +472,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if verify_original_file_alpha_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"verification still contains original alpha path: {original_file_alpha_relative}",
@@ -480,7 +481,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if verify_original_file_beta_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"verification still contains deleted beta path: {original_file_beta_relative}",
@@ -489,7 +490,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if verify_original_file_gamma_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"verification still contains original gamma path: {original_file_gamma_relative}",
@@ -498,7 +499,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if not verify_renamed_parent_dir_path.is_dir():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"verification is missing renamed parent directory: {renamed_parent_dir_relative}",
@@ -507,7 +508,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if not verify_renamed_nested_dir_path.is_dir():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"verification is missing renamed nested directory: {renamed_nested_dir_relative}",
@@ -516,7 +517,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if not verify_renamed_file_alpha_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"verification is missing alpha file at renamed path: {renamed_file_alpha_relative}",
@@ -525,7 +526,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if verify_deleted_file_beta_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"verification still contains deleted beta file: {deleted_file_beta_relative}",
@@ -534,7 +535,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if not verify_renamed_file_gamma_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"verification is missing renamed gamma file: {renamed_file_gamma_relative}",
@@ -543,7 +544,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if not verify_new_file_delta_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"verification is missing new delta file: {new_file_delta_relative}",
@@ -552,7 +553,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if verify_renamed_file_alpha_content != file_alpha_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "alpha file content did not survive nested directory renames unchanged",
@@ -561,7 +562,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if verify_renamed_file_gamma_content != file_gamma_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "renamed gamma file content did not match the original content",
@@ -570,7 +571,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             )
 
         if verify_new_file_delta_content != new_file_delta_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "new delta file content did not match the created content",
@@ -578,4 +579,4 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

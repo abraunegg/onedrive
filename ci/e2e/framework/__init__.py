@@ -1,3 +1,1 @@
-"""
-E2E framework package for GitHub Actions based validation.
-"""
+from framework.base import CaseLayout, E2ETestCase

@@ -70,14 +70,14 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         return deleted_paths
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0033"
-        case_log_dir = context.logs_dir / "tc0033"
-        state_dir = context.state_dir / "tc0033"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0033",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         seeder_root = case_work_dir / "seeder-root"
         validator_root = case_work_dir / "validator-root"
@@ -200,7 +200,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if phase1_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"seed phase failed with status {phase1_result.returncode}",
@@ -236,7 +236,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"validator initial download phase failed with status {phase2_result.returncode}",
@@ -246,7 +246,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if not validator_source_dir.is_dir():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"validator failed to download original directory: {source_dir_relative}",
@@ -256,7 +256,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if not validator_source_file_1.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"validator failed to download original top-level file: {source_file_1_relative}",
@@ -266,7 +266,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if not validator_source_file_2.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"validator failed to download original nested file: {source_file_2_relative}",
@@ -282,7 +282,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if seeder_source_dir.exists():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "seeder original directory still exists immediately after rename",
@@ -292,7 +292,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if not seeder_renamed_dir.is_dir():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "seeder renamed directory does not exist immediately after rename",
@@ -323,7 +323,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if phase3_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"directory rename propagation phase failed with status {phase3_result.returncode}",
@@ -358,7 +358,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if phase3_converge_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"directory rename convergence phase failed with status {phase3_converge_result.returncode}",
@@ -416,7 +416,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if verify_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification failed with status {verify_result.returncode}",
@@ -427,7 +427,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         # Remote truth assertions: the old tree must be fully absent before validator is judged.
         if verify_source_dir.exists() or verify_source_file_1.exists() or verify_source_file_2.exists():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote rename propagation incomplete: original directory tree still exists online: {source_dir_relative}",
@@ -437,7 +437,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if verify_old_tree_files:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote rename propagation incomplete: old files still exist online under original directory tree: {verify_old_tree_files}",
@@ -447,7 +447,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if verify_old_tree_dirs:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote rename propagation incomplete: old directories still exist online under original directory tree: {verify_old_tree_dirs}",
@@ -457,7 +457,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if not verify_renamed_dir.is_dir():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification is missing renamed directory: {renamed_dir_relative}",
@@ -467,7 +467,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if not verify_renamed_file_1.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification is missing renamed top-level file: {renamed_file_1_relative}",
@@ -477,7 +477,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if not verify_renamed_file_2.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification is missing renamed nested file: {renamed_file_2_relative}",
@@ -487,7 +487,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if verify_new_file_1_content != file1_content:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "remote verification renamed top-level file content did not match expected content",
@@ -497,7 +497,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         if verify_new_file_2_content != file2_content:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "remote verification renamed nested file content did not match expected content",
@@ -558,7 +558,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         self._write_metadata(metadata_file, details)
 
         if phase4_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"validator reconcile phase failed with status {phase4_result.returncode}",
@@ -567,7 +567,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             )
 
         if validator_source_dir.exists() or validator_source_file_1.exists() or validator_source_file_2.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"validator still contains original directory tree after reconciliation: {source_dir_relative}",
@@ -576,7 +576,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             )
 
         if validator_old_tree_files:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"validator retained old files under original directory tree after reconciliation: {validator_old_tree_files}",
@@ -585,7 +585,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             )
 
         if validator_old_tree_dirs:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"validator retained old directories under original directory tree after reconciliation: {validator_old_tree_dirs}",
@@ -594,7 +594,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             )
 
         if not validator_renamed_dir.is_dir():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"validator is missing renamed directory after reconciliation: {renamed_dir_relative}",
@@ -603,7 +603,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             )
 
         if not validator_renamed_file_1.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"validator is missing renamed top-level file after reconciliation: {renamed_file_1_relative}",
@@ -612,7 +612,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             )
 
         if not validator_renamed_file_2.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"validator is missing renamed nested file after reconciliation: {renamed_file_2_relative}",
@@ -621,7 +621,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             )
 
         if validator_new_file_1_content != file1_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "validator renamed top-level file content did not match expected content",
@@ -630,7 +630,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             )
 
         if validator_new_file_2_content != file2_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "validator renamed nested file content did not match expected content",
@@ -638,4 +638,4 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

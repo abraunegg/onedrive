@@ -15,13 +15,14 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
     description = "Perform create, modify, delete, and rename operations in one burst under --monitor and validate the final state"
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0049"
-        case_log_dir = context.logs_dir / "tc0049"
-        state_dir = context.state_dir / "tc0049"
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0049",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
@@ -83,7 +84,7 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
         details["seed_returncode"] = seed_result.returncode
         if seed_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(self.case_id, self.name, f"Seed phase failed with status {seed_result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Seed phase failed with status {seed_result.returncode}", artifacts, details)
 
         monitor_command = [context.onedrive_bin, "--display-running-config", "--monitor", "--verbose", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(conf_main)]
         context.log(f"Executing Test Case {self.case_id} monitor: {command_to_string(monitor_command)}")
@@ -93,7 +94,7 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
             details["initial_sync_complete"] = initial_sync_complete
             if not initial_sync_complete:
                 self._write_metadata(metadata_file, details)
-                return TestResult.fail_result(self.case_id, self.name, "Monitor mode did not complete the initial sync within the expected time", artifacts, details)
+                return self.fail_result(self.case_id, self.name, "Monitor mode did not complete the initial sync within the expected time", artifacts, details)
 
             write_text_file(create_local, create_content)
             write_text_file(modify_local, final_modify)
@@ -138,15 +139,15 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
         self._write_metadata(metadata_file, details)
 
         if not details.get("mutation_processed", False):
-            return TestResult.fail_result(self.case_id, self.name, "Monitor mode did not process the mixed burst operations before shutdown", artifacts, details)
+            return self.fail_result(self.case_id, self.name, "Monitor mode did not process the mixed burst operations before shutdown", artifacts, details)
         if verify_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if not modify_verify.is_file() or details["verify_modify_content"] != final_modify:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification did not preserve modified file state: {modify_relative}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification did not preserve modified file state: {modify_relative}", artifacts, details)
         if delete_verify.exists():
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification still contains deleted file: {delete_relative}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification still contains deleted file: {delete_relative}", artifacts, details)
         if rename_old_verify.exists() or not rename_new_verify.is_file() or details["verify_rename_new_content"] != rename_content:
-            return TestResult.fail_result(self.case_id, self.name, "Remote verification did not preserve renamed file state correctly", artifacts, details)
+            return self.fail_result(self.case_id, self.name, "Remote verification did not preserve renamed file state correctly", artifacts, details)
         if not create_verify.is_file() or details["verify_create_content"] != create_content:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification did not preserve created file state: {create_relative}", artifacts, details)
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification did not preserve created file state: {create_relative}", artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

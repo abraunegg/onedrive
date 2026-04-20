@@ -56,14 +56,14 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
         return sorted(str(path.relative_to(root)) for path in root.rglob("*") if path.is_file())
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0035"
-        case_log_dir = context.logs_dir / "tc0035"
-        state_dir = context.state_dir / "tc0035"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0035",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         seed_root = case_work_dir / "seedroot"
         stale_root = case_work_dir / "staleroot"
@@ -173,7 +173,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         if seed_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"seed phase failed with status {seed_result.returncode}",
@@ -200,7 +200,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         if not stale_source_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "stale snapshot did not preserve original source file before reconciliation",
@@ -219,7 +219,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         if seed_source_path.exists():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "seed local source path still exists immediately after move",
@@ -229,7 +229,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         if not seed_destination_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "seed local destination path does not exist immediately after move",
@@ -255,7 +255,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         if remote_move_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote move propagation phase failed with status {remote_move_result.returncode}",
@@ -299,7 +299,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         if stale_sync_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"stale reconciliation phase failed with status {stale_sync_result.returncode}",
@@ -345,7 +345,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification failed with status {verify_result.returncode}",
@@ -355,7 +355,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         # Stale client assertions: existing-state client must reconcile cleanly.
         if stale_source_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"stale client still contains original source file after reconciliation: {source_relative}",
@@ -364,7 +364,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             )
 
         if details["stale_source_dir_files_after_reconcile"]:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"stale client retained old files under source directory after reconciliation: {details['stale_source_dir_files_after_reconcile']}",
@@ -373,7 +373,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             )
 
         if not stale_destination_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"stale client is missing moved file after reconciliation: {destination_relative}",
@@ -382,7 +382,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             )
 
         if stale_destination_content != initial_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "stale client moved file content did not match expected content after reconciliation",
@@ -391,7 +391,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             )
 
         if not stale_anchor_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"stale client is missing destination anchor after reconciliation: {anchor_relative}",
@@ -401,7 +401,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         # Verify assertions: fresh remote truth must also be correct.
         if verify_source_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification still contains original source file path: {source_relative}",
@@ -410,7 +410,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             )
 
         if details["verify_source_dir_files"]:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification retained old files under source directory: {details['verify_source_dir_files']}",
@@ -419,7 +419,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             )
 
         if not verify_destination_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification is missing moved file at destination path: {destination_relative}",
@@ -428,7 +428,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             )
 
         if verify_destination_content != initial_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "remote verification moved file content did not match expected content",
@@ -437,7 +437,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             )
 
         if not verify_anchor_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification is missing destination anchor file: {anchor_relative}",
@@ -445,4 +445,4 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

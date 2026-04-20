@@ -33,13 +33,14 @@ class TestCase0003DryRunValidation(E2ETestCase):
         write_text_file(sync_root / root_name / "Notes" / "draft.md", "# tc0003\n")
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0003"
-        case_log_dir = context.logs_dir / "tc0003"
-        state_dir = context.state_dir / "tc0003"
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0003",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         seed_confdir = case_work_dir / "conf-seed"
@@ -130,12 +131,12 @@ class TestCase0003DryRunValidation(E2ETestCase):
         }
 
         if result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote seed failed with status {result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote seed failed with status {result.returncode}", artifacts, details)
         if verify_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if before_manifest != after_manifest:
-            return TestResult.fail_result(self.case_id, self.name, "Local filesystem changed during --dry-run", artifacts, details)
+            return self.fail_result(self.case_id, self.name, "Local filesystem changed during --dry-run", artifacts, details)
         if any(entry == root_name or entry.startswith(root_name + "/") for entry in remote_manifest):
-            return TestResult.fail_result(self.case_id, self.name, f"Dry-run unexpectedly synchronised remote content: {root_name}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Dry-run unexpectedly synchronised remote content: {root_name}", artifacts, details)
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

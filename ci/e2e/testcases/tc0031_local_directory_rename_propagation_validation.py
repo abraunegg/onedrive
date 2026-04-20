@@ -46,14 +46,14 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         )
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0031"
-        case_log_dir = context.logs_dir / "tc0031"
-        state_dir = context.state_dir / "tc0031"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0031",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         local_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
@@ -137,7 +137,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
 
         if phase1_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id, self.name, f"seed phase failed with status {phase1_result.returncode}", artifacts, details
             )
 
@@ -145,13 +145,13 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
 
         if source_dir.exists():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id, self.name, "local original directory still exists immediately after rename", artifacts, details
             )
 
         if not renamed_dir.is_dir():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id, self.name, "local renamed directory does not exist immediately after rename", artifacts, details
             )
 
@@ -172,7 +172,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id, self.name, f"directory rename propagation phase failed with status {phase2_result.returncode}", artifacts, details
             )
 
@@ -221,38 +221,38 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id, self.name, f"remote verification failed with status {verify_result.returncode}", artifacts, details
             )
 
         if verify_old_dir.exists() or verify_old_file_1.exists() or verify_old_file_2.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id, self.name, f"remote verification still contains original directory tree: {source_dir_relative}", artifacts, details
             )
 
         if not verify_new_dir.is_dir():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id, self.name, f"remote verification is missing renamed directory: {renamed_dir_relative}", artifacts, details
             )
 
         if not verify_new_file_1.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id, self.name, f"remote verification is missing renamed top-level file: {renamed_file_1_relative}", artifacts, details
             )
 
         if not verify_new_file_2.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id, self.name, f"remote verification is missing renamed nested file: {renamed_file_2_relative}", artifacts, details
             )
 
         if verify_new_file_1_content != file1_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id, self.name, "renamed top-level file content did not match expected content", artifacts, details
             )
 
         if verify_new_file_2_content != file2_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id, self.name, "renamed nested file content did not match expected content", artifacts, details
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

@@ -19,13 +19,14 @@ class TestCase0004SingleDirectorySync(E2ETestCase):
         write_onedrive_config(config_path, "# tc0004 config\nbypass_data_preservation = \"true\"\n")
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0004"
-        case_log_dir = context.logs_dir / "tc0004"
-        state_dir = context.state_dir / "tc0004"
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0004",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         confdir = case_work_dir / "conf-main"
@@ -118,12 +119,12 @@ class TestCase0004SingleDirectorySync(E2ETestCase):
         }
 
         if result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"--single-directory sync failed with status {result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"--single-directory sync failed with status {result.returncode}", artifacts, details)
         if verify_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if not any(e == target_dir or e.startswith(target_dir + "/") for e in remote_manifest):
-            return TestResult.fail_result(self.case_id, self.name, f"Target directory was not synchronised: {target_dir}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Target directory was not synchronised: {target_dir}", artifacts, details)
         if any(e == other_dir or e.startswith(other_dir + "/") for e in remote_manifest):
-            return TestResult.fail_result(self.case_id, self.name, f"Non-target directory was unexpectedly synchronised: {other_dir}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Non-target directory was unexpectedly synchronised: {other_dir}", artifacts, details)
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

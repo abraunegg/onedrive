@@ -984,14 +984,14 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         return self._scenario_pass(scenario_id, description, artifacts, details)
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0021"
-        case_log_dir = context.logs_dir / "tc0021"
-        state_dir = context.state_dir / "tc0021"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0021",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         root_name = f"ZZ_E2E_TC0021_{context.run_id}_{os.getpid()}"
 
@@ -1077,7 +1077,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         if failed:
             failed_ids = ", ".join(result.scenario_id for result in failed)
             first_failure = failed[0].failure_message or "scenario failure"
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"{len(failed)} of {len(results)} resumable transfer scenarios failed: {failed_ids} — {first_failure}",
@@ -1085,4 +1085,4 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, deduped_artifacts, details)
+        return self.pass_result(self.case_id, self.name, deduped_artifacts, details)

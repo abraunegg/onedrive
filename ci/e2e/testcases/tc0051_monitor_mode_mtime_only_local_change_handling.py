@@ -16,13 +16,14 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
     description = "Touch an existing local file under --monitor without changing content and validate that no new upload occurs"
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0051"
-        case_log_dir = context.logs_dir / "tc0051"
-        state_dir = context.state_dir / "tc0051"
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0051",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         verify_initial_root = case_work_dir / "verify-initial-root"
@@ -120,7 +121,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
 
         if seed_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Seed phase failed with status {seed_result.returncode}",
@@ -157,7 +158,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
 
         if verify_initial_result.returncode != 0 or not verify_initial_file_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Initial remote verification failed before monitor mtime-only negative validation",
@@ -190,7 +191,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
 
             if not initial_sync_complete:
                 self._write_metadata(metadata_file, details)
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     "Monitor mode did not complete the initial sync within the expected time",
@@ -212,7 +213,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
 
             if local_hash_after_touch != initial_local_hash:
                 self._write_metadata(metadata_file, details)
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     "Local file hash changed after mtime-only touch",
@@ -278,7 +279,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
         self._write_metadata(metadata_file, details)
 
         if verify_final_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Final remote verification failed with status {verify_final_result.returncode}",
@@ -287,7 +288,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             )
 
         if not verify_final_file_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Remote verification is missing mtime-only file: {relative_path}",
@@ -296,7 +297,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             )
 
         if details["verify_final_hash"] != initial_local_hash:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Remote file hash changed after mtime-only local touch",
@@ -305,7 +306,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             )
 
         if details["verify_final_content"] != initial_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Remote file content changed after mtime-only local touch",
@@ -314,7 +315,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             )
 
         if details["final_verified_mtime"] != details["baseline_verified_mtime"]:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Remote mtime changed after mtime-only local touch; expected no new upload",
@@ -323,7 +324,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             )
 
         if details["monitor_reported_upload"]:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Monitor mode uploaded the file after an mtime-only local touch",
@@ -331,4 +332,4 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

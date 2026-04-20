@@ -19,8 +19,12 @@ class TestCase0015SkipSymlinksValidation(E2ETestCase):
         write_onedrive_config(config_path, "# tc0015 config\nbypass_data_preservation = \"true\"\nskip_symlinks = \"true\"\n")
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0015"; case_log_dir = context.logs_dir / "tc0015"; state_dir = context.state_dir / "tc0015"
-        reset_directory(case_work_dir); reset_directory(case_log_dir); reset_directory(state_dir); context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0015",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir; case_log_dir = layout.log_dir; state_dir = layout.state_dir
         sync_root = case_work_dir / "syncroot"; confdir = case_work_dir / "conf-main"; verify_root = case_work_dir / "verifyroot"; verify_conf = case_work_dir / "conf-verify"; root_name = f"ZZ_E2E_TC0015_{context.run_id}_{os.getpid()}"
         target = sync_root / root_name / "real.txt"; write_text_file(target, "real\n"); link = sync_root / root_name / "linked.txt"; link.parent.mkdir(parents=True, exist_ok=True); link.symlink_to(target.name)
         context.bootstrap_config_dir(confdir); self._write_config(confdir / "config")
@@ -35,8 +39,8 @@ class TestCase0015SkipSymlinksValidation(E2ETestCase):
         write_text_file(metadata_file, f"root_name={root_name}\nreturncode={result.returncode}\nverify_returncode={verify_result.returncode}\n")
         artifacts = [str(stdout_file), str(stderr_file), str(verify_stdout), str(verify_stderr), str(remote_manifest_file), str(metadata_file)]
         details = {"returncode": result.returncode, "verify_returncode": verify_result.returncode, "root_name": root_name}
-        if result.returncode != 0: return TestResult.fail_result(self.case_id, self.name, f"skip_symlinks validation failed with status {result.returncode}", artifacts, details)
-        if verify_result.returncode != 0: return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
-        if f"{root_name}/real.txt" not in remote_manifest: return TestResult.fail_result(self.case_id, self.name, "Regular file missing after skip_symlinks processing", artifacts, details)
-        if f"{root_name}/linked.txt" in remote_manifest: return TestResult.fail_result(self.case_id, self.name, "Symbolic link was unexpectedly synchronised", artifacts, details)
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        if result.returncode != 0: return self.fail_result(self.case_id, self.name, f"skip_symlinks validation failed with status {result.returncode}", artifacts, details)
+        if verify_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+        if f"{root_name}/real.txt" not in remote_manifest: return self.fail_result(self.case_id, self.name, "Regular file missing after skip_symlinks processing", artifacts, details)
+        if f"{root_name}/linked.txt" in remote_manifest: return self.fail_result(self.case_id, self.name, "Symbolic link was unexpectedly synchronised", artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

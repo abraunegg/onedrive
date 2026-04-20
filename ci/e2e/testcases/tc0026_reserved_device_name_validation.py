@@ -49,14 +49,14 @@ class TestCase0026ReservedDeviceNameValidation(E2ETestCase):
         return result
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0026"
-        case_log_dir = context.logs_dir / "tc0026"
-        state_dir = context.state_dir / "tc0026"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0026",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
@@ -216,7 +216,7 @@ class TestCase0026ReservedDeviceNameValidation(E2ETestCase):
             ("remote verification", verify_result.returncode),
         ]:
             if rc != 0:
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"{label} failed with status {rc}",
@@ -226,7 +226,7 @@ class TestCase0026ReservedDeviceNameValidation(E2ETestCase):
 
         for expected in valid_files:
             if expected not in remote_manifest:
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"Expected valid file missing remotely: {expected}",
@@ -236,7 +236,7 @@ class TestCase0026ReservedDeviceNameValidation(E2ETestCase):
 
         for unwanted in invalid_files:
             if unwanted in remote_manifest:
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"Reserved device name was synchronised remotely: {unwanted}",
@@ -250,7 +250,7 @@ class TestCase0026ReservedDeviceNameValidation(E2ETestCase):
         ]
         for marker in expected_skip_markers:
             if marker not in combined_output:
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"Expected reserved-name skip marker not found: {marker}",
@@ -267,7 +267,7 @@ class TestCase0026ReservedDeviceNameValidation(E2ETestCase):
         ]
         for marker in crash_markers:
             if marker in combined_output:
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"Client output indicates crash or exception: {marker}",
@@ -275,4 +275,4 @@ class TestCase0026ReservedDeviceNameValidation(E2ETestCase):
                     details,
                 )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

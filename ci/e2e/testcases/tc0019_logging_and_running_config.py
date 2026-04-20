@@ -24,13 +24,14 @@ class TestCase0019LoggingAndRunningConfig(E2ETestCase):
         )
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0019"
-        case_log_dir = context.logs_dir / "tc0019"
-        state_dir = context.state_dir / "tc0019"
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0019",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         confdir = case_work_dir / "conf-main"
@@ -87,12 +88,12 @@ class TestCase0019LoggingAndRunningConfig(E2ETestCase):
         }
 
         if result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Logging validation failed with status {result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Logging validation failed with status {result.returncode}", artifacts, details)
         if not log_entries:
-            return TestResult.fail_result(self.case_id, self.name, "No application log files were created in the configured log_dir", artifacts, details)
+            return self.fail_result(self.case_id, self.name, "No application log files were created in the configured log_dir", artifacts, details)
 
         stdout_lower = result.stdout.lower()
         if "display_running_config" not in stdout_lower and "log_dir" not in stdout_lower:
-            return TestResult.fail_result(self.case_id, self.name, "display-running-config output did not expose the active runtime configuration", artifacts, details)
+            return self.fail_result(self.case_id, self.name, "display-running-config output did not expose the active runtime configuration", artifacts, details)
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

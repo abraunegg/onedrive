@@ -52,7 +52,7 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         details: dict[str, object],
     ) -> TestResult | None:
         if not path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"{phase_name} did not leave the expected local file in place",
@@ -69,7 +69,7 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         details[f"{phase_name}_expected_mtime"] = expected_mtime
 
         if actual_content != expected_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"{phase_name} changed the local file content unexpectedly",
@@ -78,7 +78,7 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
             )
 
         if actual_mtime != expected_mtime:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"{phase_name} changed the local file timestamp unexpectedly",
@@ -102,7 +102,7 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         for marker in unexpected_markers:
             if marker in stdout_text:
                 details[f"{phase_name}_unexpected_download_marker"] = marker
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"{phase_name} showed unexpected download-side local reconciliation activity in upload-only mode",
@@ -126,7 +126,7 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         for marker in unexpected_markers:
             if marker in stdout_text:
                 details[f"{phase_name}_unexpected_upload_marker"] = marker
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"{phase_name} unexpectedly attempted another upload despite no local changes",
@@ -136,14 +136,14 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         return None
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0029"
-        case_log_dir = context.logs_dir / "tc0029"
-        state_dir = context.state_dir / "tc0029"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0029",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         conf_dir = case_work_dir / "conf"
@@ -221,7 +221,7 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
                 metadata_file,
                 "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
             )
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"initial upload phase failed with status {phase1_result.returncode}",
@@ -290,7 +290,7 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
                 metadata_file,
                 "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
             )
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"modified upload phase failed with status {phase2_result.returncode}",
@@ -357,7 +357,7 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
                 metadata_file,
                 "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
             )
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"no-op sync phase failed with status {phase3_result.returncode}",
@@ -411,4 +411,4 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
             "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
         )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

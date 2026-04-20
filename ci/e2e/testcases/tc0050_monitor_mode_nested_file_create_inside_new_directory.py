@@ -15,13 +15,14 @@ class TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(MonitorModeTestC
     description = "Create a nested directory tree and deep file under --monitor and validate the remote state"
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0050"
-        case_log_dir = context.logs_dir / "tc0050"
-        state_dir = context.state_dir / "tc0050"
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0050",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
@@ -65,7 +66,7 @@ class TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(MonitorModeTestC
             details["initial_sync_complete"] = initial_sync_complete
             if not initial_sync_complete:
                 self._write_metadata(metadata_file, details)
-                return TestResult.fail_result(self.case_id, self.name, "Monitor mode did not complete the initial sync within the expected time", artifacts, details)
+                return self.fail_result(self.case_id, self.name, "Monitor mode did not complete the initial sync within the expected time", artifacts, details)
             deep_dir_local.mkdir(parents=True, exist_ok=True)
             write_text_file(deep_file_local, deep_file_content)
             required_patterns = [f"Uploading new file: {deep_file_relative} ... done"]
@@ -86,9 +87,9 @@ class TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(MonitorModeTestC
         self._write_metadata(metadata_file, details)
 
         if not details.get("mutation_processed", False):
-            return TestResult.fail_result(self.case_id, self.name, "Monitor mode did not process the nested create event before shutdown", artifacts, details)
+            return self.fail_result(self.case_id, self.name, "Monitor mode did not process the nested create event before shutdown", artifacts, details)
         if verify_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if not deep_file_verify.is_file() or details["verify_deep_file_content"] != deep_file_content:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification is missing deep nested file state: {deep_file_relative}", artifacts, details)
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification is missing deep nested file state: {deep_file_relative}", artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

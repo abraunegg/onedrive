@@ -221,13 +221,14 @@ class TestCase0002SyncListValidation(E2ETestCase):
         os.utime(root, now)
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / f"tc{self.case_id}"
-        case_log_dir = context.logs_dir / f"tc{self.case_id}"
-        state_dir = context.state_dir / f"tc{self.case_id}"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name=f"tc{self.case_id}",
+            ensure_refresh_token=False,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         fixture_root = case_work_dir / "fixture"
         sync_root = case_work_dir / "syncroot"
@@ -356,7 +357,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 + ", ".join(failure.split(":")[0] for failure in failures)
             )
             details["failures"] = failures
-            return TestResult.fail_result(
+            return self.fail_result(
                 case_id=self.case_id,
                 name=self.name,
                 reason=reason,
@@ -364,7 +365,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 details=details,
             )
 
-        return TestResult.pass_result(
+        return self.pass_result(
             case_id=self.case_id,
             name=self.name,
             artifacts=all_artifacts,

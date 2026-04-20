@@ -86,13 +86,14 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
         write_text_file(output_file, "\n".join(lines) + "\n")
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0039"
-        case_log_dir = context.logs_dir / "tc0039"
-        state_dir = context.state_dir / "tc0039"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0039",
+            ensure_refresh_token=False,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         context.ensure_refresh_token_available()
 
@@ -227,7 +228,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
 
         if phase1_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"seed phase failed with status {phase1_result.returncode}",
@@ -267,7 +268,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"creation verification failed with status {phase2_result.returncode}",
@@ -277,7 +278,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
 
         if not verify_create_anchor_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"creation verification is missing anchor file: {anchor_relative}",
@@ -287,7 +288,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
 
         if not verify_create_empty_dir_path.is_dir():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"creation verification is missing empty directory: {empty_dir_relative}",
@@ -297,7 +298,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
 
         if not verify_create_nested_parent_path.is_dir():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"creation verification is missing nested parent directory: {nested_parent_relative}",
@@ -307,7 +308,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
 
         if not verify_create_nested_empty_path.is_dir():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"creation verification is missing nested empty directory: {nested_empty_relative}",
@@ -317,7 +318,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
 
         if sorted(verify_create_manifest) != sorted(expected_creation_manifest):
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "creation verification manifest did not match expected structure",
@@ -356,7 +357,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
             or local_nested_empty_path.exists()
         ):
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local empty directory cleanup preparation failed before sync",
@@ -366,7 +367,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
 
         if not local_anchor_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local anchor file is missing before cleanup sync",
@@ -376,7 +377,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
 
         if sorted(local_manifest_before_phase3) != sorted(expected_local_before_phase3_manifest):
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local filesystem manifest before cleanup sync did not match expected structure",
@@ -404,7 +405,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
 
         if phase3_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"cleanup propagation phase failed with status {phase3_result.returncode}",
@@ -451,7 +452,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
         self._write_metadata(metadata_file, details)
 
         if phase4_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"cleanup verification failed with status {phase4_result.returncode}",
@@ -460,7 +461,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
             )
 
         if not verify_cleanup_anchor_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"cleanup verification is missing anchor file: {anchor_relative}",
@@ -469,7 +470,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
             )
 
         if verify_cleanup_empty_dir_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"cleanup verification still contains removed empty directory: {empty_dir_relative}",
@@ -478,7 +479,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
             )
 
         if verify_cleanup_nested_parent_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"cleanup verification still contains removed nested parent directory: {nested_parent_relative}",
@@ -487,7 +488,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
             )
 
         if verify_cleanup_nested_empty_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"cleanup verification still contains removed nested empty directory: {nested_empty_relative}",
@@ -496,7 +497,7 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
             )
 
         if sorted(verify_cleanup_manifest) != sorted(expected_cleanup_manifest):
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "cleanup verification manifest did not match expected final structure",
@@ -504,4 +505,4 @@ class TestCase0039EmptyDirectoryHandling(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

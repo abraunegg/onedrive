@@ -50,14 +50,14 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
         )
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0034"
-        case_log_dir = context.logs_dir / "tc0034"
-        state_dir = context.state_dir / "tc0034"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0034",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         local_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
@@ -148,7 +148,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
 
         if phase1_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"seed phase failed with status {phase1_result.returncode}",
@@ -166,7 +166,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
 
         if local_source_path.exists():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local source file still exists immediately after move",
@@ -176,7 +176,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
 
         if not local_destination_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local destination file does not exist immediately after move",
@@ -202,7 +202,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"move propagation phase failed with status {phase2_result.returncode}",
@@ -247,7 +247,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification failed with status {verify_result.returncode}",
@@ -256,7 +256,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
             )
 
         if verify_source_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification still contains source file path: {source_relative}",
@@ -265,7 +265,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
             )
 
         if not verify_destination_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification is missing moved file at destination path: {destination_relative}",
@@ -274,7 +274,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
             )
 
         if verify_destination_content != initial_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "moved file content did not match the original content after remote verification",
@@ -283,7 +283,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
             )
 
         if not verify_anchor_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification is missing destination anchor file: {anchor_relative}",
@@ -291,4 +291,4 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

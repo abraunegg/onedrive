@@ -51,14 +51,14 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(E2ETestCase):
         )
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0036"
-        case_log_dir = context.logs_dir / "tc0036"
-        state_dir = context.state_dir / "tc0036"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0036",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         local_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
@@ -141,7 +141,7 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(E2ETestCase):
 
         if phase1_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"seed phase failed with status {phase1_result.returncode}",
@@ -157,7 +157,7 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(E2ETestCase):
 
         if not local_file_path.is_file():
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "local file does not exist immediately after content replacement",
@@ -183,7 +183,7 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(E2ETestCase):
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"replace propagation phase failed with status {phase2_result.returncode}",
@@ -229,7 +229,7 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(E2ETestCase):
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification failed with status {verify_result.returncode}",
@@ -238,7 +238,7 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(E2ETestCase):
             )
 
         if not verify_file_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"remote verification is missing expected file: {relative_path}",
@@ -247,7 +247,7 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(E2ETestCase):
             )
 
         if verified_content != replacement_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "verified file content did not match the replacement content after remote verification",
@@ -256,7 +256,7 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(E2ETestCase):
             )
 
         if initial_content == verified_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "verified file content still matches the initial content after replacement",
@@ -265,7 +265,7 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(E2ETestCase):
             )
 
         if verify_manifest != expected_manifest:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "remote verification manifest did not match the expected single-file structure after content replacement",
@@ -273,4 +273,4 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

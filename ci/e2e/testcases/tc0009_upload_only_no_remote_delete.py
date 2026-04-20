@@ -19,8 +19,12 @@ class TestCase0009UploadOnlyNoRemoteDelete(E2ETestCase):
         write_onedrive_config(config_path, "# tc0009 config\nbypass_data_preservation = \"true\"\n")
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0009"; case_log_dir = context.logs_dir / "tc0009"; state_dir = context.state_dir / "tc0009"
-        reset_directory(case_work_dir); reset_directory(case_log_dir); reset_directory(state_dir); context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0009",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir; case_log_dir = layout.log_dir; state_dir = layout.state_dir
         sync_root = case_work_dir / "syncroot"; seed_conf = case_work_dir / "conf-seed"; upload_conf = case_work_dir / "conf-upload"; verify_root = case_work_dir / "verifyroot"; verify_conf = case_work_dir / "conf-verify"; root_name = f"ZZ_E2E_TC0009_{context.run_id}_{os.getpid()}"
         keep_file = sync_root / root_name / "keep.txt"; write_text_file(keep_file, "keep remote\n")
         context.bootstrap_config_dir(seed_conf); self._write_config(seed_conf / "config")
@@ -40,8 +44,8 @@ class TestCase0009UploadOnlyNoRemoteDelete(E2ETestCase):
         write_text_file(metadata_file, "\n".join([f"root_name={root_name}", f"seed_returncode={seed_result.returncode}", f"upload_returncode={upload_result.returncode}", f"verify_returncode={verify_result.returncode}"]) + "\n")
         artifacts = [str(seed_stdout), str(seed_stderr), str(upload_stdout), str(upload_stderr), str(verify_stdout), str(verify_stderr), str(remote_manifest_file), str(metadata_file)]
         details = {"seed_returncode": seed_result.returncode, "upload_returncode": upload_result.returncode, "verify_returncode": verify_result.returncode, "root_name": root_name}
-        if seed_result.returncode != 0: return TestResult.fail_result(self.case_id, self.name, f"Remote seed failed with status {seed_result.returncode}", artifacts, details)
-        if upload_result.returncode != 0: return TestResult.fail_result(self.case_id, self.name, f"--upload-only --no-remote-delete failed with status {upload_result.returncode}", artifacts, details)
-        if verify_result.returncode != 0: return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
-        if f"{root_name}/keep.txt" not in remote_manifest: return TestResult.fail_result(self.case_id, self.name, f"Remote file was unexpectedly deleted despite --no-remote-delete: {root_name}/keep.txt", artifacts, details)
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        if seed_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"Remote seed failed with status {seed_result.returncode}", artifacts, details)
+        if upload_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"--upload-only --no-remote-delete failed with status {upload_result.returncode}", artifacts, details)
+        if verify_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+        if f"{root_name}/keep.txt" not in remote_manifest: return self.fail_result(self.case_id, self.name, f"Remote file was unexpectedly deleted despite --no-remote-delete: {root_name}/keep.txt", artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

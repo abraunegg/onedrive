@@ -19,13 +19,14 @@ class TestCase0055UploadOnlyRemoveSourceFolders(E2ETestCase):
         write_text_file(metadata_file, "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n")
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0055"
-        case_log_dir = context.logs_dir / "tc0055"
-        state_dir = context.state_dir / "tc0055"
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0055",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
@@ -145,7 +146,7 @@ class TestCase0055UploadOnlyRemoveSourceFolders(E2ETestCase):
         self._write_metadata(metadata_file, details)
 
         if upload_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"--upload-only with remove_source_folders failed with status {upload_result.returncode}",
@@ -153,7 +154,7 @@ class TestCase0055UploadOnlyRemoveSourceFolders(E2ETestCase):
                 details,
             )
         if verify_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Remote verification failed with status {verify_result.returncode}",
@@ -161,7 +162,7 @@ class TestCase0055UploadOnlyRemoveSourceFolders(E2ETestCase):
                 details,
             )
         if top_dir_local.exists() or file_one_local.exists() or file_two_local.exists() or any(entry.startswith(f"{root_name}/") for entry in local_manifest):
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Local directory structure still exists after remove_source_folders processing",
@@ -169,7 +170,7 @@ class TestCase0055UploadOnlyRemoveSourceFolders(E2ETestCase):
                 details,
             )
         if not file_one_verify.is_file() or details["verify_file_one_content"] != file_one_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Remote verification missing uploaded file state: {file_one_relative}",
@@ -177,11 +178,11 @@ class TestCase0055UploadOnlyRemoveSourceFolders(E2ETestCase):
                 details,
             )
         if not file_two_verify.is_file() or details["verify_file_two_content"] != file_two_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Remote verification missing uploaded file state: {file_two_relative}",
                 artifacts,
                 details,
             )
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

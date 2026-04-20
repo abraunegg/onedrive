@@ -25,14 +25,14 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
         write_onedrive_config(config_path, content)
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0023"
-        case_log_dir = context.logs_dir / "tc0023"
-        state_dir = context.state_dir / "tc0023"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0023",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         seed_root = case_work_dir / "seedroot"
         local_root = case_work_dir / "localroot"
@@ -115,7 +115,7 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
                 "download_returncode": download_result.returncode,
                 "root_name": root_name,
             }
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Initial download phase did not create the expected local file",
@@ -137,7 +137,7 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
                 "root_name": root_name,
                 "initial_local_content": initial_local_content,
             }
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Initial download phase did not produce the expected baseline file content",
@@ -227,7 +227,7 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
             ("final sync", final_result.returncode),
         ]:
             if rc != 0:
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"{label} phase failed with status {rc}",
@@ -238,7 +238,7 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
         # With bypass_data_preservation enabled, the unchanged online version
         # should overwrite the locally modified file during the resync.
         if final_local_content != original_remote_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Local content was not overwritten by the remote file when bypass_data_preservation was enabled",
@@ -247,7 +247,7 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
             )
 
         if safe_backup_files:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Safe-backup files were created despite bypass_data_preservation being enabled",
@@ -255,4 +255,4 @@ class TestCase0023BypassDataPreservationValidation(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

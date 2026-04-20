@@ -16,14 +16,14 @@ class TestCase0045MonitorModeLocalDirectoryCreatePropagation(MonitorModeTestCase
     description = "Create a new local directory and child file under --monitor and validate the remote state"
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0045"
-        case_log_dir = context.logs_dir / "tc0045"
-        state_dir = context.state_dir / "tc0045"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0045",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
@@ -105,7 +105,7 @@ class TestCase0045MonitorModeLocalDirectoryCreatePropagation(MonitorModeTestCase
             details["initial_sync_complete"] = initial_sync_complete
             if not initial_sync_complete:
                 self._write_metadata(metadata_file, details)
-                return TestResult.fail_result(self.case_id, self.name, "Monitor mode did not complete the initial sync within the expected time", artifacts, details)
+                return self.fail_result(self.case_id, self.name, "Monitor mode did not complete the initial sync within the expected time", artifacts, details)
 
             created_dir_local_path.mkdir(parents=True, exist_ok=True)
             write_text_file(created_file_local_path, created_file_content)
@@ -146,13 +146,13 @@ class TestCase0045MonitorModeLocalDirectoryCreatePropagation(MonitorModeTestCase
         self._write_metadata(metadata_file, details)
 
         if not details.get("mutation_processed", False):
-            return TestResult.fail_result(self.case_id, self.name, "Monitor mode did not process the local directory create event before shutdown", artifacts, details)
+            return self.fail_result(self.case_id, self.name, "Monitor mode did not process the local directory create event before shutdown", artifacts, details)
         if verify_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if not created_dir_verify_path.is_dir():
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification is missing created directory: {created_dir_relative}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification is missing created directory: {created_dir_relative}", artifacts, details)
         if not created_file_verify_path.is_file():
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification is missing created file: {created_file_relative}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification is missing created file: {created_file_relative}", artifacts, details)
         if details["verify_created_file_content"] != created_file_content:
-            return TestResult.fail_result(self.case_id, self.name, "Created directory child file content did not match after remote verification", artifacts, details)
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+            return self.fail_result(self.case_id, self.name, "Created directory child file content did not match after remote verification", artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

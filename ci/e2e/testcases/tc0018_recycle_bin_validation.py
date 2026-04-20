@@ -41,14 +41,14 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         )
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0018"
-        case_log_dir = context.logs_dir / "tc0018"
-        state_dir = context.state_dir / "tc0018"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0018",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
@@ -210,7 +210,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         }
 
         if seed_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Remote seed failed with status {seed_result.returncode}",
@@ -219,7 +219,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             )
 
         if remove_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Online directory removal failed with status {remove_result.returncode}",
@@ -228,7 +228,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             )
 
         if cleanup_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Recycle bin cleanup sync failed with status {cleanup_result.returncode}",
@@ -237,7 +237,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             )
 
         if verify_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Remote verification failed with status {verify_result.returncode}",
@@ -246,7 +246,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             )
 
         if (sync_root / root_name / "OldData").exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "OldData still exists locally after online deletion cleanup",
@@ -255,7 +255,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             )
 
         if not (sync_root / root_name / "Keep" / "keep.txt").is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Keep file is missing locally after recycle bin processing",
@@ -267,7 +267,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         recycle_has_info = any(path.endswith(".trashinfo") for path in recycle_manifest)
 
         if not recycle_has_file:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Deleted content was not moved into the configured recycle bin",
@@ -276,7 +276,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             )
 
         if not recycle_has_info:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Recycle bin metadata .trashinfo file was not created",
@@ -285,7 +285,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             )
 
         if f"{root_name}/Keep/keep.txt" not in remote_manifest:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Keep file is missing online after recycle bin processing",
@@ -294,7 +294,7 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             )
 
         if any(entry == f"{root_name}/OldData" or entry.startswith(f"{root_name}/OldData/") for entry in remote_manifest):
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "OldData still exists online after explicit online removal",
@@ -302,4 +302,4 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

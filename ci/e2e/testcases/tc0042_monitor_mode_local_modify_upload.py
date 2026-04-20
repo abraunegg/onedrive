@@ -77,14 +77,14 @@ class TestCase0042MonitorModeLocalModifyUpload(E2ETestCase):
         return False
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0042"
-        case_log_dir = context.logs_dir / "tc0042"
-        state_dir = context.state_dir / "tc0042"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0042",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
@@ -174,7 +174,7 @@ class TestCase0042MonitorModeLocalModifyUpload(E2ETestCase):
 
         if seed_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Seed phase failed with status {seed_result.returncode}",
@@ -213,7 +213,7 @@ class TestCase0042MonitorModeLocalModifyUpload(E2ETestCase):
                 if not initial_sync_complete:
                     details["monitor_returncode"] = process.returncode
                     self._write_metadata(metadata_file, details)
-                    return TestResult.fail_result(
+                    return self.fail_result(
                         self.case_id,
                         self.name,
                         "Monitor mode did not complete the initial sync within the expected time",
@@ -280,7 +280,7 @@ class TestCase0042MonitorModeLocalModifyUpload(E2ETestCase):
         self._write_metadata(metadata_file, details)
 
         if not details.get("mutation_processed", False):
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Monitor mode did not process the local modify event before shutdown",
@@ -289,7 +289,7 @@ class TestCase0042MonitorModeLocalModifyUpload(E2ETestCase):
             )
 
         if verify_result.returncode != 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Remote verification failed with status {verify_result.returncode}",
@@ -298,7 +298,7 @@ class TestCase0042MonitorModeLocalModifyUpload(E2ETestCase):
             )
 
         if not verify_file_path.is_file():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Remote verification is missing modified file: {relative_path}",
@@ -307,7 +307,7 @@ class TestCase0042MonitorModeLocalModifyUpload(E2ETestCase):
             )
 
         if details["verify_content"] != modified_content:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Modified file content did not match after remote verification",
@@ -315,4 +315,4 @@ class TestCase0042MonitorModeLocalModifyUpload(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

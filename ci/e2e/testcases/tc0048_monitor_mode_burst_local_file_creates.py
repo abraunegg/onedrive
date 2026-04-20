@@ -15,14 +15,14 @@ class TestCase0048MonitorModeBurstLocalFileCreates(MonitorModeTestCaseBase):
     description = "Rapidly create multiple local files under --monitor and validate they all upload correctly"
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0048"
-        case_log_dir = context.logs_dir / "tc0048"
-        state_dir = context.state_dir / "tc0048"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0048",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
@@ -68,7 +68,7 @@ class TestCase0048MonitorModeBurstLocalFileCreates(MonitorModeTestCaseBase):
             details["initial_sync_complete"] = initial_sync_complete
             if not initial_sync_complete:
                 self._write_metadata(metadata_file, details)
-                return TestResult.fail_result(self.case_id, self.name, "Monitor mode did not complete the initial sync within the expected time", artifacts, details)
+                return self.fail_result(self.case_id, self.name, "Monitor mode did not complete the initial sync within the expected time", artifacts, details)
 
             for relative in burst_relatives:
                 write_text_file(sync_root / relative, burst_contents[relative])
@@ -92,12 +92,12 @@ class TestCase0048MonitorModeBurstLocalFileCreates(MonitorModeTestCaseBase):
         self._write_metadata(metadata_file, details)
 
         if not details.get("mutation_processed", False):
-            return TestResult.fail_result(self.case_id, self.name, "Monitor mode did not process the burst local create events before shutdown", artifacts, details)
+            return self.fail_result(self.case_id, self.name, "Monitor mode did not process the burst local create events before shutdown", artifacts, details)
         if verify_result.returncode != 0:
-            return TestResult.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         for relative in burst_relatives:
             if not verify_paths[relative].is_file():
-                return TestResult.fail_result(self.case_id, self.name, f"Remote verification is missing burst-created file: {relative}", artifacts, details)
+                return self.fail_result(self.case_id, self.name, f"Remote verification is missing burst-created file: {relative}", artifacts, details)
             if details[f"verify_content::{relative}"] != burst_contents[relative]:
-                return TestResult.fail_result(self.case_id, self.name, f"Burst-created file content did not match for: {relative}", artifacts, details)
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+                return self.fail_result(self.case_id, self.name, f"Burst-created file content did not match for: {relative}", artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

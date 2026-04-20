@@ -26,14 +26,14 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         write_onedrive_config(config_path, content)
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0022"
-        case_log_dir = context.logs_dir / "tc0022"
-        state_dir = context.state_dir / "tc0022"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0022",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         seed_root = case_work_dir / "seedroot"
         local_root = case_work_dir / "localroot"
@@ -246,7 +246,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             ("verify", verify_result.returncode),
         ]:
             if rc != 0:
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"{label} phase failed with status {rc}",
@@ -255,7 +255,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                 )
 
         if local_content != expected:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Local content was not retained after conflict resolution with local_first enabled",
@@ -264,7 +264,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             )
 
         if remote_content != expected:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Remote content did not converge to the local source-of-truth content when local_first was enabled",
@@ -272,4 +272,4 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                 details,
             )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)

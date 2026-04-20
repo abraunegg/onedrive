@@ -82,14 +82,14 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
         return extracted_files
 
     def run(self, context: E2EContext) -> TestResult:
-        case_work_dir = context.work_root / "tc0028"
-        case_log_dir = context.logs_dir / "tc0028"
-        state_dir = context.state_dir / "tc0028"
-
-        reset_directory(case_work_dir)
-        reset_directory(case_log_dir)
-        reset_directory(state_dir)
-        context.ensure_refresh_token_available()
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0028",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
         verify_root = case_work_dir / "verifyroot"
@@ -109,7 +109,7 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
         archive_path = context.repo_root / "tests" / "bad-file-name.tar.xz"
 
         if not archive_path.exists():
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Required archive not found: {archive_path}",
@@ -160,7 +160,7 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
                 "archive_path": str(archive_path),
                 "extract_returncode": extract_result.returncode,
             }
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Archive extraction failed with status {extract_result.returncode}",
@@ -287,7 +287,7 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
             ("remote verification", verify_result.returncode),
         ]:
             if rc != 0:
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"{label} failed with status {rc}",
@@ -297,7 +297,7 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
 
         for expected in valid_files:
             if expected not in remote_manifest:
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"Expected valid file missing remotely: {expected}",
@@ -307,7 +307,7 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
 
         for unwanted in extracted_file_entries:
             if unwanted in remote_manifest:
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"Control character or non-UTF8 filename was synchronised remotely: {unwanted!r}",
@@ -316,7 +316,7 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
                 )
 
         if len(extracted_file_entries) == 0:
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Archive extraction produced no test files under archive_payload",
@@ -328,7 +328,7 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
             f"./{root_name}/archive_payload" not in combined_output
             and f"{root_name}/archive_payload" not in combined_output
         ):
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Client output does not reference the extracted archive payload paths",
@@ -342,7 +342,7 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
             "Skipping item",
         ]
         if not any(indicator in combined_output for indicator in skip_indicators):
-            return TestResult.fail_result(
+            return self.fail_result(
                 self.case_id,
                 self.name,
                 "Expected skip behaviour was not observed in client output",
@@ -357,7 +357,7 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
         ]
         for marker in disallowed_remote_failure_markers:
             if marker in combined_output:
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"Client attempted remote invalid-name operation instead of safe local skip: {marker}",
@@ -376,7 +376,7 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
         ]
         for marker in crash_markers:
             if marker in combined_output:
-                return TestResult.fail_result(
+                return self.fail_result(
                     self.case_id,
                     self.name,
                     f"Client output indicates crash or exception: {marker}",
@@ -384,4 +384,4 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
                     details,
                 )
 
-        return TestResult.pass_result(self.case_id, self.name, artifacts, details)
+        return self.pass_result(self.case_id, self.name, artifacts, details)
