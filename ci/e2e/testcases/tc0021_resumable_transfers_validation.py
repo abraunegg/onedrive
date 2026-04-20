@@ -39,6 +39,10 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
     # is reached with ample time to deliver SIGINT before the transfer can complete.
     RATE_LIMIT: str | None = "1048576"
 
+    # Force active upload / download transfer abortion on SIGINT so resumable state is
+    # actually persisted for recovery testing. This must only be enabled for tc0021.
+    FORCE_XFER_ABORT = True
+
     # Poll frequently to reduce brittleness caused by buffered log writes.
     TRANSFER_POLL_INTERVAL_SECONDS = 0.25
 
@@ -56,6 +60,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         ]
         if self.RATE_LIMIT:
             lines.append(f'rate_limit = "{self.RATE_LIMIT}"')
+        if self.FORCE_XFER_ABORT:
+            lines.append('force_xfer_abort = "true"')
         write_onedrive_config(config_path, "\n".join(lines) + "\n")
 
     def _read_text_if_exists(self, path: Path) -> str:
@@ -479,6 +485,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "phase1_crash_marker_seen": crash_marker_seen,
             "phase1_interrupted_as_expected": interrupted_as_expected,
             "rate_limit": self.RATE_LIMIT or "disabled",
+            "force_xfer_abort": self.FORCE_XFER_ABORT,
             "conf_dir": str(conf_dir),
             "app_log_file": str(app_log_file),
         }
@@ -501,6 +508,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"phase1_crash_marker_seen={crash_marker_seen}",
                     f"phase1_interrupted_as_expected={interrupted_as_expected}",
                     f"rate_limit={self.RATE_LIMIT or 'disabled'}",
+                    f"force_xfer_abort={self.FORCE_XFER_ABORT}",
                     f"conf_dir={conf_dir}",
                     f"app_log_file={app_log_file}",
                 ]
@@ -676,6 +684,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 "seed_returncode": seed_result.returncode,
                 "relative_path": relative_path,
                 "rate_limit": self.RATE_LIMIT or "disabled",
+                "force_xfer_abort": self.FORCE_XFER_ABORT,
             }
             return self._scenario_fail(
                 scenario_id,
@@ -844,6 +853,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "phase1_crash_marker_seen": crash_marker_seen,
             "phase1_interrupted_as_expected": interrupted_as_expected,
             "rate_limit": self.RATE_LIMIT or "disabled",
+            "force_xfer_abort": self.FORCE_XFER_ABORT,
             "conf_dir": str(conf_dir),
             "app_log_file": str(app_log_file),
         }
@@ -868,6 +878,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"phase1_crash_marker_seen={crash_marker_seen}",
                     f"phase1_interrupted_as_expected={interrupted_as_expected}",
                     f"rate_limit={self.RATE_LIMIT or 'disabled'}",
+                    f"force_xfer_abort={self.FORCE_XFER_ABORT}",
                     f"conf_dir={conf_dir}",
                     f"app_log_file={app_log_file}",
                 ]
