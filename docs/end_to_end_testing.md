@@ -75,6 +75,10 @@ SharePoint end-to-end testing uses the same complete automated test suite as Per
 | 0051 | Monitor mode mtime-only local change handling | - Personal<br>- Business<br>- SharePoint | This test touches an existing local file under --monitor without changing content and validate that no new upload occurs |
 | 0052 | Monitor mode large file create session upload | - Personal<br>- Business<br>- SharePoint | This test creates a large file under --monitor and validate session upload behaviour and remote integrity |
 | 0053 | Monitor mode rename then modify | - Personal<br>- Business<br>- SharePoint | This test renames a file and then modify the renamed file under --monitor and validate the final remote state |
+| 0054 | Monitor mode atomic-save editor replace workflow | - Personal<br>- Business<br>- SharePoint | This test replaces an existing file via temp-file save and atomic rename under --monitor and validate the final remote state |
+| 0055 | Upload-only remove-source-folders | - Personal<br>- Business<br>- SharePoint | This test validates that remove_source_folders removes empty local directory structure after upload-only succeeds |
+| 0056 | Monitor mode create then delete quickly | - Personal<br>- Business<br>- SharePoint | This test creates and delete a local file quickly under --monitor and validate stability and final remote state |
+
 
 
 ### Contributing Additional Test Cases
