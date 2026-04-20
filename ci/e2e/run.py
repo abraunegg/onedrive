@@ -51,6 +51,10 @@ from testcases.tc0037_mtime_only_local_change_handling import TestCase0037MtimeO
 from testcases.tc0038_delete_and_recreate_with_same_name_validation import TestCase0038DeleteAndRecreateWithSameNameValidation
 from testcases.tc0039_empty_directory_handling_validation import TestCase0039EmptyDirectoryHandling
 from testcases.tc0040_nested_tree_rename_and_delete_stress_validation import TestCase0040NestedTreeRenameAndDeleteStressValidation
+from testcases.tc0041_monitor_mode_local_create_upload import TestCase0041MonitorModeLocalCreateUpload
+from testcases.tc0042_monitor_mode_local_modify_upload import TestCase0042MonitorModeLocalModifyUpload
+from testcases.tc0043_monitor_mode_local_delete_propagation import TestCase0043MonitorModeLocalDeletePropagation
+from testcases.tc0044_monitor_mode_local_rename_propagation import TestCase0044MonitorModeLocalRenamePropagation
 
 def build_test_suite() -> list:
     return [
@@ -94,6 +98,10 @@ def build_test_suite() -> list:
         #TestCase0038DeleteAndRecreateWithSameNameValidation(),
         #TestCase0039EmptyDirectoryHandling(),
         TestCase0040NestedTreeRenameAndDeleteStressValidation(),
+        TestCase0041MonitorModeLocalCreateUpload(),
+        TestCase0042MonitorModeLocalModifyUpload(),
+        TestCase0043MonitorModeLocalDeletePropagation(),
+        TestCase0044MonitorModeLocalRenamePropagation(),
     ]
 
 
