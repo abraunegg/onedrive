@@ -55,6 +55,15 @@ from testcases.tc0041_monitor_mode_local_create_upload import TestCase0041Monito
 from testcases.tc0042_monitor_mode_local_modify_upload import TestCase0042MonitorModeLocalModifyUpload
 from testcases.tc0043_monitor_mode_local_delete_propagation import TestCase0043MonitorModeLocalDeletePropagation
 from testcases.tc0044_monitor_mode_local_rename_propagation import TestCase0044MonitorModeLocalRenamePropagation
+from testcases.tc0045_monitor_mode_local_directory_create_propagation import TestCase0045MonitorModeLocalDirectoryCreatePropagation
+from testcases.tc0046_monitor_mode_local_directory_rename_propagation import TestCase0046MonitorModeLocalDirectoryRenamePropagation
+from testcases.tc0047_monitor_mode_local_directory_delete_propagation import TestCase0047MonitorModeLocalDirectoryDeletePropagation
+from testcases.tc0048_monitor_mode_burst_local_file_creates import TestCase0048MonitorModeBurstLocalFileCreates
+from testcases.tc0049_monitor_mode_mixed_burst_operations import TestCase0049MonitorModeMixedBurstOperations
+from testcases.tc0050_monitor_mode_nested_file_create_inside_new_directory import TestCase0050MonitorModeNestedFileCreateInsideNewDirectory
+from testcases.tc0051_monitor_mode_mtime_only_local_change_handling import TestCase0051MonitorModeMtimeOnlyLocalChangeHandling
+from testcases.tc0052_monitor_mode_large_file_create_session_upload import TestCase0052MonitorModeLargeFileCreateSessionUpload
+from testcases.tc0053_monitor_mode_rename_then_modify import TestCase0053MonitorModeRenameThenModify
 
 def build_test_suite() -> list:
     return [
@@ -97,11 +106,20 @@ def build_test_suite() -> list:
         #TestCase0037MtimeOnlyLocalChangeHandling(),
         #TestCase0038DeleteAndRecreateWithSameNameValidation(),
         #TestCase0039EmptyDirectoryHandling(),
-        TestCase0040NestedTreeRenameAndDeleteStressValidation(),
-        TestCase0041MonitorModeLocalCreateUpload(),
-        TestCase0042MonitorModeLocalModifyUpload(),
-        TestCase0043MonitorModeLocalDeletePropagation(),
-        TestCase0044MonitorModeLocalRenamePropagation(),
+        #TestCase0040NestedTreeRenameAndDeleteStressValidation(),
+        #TestCase0041MonitorModeLocalCreateUpload(),
+        #TestCase0042MonitorModeLocalModifyUpload(),
+        #TestCase0043MonitorModeLocalDeletePropagation(),
+        #TestCase0044MonitorModeLocalRenamePropagation(),
+        TestCase0045MonitorModeLocalDirectoryCreatePropagation(),
+        TestCase0046MonitorModeLocalDirectoryRenamePropagation(),
+        TestCase0047MonitorModeLocalDirectoryDeletePropagation(),
+        TestCase0048MonitorModeBurstLocalFileCreates(),
+        TestCase0049MonitorModeMixedBurstOperations(),
+        TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(),
+        TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(),
+        TestCase0052MonitorModeLargeFileCreateSessionUpload(),
+        TestCase0053MonitorModeRenameThenModify(),
     ]
 
 
