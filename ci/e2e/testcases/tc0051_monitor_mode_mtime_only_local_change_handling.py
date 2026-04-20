@@ -7,7 +7,7 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, compute_quickxor_hash_file, reset_directory, run_command, write_text_file
-from monitor_case_base import MonitorModeTestCaseBase
+from testcases.monitor_case_base import MonitorModeTestCaseBase
 
 
 class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBase):
