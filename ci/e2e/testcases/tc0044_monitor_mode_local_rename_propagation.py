@@ -10,12 +10,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import (
-    command_to_string,
-    reset_directory,
-    run_command,
-    write_text_file,
-)
+from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
 class TestCase0044MonitorModeLocalRenamePropagation(E2ETestCase):
@@ -40,27 +35,45 @@ class TestCase0044MonitorModeLocalRenamePropagation(E2ETestCase):
             'monitor_fullscan_frequency = "1"\n'
         )
 
-    def _count_completion_markers(self, stdout_file: Path) -> int:
+    def _read_stdout(self, stdout_file: Path) -> str:
         if not stdout_file.exists():
-            return 0
+            return ""
         try:
-            content = stdout_file.read_text(encoding="utf-8", errors="replace")
+            return stdout_file.read_text(encoding="utf-8", errors="replace")
         except OSError:
-            return 0
-        return content.count("Sync with Microsoft OneDrive is complete")
+            return ""
 
-    def _wait_for_completion_count(
+    def _wait_for_initial_sync_complete(
         self,
         stdout_file: Path,
-        expected_count: int,
         timeout_seconds: int = 120,
         poll_interval: float = 0.5,
     ) -> bool:
         deadline = time.time() + timeout_seconds
+        marker = "Sync with Microsoft OneDrive is complete"
+
         while time.time() < deadline:
-            if self._count_completion_markers(stdout_file) >= expected_count:
+            if marker in self._read_stdout(stdout_file):
                 return True
             time.sleep(poll_interval)
+
+        return False
+
+    def _wait_for_monitor_patterns(
+        self,
+        stdout_file: Path,
+        required_patterns: list[str],
+        timeout_seconds: int = 120,
+        poll_interval: float = 0.5,
+    ) -> bool:
+        deadline = time.time() + timeout_seconds
+
+        while time.time() < deadline:
+            content = self._read_stdout(stdout_file)
+            if all(pattern in content for pattern in required_patterns):
+                return True
+            time.sleep(poll_interval)
+
         return False
 
     def run(self, context: E2EContext) -> TestResult:
@@ -79,9 +92,6 @@ class TestCase0044MonitorModeLocalRenamePropagation(E2ETestCase):
         conf_verify = case_work_dir / "conf-verify"
         app_log_dir = case_log_dir / "app-logs"
 
-        reset_directory(sync_root)
-        reset_directory(verify_root)
-
         root_name = f"ZZ_E2E_TC0044_{context.run_id}_{os.getpid()}"
         old_relative = f"{root_name}/original-name.txt"
         new_relative = f"{root_name}/renamed-file.txt"
@@ -96,9 +106,12 @@ class TestCase0044MonitorModeLocalRenamePropagation(E2ETestCase):
             "This content must survive the rename unchanged.\n"
         )
 
-        context.prepare_minimal_config_dir(conf_main, self._build_config_text(sync_root, app_log_dir))
-        context.prepare_minimal_config_dir(
-            conf_verify,
+        context.bootstrap_config_dir(conf_main)
+        write_text_file(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
+
+        context.bootstrap_config_dir(conf_verify)
+        write_text_file(
+            conf_verify / "config",
             (
                 "# tc0044 verify\n"
                 f'sync_dir = "{verify_root}"\n'
@@ -193,7 +206,7 @@ class TestCase0044MonitorModeLocalRenamePropagation(E2ETestCase):
                     text=True,
                 )
 
-                initial_sync_complete = self._wait_for_completion_count(monitor_stdout, 1)
+                initial_sync_complete = self._wait_for_initial_sync_complete(monitor_stdout)
                 details["initial_sync_complete"] = initial_sync_complete
 
                 if not initial_sync_complete:
@@ -211,8 +224,17 @@ class TestCase0044MonitorModeLocalRenamePropagation(E2ETestCase):
                 details["old_local_exists_after_rename"] = old_local_path.exists()
                 details["new_local_exists_after_rename"] = new_local_path.is_file()
 
-                mutation_processed = self._wait_for_completion_count(monitor_stdout, 2)
+                required_patterns = [
+                    f"[M] Local item moved: {old_relative} -> {new_relative}",
+                    f"Moving {old_relative} to {new_relative}",
+                ]
+                mutation_processed = self._wait_for_monitor_patterns(
+                    monitor_stdout,
+                    required_patterns=required_patterns,
+                    timeout_seconds=120,
+                )
                 details["mutation_processed"] = mutation_processed
+                details["mutation_required_patterns"] = required_patterns
 
                 process.send_signal(signal.SIGINT)
                 try:

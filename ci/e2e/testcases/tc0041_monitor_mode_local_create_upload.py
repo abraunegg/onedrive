@@ -10,12 +10,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import (
-    command_to_string,
-    reset_directory,
-    run_command,
-    write_text_file,
-)
+from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
 class TestCase0041MonitorModeLocalCreateUpload(E2ETestCase):
@@ -40,27 +35,45 @@ class TestCase0041MonitorModeLocalCreateUpload(E2ETestCase):
             'monitor_fullscan_frequency = "1"\n'
         )
 
-    def _count_completion_markers(self, stdout_file: Path) -> int:
+    def _read_stdout(self, stdout_file: Path) -> str:
         if not stdout_file.exists():
-            return 0
+            return ""
         try:
-            content = stdout_file.read_text(encoding="utf-8", errors="replace")
+            return stdout_file.read_text(encoding="utf-8", errors="replace")
         except OSError:
-            return 0
-        return content.count("Sync with Microsoft OneDrive is complete")
+            return ""
 
-    def _wait_for_completion_count(
+    def _wait_for_initial_sync_complete(
         self,
         stdout_file: Path,
-        expected_count: int,
         timeout_seconds: int = 120,
         poll_interval: float = 0.5,
     ) -> bool:
         deadline = time.time() + timeout_seconds
+        marker = "Sync with Microsoft OneDrive is complete"
+
         while time.time() < deadline:
-            if self._count_completion_markers(stdout_file) >= expected_count:
+            if marker in self._read_stdout(stdout_file):
                 return True
             time.sleep(poll_interval)
+
+        return False
+
+    def _wait_for_monitor_patterns(
+        self,
+        stdout_file: Path,
+        required_patterns: list[str],
+        timeout_seconds: int = 120,
+        poll_interval: float = 0.5,
+    ) -> bool:
+        deadline = time.time() + timeout_seconds
+
+        while time.time() < deadline:
+            content = self._read_stdout(stdout_file)
+            if all(pattern in content for pattern in required_patterns):
+                return True
+            time.sleep(poll_interval)
+
         return False
 
     def run(self, context: E2EContext) -> TestResult:
@@ -79,9 +92,6 @@ class TestCase0041MonitorModeLocalCreateUpload(E2ETestCase):
         conf_verify = case_work_dir / "conf-verify"
         app_log_dir = case_log_dir / "app-logs"
 
-        reset_directory(sync_root)
-        reset_directory(verify_root)
-
         root_name = f"ZZ_E2E_TC0041_{context.run_id}_{os.getpid()}"
         baseline_relative = f"{root_name}/baseline.txt"
         created_relative = f"{root_name}/monitor-created.txt"
@@ -96,9 +106,12 @@ class TestCase0041MonitorModeLocalCreateUpload(E2ETestCase):
             "This file was created while --monitor was already running.\n"
         )
 
-        context.prepare_minimal_config_dir(conf_main, self._build_config_text(sync_root, app_log_dir))
-        context.prepare_minimal_config_dir(
-            conf_verify,
+        context.bootstrap_config_dir(conf_main)
+        write_text_file(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
+
+        context.bootstrap_config_dir(conf_verify)
+        write_text_file(
+            conf_verify / "config",
             (
                 "# tc0041 verify\n"
                 f'sync_dir = "{verify_root}"\n'
@@ -163,7 +176,7 @@ class TestCase0041MonitorModeLocalCreateUpload(E2ETestCase):
                     text=True,
                 )
 
-                initial_sync_complete = self._wait_for_completion_count(monitor_stdout, 1)
+                initial_sync_complete = self._wait_for_initial_sync_complete(monitor_stdout)
                 details["initial_sync_complete"] = initial_sync_complete
 
                 if not initial_sync_complete:
@@ -180,8 +193,17 @@ class TestCase0041MonitorModeLocalCreateUpload(E2ETestCase):
                 write_text_file(created_local_path, created_content)
                 details["created_local_exists_after_write"] = created_local_path.is_file()
 
-                mutation_processed = self._wait_for_completion_count(monitor_stdout, 2)
+                required_patterns = [
+                    f"[M] New local file added: {created_relative}",
+                    f"Uploading new file: {created_relative} ... done",
+                ]
+                mutation_processed = self._wait_for_monitor_patterns(
+                    monitor_stdout,
+                    required_patterns=required_patterns,
+                    timeout_seconds=120,
+                )
                 details["mutation_processed"] = mutation_processed
+                details["mutation_required_patterns"] = required_patterns
 
                 process.send_signal(signal.SIGINT)
                 try:
@@ -222,7 +244,9 @@ class TestCase0041MonitorModeLocalCreateUpload(E2ETestCase):
 
         details["verify_created_exists"] = created_verify_path.is_file()
         details["verify_created_content"] = (
-            created_verify_path.read_text(encoding="utf-8") if created_verify_path.is_file() else ""
+            created_verify_path.read_text(encoding="utf-8")
+            if created_verify_path.is_file()
+            else ""
         )
 
         self._write_metadata(metadata_file, details)
