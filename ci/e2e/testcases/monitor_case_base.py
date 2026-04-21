@@ -7,7 +7,13 @@ from pathlib import Path
 
 from framework.base import E2ETestCase
 from framework.context import E2EContext
-from framework.utils import run_command, write_text_file
+from framework.utils import (
+    STARTUP_RETRY_ATTEMPTS,
+    STARTUP_RETRY_SLEEP_SECONDS,
+    is_transient_startup_discovery_failure,
+    run_command,
+    write_text_file,
+)
 
 
 class MonitorModeTestCaseBase(E2ETestCase):
@@ -95,7 +101,7 @@ class MonitorModeTestCaseBase(E2ETestCase):
 
         return False, -1
 
-    def _launch_monitor_process(
+    def _launch_monitor_process_raw(
         self,
         context: E2EContext,
         monitor_command: list[str],
@@ -114,6 +120,75 @@ class MonitorModeTestCaseBase(E2ETestCase):
         process._tc_stdout_fp = stdout_fp  # type: ignore[attr-defined]
         process._tc_stderr_fp = stderr_fp  # type: ignore[attr-defined]
         return process
+
+    def _wait_for_initial_sync_complete_or_transient_failure(
+        self,
+        process: subprocess.Popen[str],
+        stdout_file: Path,
+        stderr_file: Path,
+        timeout_seconds: int = 120,
+        poll_interval: float = 0.5,
+    ) -> str:
+        deadline = time.time() + timeout_seconds
+        marker = "Sync with Microsoft OneDrive is complete"
+
+        while time.time() < deadline:
+            stdout_content = self._read_stdout(stdout_file)
+            stderr_content = self._read_stdout(stderr_file)
+
+            if marker in stdout_content:
+                return "complete"
+
+            if is_transient_startup_discovery_failure(stdout_content, stderr_content):
+                return "transient_failure"
+
+            if process.poll() is not None:
+                return "process_exited"
+
+            time.sleep(poll_interval)
+
+        return "timeout"
+
+    def _launch_monitor_process(
+        self,
+        context: E2EContext,
+        monitor_command: list[str],
+        monitor_stdout: Path,
+        monitor_stderr: Path,
+        *,
+        startup_timeout_seconds: int = 120,
+        startup_retry_attempts: int = STARTUP_RETRY_ATTEMPTS,
+        startup_retry_sleep_seconds: float = STARTUP_RETRY_SLEEP_SECONDS,
+    ) -> tuple[subprocess.Popen[str], bool]:
+        last_process: subprocess.Popen[str] | None = None
+
+        for attempt in range(1, startup_retry_attempts + 1):
+            monitor_stdout.parent.mkdir(parents=True, exist_ok=True)
+            monitor_stderr.parent.mkdir(parents=True, exist_ok=True)
+            monitor_stdout.write_text("", encoding="utf-8")
+            monitor_stderr.write_text("", encoding="utf-8")
+
+            process = self._launch_monitor_process_raw(context, monitor_command, monitor_stdout, monitor_stderr)
+            status = self._wait_for_initial_sync_complete_or_transient_failure(
+                process,
+                monitor_stdout,
+                monitor_stderr,
+                timeout_seconds=startup_timeout_seconds,
+            )
+
+            if status == "complete":
+                return process, True
+
+            self._shutdown_monitor_process(process, {})
+            last_process = process
+
+            if status != "transient_failure" or attempt >= startup_retry_attempts:
+                return process, False
+
+            time.sleep(startup_retry_sleep_seconds)
+
+        assert last_process is not None
+        return last_process, False
 
     def _shutdown_monitor_process(self, process: subprocess.Popen[str], details: dict[str, object]) -> None:
         try:

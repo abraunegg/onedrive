@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import base64
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +20,75 @@ class CommandResult:
     @property
     def ok(self) -> bool:
         return self.returncode == 0
+
+
+STARTUP_RETRY_ATTEMPTS = 3
+STARTUP_RETRY_SLEEP_SECONDS = 3.0
+STARTUP_RETRY_FUNCTION_MARKERS = (
+    "Calling Function:    syncEngine.getDefaultRootDetails()",
+    "Calling Function:    syncEngine.getDefaultDriveDetails()",
+)
+STARTUP_RETRY_ERROR_MARKERS = (
+    "HTTP request returned status code 403 (Forbidden)",
+    "Error Code:          accessDenied",
+)
+
+
+def _combined_output(stdout: str, stderr: str) -> str:
+    return f"{stdout}\n{stderr}"
+
+
+def is_transient_startup_discovery_failure(stdout: str, stderr: str) -> bool:
+    content = _combined_output(stdout, stderr)
+    return (
+        any(marker in content for marker in STARTUP_RETRY_FUNCTION_MARKERS)
+        and any(marker in content for marker in STARTUP_RETRY_ERROR_MARKERS)
+    )
+
+
+def should_retry_startup_failure(stdout: str, stderr: str, attempt: int, max_attempts: int) -> bool:
+    return attempt < max_attempts and is_transient_startup_discovery_failure(stdout, stderr)
+
+
+def run_command_with_startup_retry(
+    command: list[str],
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+    input_text: str | None = None,
+    *,
+    max_attempts: int = STARTUP_RETRY_ATTEMPTS,
+    retry_sleep_seconds: float = STARTUP_RETRY_SLEEP_SECONDS,
+) -> CommandResult:
+    last_result: CommandResult | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        completed = subprocess.run(
+            command,
+            cwd=str(cwd) if cwd else None,
+            env=(lambda merged_env: merged_env)(dict(os.environ, **(env or {}))),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            input=input_text,
+        )
+
+        last_result = CommandResult(
+            command=command,
+            returncode=completed.returncode,
+            stdout=completed.stdout,
+            stderr=completed.stderr,
+        )
+
+        if not should_retry_startup_failure(last_result.stdout, last_result.stderr, attempt, max_attempts):
+            return last_result
+
+        time.sleep(retry_sleep_seconds)
+
+    assert last_result is not None
+    return last_result
 
 
 def timestamp_now() -> str:
@@ -52,28 +122,11 @@ def run_command(
     env: dict[str, str] | None = None,
     input_text: str | None = None,
 ) -> CommandResult:
-    merged_env = os.environ.copy()
-    if env:
-        merged_env.update(env)
-
-    completed = subprocess.run(
-        command,
-        cwd=str(cwd) if cwd else None,
-        env=merged_env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        input=input_text,
-    )
-
-    return CommandResult(
+    return run_command_with_startup_retry(
         command=command,
-        returncode=completed.returncode,
-        stdout=completed.stdout,
-        stderr=completed.stderr,
+        cwd=cwd,
+        env=env,
+        input_text=input_text,
     )
 
 

@@ -198,30 +198,25 @@ class TestCase0043MonitorModeLocalDeletePropagation(E2ETestCase):
         ]
         context.log(f"Executing Test Case {self.case_id} monitor: {command_to_string(monitor_command)}")
 
-        process: subprocess.Popen[str] | None = None
+        process = None
         try:
-            with monitor_stdout.open("w", encoding="utf-8") as stdout_fp, monitor_stderr.open("w", encoding="utf-8") as stderr_fp:
-                process = subprocess.Popen(
-                    monitor_command,
-                    cwd=str(context.repo_root),
-                    stdout=stdout_fp,
-                    stderr=stderr_fp,
-                    text=True,
+            process, initial_sync_complete = self._launch_monitor_process(
+                context,
+                monitor_command,
+                monitor_stdout,
+                monitor_stderr,
+            )
+            details["initial_sync_complete"] = initial_sync_complete
+
+            if not initial_sync_complete:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(
+                    self.case_id,
+                    self.name,
+                    "Monitor mode did not complete the initial sync within the expected time",
+                    artifacts,
+                    details,
                 )
-
-                initial_sync_complete = self._wait_for_initial_sync_complete(monitor_stdout)
-                details["initial_sync_complete"] = initial_sync_complete
-
-                if not initial_sync_complete:
-                    details["monitor_returncode"] = process.returncode
-                    self._write_metadata(metadata_file, details)
-                    return self.fail_result(
-                        self.case_id,
-                        self.name,
-                        "Monitor mode did not complete the initial sync within the expected time",
-                        artifacts,
-                        details,
-                    )
 
                 if delete_local_path.exists():
                     delete_local_path.unlink()
@@ -240,14 +235,7 @@ class TestCase0043MonitorModeLocalDeletePropagation(E2ETestCase):
                 details["mutation_processed"] = mutation_processed
                 details["mutation_required_patterns"] = required_patterns
 
-                process.send_signal(signal.SIGINT)
-                try:
-                    process.wait(timeout=30)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=30)
-
-                details["monitor_returncode"] = process.returncode
+            self._shutdown_monitor_process(process, details)
         finally:
             if process is not None and process.poll() is None:
                 process.kill()

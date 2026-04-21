@@ -92,10 +92,9 @@ class TestCase0056MonitorModeCreateThenDeleteQuickly(MonitorModeTestCaseBase):
             str(conf_main),
         ]
         context.log(f"Executing Test Case {self.case_id} monitor: {command_to_string(monitor_command)}")
-        process = self._launch_monitor_process(context, monitor_command, monitor_stdout, monitor_stderr)
+        process, initial_sync_complete = self._launch_monitor_process(context, monitor_command, monitor_stdout, monitor_stderr)
         early_failure: str | None = None
         try:
-            initial_sync_complete = self._wait_for_initial_sync_complete(monitor_stdout)
             details["initial_sync_complete"] = initial_sync_complete
             if not initial_sync_complete:
                 self._write_metadata(metadata_file, details)
