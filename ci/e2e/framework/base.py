@@ -86,35 +86,50 @@ class E2ETestCase(ABC):
         self.write_metadata(metadata_file, details)
 
     def pass_result(self, *args, **kwargs) -> TestResult:
-        if args or "case_id" in kwargs or "name" in kwargs:
-            kwargs.setdefault("case_id", self.case_id)
-            kwargs.setdefault("name", self.name)
+        """
+        Return a passing TestResult while preserving compatibility with both the
+        original testcase call style and the newer helper style.
+
+        Supported forms:
+        - self.pass_result(self.case_id, self.name, artifacts, details)
+        - self.pass_result(case_id=..., name=..., artifacts=..., details=...)
+        - self.pass_result(artifacts=..., details=...)
+        """
+        if args:
             return TestResult.pass_result(*args, **kwargs)
 
-        artifacts = kwargs.get("artifacts") if kwargs else None
-        details = kwargs.get("details") if kwargs else None
+        if "case_id" in kwargs or "name" in kwargs:
+            return TestResult.pass_result(**kwargs)
+
         return TestResult.pass_result(
             case_id=self.case_id,
             name=self.name,
-            artifacts=artifacts,
-            details=details,
+            artifacts=kwargs.get("artifacts"),
+            details=kwargs.get("details"),
         )
 
     def fail_result(self, *args, **kwargs) -> TestResult:
-        if args or "case_id" in kwargs or "name" in kwargs or "reason" in kwargs:
-            kwargs.setdefault("case_id", self.case_id)
-            kwargs.setdefault("name", self.name)
+        """
+        Return a failing TestResult while preserving compatibility with both the
+        original testcase call style and the newer helper style.
+
+        Supported forms:
+        - self.fail_result(self.case_id, self.name, reason, artifacts, details)
+        - self.fail_result(case_id=..., name=..., reason=..., artifacts=..., details=...)
+        - self.fail_result(reason=..., artifacts=..., details=...)
+        """
+        if args:
             return TestResult.fail_result(*args, **kwargs)
 
-        reason = kwargs.get("reason", "") if kwargs else ""
-        artifacts = kwargs.get("artifacts") if kwargs else None
-        details = kwargs.get("details") if kwargs else None
+        if "case_id" in kwargs or "name" in kwargs:
+            return TestResult.fail_result(**kwargs)
+
         return TestResult.fail_result(
             case_id=self.case_id,
             name=self.name,
-            reason=reason,
-            artifacts=artifacts,
-            details=details,
+            reason=kwargs.get("reason", ""),
+            artifacts=kwargs.get("artifacts"),
+            details=kwargs.get("details"),
         )
 
     def write_manifest_artifact(self, root: Path, output_file: Path) -> list[str]:
