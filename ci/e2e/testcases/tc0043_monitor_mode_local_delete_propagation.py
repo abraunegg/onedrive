@@ -6,14 +6,14 @@ import subprocess
 import time
 from pathlib import Path
 
-from framework.base import E2ETestCase
+from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
-class TestCase0043MonitorModeLocalDeletePropagation(E2ETestCase):
+class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
     case_id = "0043"
     name = "monitor mode local delete propagation"
     description = "Delete a local file under --monitor and validate the remote delete occurs as expected"

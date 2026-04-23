@@ -6,14 +6,14 @@ import subprocess
 import time
 from pathlib import Path
 
-from framework.base import E2ETestCase
+from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
-class TestCase0041MonitorModeLocalCreateUpload(E2ETestCase):
+class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
     case_id = "0041"
     name = "monitor mode local create upload"
     description = "Start --monitor, create a local file, and validate it uploads without restarting the client"

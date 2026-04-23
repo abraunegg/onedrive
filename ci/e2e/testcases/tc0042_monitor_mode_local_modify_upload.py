@@ -6,14 +6,14 @@ import subprocess
 import time
 from pathlib import Path
 
-from framework.base import E2ETestCase
+from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
-class TestCase0042MonitorModeLocalModifyUpload(E2ETestCase):
+class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
     case_id = "0042"
     name = "monitor mode local modify upload"
     description = "Modify an existing local file under --monitor and validate the update propagates"

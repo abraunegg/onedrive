@@ -24,13 +24,31 @@ class CommandResult:
 
 STARTUP_RETRY_ATTEMPTS = 3
 STARTUP_RETRY_SLEEP_SECONDS = 3.0
-STARTUP_RETRY_FUNCTION_MARKERS = (
+STARTUP_DISCOVERY_FUNCTION_MARKERS = (
     "Calling Function:    syncEngine.getDefaultRootDetails()",
     "Calling Function:    syncEngine.getDefaultDriveDetails()",
 )
-STARTUP_RETRY_ERROR_MARKERS = (
+STARTUP_TRANSIENT_HTTP_MARKERS = (
     "HTTP request returned status code 403 (Forbidden)",
+    "HTTP request returned status code 408",
+    "HTTP request returned status code 429",
+    "HTTP request returned status code 500",
+    "HTTP request returned status code 502",
+    "HTTP request returned status code 503",
+    "HTTP request returned status code 504",
+    "Failed to reach the Microsoft OneDrive Service. HTTP status code: 408",
+    "Failed to reach the Microsoft OneDrive Service. HTTP status code: 429",
+    "Failed to reach the Microsoft OneDrive Service. HTTP status code: 500",
+    "Failed to reach the Microsoft OneDrive Service. HTTP status code: 502",
+    "Failed to reach the Microsoft OneDrive Service. HTTP status code: 503",
+    "Failed to reach the Microsoft OneDrive Service. HTTP status code: 504",
+)
+STARTUP_TRANSIENT_ERROR_MARKERS = (
     "Error Code:          accessDenied",
+    "Unable to reach the Microsoft OneDrive API service, unable to initialise application",
+    "Connection timeout",
+    "Operation timed out",
+    "Timeout was reached",
 )
 
 
@@ -40,10 +58,23 @@ def _combined_output(stdout: str, stderr: str) -> str:
 
 def is_transient_startup_discovery_failure(stdout: str, stderr: str) -> bool:
     content = _combined_output(stdout, stderr)
-    return (
-        any(marker in content for marker in STARTUP_RETRY_FUNCTION_MARKERS)
-        and any(marker in content for marker in STARTUP_RETRY_ERROR_MARKERS)
+    has_transient_markers = (
+        any(marker in content for marker in STARTUP_TRANSIENT_HTTP_MARKERS)
+        or any(marker in content for marker in STARTUP_TRANSIENT_ERROR_MARKERS)
     )
+
+    has_discovery_failure = (
+        any(marker in content for marker in STARTUP_DISCOVERY_FUNCTION_MARKERS)
+        and has_transient_markers
+    )
+
+    has_generic_startup_service_failure = (
+        "Attempting to contact the Microsoft OneDrive Service" in content
+        and "unable to initialise application" in content.lower()
+        and has_transient_markers
+    )
+
+    return has_discovery_failure or has_generic_startup_service_failure
 
 
 def should_retry_startup_failure(stdout: str, stderr: str, attempt: int, max_attempts: int) -> bool:

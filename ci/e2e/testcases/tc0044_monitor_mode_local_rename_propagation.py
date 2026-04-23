@@ -6,14 +6,14 @@ import subprocess
 import time
 from pathlib import Path
 
-from framework.base import E2ETestCase
+from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
-class TestCase0044MonitorModeLocalRenamePropagation(E2ETestCase):
+class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
     case_id = "0044"
     name = "monitor mode local rename propagation"
     description = "Rename a local file while --monitor is active and validate correct behaviour"
