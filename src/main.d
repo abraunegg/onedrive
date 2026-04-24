@@ -1257,9 +1257,9 @@ int main(string[] cliArgs) {
 					
 					// If full scan at a specific frequency enabled?
 					if (fullScanFrequency > 0) {
-						// On startup, force the first monitor sync to be a full-scan true-up so cleanup
-						// behaviour is authoritative immediately after service/container start.
-						if (monitorLoopFullCount == 1) {
+						// On startup, force the first monitor cleanup sync to be a full-scan true-up
+						// so cleanup behaviour is authoritative immediately after service/container start.
+						if ((monitorLoopFullCount == 1) && appConfig.getValueBool("download_only") && appConfig.getValueBool("cleanup_local_files")) {
 							if (debugLogging) {addLogEntry("Enabling Full Scan True Up on first monitor loop after startup", ["debug"]);}
 							appConfig.fullScanTrueUpRequired = true;
 						} else if (fullScanFrequencyLoopCount > fullScanFrequency) {
