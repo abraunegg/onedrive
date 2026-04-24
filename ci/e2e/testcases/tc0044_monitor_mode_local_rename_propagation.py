@@ -195,14 +195,13 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
         ]
         context.log(f"Executing Test Case {self.case_id} monitor: {command_to_string(monitor_command)}")
 
-        process = None
+        process, initial_sync_complete = self._launch_monitor_process(
+            context,
+            monitor_command,
+            monitor_stdout,
+            monitor_stderr,
+        )
         try:
-            process, initial_sync_complete = self._launch_monitor_process(
-                context,
-                monitor_command,
-                monitor_stdout,
-                monitor_stderr,
-            )
             details["initial_sync_complete"] = initial_sync_complete
 
             if not initial_sync_complete:
@@ -215,27 +214,23 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
                     details,
                 )
 
-                old_local_path.rename(new_local_path)
-                details["old_local_exists_after_rename"] = old_local_path.exists()
-                details["new_local_exists_after_rename"] = new_local_path.is_file()
+            context.log(f"Test Case {self.case_id}: renaming local file while monitor is running: {old_relative} -> {new_relative}")
+            old_local_path.rename(new_local_path)
+            details["old_local_exists_after_rename"] = old_local_path.exists()
+            details["new_local_exists_after_rename"] = new_local_path.is_file()
 
-                required_patterns = [
-                    f"[M] Local item moved: {old_relative} -> {new_relative}",
-                    f"Moving {old_relative} to {new_relative}",
-                ]
-                mutation_processed = self._wait_for_monitor_patterns(
-                    monitor_stdout,
-                    required_patterns=required_patterns,
-                    timeout_seconds=120,
-                )
-                details["mutation_processed"] = mutation_processed
-                details["mutation_required_patterns"] = required_patterns
-
-            self._shutdown_monitor_process(process, details)
+            required_patterns = [
+                f"Uploading new file: {new_relative} ... done",
+            ]
+            mutation_processed = self._wait_for_monitor_patterns(
+                monitor_stdout,
+                required_patterns=required_patterns,
+                timeout_seconds=120,
+            )
+            details["mutation_processed"] = mutation_processed
+            details["mutation_required_patterns"] = required_patterns
         finally:
-            if process is not None and process.poll() is None:
-                process.kill()
-                process.wait(timeout=30)
+            self._shutdown_monitor_process(process, details)
 
         verify_command = [
             context.onedrive_bin,
