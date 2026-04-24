@@ -2114,7 +2114,7 @@ class SyncEngine {
 					// Is the item to delete locally actually in sync with OneDrive currently?
 					// What is the source of this item data?
 					string itemSource = "online";
-					
+
 					// Compute this deleted items path based on the database entries
 					string localPathToDelete = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
 					if (isItemSynced(existingDatabaseItem, localPathToDelete, itemSource)) {
@@ -2127,11 +2127,11 @@ class SyncEngine {
 						// We need to determine the trigger for isItemSynced() returning false before we determine if we should make utilise safeBackup()
 						// Is this the exact same file?
 						// Test the file hash against the hash of the file online
-						
+
 						// Empirical evidence shows that Microsoft do not provide a 'valid' hash in JSON data for online deleted items, for example:
 						//   file":{"hashes":{"quickXorHash":"AAAAAAAAAAAAAAAAAAAAAAAAAAA="}},
 						// Thus this makes using the provided data via the API useless for a hash comparison test
-						
+
 						// Test the existing database item hash against the hash on the local disk - as this is what we know was in-sync with online prior to online deletion event
 						if (!testFileHash(localPathToDelete, existingDatabaseItem)) {
 							// Current file on disk is different by hash / content
@@ -2139,7 +2139,7 @@ class SyncEngine {
 							// In case the renamed path is needed
 							string renamedPath;
 							safeBackup(localPathToDelete, dryRun, bypassDataPreservation, renamedPath);
-							
+
 							// Purge the old record from the database as this still exists. The safeBackup() generated file now will be 'new' on the local filesystem
 							itemDB.deleteById(existingDatabaseItem.driveId, existingDatabaseItem.id);
 						} else {
