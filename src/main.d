@@ -1611,6 +1611,9 @@ void oneDriveOnlineCallback() {
 			appConfig.monitorSyncTriggeredByApiSignal = false;
 		}
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
+		if (syncEngineInstance.authoritativeCleanupPassUsedInLastSync) {
+			syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
+		}
 	}
 	if (appConfig.getValueBool("monitor")) {
 		// Handle inotify events

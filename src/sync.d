@@ -199,6 +199,8 @@ class SyncEngine {
 	long processedCount;
 	// Are we creating a simulated /delta response? This is critically important in terms of how we 'update' the database
 	bool generatedSimulatedDeltaResponse = false;
+	// Did the most recent sync use an authoritative cleanup pass?
+	bool authoritativeCleanupPassUsedInLastSync = false;
 	// Store the latest DeltaLink
 	string latestDeltaLink;
 	// Struct of containing the deltaLink details
@@ -828,8 +830,14 @@ class SyncEngine {
 		}
 	}
 
+	bool isMonitorDownloadOnlyCleanupLocalFilesMode() {
+		return cleanupLocalFiles
+			&& appConfig.getValueBool("monitor")
+			&& appConfig.getValueBool("download_only");
+	}
+
 	// In --monitor mode with --download-only --cleanup-local-files we can run fast passes using
-	// native /delta and reserve authoritative delete reconciliation for monitor full-scan cadence.
+	// native /delta and reserve authoritative delete reconciliation for the configured cadence.
 	bool shouldPerformAuthoritativeCleanupPass() {
 		if (!cleanupLocalFiles) {
 			return false;
@@ -869,10 +877,8 @@ class SyncEngine {
 	// Delete tombstones from raw /delta are deferred during fast monitor passes to avoid
 	// stale delete/recreate churn causing immediate local deletion.
 	bool shouldDeferDeletedItemsFromRawDelta() {
-		return cleanupLocalFiles
-			&& appConfig.getValueBool("monitor")
-			&& appConfig.getValueLong("monitor_fullscan_frequency") > 0
-			&& !appConfig.fullScanTrueUpRequired
+		return isMonitorDownloadOnlyCleanupLocalFilesMode()
+			&& !shouldPerformAuthoritativeCleanupPass()
 			&& !generatedSimulatedDeltaResponse;
 	}
 	
@@ -897,6 +903,9 @@ class SyncEngine {
 	
 		// performFullScanTrueUp value
 		if (debugLogging) {addLogEntry("Perform a Full Scan True-Up: " ~ to!string(appConfig.fullScanTrueUpRequired), ["debug"]);}
+
+		// Reset per-sync authoritative cleanup tracking.
+		authoritativeCleanupPassUsedInLastSync = false;
 		
 		// Fetch the API response of /delta to track changes that were performed online
 		fetchOneDriveDeltaAPIResponse();
@@ -1257,6 +1266,9 @@ class SyncEngine {
 		// When using --download-only --cleanup-local-files, generated delta is now only required
 		// for authoritative cleanup passes in --monitor mode.
 		bool authoritativeCleanupPassRequired = shouldPerformAuthoritativeCleanupPass();
+		if (authoritativeCleanupPassRequired) {
+			authoritativeCleanupPassUsedInLastSync = true;
+		}
 		
 		// What OneDrive API query do we use?
 		// - Are we running against a National Cloud Deployments that does not support /delta ?
@@ -5239,6 +5251,13 @@ class SyncEngine {
 				// Cleanup array memory
 				databaseItemsWhereContentHasChanged = [];
 			}
+		}
+
+		// The generated-delta authoritative cleanup has completed; avoid treating later
+		// API-signal fast passes as authoritative before the next monitor interval.
+		if (isMonitorDownloadOnlyCleanupLocalFilesMode() && authoritativeCleanupPassRequired && appConfig.fullScanTrueUpRequired) {
+			if (debugLogging) {addLogEntry("Unsetting fullScanTrueUpRequired after authoritative cleanup pass", ["debug"]);}
+			appConfig.fullScanTrueUpRequired = false;
 		}
 		
 		// Display function processing time if configured to do so
