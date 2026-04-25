@@ -590,6 +590,7 @@ monitor_fullscan_frequency
 > `monitor_and_signal` performs authoritative cleanup on each monitor interval and each API signal.
 > `monitor_interval` performs authoritative cleanup on each monitor interval only.
 > `monitor_fullscan_frequency` performs authoritative cleanup based on `monitor_fullscan_frequency` cadence and is the default.
+> When `monitor_authoritative_sync = "monitor_fullscan_frequency"`, a `monitor_fullscan_frequency` value greater than `0` defers authoritative cleanup to that cadence; `0` makes cleanup authoritative on every monitor sync cycle.
 
 ### monitor_fullscan_frequency
 _**Description:**_ This configuration option controls the number of 'monitor_interval' iterations between when a full scan of your data is performed to ensure data integrity and consistency.
@@ -604,9 +605,6 @@ _**CLI Option Use:**_ `--monitor-fullscan-frequency '24'`
 
 > [!NOTE]
 > By default without configuration, 'monitor_fullscan_frequency' is set to 12. In this default state, this means that a full scan is performed every 'monitor_interval' x 'monitor_fullscan_frequency' = 3600 seconds. This setting is only applicable when running in `--monitor` mode. Setting this configuration option to '0' will *disable* the full scan of your data online.
-
-> [!NOTE]
-> This setting controls cleanup cadence only when `monitor_authoritative_sync = "monitor_fullscan_frequency"` in `--monitor --download-only --cleanup-local-files` mode. A value greater than `0` defers authoritative cleanup to that cadence; `0` makes cleanup authoritative on every monitor sync cycle.
 
 ### monitor_interval
 _**Description:**_ This configuration setting determines how often the synchronisation loops run in --monitor mode, measured in seconds. When this time period elapses, the client will check for online changes in Microsoft OneDrive, conduct integrity checks on local data and scan the local 'sync_dir' to identify any new content that hasn't been uploaded yet.
