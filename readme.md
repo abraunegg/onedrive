@@ -1,11 +1,11 @@
 # OneDrive Client for Linux
-[![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
-[![Release Date](https://img.shields.io/github/release-date/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
+[![Version](https://img.shields.io/github/v/release/abraunegg/onedrive?logo=github)](https://github.com/abraunegg/onedrive/releases)
+[![Release Date](https://img.shields.io/github/release-date/abraunegg/onedrive?logo=github)](https://github.com/abraunegg/onedrive/releases)
 
 [![Test Build](https://github.com/abraunegg/onedrive/actions/workflows/testbuild.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/testbuild.yaml)
 [![Smoke Test](https://github.com/abraunegg/onedrive/actions/workflows/smoke-test.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/smoke-test.yaml)
 [![Build Docker Images](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml)
-[![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
+[![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive?logo=docker)](https://hub.docker.com/r/driveone/onedrive)
 
 [![E2E Testing - Personal Account](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
 [![E2E Testing - Personal Account: 15 Character driveId Check](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal-15char-check.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal-15char-check.yaml)
