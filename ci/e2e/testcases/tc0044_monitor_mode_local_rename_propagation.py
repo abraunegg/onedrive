@@ -219,16 +219,23 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
             details["old_local_exists_after_rename"] = old_local_path.exists()
             details["new_local_exists_after_rename"] = new_local_path.is_file()
 
-            required_patterns = [
-                f"Uploading new file: {new_relative} ... done",
+            pattern_groups = [
+                [
+                    f"[M] Local item moved: {old_relative} -> {new_relative}",
+                    f"Moving {old_relative} to {new_relative}",
+                ],
+                [
+                    f"Uploading new file: {new_relative} ... done",
+                ],
             ]
-            mutation_processed = self._wait_for_monitor_patterns(
+            mutation_processed, matched_group = self._wait_for_any_monitor_pattern_group(
                 monitor_stdout,
-                required_patterns=required_patterns,
+                alternative_pattern_groups=pattern_groups,
                 timeout_seconds=120,
             )
             details["mutation_processed"] = mutation_processed
-            details["mutation_required_patterns"] = required_patterns
+            details["matched_pattern_group_index"] = matched_group
+            details["mutation_pattern_groups"] = pattern_groups
         finally:
             self._shutdown_monitor_process(process, details)
 

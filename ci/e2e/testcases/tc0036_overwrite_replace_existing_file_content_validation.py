@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 from framework.base import E2ETestCase
@@ -149,7 +150,12 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(E2ETestCase):
                 details,
             )
 
-        # Phase 2: replace the file contents locally with same filename
+        # Phase 2: replace the file contents locally with same filename.
+        # Graph file timestamps are second-granular and this testcase uses
+        # same-sized initial/replacement content by design. Ensure phase 2 has
+        # a distinct local modified timestamp so the overwrite is detected
+        # deterministically rather than depending on CI timing.
+        time.sleep(2)
         write_text_file(local_file_path, replacement_content)
 
         details["local_file_exists_after_replace"] = local_file_path.is_file()
