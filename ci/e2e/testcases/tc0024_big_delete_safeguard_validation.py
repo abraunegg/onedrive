@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
 from pathlib import Path
 
 from framework.base import E2ETestCase
@@ -128,6 +129,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
 
         verify_stdout = case_log_dir / "verify_stdout.log"
         verify_stderr = case_log_dir / "verify_stderr.log"
+        verify_retry_manifest_file = state_dir / "remote_verify_retry_manifest.txt"
 
         blocked_verify_manifest_file = state_dir / "blocked_verify_manifest.txt"
         remote_manifest_file = state_dir / "remote_verify_manifest.txt"
@@ -287,9 +289,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             forced_stderr,
         )
 
-        reset_directory(verify_root)
-        self._write_config(conf_verify / "config", verify_root, classify_threshold)
-
         verify_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -301,15 +300,56 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--confdir",
             str(conf_verify),
         ]
-        verify_result = self._run_and_capture(
-            context,
-            "verify",
-            verify_command,
-            verify_stdout,
-            verify_stderr,
-        )
 
-        remote_manifest = build_manifest(verify_root)
+        verify_attempts = 0
+        verify_result = None
+        remote_manifest: list[str] = []
+
+        # Personal accounts can occasionally expose a short remote visibility lag after
+        # a forced delete: child files are gone, but the now-empty parent directory can
+        # still appear in the immediately-following verification sync. Retry only the
+        # final remote verification step; do not retry command failures or weaken the
+        # big-delete safeguard checks themselves.
+        for attempt in range(1, 4):
+            verify_attempts = attempt
+            reset_directory(verify_root)
+            self._write_config(conf_verify / "config", verify_root, classify_threshold)
+
+            attempt_stdout = verify_stdout if attempt == 1 else case_log_dir / f"verify_retry_{attempt}_stdout.log"
+            attempt_stderr = verify_stderr if attempt == 1 else case_log_dir / f"verify_retry_{attempt}_stderr.log"
+
+            verify_result = self._run_and_capture(
+                context,
+                "verify" if attempt == 1 else f"verify retry {attempt}",
+                verify_command,
+                attempt_stdout,
+                attempt_stderr,
+            )
+
+            remote_manifest = build_manifest(verify_root)
+            if attempt == 1:
+                write_manifest(remote_manifest_file, remote_manifest)
+            else:
+                write_manifest(verify_retry_manifest_file, remote_manifest)
+
+            if verify_result.returncode != 0:
+                break
+
+            if remote_delete_dir not in remote_manifest and remote_deleted_probe_file not in remote_manifest:
+                break
+
+            if attempt < 3:
+                context.log(
+                    f"Test Case {self.case_id} final verify still sees deleted remote path "
+                    f"after forced delete; retrying final verification in 30 seconds "
+                    f"(attempt {attempt}/3)"
+                )
+                time.sleep(30)
+
+        assert verify_result is not None
+
+        # Preserve the final observed manifest at the primary artifact path so failure
+        # diagnostics always reflect the state that drove the pass/fail decision.
         write_manifest(remote_manifest_file, remote_manifest)
 
         write_text_file(
@@ -337,6 +377,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                     f"blocked_verify_returncode={blocked_verify_result.returncode}",
                     f"forced_returncode={forced_result.returncode}",
                     f"verify_returncode={verify_result.returncode}",
+                    f"verify_attempts={verify_attempts}",
                 ]
             )
             + "\n",
@@ -357,6 +398,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             str(verify_stderr),
             str(blocked_verify_manifest_file),
             str(remote_manifest_file),
+            str(verify_retry_manifest_file),
             str(metadata_file),
         ]
         details = {
@@ -366,6 +408,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "blocked_verify_returncode": blocked_verify_result.returncode,
             "forced_returncode": forced_result.returncode,
             "verify_returncode": verify_result.returncode,
+            "verify_attempts": verify_attempts,
         }
 
         for label, rc in [
