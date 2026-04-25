@@ -89,6 +89,8 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
 
         phase1_stdout = case_log_dir / "phase1_seed_stdout.log"
         phase1_stderr = case_log_dir / "phase1_seed_stderr.log"
+        phase1_settle_stdout = case_log_dir / "phase1_settle_stdout.log"
+        phase1_settle_stderr = case_log_dir / "phase1_settle_stderr.log"
         phase2_stdout = case_log_dir / "phase2_directory_rename_stdout.log"
         phase2_stderr = case_log_dir / "phase2_directory_rename_stderr.log"
         verify_stdout = case_log_dir / "verify_stdout.log"
@@ -99,6 +101,8 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         artifacts = [
             str(phase1_stdout),
             str(phase1_stderr),
+            str(phase1_settle_stdout),
+            str(phase1_settle_stderr),
             str(phase2_stdout),
             str(phase2_stderr),
             str(verify_stdout),
@@ -120,7 +124,6 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         write_text_file(source_file_1, file1_content)
         write_text_file(source_file_2, file2_content)
 
-        # Match the proven standalone reproduction as closely as possible.
         phase1_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -138,7 +141,38 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         if phase1_result.returncode != 0:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
-                self.case_id, self.name, f"seed phase failed with status {phase1_result.returncode}", artifacts, details
+                self.case_id,
+                self.name,
+                f"seed phase failed with status {phase1_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        # Stabilise the just-created remote tree before performing the local rename.
+        # This prevents Graph delta timing from rehydrating the original source
+        # directory locally during the subsequent rename propagation phase.
+        phase1_settle_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--confdir",
+            str(conf_main),
+        ]
+        context.log(f"Executing Test Case {self.case_id} phase1 settle: {command_to_string(phase1_settle_command)}")
+        phase1_settle_result = run_command(phase1_settle_command, cwd=context.repo_root)
+        write_text_file(phase1_settle_stdout, phase1_settle_result.stdout)
+        write_text_file(phase1_settle_stderr, phase1_settle_result.stderr)
+        details["phase1_settle_returncode"] = phase1_settle_result.returncode
+
+        if phase1_settle_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"seed settle phase failed with status {phase1_settle_result.returncode}",
+                artifacts,
+                details,
             )
 
         source_dir.rename(renamed_dir)
@@ -146,13 +180,21 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         if source_dir.exists():
             self._write_metadata(metadata_file, details)
             return self.fail_result(
-                self.case_id, self.name, "local original directory still exists immediately after rename", artifacts, details
+                self.case_id,
+                self.name,
+                "local original directory still exists immediately after rename",
+                artifacts,
+                details,
             )
 
         if not renamed_dir.is_dir():
             self._write_metadata(metadata_file, details)
             return self.fail_result(
-                self.case_id, self.name, "local renamed directory does not exist immediately after rename", artifacts, details
+                self.case_id,
+                self.name,
+                "local renamed directory does not exist immediately after rename",
+                artifacts,
+                details,
             )
 
         phase2_command = [
@@ -168,12 +210,18 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         write_text_file(phase2_stdout, phase2_result.stdout)
         write_text_file(phase2_stderr, phase2_result.stderr)
         details["phase2_returncode"] = phase2_result.returncode
-        details["phase2_deleted_old_directory_online"] = f"Deleting item from Microsoft OneDrive: {root_name}/SourceDirectory" in phase2_result.stdout
+        details["phase2_deleted_old_directory_online"] = (
+            f"Deleting item from Microsoft OneDrive: {source_dir_relative}" in phase2_result.stdout
+        )
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
-                self.case_id, self.name, f"directory rename propagation phase failed with status {phase2_result.returncode}", artifacts, details
+                self.case_id,
+                self.name,
+                f"directory rename propagation phase failed with status {phase2_result.returncode}",
+                artifacts,
+                details,
             )
 
         verify_command = [
@@ -222,37 +270,65 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
 
         if verify_result.returncode != 0:
             return self.fail_result(
-                self.case_id, self.name, f"remote verification failed with status {verify_result.returncode}", artifacts, details
+                self.case_id,
+                self.name,
+                f"remote verification failed with status {verify_result.returncode}",
+                artifacts,
+                details,
             )
 
         if verify_old_dir.exists() or verify_old_file_1.exists() or verify_old_file_2.exists():
             return self.fail_result(
-                self.case_id, self.name, f"remote verification still contains original directory tree: {source_dir_relative}", artifacts, details
+                self.case_id,
+                self.name,
+                f"remote verification still contains original directory tree: {source_dir_relative}",
+                artifacts,
+                details,
             )
 
         if not verify_new_dir.is_dir():
             return self.fail_result(
-                self.case_id, self.name, f"remote verification is missing renamed directory: {renamed_dir_relative}", artifacts, details
+                self.case_id,
+                self.name,
+                f"remote verification is missing renamed directory: {renamed_dir_relative}",
+                artifacts,
+                details,
             )
 
         if not verify_new_file_1.is_file():
             return self.fail_result(
-                self.case_id, self.name, f"remote verification is missing renamed top-level file: {renamed_file_1_relative}", artifacts, details
+                self.case_id,
+                self.name,
+                f"remote verification is missing renamed top-level file: {renamed_file_1_relative}",
+                artifacts,
+                details,
             )
 
         if not verify_new_file_2.is_file():
             return self.fail_result(
-                self.case_id, self.name, f"remote verification is missing renamed nested file: {renamed_file_2_relative}", artifacts, details
+                self.case_id,
+                self.name,
+                f"remote verification is missing renamed nested file: {renamed_file_2_relative}",
+                artifacts,
+                details,
             )
 
         if verify_new_file_1_content != file1_content:
             return self.fail_result(
-                self.case_id, self.name, "renamed top-level file content did not match expected content", artifacts, details
+                self.case_id,
+                self.name,
+                "renamed top-level file content did not match expected content",
+                artifacts,
+                details,
             )
 
         if verify_new_file_2_content != file2_content:
             return self.fail_result(
-                self.case_id, self.name, "renamed nested file content did not match expected content", artifacts, details
+                self.case_id,
+                self.name,
+                "renamed nested file content did not match expected content",
+                artifacts,
+                details,
             )
 
         return self.pass_result(self.case_id, self.name, artifacts, details)
