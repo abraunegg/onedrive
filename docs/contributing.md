@@ -169,6 +169,29 @@ deactivate
 
 ```
 
+### Optional GitHub Actions smoke testing
+
+The smoke-test workflow validates simple monitor-mode behaviour including clean shutdown against a disposable OneDrive Personal test account.
+
+This workflow requires the following GitHub Environment secret:
+
+- Environment name: `smoke-test`
+- Secret name: `SMOKE_PERSONAL_REFRESH_TOKEN`
+
+For security reasons, GitHub does not provide repository secrets to workflows triggered from forked pull requests. External contributors who want to run this smoke test must configure this secret in their own fork. The refresh token must be treated as a credential and must only be generated from a disposable test account.
+
+To configure this in your fork:
+
+1. Create a disposable OneDrive Personal test account.
+2. Authenticate the client manually.
+3. Copy the contents of the generated `refresh_token` file.
+4. In GitHub, create an Environment called `smoke-test`.
+5. Add an Environment secret named `SMOKE_PERSONAL_REFRESH_TOKEN`.
+6. Re-run the smoke-test workflow in your fork.
+
+If this secret is not available, the smoke-test workflow is skipped for forked pull requests.
+
+
 ## References
 
 * D Language Official Style Guide: https://dlang.org/dstyle.html
