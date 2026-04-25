@@ -1678,8 +1678,24 @@ class OneDriveApi {
 
 				// Setup progress bar to display
 				curlEngine.http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
+					// Log entry construct
 					string downloadLogEntry = "Downloading: " ~ filename ~ " ... ";
+					
+					// Handle SIGINT (CTRL-C) and SIGTERM (kill) events + 'force_xfer_abort'
+					if ((exitHandlerTriggered) && (appConfig.getValueBool("force_xfer_abort"))) {
+						// Persist the latest absolute download progress before aborting
+						long absoluteNow = effectiveResumeOffset + cast(long) dlnow;
+						if (absoluteNow > to!long(resumeDownloadData["resumeOffset"].str)) {
+							resumeDownloadData["resumeOffset"] = JSONValue(to!string(absoluteNow));
+							saveResumeDownloadFile(threadResumeDownloadFilePath, resumeDownloadData);
+						}
+						
+						if (debugLogging) {addLogEntry("Aborting file download due to application exit request + 'force_xfer_abort'", ["debug"]);}
 
+						// Return non-zero to abort the active libcurl transfer
+						return 1;
+					}
+					
 					// ------------------------------------------------------------------
 					// Compute absolute progress as bytes_on_disk + bytes_this_transfer.
 					// This ensures that after a retry, the percentage continues from
@@ -1992,10 +2008,19 @@ class OneDriveApi {
 			} catch (CurlException exception) {
 				// Handle 'curl' exception errors
 				
-				// Detail the curl exception, debug output only
-				if (debugLogging) {
-					addLogEntry("Handling a curl exception:", ["debug"]);
-					addLogEntry(to!string(response), ["debug"]);
+				// Was exitHandlerTriggered flagged
+				if (!exitHandlerTriggered) {
+					// Detail the curl exception, debug output only
+					if (debugLogging) {
+						addLogEntry("Handling a curl exception:", ["debug"]);
+						addLogEntry(to!string(response), ["debug"]);
+					}
+				} else {
+					// exitHandlerTriggered triggered
+					if (appConfig.getValueBool("force_xfer_abort")) {
+						// we do not want to retry .. this is force abort
+						return result;
+					}
 				}
 				
 				// Parse and display error message received from OneDrive
