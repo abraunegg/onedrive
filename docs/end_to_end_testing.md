@@ -1,9 +1,12 @@
 # End to End Testing of OneDrive Client for Linux
 
-[![E2E Testing - Personal Account](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
-[![E2E Testing - Personal Account: 15 Character driveId Check](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal-15char-check.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal-15char-check.yaml)
-[![E2E Testing - Business Account](https://github.com/abraunegg/onedrive/actions/workflows/e2e-business.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
-[![E2E Testing - SharePoint Configuration](https://github.com/abraunegg/onedrive/actions/workflows/e2e-sharepoint.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
+| Test Case Results |
+|:------------------|
+|[![E2E Testing - Personal Account](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)|
+|[![E2E Testing - Personal Account: 15 Character driveId Check](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal-15char-check.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)|
+|[![E2E Testing - Personal Account: Shared Folders](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal-shared-folders.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)|
+|[![E2E Testing - Business Account](https://github.com/abraunegg/onedrive/actions/workflows/e2e-business.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)|
+|[![E2E Testing - SharePoint Configuration](https://github.com/abraunegg/onedrive/actions/workflows/e2e-sharepoint.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)|
 
 This document describes the **end-to-end (E2E) automated testing framework** used to validate the behaviour of the OneDrive Client for Linux.
 
@@ -16,7 +19,6 @@ Personal and Business end-to-end testing executes the full automated test suite 
 
 ### SharePoint Account Testing
 SharePoint end-to-end testing uses the same complete automated test suite as Personal OneDrive and OneDrive for Business, but changes the target drive by supplying a `drive_id` value in the client configuration. This means the harness is not merely repeating the same account-type tests against the same default drive context; it is explicitly forcing the client to enumerate, access, and operate against a different Microsoft Graph drive object, resulting in different drive discovery, metadata enumeration, path traversal, upload, download, delete, and synchronisation API activity. By injecting `drive_id` into the test configuration, every existing test case is executed against a SharePoint document library context rather than a personal or business default OneDrive root, ensuring that the full suite validates client behaviour, configuration handling, and synchronisation correctness when operating against SharePoint-backed storage.
-
 
 ### Test Case Details
 
