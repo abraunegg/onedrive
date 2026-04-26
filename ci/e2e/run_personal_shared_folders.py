@@ -14,11 +14,15 @@ from framework.utils import write_text_file
 from testcases_personal_shared_folders.sfptc0001_clean_sync_pull_down import (
     SharedFolderPersonalTestCase0001CleanSyncPullDown,
 )
+from testcases_personal_shared_folders.sfptc0002_clean_monitor_pull_down import (
+    SharedFolderPersonalTestCase0002CleanMonitorPullDown,
+)
 
 
 def build_test_suite() -> list:
     return [
         SharedFolderPersonalTestCase0001CleanSyncPullDown(),
+        SharedFolderPersonalTestCase0002CleanMonitorPullDown(),
     ]
 
 
