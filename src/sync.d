@@ -1237,6 +1237,7 @@ class SyncEngine {
 		processedCount = 0;
 		
 		// Reset generatedSimulatedDeltaResponse
+		addLogEntry("Reset generatedSimulatedDeltaResponse as 'false'", ["debug"]);
 		generatedSimulatedDeltaResponse = false;
 		
 		// Reset Shared Folder Flags for 'sync_list' processing
@@ -1302,6 +1303,11 @@ class SyncEngine {
 			sharedFolderDeltaGeneration = true;
 			currentSharedFolderName = sharedFolderName;
 			generatedSimulatedDeltaResponse = true;
+		}
+		
+		// Log this critical flag if set
+		if (generatedSimulatedDeltaResponse) {
+			if (debugLogging) {addLogEntry("Flagged generatedSimulatedDeltaResponse as 'true'", ["debug"]);}
 		}
 		
 		// Reset latestDeltaLink & deltaLinkCache
@@ -2768,6 +2774,7 @@ class SyncEngine {
 							// Path does not exist locally, but exists in database
 							if (!generatedSimulatedDeltaResponse) {
 								// We did not generate a simulated /delta response ... 
+								if (debugLogging) {addLogEntry("existingItemPath does not exist - we need to create it: " ~ existingItemPath, ["debug"]);}
 								handleLocalDirectoryCreation(existingDatabaseItem, existingItemPath, onedriveJSONItem);
 							}
 						}
@@ -3199,12 +3206,14 @@ class SyncEngine {
 				
 			case ItemType.dir:
 				// Create the directory immediately as we depend on its entry existing
+				if (debugLogging) {addLogEntry("newItemPath (ItemType.dir) does not exist - we need to create it: " ~ newItemPath, ["debug"]);}
 				handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				goto functionCompletion;
 				
 			case ItemType.remote:
 				// Add to the directory and relevant details for processing later
 				if (newDatabaseItem.remoteType == ItemType.dir) {
+					if (debugLogging) {addLogEntry("newItemPath (newDatabaseItem.remoteType) does not exist - we need to create it: " ~ newItemPath, ["debug"]);}
 					handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				} else {
 					// Add to the file to the download array for processing later
@@ -3244,12 +3253,15 @@ class SyncEngine {
 		// To create a path, 'newItemPath' must not be empty
 		if (!newItemPath.empty) {
 			// Update the logging output to be consistent
-			if (verboseLogging) {addLogEntry("Creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
+			if (verboseLogging) {addLogEntry("Attempting to create local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
 			if (!dryRun) {
 				try {
 					// Create the new directory
 					if (debugLogging) {addLogEntry("Requested local path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);}
 					mkdirRecurse(newItemPath);
+					
+					// Log that the local directory creation was successful
+					if (verboseLogging) {addLogEntry("Created local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
 					
 					// Has the user disabled the setting of filesystem permissions?
 					if (!appConfig.getValueBool("disable_permission_set")) {
@@ -3275,6 +3287,8 @@ class SyncEngine {
 					displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath);
 				}
 			} else {
+				// Log that the local directory creation is not occurring due to --dry-run
+				if (verboseLogging) {addLogEntry("DRY-RUN: Not creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
 				// we dont create the directory, but we need to track that we 'faked it'
 				idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
 				// Save the newDatabaseItem to the database
@@ -3338,6 +3352,25 @@ class SyncEngine {
 	
 		// Detail what we are doing
 		if (debugLogging) {addLogEntry("We have been requested to create 'root' and 'Shared Folder' DB Tie Records in a consistent manner" , ["debug"]);}
+
+		// If relocation details were not explicitly passed in, derive them from the shortcut JSON itself.
+		if ((relocatedFolderDriveId.empty) || (relocatedFolderParentId.empty)) {
+			if (isItemRemote(onedriveJSONItem)) {
+				if (hasParentReferenceId(onedriveJSONItem)) {
+					if (onedriveJSONItem["parentReference"]["driveId"].str == appConfig.defaultDriveId) {
+						if (onedriveJSONItem["parentReference"]["id"].str != appConfig.defaultRootId) {
+							relocatedFolderDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+							relocatedFolderParentId = onedriveJSONItem["parentReference"]["id"].str;
+							if (debugLogging) {
+								addLogEntry("Derived relocated Shared Folder references from provided JSON record" , ["debug"]);
+								addLogEntry(" relocatedFolderDriveId = " ~ relocatedFolderDriveId, ["debug"]);
+								addLogEntry(" relocatedFolderParentId = " ~ relocatedFolderParentId, ["debug"]);
+							}
+						}
+					}
+				}
+			}
+		}
 		
 		JSONValue onlineParentData;
 		string parentDriveId;
@@ -3449,7 +3482,7 @@ class SyncEngine {
 		
 		// Log that we are created the Shared Folder Tie record now
 		if (debugLogging) {addLogEntry("Creating the Shared Folder DB Tie Record that binds the 'root' record to the 'shared folder'" , ["debug"]);}
-		
+
 		// Make an item from the online JSON data
 		sharedFolderDatabaseTie = makeItem(onlineParentData);
 		// Ensure we use our online name, as we may have renamed the folder in our location
@@ -3474,7 +3507,9 @@ class SyncEngine {
 			// The database Tie Record for Personal Accounts must be empty .. no change, leave 'parentId' empty
 		}
 		
-		// If a user has added the 'whole' SharePoint Document Library, then the DB Shared Folder Tie Record and 'root' record are the 'same'
+		// If a user has added the 'whole' SharePoint Document Library, then the DB Shared Folder Tie Record
+		// and the previously inserted 'root' DB Tie Record are the SAME database object (same driveId + id).
+		// That means this upsert must preserve any relocated shared-folder metadata already stored.
 		if ((isItemRoot(onlineParentData)) && (onlineParentData["parentReference"]["driveType"].str == "documentLibrary")) {
 			// Yes this is a DocumentLibrary 'root' object
 			if (debugLogging) {
@@ -3484,6 +3519,31 @@ class SyncEngine {
 			}
 			sharedFolderDatabaseTie.parentId = null;
 			sharedFolderDatabaseTie.type = ItemType.root;
+
+			// Preserve any relocated parent references already inserted by
+			// createDatabaseRootTieRecordForOnlineSharedFolder().
+			Item existingTieRecord;
+			if (itemDB.selectById(sharedFolderDatabaseTie.driveId, sharedFolderDatabaseTie.id, existingTieRecord)) {
+				if (sharedFolderDatabaseTie.relocDriveId.empty && !existingTieRecord.relocDriveId.empty) {
+					if (debugLogging) {addLogEntry("Preserving existing relocDriveId on Shared Folder DB Tie Record: " ~ existingTieRecord.relocDriveId, ["debug"]);}
+					sharedFolderDatabaseTie.relocDriveId = existingTieRecord.relocDriveId;
+				}
+				if (sharedFolderDatabaseTie.relocParentId.empty && !existingTieRecord.relocParentId.empty) {
+					if (debugLogging) {addLogEntry("Preserving existing relocParentId on Shared Folder DB Tie Record: " ~ existingTieRecord.relocParentId, ["debug"]);}
+					sharedFolderDatabaseTie.relocParentId = existingTieRecord.relocParentId;
+				}
+			}
+
+			// Also apply any relocated references supplied for this specific shortcut creation/update.
+			if ((!relocatedFolderDriveId.empty) && (!relocatedFolderParentId.empty)) {
+				if (debugLogging) {
+					addLogEntry("Applying relocated shared folder references to Shared Folder DB Tie Record", ["debug"]);
+					addLogEntry(" sharedFolderDatabaseTie.relocDriveId = " ~ relocatedFolderDriveId, ["debug"]);
+					addLogEntry(" sharedFolderDatabaseTie.relocParentId = " ~ relocatedFolderParentId, ["debug"]);
+				}
+				sharedFolderDatabaseTie.relocDriveId = relocatedFolderDriveId;
+				sharedFolderDatabaseTie.relocParentId = relocatedFolderParentId;
+			}
 		}
 		
 		// Personal Account Shared Folder Handling 
@@ -3533,6 +3593,7 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}		
 	}
+	
 	
 	// If the JSON item IS in the database, this will be an update to an existing in-sync item
 	void applyPotentiallyChangedItem(Item existingDatabaseItem, string existingItemPath, Item changedOneDriveItem, string changedItemPath, JSONValue onedriveJSONItem) {
@@ -6335,15 +6396,44 @@ class SyncEngine {
 							itemDB.selectByRemoteDriveId(remoteDriveId, remoteItem);
 							if (debugLogging) {addLogEntry("Query returned result (itemDB.selectByRemoteDriveId): " ~ to!string(remoteItem), ["debug"]);}
 							
-							// Shared Folders present a unique challenge to determine what path needs to be used, especially in a --resync scenario where there are near zero records available to use computeItemPath() 
-							// Update the path that will be used to check 'sync_list' with the 'name' of the remoteDriveId database record
-							// Issue #3331
-							// Avoid duplicating the shared folder root name if already present
-							if (!selfBuiltPath.startsWith("/" ~ remoteItem.name ~ "/")) {
-								selfBuiltPath = remoteItem.name ~ selfBuiltPath;
-								if (debugLogging) {addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath), ["debug"]);}
+							// Shared Folders present a unique challenge to determine what path needs to be used,
+							// especially in a --resync scenario where there are near zero records available to use computeItemPath().
+							// For relocated shared folders, using only 'remoteItem.name' is insufficient because that drops
+							// the relocated parent path (for example: Documents/SharedFolderShortcutA -> SharedFolderShortcutA).
+							string sharedFolderAnchorPath;
+
+							// Try to compute the full local path of the shared-folder anchor from the database.
+							// This should return paths such as:
+							//   ./Documents/SharedFolderShortcutA
+							// rather than just:
+							//   ./SharedFolderShortcutA
+							try {
+								sharedFolderAnchorPath = computeItemPath(remoteItem.driveId, remoteItem.id);
+								if (debugLogging) {addLogEntry("Computed sharedFolderAnchorPath using computeItemPath() = " ~ sharedFolderAnchorPath, ["debug"]);}
+							} catch (Exception exception) {
+								if (debugLogging) {addLogEntry("Unable to compute sharedFolderAnchorPath using computeItemPath(): " ~ exception.msg, ["debug"]);}
+							}
+
+							// Fallback if computeItemPath() did not return anything usable.
+							if (sharedFolderAnchorPath.empty) {
+								sharedFolderAnchorPath = remoteItem.name;
+								if (debugLogging) {addLogEntry("Falling back to sharedFolderAnchorPath = remoteItem.name = " ~ sharedFolderAnchorPath, ["debug"]);}
+							}
+
+							// Normalise the computed anchor path for concatenation with selfBuiltPath.
+							sharedFolderAnchorPath = processPathToRemoveRootReference(sharedFolderAnchorPath);
+							sharedFolderAnchorPath = stripLeft(sharedFolderAnchorPath, "./");
+							if (!sharedFolderAnchorPath.empty && sharedFolderAnchorPath[0] == '/') {
+								sharedFolderAnchorPath = sharedFolderAnchorPath[1 .. $];
+							}
+
+							// Avoid duplicating the shared-folder anchor if it is already present.
+							if (!selfBuiltPath.startsWith("/" ~ sharedFolderAnchorPath ~ "/") &&
+							    selfBuiltPath != "/" ~ sharedFolderAnchorPath) {
+								selfBuiltPath = sharedFolderAnchorPath ~ selfBuiltPath;
+								if (debugLogging) {addLogEntry("selfBuiltPath after full shared-folder anchor update = " ~ to!string(selfBuiltPath), ["debug"]);}
 							} else {
-								if (debugLogging) {addLogEntry("Shared Folder name already present in path; no update needed to selfBuiltPath", ["debug"]);}	
+								if (debugLogging) {addLogEntry("Full shared-folder anchor already present in path; no update needed to selfBuiltPath", ["debug"]);}
 							}
 						}
 						
@@ -6628,6 +6718,7 @@ class SyncEngine {
 						// create a db item record for the online data
 						Item newDatabaseItem = makeItem(onlinePathData);
 						// create the path locally, save the data to the database post path creation
+						if (debugLogging) {addLogEntry("newLocalParentalPath does not exist - we need to create it: " ~ newLocalParentalPath, ["debug"]);}
 						handleLocalDirectoryCreation(newDatabaseItem, newLocalParentalPath, onlinePathData);
 					} else {
 						// parent path exists locally, save the data to the database
@@ -11352,6 +11443,12 @@ class SyncEngine {
 		JSONValue[] childrenData;
 		string nextLink;
 		OneDriveApi generateDeltaResponseOneDriveApiInstance;
+		
+		// Check if exitHandlerTriggered is true
+		if (exitHandlerTriggered) {
+			// exitHandlerTriggered triggered
+			return selfGeneratedDeltaResponse;
+		}
 		
 		// Was a path to query passed in?
 		if (pathToQuery.empty) {
