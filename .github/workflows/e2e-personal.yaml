@@ -8,6 +8,7 @@ on:
     paths:
       - 'src/**'
       - 'ci/**'
+      - '.github/workflows/e2e-*.yaml'
 
 permissions:
   contents: read

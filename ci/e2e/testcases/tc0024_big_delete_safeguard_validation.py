@@ -271,6 +271,22 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         blocked_remote_manifest = build_manifest(verify_root)
         write_manifest(blocked_verify_manifest_file, blocked_remote_manifest)
 
+        # The blocked run validates that the safeguard trips before remote deletion.
+        # On Personal accounts, the client can occasionally leave/recreate the deleted
+        # local directory as an empty directory after the blocked run exits. If that
+        # happens, the following forced run no longer represents a directory delete;
+        # it sees the directory as unchanged and only deletes the missing child files,
+        # leaving the empty remote directory behind. Re-assert the intended local
+        # state immediately before the forced acknowledgement so this test remains
+        # about the big-delete safeguard rather than about transient local state after
+        # the blocked phase.
+        delete_dir_recreated_before_force = delete_dir_local.exists()
+        if delete_dir_recreated_before_force:
+            if delete_dir_local.is_dir():
+                shutil.rmtree(delete_dir_local)
+            else:
+                delete_dir_local.unlink()
+
         # Step 4: rerun with --force
         forced_command = [
             context.onedrive_bin,
@@ -371,6 +387,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                     f"remote_delete_dir={remote_delete_dir}",
                     f"remote_deleted_probe_file={remote_deleted_probe_file}",
                     f"remote_keep_file={remote_keep_file}",
+                    f"delete_dir_recreated_before_force={delete_dir_recreated_before_force}",
                     f"seed_returncode={seed_result.returncode}",
                     f"option_change_returncode={option_change_result.returncode}",
                     f"blocked_returncode={blocked_result.returncode}",
