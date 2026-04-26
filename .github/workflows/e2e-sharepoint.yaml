@@ -5,6 +5,9 @@ on:
     branches-ignore:
       - master
       - main
+    paths:
+      - 'src/**'
+      - 'ci/**'
 
 permissions:
   contents: read
