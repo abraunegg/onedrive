@@ -36,16 +36,31 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Validate secret is present
+      - name: Determine smoke test secret policy
+        id: smoke-secret-policy
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${SMOKE_REFRESH_TOKEN:-}" ]; then
-            echo "SMOKE_PERSONAL_REFRESH_TOKEN is not configured"
-            exit 1
+
+          if [ -n "${SMOKE_REFRESH_TOKEN:-}" ]; then
+            echo "run_smoke=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "SMOKE_PERSONAL_REFRESH_TOKEN is not available."
+            echo "This is expected for pull requests raised from forks."
+            echo "Skipping monitor smoke test."
+            echo "run_smoke=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "SMOKE_PERSONAL_REFRESH_TOKEN is not configured"
+          echo "This secret is required for trusted smoke-test runs."
+          exit 1
+
       - name: Install build dependencies
+        if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -64,12 +79,14 @@ jobs:
             libfuse3-dev
 
       - name: Enable debuginfod for gdb
+        if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
           echo 'DEBUGINFOD_URLS=https://debuginfod.ubuntu.com' >> "$GITHUB_ENV"
 
       - name: Build client
+        if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -77,6 +94,7 @@ jobs:
           make -j"$(nproc)"
 
       - name: Prepare smoke configuration
+        if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -95,6 +113,7 @@ jobs:
           chmod 600 "$TESTROOT/config/refresh_token"
 
       - name: Prepare gdb wrapper
+        if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -110,6 +129,7 @@ jobs:
           chmod +x "$TESTROOT/run-under-gdb.sh"
 
       - name: Run monitor smoke test
+        if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
         id: smoke
         shell: bash
         run: |
@@ -218,7 +238,7 @@ jobs:
           echo "smoke_status=clean" >> "$GITHUB_OUTPUT"
 
       - name: Run gdb diagnostics on failure
-        if: failure()
+        if: failure() && steps.smoke-secret-policy.outputs.run_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -282,16 +302,31 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Validate secret is present
+      - name: Determine smoke test secret policy
+        id: smoke-secret-policy
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${SMOKE_REFRESH_TOKEN:-}" ]; then
-            echo "SMOKE_PERSONAL_REFRESH_TOKEN is not configured"
-            exit 1
+
+          if [ -n "${SMOKE_REFRESH_TOKEN:-}" ]; then
+            echo "run_smoke=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "SMOKE_PERSONAL_REFRESH_TOKEN is not available."
+            echo "This is expected for pull requests raised from forks."
+            echo "Skipping monitor smoke test."
+            echo "run_smoke=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "SMOKE_PERSONAL_REFRESH_TOKEN is not configured"
+          echo "This secret is required for trusted smoke-test runs."
+          exit 1
+
       - name: Install build dependencies
+        if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -311,12 +346,14 @@ jobs:
             dnf-plugins-core
 
       - name: Install core debuginfo packages
+        if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
           dnf -y debuginfo-install glibc libcurl sqlite systemd || true
 
       - name: Build client
+        if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -324,6 +361,7 @@ jobs:
           make -j"$(nproc)"
 
       - name: Prepare smoke configuration
+        if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -342,6 +380,7 @@ jobs:
           chmod 600 "$TESTROOT/config/refresh_token"
 
       - name: Prepare gdb wrapper
+        if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -357,6 +396,7 @@ jobs:
           chmod +x "$TESTROOT/run-under-gdb.sh"
 
       - name: Run monitor smoke test
+        if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
         id: smoke
         shell: bash
         run: |
@@ -465,7 +505,7 @@ jobs:
           echo "smoke_status=clean" >> "$GITHUB_OUTPUT"
 
       - name: Run gdb diagnostics on failure
-        if: failure()
+        if: failure() && steps.smoke-secret-policy.outputs.run_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
