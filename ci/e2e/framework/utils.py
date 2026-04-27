@@ -51,6 +51,38 @@ STARTUP_TRANSIENT_ERROR_MARKERS = (
     "Timeout was reached",
 )
 
+E2E_REMOTE_ARTEFACT_SYNC_LIST_ENTRIES = (
+    "/ZZ_E2E_*/",
+    "/ZZ_E2E_*",
+)
+
+def default_e2e_sync_list_text() -> str:
+    return "\n".join(E2E_REMOTE_ARTEFACT_SYNC_LIST_ENTRIES) + "\n"
+
+def write_default_e2e_sync_list(config_dir: Path) -> None:
+    """
+    Restrict normal E2E runs to the harness-owned remote namespace.
+
+    The non-shared E2E suite historically treated the whole OneDrive root as
+    disposable during suite cleanup. That is unsafe once an account also hosts
+    permanent seed data, such as Personal Shared Folder source folders.
+
+    All non-shared test artefacts are created using top-level names beginning
+    with ZZ_E2E_. Keeping this default sync_list in every generated config dir
+    prevents unrelated root content from being downloaded, modified or deleted
+    by normal test execution. Test cases that explicitly validate sync_list
+    behaviour may overwrite or remove this file for their own scenario-specific
+    policy.
+    """
+    write_text_file(config_dir / "sync_list", default_e2e_sync_list_text())
+
+def config_dir_has_e2e_sync_list_guard(config_dir: Path) -> bool:
+    sync_list_path = config_dir / "sync_list"
+    if not sync_list_path.is_file():
+        return False
+    return "ZZ_E2E_" in sync_list_path.read_text(encoding="utf-8", errors="replace")
+
+
 
 def _combined_output(stdout: str, stderr: str) -> str:
     return f"{stdout}\n{stderr}"
@@ -205,11 +237,25 @@ def perform_full_account_cleanup(
     log_dir: Path,
 ) -> tuple[bool, str, list[str], dict]:
     """
-    Clean the account by:
-    1. Running a full resync to establish local state from remote
-    2. Deleting everything locally
-    3. Running a normal sync to propagate deletions online
-    4. Validating that the local sync directory is empty
+    Clean only harness-owned E2E artefacts.
+
+    This deliberately does not use sync_list filtering. The OneDrive sync_list
+    syntax is not a shell-style wildcard language, so a guard such as
+    /ZZ_E2E_*/ does not safely expose every generated test root.
+
+    Instead, cleanup performs a normal resync into an isolated temporary sync
+    root, deletes only local top-level entries whose names start with ZZ_E2E_,
+    then runs a normal sync to propagate only those harness-owned deletions.
+
+    Permanent seed data and shared-folder source material may be downloaded into
+    this temporary sync root during phase 1, but it is left in place and
+    therefore is not propagated as a deletion in phase 3.
+
+    Process:
+    1. Run a full resync into an isolated local sync directory.
+    2. Delete only top-level ZZ_E2E_* artefacts locally.
+    3. Run a normal sync to propagate those harness-owned deletions online.
+    4. Validate that no top-level ZZ_E2E_* entries remain locally.
 
     Returns:
         (success, reason, artifacts, details)
@@ -231,13 +277,15 @@ def perform_full_account_cleanup(
         str(phase3_stderr),
     ]
 
-    # Phase 1: establish local state from remote
+    # Phase 1: establish local state in an isolated temporary sync root.
     phase1_command = [
         onedrive_bin,
         "--sync",
         "--verbose",
         "--resync",
         "--resync-auth",
+        "--syncdir",
+        str(sync_dir),
         "--confdir",
         str(config_dir),
     ]
@@ -258,28 +306,36 @@ def perform_full_account_cleanup(
             },
         )
 
-    # Phase 2: delete everything locally
-    purge_directory_contents(sync_dir)
+    # Phase 2: delete only harness-owned top-level artefacts.
+    deleted_entries: list[str] = []
+    preserved_entries: list[str] = []
+    for child in sorted(sync_dir.iterdir(), key=lambda path: path.name):
+        if child.name.startswith("ZZ_E2E_"):
+            deleted_entries.append(child.name)
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        else:
+            preserved_entries.append(child.name)
 
-    remaining_after_purge = [str(child) for child in sync_dir.iterdir()]
     write_text_file(
         phase2_state,
-        "\n".join(remaining_after_purge) + ("\n" if remaining_after_purge else ""),
+        "Deleted top-level ZZ_E2E_* entries:\n"
+        + "\n".join(deleted_entries)
+        + ("\n" if deleted_entries else "")
+        + "\nPreserved non-E2E top-level entries:\n"
+        + "\n".join(preserved_entries)
+        + ("\n" if preserved_entries else ""),
     )
 
-    if remaining_after_purge:
-        return (
-            False,
-            "Cleanup phase 2 failed: local sync directory is not empty after purge",
-            artifacts,
-            {"remaining_after_purge": remaining_after_purge},
-        )
-
-    # Phase 3: propagate deletions online
+    # Phase 3: propagate only the local deletions made in phase 2.
     phase3_command = [
         onedrive_bin,
         "--sync",
         "--verbose",
+        "--syncdir",
+        str(sync_dir),
         "--confdir",
         str(config_dir),
     ]
@@ -300,14 +356,14 @@ def perform_full_account_cleanup(
             },
         )
 
-    # Phase 4: validate local is empty
-    remaining_after_sync = [str(child) for child in sync_dir.iterdir()]
-    if remaining_after_sync:
+    # Phase 4: validate no harness-owned top-level entries remain.
+    remaining_e2e_entries = [child.name for child in sync_dir.iterdir() if child.name.startswith("ZZ_E2E_")]
+    if remaining_e2e_entries:
         return (
             False,
-            "Cleanup phase 4 failed: local sync directory is not empty after sync",
+            "Cleanup phase 4 failed: top-level ZZ_E2E_* entries remain after sync",
             artifacts,
-            {"remaining_after_sync": remaining_after_sync},
+            {"remaining_e2e_entries": remaining_e2e_entries},
         )
 
     return (
@@ -319,6 +375,8 @@ def perform_full_account_cleanup(
             "phase3_returncode": phase3.returncode,
             "phase1_command": command_to_string(phase1_command),
             "phase3_command": command_to_string(phase3_command),
+            "deleted_entries": deleted_entries,
+            "preserved_entries": preserved_entries,
         },
     )
 

@@ -232,13 +232,13 @@ def main() -> int:
 
     if not context.skip_suite_cleanup:
         context.bootstrap_suite_cleanup_config_dir()
-        context.log("Starting suite-wide cleanup of local and remote OneDrive content")
+        context.log("Starting guarded suite cleanup of harness-owned ZZ_E2E_* remote artefacts")
 
         cleanup_ok, cleanup_reason, cleanup_artifacts, cleanup_details = perform_full_account_cleanup(
             onedrive_bin=context.onedrive_bin,
             repo_root=context.repo_root,
             config_dir=context.suite_cleanup_config_dir,
-            sync_dir=context.default_sync_dir,
+            sync_dir=context.suite_cleanup_sync_dir,
             log_dir=context.suite_cleanup_log_dir,
         )
 
@@ -264,7 +264,7 @@ def main() -> int:
             write_text_file(results_file, results_json)
             return 1
 
-        context.log("Suite-wide cleanup completed successfully")
+        context.log("Guarded suite cleanup completed successfully")
     else:
         context.log("Skipping suite-wide cleanup because E2E_SKIP_SUITE_CLEANUP is enabled")
 
