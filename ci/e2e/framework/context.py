@@ -11,7 +11,6 @@ from framework.utils import (
     ensure_directory,
     get_optional_base_config_text,
     timestamp_now,
-    write_default_e2e_sync_list,
     write_text_file,
     write_text_file_append,
 )
@@ -254,8 +253,6 @@ class E2EContext:
             write_text_file(config_dir / "config", base_config_text)
             os.chmod(config_dir / "config", 0o600)
 
-        write_default_e2e_sync_list(config_dir)
-
         self.validate_generated_config_dir(config_dir)
         return destination
 
@@ -295,8 +292,6 @@ class E2EContext:
         hash_path = config_dir / ".config.hash"
         hash_path.write_text(compute_quickxor_hash_file(config_path), encoding="utf-8")
         os.chmod(hash_path, 0o600)
-
-        write_default_e2e_sync_list(config_dir)
 
         self.validate_generated_config_dir(config_dir)
         return config_path

@@ -239,30 +239,29 @@ def perform_full_account_cleanup(
     """
     Clean only harness-owned E2E artefacts.
 
-    The generated config dir must contain the default E2E sync_list guard,
-    limiting visibility to top-level ZZ_E2E_* paths. This prevents the suite
-    cleanup process from deleting permanent seed folders or user-owned content
-    in accounts that are reused for specialised E2E coverage.
+    This deliberately does not use sync_list filtering. The OneDrive sync_list
+    syntax is not a shell-style wildcard language, so a guard such as
+    /ZZ_E2E_*/ does not safely expose every generated test root.
+
+    Instead, cleanup performs a normal resync into an isolated temporary sync
+    root, deletes only local top-level entries whose names start with ZZ_E2E_,
+    then runs a normal sync to propagate only those harness-owned deletions.
+
+    Permanent seed data and shared-folder source material may be downloaded into
+    this temporary sync root during phase 1, but it is left in place and
+    therefore is not propagated as a deletion in phase 3.
 
     Process:
-    1. Run a guarded resync into an isolated local sync directory
-    2. Delete the locally materialised ZZ_E2E_* artefacts
-    3. Run a guarded sync to propagate those deletions online
-    4. Validate that the isolated local sync directory is empty
+    1. Run a full resync into an isolated local sync directory.
+    2. Delete only top-level ZZ_E2E_* artefacts locally.
+    3. Run a normal sync to propagate those harness-owned deletions online.
+    4. Validate that no top-level ZZ_E2E_* entries remain locally.
 
     Returns:
         (success, reason, artifacts, details)
     """
     ensure_directory(log_dir)
     ensure_directory(sync_dir)
-
-    if not config_dir_has_e2e_sync_list_guard(config_dir):
-        return (
-            False,
-            "Cleanup refused: generated config dir does not contain the ZZ_E2E_* sync_list guard",
-            [],
-            {"config_dir": str(config_dir)},
-        )
 
     phase1_stdout = log_dir / "cleanup_phase1_resync_stdout.log"
     phase1_stderr = log_dir / "cleanup_phase1_resync_stderr.log"
@@ -278,7 +277,7 @@ def perform_full_account_cleanup(
         str(phase3_stderr),
     ]
 
-    # Phase 1: establish local state for only harness-owned remote artefacts.
+    # Phase 1: establish local state in an isolated temporary sync root.
     phase1_command = [
         onedrive_bin,
         "--sync",
@@ -307,24 +306,30 @@ def perform_full_account_cleanup(
             },
         )
 
-    # Phase 2: delete only the locally materialised, sync_list-visible artefacts.
-    purge_directory_contents(sync_dir)
+    # Phase 2: delete only harness-owned top-level artefacts.
+    deleted_entries: list[str] = []
+    preserved_entries: list[str] = []
+    for child in sorted(sync_dir.iterdir(), key=lambda path: path.name):
+        if child.name.startswith("ZZ_E2E_"):
+            deleted_entries.append(child.name)
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        else:
+            preserved_entries.append(child.name)
 
-    remaining_after_purge = [str(child) for child in sync_dir.iterdir()]
     write_text_file(
         phase2_state,
-        "\n".join(remaining_after_purge) + ("\n" if remaining_after_purge else ""),
+        "Deleted top-level ZZ_E2E_* entries:\n"
+        + "\n".join(deleted_entries)
+        + ("\n" if deleted_entries else "")
+        + "\nPreserved non-E2E top-level entries:\n"
+        + "\n".join(preserved_entries)
+        + ("\n" if preserved_entries else ""),
     )
 
-    if remaining_after_purge:
-        return (
-            False,
-            "Cleanup phase 2 failed: local sync directory is not empty after purge",
-            artifacts,
-            {"remaining_after_purge": remaining_after_purge},
-        )
-
-    # Phase 3: propagate deletions online within the guarded ZZ_E2E_* namespace.
+    # Phase 3: propagate only the local deletions made in phase 2.
     phase3_command = [
         onedrive_bin,
         "--sync",
@@ -351,14 +356,14 @@ def perform_full_account_cleanup(
             },
         )
 
-    # Phase 4: validate guarded local sync directory is empty.
-    remaining_after_sync = [str(child) for child in sync_dir.iterdir()]
-    if remaining_after_sync:
+    # Phase 4: validate no harness-owned top-level entries remain.
+    remaining_e2e_entries = [child.name for child in sync_dir.iterdir() if child.name.startswith("ZZ_E2E_")]
+    if remaining_e2e_entries:
         return (
             False,
-            "Cleanup phase 4 failed: local sync directory is not empty after sync",
+            "Cleanup phase 4 failed: top-level ZZ_E2E_* entries remain after sync",
             artifacts,
-            {"remaining_after_sync": remaining_after_sync},
+            {"remaining_e2e_entries": remaining_e2e_entries},
         )
 
     return (
@@ -370,6 +375,8 @@ def perform_full_account_cleanup(
             "phase3_returncode": phase3.returncode,
             "phase1_command": command_to_string(phase1_command),
             "phase3_command": command_to_string(phase3_command),
+            "deleted_entries": deleted_entries,
+            "preserved_entries": preserved_entries,
         },
     )
 
