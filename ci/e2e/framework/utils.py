@@ -51,6 +51,38 @@ STARTUP_TRANSIENT_ERROR_MARKERS = (
     "Timeout was reached",
 )
 
+E2E_REMOTE_ARTEFACT_SYNC_LIST_ENTRIES = (
+    "/ZZ_E2E_*/",
+    "/ZZ_E2E_*",
+)
+
+def default_e2e_sync_list_text() -> str:
+    return "\n".join(E2E_REMOTE_ARTEFACT_SYNC_LIST_ENTRIES) + "\n"
+
+def write_default_e2e_sync_list(config_dir: Path) -> None:
+    """
+    Restrict normal E2E runs to the harness-owned remote namespace.
+
+    The non-shared E2E suite historically treated the whole OneDrive root as
+    disposable during suite cleanup. That is unsafe once an account also hosts
+    permanent seed data, such as Personal Shared Folder source folders.
+
+    All non-shared test artefacts are created using top-level names beginning
+    with ZZ_E2E_. Keeping this default sync_list in every generated config dir
+    prevents unrelated root content from being downloaded, modified or deleted
+    by normal test execution. Test cases that explicitly validate sync_list
+    behaviour may overwrite or remove this file for their own scenario-specific
+    policy.
+    """
+    write_text_file(config_dir / "sync_list", default_e2e_sync_list_text())
+
+def config_dir_has_e2e_sync_list_guard(config_dir: Path) -> bool:
+    sync_list_path = config_dir / "sync_list"
+    if not sync_list_path.is_file():
+        return False
+    return "ZZ_E2E_" in sync_list_path.read_text(encoding="utf-8", errors="replace")
+
+
 
 def _combined_output(stdout: str, stderr: str) -> str:
     return f"{stdout}\n{stderr}"
@@ -205,17 +237,32 @@ def perform_full_account_cleanup(
     log_dir: Path,
 ) -> tuple[bool, str, list[str], dict]:
     """
-    Clean the account by:
-    1. Running a full resync to establish local state from remote
-    2. Deleting everything locally
-    3. Running a normal sync to propagate deletions online
-    4. Validating that the local sync directory is empty
+    Clean only harness-owned E2E artefacts.
+
+    The generated config dir must contain the default E2E sync_list guard,
+    limiting visibility to top-level ZZ_E2E_* paths. This prevents the suite
+    cleanup process from deleting permanent seed folders or user-owned content
+    in accounts that are reused for specialised E2E coverage.
+
+    Process:
+    1. Run a guarded resync into an isolated local sync directory
+    2. Delete the locally materialised ZZ_E2E_* artefacts
+    3. Run a guarded sync to propagate those deletions online
+    4. Validate that the isolated local sync directory is empty
 
     Returns:
         (success, reason, artifacts, details)
     """
     ensure_directory(log_dir)
     ensure_directory(sync_dir)
+
+    if not config_dir_has_e2e_sync_list_guard(config_dir):
+        return (
+            False,
+            "Cleanup refused: generated config dir does not contain the ZZ_E2E_* sync_list guard",
+            [],
+            {"config_dir": str(config_dir)},
+        )
 
     phase1_stdout = log_dir / "cleanup_phase1_resync_stdout.log"
     phase1_stderr = log_dir / "cleanup_phase1_resync_stderr.log"
@@ -231,13 +278,15 @@ def perform_full_account_cleanup(
         str(phase3_stderr),
     ]
 
-    # Phase 1: establish local state from remote
+    # Phase 1: establish local state for only harness-owned remote artefacts.
     phase1_command = [
         onedrive_bin,
         "--sync",
         "--verbose",
         "--resync",
         "--resync-auth",
+        "--syncdir",
+        str(sync_dir),
         "--confdir",
         str(config_dir),
     ]
@@ -258,7 +307,7 @@ def perform_full_account_cleanup(
             },
         )
 
-    # Phase 2: delete everything locally
+    # Phase 2: delete only the locally materialised, sync_list-visible artefacts.
     purge_directory_contents(sync_dir)
 
     remaining_after_purge = [str(child) for child in sync_dir.iterdir()]
@@ -275,11 +324,13 @@ def perform_full_account_cleanup(
             {"remaining_after_purge": remaining_after_purge},
         )
 
-    # Phase 3: propagate deletions online
+    # Phase 3: propagate deletions online within the guarded ZZ_E2E_* namespace.
     phase3_command = [
         onedrive_bin,
         "--sync",
         "--verbose",
+        "--syncdir",
+        str(sync_dir),
         "--confdir",
         str(config_dir),
     ]
@@ -300,7 +351,7 @@ def perform_full_account_cleanup(
             },
         )
 
-    # Phase 4: validate local is empty
+    # Phase 4: validate guarded local sync directory is empty.
     remaining_after_sync = [str(child) for child in sync_dir.iterdir()]
     if remaining_after_sync:
         return (
