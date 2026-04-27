@@ -317,10 +317,6 @@ class E2EContext:
     def suite_cleanup_log_dir(self) -> Path:
         return self.logs_dir / "_suite_cleanup"
 
-    @property
-    def suite_cleanup_sync_dir(self) -> Path:
-        return self.work_root / "suite-cleanup-syncroot"
-
     def bootstrap_suite_cleanup_config_dir(self) -> Path:
         if self.suite_cleanup_config_dir.exists():
             shutil.rmtree(self.suite_cleanup_config_dir)
