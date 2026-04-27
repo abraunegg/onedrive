@@ -164,17 +164,47 @@ def run_command(
 def command_to_string(command: list[str]) -> str:
     return " ".join(command)
 
-def purge_directory_contents(path: Path) -> None:
+PROTECTED_SUITE_CLEANUP_PREFIXES = (
+    "ZZ_SHARED_SEED",
+)
+
+
+def is_protected_suite_cleanup_path(path: Path) -> bool:
     """
-    Delete all files and folders inside 'path', but do not delete 'path' itself.
+    Return True when a top-level local path represents durable online seed
+    data that must never be removed by suite-wide cleanup.
+
+    This intentionally protects any top-level name beginning with
+    ZZ_SHARED_SEED so both the current 15-character driveId seed
+    (ZZ_SHARED_SEED_15CHAR) and future shared-folder seed roots are
+    preserved.
+    """
+    return any(path.name.startswith(prefix) for prefix in PROTECTED_SUITE_CLEANUP_PREFIXES)
+
+
+def purge_directory_contents(path: Path) -> list[str]:
+    """
+    Delete files and folders inside 'path', but do not delete 'path' itself.
+
+    Durable shared-folder seed roots are explicitly preserved.  This is
+    required because the cleanup syncroot is populated from the account root;
+    deleting a preserved local seed root and then running a normal sync would
+    delete that online fixture.
     """
     ensure_directory(path)
 
+    preserved: list[str] = []
     for child in path.iterdir():
+        if is_protected_suite_cleanup_path(child):
+            preserved.append(child.name)
+            continue
+
         if child.is_dir() and not child.is_symlink():
             shutil.rmtree(child)
         else:
             child.unlink(missing_ok=True)
+
+    return sorted(preserved)
 
 
 def run_command_logged(
@@ -258,21 +288,39 @@ def perform_full_account_cleanup(
             },
         )
 
-    # Phase 2: delete everything locally
-    purge_directory_contents(sync_dir)
+    # Phase 2: delete local content that is safe for suite cleanup.
+    #
+    # IMPORTANT: do not delete durable shared-folder seed roots. If those
+    # directories are removed locally here, phase 3 will propagate that delete
+    # to OneDrive and destroy the online shared-folder fixture.
+    preserved_after_purge = purge_directory_contents(sync_dir)
 
-    remaining_after_purge = [str(child) for child in sync_dir.iterdir()]
+    remaining_after_purge = sorted(str(child.name) for child in sync_dir.iterdir())
     write_text_file(
         phase2_state,
-        "\n".join(remaining_after_purge) + ("\n" if remaining_after_purge else ""),
+        "\n".join(
+            ["Preserved by suite cleanup guard:"]
+            + preserved_after_purge
+            + ["", "Remaining after purge:"]
+            + remaining_after_purge
+        )
+        + "\n",
     )
 
-    if remaining_after_purge:
+    unsafe_remaining_after_purge = [
+        name for name in remaining_after_purge
+        if not name.startswith(PROTECTED_SUITE_CLEANUP_PREFIXES)
+    ]
+    if unsafe_remaining_after_purge:
         return (
             False,
-            "Cleanup phase 2 failed: local sync directory is not empty after purge",
+            "Cleanup phase 2 failed: unsafe local sync directory entries remain after purge",
             artifacts,
-            {"remaining_after_purge": remaining_after_purge},
+            {
+                "remaining_after_purge": remaining_after_purge,
+                "unsafe_remaining_after_purge": unsafe_remaining_after_purge,
+                "preserved_after_purge": preserved_after_purge,
+            },
         )
 
     # Phase 3: propagate deletions online
@@ -300,14 +348,21 @@ def perform_full_account_cleanup(
             },
         )
 
-    # Phase 4: validate local is empty
-    remaining_after_sync = [str(child) for child in sync_dir.iterdir()]
-    if remaining_after_sync:
+    # Phase 4: validate that only explicitly protected seed roots remain.
+    remaining_after_sync = sorted(str(child.name) for child in sync_dir.iterdir())
+    unsafe_remaining_after_sync = [
+        name for name in remaining_after_sync
+        if not name.startswith(PROTECTED_SUITE_CLEANUP_PREFIXES)
+    ]
+    if unsafe_remaining_after_sync:
         return (
             False,
-            "Cleanup phase 4 failed: local sync directory is not empty after sync",
+            "Cleanup phase 4 failed: unsafe local sync directory entries remain after sync",
             artifacts,
-            {"remaining_after_sync": remaining_after_sync},
+            {
+                "remaining_after_sync": remaining_after_sync,
+                "unsafe_remaining_after_sync": unsafe_remaining_after_sync,
+            },
         )
 
     return (
@@ -319,6 +374,8 @@ def perform_full_account_cleanup(
             "phase3_returncode": phase3.returncode,
             "phase1_command": command_to_string(phase1_command),
             "phase3_command": command_to_string(phase3_command),
+            "preserved_after_purge": preserved_after_purge,
+            "remaining_after_sync": remaining_after_sync,
         },
     )
 
