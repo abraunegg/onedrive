@@ -36,9 +36,9 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
     PROCESS_EXIT_TIMEOUT = 120
     PHASE_COMMAND_TIMEOUT = 1200
 
-    # Use 1 MB/s to deliberately slow both upload and download so the 15% threshold
+    # Use 10 MB/s to deliberately slow both upload and download so the 15% threshold
     # is reached with ample time to deliver SIGINT before the transfer can complete.
-    RATE_LIMIT: str | None = "1048576"
+    RATE_LIMIT: str | None = "10485760"
 
     # Force active upload / download transfer abortion on SIGINT so resumable state is
     # actually persisted for recovery testing. This must only be enabled for tc0021.
