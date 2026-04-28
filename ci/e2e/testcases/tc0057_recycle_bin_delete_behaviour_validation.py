@@ -14,7 +14,7 @@ from framework.utils import command_to_string, reset_directory, run_command, wri
 class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
     case_id = "0057"
     name = "recycle bin delete behaviour validation"
-    description = "Validate use_recycle_bin behaviour for online-origin and local-origin deletes"
+    description = "Validate use_recycle_bin behaviour for online-origin deletes and local-origin delete propagation"
 
     def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
         write_text_file(metadata_file, "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n")
@@ -282,6 +282,8 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
                 "remote_has_keep_file": remote_has_keep_file,
                 "recycle_has_payload": recycle_has_payload,
                 "recycle_has_trashinfo": recycle_has_trashinfo,
+                "expected_recycle_bin_payload": delete_origin == "online" and use_recycle_bin,
+                "expected_local_delete_propagation": delete_origin == "local",
                 "local_manifest_count": len(local_manifest),
                 "remote_manifest_count": len(remote_manifest),
                 "recycle_manifest_count": len(recycle_manifest),
@@ -297,14 +299,20 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
         if not remote_has_keep_file:
             failures.append(f"{scenario_id}: keep file missing online after delete processing")
 
-        if use_recycle_bin:
+        if delete_origin == "online" and use_recycle_bin:
             if not recycle_has_payload:
-                failures.append(f"{scenario_id}: deleted payload was not moved into the configured recycle bin")
+                failures.append(f"{scenario_id}: online-origin deleted payload was not moved into the configured recycle bin")
             if not recycle_has_trashinfo:
-                failures.append(f"{scenario_id}: recycle bin metadata .trashinfo file was not created")
+                failures.append(f"{scenario_id}: online-origin delete did not create recycle bin metadata .trashinfo file")
         else:
             if recycle_has_payload or recycle_has_trashinfo:
-                failures.append(f"{scenario_id}: recycle bin contains deleted data even though use_recycle_bin=false")
+                if delete_origin == "local" and use_recycle_bin:
+                    failures.append(
+                        f"{scenario_id}: local-origin delete unexpectedly created configured recycle bin data; "
+                        "local deletes are already removed before the client observes them and should be propagated online"
+                    )
+                else:
+                    failures.append(f"{scenario_id}: recycle bin contains deleted data even though use_recycle_bin=false")
 
         self._write_metadata(metadata_file, details)
         return failures, artifacts, details
