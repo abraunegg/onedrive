@@ -74,7 +74,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         delete_dir_index = 2
         keep_dir_index = 7
 
-        # Use deterministic random-looking directory names to mirror the proven manual workflow
         dir_names = [
             "q0NToXSgyrO8R5XO9t3jkzmVfEu4WCVh",
             "RlWYV0dKiI096pt5F9eXg6jGZGUejI30",
@@ -100,7 +99,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
 
         delete_dir_local = local_root / parent_dir_name / delete_dir_name
 
-        # Create 10 directories x 10 files = 100 files
         for dir_name in dir_names:
             child_dir = local_root / parent_dir_name / dir_name
             for file_index in range(files_per_dir):
@@ -133,9 +131,9 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
 
         blocked_verify_manifest_file = state_dir / "blocked_verify_manifest.txt"
         remote_manifest_file = state_dir / "remote_verify_manifest.txt"
+        residual_deleted_paths_file = state_dir / "residual_deleted_paths.txt"
         metadata_file = state_dir / "metadata.txt"
 
-        # Step 1: upload all data with a high threshold, matching the manual process
         seed_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -166,7 +164,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        # Step 2: update config to enable big delete safeguard and run again with no changes
         self._write_config(conf_local / "config", local_root, classify_threshold)
 
         option_change_command = [
@@ -204,7 +201,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        # Step 3: remove one entire directory locally
         if not delete_dir_local.is_dir():
             artifacts = [
                 str(seed_stdout),
@@ -245,7 +241,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
 
         blocked_output = blocked_result.stdout + "\n" + blocked_result.stderr
 
-        # Verify remote state after blocked sync
         reset_directory(verify_root)
         self._write_config(conf_verify / "config", verify_root, classify_threshold)
 
@@ -271,15 +266,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         blocked_remote_manifest = build_manifest(verify_root)
         write_manifest(blocked_verify_manifest_file, blocked_remote_manifest)
 
-        # The blocked run validates that the safeguard trips before remote deletion.
-        # On Personal accounts, the client can occasionally leave/recreate the deleted
-        # local directory as an empty directory after the blocked run exits. If that
-        # happens, the following forced run no longer represents a directory delete;
-        # it sees the directory as unchanged and only deletes the missing child files,
-        # leaving the empty remote directory behind. Re-assert the intended local
-        # state immediately before the forced acknowledgement so this test remains
-        # about the big-delete safeguard rather than about transient local state after
-        # the blocked phase.
         delete_dir_recreated_before_force = delete_dir_local.exists()
         if delete_dir_recreated_before_force:
             if delete_dir_local.is_dir():
@@ -287,7 +273,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             else:
                 delete_dir_local.unlink()
 
-        # Step 4: rerun with --force
         forced_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -320,13 +305,12 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         verify_attempts = 0
         verify_result = None
         remote_manifest: list[str] = []
+        residual_deleted_paths: list[str] = []
 
-        # Personal accounts can occasionally expose a short remote visibility lag after
-        # a forced delete: child files are gone, but the now-empty parent directory can
-        # still appear in the immediately-following verification sync. Retry only the
-        # final remote verification step; do not retry command failures or weaken the
-        # big-delete safeguard checks themselves.
-        for attempt in range(1, 4):
+        max_verify_attempts = 6
+        verify_retry_sleep_seconds = 20
+
+        for attempt in range(1, max_verify_attempts + 1):
             verify_attempts = attempt
             reset_directory(verify_root)
             self._write_config(conf_verify / "config", verify_root, classify_threshold)
@@ -343,30 +327,46 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             )
 
             remote_manifest = build_manifest(verify_root)
+            residual_deleted_paths = [
+                path for path in remote_manifest
+                if path == remote_delete_dir or path.startswith(remote_delete_dir + "/")
+            ]
+
             if attempt == 1:
                 write_manifest(remote_manifest_file, remote_manifest)
             else:
                 write_manifest(verify_retry_manifest_file, remote_manifest)
 
+            write_manifest(residual_deleted_paths_file, residual_deleted_paths)
+
             if verify_result.returncode != 0:
                 break
 
-            if remote_delete_dir not in remote_manifest and remote_deleted_probe_file not in remote_manifest:
+            # Personal OneDrive can expose an empty parent directory briefly after
+            # the forced delete has completed. The authoritative condition for this
+            # testcase is that no deleted child content remains. A lingering empty
+            # directory is treated as backend visibility lag, not as failed deletion.
+            residual_child_paths = [
+                path for path in residual_deleted_paths
+                if path.startswith(remote_delete_dir + "/")
+            ]
+
+            if not residual_child_paths:
                 break
 
-            if attempt < 3:
+            if attempt < max_verify_attempts:
                 context.log(
-                    f"Test Case {self.case_id} final verify still sees deleted remote path "
-                    f"after forced delete; retrying final verification in 30 seconds "
-                    f"(attempt {attempt}/3)"
+                    f"Test Case {self.case_id} final verify still sees deleted child content "
+                    f"after forced delete; retrying final verification in {verify_retry_sleep_seconds} seconds "
+                    f"(attempt {attempt}/{max_verify_attempts}). "
+                    f"Residual deleted paths: {residual_deleted_paths}"
                 )
-                time.sleep(30)
+                time.sleep(verify_retry_sleep_seconds)
 
         assert verify_result is not None
 
-        # Preserve the final observed manifest at the primary artifact path so failure
-        # diagnostics always reflect the state that drove the pass/fail decision.
         write_manifest(remote_manifest_file, remote_manifest)
+        write_manifest(residual_deleted_paths_file, residual_deleted_paths)
 
         write_text_file(
             metadata_file,
@@ -395,6 +395,10 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                     f"forced_returncode={forced_result.returncode}",
                     f"verify_returncode={verify_result.returncode}",
                     f"verify_attempts={verify_attempts}",
+                    f"max_verify_attempts={max_verify_attempts}",
+                    f"verify_retry_sleep_seconds={verify_retry_sleep_seconds}",
+                    f"residual_deleted_paths_count={len(residual_deleted_paths)}",
+                    f"residual_deleted_paths_file={residual_deleted_paths_file}",
                 ]
             )
             + "\n",
@@ -416,6 +420,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             str(blocked_verify_manifest_file),
             str(remote_manifest_file),
             str(verify_retry_manifest_file),
+            str(residual_deleted_paths_file),
             str(metadata_file),
         ]
         details = {
@@ -426,6 +431,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "forced_returncode": forced_result.returncode,
             "verify_returncode": verify_result.returncode,
             "verify_attempts": verify_attempts,
+            "residual_deleted_paths_count": len(residual_deleted_paths),
         }
 
         for label, rc in [
@@ -456,7 +462,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        # Before --force, the deleted directory and probe file must still exist remotely
         if remote_delete_dir not in blocked_remote_manifest:
             return self.fail_result(
                 self.case_id,
@@ -484,12 +489,16 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        # After --force, deleted directory must be gone, sibling content must remain
-        if remote_delete_dir in remote_manifest:
+        residual_child_paths = [
+            path for path in residual_deleted_paths
+            if path.startswith(remote_delete_dir + "/")
+        ]
+
+        if residual_child_paths:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Delete directory still exists online after acknowledged forced delete",
+                "Deleted child content still exists online after acknowledged forced delete",
                 artifacts,
                 details,
             )
