@@ -5,6 +5,8 @@ on:
     branches:
       - master
       - feature/**
+    paths:
+      - 'src/**'
   pull_request:
   workflow_dispatch:
 
