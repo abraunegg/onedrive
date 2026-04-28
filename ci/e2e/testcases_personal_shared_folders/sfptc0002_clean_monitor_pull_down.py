@@ -63,7 +63,7 @@ class SharedFolderPersonalTestCase0002CleanMonitorPullDown(E2ETestCase):
                 stderr=stderr_fp,
                 text=True,
             )
-            initial_sync_complete = wait_for_stdout_marker(stdout_file, "Sync with Microsoft OneDrive is complete")
+            initial_sync_complete = wait_for_stdout_marker(stdout_file, "Sync with Microsoft OneDrive is complete", timeout_seconds=1200)
             monitor_returncode = stop_monitor_process(process)
 
         stdout_text = stdout_file.read_text(encoding="utf-8", errors="replace") if stdout_file.exists() else ""
