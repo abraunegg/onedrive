@@ -116,7 +116,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          f="$(find artifacts/e2e-sharepoint -name results.json -type f | head -n 1 || true)"
+          primary_results="artifacts/e2e-sharepoint/results.json"
+          if [ -f "$primary_results" ]; then
+            f="$primary_results"
+          else
+            f="$(find artifacts/e2e-sharepoint \
+              -path '*/debug-rerun/*' -prune -o \
+              -name results.json -type f -print | head -n 1 || true)"
+          fi
           if [ -z "$f" ] || [ ! -f "$f" ]; then
             echo "md=⚠️ E2E ran but results.json was not found." >> "$GITHUB_OUTPUT"
             exit 0
