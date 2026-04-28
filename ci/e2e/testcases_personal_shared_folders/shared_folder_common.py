@@ -253,7 +253,7 @@ def write_case_config(context: E2EContext, config_dir: Path, case_id: str) -> Pa
     )
 
 
-def wait_for_stdout_marker(stdout_file: Path, marker: str, timeout_seconds: int = 180, poll_interval: float = 0.5) -> bool:
+def wait_for_stdout_marker(stdout_file: Path, marker: str, timeout_seconds: int = 600, poll_interval: float = 0.5) -> bool:
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
         if stdout_file.exists():

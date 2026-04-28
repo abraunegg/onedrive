@@ -12,7 +12,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
+from framework.utils import CommandResult, command_to_string, reset_directory, write_onedrive_config, write_text_file
 
 
 @dataclass
@@ -34,6 +34,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
     INTERRUPT_THRESHOLD_PERCENT = 15.0
     TRANSFER_WAIT_TIMEOUT = 300
     PROCESS_EXIT_TIMEOUT = 120
+    PHASE_COMMAND_TIMEOUT = 1200
 
     # Use 1 MB/s to deliberately slow both upload and download so the 15% threshold
     # is reached with ample time to deliver SIGINT before the transfer can complete.
@@ -211,9 +212,50 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         command: list[str],
         stdout_file: Path,
         stderr_file: Path,
-    ):
-        context.log(f"Executing Test Case {self.case_id} {label}: {command_to_string(command)}")
-        result = run_command(command, cwd=context.repo_root)
+        timeout_seconds: int | None = None,
+    ) -> CommandResult:
+        timeout = timeout_seconds or self.PHASE_COMMAND_TIMEOUT
+        context.log(
+            f"Executing Test Case {self.case_id} {label}: {command_to_string(command)} "
+            f"(timeout {timeout}s)"
+        )
+
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=str(context.repo_root),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+            )
+            result = CommandResult(
+                command=command,
+                returncode=completed.returncode,
+                stdout=completed.stdout or "",
+                stderr=completed.stderr or "",
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout or ""
+            stderr = exc.stderr or ""
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode("utf-8", errors="replace")
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            stderr = (
+                f"{stderr}\n"
+                f"Test Case {self.case_id} {label} timed out after {timeout} seconds; "
+                "the onedrive process was terminated by the harness.\n"
+            )
+            result = CommandResult(
+                command=command,
+                returncode=124,
+                stdout=stdout,
+                stderr=stderr,
+            )
+
         write_text_file(stdout_file, result.stdout)
         write_text_file(stderr_file, result.stderr)
         return result
