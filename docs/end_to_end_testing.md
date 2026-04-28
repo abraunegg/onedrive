@@ -80,7 +80,7 @@ SharePoint end-to-end testing uses the same complete automated test suite as Per
 | 0054 | Monitor mode atomic-save editor replace workflow | - Personal<br>- Business<br>- SharePoint | This test replaces an existing file via temp-file save and atomic rename under --monitor and validate the final remote state |
 | 0055 | Upload-only remove-source-folders | - Personal<br>- Business<br>- SharePoint | This test validates that remove_source_folders removes empty local directory structure after upload-only succeeds |
 | 0056 | Monitor mode create then delete quickly | - Personal<br>- Business<br>- SharePoint | This test creates and delete a local file quickly under --monitor and validate stability and final remote state |
-
+| 0057 | Recycle bin delete behaviour validation |  - Personal<br>- Business<br>- SharePoint | This test validates that use_recycle_bin behaviour for online-origin deletes and local-origin delete propagation |
 
 
 ### Contributing Additional Test Cases
