@@ -1593,15 +1593,15 @@ To remove the local copy without deleting online data:
 1. Stop all running `onedrive` processes.
 2. Stop any configured systemd service, for example:
 ```
-       systemctl --user stop onedrive
+systemctl --user stop onedrive
 ```
 3. Confirm no client process is still running:
 ```
-       pgrep -a onedrive
+pgrep -a onedrive
 ```
 4. Move the local sync directory out of the way first:
 ```
-       mv ~/OneDrive ~/OneDrive.local-backup
+mv ~/OneDrive ~/OneDrive.local-backup
 ```
 5. Only delete the backup after you are certain the client is stopped and you no longer need the local data.
 
