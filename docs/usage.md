@@ -1066,6 +1066,47 @@ The following are supported for pattern matching and exclusion rules:
 > ```
 > This will tell the application to sync any file that it finds in your 'sync_dir' root by default, negating the need to constantly update your 'sync_list' file.
 
+#### Using 'sync_list' with OneDrive Personal Shared Folders (Shortcuts)
+
+When using `sync_list` with OneDrive Personal shared folders that have been added to your OneDrive as shortcuts, it is important to understand that these are **not standard directories within your OneDrive file hierarchy**.
+
+A shared folder is represented as a *shortcut (link)* to content stored in another location (for example, another user's OneDrive). Because of this:
+
+> [!IMPORTANT]
+> Including only the parent directory that contains shared-folder shortcuts does **not guarantee** that the client will traverse and synchronise the contents of those shared folders.
+
+For example, given the following structure:
+
+```text
+SHARED_FOLDERS/
+SHARED_FOLDERS/SUB_FOLDER_1/
+SHARED_FOLDERS/SUB_FOLDER_1/CORE/
+SHARED_FOLDERS/SUB_FOLDER_1/DEEP_SOURCE/
+```
+
+The following `sync_list` rule:
+
+```text
+/SHARED_FOLDERS/
+```
+
+will include the shared-folder **shortcut entries only**, but will not reliably trigger traversal into the contents of those shared folders.
+
+To ensure correct behaviour, explicitly include each shared-folder shortcut path that you want to synchronise:
+
+```text
+/SHARED_FOLDERS/SUB_FOLDER_1/CORE/
+/SHARED_FOLDERS/SUB_FOLDER_1/DEEP_SOURCE/
+```
+
+> [!NOTE]
+> Using wildcard rules such as `/SHARED_FOLDERS/*` will only include the shared-folder shortcut entries and does **not guarantee** traversal into the contents of those shared folders.
+
+> [!TIP]
+> Treat each shared-folder shortcut as an independent root for the purposes of `sync_list`. Always explicitly include the exact shared-folder paths you want synchronised.
+
+
+
 ### Performing a --resync
 A `--resync` operation instructs the client to delete its local state database and fully rebuild it from the current online OneDrive contents. This is a powerful recovery and re-alignment action that should be used **sparingly** and **with care**.
 

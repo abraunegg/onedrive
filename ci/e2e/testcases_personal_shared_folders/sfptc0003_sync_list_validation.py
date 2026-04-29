@@ -21,6 +21,12 @@ SYNC_LIST_FILE_NAME = "sync_list"
 
 
 @dataclass
+class SharedFolderUploadCheck:
+    relative_path: str
+    content: str
+
+
+@dataclass
 class SharedFolderSyncListScenario:
     scenario_id: str
     description: str
@@ -29,6 +35,7 @@ class SharedFolderSyncListScenario:
     required_present: list[str] = field(default_factory=list)
     required_absent: list[str] = field(default_factory=list)
     required_stdout_markers: list[str] = field(default_factory=list)
+    upload_checks: list[SharedFolderUploadCheck] = field(default_factory=list)
 
 
 class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
@@ -89,6 +96,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 context.onedrive_bin,
                 "--sync",
                 "--verbose",
+                "--download-only",
                 "--resync",
                 "--resync-auth",
                 "--confdir",
@@ -125,6 +133,25 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             write_manifest(required_present_file, missing_required_present)
             write_manifest(required_absent_file, unexpected_required_absent)
 
+            upload_failures: list[str] = []
+            upload_artifacts: list[str] = []
+            if scenario.upload_checks:
+                if result.returncode != 0:
+                    upload_failures.append(
+                        "Skipping upload validation because initial download-only sync failed"
+                    )
+                else:
+                    upload_failures.extend(
+                        self._run_upload_checks(
+                            context=context,
+                            confdir=confdir,
+                            sync_root=scenario_sync_root,
+                            scenario_log_dir=scenario_log_dir,
+                            scenario=scenario,
+                            artifacts=upload_artifacts,
+                        )
+                    )
+
             diffs: list[str] = []
             if result.returncode != 0:
                 diffs.append(f"onedrive exited with non-zero status {result.returncode}")
@@ -144,6 +171,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 diffs.append(f"Required included entries were missing: {missing_required_present!r}")
             if unexpected_required_absent:
                 diffs.append(f"Required excluded entries were present locally: {unexpected_required_absent!r}")
+            if upload_failures:
+                diffs.append("Upload validation failed: " + "; ".join(upload_failures))
 
             metadata_lines = [
                 f"case_id={self.case_id}",
@@ -162,6 +191,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 f"missing_required_present={missing_required_present!r}",
                 f"unexpected_required_absent={unexpected_required_absent!r}",
                 f"missing_stdout_markers={missing_stdout_markers!r}",
+                f"upload_checks={len(scenario.upload_checks)}",
+                f"upload_failures={upload_failures!r}",
             ]
             write_text_file(metadata_file, "\n".join(metadata_lines) + "\n")
 
@@ -178,6 +209,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 str(required_absent_file),
                 str(metadata_file),
             ]
+            scenario_artifacts.extend(upload_artifacts)
             all_artifacts.extend(scenario_artifacts)
 
             if diffs:
@@ -209,14 +241,131 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
 
         return self.pass_result(self.case_id, self.name, all_artifacts, details)
 
+    def _run_upload_checks(
+        self,
+        context: E2EContext,
+        confdir: Path,
+        sync_root: Path,
+        scenario_log_dir: Path,
+        scenario: SharedFolderSyncListScenario,
+        artifacts: list[str],
+    ) -> list[str]:
+        failures: list[str] = []
+
+        for index, upload_check in enumerate(scenario.upload_checks, start=1):
+            upload_relative_path = upload_check.relative_path.strip("/")
+            local_upload_path = sync_root / upload_relative_path
+            local_upload_path.parent.mkdir(parents=True, exist_ok=True)
+            write_text_file(local_upload_path, upload_check.content)
+
+            upload_stdout_file = scenario_log_dir / f"upload-{index:02d}-stdout.log"
+            upload_stderr_file = scenario_log_dir / f"upload-{index:02d}-stderr.log"
+            cleanup_stdout_file = scenario_log_dir / f"cleanup-{index:02d}-stdout.log"
+            cleanup_stderr_file = scenario_log_dir / f"cleanup-{index:02d}-stderr.log"
+            verify_stdout_file = scenario_log_dir / f"cleanup-verify-{index:02d}-stdout.log"
+            verify_stderr_file = scenario_log_dir / f"cleanup-verify-{index:02d}-stderr.log"
+
+            artifacts.extend(
+                [
+                    str(upload_stdout_file),
+                    str(upload_stderr_file),
+                    str(cleanup_stdout_file),
+                    str(cleanup_stderr_file),
+                    str(verify_stdout_file),
+                    str(verify_stderr_file),
+                ]
+            )
+
+            upload_command = [
+                context.onedrive_bin,
+                "--sync",
+                "--verbose",
+                "--confdir",
+                str(confdir),
+            ]
+            context.log(
+                f"Executing {self.case_id} {scenario.scenario_id} upload validation "
+                f"for {upload_relative_path}: {command_to_string(upload_command)}"
+            )
+            upload_result = run_command(upload_command, cwd=context.repo_root)
+            write_text_file(upload_stdout_file, upload_result.stdout)
+            write_text_file(upload_stderr_file, upload_result.stderr)
+
+            if upload_result.returncode != 0:
+                failures.append(
+                    f"{upload_relative_path}: upload sync exited with non-zero status "
+                    f"{upload_result.returncode}"
+                )
+
+            if not local_upload_path.exists():
+                failures.append(
+                    f"{upload_relative_path}: uploaded local file disappeared unexpectedly "
+                    "after upload sync"
+                )
+
+            if local_upload_path.exists():
+                local_upload_path.unlink()
+
+            cleanup_command = [
+                context.onedrive_bin,
+                "--sync",
+                "--verbose",
+                "--confdir",
+                str(confdir),
+            ]
+            context.log(
+                f"Executing {self.case_id} {scenario.scenario_id} upload cleanup "
+                f"for {upload_relative_path}: {command_to_string(cleanup_command)}"
+            )
+            cleanup_result = run_command(cleanup_command, cwd=context.repo_root)
+            write_text_file(cleanup_stdout_file, cleanup_result.stdout)
+            write_text_file(cleanup_stderr_file, cleanup_result.stderr)
+
+            if cleanup_result.returncode != 0:
+                failures.append(
+                    f"{upload_relative_path}: cleanup sync exited with non-zero status "
+                    f"{cleanup_result.returncode}"
+                )
+
+            verify_command = [
+                context.onedrive_bin,
+                "--sync",
+                "--verbose",
+                "--download-only",
+                "--resync",
+                "--resync-auth",
+                "--confdir",
+                str(confdir),
+            ]
+            context.log(
+                f"Executing {self.case_id} {scenario.scenario_id} cleanup verification "
+                f"for {upload_relative_path}: {command_to_string(verify_command)}"
+            )
+            verify_result = run_command(verify_command, cwd=context.repo_root)
+            write_text_file(verify_stdout_file, verify_result.stdout)
+            write_text_file(verify_stderr_file, verify_result.stderr)
+
+            if verify_result.returncode != 0:
+                failures.append(
+                    f"{upload_relative_path}: cleanup verification sync exited with "
+                    f"non-zero status {verify_result.returncode}"
+                )
+
+            if local_upload_path.exists():
+                failures.append(
+                    f"{upload_relative_path}: uploaded test file still exists after "
+                    "cleanup verification; remote cleanup may have failed"
+                )
+                local_upload_path.unlink()
+
+        return failures
+
     def _write_scenario_config(self, context: E2EContext, config_dir: Path, sync_root: Path) -> Path:
         config_path = context.prepare_minimal_config_dir(
             config_dir,
             "# sfptc0003 Personal Shared Folder sync_list config\n"
             f'sync_dir = "{sync_root}"\n'
             'threads = "2"\n'
-            'download_only = "true"\n'
-            'cleanup_local_files = "false"\n'
             'bypass_data_preservation = "true"\n',
         )
         return config_path
@@ -231,6 +380,24 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             parents.append("/".join(parts[:index]) + "/")
         return [entry for entry in parents if entry in EXPECTED_TYPED_MANIFEST]
 
+    def _prune_empty_directory_expectations(self, entries: list[str]) -> list[str]:
+        selected = set(entries)
+        pruned: list[str] = []
+        for entry in selected:
+            if not entry.endswith("/"):
+                pruned.append(entry)
+                continue
+
+            directory_prefix = entry
+            has_child = any(
+                candidate != entry and candidate.startswith(directory_prefix)
+                for candidate in selected
+            )
+            if has_child:
+                pruned.append(entry)
+
+        return sorted(set(pruned))
+
     def _entries_under(self, *prefixes: str) -> list[str]:
         normalised_prefixes = [prefix.strip("/") for prefix in prefixes]
         entries: list[str] = []
@@ -242,7 +409,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 if clean_entry == prefix or clean_entry.startswith(prefix + "/"):
                     entries.append(entry)
                     break
-        return sorted(set(entries))
+        return self._prune_empty_directory_expectations(entries)
 
     def _entries_exact(self, *entries: str) -> list[str]:
         expected_set = set(EXPECTED_TYPED_MANIFEST)
@@ -260,7 +427,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 selected.append(clean_entry + "/")
             else:
                 selected.append(entry)
-        return sorted(set(selected))
+        return self._prune_empty_directory_expectations(selected)
 
     def _exclude_entries(self, entries: list[str], *prefixes: str) -> list[str]:
         normalised_prefixes = [prefix.strip("/") for prefix in prefixes]
@@ -273,7 +440,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             )
             if not excluded:
                 filtered.append(entry)
-        return sorted(set(filtered))
+        return self._prune_empty_directory_expectations(filtered)
 
     def _marker(self, shared_folder_path: str) -> str:
         return f"Syncing this OneDrive Personal Shared Folder: ./{shared_folder_path.strip('/')}"
@@ -410,19 +577,54 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0010",
-                description="broad parent include with targeted shared-folder exclusions",
+                description="explicit shared-folder shortcut includes with targeted exclusions",
                 sync_list=[
-                    "!/SHARED_FOLDERS/SUB_FOLDER_1/CORE_15/*",
-                    "!/SHARED_FOLDERS/SUB_FOLDER_2/WIDE_SET/*",
-                    "/SHARED_FOLDERS/",
+                    f"!/{core15}/*",
+                    f"!/{wide}/*",
+                    f"/{core}/",
+                    f"/{deep}/",
+                    f"/{tree}/",
                 ],
                 expected_entries=self._exclude_entries(
-                    self._entries_under("SHARED_FOLDERS"),
-                    "SHARED_FOLDERS/SUB_FOLDER_1/CORE_15",
-                    "SHARED_FOLDERS/SUB_FOLDER_2/WIDE_SET",
+                    sorted(
+                        set(
+                            self._entries_under(core)
+                            + self._entries_under(deep)
+                            + self._entries_under(tree)
+                        )
+                    ),
+                    core15,
+                    wide,
                 ),
-                required_present=[f"{core}/README.txt", f"{tree}/A/B/C/tree.txt"],
+                required_present=[f"{core}/README.txt", f"{deep}/L1/L2/L3/deepfile.txt", f"{tree}/A/B/C/tree.txt"],
                 required_absent=[f"{core15}/README.txt", f"{wide}/file00.txt"],
+                required_stdout_markers=[self._marker(core), self._marker(deep), self._marker(tree)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0011",
+                description="upload new data into included shared-folder paths and clean it up",
+                sync_list=[
+                    f"/{core}/files/",
+                    f"/{tree}/A/B/C/",
+                ],
+                expected_entries=sorted(
+                    set(
+                        self._entries_under(f"{core}/files")
+                        + self._entries_under(f"{tree}/A/B/C")
+                    )
+                ),
+                required_present=[f"{core}/files/data.txt", f"{tree}/A/B/C/tree.txt"],
+                required_absent=[f"{core}/README.txt", f"{wide}/file00.txt"],
                 required_stdout_markers=[self._marker(core), self._marker(tree)],
+                upload_checks=[
+                    SharedFolderUploadCheck(
+                        relative_path=f"{core}/files/sfptc0003-upload-core.txt",
+                        content="sfptc0003 upload validation for CORE/files\n",
+                    ),
+                    SharedFolderUploadCheck(
+                        relative_path=f"{tree}/A/B/C/sfptc0003-upload-tree.txt",
+                        content="sfptc0003 upload validation for TREE/A/B/C\n",
+                    ),
+                ],
             ),
         ]
