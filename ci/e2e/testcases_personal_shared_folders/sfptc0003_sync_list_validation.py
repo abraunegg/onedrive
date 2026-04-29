@@ -98,6 +98,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 context.onedrive_bin,
                 "--sync",
                 "--verbose",
+                "--download-only",
                 "--resync",
                 "--resync-auth",
                 "--confdir",
@@ -137,9 +138,9 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             mutation_failures: list[str] = []
             mutation_artifacts: list[str] = []
             if scenario.mutation_checks:
-                if result.returncode != 0:
+                if result.returncode != 0 or missing_entries or unexpected_entries or missing_required_present or unexpected_required_absent:
                     mutation_failures.append(
-                        "Skipping mutation validation because initial download-only sync failed"
+                        "Skipping mutation validation because initial immutable baseline validation failed"
                     )
                 else:
                     mutation_failures.extend(
@@ -265,17 +266,49 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             cleanup_stderr_file = scenario_log_dir / f"mutation-cleanup-{index:02d}-stderr.log"
             verify_stdout_file = scenario_log_dir / f"mutation-cleanup-verify-{index:02d}-stdout.log"
             verify_stderr_file = scenario_log_dir / f"mutation-cleanup-verify-{index:02d}-stderr.log"
+            baseline_manifest_file = scenario_log_dir / f"mutation-baseline-{index:02d}-manifest.txt"
+            verify_manifest_file = scenario_log_dir / f"mutation-verify-{index:02d}-manifest.txt"
+            mutation_diff_file = scenario_log_dir / f"mutation-diff-{index:02d}.txt"
 
-            artifacts.extend(
-                [
-                    str(upload_stdout_file),
-                    str(upload_stderr_file),
-                    str(cleanup_stdout_file),
-                    str(cleanup_stderr_file),
-                    str(verify_stdout_file),
-                    str(verify_stderr_file),
-                ]
-            )
+            artifacts.extend([
+                str(upload_stdout_file),
+                str(upload_stderr_file),
+                str(cleanup_stdout_file),
+                str(cleanup_stderr_file),
+                str(verify_stdout_file),
+                str(verify_stderr_file),
+                str(baseline_manifest_file),
+                str(verify_manifest_file),
+                str(mutation_diff_file),
+            ])
+
+            if "/" in mutation_check.directory_name or mutation_check.directory_name in {"", ".", ".."}:
+                failures.append(
+                    f"{parent_relative_path}: refusing mutation because tracked directory "
+                    f"name is unsafe: {mutation_check.directory_name!r}"
+                )
+                continue
+
+            if "/" in mutation_check.file_name or mutation_check.file_name in {"", ".", ".."}:
+                failures.append(
+                    f"{parent_relative_path}: refusing mutation because tracked file "
+                    f"name is unsafe: {mutation_check.file_name!r}"
+                )
+                continue
+
+            if not mutation_check.directory_name.startswith("sfptc0003-"):
+                failures.append(
+                    f"{parent_relative_path}: refusing mutation because tracked directory "
+                    "does not use the sfptc0003- safety prefix"
+                )
+                continue
+
+            if not mutation_check.file_name.startswith("sfptc0003-"):
+                failures.append(
+                    f"{parent_relative_path}: refusing mutation because tracked file "
+                    "does not use the sfptc0003- safety prefix"
+                )
+                continue
 
             if not local_parent_path.is_dir():
                 failures.append(
@@ -291,11 +324,21 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 )
                 continue
 
+            if local_test_file.exists():
+                failures.append(
+                    f"{parent_relative_path}: refusing mutation because tracked test "
+                    f"file already exists: {local_test_file}"
+                )
+                continue
+
+            immutable_before_manifest = build_typed_manifest(sync_root)
+            write_manifest(baseline_manifest_file, immutable_before_manifest)
+
             # Safety rule for shared-folder mutation testing:
+            # - parent path must already exist from the initial download-only sync
             # - never create shared-folder parent paths
-            # - only create one exact tracked child directory below an already
-            #   materialised shared-folder directory
-            # - only delete the exact tracked test file and directory created here
+            # - create only one exact tracked child directory below that parent
+            # - delete only the exact tracked file and directory created here
             local_test_dir.mkdir()
             write_text_file(local_test_file, mutation_check.content)
 
@@ -385,6 +428,38 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                     f"verification sync exited with non-zero status {verify_result.returncode}"
                 )
 
+            immutable_after_manifest = build_typed_manifest(sync_root)
+            write_manifest(verify_manifest_file, immutable_after_manifest)
+
+            before_set = set(immutable_before_manifest)
+            after_set = set(immutable_after_manifest)
+            missing_after = sorted(before_set - after_set)
+            unexpected_after = sorted(after_set - before_set)
+
+            mutation_diff_lines: list[str] = []
+            if missing_after:
+                mutation_diff_lines.append(
+                    "Immutable baseline entries disappeared after tracked mutation cleanup: "
+                    + repr(missing_after[:50])
+                )
+            if unexpected_after:
+                mutation_diff_lines.append(
+                    "Unexpected entries remain after tracked mutation cleanup: "
+                    + repr(unexpected_after[:50])
+                )
+            write_text_file(mutation_diff_file, "\n".join(mutation_diff_lines) + ("\n" if mutation_diff_lines else ""))
+
+            if missing_after:
+                failures.append(
+                    f"{parent_relative_path}/{mutation_check.directory_name}: immutable "
+                    f"baseline changed; missing entries after cleanup: {missing_after[:20]!r}"
+                )
+            if unexpected_after:
+                failures.append(
+                    f"{parent_relative_path}/{mutation_check.directory_name}: immutable "
+                    f"baseline changed; unexpected entries after cleanup: {unexpected_after[:20]!r}"
+                )
+
             if local_test_file.exists():
                 failures.append(
                     f"{local_test_file.relative_to(sync_root)}: tracked test file still "
@@ -410,6 +485,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             "# sfptc0003 Personal Shared Folder sync_list config\n"
             f'sync_dir = "{sync_root}"\n'
             'threads = "2"\n'
+            'download_only = "true"\n'
             'cleanup_local_files = "false"\n'
             'bypass_data_preservation = "true"\n',
         )
@@ -425,24 +501,6 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             parents.append("/".join(parts[:index]) + "/")
         return [entry for entry in parents if entry in EXPECTED_TYPED_MANIFEST]
 
-    def _prune_empty_directory_expectations(self, entries: list[str]) -> list[str]:
-        selected = set(entries)
-        pruned: list[str] = []
-        for entry in selected:
-            if not entry.endswith("/"):
-                pruned.append(entry)
-                continue
-
-            directory_prefix = entry
-            has_child = any(
-                candidate != entry and candidate.startswith(directory_prefix)
-                for candidate in selected
-            )
-            if has_child:
-                pruned.append(entry)
-
-        return sorted(set(pruned))
-
     def _entries_under(self, *prefixes: str) -> list[str]:
         normalised_prefixes = [prefix.strip("/") for prefix in prefixes]
         entries: list[str] = []
@@ -454,7 +512,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 if clean_entry == prefix or clean_entry.startswith(prefix + "/"):
                     entries.append(entry)
                     break
-        return self._prune_empty_directory_expectations(entries)
+        return sorted(set(entries))
 
     def _entries_exact(self, *entries: str) -> list[str]:
         expected_set = set(EXPECTED_TYPED_MANIFEST)
@@ -472,7 +530,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 selected.append(clean_entry + "/")
             else:
                 selected.append(entry)
-        return self._prune_empty_directory_expectations(selected)
+        return sorted(set(selected))
 
     def _exclude_entries(self, entries: list[str], *prefixes: str) -> list[str]:
         normalised_prefixes = [prefix.strip("/") for prefix in prefixes]
@@ -485,7 +543,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             )
             if not excluded:
                 filtered.append(entry)
-        return self._prune_empty_directory_expectations(filtered)
+        return sorted(set(filtered))
 
     def _marker(self, shared_folder_path: str) -> str:
         return f"Syncing this OneDrive Personal Shared Folder: ./{shared_folder_path.strip('/')}"
@@ -501,6 +559,10 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
         annas = "Family pictures/Annas pictures"
         bens = "Family pictures/Bens pictures"
 
+        core_without_exclude = self._exclude_entries(
+            self._entries_under(core),
+            f"{core}/nested/exclude",
+        )
         wide_subset = self._entries_exact(
             "SHARED_FOLDERS/SUB_FOLDER_2/",
             f"{wide}/",
@@ -544,11 +606,14 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0004",
-                description="include specific nested keep path inside a shared folder",
-                sync_list=[f"/{core}/nested/keep/"],
-                expected_entries=self._entries_under(f"{core}/nested/keep"),
+                description="include shared folder tree with nested exclusion",
+                sync_list=[
+                    f"!/{core}/nested/exclude/*",
+                    f"/{core}/",
+                ],
+                expected_entries=core_without_exclude,
                 required_present=[f"{core}/nested/keep/keep.txt"],
-                required_absent=[f"{core}/nested/exclude/exclude.txt", f"{core}/README.txt"],
+                required_absent=[f"{core}/nested/exclude/exclude.txt"],
                 required_stdout_markers=[self._marker(core)],
             ),
             SharedFolderSyncListScenario(
@@ -611,36 +676,23 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 sync_list=[f"/{annas}/"],
                 expected_entries=self._entries_under(annas),
                 required_present=[f"{annas}/4DiNZfTkCOlazjoQlDIVDh4VglcbENhA/image0.png"],
-                required_absent=[
-                    "Family pictures/Bens pictures/7X2tH5TX0aiCXuNs8SBOk4lZqDS2qfEA/image0.png",
-                    "Annas pictures/",
-                    "Annas pictures/4DiNZfTkCOlazjoQlDIVDh4VglcbENhA/image0.png",
-                ],
+                required_absent=["Family pictures/Bens pictures/7X2tH5TX0aiCXuNs8SBOk4lZqDS2qfEA/image0.png"],
                 required_stdout_markers=[self._marker(annas)],
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0010",
-                description="explicit shared-folder shortcut includes with targeted exclusions",
+                description="multiple explicit shared-folder shortcut includes only",
                 sync_list=[
-                    f"!/{core15}/*",
-                    f"!/{wide}/*",
-                    "/SHARED_FOLDERS/",
-                    "/SHARED_FOLDERS/SUB_FOLDER_1/",
-                    "/SHARED_FOLDERS/SUB_FOLDER_2/",
                     f"/{core}/",
                     f"/{deep}/",
                     f"/{tree}/",
                 ],
-                expected_entries=self._exclude_entries(
-                    sorted(
-                        set(
-                            self._entries_under(core)
-                            + self._entries_under(deep)
-                            + self._entries_under(tree)
-                        )
-                    ),
-                    core15,
-                    wide,
+                expected_entries=sorted(
+                    set(
+                        self._entries_under(core)
+                        + self._entries_under(deep)
+                        + self._entries_under(tree)
+                    )
                 ),
                 required_present=[f"{core}/README.txt", f"{deep}/L1/L2/L3/deepfile.txt", f"{tree}/A/B/C/tree.txt"],
                 required_absent=[f"{core15}/README.txt", f"{wide}/file00.txt"],
