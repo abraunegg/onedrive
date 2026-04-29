@@ -21,8 +21,10 @@ SYNC_LIST_FILE_NAME = "sync_list"
 
 
 @dataclass
-class SharedFolderUploadCheck:
-    relative_path: str
+class SharedFolderMutationCheck:
+    parent_relative_path: str
+    directory_name: str
+    file_name: str
     content: str
 
 
@@ -35,7 +37,7 @@ class SharedFolderSyncListScenario:
     required_present: list[str] = field(default_factory=list)
     required_absent: list[str] = field(default_factory=list)
     required_stdout_markers: list[str] = field(default_factory=list)
-    upload_checks: list[SharedFolderUploadCheck] = field(default_factory=list)
+    mutation_checks: list[SharedFolderMutationCheck] = field(default_factory=list)
 
 
 class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
@@ -96,7 +98,6 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 context.onedrive_bin,
                 "--sync",
                 "--verbose",
-                "--download-only",
                 "--resync",
                 "--resync-auth",
                 "--confdir",
@@ -133,22 +134,22 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             write_manifest(required_present_file, missing_required_present)
             write_manifest(required_absent_file, unexpected_required_absent)
 
-            upload_failures: list[str] = []
-            upload_artifacts: list[str] = []
-            if scenario.upload_checks:
+            mutation_failures: list[str] = []
+            mutation_artifacts: list[str] = []
+            if scenario.mutation_checks:
                 if result.returncode != 0:
-                    upload_failures.append(
-                        "Skipping upload validation because initial download-only sync failed"
+                    mutation_failures.append(
+                        "Skipping mutation validation because initial download-only sync failed"
                     )
                 else:
-                    upload_failures.extend(
-                        self._run_upload_checks(
+                    mutation_failures.extend(
+                        self._run_mutation_checks(
                             context=context,
                             confdir=confdir,
                             sync_root=scenario_sync_root,
                             scenario_log_dir=scenario_log_dir,
                             scenario=scenario,
-                            artifacts=upload_artifacts,
+                            artifacts=mutation_artifacts,
                         )
                     )
 
@@ -171,8 +172,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 diffs.append(f"Required included entries were missing: {missing_required_present!r}")
             if unexpected_required_absent:
                 diffs.append(f"Required excluded entries were present locally: {unexpected_required_absent!r}")
-            if upload_failures:
-                diffs.append("Upload validation failed: " + "; ".join(upload_failures))
+            if mutation_failures:
+                diffs.append("Mutation validation failed: " + "; ".join(mutation_failures))
 
             metadata_lines = [
                 f"case_id={self.case_id}",
@@ -191,8 +192,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 f"missing_required_present={missing_required_present!r}",
                 f"unexpected_required_absent={unexpected_required_absent!r}",
                 f"missing_stdout_markers={missing_stdout_markers!r}",
-                f"upload_checks={len(scenario.upload_checks)}",
-                f"upload_failures={upload_failures!r}",
+                f"mutation_checks={len(scenario.mutation_checks)}",
+                f"mutation_failures={mutation_failures!r}",
             ]
             write_text_file(metadata_file, "\n".join(metadata_lines) + "\n")
 
@@ -209,7 +210,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 str(required_absent_file),
                 str(metadata_file),
             ]
-            scenario_artifacts.extend(upload_artifacts)
+            scenario_artifacts.extend(mutation_artifacts)
             all_artifacts.extend(scenario_artifacts)
 
             if diffs:
@@ -241,7 +242,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
 
         return self.pass_result(self.case_id, self.name, all_artifacts, details)
 
-    def _run_upload_checks(
+    def _run_mutation_checks(
         self,
         context: E2EContext,
         confdir: Path,
@@ -252,18 +253,18 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
     ) -> list[str]:
         failures: list[str] = []
 
-        for index, upload_check in enumerate(scenario.upload_checks, start=1):
-            upload_relative_path = upload_check.relative_path.strip("/")
-            local_upload_path = sync_root / upload_relative_path
-            local_upload_path.parent.mkdir(parents=True, exist_ok=True)
-            write_text_file(local_upload_path, upload_check.content)
+        for index, mutation_check in enumerate(scenario.mutation_checks, start=1):
+            parent_relative_path = mutation_check.parent_relative_path.strip("/")
+            local_parent_path = sync_root / parent_relative_path
+            local_test_dir = local_parent_path / mutation_check.directory_name
+            local_test_file = local_test_dir / mutation_check.file_name
 
-            upload_stdout_file = scenario_log_dir / f"upload-{index:02d}-stdout.log"
-            upload_stderr_file = scenario_log_dir / f"upload-{index:02d}-stderr.log"
-            cleanup_stdout_file = scenario_log_dir / f"cleanup-{index:02d}-stdout.log"
-            cleanup_stderr_file = scenario_log_dir / f"cleanup-{index:02d}-stderr.log"
-            verify_stdout_file = scenario_log_dir / f"cleanup-verify-{index:02d}-stdout.log"
-            verify_stderr_file = scenario_log_dir / f"cleanup-verify-{index:02d}-stderr.log"
+            upload_stdout_file = scenario_log_dir / f"mutation-upload-{index:02d}-stdout.log"
+            upload_stderr_file = scenario_log_dir / f"mutation-upload-{index:02d}-stderr.log"
+            cleanup_stdout_file = scenario_log_dir / f"mutation-cleanup-{index:02d}-stdout.log"
+            cleanup_stderr_file = scenario_log_dir / f"mutation-cleanup-{index:02d}-stderr.log"
+            verify_stdout_file = scenario_log_dir / f"mutation-cleanup-verify-{index:02d}-stdout.log"
+            verify_stderr_file = scenario_log_dir / f"mutation-cleanup-verify-{index:02d}-stderr.log"
 
             artifacts.extend(
                 [
@@ -276,6 +277,28 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 ]
             )
 
+            if not local_parent_path.is_dir():
+                failures.append(
+                    f"{parent_relative_path}: refusing mutation because parent directory "
+                    f"does not already exist locally: {local_parent_path}"
+                )
+                continue
+
+            if local_test_dir.exists():
+                failures.append(
+                    f"{parent_relative_path}: refusing mutation because tracked test "
+                    f"directory already exists: {local_test_dir}"
+                )
+                continue
+
+            # Safety rule for shared-folder mutation testing:
+            # - never create shared-folder parent paths
+            # - only create one exact tracked child directory below an already
+            #   materialised shared-folder directory
+            # - only delete the exact tracked test file and directory created here
+            local_test_dir.mkdir()
+            write_text_file(local_test_file, mutation_check.content)
+
             upload_command = [
                 context.onedrive_bin,
                 "--sync",
@@ -284,8 +307,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 str(confdir),
             ]
             context.log(
-                f"Executing {self.case_id} {scenario.scenario_id} upload validation "
-                f"for {upload_relative_path}: {command_to_string(upload_command)}"
+                f"Executing {self.case_id} {scenario.scenario_id} mutation upload "
+                f"for {local_test_file.relative_to(sync_root)}: {command_to_string(upload_command)}"
             )
             upload_result = run_command(upload_command, cwd=context.repo_root)
             write_text_file(upload_stdout_file, upload_result.stdout)
@@ -293,18 +316,27 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
 
             if upload_result.returncode != 0:
                 failures.append(
-                    f"{upload_relative_path}: upload sync exited with non-zero status "
-                    f"{upload_result.returncode}"
+                    f"{local_test_file.relative_to(sync_root)}: upload sync exited with "
+                    f"non-zero status {upload_result.returncode}"
                 )
 
-            if not local_upload_path.exists():
+            if not local_test_file.exists():
                 failures.append(
-                    f"{upload_relative_path}: uploaded local file disappeared unexpectedly "
-                    "after upload sync"
+                    f"{local_test_file.relative_to(sync_root)}: tracked test file "
+                    "disappeared unexpectedly after upload sync"
                 )
 
-            if local_upload_path.exists():
-                local_upload_path.unlink()
+            if local_test_file.exists():
+                local_test_file.unlink()
+
+            if local_test_dir.exists():
+                try:
+                    local_test_dir.rmdir()
+                except OSError as exc:
+                    failures.append(
+                        f"{local_test_dir.relative_to(sync_root)}: unable to remove exact "
+                        f"tracked test directory after deleting tracked test file: {exc}"
+                    )
 
             cleanup_command = [
                 context.onedrive_bin,
@@ -314,8 +346,9 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 str(confdir),
             ]
             context.log(
-                f"Executing {self.case_id} {scenario.scenario_id} upload cleanup "
-                f"for {upload_relative_path}: {command_to_string(cleanup_command)}"
+                f"Executing {self.case_id} {scenario.scenario_id} mutation cleanup "
+                f"for {parent_relative_path}/{mutation_check.directory_name}: "
+                f"{command_to_string(cleanup_command)}"
             )
             cleanup_result = run_command(cleanup_command, cwd=context.repo_root)
             write_text_file(cleanup_stdout_file, cleanup_result.stdout)
@@ -323,8 +356,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
 
             if cleanup_result.returncode != 0:
                 failures.append(
-                    f"{upload_relative_path}: cleanup sync exited with non-zero status "
-                    f"{cleanup_result.returncode}"
+                    f"{parent_relative_path}/{mutation_check.directory_name}: cleanup "
+                    f"sync exited with non-zero status {cleanup_result.returncode}"
                 )
 
             verify_command = [
@@ -338,8 +371,9 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 str(confdir),
             ]
             context.log(
-                f"Executing {self.case_id} {scenario.scenario_id} cleanup verification "
-                f"for {upload_relative_path}: {command_to_string(verify_command)}"
+                f"Executing {self.case_id} {scenario.scenario_id} mutation cleanup "
+                f"verification for {parent_relative_path}/{mutation_check.directory_name}: "
+                f"{command_to_string(verify_command)}"
             )
             verify_result = run_command(verify_command, cwd=context.repo_root)
             write_text_file(verify_stdout_file, verify_result.stdout)
@@ -347,16 +381,26 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
 
             if verify_result.returncode != 0:
                 failures.append(
-                    f"{upload_relative_path}: cleanup verification sync exited with "
-                    f"non-zero status {verify_result.returncode}"
+                    f"{parent_relative_path}/{mutation_check.directory_name}: cleanup "
+                    f"verification sync exited with non-zero status {verify_result.returncode}"
                 )
 
-            if local_upload_path.exists():
+            if local_test_file.exists():
                 failures.append(
-                    f"{upload_relative_path}: uploaded test file still exists after "
-                    "cleanup verification; remote cleanup may have failed"
+                    f"{local_test_file.relative_to(sync_root)}: tracked test file still "
+                    "exists after cleanup verification; remote cleanup may have failed"
                 )
-                local_upload_path.unlink()
+                local_test_file.unlink()
+
+            if local_test_dir.exists():
+                failures.append(
+                    f"{local_test_dir.relative_to(sync_root)}: tracked test directory still "
+                    "exists after cleanup verification; remote cleanup may have failed"
+                )
+                try:
+                    local_test_dir.rmdir()
+                except OSError:
+                    pass
 
         return failures
 
@@ -366,6 +410,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             "# sfptc0003 Personal Shared Folder sync_list config\n"
             f'sync_dir = "{sync_root}"\n'
             'threads = "2"\n'
+            'cleanup_local_files = "false"\n'
             'bypass_data_preservation = "true"\n',
         )
         return config_path
@@ -454,6 +499,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
         renamed = "SHARED_FOLDERS_RENAMED/RENAMED_SHARED_FOLDER"
         minimal = "MINIMAL"
         annas = "Family pictures/Annas pictures"
+        bens = "Family pictures/Bens pictures"
 
         wide_subset = self._entries_exact(
             "SHARED_FOLDERS/SUB_FOLDER_2/",
@@ -565,7 +611,11 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 sync_list=[f"/{annas}/"],
                 expected_entries=self._entries_under(annas),
                 required_present=[f"{annas}/4DiNZfTkCOlazjoQlDIVDh4VglcbENhA/image0.png"],
-                required_absent=["Family pictures/Bens pictures/7X2tH5TX0aiCXuNs8SBOk4lZqDS2qfEA/image0.png"],
+                required_absent=[
+                    "Family pictures/Bens pictures/7X2tH5TX0aiCXuNs8SBOk4lZqDS2qfEA/image0.png",
+                    "Annas pictures/",
+                    "Annas pictures/4DiNZfTkCOlazjoQlDIVDh4VglcbENhA/image0.png",
+                ],
                 required_stdout_markers=[self._marker(annas)],
             ),
             SharedFolderSyncListScenario(
@@ -598,17 +648,44 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0011",
-                description="upload new data into an included shared-folder path and clean it up",
+                description="safe tracked mutation inside an existing shared-folder directory",
                 sync_list=[f"/{tree}/A/B/C/"],
                 expected_entries=self._entries_under(f"{tree}/A/B/C"),
                 required_present=[f"{tree}/A/B/C/tree.txt"],
                 required_absent=[f"{core}/README.txt", f"{wide}/file00.txt"],
                 required_stdout_markers=[self._marker(tree)],
-                upload_checks=[
-                    SharedFolderUploadCheck(
-                        relative_path=f"{tree}/A/B/C/sfptc0003-upload-tree.txt",
-                        content="sfptc0003 upload validation for TREE/A/B/C\n",
+                mutation_checks=[
+                    SharedFolderMutationCheck(
+                        parent_relative_path=f"{tree}/A/B/C",
+                        directory_name="sfptc0003-tracked-mutation",
+                        file_name="sfptc0003-upload-tree.txt",
+                        content="sfptc0003 tracked mutation validation for TREE/A/B/C\n",
                     ),
                 ],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0012",
+                description="issue 3643 explicit Family pictures shared-folder includes only",
+                sync_list=[
+                    f"/{annas}/",
+                    f"/{bens}/",
+                ],
+                expected_entries=sorted(
+                    set(
+                        self._entries_under(annas)
+                        + self._entries_under(bens)
+                    )
+                ),
+                required_present=[
+                    f"{annas}/4DiNZfTkCOlazjoQlDIVDh4VglcbENhA/image0.png",
+                    f"{bens}/7X2tH5TX0aiCXuNs8SBOk4lZqDS2qfEA/image0.png",
+                ],
+                required_absent=[
+                    "Annas pictures/",
+                    "Bens pictures/",
+                    "Annas pictures/4DiNZfTkCOlazjoQlDIVDh4VglcbENhA/image0.png",
+                    "Bens pictures/7X2tH5TX0aiCXuNs8SBOk4lZqDS2qfEA/image0.png",
+                ],
+                required_stdout_markers=[self._marker(annas), self._marker(bens)],
             ),
         ]
