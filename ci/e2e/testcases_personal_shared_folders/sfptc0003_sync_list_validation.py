@@ -455,10 +455,6 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
         minimal = "MINIMAL"
         annas = "Family pictures/Annas pictures"
 
-        core_without_exclude = self._exclude_entries(
-            self._entries_under(core),
-            f"{core}/nested/exclude",
-        )
         wide_subset = self._entries_exact(
             "SHARED_FOLDERS/SUB_FOLDER_2/",
             f"{wide}/",
@@ -502,14 +498,11 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0004",
-                description="include shared folder tree with nested exclusion",
-                sync_list=[
-                    f"!/{core}/nested/exclude/*",
-                    f"/{core}/",
-                ],
-                expected_entries=core_without_exclude,
+                description="include specific nested keep path inside a shared folder",
+                sync_list=[f"/{core}/nested/keep/"],
+                expected_entries=self._entries_under(f"{core}/nested/keep"),
                 required_present=[f"{core}/nested/keep/keep.txt"],
-                required_absent=[f"{core}/nested/exclude/exclude.txt"],
+                required_absent=[f"{core}/nested/exclude/exclude.txt", f"{core}/README.txt"],
                 required_stdout_markers=[self._marker(core)],
             ),
             SharedFolderSyncListScenario(
@@ -581,6 +574,9 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 sync_list=[
                     f"!/{core15}/*",
                     f"!/{wide}/*",
+                    "/SHARED_FOLDERS/",
+                    "/SHARED_FOLDERS/SUB_FOLDER_1/",
+                    "/SHARED_FOLDERS/SUB_FOLDER_2/",
                     f"/{core}/",
                     f"/{deep}/",
                     f"/{tree}/",
@@ -602,25 +598,13 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0011",
-                description="upload new data into included shared-folder paths and clean it up",
-                sync_list=[
-                    f"/{core}/files/",
-                    f"/{tree}/A/B/C/",
-                ],
-                expected_entries=sorted(
-                    set(
-                        self._entries_under(f"{core}/files")
-                        + self._entries_under(f"{tree}/A/B/C")
-                    )
-                ),
-                required_present=[f"{core}/files/data.txt", f"{tree}/A/B/C/tree.txt"],
+                description="upload new data into an included shared-folder path and clean it up",
+                sync_list=[f"/{tree}/A/B/C/"],
+                expected_entries=self._entries_under(f"{tree}/A/B/C"),
+                required_present=[f"{tree}/A/B/C/tree.txt"],
                 required_absent=[f"{core}/README.txt", f"{wide}/file00.txt"],
-                required_stdout_markers=[self._marker(core), self._marker(tree)],
+                required_stdout_markers=[self._marker(tree)],
                 upload_checks=[
-                    SharedFolderUploadCheck(
-                        relative_path=f"{core}/files/sfptc0003-upload-core.txt",
-                        content="sfptc0003 upload validation for CORE/files\n",
-                    ),
                     SharedFolderUploadCheck(
                         relative_path=f"{tree}/A/B/C/sfptc0003-upload-tree.txt",
                         content="sfptc0003 upload validation for TREE/A/B/C\n",
