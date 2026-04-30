@@ -552,6 +552,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
         core = "SHARED_FOLDERS/SUB_FOLDER_1/CORE"
         core15 = "SHARED_FOLDERS/SUB_FOLDER_1/CORE_15"
         deep = "SHARED_FOLDERS/SUB_FOLDER_1/DEEP_SOURCE"
+        deep15 = "SHARED_FOLDERS/SUB_FOLDER_1/DEEP_SOURCE_15"
         tree = "SHARED_FOLDERS/SUB_FOLDER_2/TREE"
         wide = "SHARED_FOLDERS/SUB_FOLDER_2/WIDE_SET"
         renamed = "SHARED_FOLDERS_RENAMED/RENAMED_SHARED_FOLDER"
@@ -575,6 +576,14 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             + self._entries_under(renamed)
             + self._entries_exact(f"{deep}/L1/L2/L3/deepfile.txt")
         ))
+        wide_set_and_15_roots = sorted(set(
+            self._entries_under(wide)
+            + self._entries_exact(f"{wide}_15/")
+        ))
+        deep_and_deep15_without_deep15_file = self._exclude_entries(
+            sorted(set(self._entries_under(deep) + self._entries_under(deep15))),
+            f"{deep15}/L1/L2/L3/deepfile.txt",
+        )
 
         return [
             SharedFolderSyncListScenario(
@@ -739,5 +748,71 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                     "Bens pictures/7X2tH5TX0aiCXuNs8SBOk4lZqDS2qfEA/image0.png",
                 ],
                 required_stdout_markers=[self._marker(annas), self._marker(bens)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0013",
+                description="wildcard shared-folder directory include across WIDE_SET shortcuts",
+                sync_list=["/SHARED_FOLDERS/SUB_FOLDER_2/WIDE_*/"],
+                expected_entries=sorted(set(self._entries_under(wide) + self._entries_under(f"{wide}_15"))),
+                required_present=[f"{wide}/file00.txt", f"{wide}_15/file00.txt"],
+                required_absent=[f"{tree}/A/B/C/tree.txt", f"{core}/README.txt"],
+                required_stdout_markers=[self._marker(wide), self._marker(f"{wide}_15")],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0014",
+                description="globbing include for a file below a shared-folder directory tree",
+                sync_list=[f"/{tree}/**/tree.txt"],
+                expected_entries=self._entries_exact(f"{tree}/A/B/C/tree.txt"),
+                required_present=[f"{tree}/A/B/C/tree.txt"],
+                required_absent=[f"{wide}/file00.txt", f"{core}/README.txt"],
+                required_stdout_markers=[self._marker(tree)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0015",
+                description="normal shared-folder include with deeper wildcard exclusion",
+                sync_list=[
+                    f"!/{core}/nested/excl*/*",
+                    f"/{core}/",
+                ],
+                expected_entries=self._exclude_entries(self._entries_under(core), f"{core}/nested/exclude"),
+                required_present=[f"{core}/README.txt", f"{core}/nested/keep/keep.txt"],
+                required_absent=[f"{core}/nested/exclude/exclude.txt", f"{core15}/README.txt"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0016",
+                description="normal shared-folder include with deeper globbing exclusion",
+                sync_list=[
+                    f"!/{core}/**/exclude/*",
+                    f"/{core}/",
+                ],
+                expected_entries=self._exclude_entries(self._entries_under(core), f"{core}/nested/exclude"),
+                required_present=[f"{core}/README.txt", f"{core}/nested/keep/keep.txt"],
+                required_absent=[f"{core}/nested/exclude/exclude.txt", f"{core15}/README.txt"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0017",
+                description="wildcard shared-folder include with wildcard exclusion of one matched shortcut's children",
+                sync_list=[
+                    "!/SHARED_FOLDERS/SUB_FOLDER_2/WIDE_*_15/*",
+                    "/SHARED_FOLDERS/SUB_FOLDER_2/WIDE_*/",
+                ],
+                expected_entries=wide_set_and_15_roots,
+                required_present=[f"{wide}/file00.txt", f"{wide}/file49.txt"],
+                required_absent=[f"{wide}_15/file00.txt", f"{tree}/A/B/C/tree.txt"],
+                required_stdout_markers=[self._marker(wide), self._marker(f"{wide}_15")],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0018",
+                description="wildcard shared-folder include with globbing exclusion of one matched file",
+                sync_list=[
+                    f"!/{deep15}/**/deepfile.txt",
+                    "/SHARED_FOLDERS/SUB_FOLDER_1/DEEP_SOURCE*/",
+                ],
+                expected_entries=deep_and_deep15_without_deep15_file,
+                required_present=[f"{deep}/L1/L2/L3/deepfile.txt"],
+                required_absent=[f"{deep15}/L1/L2/L3/deepfile.txt", f"{core}/README.txt"],
+                required_stdout_markers=[self._marker(deep), self._marker(deep15)],
             ),
         ]
