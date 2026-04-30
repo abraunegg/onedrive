@@ -6027,6 +6027,47 @@ class SyncEngine {
 			if (debugLogging) {addLogEntry("Parent path details are in DB - computing 'calculatedParentalPath' using computeItemPath()", ["debug"]);}
 			calculatedParentalPath = computeItemPath(thisItemDriveId, thisItemParentId);
 			if (debugLogging) {addLogEntry("Resulting 'calculatedParentalPath' using computeItemPath() = " ~ calculatedParentalPath, ["debug"]);}
+
+			// When generating a synthetic /delta response for a OneDrive Personal Shared Folder,
+			// the remote driveId and itemId can legitimately be shared by more than one shortcut
+			// location in the local account namespace. In that situation a generic DB path lookup
+			// can resolve the same remote object under the wrong shortcut parent, for example:
+			//   SHARED_FOLDERS/SUB_FOLDER_1/DEEP_SOURCE -> SHARED_FOLDERS/SUB_FOLDER_2/DEEP_SOURCE
+			// The active shared-folder traversal already has the correct logical anchor in
+			// currentSharedFolderName, so use the JSON parentReference path only to derive the
+			// relative child path below that anchor. This keeps the fix scoped to generated
+			// shared-folder delta processing and avoids changing normal /delta behaviour.
+			if (sharedFolderDeltaGeneration && !currentSharedFolderName.empty && hasParentReference(onedriveJSONItem)) {
+				if (("path" in onedriveJSONItem["parentReference"]) != null) {
+					string sharedFolderGeneratedParentPath = onedriveJSONItem["parentReference"]["path"].str;
+
+					// Remove the Graph root prefix, leaving the remote-owner path, for example:
+					//   /ZZ_SHARED_SEED/DEEP_SOURCE/L1/L2
+					auto splitIndex = sharedFolderGeneratedParentPath.indexOf(":");
+					if (splitIndex != -1) {
+						sharedFolderGeneratedParentPath = sharedFolderGeneratedParentPath[splitIndex + 1 .. $];
+					}
+
+					string normalisedSharedFolderAnchor = processPathToRemoveRootReference(currentSharedFolderName);
+					normalisedSharedFolderAnchor = stripLeft(normalisedSharedFolderAnchor, "./");
+					if (!normalisedSharedFolderAnchor.empty && normalisedSharedFolderAnchor[0] == '/') {
+						normalisedSharedFolderAnchor = normalisedSharedFolderAnchor[1 .. $];
+					}
+
+					string[] sharedFolderAnchorParts = normalisedSharedFolderAnchor.split("/");
+					if (sharedFolderAnchorParts.length > 0) {
+						string sharedFolderLeafName = sharedFolderAnchorParts[$ - 1];
+						string sharedFolderLeafPattern = "/" ~ sharedFolderLeafName;
+						auto sharedFolderLeafIndex = sharedFolderGeneratedParentPath.indexOf(sharedFolderLeafPattern);
+
+						if (sharedFolderLeafIndex != -1) {
+							string relativePathBelowSharedFolderAnchor = sharedFolderGeneratedParentPath[sharedFolderLeafIndex + sharedFolderLeafPattern.length .. $];
+							calculatedParentalPath = normalisedSharedFolderAnchor ~ relativePathBelowSharedFolderAnchor;
+							if (debugLogging) {addLogEntry("Overriding calculatedParentalPath using active shared-folder generated-delta anchor = " ~ calculatedParentalPath, ["debug"]);}
+						}
+					}
+				}
+			}
 		}
 		
 		// Check if this is excluded by config option: skip_dir 
