@@ -6465,7 +6465,8 @@ class SyncEngine {
 						//
 						// Avoid inserting an included directory into the database without also ensuring that the local directory exists.
 						if (!parentInDatabase) {
-							// Parental database and local path structure needs to be created before this included directory can be materialised locally.
+							// Parental database and local path structure needs to be created
+							// before this included directory can be materialised locally.
 							string newParentalPath = dirName(newItemPath);
 							if (verboseLogging) {addLogEntry("Parental Path structure needs to be created to support included directory: " ~ newParentalPath, ["verbose"]);}
 							createLocalPathStructure(onedriveJSONItem, newParentalPath);
