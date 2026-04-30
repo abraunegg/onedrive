@@ -764,7 +764,8 @@ class ClientSideFiltering {
 							// include rule
 							if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing pattern matched and must be included", ["debug"]);}
 							finalResult = false;
-							excludeWildcardMatched = false;
+							// Do not clear excludeWildcardMatched here.
+							// A prior wildcard/globbing exclusion rule must retain precedence over a later wildcard/globbing inclusion rule for the same path.
 						}
 					} else {
 						if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: No match to 'sync_list' wildcard|globbing rule", ["debug"]);}
