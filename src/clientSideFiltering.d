@@ -27,6 +27,10 @@ class ClientSideFiltering {
 	bool skipDirStrictMatch = false;
 	bool skipDotfiles = false;
 	
+	// Define these at the class level
+	string wildcard = "*";
+	string globbing = "**";
+	
 	this(ApplicationConfig appConfig) {
 		// Configure the class variable to consume the application configuration
 		this.appConfig = appConfig;
@@ -378,9 +382,7 @@ class ClientSideFiltering {
 		bool wildcardRuleMatched = false; // will get updated if the 'wildcard' rule matches
 		bool excludeWildcardMatched = false; // will get updated if the 'wildcard' rule matches
 		int offset;
-		string wildcard = "*";
-		string globbing = "**";
-				
+						
 		// always allow the root
 		if (path == ".") return false;
 		
