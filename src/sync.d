@@ -6542,19 +6542,53 @@ class SyncEngine {
 						// Directory included due to 'sync_list' match
 						if (verboseLogging) {addLogEntry("Including path - included by sync_list config: " ~ newItemPath, ["verbose"]);}
 						
-						// So that this path is in the DB, we need to add onedriveJSONItem to the DB so that this record can be used to build paths if required
-						if (parentInDatabase) {
-							// Parent is in DB .. is this a 'new' object or an 'existing' object?
-							// Issue #3501 - If an online name name is done, the item needs to be 'renamed' via applyPotentiallyChangedItem() later
-							// Only save to the database at this point, if this JSON 'id' is not already in the database to allow applyPotentiallyChangedItem() to operate as expected
-							Item tempDBItem;
-							itemDB.selectById(onedriveJSONItem["parentReference"]["driveId"].str, onedriveJSONItem["id"].str, tempDBItem);
-							
-							// Was a valid DB response returned
-							if (tempDBItem.driveId.empty) {
-								// No .. so this is a new item
-								// Save this JSON now
-								saveItem(onedriveJSONItem);
+						// When using 'sync_list', an included directory must be represented
+						// consistently in both the local filesystem and the database.
+						//
+						// Previously this branch could save the directory JSON directly to
+						// the database when the parent was already present, without also
+						// creating the local directory. This was particularly visible for
+						// included empty directories in OneDrive Personal Shared Folders:
+						// the DB record existed, but no local directory existed, so the
+						// later database consistency check incorrectly reported:
+						//     The directory has been deleted locally
+						//
+						// Avoid inserting an included directory into the database without
+						// also ensuring that the local directory exists.
+						if (!parentInDatabase) {
+							// Parental database and local path structure needs to be created
+							// before this included directory can be materialised locally.
+							string newParentalPath = dirName(newItemPath);
+							if (verboseLogging) {addLogEntry("Parental Path structure needs to be created to support included directory: " ~ newParentalPath, ["verbose"]);}
+							createLocalPathStructure(onedriveJSONItem, newParentalPath);
+						}
+
+						Item includedDirectoryItem = makeItem(onedriveJSONItem);
+
+						// Parent is in DB .. is this a 'new' object or an 'existing' object?
+						// Issue #3501 - If an online name change is done, the item needs to be 'renamed' via applyPotentiallyChangedItem() later
+						// Only save to the database at this point, if this JSON 'id' is not already in the database to allow applyPotentiallyChangedItem() to operate as expected
+						Item tempDBItem;
+						itemDB.selectById(onedriveJSONItem["parentReference"]["driveId"].str, onedriveJSONItem["id"].str, tempDBItem);
+
+						if (!exists(newItemPath)) {
+							if (debugLogging) {
+								addLogEntry("Included directory from sync_list is not present locally; creating local directory before database insertion: " ~ newItemPath, ["debug"]);
+							}
+							handleLocalDirectoryCreation(includedDirectoryItem, newItemPath, onedriveJSONItem);
+						} else if (tempDBItem.driveId.empty) {
+							// No valid DB response was returned, so this is a new item.
+							// Save this JSON now.
+							if (debugLogging) {
+								addLogEntry("Included directory from sync_list already exists locally but is not present in the database; saving database record: " ~ newItemPath, ["debug"]);
+							}
+							saveItem(onedriveJSONItem);
+						} else {
+							// Valid DB response was returned, so this is an existing item.
+							// Do not overwrite the existing DB record here, as applyPotentiallyChangedItem()
+							// must still be able to process potential online rename/name changes later.
+							if (debugLogging) {
+								addLogEntry("Included directory from sync_list already exists locally and in the database; preserving existing database record for later change detection: " ~ newItemPath, ["debug"]);
 							}
 						}
 					}
