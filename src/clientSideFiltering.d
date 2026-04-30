@@ -686,18 +686,23 @@ class ClientSideFiltering {
 				// Does the parents of the input path and rule path match .. meaning we can actually evaluate this wildcard rule against the input path
 				if (matchFirstSegmentToPathFirstSegment(ruleSegments, pathSegments)) {
 
-					// A deeper wildcard/globbing exclusion rule must not exclude an ancestor path.
+					// A deeper wildcard/globbing exclusion rule must not exclude an ancestor path
+					// when the next unmatched rule segment is a named path component.
 					//
 					// Example:
 					//     input path: /SHARED_FOLDERS/SUB_FOLDER_1/CORE
 					//     exclusion:  !/SHARED_FOLDERS/SUB_FOLDER_1/CORE/nested/exclude/*
 					//
-					// The exclusion targets children under nested/exclude, not the CORE directory itself.
-					// Without this guard, matchPathAgainstRule() can treat the already-matched prefix
-					// as a wildcard match and incorrectly exclude the ancestor path.
-					if (thisIsAnExcludeRule && inputPathIsAncestorOfWildcardRule(ruleSegments, pathSegments)) {
+					// The input path ends at CORE and the next rule segment is "nested",
+					// not "*" or "**". The exclusion targets a deeper named child path,
+					// not the CORE directory itself.
+					//
+					// Do not apply this guard when the next unmatched rule segment is "*" or "**",
+					// as those rules intentionally target the direct or recursive contents below
+					// the current input path.
+					if (thisIsAnExcludeRule && exclusionRuleTargetsNamedChildBeyondInputPath(ruleSegments, pathSegments)) {
 						if (debugLogging) {
-							addLogEntry("Evaluation against 'sync_list' rule result: exclusion wildcard|globbing rule targets a deeper child path; ancestor input path must not be excluded", ["debug"]);
+							addLogEntry("Evaluation against 'sync_list' rule result: exclusion wildcard|globbing rule targets a deeper named child path; ancestor input path must not be excluded", ["debug"]);
 						}
 						continue;
 					}
@@ -833,7 +838,7 @@ class ClientSideFiltering {
 	}
 	
 
-	// Function to determine if the current input path is an ancestor of a deeper wildcard/globbing exclusion rule.
+	// Function to determine if an exclusion wildcard/globbing rule targets a deeper named child path beyond the current input path.
 	//
 	// This prevents a deeper exclusion such as:
 	//     !/SHARED_FOLDERS/SUB_FOLDER_1/CORE/nested/exclude/*
@@ -842,8 +847,16 @@ class ClientSideFiltering {
 	//
 	// This helper is intentionally used only for exclusion wildcard/globbing rules so that
 	// existing include traversal behaviour is not altered.
-	bool inputPathIsAncestorOfWildcardRule(string[] ruleSegments, string[] pathSegments) {
-		// If the rule is not deeper than the input path, the input path is not an ancestor of the rule
+	//
+	// The guard is intentionally narrow:
+	// - If the input path is not a prefix of the rule, do not guard.
+	// - If the rule is not deeper than the input path, do not guard.
+	// - If the next unmatched rule segment is "*" or "**", do not guard because
+	//   the rule intentionally targets the contents below the input path.
+	// - If the next unmatched rule segment is a named segment, guard because the rule
+	//   targets a deeper child path and must not exclude the ancestor.
+	bool exclusionRuleTargetsNamedChildBeyondInputPath(string[] ruleSegments, string[] pathSegments) {
+		// If the rule is not deeper than the input path, there is no deeper named child path to guard
 		if (ruleSegments.length <= pathSegments.length) {
 			return false;
 		}
@@ -855,6 +868,16 @@ class ClientSideFiltering {
 			}
 		}
 
+		// The input path is a prefix of the rule. Inspect the next unmatched rule segment.
+		string nextRuleSegment = ruleSegments[pathSegments.length];
+
+		// If the next segment is a wildcard/globbing segment, the rule is intentionally targeting
+		// contents immediately below the input path, so allow normal exclusion evaluation.
+		if ((nextRuleSegment == wildcard) || (nextRuleSegment == globbing)) {
+			return false;
+		}
+
+		// The next segment is a named child path, so this exclusion rule must not exclude the ancestor.
 		return true;
 	}
 
