@@ -40,6 +40,7 @@ Before reading this document, please ensure you are running application version 
   - [local_first](#local_first)
   - [log_dir](#log_dir)
   - [max_curl_idle](#max_curl_idle)
+  - [monitor_authoritative_sync](#monitor_authoritative_sync)
   - [monitor_fullscan_frequency](#monitor_fullscan_frequency)
   - [monitor_interval](#monitor_interval)
   - [monitor_log_frequency](#monitor_log_frequency)
@@ -212,6 +213,9 @@ _**CLI Option Use:**_ `--cleanup-local-files`
 
 > [!IMPORTANT]
 > This configuration option can only be used with `--download-only`. It cannot be used with any other application option.
+
+> [!NOTE]
+> In `--monitor` mode, authoritative cleanup cadence for `--download-only --cleanup-local-files` is configured by `monitor_authoritative_sync`.
 
 ### connect_timeout
 _**Description:**_ This configuration setting manages the TCP connection timeout duration in seconds for HTTPS connections to Microsoft OneDrive when using the curl library (CURLOPT_CONNECTTIMEOUT).
@@ -560,6 +564,33 @@ _**CLI Option Use:**_ *None - this is a config file option only*
 
 > [!IMPORTANT]
 > It is strongly recommended not to modify this setting without conducting thorough network testing. Changing this option may lead to unexpected behaviour or connectivity issues, especially if upstream network devices handle idle connections in non-standard ways.
+
+### monitor_authoritative_sync
+_**Description:**_ This configuration option controls the authoritative cleanup behavior in `--monitor` mode when using `--download-only --cleanup-local-files`.
+
+_**Value Type:**_ String
+
+_**Default Value:**_ `monitor_fullscan_frequency`
+
+_**Config Example:**_ `monitor_authoritative_sync = "monitor_fullscan_frequency"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+_**Valid Values:**_
+```
+monitor_and_signal
+monitor_interval
+monitor_fullscan_frequency
+```
+
+> [!NOTE]
+> This option is only applicable when using `--monitor --download-only --cleanup-local-files`. In all other scenarios, this setting is ignored.
+
+> [!NOTE]
+> `monitor_and_signal` performs authoritative cleanup on each monitor interval and each API signal.
+> `monitor_interval` performs authoritative cleanup on each monitor interval only.
+> `monitor_fullscan_frequency` performs authoritative cleanup based on `monitor_fullscan_frequency` cadence and is the default.
+> When `monitor_authoritative_sync = "monitor_fullscan_frequency"`, a `monitor_fullscan_frequency` value greater than `0` defers authoritative cleanup to that cadence; `0` makes cleanup authoritative on every monitor sync cycle.
 
 ### monitor_fullscan_frequency
 _**Description:**_ This configuration option controls the number of 'monitor_interval' iterations between when a full scan of your data is performed to ensure data integrity and consistency.

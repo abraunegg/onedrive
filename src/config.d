@@ -156,6 +156,7 @@ class ApplicationConfig {
 		
 	// Sync Operations
 	bool fullScanTrueUpRequired = false;
+	bool monitorSyncTriggeredByApiSignal = false;
 	bool suppressLoggingOutput = false;
 	
 	// WebSocket Operations
@@ -291,6 +292,10 @@ class ApplicationConfig {
 		// - name_asc = file name ascending
 		// - name_dsc = file name descending
 		stringValues["transfer_order"] = "default";
+		// - monitor_and_signal: authoritative cleanup on each monitor interval and API signal
+		// - monitor_interval: authoritative cleanup on each monitor interval only
+		// - monitor_fullscan_frequency: authoritative cleanup by monitor_fullscan_frequency cadence
+		stringValues["monitor_authoritative_sync"] = "monitor_fullscan_frequency";
 				
 		// Recycle Bin Configuration
 		// Enable|Disable feature
@@ -997,6 +1002,21 @@ class ApplicationConfig {
 						default:
 							addLogEntry("Files will be transferred in original order that they were received (FIFO)");
 					}
+				} else if (key == "monitor_authoritative_sync") {
+					switch (value) {
+						case "monitor_and_signal":
+							addLogEntry("Authoritative cleanup for monitor mode will run on monitor intervals and API signals");
+							break;
+						case "monitor_interval":
+							addLogEntry("Authoritative cleanup for monitor mode will run on monitor intervals only");
+							break;
+						case "monitor_fullscan_frequency":
+							addLogEntry("Authoritative cleanup for monitor mode will run using monitor_fullscan_frequency cadence");
+							break;
+						default:
+							addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+							setValueString("monitor_authoritative_sync", "monitor_fullscan_frequency");
+					}
 				} else if (key == "application_id") {
 					string tempApplicationId = strip(value);
 					if (tempApplicationId.empty) {
@@ -1669,6 +1689,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'monitor_interval'             = " ~ to!string(getValueLong("monitor_interval")));
 		addLogEntry("Config option 'monitor_log_frequency'        = " ~ to!string(getValueLong("monitor_log_frequency")));
 		addLogEntry("Config option 'monitor_fullscan_frequency'   = " ~ to!string(getValueLong("monitor_fullscan_frequency")));
+		addLogEntry("Config option 'monitor_authoritative_sync'   = " ~ getValueString("monitor_authoritative_sync"));
 		addLogEntry("Config option 'disable_websocket_support'    = " ~ to!string(getValueBool("disable_websocket_support")));
 		
 		// sync process and method

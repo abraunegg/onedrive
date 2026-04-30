@@ -199,6 +199,8 @@ class SyncEngine {
 	long processedCount;
 	// Are we creating a simulated /delta response? This is critically important in terms of how we 'update' the database
 	bool generatedSimulatedDeltaResponse = false;
+	// Did the most recent sync use an authoritative cleanup pass?
+	bool authoritativeCleanupPassUsedInLastSync = false;
 	// Store the latest DeltaLink
 	string latestDeltaLink;
 	// Struct of containing the deltaLink details
@@ -827,6 +829,58 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
+
+	bool isMonitorDownloadOnlyCleanupLocalFilesMode() {
+		return cleanupLocalFiles
+			&& appConfig.getValueBool("monitor")
+			&& appConfig.getValueBool("download_only");
+	}
+
+	// In --monitor mode with --download-only --cleanup-local-files we can run fast passes using
+	// native /delta and reserve authoritative delete reconciliation for the configured cadence.
+	bool shouldPerformAuthoritativeCleanupPass() {
+		if (!cleanupLocalFiles) {
+			return false;
+		}
+
+		// Preserve current behavior for non-monitor operations (for example --sync).
+		if (!appConfig.getValueBool("monitor")) {
+			return true;
+		}
+
+		// This policy is only meaningful for --monitor --download-only --cleanup-local-files.
+		if (!appConfig.getValueBool("download_only")) {
+			return true;
+		}
+
+		string policy = appConfig.getValueString("monitor_authoritative_sync");
+
+		// Mode 1: authoritative cleanup on each monitor interval and API signal.
+		if (policy == "monitor_and_signal") {
+			return true;
+		}
+
+		// Mode 2: authoritative cleanup on each monitor interval only.
+		if (policy == "monitor_interval") {
+			return !appConfig.monitorSyncTriggeredByApiSignal;
+		}
+
+		// Mode 3 (default): authoritative cleanup on monitor_fullscan_frequency cadence.
+		// If cadence is disabled, preserve always-authoritative behavior.
+		if (appConfig.getValueLong("monitor_fullscan_frequency") == 0) {
+			return true;
+		}
+
+		return appConfig.fullScanTrueUpRequired;
+	}
+
+	// Delete tombstones from raw /delta are deferred during fast monitor passes to avoid
+	// stale delete/recreate churn causing immediate local deletion.
+	bool shouldDeferDeletedItemsFromRawDelta() {
+		return isMonitorDownloadOnlyCleanupLocalFilesMode()
+			&& !shouldPerformAuthoritativeCleanupPass()
+			&& !generatedSimulatedDeltaResponse;
+	}
 	
 	// Perform a sync of the OneDrive Account
 	// - Query /delta
@@ -849,6 +903,9 @@ class SyncEngine {
 	
 		// performFullScanTrueUp value
 		if (debugLogging) {addLogEntry("Perform a Full Scan True-Up: " ~ to!string(appConfig.fullScanTrueUpRequired), ["debug"]);}
+
+		// Reset per-sync authoritative cleanup tracking.
+		authoritativeCleanupPassUsedInLastSync = false;
 		
 		// Fetch the API response of /delta to track changes that were performed online
 		fetchOneDriveDeltaAPIResponse();
@@ -1206,6 +1263,13 @@ class SyncEngine {
 				addLogEntry("itemIdToQuery: " ~ itemIdToQuery, ["debug"]);
 			}
 		}
+
+		// When using --download-only --cleanup-local-files, generated delta is now only required
+		// for authoritative cleanup passes in --monitor mode.
+		bool authoritativeCleanupPassRequired = shouldPerformAuthoritativeCleanupPass();
+		if (authoritativeCleanupPassRequired) {
+			authoritativeCleanupPassUsedInLastSync = true;
+		}
 		
 		// What OneDrive API query do we use?
 		// - Are we running against a National Cloud Deployments that does not support /delta ?
@@ -1218,9 +1282,13 @@ class SyncEngine {
 		//   - If we are, and we use a normal /delta query, we get all the local 'deleted' objects as well.
 		//   - If the user deletes a folder online, then replaces it online, we download the deletion events and process the new 'upload' via the web interface .. 
 		//     the net effect of this, is that the valid local files we want to keep, are actually deleted ...... not desirable
-		if ((singleDirectoryScope) || (nationalCloudDeployment) || (cleanupLocalFiles)) {
+		if ((singleDirectoryScope) || (nationalCloudDeployment) || (authoritativeCleanupPassRequired)) {
 			// Generate a simulated /delta response so that we correctly capture the current online state, less any 'online' delete and replace activity
 			generatedSimulatedDeltaResponse = true;
+		}
+
+		if (debugLogging && cleanupLocalFiles && !authoritativeCleanupPassRequired) {
+			addLogEntry("Using native /delta for this pass; authoritative cleanup deferred until monitor full-scan cadence", ["debug"]);
 		}
 		
 		// Shared Folders, by nature of where that path has been shared with us, we cannot use /delta against that path, as this queries the entire 'other persons' drive:
@@ -2041,43 +2109,53 @@ class SyncEngine {
 			
 			// Is the deleted item in our database?
 			if (existingDBEntry) {
-				// Is the item to delete locally actually in sync with OneDrive currently?
-				// What is the source of this item data?
-				string itemSource = "online";
-				
-				// Compute this deleted items path based on the database entries
-				string localPathToDelete = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
-				if (isItemSynced(existingDatabaseItem, localPathToDelete, itemSource)) {
-					// Flag to delete
-					if (debugLogging) {addLogEntry("Flagging to delete item locally due to online deletion event: " ~ to!string(onedriveJSONItem), ["debug"]);}
-					// Use the DB entries returned - add the driveId, itemId and parentId values  to the array
-					idsToDelete ~= [existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId];
+				// In fast monitor passes defer deletes from raw /delta tombstones.
+				if (shouldDeferDeletedItemsFromRawDelta()) {
+					if (verboseLogging) {
+						addLogEntry("Deferring local deletion from raw /delta delete tombstone until next authoritative monitor cleanup pass", ["verbose"]);
+					}
+					if (debugLogging) {
+						addLogEntry("Deferred deleted JSON item: " ~ to!string(onedriveJSONItem), ["debug"]);
+					}
 				} else {
-					// Local item is not in sync with the online item, but the online item has been deleted, and we are flagging to delete the local item
-					// We need to determine the trigger for isItemSynced() returning false before we determine if we should make utilise safeBackup()
-					// Is this the exact same file?
-					// Test the file hash against the hash of the file online
-					
-					// Empirical evidence shows that Microsoft do not provide a 'valid' hash in JSON data for online deleted items, for example:
-					//   file":{"hashes":{"quickXorHash":"AAAAAAAAAAAAAAAAAAAAAAAAAAA="}},
-					// Thus this makes using the provided data via the API useless for a hash comparison test
-					
-					// Test the existing database item hash against the hash on the local disk - as this is what we know was in-sync with online prior to online deletion event
-					if (!testFileHash(localPathToDelete, existingDatabaseItem)) {
-						// Current file on disk is different by hash / content
-						// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
-						// In case the renamed path is needed
-						string renamedPath;
-						safeBackup(localPathToDelete, dryRun, bypassDataPreservation, renamedPath);
-						
-						// Purge the old record from the database as this still exists. The safeBackup() generated file now will be 'new' on the local filesystem
-						itemDB.deleteById(existingDatabaseItem.driveId, existingDatabaseItem.id);
-					} else {
-						// Hash is the same, we can assume the isItemSynced() returning false was due to some sort of timestamp issue
-						// Flag to delete rather than create a backup of the local file
+					// Is the item to delete locally actually in sync with OneDrive currently?
+					// What is the source of this item data?
+					string itemSource = "online";
+
+					// Compute this deleted items path based on the database entries
+					string localPathToDelete = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
+					if (isItemSynced(existingDatabaseItem, localPathToDelete, itemSource)) {
+						// Flag to delete
 						if (debugLogging) {addLogEntry("Flagging to delete item locally due to online deletion event: " ~ to!string(onedriveJSONItem), ["debug"]);}
 						// Use the DB entries returned - add the driveId, itemId and parentId values  to the array
 						idsToDelete ~= [existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId];
+					} else {
+						// Local item is not in sync with the online item, but the online item has been deleted, and we are flagging to delete the local item
+						// We need to determine the trigger for isItemSynced() returning false before we determine if we should make utilise safeBackup()
+						// Is this the exact same file?
+						// Test the file hash against the hash of the file online
+
+						// Empirical evidence shows that Microsoft do not provide a 'valid' hash in JSON data for online deleted items, for example:
+						//   file":{"hashes":{"quickXorHash":"AAAAAAAAAAAAAAAAAAAAAAAAAAA="}},
+						// Thus this makes using the provided data via the API useless for a hash comparison test
+
+						// Test the existing database item hash against the hash on the local disk - as this is what we know was in-sync with online prior to online deletion event
+						if (!testFileHash(localPathToDelete, existingDatabaseItem)) {
+							// Current file on disk is different by hash / content
+							// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
+							// In case the renamed path is needed
+							string renamedPath;
+							safeBackup(localPathToDelete, dryRun, bypassDataPreservation, renamedPath);
+
+							// Purge the old record from the database as this still exists. The safeBackup() generated file now will be 'new' on the local filesystem
+							itemDB.deleteById(existingDatabaseItem.driveId, existingDatabaseItem.id);
+						} else {
+							// Hash is the same, we can assume the isItemSynced() returning false was due to some sort of timestamp issue
+							// Flag to delete rather than create a backup of the local file
+							if (debugLogging) {addLogEntry("Flagging to delete item locally due to online deletion event: " ~ to!string(onedriveJSONItem), ["debug"]);}
+							// Use the DB entries returned - add the driveId, itemId and parentId values  to the array
+							idsToDelete ~= [existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId];
+						}
 					}
 				}
 			} else {
@@ -5224,6 +5302,7 @@ class SyncEngine {
 		
 		// Create a new DB blank item
 		Item item;
+		bool authoritativeCleanupPassRequired = shouldPerformAuthoritativeCleanupPass();
 		// Use the array we populate, rather than selecting all distinct driveId's from the database
 		foreach (driveId; consistencyCheckDriveIdsArray) {
 			// Make the logging more accurate - we cant update driveId as this then breaks the below queries
@@ -5245,7 +5324,7 @@ class SyncEngine {
 			// - Are we scanning a Shared Folder
 			//
 			// If we did, we self generated a /delta response, thus need to now process elements that are still flagged as out-of-sync
-			if ((singleDirectoryScope) || (nationalCloudDeployment) || (cleanupLocalFiles) || sharedFolderDeltaGeneration) {
+			if ((singleDirectoryScope) || (nationalCloudDeployment) || (authoritativeCleanupPassRequired) || sharedFolderDeltaGeneration) {
 				// Any entry in the DB than is flagged as out-of-sync needs to be cleaned up locally first before we scan the entire DB
 				// Normally, this is done at the end of processing all /delta queries, however when using --single-directory or a National Cloud Deployments is configured
 				// We cant use /delta to query the OneDrive API as National Cloud Deployments dont support /delta
@@ -5345,6 +5424,13 @@ class SyncEngine {
 				// Cleanup array memory
 				databaseItemsWhereContentHasChanged = [];
 			}
+		}
+
+		// The generated-delta authoritative cleanup has completed; avoid treating later
+		// API-signal fast passes as authoritative before the next monitor interval.
+		if (isMonitorDownloadOnlyCleanupLocalFilesMode() && authoritativeCleanupPassRequired && appConfig.fullScanTrueUpRequired) {
+			if (debugLogging) {addLogEntry("Unsetting fullScanTrueUpRequired after authoritative cleanup pass", ["debug"]);}
+			appConfig.fullScanTrueUpRequired = false;
 		}
 		
 		// Display function processing time if configured to do so
