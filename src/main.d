@@ -1162,7 +1162,11 @@ int main(string[] cliArgs) {
 			if (!appConfig.getValueBool("download_only")) {
 				// Not using --download-only
 				try {
-					addLogEntry("Initialising filesystem inotify monitoring ...", ["info", "notify"]);
+					version (OSX) {
+						addLogEntry("Initialising filesystem FSEvents monitoring ...", ["info", "notify"]);
+					} else {
+						addLogEntry("Initialising filesystem inotify monitoring ...", ["info", "notify"]);
+					}
 					filesystemMonitor.initialise();
 					addLogEntry("Performing initial synchronisation to ensure consistent local state ...");
 				} catch (MonitorException e) {	
@@ -1749,7 +1753,11 @@ void processInotifyEvents(bool updateFlag) {
 		filesystemMonitor.update(updateFlag);
 	} catch (MonitorException e) {
 		// Catch any exceptions thrown by inotify / monitor engine
-		addLogEntry("ERROR: The following inotify error was generated: " ~ e.msg);
+		version (OSX) {
+			addLogEntry("ERROR: The following FSEvents error was generated: " ~ e.msg);
+		} else {
+			addLogEntry("ERROR: The following inotify error was generated: " ~ e.msg);
+		}
 	}
 }
 

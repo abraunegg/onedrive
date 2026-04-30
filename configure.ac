@@ -313,6 +313,18 @@ esac
 
 AC_SUBST([bsd_inotify_LIBS])
 
+# Conditionally set macOS FSEvents framework linker flags
+case "$(uname -s)" in
+    Darwin)
+        macos_fsevents_LIBS="-framework CoreServices -framework CoreFoundation"
+        ;;
+    *)
+        macos_fsevents_LIBS=""
+        ;;
+esac
+
+AC_SUBST([macos_fsevents_LIBS])
+
 dnl
 dnl Dynamic Linker Support
 

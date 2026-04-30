@@ -1,6 +1,427 @@
 // What is this module called?
 module monitor;
 
+version (OSX) {
+
+// macOS has no inotify-compatible API. Use FSEvents and keep the public
+// Monitor interface aligned with the inotify implementation below.
+import core.stdc.string;
+import core.sync.mutex;
+import config;
+import clientSideFiltering;
+import util;
+import log;
+import std.algorithm;
+import std.array;
+import std.concurrency;
+import std.conv;
+import std.file;
+import std.path;
+import std.string;
+
+alias CFAllocatorRef = const(void)*;
+alias CFArrayRef = const(void)*;
+alias CFStringRef = const(void)*;
+alias FSEventStreamRef = void*;
+alias ConstFSEventStreamRef = const(void)*;
+alias FSEventStreamCreateFlags = uint;
+alias FSEventStreamEventFlags = uint;
+alias FSEventStreamEventId = ulong;
+alias dispatch_queue_t = void*;
+
+enum kCFStringEncodingUTF8 = 0x08000100;
+enum kFSEventStreamEventIdSinceNow = ulong.max;
+enum kFSEventStreamCreateFlagNoDefer = 0x00000002;
+enum kFSEventStreamCreateFlagWatchRoot = 0x00000004;
+enum kFSEventStreamCreateFlagFileEvents = 0x00000010;
+enum kFSEventStreamEventFlagMustScanSubDirs = 0x00000001;
+enum kFSEventStreamEventFlagRootChanged = 0x00000020;
+enum kFSEventStreamEventFlagItemCreated = 0x00000100;
+enum kFSEventStreamEventFlagItemRemoved = 0x00000200;
+enum kFSEventStreamEventFlagItemInodeMetaMod = 0x00000400;
+enum kFSEventStreamEventFlagItemRenamed = 0x00000800;
+enum kFSEventStreamEventFlagItemModified = 0x00001000;
+enum kFSEventStreamEventFlagItemFinderInfoMod = 0x00002000;
+enum kFSEventStreamEventFlagItemChangeOwner = 0x00004000;
+enum kFSEventStreamEventFlagItemXattrMod = 0x00008000;
+enum kFSEventStreamEventFlagItemIsFile = 0x00010000;
+enum kFSEventStreamEventFlagItemIsDir = 0x00020000;
+
+alias FSEventStreamCallback = extern(C) void function(
+	ConstFSEventStreamRef streamRef,
+	void* clientCallBackInfo,
+	size_t numEvents,
+	void* eventPaths,
+	const(FSEventStreamEventFlags)* eventFlags,
+	const(FSEventStreamEventId)* eventIds
+);
+
+struct FSEventStreamContext {
+	long version_;
+	void* info;
+	void* retain;
+	void* release;
+	void* copyDescription;
+}
+
+extern(C) {
+	CFStringRef CFStringCreateWithCString(CFAllocatorRef alloc, const(char)* cStr, uint encoding);
+	CFArrayRef CFArrayCreate(CFAllocatorRef allocator, const(void)** values, long numValues, const(void)* callbacks);
+	void CFRelease(const(void)* cf);
+	dispatch_queue_t dispatch_get_global_queue(long identifier, ulong flags);
+	FSEventStreamRef FSEventStreamCreate(
+		CFAllocatorRef allocator,
+		FSEventStreamCallback callback,
+		FSEventStreamContext* context,
+		CFArrayRef pathsToWatch,
+		FSEventStreamEventId sinceWhen,
+		double latency,
+		FSEventStreamCreateFlags flags
+	);
+	void FSEventStreamSetDispatchQueue(FSEventStreamRef streamRef, dispatch_queue_t q);
+	ubyte FSEventStreamStart(FSEventStreamRef streamRef);
+	void FSEventStreamStop(FSEventStreamRef streamRef);
+	void FSEventStreamInvalidate(FSEventStreamRef streamRef);
+	void FSEventStreamRelease(FSEventStreamRef streamRef);
+	void FSEventStreamFlushSync(FSEventStreamRef streamRef);
+}
+
+struct FsEvent {
+	string path;
+	FSEventStreamEventFlags flags;
+}
+
+struct RenameTarget {
+	string path;
+	bool isDir;
+}
+
+enum ActionType {
+	moved,
+	deleted,
+	changed,
+	createDir
+}
+
+struct Action {
+	ActionType type;
+	bool skipped;
+	string src;
+	string dst;
+}
+
+struct ActionHolder {
+	Action[] actions;
+	size_t[string] srcMap;
+
+	void append(ActionType type, string src, string dst=null) {
+		if (type == ActionType.changed) {
+			if (src in srcMap && actions[srcMap[src]].type == ActionType.changed) return;
+		}
+		actions ~= Action(type, false, src, dst);
+		srcMap[src] = actions.length - 1;
+	}
+}
+
+class MonitorException: Exception {
+	@safe this(string msg, string file = __FILE__, size_t line = __LINE__) {
+		super(msg, file, line);
+	}
+}
+
+final class Monitor {
+	ApplicationConfig appConfig;
+	ClientSideFiltering selectiveSync;
+	bool verbose = false;
+	bool skip_symlinks = false;
+	bool check_nosync = false;
+	bool initialised = false;
+	FSEventStreamRef stream;
+	CFStringRef watchedPathRef;
+	CFArrayRef pathsToWatch;
+	string rootAbsolute;
+	string rootRelative;
+	Tid callerTid;
+	Mutex eventMutex;
+	FsEvent[] queuedEvents;
+	ActionHolder actionHolder;
+
+	void delegate(string path) onDirCreated;
+	void delegate(string[] path) onFileChanged;
+	void delegate(string path) onDelete;
+	void delegate(string from, string to) onMove;
+
+	this(ApplicationConfig appConfig, ClientSideFiltering selectiveSync) {
+		this.appConfig = appConfig;
+		this.selectiveSync = selectiveSync;
+		eventMutex = new Mutex();
+	}
+
+	~this() {
+		shutdown();
+	}
+
+	void initialise() {
+		skip_symlinks = appConfig.getValueBool("skip_symlinks");
+		check_nosync = appConfig.getValueBool("check_nosync");
+		if (appConfig.getValueLong("verbose") > 0) verbose = true;
+		callerTid = thisTid;
+
+		assert(onDirCreated && onFileChanged && onDelete && onMove);
+		string monitorPath = ".";
+		if (appConfig.getValueString("single_directory") != "") {
+			monitorPath = "./" ~ appConfig.getValueString("single_directory");
+		}
+
+		rootRelative = buildNormalizedPath(monitorPath);
+		if (rootRelative == "") rootRelative = ".";
+		rootAbsolute = buildNormalizedPath(absolutePath(monitorPath));
+
+		watchedPathRef = CFStringCreateWithCString(null, toStringz(rootAbsolute), kCFStringEncodingUTF8);
+		if (watchedPathRef is null) throw new MonitorException("CFStringCreateWithCString failed for FSEvents path: " ~ rootAbsolute);
+
+		const(void)* pathValue = watchedPathRef;
+		pathsToWatch = CFArrayCreate(null, &pathValue, 1, null);
+		if (pathsToWatch is null) throw new MonitorException("CFArrayCreate failed for FSEvents path: " ~ rootAbsolute);
+
+		FSEventStreamContext context;
+		context.version_ = 0;
+		context.info = cast(void*) this;
+
+		auto flags = kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagWatchRoot;
+		stream = FSEventStreamCreate(null, &fseventsCallback, &context, pathsToWatch, kFSEventStreamEventIdSinceNow, 1.0, flags);
+		if (stream is null) throw new MonitorException("FSEventStreamCreate failed for path: " ~ rootAbsolute);
+
+		FSEventStreamSetDispatchQueue(stream, dispatch_get_global_queue(0, 0));
+		if (FSEventStreamStart(stream) == 0) throw new MonitorException("FSEventStreamStart failed for path: " ~ rootAbsolute);
+
+		addLogEntry("Initialised macOS FSEvents monitoring for: " ~ rootRelative, ["info"]);
+		initialised = true;
+	}
+
+	void send(bool isAlive) {
+	}
+
+	void shutdown() {
+		if (stream !is null) {
+			FSEventStreamStop(stream);
+			FSEventStreamInvalidate(stream);
+			FSEventStreamRelease(stream);
+			stream = null;
+		}
+		if (pathsToWatch !is null) {
+			CFRelease(pathsToWatch);
+			pathsToWatch = null;
+		}
+		if (watchedPathRef !is null) {
+			CFRelease(watchedPathRef);
+			watchedPathRef = null;
+		}
+		initialised = false;
+	}
+
+	void update(bool useCallbacks = true) {
+		if (!initialised) return;
+		if (stream !is null) FSEventStreamFlushSync(stream);
+
+		auto events = drainEvents();
+		if (events.empty) return;
+		if (!useCallbacks) return;
+
+		processEvents(events);
+		processChanges();
+	}
+
+	void enqueueEvent(string absoluteEventPath, FSEventStreamEventFlags flags) {
+		auto relativePath = toMonitorPath(absoluteEventPath);
+		if (relativePath.empty) return;
+		bool shouldWake;
+
+		eventMutex.lock();
+		try {
+			shouldWake = queuedEvents.empty;
+			queuedEvents ~= FsEvent(relativePath, flags);
+		} finally {
+			eventMutex.unlock();
+		}
+		if (shouldWake) callerTid.send(1);
+	}
+
+	private FsEvent[] drainEvents() {
+		FsEvent[] events;
+		eventMutex.lock();
+		try {
+			events = queuedEvents;
+			queuedEvents = null;
+		} finally {
+			eventMutex.unlock();
+		}
+		return events;
+	}
+
+	private string toMonitorPath(string absoluteEventPath) {
+		auto normalised = buildNormalizedPath(absoluteEventPath);
+		if (normalised == rootAbsolute) return rootRelative;
+		auto prefix = rootAbsolute ~ "/";
+		if (!normalised.startsWith(prefix)) return null;
+		auto suffix = normalised[prefix.length .. $];
+		if (rootRelative == ".") return "./" ~ suffix;
+		return buildNormalizedPath(rootRelative ~ "/" ~ suffix);
+	}
+
+	private bool isDirectoryEvent(FsEvent event) {
+		if (event.flags & kFSEventStreamEventFlagItemIsDir) return true;
+		try {
+			return exists(event.path) && isDir(event.path);
+		} catch (FileException e) {
+			return false;
+		}
+	}
+
+	private bool shouldSkipEvent(string path, bool isDirEvent) {
+		if (path == ".") return false;
+		try {
+			if (exists(path) && isSymlink(path) && skip_symlinks) return true;
+			if (check_nosync && isDirEvent && exists(buildNormalizedPath(path) ~ "/.nosync")) return true;
+			auto evalPath = path.strip('.');
+			if (isDirEvent) {
+				if (selectiveSync.isDirNameExcluded(evalPath)) return true;
+				if ((selectiveSync.getSkipDotfiles()) && (isDotFile(path))) return true;
+			} else {
+				if (selectiveSync.isFileNameExcluded(evalPath)) return true;
+			}
+			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(path))) return true;
+		} catch (FileException e) {
+			return false;
+		}
+		return false;
+	}
+
+	private void processEvents(FsEvent[] events) {
+		RenameTarget[] removedRenames;
+		RenameTarget[] createdRenames;
+
+		foreach (event; events) {
+			if (debugLogging) {
+				addLogEntry("FSEvents path event for: " ~ event.path, ["debug"]);
+				addLogEntry("FSEvents event flags: " ~ to!string(event.flags), ["debug"]);
+			}
+
+			if ((event.flags & kFSEventStreamEventFlagMustScanSubDirs) || (event.flags & kFSEventStreamEventFlagRootChanged)) {
+				if (!shouldSkipEvent(rootRelative, true)) actionHolder.append(ActionType.createDir, rootRelative);
+				continue;
+			}
+
+			bool isDirEvent = isDirectoryEvent(event);
+			if (shouldSkipEvent(event.path, isDirEvent)) continue;
+
+			if (event.flags & kFSEventStreamEventFlagItemRenamed) {
+				if (exists(event.path)) {
+					createdRenames ~= RenameTarget(event.path, isDirEvent);
+				} else {
+					removedRenames ~= RenameTarget(event.path, isDirEvent);
+				}
+				continue;
+			}
+
+			if (event.flags & kFSEventStreamEventFlagItemRemoved) {
+				actionHolder.append(ActionType.deleted, event.path);
+			} else if (event.flags & kFSEventStreamEventFlagItemCreated) {
+				if (isDirEvent) {
+					actionHolder.append(ActionType.createDir, event.path);
+				} else {
+					actionHolder.append(ActionType.changed, event.path);
+				}
+			} else if (event.flags & (kFSEventStreamEventFlagItemModified | kFSEventStreamEventFlagItemInodeMetaMod | kFSEventStreamEventFlagItemFinderInfoMod | kFSEventStreamEventFlagItemChangeOwner | kFSEventStreamEventFlagItemXattrMod)) {
+				if (!isDirEvent) actionHolder.append(ActionType.changed, event.path);
+			}
+		}
+
+		pairRenameEvents(removedRenames, createdRenames);
+	}
+
+	private void pairRenameEvents(RenameTarget[] removedRenames, RenameTarget[] createdRenames) {
+		bool[] usedCreated;
+		usedCreated.length = createdRenames.length;
+
+		foreach (removed; removedRenames) {
+			ptrdiff_t targetIndex = -1;
+
+			foreach (idx, created; createdRenames) {
+				if (usedCreated[idx]) continue;
+				if (removed.isDir == created.isDir && baseName(removed.path) == baseName(created.path)) {
+					targetIndex = cast(ptrdiff_t) idx;
+					break;
+				}
+			}
+
+			if (targetIndex >= 0) {
+				usedCreated[targetIndex] = true;
+				if (debugLogging) {addLogEntry("FSEvents paired rename: " ~ removed.path ~ " -> " ~ createdRenames[targetIndex].path, ["debug"]);}
+				actionHolder.append(ActionType.moved, removed.path, createdRenames[targetIndex].path);
+			} else {
+				// FSEvents has no inotify-style rename cookie. A rename-away may
+				// be an application-driven safeBackup, not a user delete. Real
+				// deletes arrive as ItemRemoved and are handled above.
+				if (debugLogging) {addLogEntry("FSEvents unpaired rename-away ignored as delete: " ~ removed.path, ["debug"]);}
+			}
+		}
+
+		foreach (idx, created; createdRenames) {
+			if (usedCreated[idx]) continue;
+			if (created.isDir) {
+				actionHolder.append(ActionType.createDir, created.path);
+			} else {
+				actionHolder.append(ActionType.changed, created.path);
+			}
+		}
+	}
+
+	private void processChanges() {
+		string[] changes;
+
+		foreach(action; actionHolder.actions) {
+			if (action.skipped) continue;
+			switch (action.type) {
+				case ActionType.changed:
+					changes ~= action.src;
+					break;
+				case ActionType.deleted:
+					onDelete(action.src);
+					break;
+				case ActionType.createDir:
+					onDirCreated(action.src);
+					break;
+				case ActionType.moved:
+					onMove(action.src, action.dst);
+					break;
+				default:
+					break;
+			}
+		}
+		if (!changes.empty) onFileChanged(changes);
+		object.destroy(actionHolder);
+	}
+}
+
+extern(C) void fseventsCallback(
+	ConstFSEventStreamRef streamRef,
+	void* clientCallBackInfo,
+	size_t numEvents,
+	void* eventPaths,
+	const(FSEventStreamEventFlags)* eventFlags,
+	const(FSEventStreamEventId)* eventIds
+) {
+	if (clientCallBackInfo is null) return;
+	auto monitor = cast(Monitor) clientCallBackInfo;
+	auto paths = cast(const(char)**) eventPaths;
+	foreach (idx; 0 .. numEvents) {
+		monitor.enqueueEvent(fromStringz(paths[idx]).idup, eventFlags[idx]);
+	}
+}
+
+} else {
+
 // What does this module require to function?
 import core.stdc.errno;
 import core.stdc.stdlib;
@@ -823,4 +1244,6 @@ final class Monitor {
 
 		object.destroy(actionHolder);
 	}
+}
+
 }
