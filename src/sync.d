@@ -6456,22 +6456,16 @@ class SyncEngine {
 						// Directory included due to 'sync_list' match
 						if (verboseLogging) {addLogEntry("Including path - included by sync_list config: " ~ newItemPath, ["verbose"]);}
 						
-						// When using 'sync_list', an included directory must be represented
-						// consistently in both the local filesystem and the database.
+						// When using 'sync_list', an included directory must be represented consistently in both the local filesystem and the database.
 						//
-						// Previously this branch could save the directory JSON directly to
-						// the database when the parent was already present, without also
-						// creating the local directory. This was particularly visible for
-						// included empty directories in OneDrive Personal Shared Folders:
-						// the DB record existed, but no local directory existed, so the
-						// later database consistency check incorrectly reported:
+						// Previously this branch could save the directory JSON directly to the database when the parent was already present, without also
+						// creating the local directory. This was particularly visible for included empty directories in OneDrive Personal Shared Folders:
+						// the DB record existed, but no local directory existed, so the later database consistency check incorrectly reported:
 						//     The directory has been deleted locally
 						//
-						// Avoid inserting an included directory into the database without
-						// also ensuring that the local directory exists.
+						// Avoid inserting an included directory into the database without also ensuring that the local directory exists.
 						if (!parentInDatabase) {
-							// Parental database and local path structure needs to be created
-							// before this included directory can be materialised locally.
+							// Parental database and local path structure needs to be created before this included directory can be materialised locally.
 							string newParentalPath = dirName(newItemPath);
 							if (verboseLogging) {addLogEntry("Parental Path structure needs to be created to support included directory: " ~ newParentalPath, ["verbose"]);}
 							createLocalPathStructure(onedriveJSONItem, newParentalPath);
