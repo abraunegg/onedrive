@@ -75,7 +75,8 @@ jobs:
             libcurl4-openssl-dev \
             libsqlite3-dev \
             libsystemd-dev \
-            libdbus-1-dev
+            libdbus-1-dev \
+            libfuse3-dev
 
       - name: Enable debuginfod for gdb
         if: steps.smoke-secret-policy.outputs.run_smoke == 'true'
@@ -339,6 +340,7 @@ jobs:
             libcurl-devel \
             sqlite-devel \
             dbus-devel \
+            fuse3-devel \
             which \
             procps-ng \
             dnf-plugins-core
