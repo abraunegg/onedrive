@@ -373,6 +373,7 @@ pastebin
 permessage
 pfa
 PFN
+pgrep
 phlibi
 phobos
 pidx
@@ -444,6 +445,7 @@ rsnapshot
 rsv
 rtud
 rul
+ruleset
 runstatedir
 runsvdir
 Ruppe

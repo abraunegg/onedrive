@@ -685,6 +685,22 @@ class ClientSideFiltering {
 				
 				// Does the parents of the input path and rule path match .. meaning we can actually evaluate this wildcard rule against the input path
 				if (matchFirstSegmentToPathFirstSegment(ruleSegments, pathSegments)) {
+
+					// A deeper wildcard/globbing exclusion rule must not exclude an ancestor path.
+					//
+					// Example:
+					//     input path: /SHARED_FOLDERS/SUB_FOLDER_1/CORE
+					//     exclusion:  !/SHARED_FOLDERS/SUB_FOLDER_1/CORE/nested/exclude/*
+					//
+					// The exclusion targets children under nested/exclude, not the CORE directory itself.
+					// Without this guard, matchPathAgainstRule() can treat the already-matched prefix
+					// as a wildcard match and incorrectly exclude the ancestor path.
+					if (thisIsAnExcludeRule && inputPathIsAncestorOfWildcardRule(ruleSegments, pathSegments)) {
+						if (debugLogging) {
+							addLogEntry("Evaluation against 'sync_list' rule result: exclusion wildcard|globbing rule targets a deeper child path; ancestor input path must not be excluded", ["debug"]);
+						}
+						continue;
+					}
 					
 					// Is this a globbing rule (**) or just a single wildcard (*) entries
 					if (globbingRule) {
@@ -816,6 +832,32 @@ class ClientSideFiltering {
 		return !match(pathSegment, pattern).empty;
 	}
 	
+
+	// Function to determine if the current input path is an ancestor of a deeper wildcard/globbing exclusion rule.
+	//
+	// This prevents a deeper exclusion such as:
+	//     !/SHARED_FOLDERS/SUB_FOLDER_1/CORE/nested/exclude/*
+	// from incorrectly excluding the ancestor path:
+	//     /SHARED_FOLDERS/SUB_FOLDER_1/CORE
+	//
+	// This helper is intentionally used only for exclusion wildcard/globbing rules so that
+	// existing include traversal behaviour is not altered.
+	bool inputPathIsAncestorOfWildcardRule(string[] ruleSegments, string[] pathSegments) {
+		// If the rule is not deeper than the input path, the input path is not an ancestor of the rule
+		if (ruleSegments.length <= pathSegments.length) {
+			return false;
+		}
+
+		// Compare the input path against the equivalent prefix of the rule path
+		foreach (index, pathSegment; pathSegments) {
+			if (!matchSegment(ruleSegments[index], pathSegment)) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	// Function to handle path matching when using globbing (**)
 	bool matchPathAgainstRule(string path, string rule) {
 		// Split both the path and rule into segments

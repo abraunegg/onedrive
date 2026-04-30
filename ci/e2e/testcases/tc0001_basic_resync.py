@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+from framework.base import E2ETestCase
+from framework.context import E2EContext
+from framework.result import TestResult
+from framework.utils import (
+    command_to_string,
+    reset_directory,
+    run_command,
+    write_onedrive_config,
+    write_text_file,
+)
+
+
+class TestCase0001BasicResync(E2ETestCase):
+    """
+    Test Case 0001: basic resync
+
+    Purpose:
+    - validate that the E2E framework can invoke the client
+    - validate that the configured environment is sufficient to run a basic sync
+    - provide a simple baseline smoke test before more advanced E2E scenarios
+    """
+
+    case_id = "0001"
+    name = "basic resync"
+    description = "Run a basic --sync --resync --resync-auth operation and capture the outcome"
+
+    def run(self, context: E2EContext) -> TestResult:
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name=f"tc{self.case_id}",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
+
+        sync_root = case_work_dir / "syncroot"
+        conf_dir = case_work_dir / "conf-main"
+
+        reset_directory(sync_root)
+        reset_directory(conf_dir)
+        context.bootstrap_config_dir(conf_dir)
+
+        stdout_file = case_log_dir / "stdout.log"
+        stderr_file = case_log_dir / "stderr.log"
+        metadata_file = state_dir / "metadata.txt"
+
+        write_onedrive_config(
+            conf_dir / "config",
+            "# tc0001 config\n",
+        )
+
+        command = [
+            context.onedrive_bin,
+            "--sync",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--syncdir",
+            str(sync_root),
+            "--confdir",
+            str(conf_dir),
+        ]
+
+        context.log(
+            f"Executing Test Case {self.case_id}: {command_to_string(command)}"
+        )
+
+        result = run_command(command, cwd=context.repo_root)
+
+        write_text_file(stdout_file, result.stdout)
+        write_text_file(stderr_file, result.stderr)
+
+        metadata_lines = [
+            f"case_id={self.case_id}",
+            f"name={self.name}",
+            f"command={command_to_string(command)}",
+            f"returncode={result.returncode}",
+            f"sync_root={sync_root}",
+            f"conf_dir={conf_dir}",
+        ]
+        write_text_file(metadata_file, "\n".join(metadata_lines) + "\n")
+
+        artifacts = [
+            str(stdout_file),
+            str(stderr_file),
+            str(metadata_file),
+        ]
+
+        details = {
+            "command": command,
+            "returncode": result.returncode,
+            "sync_root": str(sync_root),
+            "conf_dir": str(conf_dir),
+        }
+
+        if result.returncode != 0:
+            reason = f"onedrive exited with non-zero status {result.returncode}"
+            return self.fail_result(
+                case_id=self.case_id,
+                name=self.name,
+                reason=reason,
+                artifacts=artifacts,
+                details=details,
+            )
+
+        return self.pass_result(
+            case_id=self.case_id,
+            name=self.name,
+            artifacts=artifacts,
+            details=details,
+        )

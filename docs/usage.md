@@ -43,6 +43,7 @@ Before reading this document, please ensure you are running application version 
 - [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
   - [How to change the default configuration of the client?](#how-to-change-the-default-configuration-of-the-client)
   - [How to change where my data from Microsoft OneDrive is stored?](#how-to-change-where-my-data-from-microsoft-onedrive-is-stored)
+  - [How do I safely remove my local sync_dir without deleting my OneDrive data?](#how-do-i-safely-remove-my-local-sync_dir-without-deleting-my-onedrive-data)
   - [Why does the client create 'safeBackup' files?](#why-does-the-client-create-safebackup-files)
   - [How to change what file and directory permissions are assigned to data that is downloaded from Microsoft OneDrive?](#how-to-change-what-file-and-directory-permissions-are-assigned-to-data-that-is-downloaded-from-microsoft-onedrive)
   - [How are uploads and downloads managed?](#how-are-uploads-and-downloads-managed)
@@ -1065,6 +1066,47 @@ The following are supported for pattern matching and exclusion rules:
 > ```
 > This will tell the application to sync any file that it finds in your 'sync_dir' root by default, negating the need to constantly update your 'sync_list' file.
 
+#### Using 'sync_list' with OneDrive Personal Shared Folders (Shortcuts)
+
+When using `sync_list` with OneDrive Personal shared folders that have been added to your OneDrive as shortcuts, it is important to understand that these are **not standard directories within your OneDrive file hierarchy**.
+
+A shared folder is represented as a *shortcut (link)* to content stored in another location (for example, another user's OneDrive). Because of this:
+
+> [!IMPORTANT]
+> Including only the parent directory that contains shared-folder shortcuts does **not guarantee** that the client will traverse and synchronise the contents of those shared folders.
+
+For example, given the following structure:
+
+```text
+SHARED_FOLDERS/
+SHARED_FOLDERS/SUB_FOLDER_1/
+SHARED_FOLDERS/SUB_FOLDER_1/CORE/
+SHARED_FOLDERS/SUB_FOLDER_1/DEEP_SOURCE/
+```
+
+The following `sync_list` rule:
+
+```text
+/SHARED_FOLDERS/
+```
+
+will include the shared-folder **shortcut entries only**, but will not reliably trigger traversal into the contents of those shared folders.
+
+To ensure correct behaviour, explicitly include each shared-folder shortcut path that you want to synchronise:
+
+```text
+/SHARED_FOLDERS/SUB_FOLDER_1/CORE/
+/SHARED_FOLDERS/SUB_FOLDER_1/DEEP_SOURCE/
+```
+
+> [!NOTE]
+> Using wildcard rules such as `/SHARED_FOLDERS/*` will only include the shared-folder shortcut entries and does **not guarantee** traversal into the contents of those shared folders.
+
+> [!TIP]
+> Treat each shared-folder shortcut as an independent root for the purposes of `sync_list`. Always explicitly include the exact shared-folder paths you want synchronised.
+
+
+
 ### Performing a --resync
 A `--resync` operation instructs the client to delete its local state database and fully rebuild it from the current online OneDrive contents. This is a powerful recovery and re-alignment action that should be used **sparingly** and **with care**.
 
@@ -1463,6 +1505,15 @@ The same FreeDesktop.org Trash Specification will be used with this explicit 'Re
 
 ![using_recycle_bin](./images/using_recycle_bin.png)
 
+> [!IMPORTANT]
+> The `use_recycle_bin` option only applies when a deletion originates from Microsoft OneDrive online, or from another OneDrive client, and this client then needs to remove the corresponding local file or folder.
+>
+> It does **not** protect files or folders that you delete locally from your configured `sync_dir`.
+> 
+> If you delete files locally from `sync_dir`, this client treats that as an intentional local delete and will propagate that delete to Microsoft OneDrive during synchronisation. By the time this client detects the local delete, the data has already been removed from the local filesystem, so the client cannot move it to the local Recycle Bin.
+>
+> If you want locally deleted files to go to Trash first, you must delete them using your desktop environment’s Trash mechanism, such as GNOME Files, KDE Dolphin, or another tool that implements the FreeDesktop.org Trash Specification. Do not use `rm`, `shred`, scripts, terminal cleanup commands, or manually delete the sync directory while the client or systemd service is still running unless you intend those deletes to be synchronised online.
+
 
 ### Handling a Microsoft OneDrive Account Password Change
 If you change your Microsoft OneDrive Account Password, the client will no longer be authorised to sync, and will generate the following error upon next application run:
@@ -1571,6 +1622,31 @@ To change this location, the application configuration option 'sync_dir' is used
 
 > [!IMPORTANT]
 > Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of local file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
+
+### How do I safely remove my local sync_dir without deleting my OneDrive data?
+> [!CAUTION]
+> Do **not** delete your configured `sync_dir` while the client is running.
+
+A local delete inside `sync_dir` is treated as an intentional synchronisation action. The client may detect this through inotify events in monitor mode, or during a filesystem scan, and then propagate the delete to Microsoft OneDrive.
+
+To remove the local copy without deleting online data:
+
+1. Stop all running `onedrive` processes.
+2. Stop any configured systemd service, for example:
+```
+systemctl --user stop onedrive
+```
+3. Confirm no client process is still running:
+```
+pgrep -a onedrive
+```
+4. Move the local sync directory out of the way first:
+```
+mv ~/OneDrive ~/OneDrive.local-backup
+```
+5. Only delete the backup after you are certain the client is stopped and you no longer need the local data.
+
+If you accidentally deleted local files while the client was still running, immediately stop the client and check the Microsoft OneDrive online Recycle Bin.
 
 ### Why does the client create 'safeBackup' files?
 'safeBackup' files are created to prevent local data loss whenever the client is about to replace or remove a local file and there’s any chance the current on-disk content might be different to what OneDrive expects.

@@ -1,11 +1,16 @@
 # OneDrive Client for Linux
-[![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
-[![Release Date](https://img.shields.io/github/release-date/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
+[![Version](https://img.shields.io/github/v/release/abraunegg/onedrive?logo=github)](https://github.com/abraunegg/onedrive/releases)
+[![Release Date](https://img.shields.io/github/release-date/abraunegg/onedrive?logo=github)](https://github.com/abraunegg/onedrive/releases)
 
 [![Test Build](https://github.com/abraunegg/onedrive/actions/workflows/testbuild.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/testbuild.yaml)
 [![Smoke Test](https://github.com/abraunegg/onedrive/actions/workflows/smoke-test.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/smoke-test.yaml)
 [![Build Docker Images](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml)
-[![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
+[![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive?logo=docker)](https://hub.docker.com/r/driveone/onedrive)
+
+[![E2E Testing - Personal Account](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
+[![E2E Testing - Personal Account: 15 Character driveId Check](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal-15char-check.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal-15char-check.yaml)
+[![E2E Testing - Business Account](https://github.com/abraunegg/onedrive/actions/workflows/e2e-business.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
+[![E2E Testing - SharePoint documentLibrary Configuration](https://github.com/abraunegg/onedrive/actions/workflows/e2e-sharepoint.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
 
 A fully featured, free, and actively maintained Microsoft OneDrive client that seamlessly supports OneDrive Personal, OneDrive for Business, Microsoft 365 (formerly Office 365), and SharePoint document libraries.
 
@@ -169,7 +174,11 @@ If you encounter any issues running the application, please follow these steps *
    - See [Compatibility with curl](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#compatibility-with-curl) for details on curl bugs that impact this client.  
    - Refer to the official [cURL Releases](https://curl.se/docs/releases.html) page for version information.
 
-6. **Open a new issue**  
+6. **Perform a --resync**
+   In some cases, a `--resync` is needed to ensure your data is correctly synced. This option instructs the client to delete its local state database and fully rebuild it from the current online OneDrive contents. This is a powerful recovery and re-alignment action that should be used sparingly and with care.
+   - See [Performing a --resync](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#performing-a---resync) for further details.
+
+7. **Open a new issue**  
    If the problem persists after completing the steps above, proceed to **Reporting an Issue or Bug** below and open a new issue with the requested details and logs.
 
 
