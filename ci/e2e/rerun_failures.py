@@ -4,13 +4,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
-
-
-DATABASE_ARTIFACT_SUFFIXES = ("", "-wal", "-shm", "-journal")
 
 
 def _normalise_case_id(value: str) -> str:
@@ -20,82 +16,6 @@ def _normalise_case_id(value: str) -> str:
     if text.isdigit() and len(text) <= 4:
         text = text.zfill(4)
     return text
-
-
-def _safe_relative_path(path: Path, base: Path) -> Path:
-    try:
-        return path.relative_to(base)
-    except ValueError:
-        return Path(path.name)
-
-
-def _database_capture_roots(output_subdir: str) -> tuple[Path, Path]:
-    repo_root = Path.cwd()
-    target = os.environ.get("E2E_TARGET", "").strip() or "unknown-target"
-    runner_temp = os.environ.get("RUNNER_TEMP", "/tmp").strip() or "/tmp"
-
-    work_root = Path(runner_temp) / f"onedrive-e2e-{target}"
-    out_dir = repo_root / "ci" / "e2e" / "out"
-
-    if output_subdir.strip():
-        safe_subdir = output_subdir.strip().replace("/", "_")
-        work_root = work_root / safe_subdir
-        out_dir = out_dir / output_subdir.strip()
-
-    return work_root, out_dir
-
-
-def _capture_debug_rerun_databases(output_subdir: str) -> list[dict[str, str]]:
-    """
-    Copy per-test/per-scenario OneDrive item databases from the debug rerun
-    working area into ci/e2e/out so GitHub artifact upload preserves them.
-
-    This is intentionally done in rerun_failures.py rather than individual
-    testcases so every failed debug rerun can capture DB state consistently,
-    regardless of account type or testcase implementation.
-    """
-    work_root, out_dir = _database_capture_roots(output_subdir)
-    capture_root = out_dir / "database-captures"
-    manifest_file = capture_root / "database-captures.json"
-    captured: list[dict[str, str]] = []
-
-    if not work_root.exists():
-        print(f"Database capture skipped; debug work root not found: {work_root}")
-        return captured
-
-    capture_root.mkdir(parents=True, exist_ok=True)
-
-    for db_path in sorted(work_root.rglob("items.sqlite3")):
-        if not db_path.is_file():
-            continue
-
-        rel_db_path = _safe_relative_path(db_path, work_root)
-        dest_dir = capture_root / rel_db_path.parent
-        dest_dir.mkdir(parents=True, exist_ok=True)
-
-        related_files: list[str] = []
-        for suffix in DATABASE_ARTIFACT_SUFFIXES:
-            source = Path(str(db_path) + suffix)
-            if not source.is_file():
-                continue
-
-            destination = dest_dir / source.name
-            shutil.copy2(source, destination)
-            related_files.append(str(destination))
-
-        if related_files:
-            captured.append(
-                {
-                    "source_database": str(db_path),
-                    "relative_database": str(rel_db_path),
-                    "captured_files": related_files,
-                }
-            )
-
-    manifest_file.write_text(json.dumps(captured, indent=2, sort_keys=False) + "\n", encoding="utf-8")
-    print(f"Captured {len(captured)} debug rerun database(s) into: {capture_root}")
-    print(f"Database capture manifest written to: {manifest_file}")
-    return captured
 
 
 def _extract_failed_plan(results: dict) -> tuple[list[str], dict[str, list[str]]]:
@@ -169,7 +89,6 @@ def main() -> int:
 
     env = os.environ.copy()
     completed = subprocess.run(command, env=env, check=False)
-    _capture_debug_rerun_databases(args.output_subdir)
     return completed.returncode
 
 

@@ -9,6 +9,7 @@ import traceback
 from pathlib import Path
 
 from framework.context import E2EContext
+from framework.database_capture import capture_onedrive_databases
 from framework.result import TestResult
 from framework.utils import ensure_directory, perform_full_account_cleanup, write_text_file
 from testcases.tc0001_basic_resync import TestCase0001BasicResync
@@ -180,6 +181,8 @@ def _apply_cli_overrides(args: argparse.Namespace) -> None:
             os.environ["E2E_SELECTED_SCENARIOS_JSON"] = json.dumps({key: sorted(value) for key, value in mapping.items()}, sort_keys=True)
 
 
+
+
 def result_to_actions_case(result: TestResult) -> dict:
     output = {
         "id": result.case_id,
@@ -293,6 +296,11 @@ def main() -> int:
 
             if result.status != "pass":
                 failed = True
+                captured_databases = capture_onedrive_databases(context, testcase.case_id, reason="failure")
+                if captured_databases:
+                    result.artifacts.extend(captured_databases)
+                    result.details.setdefault("captured_database_files", captured_databases)
+                    cases[-1] = result_to_actions_case(result)
                 context.log(f"Test case {testcase.case_id} FAILED: {result.reason or 'no reason provided'}")
             else:
                 context.log(f"Test case {testcase.case_id} PASSED")
@@ -315,6 +323,10 @@ def main() -> int:
                 artifacts=[str(error_log)],
                 details={"exception_type": type(exc).__name__},
             )
+            captured_databases = capture_onedrive_databases(context, testcase.case_id, reason="failure")
+            if captured_databases:
+                failure_result.artifacts.extend(captured_databases)
+                failure_result.details["captured_database_files"] = captured_databases
             cases.append(result_to_actions_case(failure_result))
 
     results = {
