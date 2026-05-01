@@ -214,6 +214,7 @@ class SyncEngine {
 	// Shared Folder Flags for 'sync_list' processing
 	bool sharedFolderDeltaGeneration = false;
 	string currentSharedFolderName = "";
+	string currentSharedFolderLogicalPath = "";
 	
 	// Directory excluded by 'sync_list flag so that when scanning that directory, if it is excluded, 
 	// can be scanned for new data which may be included by other include rule, but parent is excluded
@@ -879,13 +880,13 @@ class SyncEngine {
 					}
 					
 					// Directory name is not excluded or skip_dir is not populated
+					// So that we represent correctly where this shared folder is, calculate the full logical path
+					string sharedFolderLogicalPath = computeItemPath(remoteItem.driveId, remoteItem.id);
 					if (!appConfig.suppressLoggingOutput) {
-						// So that we represent correctly where this shared folder is, calculate the path
-						string sharedFolderLogicalPath = computeItemPath(remoteItem.driveId, remoteItem.id);
 						addLogEntry("Syncing this OneDrive Personal Shared Folder: " ~ ensureStartsWithDotSlash(sharedFolderLogicalPath));
 					}
 					// Check this OneDrive Personal Shared Folder for changes
-					fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
+					fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name, sharedFolderLogicalPath);
 					
 					// Process any download activities or cleanup actions for this OneDrive Personal Shared Folder
 					processDownloadActivities();
@@ -1156,7 +1157,7 @@ class SyncEngine {
 	}
 	
 	// Query OneDrive API for /delta changes and iterate through items online
-	void fetchOneDriveDeltaAPIResponse(string driveIdToQuery = null, string itemIdToQuery = null, string sharedFolderName = null) {
+	void fetchOneDriveDeltaAPIResponse(string driveIdToQuery = null, string itemIdToQuery = null, string sharedFolderName = null, string sharedFolderLogicalPath = null) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -1186,6 +1187,7 @@ class SyncEngine {
 		// Reset Shared Folder Flags for 'sync_list' processing
 		sharedFolderDeltaGeneration = false;
 		currentSharedFolderName = "";
+		currentSharedFolderLogicalPath = "";
 		
 		// Was a driveId provided as an input
 		if (strip(driveIdToQuery).empty) {
@@ -1234,6 +1236,19 @@ class SyncEngine {
 			// When using 'sync_list' we need to do this
 			sharedFolderDeltaGeneration = true;
 			currentSharedFolderName = sharedFolderName;
+			currentSharedFolderLogicalPath = sharedFolderLogicalPath;
+			if (currentSharedFolderLogicalPath.empty) {
+				currentSharedFolderLogicalPath = sharedFolderName;
+			}
+			currentSharedFolderLogicalPath = processPathToRemoveRootReference(currentSharedFolderLogicalPath);
+			currentSharedFolderLogicalPath = buildNormalizedPath(currentSharedFolderLogicalPath);
+			if (startsWith(currentSharedFolderLogicalPath, "./")) {
+				currentSharedFolderLogicalPath = currentSharedFolderLogicalPath[2 .. $];
+			}
+			if (startsWith(currentSharedFolderLogicalPath, "/")) {
+				currentSharedFolderLogicalPath = currentSharedFolderLogicalPath[1 .. $];
+			}
+			if (debugLogging) {addLogEntry("Current shared-folder logical path for generated delta processing: " ~ currentSharedFolderLogicalPath, ["debug"]);}
 			generatedSimulatedDeltaResponse = true;
 		}
 		
@@ -6027,6 +6042,35 @@ class SyncEngine {
 			if (debugLogging) {addLogEntry("Parent path details are in DB - computing 'calculatedParentalPath' using computeItemPath()", ["debug"]);}
 			calculatedParentalPath = computeItemPath(thisItemDriveId, thisItemParentId);
 			if (debugLogging) {addLogEntry("Resulting 'calculatedParentalPath' using computeItemPath() = " ~ calculatedParentalPath, ["debug"]);}
+			
+			// OneDrive Personal Shared Folder generated-delta processing can have multiple shortcut
+			// links to items with the same remote drive id and shared-folder root name. In that case,
+			// computeItemPath() can resolve the remote parent via a sibling shortcut that has the same
+			// remote drive id/name but a different logical location. Do not globally rebuild paths here;
+			// only correct the immediate shared-folder-root parent path when it resolves to the same
+			// shared-folder leaf name but under a different logical parent. This preserves normal
+			// shared-folder child path construction while preventing SUB_FOLDER_1 items being
+			// evaluated as SUB_FOLDER_2 items during sync_list checks.
+			if ((sharedFolderDeltaGeneration) && (appConfig.accountType == "personal") && (!currentSharedFolderLogicalPath.empty)) {
+				string normalisedCalculatedParentalPath = processPathToRemoveRootReference(calculatedParentalPath);
+				normalisedCalculatedParentalPath = buildNormalizedPath(normalisedCalculatedParentalPath);
+				if (startsWith(normalisedCalculatedParentalPath, "./")) {
+					normalisedCalculatedParentalPath = normalisedCalculatedParentalPath[2 .. $];
+				}
+				if (startsWith(normalisedCalculatedParentalPath, "/")) {
+					normalisedCalculatedParentalPath = normalisedCalculatedParentalPath[1 .. $];
+				}
+				if ((normalisedCalculatedParentalPath != currentSharedFolderLogicalPath) &&
+				    ((normalisedCalculatedParentalPath == currentSharedFolderName) ||
+				     (normalisedCalculatedParentalPath.endsWith("/" ~ currentSharedFolderName)))) {
+					if (debugLogging) {
+						addLogEntry("Correcting calculatedParentalPath for active Personal Shared Folder generated-delta anchor", ["debug"]);
+						addLogEntry(" - computed parent path: " ~ calculatedParentalPath, ["debug"]);
+						addLogEntry(" - active logical path: " ~ currentSharedFolderLogicalPath, ["debug"]);
+					}
+					calculatedParentalPath = currentSharedFolderLogicalPath;
+				}
+			}
 		}
 		
 		// Check if this is excluded by config option: skip_dir 
