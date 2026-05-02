@@ -38,6 +38,7 @@ class SharedFolderSyncListScenario:
     required_absent: list[str] = field(default_factory=list)
     required_stdout_markers: list[str] = field(default_factory=list)
     mutation_checks: list[SharedFolderMutationCheck] = field(default_factory=list)
+    cleanup_local_stale_files: list[str] = field(default_factory=list)
 
 
 class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
@@ -137,6 +138,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
 
             mutation_failures: list[str] = []
             mutation_artifacts: list[str] = []
+            cleanup_failures: list[str] = []
+            cleanup_artifacts: list[str] = []
             if scenario.mutation_checks:
                 if result.returncode != 0 or missing_entries or unexpected_entries or missing_required_present or unexpected_required_absent:
                     mutation_failures.append(
@@ -151,6 +154,24 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                             scenario_log_dir=scenario_log_dir,
                             scenario=scenario,
                             artifacts=mutation_artifacts,
+                        )
+                    )
+
+            if scenario.cleanup_local_stale_files:
+                if result.returncode != 0 or missing_entries or unexpected_entries or missing_required_present or unexpected_required_absent:
+                    cleanup_failures.append(
+                        "Skipping cleanup_local_files validation because initial immutable baseline validation failed"
+                    )
+                else:
+                    cleanup_failures.extend(
+                        self._run_local_stale_cleanup_check(
+                            context=context,
+                            confdir=confdir,
+                            config_path=config_path,
+                            sync_root=scenario_sync_root,
+                            scenario_log_dir=scenario_log_dir,
+                            scenario=scenario,
+                            artifacts=cleanup_artifacts,
                         )
                     )
 
@@ -175,6 +196,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 diffs.append(f"Required excluded entries were present locally: {unexpected_required_absent!r}")
             if mutation_failures:
                 diffs.append("Mutation validation failed: " + "; ".join(mutation_failures))
+            if cleanup_failures:
+                diffs.append("cleanup_local_files validation failed: " + "; ".join(cleanup_failures))
 
             metadata_lines = [
                 f"case_id={self.case_id}",
@@ -195,6 +218,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 f"missing_stdout_markers={missing_stdout_markers!r}",
                 f"mutation_checks={len(scenario.mutation_checks)}",
                 f"mutation_failures={mutation_failures!r}",
+                f"cleanup_local_stale_files={scenario.cleanup_local_stale_files!r}",
+                f"cleanup_failures={cleanup_failures!r}",
             ]
             write_text_file(metadata_file, "\n".join(metadata_lines) + "\n")
 
@@ -212,6 +237,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 str(metadata_file),
             ]
             scenario_artifacts.extend(mutation_artifacts)
+            scenario_artifacts.extend(cleanup_artifacts)
             all_artifacts.extend(scenario_artifacts)
 
             if diffs:
@@ -479,14 +505,135 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
 
         return failures
 
-    def _write_scenario_config(self, context: E2EContext, config_dir: Path, sync_root: Path) -> Path:
+    def _run_local_stale_cleanup_check(
+        self,
+        context: E2EContext,
+        confdir: Path,
+        config_path: Path,
+        sync_root: Path,
+        scenario_log_dir: Path,
+        scenario: SharedFolderSyncListScenario,
+        artifacts: list[str],
+    ) -> list[str]:
+        failures: list[str] = []
+        before_manifest = build_typed_manifest(sync_root)
+
+        cleanup_stdout_file = scenario_log_dir / "cleanup-local-files-stdout.log"
+        cleanup_stderr_file = scenario_log_dir / "cleanup-local-files-stderr.log"
+        cleanup_before_manifest_file = scenario_log_dir / "cleanup-local-files-before-manifest.txt"
+        cleanup_after_manifest_file = scenario_log_dir / "cleanup-local-files-after-manifest.txt"
+        artifacts.extend([
+            str(cleanup_stdout_file),
+            str(cleanup_stderr_file),
+            str(cleanup_before_manifest_file),
+            str(cleanup_after_manifest_file),
+        ])
+
+        write_manifest(cleanup_before_manifest_file, before_manifest)
+
+        created_files: list[Path] = []
+        for rel_file in scenario.cleanup_local_stale_files:
+            rel_file = rel_file.strip("/")
+            if not rel_file or rel_file.endswith("/") or "/../" in f"/{rel_file}/":
+                failures.append(f"Refusing unsafe cleanup-local stale file path: {rel_file!r}")
+                continue
+
+            local_file = sync_root / rel_file
+            if not local_file.parent.is_dir():
+                failures.append(
+                    f"Refusing cleanup-local stale file because immutable parent is missing: {rel_file}"
+                )
+                continue
+            if local_file.exists():
+                failures.append(
+                    f"Refusing cleanup-local stale file because path already exists: {rel_file}"
+                )
+                continue
+            if not local_file.name.startswith("sfptc0003-"):
+                failures.append(
+                    f"Refusing cleanup-local stale file without sfptc0003- prefix: {rel_file}"
+                )
+                continue
+
+            write_text_file(local_file, f"local stale cleanup validation for {scenario.scenario_id}\n")
+            created_files.append(local_file)
+
+        if failures:
+            for local_file in created_files:
+                if local_file.exists():
+                    local_file.unlink()
+            return failures
+
+        self._write_scenario_config(
+            context,
+            confdir,
+            sync_root,
+            cleanup_local_files=True,
+        )
+        self._write_sync_list(confdir / SYNC_LIST_FILE_NAME, scenario.sync_list)
+
+        cleanup_command = [
+            context.onedrive_bin,
+            "--sync",
+            "--verbose",
+            "--download-only",
+            "--confdir",
+            str(confdir),
+        ]
+        context.log(
+            f"Executing {self.case_id} {scenario.scenario_id} cleanup_local_files "
+            f"validation: {command_to_string(cleanup_command)}"
+        )
+        cleanup_result = run_command(cleanup_command, cwd=context.repo_root)
+        write_text_file(cleanup_stdout_file, cleanup_result.stdout)
+        write_text_file(cleanup_stderr_file, cleanup_result.stderr)
+
+        if cleanup_result.returncode != 0:
+            failures.append(
+                f"cleanup_local_files validation sync exited with non-zero status {cleanup_result.returncode}"
+            )
+
+        for local_file in created_files:
+            if local_file.exists():
+                failures.append(
+                    f"Local stale file was not removed by cleanup_local_files: "
+                    f"{local_file.relative_to(sync_root)}"
+                )
+                local_file.unlink()
+
+        after_manifest = build_typed_manifest(sync_root)
+        write_manifest(cleanup_after_manifest_file, after_manifest)
+
+        before_without_stale = set(before_manifest)
+        after_set = set(after_manifest)
+        missing_after = sorted(before_without_stale - after_set)
+        unexpected_after = sorted(after_set - before_without_stale)
+        if missing_after:
+            failures.append(
+                f"Immutable baseline changed during cleanup_local_files; missing entries: {missing_after[:20]!r}"
+            )
+        if unexpected_after:
+            failures.append(
+                f"Unexpected entries after cleanup_local_files: {unexpected_after[:20]!r}"
+            )
+
+        return failures
+
+    def _write_scenario_config(
+        self,
+        context: E2EContext,
+        config_dir: Path,
+        sync_root: Path,
+        cleanup_local_files: bool = False,
+    ) -> Path:
+        cleanup_value = "true" if cleanup_local_files else "false"
         config_path = context.prepare_minimal_config_dir(
             config_dir,
             "# sfptc0003 Personal Shared Folder sync_list config\n"
             f'sync_dir = "{sync_root}"\n'
             'threads = "2"\n'
             'download_only = "true"\n'
-            'cleanup_local_files = "false"\n'
+            f'cleanup_local_files = "{cleanup_value}"\n'
             'bypass_data_preservation = "true"\n',
         )
         return config_path
@@ -814,5 +961,89 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 required_present=[f"{deep}/L1/L2/L3/deepfile.txt"],
                 required_absent=[f"{deep15}/L1/L2/L3/deepfile.txt", f"{core}/README.txt"],
                 required_stdout_markers=[self._marker(deep), self._marker(deep15)],
+            ),
+
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0019",
+                description="shared-folder shortcut name collision with different per-shortcut exclusions",
+                sync_list=[
+                    f"!/{core}/files/image*",
+                    f"!/{core15}/nested/exclude/*",
+                    f"/SHARED_FOLDERS/SUB_FOLDER_1/CORE*/",
+                ],
+                expected_entries=sorted(set(
+                    self._exclude_entries(self._entries_under(core), f"{core}/files/image0.png", f"{core}/files/image1.png")
+                    + self._exclude_entries(self._entries_under(core15), f"{core15}/nested/exclude")
+                )),
+                required_present=[f"{core}/files/data.txt", f"{core15}/README.txt", f"{core15}/nested/keep/keep.txt"],
+                required_absent=[f"{core}/files/image0.png", f"{core15}/nested/exclude/exclude.txt", f"{wide}/file00.txt"],
+                required_stdout_markers=[self._marker(core), self._marker(core15)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0020",
+                description="shared-folder exact file include with sibling wildcard exclusion",
+                sync_list=[
+                    f"!/{core}/files/image*",
+                    f"/{core}/files/data.txt",
+                ],
+                expected_entries=self._entries_exact(
+                    "SHARED_FOLDERS/",
+                    "SHARED_FOLDERS/SUB_FOLDER_1/",
+                    f"{core}/",
+                    f"{core}/files/",
+                    f"{core}/files/data.txt",
+                ),
+                required_present=[f"{core}/files/data.txt"],
+                required_absent=[f"{core}/files/image0.png", f"{core}/files/image1.png", f"{core}/README.txt"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0021",
+                description="shared-folder path with spaces using wildcard and globbing include",
+                sync_list=["/Family pictures/* pictures/**"],
+                expected_entries=sorted(set(self._entries_under(annas) + self._entries_under(bens))),
+                required_present=[
+                    f"{annas}/4DiNZfTkCOlazjoQlDIVDh4VglcbENhA/image0.png",
+                    f"{bens}/7X2tH5TX0aiCXuNs8SBOk4lZqDS2qfEA/image0.png",
+                ],
+                required_absent=[f"{core}/README.txt", f"{wide}/file00.txt"],
+                required_stdout_markers=[self._marker(annas), self._marker(bens)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0022",
+                description="renamed shared folder include with nested child exclusion",
+                sync_list=[
+                    f"!/{renamed}/upload-target/*",
+                    f"/{renamed}/",
+                ],
+                expected_entries=self._entries_under(renamed),
+                required_present=[f"{renamed}/original.txt", f"{renamed}/upload-target/"],
+                required_absent=[f"{core}/README.txt", "SHARED_FOLDERS_RENAMED/RENAMED_SHARED_FOLDER_15/original.txt"],
+                required_stdout_markers=[self._marker(renamed)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0023",
+                description="shared-folder globbing include across TREE shortcut variants",
+                sync_list=["/SHARED_FOLDERS/SUB_FOLDER_2/TREE*/**/tree.txt"],
+                expected_entries=self._entries_exact(
+                    f"{tree}/A/B/C/tree.txt",
+                    f"{tree}_15/A/B/C/tree.txt",
+                ),
+                required_present=[f"{tree}/A/B/C/tree.txt", f"{tree}_15/A/B/C/tree.txt"],
+                required_absent=[f"{wide}/file00.txt", f"{core}/README.txt"],
+                required_stdout_markers=[self._marker(tree), self._marker(f"{tree}_15")],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0024",
+                description="cleanup_local_files removes local-only stale file below excluded shared-folder child path",
+                sync_list=[
+                    f"!/{core}/nested/upload-target/*",
+                    f"/{core}/",
+                ],
+                expected_entries=self._entries_under(core),
+                required_present=[f"{core}/README.txt", f"{core}/nested/upload-target/"],
+                required_absent=[f"{core15}/README.txt", f"{wide}/file00.txt"],
+                required_stdout_markers=[self._marker(core)],
+                cleanup_local_stale_files=[f"{core}/nested/upload-target/sfptc0003-local-stale.tmp"],
             ),
         ]

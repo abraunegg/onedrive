@@ -941,6 +941,27 @@ class TestCase0002SyncListValidation(E2ETestCase):
             f"{FIXTURE_ROOT_NAME}/Programming/Projects/Misc/App1",
             f"{FIXTURE_ROOT_NAME}/Programming/Projects/Misc/App1/.cache",
             f"{FIXTURE_ROOT_NAME}/Programming/Projects/Misc/App1/src",
+            f"{FIXTURE_ROOT_NAME}/RuleLab",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Trees",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeA",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeA/A",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeA/A/B",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeA/A/B/C",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeB",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeB/A",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeB/A/B",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeB/A/B/C",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/With Spaces",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/With Spaces/Family pictures",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/With Spaces/Family pictures/Annas pictures",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/With Spaces/Family pictures/Bens pictures",
         ]
 
         for rel in dirs:
@@ -1004,6 +1025,20 @@ class TestCase0002SyncListValidation(E2ETestCase):
             f"{FIXTURE_ROOT_NAME}/Programming/Projects/Idea/App1/src/App.kt": "class IdeaApp\n",
             f"{FIXTURE_ROOT_NAME}/Programming/Projects/Misc/App1/.cache/tool.cache": "misc cache\n",
             f"{FIXTURE_ROOT_NAME}/Programming/Projects/Misc/App1/src/readme.txt": "misc src\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET/file00.txt": "wide set file 00\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET/file01.txt": "wide set file 01\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET/file02.txt": "wide set file 02\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file00.txt": "wide set 15 file 00\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file01.txt": "wide set 15 file 01\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeA/A/B/C/tree.txt": "tree a\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeB/A/B/C/tree.txt": "tree b\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeB/A/B/C/other.txt": "tree b other\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt": "core data\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image0.png": "image zero\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image1.png": "image one\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/transient.tmp": "temporary\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/With Spaces/Family pictures/Annas pictures/image0.png": "anna image\n",
+            f"{FIXTURE_ROOT_NAME}/RuleLab/With Spaces/Family pictures/Bens pictures/image0.png": "ben image\n",
         }
 
         for rel, content in files.items():
@@ -2058,5 +2093,180 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App1/.cxx",
                     f"{FIXTURE_ROOT_NAME}/Programming/Projects/Android/App2/.cxx",
                 ],
+            ),
+
+            SyncListScenario(
+                scenario_id="SL-0033",
+                description="generic wildcard include with per-matched-container child exclusion",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/*",
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_*/",
+                ],
+                allowed_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET",
+                ],
+                allowed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15",
+                ],
+                forbidden_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file00.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file01.txt",
+                ],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET/file00.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET/file02.txt",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file00.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Trees",
+                ],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0034",
+                description="generic globbing include across multiple seeded trees",
+                sync_list=[f"/{FIXTURE_ROOT_NAME}/RuleLab/Trees/**/tree.txt"],
+                allowed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeA/A/B/C/tree.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeB/A/B/C/tree.txt",
+                ],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeA/A/B/C/tree.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeB/A/B/C/tree.txt",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeB/A/B/C/other.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard",
+                ],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0035",
+                description="generic exact file include with sibling wildcard exclusion",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image*",
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
+                ],
+                allowed_exact=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
+                forbidden_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image0.png",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image1.png",
+                ],
+                required_processed=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image0.png",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard",
+                ],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0036",
+                description="generic path with spaces using wildcard and globbing include",
+                sync_list=[f"/{FIXTURE_ROOT_NAME}/RuleLab/With Spaces/Family pictures/* pictures/**"],
+                allowed_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/With Spaces/Family pictures/Annas pictures",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/With Spaces/Family pictures/Bens pictures",
+                ],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/With Spaces/Family pictures/Annas pictures/image0.png",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/With Spaces/Family pictures/Bens pictures/image0.png",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard",
+                ],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0037",
+                description="generic cleanup_local_files with included root and excluded child subtree",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/*",
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE"],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp"],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp",
+                ],
+                execution_mode="cleanup_regression",
+                phase1_config_overrides=[
+                    'download_only = "false"',
+                    'cleanup_local_files = "false"',
+                ],
+                phase2_config_overrides=[
+                    'download_only = "true"',
+                    'cleanup_local_files = "true"',
+                ],
+                expected_present_after=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
+                ],
+                expected_absent_after=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/transient.tmp",
+                ],
+                required_removed=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/transient.tmp",
+                ],
+                forbidden_removed=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
+                ],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0038",
+                description="generic cleanup_local_files with wildcard include and excluded sibling container children",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/*",
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_*/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET"],
+                allowed_exact=[f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15"],
+                forbidden_prefixes=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file00.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file01.txt",
+                ],
+                required_processed=[f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET/file00.txt"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file00.txt"],
+                execution_mode="cleanup_regression",
+                phase1_config_overrides=[
+                    'download_only = "false"',
+                    'cleanup_local_files = "false"',
+                ],
+                phase2_config_overrides=[
+                    'download_only = "true"',
+                    'cleanup_local_files = "true"',
+                ],
+                expected_present_after=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET/file00.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET/file02.txt",
+                ],
+                expected_absent_after=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file00.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file01.txt",
+                ],
+                required_removed=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file00.txt",
+                ],
+                forbidden_removed=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET/file00.txt",
+                ],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0039",
+                description="generic sync_root_files override must not pull excluded fixture subtree content",
+                sync_list=[f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
+                allowed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/README.txt",
+                    f"{FIXTURE_ROOT_NAME}/loose.bin",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
+                ],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
+                    f"{FIXTURE_ROOT_NAME}/README.txt",
+                    f"{FIXTURE_ROOT_NAME}/loose.bin",
+                ],
+                required_skipped=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image0.png",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard",
+                ],
+                phase2_config_overrides=['sync_root_files = "true"'],
             ),
         ]
