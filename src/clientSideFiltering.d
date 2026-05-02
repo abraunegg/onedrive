@@ -985,12 +985,29 @@ class ClientSideFiltering {
 
 	// Function to determine if an include wildcard/globbing rule can match a
 	// descendant of the current input path. This allows directory/container
-	// traversal for rules that target deeper descendants, for example:
+	// traversal for rules that target deeper file descendants, for example:
 	//     /SHARED_FOLDERS/SUB_FOLDER_2/TREE/**/tree.txt
 	// when evaluating:
 	//     /SHARED_FOLDERS/SUB_FOLDER_2/TREE
+	//
+	// This must not be used as a broad include for every container below a
+	// globbing segment. For example, this rule:
+	//     /ZZ_E2E_SYNC_LIST/Programming/Projects/**/src/
+	// must include matching src directories only. It must not include sibling
+	// containers such as build, .gradle, .next, node_modules or __pycache__
+	// merely because they are below Programming/Projects.
 	bool inclusionWildcardRuleCanMatchDescendant(string[] ruleSegments, string[] pathSegments) {
 		if (pathSegments.empty || ruleSegments.empty) {
+			return false;
+		}
+
+		// This helper exists to allow traversal for descendant file targets such
+		// as **/tree.txt. Directory include rules such as **/src/ are handled by
+		// normal segment matching and must not cause unrelated sibling containers
+		// to be included. Because sync_list normalisation removes the trailing
+		// slash, use a conservative file-target heuristic here.
+		string terminalRuleSegment = ruleSegments[$ - 1];
+		if (terminalRuleSegment == wildcard || terminalRuleSegment == globbing || !canFind(terminalRuleSegment, ".")) {
 			return false;
 		}
 
@@ -1003,9 +1020,8 @@ class ClientSideFiltering {
 			}
 
 			if (ruleSegments[ruleIndex] == globbing) {
-				// A globbing segment can consume the current and future path
-				// segments, so the input path remains a viable traversal container
-				// for a descendant include match.
+				// A globbing segment may consume the current path segment only for
+				// the conservative descendant-file traversal case guarded above.
 				return true;
 			}
 
