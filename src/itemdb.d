@@ -1013,10 +1013,44 @@ final class ItemDatabase {
 						// Move up one level (within the same drive)
 						id = item.parentId;
 
-						// Check for relocation and handle the relocation
+						// Check for relocation and handle the relocation.
+						//
+						// For Personal Shared Folders, a single remote drive root can be represented
+						// locally by multiple shared-folder shortcut mount points. In that case the
+						// root row's relocDriveId/relocParentId is not specific enough: it can point
+						// at a sibling shortcut location and cause computePath() to reconstruct the
+						// child path under the wrong logical parent.
+						//
+						// Prefer resolving via the highest non-root remote item we saw before the
+						// root. This maps the remote shared-folder root back to the exact local
+						// shortcut row. If no such mount point exists, fall back to the legacy root
+						// relocation fields.
 						if (item.type == ItemType.root && item.relocDriveId !is null && item.relocParentId !is null) {
-							driveId = item.relocDriveId;
-							id = item.relocParentId;
+							bool relocatedViaRemoteAnchor = false;
+
+							if (anchorCandidateItemId.length) {
+								s2.bind(1, anchorCandidateDriveId);
+								s2.bind(2, anchorCandidateItemId);
+								auto r2 = s2.exec();
+
+								if (!r2.empty) {
+									// Jump into the drive that contains the exact shared-folder mount point
+									// for the remote item that anchored this generated path.
+									driveId = r2.front[0].dup;
+									id      = r2.front[1].dup;
+									relocatedViaRemoteAnchor = true;
+
+									// Avoid reusing the remote-drive anchor after crossing back into the
+									// local logical hierarchy.
+									anchorCandidateDriveId = "";
+									anchorCandidateItemId = "";
+								}
+							}
+
+							if (!relocatedViaRemoteAnchor) {
+								driveId = item.relocDriveId;
+								id = item.relocParentId;
+							}
 						}
 					} else {
 						// We fell off the top (id == null). Try to jump to the anchor (mount point).
