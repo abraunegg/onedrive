@@ -62,13 +62,7 @@ private __gshared {
 }
 
 private void* loadCurlLib() {
-	// Respect explicit override first.
-	auto overridePath = getenv("ONEDRIVE_LIBCURL");
-	if (overridePath !is null) {
-		auto h = dlopen(overridePath, RTLD_NOW);
-		if (h !is null) return h;
-	}
-
+	// Whilst libcurl should be loaded?
 	version (OSX) {
 		auto h = dlopen("libcurl.4.dylib", RTLD_NOW);
 		if (h is null) h = dlopen("libcurl.dylib", RTLD_NOW);
