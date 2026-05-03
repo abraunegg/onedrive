@@ -80,7 +80,12 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             reset_directory(scenario_log_dir)
             reset_directory(confdir)
 
-            config_path = self._write_scenario_config(context, confdir, scenario_sync_root)
+            config_path = self._write_scenario_config(
+                context,
+                confdir,
+                scenario_sync_root,
+                cleanup_local_files=bool(scenario.cleanup_local_stale_files),
+            )
             sync_list_path = confdir / SYNC_LIST_FILE_NAME
             self._write_sync_list(sync_list_path, scenario.sync_list)
 
@@ -564,14 +569,6 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                     local_file.unlink()
             return failures
 
-        self._write_scenario_config(
-            context,
-            confdir,
-            sync_root,
-            cleanup_local_files=True,
-        )
-        self._write_sync_list(confdir / SYNC_LIST_FILE_NAME, scenario.sync_list)
-
         cleanup_command = [
             context.onedrive_bin,
             "--sync",
@@ -1044,6 +1041,6 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 required_present=[f"{core}/README.txt", f"{core}/files/", f"{core}/files/data.txt"],
                 required_absent=[f"{core15}/README.txt", f"{wide}/file00.txt"],
                 required_stdout_markers=[self._marker(core)],
-                cleanup_local_stale_files=[f"{core}/files/sfptc0003-local-stale.tmp"],
+                cleanup_local_stale_files=[f"{core}/files/sfptc0003-local-stale.txt"],
             ),
         ]
