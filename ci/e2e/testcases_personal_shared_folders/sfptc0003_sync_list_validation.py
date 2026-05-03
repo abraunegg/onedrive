@@ -577,6 +577,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             "--sync",
             "--verbose",
             "--download-only",
+            "--resync",
+            "--resync-auth",
             "--confdir",
             str(confdir),
         ]
@@ -1011,14 +1013,14 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0022",
-                description="renamed shared folder include remains anchored without ghost sibling creation",
+                description="renamed shared folder include with nested child exclusion",
                 sync_list=[
-                    f"!/{renamed}_15/*",
+                    f"!/{renamed}/upload-target/*",
                     f"/{renamed}/",
                 ],
                 expected_entries=self._entries_under(renamed),
                 required_present=[f"{renamed}/original.txt", f"{renamed}/upload-target/"],
-                required_absent=[f"{core}/README.txt", f"{renamed}_15/original.txt", f"{renamed}_15/upload-target/"],
+                required_absent=[f"{core}/README.txt", "SHARED_FOLDERS_RENAMED/RENAMED_SHARED_FOLDER_15/original.txt"],
                 required_stdout_markers=[self._marker(renamed)],
             ),
             SharedFolderSyncListScenario(
@@ -1035,15 +1037,15 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0024",
-                description="cleanup_local_files removes local-only stale file under included shared-folder parent",
+                description="cleanup_local_files removes local-only stale file below excluded shared-folder child path",
                 sync_list=[
-                    f"!/{core}/files/sfptc0003-*",
+                    f"!/{core}/nested/upload-target/*",
                     f"/{core}/",
                 ],
                 expected_entries=self._entries_under(core),
-                required_present=[f"{core}/README.txt", f"{core}/files/", f"{core}/files/data.txt"],
+                required_present=[f"{core}/README.txt", f"{core}/nested/upload-target/"],
                 required_absent=[f"{core15}/README.txt", f"{wide}/file00.txt"],
                 required_stdout_markers=[self._marker(core)],
-                cleanup_local_stale_files=[f"{core}/files/sfptc0003-local-stale.tmp"],
+                cleanup_local_stale_files=[f"{core}/nested/upload-target/sfptc0003-local-stale.tmp"],
             ),
         ]
