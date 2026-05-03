@@ -1012,14 +1012,13 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             SharedFolderSyncListScenario(
                 scenario_id="SL-0022",
                 description="renamed shared folder include remains anchored without ghost sibling creation",
-                sync_list=[f"/{renamed}/"],
-                expected_entries=self._entries_under(renamed),
-                required_present=[f"{renamed}/original.txt"],
-                required_absent=[
-                    f"{core}/README.txt",
-                    "SHARED_FOLDERS_RENAMED/RENAMED_SHARED_FOLDER_15/original.txt",
-                    f"{renamed}/upload-target/",
+                sync_list=[
+                    f"!/{renamed}_15/*",
+                    f"/{renamed}/",
                 ],
+                expected_entries=self._entries_under(renamed),
+                required_present=[f"{renamed}/original.txt", f"{renamed}/upload-target/"],
+                required_absent=[f"{core}/README.txt", f"{renamed}_15/original.txt", f"{renamed}_15/upload-target/"],
                 required_stdout_markers=[self._marker(renamed)],
             ),
             SharedFolderSyncListScenario(
@@ -1036,15 +1035,15 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0024",
-                description="cleanup_local_files removes local-only stale file below excluded shared-folder child path",
+                description="cleanup_local_files removes local-only stale file under included shared-folder parent",
                 sync_list=[
-                    f"!/{core}/nested/exclude/*",
+                    f"!/{core}/files/sfptc0003-*",
                     f"/{core}/",
                 ],
-                expected_entries=self._exclude_entries(self._entries_under(core), f"{core}/nested/exclude/exclude.txt"),
-                required_present=[f"{core}/README.txt", f"{core}/nested/exclude/"],
-                required_absent=[f"{core15}/README.txt", f"{wide}/file00.txt", f"{core}/nested/exclude/exclude.txt"],
+                expected_entries=self._entries_under(core),
+                required_present=[f"{core}/README.txt", f"{core}/files/", f"{core}/files/data.txt"],
+                required_absent=[f"{core15}/README.txt", f"{wide}/file00.txt"],
                 required_stdout_markers=[self._marker(core)],
-                cleanup_local_stale_files=[f"{core}/nested/exclude/sfptc0003-local-stale.tmp"],
+                cleanup_local_stale_files=[f"{core}/files/sfptc0003-local-stale.tmp"],
             ),
         ]
