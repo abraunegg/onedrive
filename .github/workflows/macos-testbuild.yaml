@@ -53,8 +53,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --force --tags origin 'refs/tags/*:refs/tags/*'
-          git describe --tags
+          git fetch --force --tags origin 'refs/tags/*:refs/tags/*' || true
+          git describe --tags || echo "No tags available; build will use package version fallback"
 
       - name: Install build dependencies
         shell: bash
