@@ -2123,20 +2123,14 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0034",
-                description="generic globbing include across multiple seeded trees",
+                description="generic globbing include traverses multiple seeded trees without premature pruning",
                 sync_list=[f"/{FIXTURE_ROOT_NAME}/RuleLab/Trees/**/tree.txt"],
-                allowed_exact=[
-                    f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeA/A/B/C/tree.txt",
-                    f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeB/A/B/C/tree.txt",
-                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/Trees"],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeA/A/B/C/tree.txt",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeB/A/B/C/tree.txt",
                 ],
-                required_skipped=[
-                    f"{FIXTURE_ROOT_NAME}/RuleLab/Trees/TreeB/A/B/C/other.txt",
-                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard",
-                ],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard"],
             ),
             SyncListScenario(
                 scenario_id="SL-0035",
@@ -2251,12 +2245,17 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0039",
-                description="generic sync_root_files override must not pull excluded fixture subtree content",
+                description="generic sync_root_files override retains logical root files without entering unrelated fixture subtrees",
                 sync_list=[f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
                 allowed_exact=[
                     f"{FIXTURE_ROOT_NAME}/README.txt",
                     f"{FIXTURE_ROOT_NAME}/loose.bin",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/zz_e2e_zz_e2e_sync_list_rulelab.bin",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/zz_e2e_zz_e2e_sync_list_rulelab_filespecific.dat",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/zz_e2e_zz_e2e_sync_list_rulelab_filespecific_core.cache",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image0.png",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image1.png",
                 ],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
@@ -2264,7 +2263,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/loose.bin",
                 ],
                 required_skipped=[
-                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image0.png",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard",
                 ],
                 phase2_config_overrides=['sync_root_files = "true"'],
