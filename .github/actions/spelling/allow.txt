@@ -465,6 +465,7 @@ settime
 setxattr
 sev
 sfn
+sfptc
 sharedstatedir
 sharepoint
 shortnames
