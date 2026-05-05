@@ -153,7 +153,7 @@ string extract_username_from_account_json(string accountJson) {
     return "";
 }
 
-string build_interactive_auth_request(string clientId) {
+string build_interactive_auth_request(string clientId, string redirectURI, string authority) {
     return format(`{
   "authParameters": {
     "clientId": "%s",
@@ -165,10 +165,10 @@ string build_interactive_auth_request(string clientId) {
       "Sites.ReadWrite.All"
     ]
   }
-}`, clientId, DEFAULT_REDIRECT_URI, DEFAULT_AUTHORITY);
+}`, clientId, redirectURI, authority);
 }
 
-string build_silent_auth_request(string accountJson, string clientId) {
+string build_silent_auth_request(string accountJson, string clientId, string redirectURI, string authority) {
     string username = extract_username_from_account_json(accountJson);
 
     string requestJson = format(`{
@@ -185,8 +185,8 @@ string build_silent_auth_request(string accountJson, string clientId) {
     "additionalQueryParametersForAuthorization": {},
     "uxContextHandle": -1`,
         clientId,
-        DEFAULT_REDIRECT_URI,
-        DEFAULT_AUTHORITY,
+        redirectURI,
+        authority,
         AUTHORIZATION_TYPE_CACHED_REFRESH_TOKEN
     );
 
@@ -431,13 +431,13 @@ string get_first_broker_account_json(string clientId) {
 }
 
 // Perform silent authentication via D-Bus using the Microsoft Identity Broker
-AuthResult acquire_token_silently(string accountJson, string clientId) {
+AuthResult acquire_token_silently(string accountJson, string clientId, string redirectURI = DEFAULT_REDIRECT_URI, string authority = DEFAULT_AUTHORITY) {
     AuthResult result;
 
     version (linux) {
         BrokerCallResult brokerResult = call_broker_method(
             "acquireTokenSilently",
-            build_silent_auth_request(accountJson, clientId),
+            build_silent_auth_request(accountJson, clientId, redirectURI, authority),
             10000
         );
 
@@ -466,7 +466,7 @@ AuthResult acquire_token_silently(string accountJson, string clientId) {
 }
 
 // Initiate interactive authentication via D-Bus using the Microsoft Identity Broker
-AuthResult acquire_token_interactive(string clientId) {
+AuthResult acquire_token_interactive(string clientId, string redirectURI = DEFAULT_REDIRECT_URI, string authority = DEFAULT_AUTHORITY) {
     AuthResult result;
 
     version (linux) {
@@ -488,7 +488,7 @@ AuthResult acquire_token_interactive(string clientId) {
                 addLogEntry("Broker cached account JSON: " ~ brokerAccountJson, ["debug"]);
             }
 
-            AuthResult silentResult = acquire_token_silently(brokerAccountJson, clientId);
+            AuthResult silentResult = acquire_token_silently(brokerAccountJson, clientId, redirectURI, authority);
 
             if (silentResult.brokerTokenResponse.type != JSONType.null_) {
                 if (broker_token_response_has_error(silentResult.brokerTokenResponse)) {
@@ -514,7 +514,7 @@ AuthResult acquire_token_interactive(string clientId) {
 
         BrokerCallResult brokerResult = call_broker_method(
             "acquireTokenInteractively",
-            build_interactive_auth_request(clientId),
+            build_interactive_auth_request(clientId, redirectURI, authority),
             60000
         );
 
