@@ -94,8 +94,12 @@ REQUIRED_TYPED_MANIFEST_ENTRIES = [
 
 REQUIRED_STDOUT_MARKERS = [
     'Account Type:          business',
+    # Only folders that the client identifies as shortcut-backed Business Shared
+    # Folders are required to emit this marker. BSF_FILTER_MATRIX is validated
+    # via manifest presence below, but the current online fixture is enumerated
+    # as normal default-drive content rather than reported as a Business Shared
+    # Folder marker in stdout.
     'Syncing this OneDrive Business Shared Folder: Documents/BSF_CORE',
-    'Syncing this OneDrive Business Shared Folder: Documents/BSF_FILTER_MATRIX',
     'Syncing this OneDrive Business Shared Folder: Documents/BSF_MIXED_FILES',
     'Sync with Microsoft OneDrive is complete',
 ]
