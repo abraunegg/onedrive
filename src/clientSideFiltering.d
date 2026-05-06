@@ -27,6 +27,10 @@ class ClientSideFiltering {
 	bool skipDirStrictMatch = false;
 	bool skipDotfiles = false;
 	
+	// Define these at the class level
+	string wildcard = "*";
+	string globbing = "**";
+	
 	this(ApplicationConfig appConfig) {
 		// Configure the class variable to consume the application configuration
 		this.appConfig = appConfig;
@@ -378,9 +382,7 @@ class ClientSideFiltering {
 		bool wildcardRuleMatched = false; // will get updated if the 'wildcard' rule matches
 		bool excludeWildcardMatched = false; // will get updated if the 'wildcard' rule matches
 		int offset;
-		string wildcard = "*";
-		string globbing = "**";
-				
+						
 		// always allow the root
 		if (path == ".") return false;
 		
@@ -685,6 +687,46 @@ class ClientSideFiltering {
 				
 				// Does the parents of the input path and rule path match .. meaning we can actually evaluate this wildcard rule against the input path
 				if (matchFirstSegmentToPathFirstSegment(ruleSegments, pathSegments)) {
+
+					// A deeper wildcard/globbing exclusion rule must not exclude an ancestor path
+					// when the next unmatched rule segment is a named path component.
+					//
+					// Example:
+					//     input path: /SHARED_FOLDERS/SUB_FOLDER_1/CORE
+					//     exclusion:  !/SHARED_FOLDERS/SUB_FOLDER_1/CORE/nested/exclude/*
+					//
+					// The input path ends at CORE and the next rule segment is "nested",
+					// not "*" or "**". The exclusion targets a deeper named child path,
+					// not the CORE directory itself.
+					//
+					// Do not apply this guard when the next unmatched rule segment is "*" or "**",
+					// as those rules intentionally target the direct or recursive contents below
+					// the current input path.
+					if (thisIsAnExcludeRule && exclusionRuleTargetsNamedChildBeyondInputPath(ruleSegments, pathSegments)) {
+						if (debugLogging) {
+							addLogEntry("Evaluation against 'sync_list' rule result: exclusion wildcard|globbing rule targets a deeper named child path; ancestor input path must not be excluded", ["debug"]);
+						}
+						continue;
+					}
+
+					// A child-only exclusion rule must not exclude the container itself when
+					// there is an explicit include rule for that same container.
+					//
+					// Example:
+					//     exclusion: !/SHARED_FOLDERS/SUB_FOLDER_2/WIDE_*_15/*
+					//     inclusion:  /SHARED_FOLDERS/SUB_FOLDER_2/WIDE_*/
+					//     input:      /SHARED_FOLDERS/SUB_FOLDER_2/WIDE_SET_15
+					//
+					// The exclusion applies to children below WIDE_SET_15, not to the
+					// WIDE_SET_15 container itself. This is intentionally guarded by the
+					// presence of a same-depth include rule so ordinary deeper exclusions
+					// such as !/Projects/Code*/JOBXYZ/Exports/* are not weakened.
+					if (thisIsAnExcludeRule && childWildcardExclusionHasSpecificIncludeForCurrentPath(ruleSegments, pathSegments)) {
+						if (debugLogging) {
+							addLogEntry("Evaluation against 'sync_list' rule result: child-only wildcard exclusion targets contents below an explicitly included container; container input path must not be excluded", ["debug"]);
+						}
+						continue;
+					}
 					
 					// Is this a globbing rule (**) or just a single wildcard (*) entries
 					if (globbingRule) {
@@ -728,6 +770,24 @@ class ClientSideFiltering {
 						}
 					}
 					
+
+					// If this is an include rule that targets a descendant path, allow the
+					// current input path as a traversal container even before the final
+					// descendant exists in the evaluation path.
+					//
+					// Example:
+					//     include: /SHARED_FOLDERS/SUB_FOLDER_2/TREE/**/tree.txt
+					//     input:   /SHARED_FOLDERS/SUB_FOLDER_2/TREE
+					//
+					// TREE itself does not directly match tree.txt, but it must be
+					// traversed so that A/B/C/tree.txt can be discovered and included.
+					if (!thisIsAnExcludeRule && !wildcardRuleMatched && inclusionWildcardRuleCanMatchDescendant(ruleSegments, pathSegments)) {
+						wildcardRuleMatched = true;
+						if (debugLogging) {
+							addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing inclusion rule requires traversal of this container path", ["debug"]);
+						}
+					}
+
 					// Was the rule matched?
 					if (wildcardRuleMatched) {
 						// Is this an exclude rule?
@@ -741,7 +801,8 @@ class ClientSideFiltering {
 							// include rule
 							if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing pattern matched and must be included", ["debug"]);}
 							finalResult = false;
-							excludeWildcardMatched = false;
+							// Do not clear excludeWildcardMatched here.
+							// A prior wildcard/globbing exclusion rule must retain precedence over a later wildcard/globbing inclusion rule for the same path.
 						}
 					} else {
 						if (debugLogging) {addLogEntry("Evaluation against 'sync_list' rule result: No match to 'sync_list' wildcard|globbing rule", ["debug"]);}
@@ -816,6 +877,168 @@ class ClientSideFiltering {
 		return !match(pathSegment, pattern).empty;
 	}
 	
+
+	// Function to determine if an exclusion wildcard/globbing rule targets a deeper named child path beyond the current input path.
+	//
+	// This prevents a deeper exclusion such as:
+	//     !/SHARED_FOLDERS/SUB_FOLDER_1/CORE/nested/exclude/*
+	// from incorrectly excluding the ancestor path:
+	//     /SHARED_FOLDERS/SUB_FOLDER_1/CORE
+	//
+	// This helper is intentionally used only for exclusion wildcard/globbing rules so that
+	// existing include traversal behaviour is not altered.
+	//
+	// The guard is intentionally narrow:
+	// - If the input path is not a prefix of the rule, do not guard.
+	// - If the rule is not deeper than the input path, do not guard.
+	// - If the next unmatched rule segment is "*" or "**", do not guard because
+	//   the rule intentionally targets the contents below the input path.
+	// - If the next unmatched rule segment is a named segment, guard because the rule
+	//   targets a deeper child path and must not exclude the ancestor.
+	bool exclusionRuleTargetsNamedChildBeyondInputPath(string[] ruleSegments, string[] pathSegments) {
+		// If the rule is not deeper than the input path, there is no deeper named child path to guard
+		if (ruleSegments.length <= pathSegments.length) {
+			return false;
+		}
+
+		// Compare the input path against the equivalent prefix of the rule path
+		foreach (index, pathSegment; pathSegments) {
+			if (!matchSegment(ruleSegments[index], pathSegment)) {
+				return false;
+			}
+		}
+
+		// The input path is a prefix of the rule. Inspect the next unmatched rule segment.
+		string nextRuleSegment = ruleSegments[pathSegments.length];
+
+		// If the next segment is a wildcard/globbing segment, the rule is intentionally targeting
+		// contents immediately below the input path, so allow normal exclusion evaluation.
+		if ((nextRuleSegment == wildcard) || (nextRuleSegment == globbing)) {
+			return false;
+		}
+
+		// The next segment is a named child path, so this exclusion rule must not exclude the ancestor.
+		return true;
+	}
+
+	// Function to determine if an exclusion rule of the form:
+	//     /path/to/container/*
+	// is being evaluated against the container itself, and that same container
+	// is explicitly included by an include rule at the same path depth.
+	//
+	// This preserves child-only exclusion semantics without weakening broader
+	// exclusion precedence. The same-depth include requirement is important:
+	// it prevents a broad include such as /Projects/Code* from re-including a
+	// deeper excluded container such as /Projects/Code/JOBXYZ/Exports.
+	bool childWildcardExclusionHasSpecificIncludeForCurrentPath(string[] ruleSegments, string[] pathSegments) {
+		// This helper only applies to direct child wildcard exclusions where the
+		// rule is exactly one segment deeper than the current input path.
+		if (ruleSegments.length != pathSegments.length + 1) {
+			return false;
+		}
+
+		// Only direct child wildcard exclusions are handled here. Globbing exclusions
+		// are intentionally left to the normal exclusion logic.
+		if (ruleSegments[$ - 1] != wildcard) {
+			return false;
+		}
+
+		// The current input path must match the exclusion rule's container prefix.
+		foreach (index, pathSegment; pathSegments) {
+			if (!matchSegment(ruleSegments[index], pathSegment)) {
+				return false;
+			}
+		}
+
+		// The same container must be explicitly included at the same path depth.
+		foreach (includeRule; syncListIncludePathsOnly) {
+			if (includeRule.empty) continue;
+
+			string candidate = includeRule;
+			if (candidate.endsWith("/*")) {
+				candidate = candidate[0 .. $ - 2];
+			}
+			if (candidate.length > 1 && candidate[$ - 1] == '/') {
+				candidate = candidate[0 .. $ - 1];
+			}
+
+			string[] includeSegments = candidate.strip.split("/").filter!(s => !s.empty).array;
+			if (includeSegments.length != pathSegments.length) {
+				continue;
+			}
+
+			bool includeMatchesCurrentPath = true;
+			foreach (index, pathSegment; pathSegments) {
+				if (!matchSegment(includeSegments[index], pathSegment)) {
+					includeMatchesCurrentPath = false;
+					break;
+				}
+			}
+
+			if (includeMatchesCurrentPath) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	// Function to determine if an include wildcard/globbing rule can match a
+	// descendant of the current input path. This allows directory/container
+	// traversal for rules that target deeper file descendants, for example:
+	//     /SHARED_FOLDERS/SUB_FOLDER_2/TREE/**/tree.txt
+	// when evaluating:
+	//     /SHARED_FOLDERS/SUB_FOLDER_2/TREE
+	//
+	// This must not be used as a broad include for every container below a
+	// globbing segment. For example, this rule:
+	//     /ZZ_E2E_SYNC_LIST/Programming/Projects/**/src/
+	// must include matching src directories only. It must not include sibling
+	// containers such as build, .gradle, .next, node_modules or __pycache__
+	// merely because they are below Programming/Projects.
+	bool inclusionWildcardRuleCanMatchDescendant(string[] ruleSegments, string[] pathSegments) {
+		if (pathSegments.empty || ruleSegments.empty) {
+			return false;
+		}
+
+		// This helper exists to allow traversal for descendant file targets such
+		// as **/tree.txt. Directory include rules such as **/src/ are handled by
+		// normal segment matching and must not cause unrelated sibling containers
+		// to be included. Because sync_list normalisation removes the trailing
+		// slash, use a conservative file-target heuristic here.
+		string terminalRuleSegment = ruleSegments[$ - 1];
+		if (terminalRuleSegment == wildcard || terminalRuleSegment == globbing || !canFind(terminalRuleSegment, ".")) {
+			return false;
+		}
+
+		size_t ruleIndex = 0;
+		size_t pathIndex = 0;
+
+		while (pathIndex < pathSegments.length) {
+			if (ruleIndex >= ruleSegments.length) {
+				return false;
+			}
+
+			if (ruleSegments[ruleIndex] == globbing) {
+				// A globbing segment may consume the current path segment only for
+				// the conservative descendant-file traversal case guarded above.
+				return true;
+			}
+
+			if (!matchSegment(ruleSegments[ruleIndex], pathSegments[pathIndex])) {
+				return false;
+			}
+
+			pathIndex++;
+			ruleIndex++;
+		}
+
+		// The full input path matched the leading portion of the include rule and
+		// the rule still has unmatched segments. Therefore a descendant of the
+		// current input path can match this include rule.
+		return ruleIndex < ruleSegments.length;
+	}
+
 	// Function to handle path matching when using globbing (**)
 	bool matchPathAgainstRule(string path, string rule) {
 		// Split both the path and rule into segments

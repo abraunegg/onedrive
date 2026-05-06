@@ -5,7 +5,15 @@ on:
     branches:
       - master
       - feature/**
+    paths:
+      - 'src/**'
+      - '.github/workflows/smoke-test.yaml'
+      - '.github/gdb/**'
   pull_request:
+    paths:
+      - 'src/**'
+      - '.github/workflows/smoke-test.yaml'      
+      - '.github/gdb/**'
   workflow_dispatch:
 
 permissions:

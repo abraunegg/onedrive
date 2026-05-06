@@ -58,6 +58,7 @@ bmap
 bools
 bpozdena
 brp
+bsftc
 Btrfs
 btw
 buflen
@@ -393,6 +394,7 @@ pastebin
 permessage
 pfa
 PFN
+pgrep
 phlibi
 phobos
 pidx
@@ -469,6 +471,7 @@ rsnapshot
 rsv
 rtud
 rul
+ruleset
 runstatedir
 runsvdir
 Ruppe
@@ -488,6 +491,7 @@ settime
 setxattr
 sev
 sfn
+sfptc
 sharedstatedir
 sharepoint
 shortnames

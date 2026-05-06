@@ -3,9 +3,14 @@ name: Test Build
 on:
   push:
     branches: [ "master" ]
+    paths:
+      - 'src/**'
+      - '.github/workflows/testbuild.yaml'
   pull_request:
     branches: [ "master" ]
-
+    paths:
+      - 'src/**'
+      - '.github/workflows/testbuild.yaml'
 jobs:
   build:
     runs-on: ubuntu-latest
