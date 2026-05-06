@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   e2e_sharepoint:
+    if: github.repository == 'abraunegg/onedrive'
     runs-on: ubuntu-latest
     container: fedora:latest
     environment:
@@ -100,7 +101,7 @@ jobs:
     name: Post PR summary comment
     needs: [ e2e_sharepoint ]
     runs-on: ubuntu-latest
-    if: always()
+    if: always() && github.repository == 'abraunegg/onedrive'
 
     steps:
       - uses: actions/checkout@v4
