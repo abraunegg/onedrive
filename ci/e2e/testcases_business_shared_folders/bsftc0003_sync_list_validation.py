@@ -732,8 +732,8 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             ),
             BusinessSharedFolderSyncListScenario(
                 scenario_id="SL-0023",
-                description="Business shared-folder globbing include across DATASET_B deep-file variants",
-                sync_list=[f"/Documents/BSF_*/DATASET_B/**/deepfile.txt"],
+                description="Business shared-folder globbing include anchored to the verified deep DATASET_B branch",
+                sync_list=[f"/{mixed}/DATASET_B/**/deepfile.txt"],
                 expected_entries=self._entries_exact(mixed_deep_file),
                 required_present=[mixed_deep_file],
                 required_absent=[f"{core_dataset_b}/README.txt", f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/L2/L3/deepfile.txt"],
@@ -751,5 +751,42 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 required_absent=[f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
                 required_stdout_markers=[self._marker(core)],
                 cleanup_local_stale_files=[f"{core}/DATASET_B/files/bsftc0003-local-stale.txt"],
+            ),
+
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0025",
+                description="Business shared-folder wildcard include across verified shared-folder DATASET_A document files",
+                sync_list=["/Documents/BSF_*/DATASET_A/Document*.docx"],
+                expected_entries=sorted(set(
+                    self._entries_exact(f"{core_dataset_a}/Document1.docx")
+                    + self._entries_exact(f"{mixed_dataset_a}/Document2.docx")
+                )),
+                required_present=[f"{core_dataset_a}/Document1.docx", f"{mixed_dataset_a}/Document2.docx"],
+                required_absent=[f"{core_dataset_a}/image0.png", f"{mixed_dataset_a}/Presentation1.pptx", f"{core_dataset_b}/README.txt"],
+                required_stdout_markers=[self._marker(core), self._marker(mixed)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0026",
+                description="Business shared-folder wildcard include across verified shared-folder DATASET_A trees",
+                sync_list=["/Documents/BSF_*/DATASET_A/"],
+                expected_entries=sorted(set(self._entries_under(core_dataset_a) + self._entries_under(mixed_dataset_a))),
+                required_present=[f"{core_dataset_a}/Document1.docx", f"{mixed_dataset_a}/Document2.docx", f"{mixed_dataset_a}/Presentation5.pptx"],
+                required_absent=[f"{core_dataset_b}/README.txt", mixed_deep_file, "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_stdout_markers=[self._marker(core), self._marker(mixed)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0027",
+                description="Business shared-folder mixed backend exact includes without sibling leakage",
+                sync_list=[
+                    f"/{core_dataset_b}/README.txt",
+                    f"/{mixed_deep_file}",
+                ],
+                expected_entries=sorted(set(
+                    self._entries_exact(f"{core_dataset_b}/README.txt")
+                    + self._entries_exact(mixed_deep_file)
+                )),
+                required_present=[f"{core_dataset_b}/README.txt", mixed_deep_file],
+                required_absent=[f"{core_files}/data.txt", f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_stdout_markers=[self._marker(core), self._marker(mixed)],
             ),
         ]
