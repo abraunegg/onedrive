@@ -28,6 +28,7 @@ class BusinessSharedFolderSyncListScenario:
     required_present: list[str] = field(default_factory=list)
     required_absent: list[str] = field(default_factory=list)
     required_stdout_markers: list[str] = field(default_factory=list)
+    cleanup_local_stale_files: list[str] = field(default_factory=list)
 
 
 class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
@@ -72,7 +73,12 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             reset_directory(scenario_log_dir)
             reset_directory(confdir)
 
-            config_path = self._write_scenario_config(context, confdir, scenario_sync_root)
+            config_path = self._write_scenario_config(
+                context,
+                confdir,
+                scenario_sync_root,
+                cleanup_local_files=bool(scenario.cleanup_local_stale_files),
+            )
             sync_list_path = confdir / SYNC_LIST_FILE_NAME
             self._write_sync_list(sync_list_path, scenario.sync_list)
 
@@ -128,6 +134,25 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             write_manifest(required_present_file, missing_required_present)
             write_manifest(required_absent_file, unexpected_required_absent)
 
+            cleanup_failures: list[str] = []
+            cleanup_artifacts: list[str] = []
+            if scenario.cleanup_local_stale_files:
+                if result.returncode != 0 or missing_entries or unexpected_entries or missing_required_present or unexpected_required_absent:
+                    cleanup_failures.append(
+                        "Skipping cleanup_local_files validation because initial immutable baseline validation failed"
+                    )
+                else:
+                    cleanup_failures.extend(
+                        self._run_local_stale_cleanup_check(
+                            context=context,
+                            confdir=confdir,
+                            sync_root=scenario_sync_root,
+                            scenario_log_dir=scenario_log_dir,
+                            scenario=scenario,
+                            artifacts=cleanup_artifacts,
+                        )
+                    )
+
             diffs: list[str] = []
             if result.returncode != 0:
                 diffs.append(f"onedrive exited with non-zero status {result.returncode}")
@@ -147,6 +172,8 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 diffs.append(f"Required included entries were missing: {missing_required_present!r}")
             if unexpected_required_absent:
                 diffs.append(f"Required excluded entries were present locally: {unexpected_required_absent!r}")
+            if cleanup_failures:
+                diffs.append("cleanup_local_files validation failed: " + "; ".join(cleanup_failures))
 
             metadata_lines = [
                 f"case_id={self.case_id}",
@@ -165,6 +192,8 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 f"missing_required_present={missing_required_present!r}",
                 f"unexpected_required_absent={unexpected_required_absent!r}",
                 f"missing_stdout_markers={missing_stdout_markers!r}",
+                f"cleanup_local_stale_files={scenario.cleanup_local_stale_files!r}",
+                f"cleanup_failures={cleanup_failures!r}",
             ]
             write_text_file(metadata_file, "\n".join(metadata_lines) + "\n")
 
@@ -181,6 +210,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 str(required_absent_file),
                 str(metadata_file),
             ]
+            scenario_artifacts.extend(cleanup_artifacts)
             all_artifacts.extend(scenario_artifacts)
 
             if diffs:
@@ -212,13 +242,126 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
 
         return self.pass_result(self.case_id, self.name, all_artifacts, details)
 
-    def _write_scenario_config(self, context: E2EContext, config_dir: Path, sync_root: Path) -> Path:
+    def _run_local_stale_cleanup_check(
+        self,
+        context: E2EContext,
+        confdir: Path,
+        sync_root: Path,
+        scenario_log_dir: Path,
+        scenario: BusinessSharedFolderSyncListScenario,
+        artifacts: list[str],
+    ) -> list[str]:
+        failures: list[str] = []
+        before_manifest = build_typed_manifest(sync_root)
+
+        cleanup_stdout_file = scenario_log_dir / "cleanup-local-files-stdout.log"
+        cleanup_stderr_file = scenario_log_dir / "cleanup-local-files-stderr.log"
+        cleanup_before_manifest_file = scenario_log_dir / "cleanup-local-files-before-manifest.txt"
+        cleanup_after_manifest_file = scenario_log_dir / "cleanup-local-files-after-manifest.txt"
+        artifacts.extend([
+            str(cleanup_stdout_file),
+            str(cleanup_stderr_file),
+            str(cleanup_before_manifest_file),
+            str(cleanup_after_manifest_file),
+        ])
+
+        write_manifest(cleanup_before_manifest_file, before_manifest)
+
+        created_files: list[Path] = []
+        for rel_file in scenario.cleanup_local_stale_files:
+            rel_file = rel_file.strip("/")
+            if not rel_file or rel_file.endswith("/") or "/../" in f"/{rel_file}/":
+                failures.append(f"Refusing unsafe cleanup-local stale file path: {rel_file!r}")
+                continue
+
+            local_file = sync_root / rel_file
+            if not local_file.parent.is_dir():
+                failures.append(
+                    f"Refusing cleanup-local stale file because immutable parent is missing: {rel_file}"
+                )
+                continue
+            if local_file.exists():
+                failures.append(
+                    f"Refusing cleanup-local stale file because path already exists: {rel_file}"
+                )
+                continue
+            if not local_file.name.startswith("bsftc0003-"):
+                failures.append(
+                    f"Refusing cleanup-local stale file without bsftc0003- prefix: {rel_file}"
+                )
+                continue
+
+            write_text_file(local_file, f"local stale cleanup validation for {scenario.scenario_id}\n")
+            created_files.append(local_file)
+
+        if failures:
+            for local_file in created_files:
+                if local_file.exists():
+                    local_file.unlink()
+            return failures
+
+        cleanup_command = [
+            context.onedrive_bin,
+            "--sync",
+            "--verbose",
+            "--download-only",
+            "--confdir",
+            str(confdir),
+        ]
+        context.log(
+            f"Executing {self.case_id} {scenario.scenario_id} cleanup_local_files "
+            f"validation: {command_to_string(cleanup_command)}"
+        )
+        cleanup_result = run_command(cleanup_command, cwd=context.repo_root)
+        write_text_file(cleanup_stdout_file, cleanup_result.stdout)
+        write_text_file(cleanup_stderr_file, cleanup_result.stderr)
+
+        if cleanup_result.returncode != 0:
+            failures.append(
+                f"cleanup_local_files validation sync exited with non-zero status {cleanup_result.returncode}"
+            )
+
+        for local_file in created_files:
+            if local_file.exists():
+                failures.append(
+                    f"Local stale file was not removed by cleanup_local_files: "
+                    f"{local_file.relative_to(sync_root)}"
+                )
+                local_file.unlink()
+
+        after_manifest = build_typed_manifest(sync_root)
+        write_manifest(cleanup_after_manifest_file, after_manifest)
+
+        before_set = set(before_manifest)
+        after_set = set(after_manifest)
+        missing_after = sorted(before_set - after_set)
+        unexpected_after = sorted(after_set - before_set)
+        if missing_after:
+            failures.append(
+                f"Immutable baseline changed during cleanup_local_files; missing entries: {missing_after[:20]!r}"
+            )
+        if unexpected_after:
+            failures.append(
+                f"Unexpected entries after cleanup_local_files: {unexpected_after[:20]!r}"
+            )
+
+        return failures
+
+    def _write_scenario_config(
+        self,
+        context: E2EContext,
+        config_dir: Path,
+        sync_root: Path,
+        cleanup_local_files: bool = False,
+    ) -> Path:
+        cleanup_value = "true" if cleanup_local_files else "false"
         config_path = context.prepare_minimal_config_dir(
             config_dir,
             "# bsftc0003 Business Shared Folder sync_list config\n"
             f'sync_dir = "{sync_root}"\n'
             'threads = "2"\n'
             'download_only = "true"\n'
+            f'cleanup_local_files = "{cleanup_value}"\n'
             'sync_business_shared_items = "true"\n'
             'bypass_data_preservation = "true"\n',
         )
@@ -284,29 +427,66 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
     def _build_scenarios(self) -> list[BusinessSharedFolderSyncListScenario]:
         core = "Documents/BSF_CORE"
         mixed = "Documents/BSF_MIXED_FILES"
+        core_dataset_a = f"{core}/DATASET_A"
         core_dataset_b = f"{core}/DATASET_B"
         core_files = f"{core_dataset_b}/files"
         core_nested = f"{core_dataset_b}/nested"
         core_keep = f"{core_nested}/keep"
         core_exclude = f"{core_nested}/exclude"
-        core_deep_log = f"{core}/TOP_LEVEL/PROJECTS/2026/Week10/debug_output.log"
+        core_upload_target = f"{core_nested}/upload-target"
+        core_deep = f"{core}/TOP_LEVEL/PROJECTS/2026/Week10"
+        core_deep_log = f"{core_deep}/debug_output.log"
         mixed_dataset_a = f"{mixed}/DATASET_A"
-        mixed_deep = f"{mixed}/DATASET_B/L1/L2/L3"
+        mixed_dataset_b = f"{mixed}/DATASET_B"
+        mixed_deep = f"{mixed_dataset_b}/L1/L2/L3"
+        mixed_deep_file = f"{mixed_deep}/deepfile.txt"
+        mixed_upload_target = f"{mixed_deep}/upload-target"
 
         core_without_exclude = self._exclude_entries(
             self._entries_under(core),
             core_exclude,
+        )
+        core_dataset_b_without_images = self._exclude_entries(
+            self._entries_under(core_dataset_b),
+            f"{core_files}/image0.png",
+            f"{core_files}/image1.png",
         )
         presentation_subset = self._entries_exact(
             f"{mixed_dataset_a}/Presentation1.pptx",
             f"{mixed_dataset_a}/Presentation2.pptx",
             f"{mixed_dataset_a}/Presentation3.pptx",
         )
+        mixed_presentations = self._entries_exact(
+            f"{mixed_dataset_a}/Presentation1.pptx",
+            f"{mixed_dataset_a}/Presentation2.pptx",
+            f"{mixed_dataset_a}/Presentation3.pptx",
+            f"{mixed_dataset_a}/Presentation4.pptx",
+            f"{mixed_dataset_a}/Presentation5.pptx",
+        )
         multi_tree = sorted(set(
             self._entries_under(core_keep)
-            + self._entries_exact(f"{mixed_deep}/deepfile.txt")
+            + self._entries_exact(mixed_deep_file)
             + self._entries_exact(core_deep_log)
         ))
+        both_shared_folders = sorted(set(self._entries_under(core) + self._entries_under(mixed)))
+        dataset_b_pair = sorted(set(self._entries_under(core_dataset_b) + self._entries_under(mixed_dataset_b)))
+        dataset_b_pair_without_core_images = sorted(set(
+            self._exclude_entries(self._entries_under(core_dataset_b), f"{core_files}/image0.png", f"{core_files}/image1.png")
+            + self._entries_under(mixed_dataset_b)
+        ))
+        exact_data_and_presentations = sorted(set(
+            self._entries_exact(f"{core_files}/data.txt")
+            + mixed_presentations
+        ))
+        upload_targets = sorted(set(
+            self._entries_under(core_upload_target)
+            + self._entries_under(mixed_upload_target)
+        ))
+        core_dataset_a_root_only = self._entries_exact(f"{core_dataset_a}/")
+        dataset_b_pair_without_core_images_and_mixed_deep_file = self._exclude_entries(
+            dataset_b_pair_without_core_images,
+            mixed_deep_file,
+        )
 
         return [
             BusinessSharedFolderSyncListScenario(
@@ -323,7 +503,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 description="rooted include of BSF_MIXED_FILES shared folder tree without trailing slash",
                 sync_list=[f"/{mixed}"],
                 expected_entries=self._entries_under(mixed),
-                required_present=[f"{mixed_dataset_a}/Document2.docx", f"{mixed_deep}/deepfile.txt"],
+                required_present=[f"{mixed_dataset_a}/Document2.docx", mixed_deep_file],
                 required_absent=[f"{core_dataset_b}/README.txt", "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
                 required_stdout_markers=[self._marker(mixed)],
             ),
@@ -332,7 +512,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 description="rooted include of deep path below a Business shared folder",
                 sync_list=[f"/{mixed_deep}/"],
                 expected_entries=self._entries_under(mixed_deep),
-                required_present=[f"{mixed_deep}/deepfile.txt", f"{mixed_deep}/upload-target/"],
+                required_present=[mixed_deep_file, f"{mixed_deep}/upload-target/"],
                 required_absent=[f"{mixed_dataset_a}/Document2.docx", f"{core_dataset_b}/README.txt"],
                 required_stdout_markers=[self._marker(mixed)],
             ),
@@ -372,11 +552,11 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             ),
             BusinessSharedFolderSyncListScenario(
                 scenario_id="SL-0007",
-                description="globbing include for one file below a Business shared-folder directory tree",
-                sync_list=[f"/{core}/TOP_LEVEL/**/debug_output.log"],
-                expected_entries=self._entries_exact(core_deep_log),
+                description="include nested Business shared-folder tree and exclude sibling shared folder trees",
+                sync_list=[f"/{core_deep}/"],
+                expected_entries=self._entries_under(core_deep),
                 required_present=[core_deep_log],
-                required_absent=[f"{core_dataset_b}/README.txt", f"{mixed_deep}/deepfile.txt"],
+                required_absent=[mixed_deep_file, f"{core_dataset_b}/README.txt"],
                 required_stdout_markers=[self._marker(core)],
             ),
             BusinessSharedFolderSyncListScenario(
@@ -384,11 +564,11 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 description="mixed explicit includes across both Business shared folders",
                 sync_list=[
                     f"/{core_keep}/",
-                    f"/{mixed_deep}/deepfile.txt",
+                    f"/{mixed_deep_file}",
                     f"/{core_deep_log}",
                 ],
                 expected_entries=multi_tree,
-                required_present=[f"{core_keep}/keep.txt", f"{mixed_deep}/deepfile.txt", core_deep_log],
+                required_present=[f"{core_keep}/keep.txt", mixed_deep_file, core_deep_log],
                 required_absent=[f"{core_exclude}/exclude.txt", f"{mixed_dataset_a}/Document2.docx"],
                 required_stdout_markers=[self._marker(core), self._marker(mixed)],
             ),
@@ -396,13 +576,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 scenario_id="SL-0009",
                 description="wildcard include within a Business shared folder subtree",
                 sync_list=[f"/{mixed_dataset_a}/Presentation*.pptx"],
-                expected_entries=self._entries_exact(
-                    f"{mixed_dataset_a}/Presentation1.pptx",
-                    f"{mixed_dataset_a}/Presentation2.pptx",
-                    f"{mixed_dataset_a}/Presentation3.pptx",
-                    f"{mixed_dataset_a}/Presentation4.pptx",
-                    f"{mixed_dataset_a}/Presentation5.pptx",
-                ),
+                expected_entries=mixed_presentations,
                 required_present=[f"{mixed_dataset_a}/Presentation1.pptx", f"{mixed_dataset_a}/Presentation5.pptx"],
                 required_absent=[f"{mixed_dataset_a}/Document2.docx", f"{core_dataset_b}/README.txt"],
                 required_stdout_markers=[self._marker(mixed)],
@@ -414,13 +588,168 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                     f"!/{core_files}/image*",
                     f"/{core_dataset_b}/",
                 ],
-                expected_entries=self._exclude_entries(
-                    self._entries_under(core_dataset_b),
-                    f"{core_files}/image0.png",
-                    f"{core_files}/image1.png",
-                ),
+                expected_entries=core_dataset_b_without_images,
                 required_present=[f"{core_dataset_b}/README.txt", f"{core_files}/data.txt", f"{core_keep}/keep.txt"],
                 required_absent=[f"{core_files}/image0.png", f"{core_files}/image1.png", f"{mixed_dataset_a}/Document2.docx"],
                 required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0011",
+                description="include empty upload-target directory inside a Business shared folder",
+                sync_list=[f"/{core_upload_target}/"],
+                expected_entries=self._entries_under(core_upload_target),
+                required_present=[f"{core_upload_target}/"],
+                required_absent=[f"{core_keep}/keep.txt", f"{core_exclude}/exclude.txt", mixed_deep_file],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0012",
+                description="multiple explicit Business shared-folder shortcut includes only",
+                sync_list=[
+                    f"/{core}/",
+                    f"/{mixed}/",
+                ],
+                expected_entries=both_shared_folders,
+                required_present=[f"{core_dataset_b}/README.txt", f"{mixed_dataset_a}/Document2.docx", mixed_deep_file],
+                required_absent=["Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_stdout_markers=[self._marker(core), self._marker(mixed)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0013",
+                description="wildcard Business shared-folder child include across DATASET_B branches",
+                sync_list=[f"/{core}/DATASET_*/", f"/{mixed}/DATASET_B/"],
+                expected_entries=dataset_b_pair + self._entries_under(core_dataset_a),
+                required_present=[f"{core_dataset_a}/Document1.docx", f"{core_dataset_b}/README.txt", mixed_deep_file],
+                required_absent=[f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_stdout_markers=[self._marker(core), self._marker(mixed)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0014",
+                description="globbing include for one file below a Business shared-folder directory tree",
+                sync_list=[f"/{core}/TOP_LEVEL/**/debug_output.log"],
+                expected_entries=self._entries_exact(core_deep_log),
+                required_present=[core_deep_log],
+                required_absent=[f"{core_dataset_b}/README.txt", mixed_deep_file],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0015",
+                description="normal Business shared-folder include with deeper wildcard exclusion",
+                sync_list=[
+                    f"!/{core}/DATASET_B/nested/excl*/*",
+                    f"/{core}/",
+                ],
+                expected_entries=core_without_exclude,
+                required_present=[f"{core_dataset_b}/README.txt", f"{core_keep}/keep.txt"],
+                required_absent=[f"{core_exclude}/exclude.txt", f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0016",
+                description="normal Business shared-folder include with deeper globbing exclusion",
+                sync_list=[
+                    f"!/{core}/**/exclude/*",
+                    f"/{core}/",
+                ],
+                expected_entries=core_without_exclude,
+                required_present=[f"{core_dataset_b}/README.txt", f"{core_keep}/keep.txt"],
+                required_absent=[f"{core_exclude}/exclude.txt", f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0017",
+                description="wildcard Business shared-folder include with wildcard exclusion of one matched branch",
+                sync_list=[
+                    f"!/{core}/DATASET_A/*",
+                    f"/{core}/DATASET_*/",
+                ],
+                expected_entries=sorted(set(core_dataset_a_root_only + self._entries_under(core_dataset_b))),
+                required_present=[f"{core_dataset_b}/README.txt", f"{core_files}/data.txt"],
+                required_absent=[f"{core_dataset_a}/Document1.docx", f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0018",
+                description="wildcard Business shared-folder include with globbing exclusion of one matched file",
+                sync_list=[
+                    f"!/{mixed}/**/deepfile.txt",
+                    f"/{mixed_dataset_b}/",
+                ],
+                expected_entries=self._exclude_entries(self._entries_under(mixed_dataset_b), mixed_deep_file),
+                required_present=[f"{mixed_upload_target}/"],
+                required_absent=[mixed_deep_file, f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(mixed)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0019",
+                description="Business shared-folder dataset name collision with different per-branch exclusions",
+                sync_list=[
+                    f"!/{core}/DATASET_B/files/image*",
+                    f"!/{mixed}/DATASET_B/**/deepfile.txt",
+                    f"/{core_dataset_b}/",
+                    f"/{mixed_dataset_b}/",
+                ],
+                expected_entries=dataset_b_pair_without_core_images_and_mixed_deep_file,
+                required_present=[f"{core_files}/data.txt", f"{core_keep}/keep.txt", f"{mixed_upload_target}/"],
+                required_absent=[f"{core_files}/image0.png", mixed_deep_file, f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(core), self._marker(mixed)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0020",
+                description="Business shared-folder exact file include with sibling wildcard exclusion",
+                sync_list=[
+                    f"!/{core}/DATASET_B/files/image*",
+                    f"/{core}/DATASET_B/files/data.txt",
+                ],
+                expected_entries=self._entries_exact(f"{core_files}/data.txt"),
+                required_present=[f"{core_files}/data.txt"],
+                required_absent=[f"{core_files}/image0.png", f"{core_files}/image1.png", f"{core_dataset_b}/README.txt"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0021",
+                description="Business shared-folder globbing include across file-type and exact-file patterns",
+                sync_list=[
+                    f"/{mixed_dataset_a}/Presentation*.pptx",
+                    f"/{core_files}/data.txt",
+                ],
+                expected_entries=exact_data_and_presentations,
+                required_present=[f"{core_files}/data.txt", f"{mixed_dataset_a}/Presentation1.pptx", f"{mixed_dataset_a}/Presentation5.pptx"],
+                required_absent=[f"{mixed_dataset_a}/Document2.docx", f"{core_dataset_b}/README.txt"],
+                required_stdout_markers=[self._marker(core), self._marker(mixed)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0022",
+                description="Business shared-folder include remains anchored without ghost sibling creation",
+                sync_list=[
+                    f"!/{core}_RENAMED/*",
+                    f"/{core}/",
+                ],
+                expected_entries=self._entries_under(core),
+                required_present=[f"{core_dataset_b}/README.txt", f"{core_upload_target}/"],
+                required_absent=[f"{core}_RENAMED/", f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0023",
+                description="Business shared-folder globbing include across DATASET_B deep-file variants",
+                sync_list=[f"/Documents/BSF_*/DATASET_B/**/deepfile.txt"],
+                expected_entries=self._entries_exact(mixed_deep_file),
+                required_present=[mixed_deep_file],
+                required_absent=[f"{core_dataset_b}/README.txt", f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/L2/L3/deepfile.txt"],
+                required_stdout_markers=[self._marker(mixed)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0024",
+                description="cleanup_local_files removes local-only stale file under included Business shared-folder parent",
+                sync_list=[
+                    f"!/{core}/DATASET_B/files/bsftc0003-*",
+                    f"/{core}/",
+                ],
+                expected_entries=self._entries_under(core),
+                required_present=[f"{core_dataset_b}/README.txt", f"{core_files}/", f"{core_files}/data.txt"],
+                required_absent=[f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_stdout_markers=[self._marker(core)],
+                cleanup_local_stale_files=[f"{core}/DATASET_B/files/bsftc0003-local-stale.txt"],
             ),
         ]
