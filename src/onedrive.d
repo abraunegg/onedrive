@@ -507,7 +507,7 @@ class OneDriveApi {
 			// Do we have a saved account file?
 			if (!exists(appConfig.intuneAccountDetailsFilePath)) {
 				// No file exists locally
-				auto intuneAuthResult = acquire_token_interactive(appConfig.getValueString("application_id"));
+				auto intuneAuthResult = acquire_token_interactive(clientId, redirectUrl, authUrl);
 				JSONValue intuneBrokerJSONData = intuneAuthResult.brokerTokenResponse;
 				
 				// Is the response JSON data valid?
@@ -545,7 +545,7 @@ class OneDriveApi {
 						return authorise();
 					} else {
 						// We have loaded some Intune Account details, try and use them
-						auto intuneAuthResult = acquire_token_silently(appConfig.intuneAccountDetails, appConfig.getValueString("application_id"));
+						auto intuneAuthResult = acquire_token_silently(appConfig.intuneAccountDetails, clientId, redirectUrl, authUrl);
 						JSONValue intuneBrokerJSONData = intuneAuthResult.brokerTokenResponse;
 						// Is the JSON data valid?
 						if ((intuneBrokerJSONData.type() == JSONType.object)) {
@@ -562,7 +562,7 @@ class OneDriveApi {
 								// Broker 3.x can return an error payload for silent auth even when account details are valid.
 								// Fall back to the interactive broker flow rather than hard failing.
 								if (debugLogging) {addLogEntry("Cached Intune silent authentication failed or returned an incomplete broker token response - falling back to interactive Intune authentication", ["debug"]);}
-								auto interactiveAuthResult = acquire_token_interactive(appConfig.getValueString("application_id"));
+								auto interactiveAuthResult = acquire_token_interactive(clientId, redirectUrl, authUrl);
 								JSONValue interactiveBrokerJSONData = interactiveAuthResult.brokerTokenResponse;
 								if ((interactiveBrokerJSONData.type() == JSONType.object)) {
 									if ((hasAccessTokenData(interactiveBrokerJSONData)) && (hasUsableIntuneAccountData(interactiveBrokerJSONData)) && (hasExpiresOn(interactiveBrokerJSONData))) {
@@ -1234,7 +1234,7 @@ class OneDriveApi {
 			"notificationUrl": notificationUrl,
 			"resource": resourceItem,
 			"expirationDateTime": expirationDateTime.toISOExtString(),
- 			"clientState": randomUUID().toString()
+			"clientState": randomUUID().toString()
 		];
 		return post(url, request.toString());
 	}
@@ -1494,7 +1494,7 @@ class OneDriveApi {
 		// Has the client been configured to use Intune SSO via Microsoft Identity Broker (microsoft-identity-broker) dbus session
 		if (appConfig.getValueBool("use_intune_sso")) {
 			// The client is configured to use Intune SSO via Microsoft Identity Broker dbus session
-			auto intuneAuthResult = acquire_token_silently(appConfig.intuneAccountDetails, appConfig.getValueString("application_id"));
+			auto intuneAuthResult = acquire_token_silently(appConfig.intuneAccountDetails, clientId, redirectUrl, authUrl);
 			JSONValue intuneBrokerJSONData = intuneAuthResult.brokerTokenResponse;
 			// Is the JSON data valid?
 			if ((intuneBrokerJSONData.type() == JSONType.object)) {
@@ -1508,7 +1508,7 @@ class OneDriveApi {
 				} else {
 					// Broker 3.x can return an error payload for silent renewal; fall back to interactive broker auth.
 					if (debugLogging) {addLogEntry("Silent Intune access token renewal failed or returned an incomplete broker token response - falling back to interactive Intune authentication", ["debug"]);}
-					auto interactiveAuthResult = acquire_token_interactive(appConfig.getValueString("application_id"));
+					auto interactiveAuthResult = acquire_token_interactive(clientId, redirectUrl, authUrl);
 					JSONValue interactiveBrokerJSONData = interactiveAuthResult.brokerTokenResponse;
 					if ((interactiveBrokerJSONData.type() == JSONType.object)) {
 						if ((hasAccessTokenData(interactiveBrokerJSONData)) && (hasUsableIntuneAccountData(interactiveBrokerJSONData)) && (hasExpiresOn(interactiveBrokerJSONData))) {
@@ -2324,10 +2324,10 @@ class OneDriveApi {
 		//
 		
 		if ((httpResponseCode >= 100 && httpResponseCode < 300) || canFind(acceptedRedirectCodes, httpResponseCode) || httpResponseCode == 0) {
-            shouldThrow = false;
-        } else {
-            shouldThrow = true;
-        }
+			shouldThrow = false;
+		} else {
+			shouldThrow = true;
+		}
 	
 		// return evaluation
 		return shouldThrow;
