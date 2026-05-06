@@ -844,7 +844,7 @@ class SyncEngine {
 			return false;
 		}
 
-		// Preserve current behavior for non-monitor operations (for example --sync).
+		// Preserve current behaviour for non-monitor operations (for example --sync).
 		if (!appConfig.getValueBool("monitor")) {
 			return true;
 		}
@@ -867,7 +867,7 @@ class SyncEngine {
 		}
 
 		// Mode 3 (default): authoritative cleanup on monitor_fullscan_frequency cadence.
-		// If cadence is disabled, preserve always-authoritative behavior.
+		// If cadence is disabled, preserve always-authoritative behaviour.
 		if (appConfig.getValueLong("monitor_fullscan_frequency") == 0) {
 			return true;
 		}
