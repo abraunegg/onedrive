@@ -1234,7 +1234,7 @@ class OneDriveApi {
 			"notificationUrl": notificationUrl,
 			"resource": resourceItem,
 			"expirationDateTime": expirationDateTime.toISOExtString(),
- 			"clientState": randomUUID().toString()
+			"clientState": randomUUID().toString()
 		];
 		return post(url, request.toString());
 	}
@@ -2324,10 +2324,10 @@ class OneDriveApi {
 		//
 		
 		if ((httpResponseCode >= 100 && httpResponseCode < 300) || canFind(acceptedRedirectCodes, httpResponseCode) || httpResponseCode == 0) {
-            shouldThrow = false;
-        } else {
-            shouldThrow = true;
-        }
+			shouldThrow = false;
+		} else {
+			shouldThrow = true;
+		}
 	
 		// return evaluation
 		return shouldThrow;
