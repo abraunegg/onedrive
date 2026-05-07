@@ -2,8 +2,8 @@
 [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive?logo=github)](https://github.com/abraunegg/onedrive/releases)
 [![Release Date](https://img.shields.io/github/release-date/abraunegg/onedrive?logo=github)](https://github.com/abraunegg/onedrive/releases)
 
-[![Test Build](https://github.com/abraunegg/onedrive/actions/workflows/testbuild.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/testbuild.yaml)
-[![Smoke Test](https://github.com/abraunegg/onedrive/actions/workflows/smoke-test.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/smoke-test.yaml)
+[![Linux Test Build](https://github.com/abraunegg/onedrive/actions/workflows/testbuild.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/testbuild.yaml)
+[![Linux Smoke Test](https://github.com/abraunegg/onedrive/actions/workflows/smoke-test.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/smoke-test.yaml)
 [![Build Docker Images](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive?logo=docker)](https://hub.docker.com/r/driveone/onedrive)
 
