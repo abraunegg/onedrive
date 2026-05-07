@@ -216,6 +216,7 @@ class SyncEngine {
 	// Shared Folder Flags for 'sync_list' processing
 	bool sharedFolderDeltaGeneration = false;
 	string currentSharedFolderName = "";
+	string currentSharedFolderLogicalPath = "";
 	
 	// Directory excluded by 'sync_list flag so that when scanning that directory, if it is excluded, 
 	// can be scanned for new data which may be included by other include rule, but parent is excluded
@@ -843,7 +844,7 @@ class SyncEngine {
 			return false;
 		}
 
-		// Preserve current behavior for non-monitor operations (for example --sync).
+		// Preserve current behaviour for non-monitor operations (for example --sync).
 		if (!appConfig.getValueBool("monitor")) {
 			return true;
 		}
@@ -866,7 +867,7 @@ class SyncEngine {
 		}
 
 		// Mode 3 (default): authoritative cleanup on monitor_fullscan_frequency cadence.
-		// If cadence is disabled, preserve always-authoritative behavior.
+		// If cadence is disabled, preserve always-authoritative behaviour.
 		if (appConfig.getValueLong("monitor_fullscan_frequency") == 0) {
 			return true;
 		}
@@ -936,13 +937,13 @@ class SyncEngine {
 					}
 					
 					// Directory name is not excluded or skip_dir is not populated
+					// So that we represent correctly where this shared folder is, calculate the path
+					string sharedFolderLogicalPath = computeItemPath(remoteItem.driveId, remoteItem.id);
 					if (!appConfig.suppressLoggingOutput) {
-						// So that we represent correctly where this shared folder is, calculate the path
-						string sharedFolderLogicalPath = computeItemPath(remoteItem.driveId, remoteItem.id);
 						addLogEntry("Syncing this OneDrive Personal Shared Folder: " ~ ensureStartsWithDotSlash(sharedFolderLogicalPath));
 					}
 					// Check this OneDrive Personal Shared Folder for changes
-					fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
+					fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name, sharedFolderLogicalPath);
 					
 					// Process any download activities or cleanup actions for this OneDrive Personal Shared Folder
 					processDownloadActivities();
@@ -976,9 +977,9 @@ class SyncEngine {
 							}
 							
 							// Directory name is not excluded or skip_dir is not populated
+							// So that we represent correctly where this shared folder is, calculate the path
+							string sharedFolderLogicalPath = computeItemPath(remoteItem.driveId, remoteItem.id);
 							if (!appConfig.suppressLoggingOutput) {
-								// So that we represent correctly where this shared folder is, calculate the path
-								string sharedFolderLogicalPath = computeItemPath(remoteItem.driveId, remoteItem.id);
 								addLogEntry("Syncing this OneDrive Business Shared Folder: " ~ sharedFolderLogicalPath);
 							}
 							
@@ -990,7 +991,7 @@ class SyncEngine {
 							}
 							
 							// Check this OneDrive Business Shared Folder for changes
-							fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
+							fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name, sharedFolderLogicalPath);
 							
 							// Process any download activities or cleanup actions for this OneDrive Business Shared Folder
 							processDownloadActivities();
@@ -1213,7 +1214,7 @@ class SyncEngine {
 	}
 	
 	// Query OneDrive API for /delta changes and iterate through items online
-	void fetchOneDriveDeltaAPIResponse(string driveIdToQuery = null, string itemIdToQuery = null, string sharedFolderName = null) {
+	void fetchOneDriveDeltaAPIResponse(string driveIdToQuery = null, string itemIdToQuery = null, string sharedFolderName = null, string sharedFolderLogicalPath = null) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -1237,11 +1238,13 @@ class SyncEngine {
 		processedCount = 0;
 		
 		// Reset generatedSimulatedDeltaResponse
+		addLogEntry("Reset generatedSimulatedDeltaResponse as 'false'", ["debug"]);
 		generatedSimulatedDeltaResponse = false;
 		
 		// Reset Shared Folder Flags for 'sync_list' processing
 		sharedFolderDeltaGeneration = false;
 		currentSharedFolderName = "";
+		currentSharedFolderLogicalPath = "";
 		
 		// Was a driveId provided as an input
 		if (strip(driveIdToQuery).empty) {
@@ -1301,7 +1304,14 @@ class SyncEngine {
 			// When using 'sync_list' we need to do this
 			sharedFolderDeltaGeneration = true;
 			currentSharedFolderName = sharedFolderName;
+			currentSharedFolderLogicalPath = sharedFolderLogicalPath.empty ? sharedFolderName : sharedFolderLogicalPath;
+			if (debugLogging) {addLogEntry("Current shared-folder logical path for generated delta processing: " ~ currentSharedFolderLogicalPath, ["debug"]);}
 			generatedSimulatedDeltaResponse = true;
+		}
+		
+		// Log this critical flag if set
+		if (generatedSimulatedDeltaResponse) {
+			if (debugLogging) {addLogEntry("Flagged generatedSimulatedDeltaResponse as 'true'", ["debug"]);}
 		}
 		
 		// Reset latestDeltaLink & deltaLinkCache
@@ -2279,6 +2289,14 @@ class SyncEngine {
 					newItemPath = computedItemPath ~ "/" ~ thisItemName;
 				}
 				
+				string generatedSharedFolderItemPath = computeGeneratedSharedFolderDeltaPath(onedriveJSONItem);
+				if (!generatedSharedFolderItemPath.empty) {
+					if (debugLogging) {
+						addLogEntry("Overriding JSON Item calculated full path using active shared-folder generated-delta logical path = " ~ generatedSharedFolderItemPath, ["debug"]);
+					}
+					newItemPath = generatedSharedFolderItemPath;
+				}
+
 				// debug logging of what was calculated
 				if (debugLogging) {addLogEntry("JSON Item calculated full path is: " ~ newItemPath, ["debug"]);}
 			} else {
@@ -2768,6 +2786,7 @@ class SyncEngine {
 							// Path does not exist locally, but exists in database
 							if (!generatedSimulatedDeltaResponse) {
 								// We did not generate a simulated /delta response ... 
+								if (debugLogging) {addLogEntry("existingItemPath does not exist - we need to create it: " ~ existingItemPath, ["debug"]);}
 								handleLocalDirectoryCreation(existingDatabaseItem, existingItemPath, onedriveJSONItem);
 							}
 						}
@@ -3199,12 +3218,14 @@ class SyncEngine {
 				
 			case ItemType.dir:
 				// Create the directory immediately as we depend on its entry existing
+				if (debugLogging) {addLogEntry("newItemPath (ItemType.dir) does not exist - we need to create it: " ~ newItemPath, ["debug"]);}
 				handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				goto functionCompletion;
 				
 			case ItemType.remote:
 				// Add to the directory and relevant details for processing later
 				if (newDatabaseItem.remoteType == ItemType.dir) {
+					if (debugLogging) {addLogEntry("newItemPath (newDatabaseItem.remoteType) does not exist - we need to create it: " ~ newItemPath, ["debug"]);}
 					handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				} else {
 					// Add to the file to the download array for processing later
@@ -3244,12 +3265,15 @@ class SyncEngine {
 		// To create a path, 'newItemPath' must not be empty
 		if (!newItemPath.empty) {
 			// Update the logging output to be consistent
-			if (verboseLogging) {addLogEntry("Creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
+			if (verboseLogging) {addLogEntry("Attempting to create local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
 			if (!dryRun) {
 				try {
 					// Create the new directory
 					if (debugLogging) {addLogEntry("Requested local path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);}
 					mkdirRecurse(newItemPath);
+					
+					// Log that the local directory creation was successful
+					if (verboseLogging) {addLogEntry("Created local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
 					
 					// Has the user disabled the setting of filesystem permissions?
 					if (!appConfig.getValueBool("disable_permission_set")) {
@@ -3275,6 +3299,8 @@ class SyncEngine {
 					displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath);
 				}
 			} else {
+				// Log that the local directory creation is not occurring due to --dry-run
+				if (verboseLogging) {addLogEntry("DRY-RUN: Not creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
 				// we dont create the directory, but we need to track that we 'faked it'
 				idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
 				// Save the newDatabaseItem to the database
@@ -3338,6 +3364,25 @@ class SyncEngine {
 	
 		// Detail what we are doing
 		if (debugLogging) {addLogEntry("We have been requested to create 'root' and 'Shared Folder' DB Tie Records in a consistent manner" , ["debug"]);}
+
+		// If relocation details were not explicitly passed in, derive them from the shortcut JSON itself.
+		if ((relocatedFolderDriveId.empty) || (relocatedFolderParentId.empty)) {
+			if (isItemRemote(onedriveJSONItem)) {
+				if (hasParentReferenceId(onedriveJSONItem)) {
+					if (onedriveJSONItem["parentReference"]["driveId"].str == appConfig.defaultDriveId) {
+						if (onedriveJSONItem["parentReference"]["id"].str != appConfig.defaultRootId) {
+							relocatedFolderDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+							relocatedFolderParentId = onedriveJSONItem["parentReference"]["id"].str;
+							if (debugLogging) {
+								addLogEntry("Derived relocated Shared Folder references from provided JSON record" , ["debug"]);
+								addLogEntry(" relocatedFolderDriveId = " ~ relocatedFolderDriveId, ["debug"]);
+								addLogEntry(" relocatedFolderParentId = " ~ relocatedFolderParentId, ["debug"]);
+							}
+						}
+					}
+				}
+			}
+		}
 		
 		JSONValue onlineParentData;
 		string parentDriveId;
@@ -3449,7 +3494,7 @@ class SyncEngine {
 		
 		// Log that we are created the Shared Folder Tie record now
 		if (debugLogging) {addLogEntry("Creating the Shared Folder DB Tie Record that binds the 'root' record to the 'shared folder'" , ["debug"]);}
-		
+
 		// Make an item from the online JSON data
 		sharedFolderDatabaseTie = makeItem(onlineParentData);
 		// Ensure we use our online name, as we may have renamed the folder in our location
@@ -3474,7 +3519,9 @@ class SyncEngine {
 			// The database Tie Record for Personal Accounts must be empty .. no change, leave 'parentId' empty
 		}
 		
-		// If a user has added the 'whole' SharePoint Document Library, then the DB Shared Folder Tie Record and 'root' record are the 'same'
+		// If a user has added the 'whole' SharePoint Document Library, then the DB Shared Folder Tie Record
+		// and the previously inserted 'root' DB Tie Record are the SAME database object (same driveId + id).
+		// That means this upsert must preserve any relocated shared-folder metadata already stored.
 		if ((isItemRoot(onlineParentData)) && (onlineParentData["parentReference"]["driveType"].str == "documentLibrary")) {
 			// Yes this is a DocumentLibrary 'root' object
 			if (debugLogging) {
@@ -3484,6 +3531,31 @@ class SyncEngine {
 			}
 			sharedFolderDatabaseTie.parentId = null;
 			sharedFolderDatabaseTie.type = ItemType.root;
+
+			// Preserve any relocated parent references already inserted by
+			// createDatabaseRootTieRecordForOnlineSharedFolder().
+			Item existingTieRecord;
+			if (itemDB.selectById(sharedFolderDatabaseTie.driveId, sharedFolderDatabaseTie.id, existingTieRecord)) {
+				if (sharedFolderDatabaseTie.relocDriveId.empty && !existingTieRecord.relocDriveId.empty) {
+					if (debugLogging) {addLogEntry("Preserving existing relocDriveId on Shared Folder DB Tie Record: " ~ existingTieRecord.relocDriveId, ["debug"]);}
+					sharedFolderDatabaseTie.relocDriveId = existingTieRecord.relocDriveId;
+				}
+				if (sharedFolderDatabaseTie.relocParentId.empty && !existingTieRecord.relocParentId.empty) {
+					if (debugLogging) {addLogEntry("Preserving existing relocParentId on Shared Folder DB Tie Record: " ~ existingTieRecord.relocParentId, ["debug"]);}
+					sharedFolderDatabaseTie.relocParentId = existingTieRecord.relocParentId;
+				}
+			}
+
+			// Also apply any relocated references supplied for this specific shortcut creation/update.
+			if ((!relocatedFolderDriveId.empty) && (!relocatedFolderParentId.empty)) {
+				if (debugLogging) {
+					addLogEntry("Applying relocated shared folder references to Shared Folder DB Tie Record", ["debug"]);
+					addLogEntry(" sharedFolderDatabaseTie.relocDriveId = " ~ relocatedFolderDriveId, ["debug"]);
+					addLogEntry(" sharedFolderDatabaseTie.relocParentId = " ~ relocatedFolderParentId, ["debug"]);
+				}
+				sharedFolderDatabaseTie.relocDriveId = relocatedFolderDriveId;
+				sharedFolderDatabaseTie.relocParentId = relocatedFolderParentId;
+			}
 		}
 		
 		// Personal Account Shared Folder Handling 
@@ -3533,6 +3605,7 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}		
 	}
+	
 	
 	// If the JSON item IS in the database, this will be an update to an existing in-sync item
 	void applyPotentiallyChangedItem(Item existingDatabaseItem, string existingItemPath, Item changedOneDriveItem, string changedItemPath, JSONValue onedriveJSONItem) {
@@ -4678,6 +4751,96 @@ class SyncEngine {
 		}
 	}
 	
+	// Compute a Shared Folder path
+	string computeGeneratedSharedFolderDeltaPath(JSONValue onedriveJSONItem, bool parentOnly = false) {
+		// This helper is intentionally limited to self-generated /delta responses for Shared Folders.
+		// In that mode Microsoft Graph returns paths from the owner drive, but the client must
+		// evaluate and materialise paths under the selected local Shared Folder shortcut.
+		if ((!sharedFolderDeltaGeneration) || (currentSharedFolderLogicalPath.empty)) {
+			return "";
+		}
+		if (!hasParentReference(onedriveJSONItem)) {
+			return "";
+		}
+		if (("path" in onedriveJSONItem["parentReference"]) == null) {
+			return "";
+		}
+
+		string parentPath = onedriveJSONItem["parentReference"]["path"].str;
+		string itemName = onedriveJSONItem["name"].str;
+		string logicalAnchorPath = currentSharedFolderLogicalPath;
+
+		// Convert Graph parentReference path from /drives/<id>/root:/A/B/C to /A/B/C.
+		auto splitIndex = parentPath.indexOf(":");
+		if (splitIndex != -1) {
+			parentPath = parentPath[splitIndex + 1 .. $];
+		}
+		parentPath = buildNormalizedPath(parentPath);
+		if (parentPath == ".") {
+			parentPath = "";
+		}
+		if ((!parentPath.empty) && (parentPath[$ - 1] == '/')) {
+			parentPath = parentPath[0 .. $ - 1];
+		}
+
+		logicalAnchorPath = processPathToRemoveRootReference(logicalAnchorPath);
+		if (startsWith(logicalAnchorPath, "./")) {
+			logicalAnchorPath = logicalAnchorPath[2 .. $];
+		}
+		if (startsWith(logicalAnchorPath, "/")) {
+			logicalAnchorPath = logicalAnchorPath[1 .. $];
+		}
+		if ((!logicalAnchorPath.empty) && (logicalAnchorPath[$ - 1] == '/')) {
+			logicalAnchorPath = logicalAnchorPath[0 .. $ - 1];
+		}
+		if (logicalAnchorPath.empty) {
+			return "";
+		}
+
+		string calculatedParentPath;
+
+		// The generated delta can include the shared-folder anchor item itself. Its owner-drive
+		// parent is outside the selected shortcut, so use the local parent of the shortcut.
+		if (itemName == currentSharedFolderName) {
+			calculatedParentPath = dirName(logicalAnchorPath);
+			if (calculatedParentPath == ".") {
+				calculatedParentPath = "";
+			}
+		} else {
+			string anchorNeedle = "/" ~ currentSharedFolderName;
+			auto anchorIndex = lastIndexOf(parentPath, anchorNeedle);
+			if (anchorIndex < 0) {
+				if (parentPath == currentSharedFolderName) {
+					anchorIndex = 0;
+					anchorNeedle = currentSharedFolderName;
+				} else {
+					return "";
+				}
+			}
+
+			string suffix = "";
+			auto suffixStart = cast(size_t)(anchorIndex + anchorNeedle.length);
+			if (suffixStart < parentPath.length) {
+				suffix = parentPath[suffixStart .. $];
+			}
+			calculatedParentPath = logicalAnchorPath ~ suffix;
+		}
+
+		calculatedParentPath = buildNormalizedPath(calculatedParentPath);
+		if (calculatedParentPath == ".") {
+			calculatedParentPath = "";
+		}
+
+		if (parentOnly) {
+			return calculatedParentPath;
+		}
+
+		if (calculatedParentPath.empty) {
+			return itemName;
+		}
+		return buildNormalizedPath(calculatedParentPath ~ "/" ~ itemName);
+	}
+
 	// Query itemdb.computePath() and catch potential assert when DB consistency issue occurs
 	// This function returns what that local physical path should be on the local disk
 	string computeItemPath(string thisDriveId, string thisItemId) {
@@ -6052,6 +6215,14 @@ class SyncEngine {
 			if (debugLogging) {addLogEntry("Parent path details are in DB - computing 'calculatedParentalPath' using computeItemPath()", ["debug"]);}
 			calculatedParentalPath = computeItemPath(thisItemDriveId, thisItemParentId);
 			if (debugLogging) {addLogEntry("Resulting 'calculatedParentalPath' using computeItemPath() = " ~ calculatedParentalPath, ["debug"]);}
+
+			string generatedSharedFolderParentalPath = computeGeneratedSharedFolderDeltaPath(onedriveJSONItem, true);
+			if (!generatedSharedFolderParentalPath.empty) {
+				if (debugLogging) {
+					addLogEntry("Overriding calculatedParentalPath using active shared-folder generated-delta logical path = " ~ generatedSharedFolderParentalPath, ["debug"]);
+				}
+				calculatedParentalPath = generatedSharedFolderParentalPath;
+			}
 		}
 		
 		// Check if this is excluded by config option: skip_dir 
@@ -6335,15 +6506,44 @@ class SyncEngine {
 							itemDB.selectByRemoteDriveId(remoteDriveId, remoteItem);
 							if (debugLogging) {addLogEntry("Query returned result (itemDB.selectByRemoteDriveId): " ~ to!string(remoteItem), ["debug"]);}
 							
-							// Shared Folders present a unique challenge to determine what path needs to be used, especially in a --resync scenario where there are near zero records available to use computeItemPath() 
-							// Update the path that will be used to check 'sync_list' with the 'name' of the remoteDriveId database record
-							// Issue #3331
-							// Avoid duplicating the shared folder root name if already present
-							if (!selfBuiltPath.startsWith("/" ~ remoteItem.name ~ "/")) {
-								selfBuiltPath = remoteItem.name ~ selfBuiltPath;
-								if (debugLogging) {addLogEntry("selfBuiltPath after 'Shared Folder' DB details update = " ~ to!string(selfBuiltPath), ["debug"]);}
+							// Shared Folders present a unique challenge to determine what path needs to be used,
+							// especially in a --resync scenario where there are near zero records available to use computeItemPath().
+							// For relocated shared folders, using only 'remoteItem.name' is insufficient because that drops
+							// the relocated parent path (for example: Documents/SharedFolderShortcutA -> SharedFolderShortcutA).
+							string sharedFolderAnchorPath;
+
+							// Try to compute the full local path of the shared-folder anchor from the database.
+							// This should return paths such as:
+							//   ./Documents/SharedFolderShortcutA
+							// rather than just:
+							//   ./SharedFolderShortcutA
+							try {
+								sharedFolderAnchorPath = computeItemPath(remoteItem.driveId, remoteItem.id);
+								if (debugLogging) {addLogEntry("Computed sharedFolderAnchorPath using computeItemPath() = " ~ sharedFolderAnchorPath, ["debug"]);}
+							} catch (Exception exception) {
+								if (debugLogging) {addLogEntry("Unable to compute sharedFolderAnchorPath using computeItemPath(): " ~ exception.msg, ["debug"]);}
+							}
+
+							// Fallback if computeItemPath() did not return anything usable.
+							if (sharedFolderAnchorPath.empty) {
+								sharedFolderAnchorPath = remoteItem.name;
+								if (debugLogging) {addLogEntry("Falling back to sharedFolderAnchorPath = remoteItem.name = " ~ sharedFolderAnchorPath, ["debug"]);}
+							}
+
+							// Normalise the computed anchor path for concatenation with selfBuiltPath.
+							sharedFolderAnchorPath = processPathToRemoveRootReference(sharedFolderAnchorPath);
+							sharedFolderAnchorPath = stripLeft(sharedFolderAnchorPath, "./");
+							if (!sharedFolderAnchorPath.empty && sharedFolderAnchorPath[0] == '/') {
+								sharedFolderAnchorPath = sharedFolderAnchorPath[1 .. $];
+							}
+
+							// Avoid duplicating the shared-folder anchor if it is already present.
+							if (!selfBuiltPath.startsWith("/" ~ sharedFolderAnchorPath ~ "/") &&
+							    selfBuiltPath != "/" ~ sharedFolderAnchorPath) {
+								selfBuiltPath = sharedFolderAnchorPath ~ selfBuiltPath;
+								if (debugLogging) {addLogEntry("selfBuiltPath after full shared-folder anchor update = " ~ to!string(selfBuiltPath), ["debug"]);}
 							} else {
-								if (debugLogging) {addLogEntry("Shared Folder name already present in path; no update needed to selfBuiltPath", ["debug"]);}	
+								if (debugLogging) {addLogEntry("Full shared-folder anchor already present in path; no update needed to selfBuiltPath", ["debug"]);}
 							}
 						}
 						
@@ -6452,19 +6652,48 @@ class SyncEngine {
 						// Directory included due to 'sync_list' match
 						if (verboseLogging) {addLogEntry("Including path - included by sync_list config: " ~ newItemPath, ["verbose"]);}
 						
-						// So that this path is in the DB, we need to add onedriveJSONItem to the DB so that this record can be used to build paths if required
-						if (parentInDatabase) {
-							// Parent is in DB .. is this a 'new' object or an 'existing' object?
-							// Issue #3501 - If an online name name is done, the item needs to be 'renamed' via applyPotentiallyChangedItem() later
-							// Only save to the database at this point, if this JSON 'id' is not already in the database to allow applyPotentiallyChangedItem() to operate as expected
-							Item tempDBItem;
-							itemDB.selectById(onedriveJSONItem["parentReference"]["driveId"].str, onedriveJSONItem["id"].str, tempDBItem);
-							
-							// Was a valid DB response returned
-							if (tempDBItem.driveId.empty) {
-								// No .. so this is a new item
-								// Save this JSON now
-								saveItem(onedriveJSONItem);
+						// When using 'sync_list', an included directory must be represented consistently in both the local filesystem and the database.
+						//
+						// Previously this branch could save the directory JSON directly to the database when the parent was already present, without also
+						// creating the local directory. This was particularly visible for included empty directories in OneDrive Personal Shared Folders:
+						// the DB record existed, but no local directory existed, so the later database consistency check incorrectly reported:
+						//     The directory has been deleted locally
+						//
+						// Avoid inserting an included directory into the database without also ensuring that the local directory exists.
+						if (!parentInDatabase) {
+							// Parental database and local path structure needs to be created
+							// before this included directory can be materialised locally.
+							string newParentalPath = dirName(newItemPath);
+							if (verboseLogging) {addLogEntry("Parental Path structure needs to be created to support included directory: " ~ newParentalPath, ["verbose"]);}
+							createLocalPathStructure(onedriveJSONItem, newParentalPath);
+						}
+
+						Item includedDirectoryItem = makeItem(onedriveJSONItem);
+
+						// Parent is in DB .. is this a 'new' object or an 'existing' object?
+						// Issue #3501 - If an online name change is done, the item needs to be 'renamed' via applyPotentiallyChangedItem() later
+						// Only save to the database at this point, if this JSON 'id' is not already in the database to allow applyPotentiallyChangedItem() to operate as expected
+						Item tempDBItem;
+						itemDB.selectById(onedriveJSONItem["parentReference"]["driveId"].str, onedriveJSONItem["id"].str, tempDBItem);
+
+						if (!exists(newItemPath)) {
+							if (debugLogging) {
+								addLogEntry("Included directory from sync_list is not present locally; creating local directory before database insertion: " ~ newItemPath, ["debug"]);
+							}
+							handleLocalDirectoryCreation(includedDirectoryItem, newItemPath, onedriveJSONItem);
+						} else if (tempDBItem.driveId.empty) {
+							// No valid DB response was returned, so this is a new item.
+							// Save this JSON now.
+							if (debugLogging) {
+								addLogEntry("Included directory from sync_list already exists locally but is not present in the database; saving database record: " ~ newItemPath, ["debug"]);
+							}
+							saveItem(onedriveJSONItem);
+						} else {
+							// Valid DB response was returned, so this is an existing item.
+							// Do not overwrite the existing DB record here, as applyPotentiallyChangedItem()
+							// must still be able to process potential online rename/name changes later.
+							if (debugLogging) {
+								addLogEntry("Included directory from sync_list already exists locally and in the database; preserving existing database record for later change detection: " ~ newItemPath, ["debug"]);
 							}
 						}
 					}
@@ -6628,6 +6857,7 @@ class SyncEngine {
 						// create a db item record for the online data
 						Item newDatabaseItem = makeItem(onlinePathData);
 						// create the path locally, save the data to the database post path creation
+						if (debugLogging) {addLogEntry("newLocalParentalPath does not exist - we need to create it: " ~ newLocalParentalPath, ["debug"]);}
 						handleLocalDirectoryCreation(newDatabaseItem, newLocalParentalPath, onlinePathData);
 					} else {
 						// parent path exists locally, save the data to the database
@@ -11352,6 +11582,12 @@ class SyncEngine {
 		JSONValue[] childrenData;
 		string nextLink;
 		OneDriveApi generateDeltaResponseOneDriveApiInstance;
+		
+		// Check if exitHandlerTriggered is true
+		if (exitHandlerTriggered) {
+			// exitHandlerTriggered triggered
+			return selfGeneratedDeltaResponse;
+		}
 		
 		// Was a path to query passed in?
 		if (pathToQuery.empty) {

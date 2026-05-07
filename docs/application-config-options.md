@@ -566,7 +566,7 @@ _**CLI Option Use:**_ *None - this is a config file option only*
 > It is strongly recommended not to modify this setting without conducting thorough network testing. Changing this option may lead to unexpected behaviour or connectivity issues, especially if upstream network devices handle idle connections in non-standard ways.
 
 ### monitor_authoritative_sync
-_**Description:**_ This configuration option controls the authoritative cleanup behavior in `--monitor` mode when using `--download-only --cleanup-local-files`.
+_**Description:**_ This configuration option controls the authoritative cleanup behaviour in `--monitor` mode when using `--download-only --cleanup-local-files`.
 
 _**Value Type:**_ String
 
@@ -587,9 +587,9 @@ monitor_fullscan_frequency
 > This option is only applicable when using `--monitor --download-only --cleanup-local-files`. In all other scenarios, this setting is ignored.
 
 > [!NOTE]
-> `monitor_and_signal` performs authoritative cleanup on each monitor interval and each API signal.
-> `monitor_interval` performs authoritative cleanup on each monitor interval only.
-> `monitor_fullscan_frequency` performs authoritative cleanup based on `monitor_fullscan_frequency` cadence and is the default.
+> `monitor_and_signal` performs authoritative cleanup on each monitor interval and each API signal. This is the most aggressive mode and may significantly increase Microsoft Graph API usage when push notifications are frequent.
+> `monitor_interval` performs authoritative cleanup on scheduled monitor intervals only. API-signal-triggered syncs remain fast and defer local cleanup until the next monitor interval.
+> `monitor_fullscan_frequency` performs authoritative cleanup based on `monitor_fullscan_frequency` cadence and is the default. API-signal-triggered syncs and monitor interval syncs remain fast between authoritative passes.
 > When `monitor_authoritative_sync = "monitor_fullscan_frequency"`, a `monitor_fullscan_frequency` value greater than `0` defers authoritative cleanup to that cadence; `0` makes cleanup authoritative on every monitor sync cycle.
 
 ### monitor_fullscan_frequency
