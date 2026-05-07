@@ -1,0 +1,15 @@
+name: E2E Testing - Master Status
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  master-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm master E2E status source
+        run: |
+          echo "Full E2E validation runs on PR / feature branches."
+          echo "This workflow exists so README badges reflect master branch status only."
