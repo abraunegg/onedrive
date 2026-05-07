@@ -7,12 +7,7 @@
 [![Build Docker Images](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive?logo=docker)](https://hub.docker.com/r/driveone/onedrive)
 
-[![E2E Testing - Personal Account](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
-[![E2E Testing - Personal Account: 15 Character driveId Check](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal-15char-check.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
-[![E2E Testing - Personal Account: Shared Folders](https://github.com/abraunegg/onedrive/actions/workflows/e2e-personal-shared-folders.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
-[![E2E Testing - Business Account](https://github.com/abraunegg/onedrive/actions/workflows/e2e-business.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
-[![E2E Testing - Business Account: Shared Folders](https://github.com/abraunegg/onedrive/actions/workflows/e2e-business-shared-folders.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
-[![E2E Testing - SharePoint documentLibrary Configuration](https://github.com/abraunegg/onedrive/actions/workflows/e2e-sharepoint.yaml/badge.svg)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
+[![E2E Testing - Master Status](https://github.com/abraunegg/onedrive/actions/workflows/e2e-master-status.yaml/badge.svg?branch=master)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
 
 A fully featured, free, and actively maintained Microsoft OneDrive client that seamlessly supports OneDrive Personal, OneDrive for Business, Microsoft 365 (formerly Office 365), and SharePoint document libraries.
 
