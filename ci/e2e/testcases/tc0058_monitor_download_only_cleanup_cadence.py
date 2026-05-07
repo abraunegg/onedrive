@@ -67,23 +67,6 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         except FileNotFoundError:
             return 0
 
-    def _wait_for_sync_complete_markers(
-        self,
-        log_file: Path,
-        *,
-        baseline_count: int,
-        additional_count: int,
-        timeout_seconds: int,
-        poll_interval: float = 2.0,
-    ) -> bool:
-        expected_count = baseline_count + additional_count
-        deadline = time.time() + timeout_seconds
-        while time.time() < deadline:
-            if self._count_sync_complete_markers(log_file) >= expected_count:
-                return True
-            time.sleep(poll_interval)
-        return self._count_sync_complete_markers(log_file) >= expected_count
-
     def _seed_remote_fixture(
         self,
         context: E2EContext,
@@ -120,6 +103,42 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         write_text_file(seed_stdout, seed_result.stdout)
         write_text_file(seed_stderr, seed_result.stderr)
         return seed_result
+
+    def _preload_monitor_fixture(
+        self,
+        context: E2EContext,
+        *,
+        root_name: str,
+        monitor_root: Path,
+        monitor_conf: Path,
+        preload_stdout: Path,
+        preload_stderr: Path,
+    ):
+        """Download the seeded remote fixture into the monitor sync_dir before remote deletion.
+
+        This creates the local stale-file condition deterministically without keeping a
+        monitor process alive while another client mutates the remote tree.
+        """
+        preload_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--download-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--syncdir",
+            str(monitor_root),
+            "--confdir",
+            str(monitor_conf),
+        ]
+        context.log(f"Executing Test Case {self.case_id} preload {root_name}: {command_to_string(preload_command)}")
+        preload_result = run_command(preload_command, cwd=context.repo_root)
+        write_text_file(preload_stdout, preload_result.stdout)
+        write_text_file(preload_stderr, preload_result.stderr)
+        return preload_result
 
     def _delete_remote_fixture_file(
         self,
@@ -188,9 +207,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         monitor_interval: int,
         monitor_fullscan_frequency: int,
         monitor_max_loop: int,
-        expected_sync_completions_after_delete: int,
-        expect_cleanup_after_first_completion: bool,
-        expect_cleanup_after_final_completion: bool,
+        expect_cleanup_after_single_monitor_pass: bool,
         work_dir: Path,
         log_dir: Path,
         state_dir: Path,
@@ -213,6 +230,8 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
 
         seed_stdout = scenario_logs / "seed_stdout.log"
         seed_stderr = scenario_logs / "seed_stderr.log"
+        preload_stdout = scenario_logs / "preload_stdout.log"
+        preload_stderr = scenario_logs / "preload_stderr.log"
         monitor_stdout = scenario_logs / "monitor_stdout.log"
         monitor_stderr = scenario_logs / "monitor_stderr.log"
         mutator_pull_stdout = scenario_logs / "mutator_pull_stdout.log"
@@ -225,6 +244,8 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         artifacts = [
             str(seed_stdout),
             str(seed_stderr),
+            str(preload_stdout),
+            str(preload_stderr),
             str(monitor_stdout),
             str(monitor_stderr),
             str(mutator_pull_stdout),
@@ -244,9 +265,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             "monitor_interval": monitor_interval,
             "monitor_fullscan_frequency": monitor_fullscan_frequency,
             "monitor_max_loop": monitor_max_loop,
-            "expected_sync_completions_after_delete": expected_sync_completions_after_delete,
-            "expect_cleanup_after_first_completion": expect_cleanup_after_first_completion,
-            "expect_cleanup_after_final_completion": expect_cleanup_after_final_completion,
+            "expect_cleanup_after_single_monitor_pass": expect_cleanup_after_single_monitor_pass,
             "seed_root": str(seed_root),
             "monitor_root": str(monitor_root),
             "mutator_root": str(mutator_root),
@@ -278,6 +297,53 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             ),
         )
 
+        preload_result = self._preload_monitor_fixture(
+            context,
+            root_name=root_name,
+            monitor_root=monitor_root,
+            monitor_conf=monitor_conf,
+            preload_stdout=preload_stdout,
+            preload_stderr=preload_stderr,
+        )
+        details["preload_returncode"] = preload_result.returncode
+        if preload_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_name}: monitor preload failed with status {preload_result.returncode}", artifacts, details
+
+        local_anchor = monitor_root / root_name / "anchor.txt"
+        local_delete_target = monitor_root / root_name / "delete-me.txt"
+        details["local_anchor_exists_after_preload"] = local_anchor.is_file()
+        details["local_delete_target_exists_after_preload"] = local_delete_target.is_file()
+
+        if not local_anchor.is_file() or not local_delete_target.is_file():
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_name}: preload did not download expected fixture files", artifacts, details
+
+        pull_result, delete_result, mutator_delete_target = self._delete_remote_fixture_file(
+            context,
+            root_name=root_name,
+            mutator_root=mutator_root,
+            mutator_conf=mutator_conf,
+            pull_stdout=mutator_pull_stdout,
+            pull_stderr=mutator_pull_stderr,
+            delete_stdout=mutator_delete_stdout,
+            delete_stderr=mutator_delete_stderr,
+        )
+        details["mutator_pull_returncode"] = pull_result.returncode
+        details["mutator_delete_returncode"] = delete_result.returncode
+        details["mutator_delete_target_exists_after_unlink"] = mutator_delete_target.exists()
+
+        if pull_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_name}: mutator pull failed with status {pull_result.returncode}", artifacts, details
+
+        if delete_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_name}: remote delete propagation failed with status {delete_result.returncode}", artifacts, details
+
+        # Run exactly one monitor pass against a pre-existing stale local file.
+        # Do not use --resync here: --resync makes the launch itself an
+        # authoritative rebuild, which bypasses the cadence being validated.
         monitor_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -285,8 +351,6 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             "--download-only",
             "--cleanup-local-files",
             "--verbose",
-            "--resync",
-            "--resync-auth",
             "--single-directory",
             root_name,
             "--syncdir",
@@ -296,7 +360,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         ]
         context.log(f"Executing Test Case {self.case_id} monitor {scenario_name}: {command_to_string(monitor_command)}")
 
-        process, initial_sync_complete = self._launch_monitor_process(
+        process, monitor_sync_complete = self._launch_monitor_process(
             context,
             monitor_command,
             monitor_stdout,
@@ -305,130 +369,36 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         )
 
         try:
-            details["initial_sync_complete"] = initial_sync_complete
-            local_anchor = monitor_root / root_name / "anchor.txt"
-            local_delete_target = monitor_root / root_name / "delete-me.txt"
+            details["monitor_sync_complete"] = monitor_sync_complete
+            details["sync_complete_count_after_monitor"] = self._count_sync_complete_markers(monitor_stdout)
 
-            details["local_anchor_exists_after_initial_sync"] = local_anchor.is_file()
-            details["local_delete_target_exists_after_initial_sync"] = local_delete_target.is_file()
-            initial_sync_complete_count = self._count_sync_complete_markers(monitor_stdout)
-            details["sync_complete_count_after_initial_sync"] = initial_sync_complete_count
-
-            if not initial_sync_complete:
+            if not monitor_sync_complete:
                 self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: monitor initial sync did not complete", artifacts, details
+                return False, f"{scenario_name}: monitor pass did not complete", artifacts, details
 
-            if not local_anchor.is_file() or not local_delete_target.is_file():
-                self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: monitor initial sync did not download expected fixture files", artifacts, details
-
-            pull_result, delete_result, mutator_delete_target = self._delete_remote_fixture_file(
-                context,
-                root_name=root_name,
-                mutator_root=mutator_root,
-                mutator_conf=mutator_conf,
-                pull_stdout=mutator_pull_stdout,
-                pull_stderr=mutator_pull_stderr,
-                delete_stdout=mutator_delete_stdout,
-                delete_stderr=mutator_delete_stderr,
-            )
-            details["mutator_pull_returncode"] = pull_result.returncode
-            details["mutator_delete_returncode"] = delete_result.returncode
-            details["mutator_delete_target_exists_after_unlink"] = mutator_delete_target.exists()
-
-            if pull_result.returncode != 0:
-                self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: mutator pull failed with status {pull_result.returncode}", artifacts, details
-
-            if delete_result.returncode != 0:
-                self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: remote delete propagation failed with status {delete_result.returncode}", artifacts, details
-
-            sync_complete_count_after_delete = self._count_sync_complete_markers(monitor_stdout)
-            details["sync_complete_count_after_delete"] = sync_complete_count_after_delete
-
-            # Wait for the first completed monitor pass after the remote delete. This is
-            # intentionally based on the client completion marker rather than a sleep.
-            # The marker confirms that the client has completed processing the pass:
-            # "Sync with Microsoft OneDrive is complete"
-            first_completion_seen = self._wait_for_sync_complete_markers(
-                monitor_stdout,
-                baseline_count=sync_complete_count_after_delete,
-                additional_count=1,
-                timeout_seconds=monitor_interval + 240,
-            )
-            details["first_post_delete_sync_complete_seen"] = first_completion_seen
-            details["sync_complete_count_after_first_wait"] = self._count_sync_complete_markers(monitor_stdout)
-            details["local_delete_target_exists_after_first_completion"] = local_delete_target.exists()
-            details["local_anchor_exists_after_first_completion"] = local_anchor.is_file()
-
-            if not first_completion_seen:
-                self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: monitor did not complete first post-delete sync pass", artifacts, details
-
-            if expect_cleanup_after_first_completion:
-                if not self._wait_for_path_absent(local_delete_target, timeout_seconds=30):
-                    self._write_metadata(metadata_file, details)
-                    return False, f"{scenario_name}: stale local file was not removed by first authoritative monitor pass", artifacts, details
+            if expect_cleanup_after_single_monitor_pass:
+                removed = self._wait_for_path_absent(local_delete_target, timeout_seconds=30)
             else:
-                if not local_delete_target.exists():
-                    self._write_metadata(metadata_file, details)
-                    return (
-                        False,
-                        f"{scenario_name}: stale local file was removed before the configured authoritative cadence",
-                        artifacts,
-                        details,
-                    )
-
-            if expected_sync_completions_after_delete > 1:
-                final_completion_seen = self._wait_for_sync_complete_markers(
-                    monitor_stdout,
-                    baseline_count=sync_complete_count_after_delete,
-                    additional_count=expected_sync_completions_after_delete,
-                    timeout_seconds=(monitor_interval * expected_sync_completions_after_delete) + 300,
-                )
-                details["final_post_delete_sync_complete_seen"] = final_completion_seen
-                details["sync_complete_count_after_final_wait"] = self._count_sync_complete_markers(monitor_stdout)
-                details["local_delete_target_exists_after_final_completion"] = local_delete_target.exists()
-                details["local_anchor_exists_after_final_completion"] = local_anchor.is_file()
-
-                if not final_completion_seen:
-                    self._write_metadata(metadata_file, details)
-                    return (
-                        False,
-                        f"{scenario_name}: monitor did not complete expected post-delete sync passes",
-                        artifacts,
-                        details,
-                    )
-            else:
-                details["final_post_delete_sync_complete_seen"] = first_completion_seen
-                details["sync_complete_count_after_final_wait"] = details["sync_complete_count_after_first_wait"]
-                details["local_delete_target_exists_after_final_completion"] = details[
-                    "local_delete_target_exists_after_first_completion"
-                ]
-                details["local_anchor_exists_after_final_completion"] = details[
-                    "local_anchor_exists_after_first_completion"
-                ]
-
-            if expect_cleanup_after_final_completion:
-                removed = self._wait_for_path_absent(local_delete_target, timeout_seconds=60)
-            else:
+                # Give the client a short grace period after the completion marker to
+                # expose any incorrect early cleanup without waiting for another loop.
+                time.sleep(5)
                 removed = not local_delete_target.exists()
 
-            details["local_delete_target_removed_by_expected_final_state"] = removed
-            details["local_anchor_exists_after_monitor_cleanup"] = local_anchor.is_file()
+            details["local_delete_target_exists_after_single_monitor_pass"] = local_delete_target.exists()
+            details["local_delete_target_removed_after_single_monitor_pass"] = removed
+            details["local_anchor_exists_after_single_monitor_pass"] = local_anchor.is_file()
 
             monitor_manifest = build_manifest(monitor_root)
             write_manifest(monitor_manifest_file, monitor_manifest)
             details["monitor_manifest_entries"] = len(monitor_manifest)
 
-            if expect_cleanup_after_final_completion and not removed:
+            if expect_cleanup_after_single_monitor_pass and not removed:
                 self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: stale local file was not removed by the expected authoritative cleanup cadence", artifacts, details
+                return False, f"{scenario_name}: stale local file was not removed by the authoritative monitor pass", artifacts, details
 
-            if not expect_cleanup_after_final_completion and removed:
+            if not expect_cleanup_after_single_monitor_pass and removed:
                 self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: stale local file was removed when cleanup should have remained deferred", artifacts, details
+                return False, f"{scenario_name}: stale local file was removed before the configured authoritative cadence", artifacts, details
 
             if not local_anchor.is_file():
                 self._write_metadata(metadata_file, details)
@@ -455,31 +425,25 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 "monitor_interval": 300,
                 "monitor_fullscan_frequency": 12,
                 "monitor_max_loop": 1,
-                "expected_sync_completions_after_delete": 1,
-                "expect_cleanup_after_first_completion": True,
-                "expect_cleanup_after_final_completion": True,
+                "expect_cleanup_after_single_monitor_pass": True,
             },
             {
                 "scenario_id": "MSFREQ1",
+                "scenario_name": "monitor_fullscan_frequency authoritative first pass",
+                "monitor_authoritative_sync": "monitor_fullscan_frequency",
+                "monitor_interval": 300,
+                "monitor_fullscan_frequency": 1,
+                "monitor_max_loop": 1,
+                "expect_cleanup_after_single_monitor_pass": True,
+            },
+            {
+                "scenario_id": "MSFREQ2",
                 "scenario_name": "monitor_fullscan_frequency deferred first pass",
                 "monitor_authoritative_sync": "monitor_fullscan_frequency",
                 "monitor_interval": 300,
                 "monitor_fullscan_frequency": 2,
                 "monitor_max_loop": 1,
-                "expected_sync_completions_after_delete": 1,
-                "expect_cleanup_after_first_completion": False,
-                "expect_cleanup_after_final_completion": False,
-            },
-            {
-                "scenario_id": "MSFREQ2",
-                "scenario_name": "monitor_fullscan_frequency authoritative cadence",
-                "monitor_authoritative_sync": "monitor_fullscan_frequency",
-                "monitor_interval": 300,
-                "monitor_fullscan_frequency": 2,
-                "monitor_max_loop": 2,
-                "expected_sync_completions_after_delete": 2,
-                "expect_cleanup_after_first_completion": False,
-                "expect_cleanup_after_final_completion": True,
+                "expect_cleanup_after_single_monitor_pass": False,
             },
         ]
 
