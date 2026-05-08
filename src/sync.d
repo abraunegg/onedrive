@@ -856,7 +856,7 @@ class SyncEngine {
 
 		string policy = appConfig.getValueString("monitor_authoritative_sync");
 
-		// Mode 1: authoritative cleanup on each monitor interval and API signal.
+		// Mode 1(default): authoritative cleanup on each monitor interval and API signal.
 		if (policy == "monitor_and_signal") {
 			return true;
 		}
@@ -866,7 +866,7 @@ class SyncEngine {
 			return !appConfig.monitorSyncTriggeredByApiSignal;
 		}
 
-		// Mode 3 (default): authoritative cleanup on monitor_fullscan_frequency cadence.
+		// Mode 3: authoritative cleanup on monitor_fullscan_frequency cadence.
 		// If cadence is disabled, preserve always-authoritative behaviour.
 		if (appConfig.getValueLong("monitor_fullscan_frequency") == 0) {
 			return true;

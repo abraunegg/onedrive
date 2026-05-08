@@ -215,7 +215,7 @@ _**CLI Option Use:**_ `--cleanup-local-files`
 > This configuration option can only be used with `--download-only`. It cannot be used with any other application option.
 
 > [!NOTE]
-> In `--monitor` mode, authoritative cleanup cadence for `--download-only --cleanup-local-files` is configured by `monitor_authoritative_sync`.
+> In `--monitor` mode, authoritative cleanup cadence for `--download-only --cleanup-local-files` is configured by the `monitor_authoritative_sync` option.
 
 ### connect_timeout
 _**Description:**_ This configuration setting manages the TCP connection timeout duration in seconds for HTTPS connections to Microsoft OneDrive when using the curl library (CURLOPT_CONNECTTIMEOUT).
@@ -570,7 +570,7 @@ _**Description:**_ This configuration option controls the authoritative cleanup 
 
 _**Value Type:**_ String
 
-_**Default Value:**_ `monitor_fullscan_frequency`
+_**Default Value:**_ `monitor_and_signal`
 
 _**Config Example:**_ `monitor_authoritative_sync = "monitor_fullscan_frequency"`
 

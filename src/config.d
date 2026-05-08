@@ -295,7 +295,7 @@ class ApplicationConfig {
 		// - monitor_and_signal: authoritative cleanup on each monitor interval and API signal
 		// - monitor_interval: authoritative cleanup on each monitor interval only
 		// - monitor_fullscan_frequency: authoritative cleanup by monitor_fullscan_frequency cadence
-		stringValues["monitor_authoritative_sync"] = "monitor_fullscan_frequency";
+		stringValues["monitor_authoritative_sync"] = "monitor_and_signal";
 				
 		// Recycle Bin Configuration
 		// Enable|Disable feature
@@ -1015,7 +1015,7 @@ class ApplicationConfig {
 							break;
 						default:
 							addLogEntry("Invalid value for key in config file - using default value: " ~ key);
-							setValueString("monitor_authoritative_sync", "monitor_fullscan_frequency");
+							setValueString("monitor_authoritative_sync", "monitor_and_signal");
 					}
 				} else if (key == "application_id") {
 					string tempApplicationId = strip(value);
