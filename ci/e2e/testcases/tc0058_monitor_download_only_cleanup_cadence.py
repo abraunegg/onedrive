@@ -16,10 +16,11 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
     name = "monitor download-only cleanup cadence"
     description = (
         "Validate monitor_authoritative_sync behaviour for --monitor --download-only "
-        "and --cleanup-local-files using a single deterministic monitor pass"
+        "and --cleanup-local-files using a local-only stale file and one monitor pass"
     )
 
     SYNC_COMPLETE_PATTERN = "Sync with Microsoft OneDrive is complete"
+    STALE_FILE_NAME = "tc0058-local-only-stale-file.txt"
 
     def _build_config_text(
         self,
@@ -77,11 +78,11 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         seed_stdout: Path,
         seed_stderr: Path,
     ):
+        # Only seed a retained online anchor. The stale-file target is created
+        # locally after preload and is intentionally never uploaded to OneDrive.
+        # This prevents normal remote-delete/tombstone processing from masking
+        # the --cleanup-local-files behaviour being tested.
         write_text_file(seed_root / root_name / "anchor.txt", f"TC0058 anchor for {root_name}\n")
-        write_text_file(
-            seed_root / root_name / "delete-me.txt",
-            f"TC0058 remote deletion target for {root_name}\n",
-        )
 
         context.bootstrap_config_dir(seed_conf)
         self._write_simple_config(seed_conf / "config", seed_root)
@@ -114,12 +115,6 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         preload_stdout: Path,
         preload_stderr: Path,
     ):
-        """Download the remote fixture into the monitor sync_dir before deletion.
-
-        This creates a deterministic stale local file once the mutator removes the
-        matching remote file. The later monitor run can then be constrained to one
-        pass with monitor_max_loop=1.
-        """
         preload_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -140,63 +135,6 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         write_text_file(preload_stdout, preload_result.stdout)
         write_text_file(preload_stderr, preload_result.stderr)
         return preload_result
-
-    def _delete_remote_fixture_file(
-        self,
-        context: E2EContext,
-        *,
-        root_name: str,
-        mutator_root: Path,
-        mutator_conf: Path,
-        pull_stdout: Path,
-        pull_stderr: Path,
-        delete_stdout: Path,
-        delete_stderr: Path,
-    ):
-        context.bootstrap_config_dir(mutator_conf)
-        self._write_simple_config(mutator_conf / "config", mutator_root)
-
-        pull_command = [
-            context.onedrive_bin,
-            "--display-running-config",
-            "--sync",
-            "--download-only",
-            "--verbose",
-            "--resync",
-            "--resync-auth",
-            "--single-directory",
-            root_name,
-            "--syncdir",
-            str(mutator_root),
-            "--confdir",
-            str(mutator_conf),
-        ]
-        context.log(f"Executing Test Case {self.case_id} mutator pull {root_name}: {command_to_string(pull_command)}")
-        pull_result = run_command(pull_command, cwd=context.repo_root)
-        write_text_file(pull_stdout, pull_result.stdout)
-        write_text_file(pull_stderr, pull_result.stderr)
-
-        delete_target = mutator_root / root_name / "delete-me.txt"
-        if delete_target.exists():
-            delete_target.unlink()
-
-        delete_command = [
-            context.onedrive_bin,
-            "--display-running-config",
-            "--sync",
-            "--verbose",
-            "--single-directory",
-            root_name,
-            "--syncdir",
-            str(mutator_root),
-            "--confdir",
-            str(mutator_conf),
-        ]
-        context.log(f"Executing Test Case {self.case_id} mutator remote delete {root_name}: {command_to_string(delete_command)}")
-        delete_result = run_command(delete_command, cwd=context.repo_root)
-        write_text_file(delete_stdout, delete_result.stdout)
-        write_text_file(delete_stderr, delete_result.stderr)
-        return pull_result, delete_result, delete_target
 
     def _run_policy_scenario(
         self,
@@ -221,10 +159,8 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         root_name = f"ZZ_E2E_TC0058_{scenario_id}_{context.run_id}_{os.getpid()}"
         seed_root = scenario_work / "seedroot"
         monitor_root = scenario_work / "monitorroot"
-        mutator_root = scenario_work / "mutatorroot"
         seed_conf = scenario_work / "conf-seed"
         monitor_conf = scenario_work / "conf-monitor"
-        mutator_conf = scenario_work / "conf-mutator"
         app_log_dir = scenario_logs / "app-logs"
 
         seed_stdout = scenario_logs / "seed_stdout.log"
@@ -233,10 +169,6 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         preload_stderr = scenario_logs / "preload_stderr.log"
         monitor_stdout = scenario_logs / "monitor_stdout.log"
         monitor_stderr = scenario_logs / "monitor_stderr.log"
-        mutator_pull_stdout = scenario_logs / "mutator_pull_stdout.log"
-        mutator_pull_stderr = scenario_logs / "mutator_pull_stderr.log"
-        mutator_delete_stdout = scenario_logs / "mutator_delete_stdout.log"
-        mutator_delete_stderr = scenario_logs / "mutator_delete_stderr.log"
         monitor_manifest_file = scenario_state / "monitor_manifest.txt"
         metadata_file = scenario_state / "metadata.txt"
 
@@ -247,10 +179,6 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             str(preload_stderr),
             str(monitor_stdout),
             str(monitor_stderr),
-            str(mutator_pull_stdout),
-            str(mutator_pull_stderr),
-            str(mutator_delete_stdout),
-            str(mutator_delete_stderr),
             str(monitor_manifest_file),
             str(metadata_file),
             str(app_log_dir),
@@ -272,7 +200,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             "expect_cleanup_after_single_monitor_pass": expect_cleanup_after_single_monitor_pass,
             "seed_root": str(seed_root),
             "monitor_root": str(monitor_root),
-            "mutator_root": str(mutator_root),
+            "stale_file_name": self.STALE_FILE_NAME,
         }
 
         seed_result = self._seed_remote_fixture(
@@ -315,39 +243,24 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             return False, f"{scenario_name}: monitor preload failed with status {preload_result.returncode}", artifacts, details
 
         local_anchor = monitor_root / root_name / "anchor.txt"
-        local_delete_target = monitor_root / root_name / "delete-me.txt"
+        stale_local_file = monitor_root / root_name / self.STALE_FILE_NAME
+        write_text_file(stale_local_file, f"TC0058 local-only stale file for {root_name}\n")
+
         details["local_anchor_exists_after_preload"] = local_anchor.is_file()
-        details["local_delete_target_exists_after_preload"] = local_delete_target.is_file()
+        details["stale_local_file_exists_after_injection"] = stale_local_file.is_file()
 
-        if not local_anchor.is_file() or not local_delete_target.is_file():
+        if not local_anchor.is_file():
             self._write_metadata(metadata_file, details)
-            return False, f"{scenario_name}: preload did not download expected fixture files", artifacts, details
+            return False, f"{scenario_name}: preload did not download expected anchor file", artifacts, details
 
-        pull_result, delete_result, mutator_delete_target = self._delete_remote_fixture_file(
-            context,
-            root_name=root_name,
-            mutator_root=mutator_root,
-            mutator_conf=mutator_conf,
-            pull_stdout=mutator_pull_stdout,
-            pull_stderr=mutator_pull_stderr,
-            delete_stdout=mutator_delete_stdout,
-            delete_stderr=mutator_delete_stderr,
-        )
-        details["mutator_pull_returncode"] = pull_result.returncode
-        details["mutator_delete_returncode"] = delete_result.returncode
-        details["mutator_delete_target_exists_after_unlink"] = mutator_delete_target.exists()
-
-        if pull_result.returncode != 0:
+        if not stale_local_file.is_file():
             self._write_metadata(metadata_file, details)
-            return False, f"{scenario_name}: mutator pull failed with status {pull_result.returncode}", artifacts, details
+            return False, f"{scenario_name}: failed to inject local-only stale file", artifacts, details
 
-        if delete_result.returncode != 0:
-            self._write_metadata(metadata_file, details)
-            return False, f"{scenario_name}: remote delete propagation failed with status {delete_result.returncode}", artifacts, details
-
-        # Run exactly one monitor pass against the stale local file. Do not use
-        # --resync here: --resync makes the launch itself an authoritative
-        # rebuild, bypassing the monitor_authoritative_sync policy being tested.
+        # Run exactly one monitor pass against a local-only stale file. There is
+        # intentionally no remote mutator in this test: a real remote tombstone
+        # would trigger ordinary remote-delete propagation, which happens even
+        # when --cleanup-local-files is not enabled and does not validate this option.
         monitor_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -383,17 +296,17 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 return False, f"{scenario_name}: monitor pass did not complete", artifacts, details
 
             if expect_cleanup_after_single_monitor_pass:
-                removed = self._wait_for_path_absent(local_delete_target, timeout_seconds=30)
+                removed = self._wait_for_path_absent(stale_local_file, timeout_seconds=30)
             else:
-                # Completion marker should be emitted only after the pass has
+                # The completion marker should be emitted after the pass has
                 # finished. A short grace period catches incorrect cleanup that
                 # occurs immediately after the marker without waiting for another
                 # 300-second monitor interval.
                 time.sleep(5)
-                removed = not local_delete_target.exists()
+                removed = not stale_local_file.exists()
 
-            details["local_delete_target_exists_after_single_monitor_pass"] = local_delete_target.exists()
-            details["local_delete_target_removed_after_single_monitor_pass"] = removed
+            details["stale_local_file_exists_after_single_monitor_pass"] = stale_local_file.exists()
+            details["stale_local_file_removed_after_single_monitor_pass"] = removed
             details["local_anchor_exists_after_single_monitor_pass"] = local_anchor.is_file()
 
             monitor_manifest = build_manifest(monitor_root)
@@ -402,11 +315,11 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
 
             if expect_cleanup_after_single_monitor_pass and not removed:
                 self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: stale local file was not removed by the authoritative monitor pass", artifacts, details
+                return False, f"{scenario_name}: local-only stale file was not removed by the authoritative monitor pass", artifacts, details
 
             if not expect_cleanup_after_single_monitor_pass and removed:
                 self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: stale local file was removed when it should have remained deferred", artifacts, details
+                return False, f"{scenario_name}: local-only stale file was removed when cleanup should have remained deferred/disabled", artifacts, details
 
             if not local_anchor.is_file():
                 self._write_metadata(metadata_file, details)
