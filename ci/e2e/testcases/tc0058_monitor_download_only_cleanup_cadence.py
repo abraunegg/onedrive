@@ -16,11 +16,12 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
     name = "monitor download-only cleanup cadence"
     description = (
         "Validate monitor_authoritative_sync behaviour for --monitor --download-only "
-        "and --cleanup-local-files using a local-only stale file and one monitor pass"
+        "--cleanup-local-files using one monitor pass per policy mode"
     )
 
     SYNC_COMPLETE_PATTERN = "Sync with Microsoft OneDrive is complete"
-    STALE_FILE_NAME = "tc0058-local-only-stale-file.txt"
+    REMOTE_DELETE_FILE_NAME = "delete-me.txt"
+    LOCAL_ONLY_STALE_FILE_NAME = "tc0058-local-only-stale-file.txt"
 
     def _build_config_text(
         self,
@@ -28,9 +29,9 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         app_log_dir: Path,
         *,
         monitor_authoritative_sync: str,
-        monitor_interval: int,
-        monitor_fullscan_frequency: int,
-        monitor_max_loop: int,
+        monitor_interval: int = 300,
+        monitor_fullscan_frequency: int = 12,
+        monitor_max_loop: int = 1,
     ) -> str:
         return (
             "# tc0058 config\n"
@@ -78,11 +79,11 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         seed_stdout: Path,
         seed_stderr: Path,
     ):
-        # Only seed a retained online anchor. The stale-file target is created
-        # locally after preload and is intentionally never uploaded to OneDrive.
-        # This prevents normal remote-delete/tombstone processing from masking
-        # the --cleanup-local-files behaviour being tested.
         write_text_file(seed_root / root_name / "anchor.txt", f"TC0058 anchor for {root_name}\n")
+        write_text_file(
+            seed_root / root_name / self.REMOTE_DELETE_FILE_NAME,
+            f"TC0058 remote deletion target for {root_name}\n",
+        )
 
         context.bootstrap_config_dir(seed_conf)
         self._write_simple_config(seed_conf / "config", seed_root)
@@ -136,6 +137,63 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         write_text_file(preload_stderr, preload_result.stderr)
         return preload_result
 
+    def _delete_remote_fixture_file(
+        self,
+        context: E2EContext,
+        *,
+        root_name: str,
+        mutator_root: Path,
+        mutator_conf: Path,
+        pull_stdout: Path,
+        pull_stderr: Path,
+        delete_stdout: Path,
+        delete_stderr: Path,
+    ):
+        context.bootstrap_config_dir(mutator_conf)
+        self._write_simple_config(mutator_conf / "config", mutator_root)
+
+        pull_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--download-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--syncdir",
+            str(mutator_root),
+            "--confdir",
+            str(mutator_conf),
+        ]
+        context.log(f"Executing Test Case {self.case_id} mutator pull {root_name}: {command_to_string(pull_command)}")
+        pull_result = run_command(pull_command, cwd=context.repo_root)
+        write_text_file(pull_stdout, pull_result.stdout)
+        write_text_file(pull_stderr, pull_result.stderr)
+
+        delete_target = mutator_root / root_name / self.REMOTE_DELETE_FILE_NAME
+        if delete_target.exists():
+            delete_target.unlink()
+
+        delete_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            root_name,
+            "--syncdir",
+            str(mutator_root),
+            "--confdir",
+            str(mutator_conf),
+        ]
+        context.log(f"Executing Test Case {self.case_id} mutator remote delete {root_name}: {command_to_string(delete_command)}")
+        delete_result = run_command(delete_command, cwd=context.repo_root)
+        write_text_file(delete_stdout, delete_result.stdout)
+        write_text_file(delete_stderr, delete_result.stderr)
+        return pull_result, delete_result, delete_target
+
     def _run_policy_scenario(
         self,
         context: E2EContext,
@@ -144,7 +202,8 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         scenario_name: str,
         monitor_authoritative_sync: str,
         include_cleanup_local_files: bool,
-        expect_cleanup_after_single_monitor_pass: bool,
+        stimulus: str,
+        expect_target_removed_after_single_monitor_pass: bool,
         work_dir: Path,
         log_dir: Path,
         state_dir: Path,
@@ -159,14 +218,20 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         root_name = f"ZZ_E2E_TC0058_{scenario_id}_{context.run_id}_{os.getpid()}"
         seed_root = scenario_work / "seedroot"
         monitor_root = scenario_work / "monitorroot"
+        mutator_root = scenario_work / "mutatorroot"
         seed_conf = scenario_work / "conf-seed"
         monitor_conf = scenario_work / "conf-monitor"
+        mutator_conf = scenario_work / "conf-mutator"
         app_log_dir = scenario_logs / "app-logs"
 
         seed_stdout = scenario_logs / "seed_stdout.log"
         seed_stderr = scenario_logs / "seed_stderr.log"
         preload_stdout = scenario_logs / "preload_stdout.log"
         preload_stderr = scenario_logs / "preload_stderr.log"
+        mutator_pull_stdout = scenario_logs / "mutator_pull_stdout.log"
+        mutator_pull_stderr = scenario_logs / "mutator_pull_stderr.log"
+        mutator_delete_stdout = scenario_logs / "mutator_delete_stdout.log"
+        mutator_delete_stderr = scenario_logs / "mutator_delete_stderr.log"
         monitor_stdout = scenario_logs / "monitor_stdout.log"
         monitor_stderr = scenario_logs / "monitor_stderr.log"
         monitor_manifest_file = scenario_state / "monitor_manifest.txt"
@@ -177,6 +242,10 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             str(seed_stderr),
             str(preload_stdout),
             str(preload_stderr),
+            str(mutator_pull_stdout),
+            str(mutator_pull_stderr),
+            str(mutator_delete_stdout),
+            str(mutator_delete_stderr),
             str(monitor_stdout),
             str(monitor_stderr),
             str(monitor_manifest_file),
@@ -184,23 +253,19 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             str(app_log_dir),
         ]
 
-        monitor_interval = 300
-        monitor_fullscan_frequency = 12
-        monitor_max_loop = 1
-
         details: dict[str, object] = {
             "scenario_id": scenario_id,
             "scenario_name": scenario_name,
             "root_name": root_name,
             "monitor_authoritative_sync": monitor_authoritative_sync,
             "include_cleanup_local_files": include_cleanup_local_files,
-            "monitor_interval": monitor_interval,
-            "monitor_fullscan_frequency": monitor_fullscan_frequency,
-            "monitor_max_loop": monitor_max_loop,
-            "expect_cleanup_after_single_monitor_pass": expect_cleanup_after_single_monitor_pass,
+            "stimulus": stimulus,
+            "monitor_interval": 300,
+            "monitor_fullscan_frequency": 12,
+            "monitor_max_loop": 1,
+            "expect_target_removed_after_single_monitor_pass": expect_target_removed_after_single_monitor_pass,
             "seed_root": str(seed_root),
             "monitor_root": str(monitor_root),
-            "stale_file_name": self.STALE_FILE_NAME,
         }
 
         seed_result = self._seed_remote_fixture(
@@ -223,9 +288,6 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 monitor_root,
                 app_log_dir,
                 monitor_authoritative_sync=monitor_authoritative_sync,
-                monitor_interval=monitor_interval,
-                monitor_fullscan_frequency=monitor_fullscan_frequency,
-                monitor_max_loop=monitor_max_loop,
             ),
         )
 
@@ -243,24 +305,55 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             return False, f"{scenario_name}: monitor preload failed with status {preload_result.returncode}", artifacts, details
 
         local_anchor = monitor_root / root_name / "anchor.txt"
-        stale_local_file = monitor_root / root_name / self.STALE_FILE_NAME
-        write_text_file(stale_local_file, f"TC0058 local-only stale file for {root_name}\n")
+        remote_delete_target = monitor_root / root_name / self.REMOTE_DELETE_FILE_NAME
+        local_only_target = monitor_root / root_name / self.LOCAL_ONLY_STALE_FILE_NAME
 
         details["local_anchor_exists_after_preload"] = local_anchor.is_file()
-        details["stale_local_file_exists_after_injection"] = stale_local_file.is_file()
-
-        if not local_anchor.is_file():
+        details["remote_delete_target_exists_after_preload"] = remote_delete_target.is_file()
+        if not local_anchor.is_file() or not remote_delete_target.is_file():
             self._write_metadata(metadata_file, details)
-            return False, f"{scenario_name}: preload did not download expected anchor file", artifacts, details
+            return False, f"{scenario_name}: preload did not download expected fixture files", artifacts, details
 
-        if not stale_local_file.is_file():
+        if stimulus == "remote_delete":
+            # This is the valid stimulus for monitor_authoritative_sync. The file is
+            # DB-known locally, then removed online by an independent mutator. An
+            # authoritative monitor pass should remove it locally; a native /delta
+            # pass in monitor_fullscan_frequency mode should defer the tombstone.
+            pull_result, delete_result, mutator_delete_target = self._delete_remote_fixture_file(
+                context,
+                root_name=root_name,
+                mutator_root=mutator_root,
+                mutator_conf=mutator_conf,
+                pull_stdout=mutator_pull_stdout,
+                pull_stderr=mutator_pull_stderr,
+                delete_stdout=mutator_delete_stdout,
+                delete_stderr=mutator_delete_stderr,
+            )
+            details["mutator_pull_returncode"] = pull_result.returncode
+            details["mutator_delete_returncode"] = delete_result.returncode
+            details["mutator_delete_target_exists_after_unlink"] = mutator_delete_target.exists()
+            if pull_result.returncode != 0:
+                self._write_metadata(metadata_file, details)
+                return False, f"{scenario_name}: mutator pull failed with status {pull_result.returncode}", artifacts, details
+            if delete_result.returncode != 0:
+                self._write_metadata(metadata_file, details)
+                return False, f"{scenario_name}: remote delete propagation failed with status {delete_result.returncode}", artifacts, details
+            target_path = remote_delete_target
+        elif stimulus == "local_only":
+            # This control deliberately avoids a real remote delete. Remote tombstones
+            # are normal sync activity and may remove local files even when
+            # --cleanup-local-files is disabled, so the disabled-control case uses a
+            # local-only file that has never existed online.
+            write_text_file(local_only_target, f"TC0058 local-only stale file for {root_name}\n")
+            details["local_only_target_exists_after_injection"] = local_only_target.is_file()
+            if not local_only_target.is_file():
+                self._write_metadata(metadata_file, details)
+                return False, f"{scenario_name}: failed to inject local-only stale file", artifacts, details
+            target_path = local_only_target
+        else:
             self._write_metadata(metadata_file, details)
-            return False, f"{scenario_name}: failed to inject local-only stale file", artifacts, details
+            return False, f"{scenario_name}: invalid stimulus '{stimulus}'", artifacts, details
 
-        # Run exactly one monitor pass against a local-only stale file. There is
-        # intentionally no remote mutator in this test: a real remote tombstone
-        # would trigger ordinary remote-delete propagation, which happens even
-        # when --cleanup-local-files is not enabled and does not validate this option.
         monitor_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -278,7 +371,6 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             monitor_command.insert(3, "--cleanup-local-files")
 
         context.log(f"Executing Test Case {self.case_id} monitor {scenario_name}: {command_to_string(monitor_command)}")
-
         process, monitor_sync_complete = self._launch_monitor_process(
             context,
             monitor_command,
@@ -290,37 +382,31 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         try:
             details["monitor_sync_complete"] = monitor_sync_complete
             details["sync_complete_count_after_monitor"] = self._count_sync_complete_markers(monitor_stdout)
-
             if not monitor_sync_complete:
                 self._write_metadata(metadata_file, details)
                 return False, f"{scenario_name}: monitor pass did not complete", artifacts, details
 
-            if expect_cleanup_after_single_monitor_pass:
-                removed = self._wait_for_path_absent(stale_local_file, timeout_seconds=30)
+            if expect_target_removed_after_single_monitor_pass:
+                removed = self._wait_for_path_absent(target_path, timeout_seconds=30)
             else:
-                # The completion marker should be emitted after the pass has
-                # finished. A short grace period catches incorrect cleanup that
-                # occurs immediately after the marker without waiting for another
-                # 300-second monitor interval.
                 time.sleep(5)
-                removed = not stale_local_file.exists()
+                removed = not target_path.exists()
 
-            details["stale_local_file_exists_after_single_monitor_pass"] = stale_local_file.exists()
-            details["stale_local_file_removed_after_single_monitor_pass"] = removed
+            details["target_path"] = str(target_path)
+            details["target_exists_after_single_monitor_pass"] = target_path.exists()
+            details["target_removed_after_single_monitor_pass"] = removed
             details["local_anchor_exists_after_single_monitor_pass"] = local_anchor.is_file()
 
             monitor_manifest = build_manifest(monitor_root)
             write_manifest(monitor_manifest_file, monitor_manifest)
             details["monitor_manifest_entries"] = len(monitor_manifest)
 
-            if expect_cleanup_after_single_monitor_pass and not removed:
+            if expect_target_removed_after_single_monitor_pass and not removed:
                 self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: local-only stale file was not removed by the authoritative monitor pass", artifacts, details
-
-            if not expect_cleanup_after_single_monitor_pass and removed:
+                return False, f"{scenario_name}: target file was not removed by the authoritative monitor pass", artifacts, details
+            if not expect_target_removed_after_single_monitor_pass and removed:
                 self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: local-only stale file was removed when cleanup should have remained deferred/disabled", artifacts, details
-
+                return False, f"{scenario_name}: target file was removed when cleanup should have remained deferred/disabled", artifacts, details
             if not local_anchor.is_file():
                 self._write_metadata(metadata_file, details)
                 return False, f"{scenario_name}: retained anchor file disappeared during cleanup validation", artifacts, details
@@ -344,28 +430,32 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 "scenario_name": "monitor_and_signal cleanup enabled",
                 "monitor_authoritative_sync": "monitor_and_signal",
                 "include_cleanup_local_files": True,
-                "expect_cleanup_after_single_monitor_pass": True,
+                "stimulus": "remote_delete",
+                "expect_target_removed_after_single_monitor_pass": True,
             },
             {
                 "scenario_id": "MINTERVAL",
                 "scenario_name": "monitor_interval cleanup enabled",
                 "monitor_authoritative_sync": "monitor_interval",
                 "include_cleanup_local_files": True,
-                "expect_cleanup_after_single_monitor_pass": True,
+                "stimulus": "remote_delete",
+                "expect_target_removed_after_single_monitor_pass": True,
             },
             {
                 "scenario_id": "MFULLSCAN",
                 "scenario_name": "monitor_fullscan_frequency cleanup deferred",
                 "monitor_authoritative_sync": "monitor_fullscan_frequency",
                 "include_cleanup_local_files": True,
-                "expect_cleanup_after_single_monitor_pass": False,
+                "stimulus": "remote_delete",
+                "expect_target_removed_after_single_monitor_pass": False,
             },
             {
                 "scenario_id": "NOCLEANUP",
                 "scenario_name": "cleanup disabled control",
                 "monitor_authoritative_sync": "monitor_and_signal",
                 "include_cleanup_local_files": False,
-                "expect_cleanup_after_single_monitor_pass": False,
+                "stimulus": "local_only",
+                "expect_target_removed_after_single_monitor_pass": False,
             },
         ]
 
