@@ -15,8 +15,8 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
     case_id = "0058"
     name = "monitor download-only cleanup cadence"
     description = (
-        "Validate monitor_authoritative_sync controls when --monitor --download-only "
-        "--cleanup-local-files removes locally stale files after remote deletion"
+        "Validate monitor_authoritative_sync behaviour for --monitor --download-only "
+        "and --cleanup-local-files using a single deterministic monitor pass"
     )
 
     SYNC_COMPLETE_PATTERN = "Sync with Microsoft OneDrive is complete"
@@ -114,10 +114,11 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         preload_stdout: Path,
         preload_stderr: Path,
     ):
-        """Download the seeded remote fixture into the monitor sync_dir before remote deletion.
+        """Download the remote fixture into the monitor sync_dir before deletion.
 
-        This creates the local stale-file condition deterministically without keeping a
-        monitor process alive while another client mutates the remote tree.
+        This creates a deterministic stale local file once the mutator removes the
+        matching remote file. The later monitor run can then be constrained to one
+        pass with monitor_max_loop=1.
         """
         preload_command = [
             context.onedrive_bin,
@@ -204,9 +205,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         scenario_id: str,
         scenario_name: str,
         monitor_authoritative_sync: str,
-        monitor_interval: int,
-        monitor_fullscan_frequency: int,
-        monitor_max_loop: int,
+        include_cleanup_local_files: bool,
         expect_cleanup_after_single_monitor_pass: bool,
         work_dir: Path,
         log_dir: Path,
@@ -257,11 +256,16 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             str(app_log_dir),
         ]
 
+        monitor_interval = 300
+        monitor_fullscan_frequency = 12
+        monitor_max_loop = 1
+
         details: dict[str, object] = {
             "scenario_id": scenario_id,
             "scenario_name": scenario_name,
             "root_name": root_name,
             "monitor_authoritative_sync": monitor_authoritative_sync,
+            "include_cleanup_local_files": include_cleanup_local_files,
             "monitor_interval": monitor_interval,
             "monitor_fullscan_frequency": monitor_fullscan_frequency,
             "monitor_max_loop": monitor_max_loop,
@@ -341,15 +345,14 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_name}: remote delete propagation failed with status {delete_result.returncode}", artifacts, details
 
-        # Run exactly one monitor pass against a pre-existing stale local file.
-        # Do not use --resync here: --resync makes the launch itself an
-        # authoritative rebuild, which bypasses the cadence being validated.
+        # Run exactly one monitor pass against the stale local file. Do not use
+        # --resync here: --resync makes the launch itself an authoritative
+        # rebuild, bypassing the monitor_authoritative_sync policy being tested.
         monitor_command = [
             context.onedrive_bin,
             "--display-running-config",
             "--monitor",
             "--download-only",
-            "--cleanup-local-files",
             "--verbose",
             "--single-directory",
             root_name,
@@ -358,6 +361,9 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             "--confdir",
             str(monitor_conf),
         ]
+        if include_cleanup_local_files:
+            monitor_command.insert(3, "--cleanup-local-files")
+
         context.log(f"Executing Test Case {self.case_id} monitor {scenario_name}: {command_to_string(monitor_command)}")
 
         process, monitor_sync_complete = self._launch_monitor_process(
@@ -379,8 +385,10 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             if expect_cleanup_after_single_monitor_pass:
                 removed = self._wait_for_path_absent(local_delete_target, timeout_seconds=30)
             else:
-                # Give the client a short grace period after the completion marker to
-                # expose any incorrect early cleanup without waiting for another loop.
+                # Completion marker should be emitted only after the pass has
+                # finished. A short grace period catches incorrect cleanup that
+                # occurs immediately after the marker without waiting for another
+                # 300-second monitor interval.
                 time.sleep(5)
                 removed = not local_delete_target.exists()
 
@@ -398,11 +406,11 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
 
             if not expect_cleanup_after_single_monitor_pass and removed:
                 self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: stale local file was removed before the configured authoritative cadence", artifacts, details
+                return False, f"{scenario_name}: stale local file was removed when it should have remained deferred", artifacts, details
 
             if not local_anchor.is_file():
                 self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: retained anchor file disappeared during cleanup cadence validation", artifacts, details
+                return False, f"{scenario_name}: retained anchor file disappeared during cleanup validation", artifacts, details
 
             self._write_metadata(metadata_file, details)
             return True, "", artifacts, details
@@ -420,29 +428,30 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         scenarios = [
             {
                 "scenario_id": "MSIGNAL",
-                "scenario_name": "monitor_and_signal immediate authoritative cleanup",
+                "scenario_name": "monitor_and_signal cleanup enabled",
                 "monitor_authoritative_sync": "monitor_and_signal",
-                "monitor_interval": 300,
-                "monitor_fullscan_frequency": 12,
-                "monitor_max_loop": 1,
+                "include_cleanup_local_files": True,
                 "expect_cleanup_after_single_monitor_pass": True,
             },
             {
-                "scenario_id": "MSFREQ1",
-                "scenario_name": "monitor_fullscan_frequency authoritative first pass",
-                "monitor_authoritative_sync": "monitor_fullscan_frequency",
-                "monitor_interval": 300,
-                "monitor_fullscan_frequency": 1,
-                "monitor_max_loop": 1,
+                "scenario_id": "MINTERVAL",
+                "scenario_name": "monitor_interval cleanup enabled",
+                "monitor_authoritative_sync": "monitor_interval",
+                "include_cleanup_local_files": True,
                 "expect_cleanup_after_single_monitor_pass": True,
             },
             {
-                "scenario_id": "MSFREQ2",
-                "scenario_name": "monitor_fullscan_frequency deferred first pass",
+                "scenario_id": "MFULLSCAN",
+                "scenario_name": "monitor_fullscan_frequency cleanup deferred",
                 "monitor_authoritative_sync": "monitor_fullscan_frequency",
-                "monitor_interval": 300,
-                "monitor_fullscan_frequency": 2,
-                "monitor_max_loop": 1,
+                "include_cleanup_local_files": True,
+                "expect_cleanup_after_single_monitor_pass": False,
+            },
+            {
+                "scenario_id": "NOCLEANUP",
+                "scenario_name": "cleanup disabled control",
+                "monitor_authoritative_sync": "monitor_and_signal",
+                "include_cleanup_local_files": False,
                 "expect_cleanup_after_single_monitor_pass": False,
             },
         ]
