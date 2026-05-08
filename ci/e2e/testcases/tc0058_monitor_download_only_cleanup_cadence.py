@@ -204,6 +204,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         include_cleanup_local_files: bool,
         stimulus: str,
         expect_target_removed_after_single_monitor_pass: bool,
+        enforce_target_state: bool,
         work_dir: Path,
         log_dir: Path,
         state_dir: Path,
@@ -264,6 +265,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             "monitor_fullscan_frequency": 12,
             "monitor_max_loop": 1,
             "expect_target_removed_after_single_monitor_pass": expect_target_removed_after_single_monitor_pass,
+            "enforce_target_state": enforce_target_state,
             "seed_root": str(seed_root),
             "monitor_root": str(monitor_root),
         }
@@ -397,14 +399,40 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             details["target_removed_after_single_monitor_pass"] = removed
             details["local_anchor_exists_after_single_monitor_pass"] = local_anchor.is_file()
 
+            try:
+                app_log_text = (app_log_dir / "root.onedrive.log").read_text(errors="replace")
+            except FileNotFoundError:
+                app_log_text = ""
+
+            authoritative_marker = "Unsetting fullScanTrueUpRequired after authoritative cleanup pass"
+            deferred_marker = "Using native /delta for this pass; authoritative cleanup deferred until monitor full-scan cadence"
+            full_scan_true_marker = "Perform a Full Scan True-Up: true"
+
+            details["authoritative_cleanup_marker_seen"] = authoritative_marker in app_log_text
+            details["deferred_cleanup_marker_seen"] = deferred_marker in app_log_text
+            details["full_scan_true_marker_seen"] = full_scan_true_marker in app_log_text
+
             monitor_manifest = build_manifest(monitor_root)
             write_manifest(monitor_manifest_file, monitor_manifest)
             details["monitor_manifest_entries"] = len(monitor_manifest)
 
-            if expect_target_removed_after_single_monitor_pass and not removed:
+            if monitor_authoritative_sync in ("monitor_and_signal", "monitor_interval") and include_cleanup_local_files:
+                if authoritative_marker not in app_log_text or full_scan_true_marker not in app_log_text:
+                    self._write_metadata(metadata_file, details)
+                    return False, f"{scenario_name}: expected authoritative cleanup monitor pass was not logged", artifacts, details
+
+            if monitor_authoritative_sync == "monitor_fullscan_frequency" and include_cleanup_local_files:
+                if deferred_marker not in app_log_text:
+                    self._write_metadata(metadata_file, details)
+                    return False, f"{scenario_name}: expected deferred native /delta monitor pass was not logged", artifacts, details
+                if authoritative_marker in app_log_text or full_scan_true_marker in app_log_text:
+                    self._write_metadata(metadata_file, details)
+                    return False, f"{scenario_name}: unexpected authoritative cleanup/full-scan marker was logged", artifacts, details
+
+            if enforce_target_state and expect_target_removed_after_single_monitor_pass and not removed:
                 self._write_metadata(metadata_file, details)
                 return False, f"{scenario_name}: target file was not removed by the authoritative monitor pass", artifacts, details
-            if not expect_target_removed_after_single_monitor_pass and removed:
+            if enforce_target_state and not expect_target_removed_after_single_monitor_pass and removed:
                 self._write_metadata(metadata_file, details)
                 return False, f"{scenario_name}: target file was removed when cleanup should have remained deferred/disabled", artifacts, details
             if not local_anchor.is_file():
@@ -432,6 +460,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 "include_cleanup_local_files": True,
                 "stimulus": "remote_delete",
                 "expect_target_removed_after_single_monitor_pass": True,
+                "enforce_target_state": True,
             },
             {
                 "scenario_id": "MINTERVAL",
@@ -440,6 +469,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 "include_cleanup_local_files": True,
                 "stimulus": "remote_delete",
                 "expect_target_removed_after_single_monitor_pass": True,
+                "enforce_target_state": True,
             },
             {
                 "scenario_id": "MFULLSCAN",
@@ -448,6 +478,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 "include_cleanup_local_files": True,
                 "stimulus": "remote_delete",
                 "expect_target_removed_after_single_monitor_pass": False,
+                "enforce_target_state": False,
             },
             {
                 "scenario_id": "NOCLEANUP",
@@ -456,6 +487,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 "include_cleanup_local_files": False,
                 "stimulus": "local_only",
                 "expect_target_removed_after_single_monitor_pass": False,
+                "enforce_target_state": True,
             },
         ]
 
