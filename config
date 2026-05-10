@@ -105,7 +105,8 @@
 ## API-signal-triggered syncs are fastest with monitor_interval or
 ## monitor_fullscan_frequency.
 ## Valid values: monitor_and_signal | monitor_interval | monitor_fullscan_frequency
-#monitor_authoritative_sync = "monitor_fullscan_frequency"
+## Default: monitor_and_signal
+#monitor_authoritative_sync = "monitor_and_signal"
 
 ## This setting determines how often the sync loop runs in --monitor mode.
 #monitor_interval = "300"
