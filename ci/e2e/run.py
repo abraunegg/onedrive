@@ -69,6 +69,7 @@ from testcases.tc0054_monitor_mode_atomic_save_editor_replace_workflow import Te
 from testcases.tc0055_upload_only_remove_source_folders import TestCase0055UploadOnlyRemoveSourceFolders
 from testcases.tc0056_monitor_mode_create_then_delete_quickly import TestCase0056MonitorModeCreateThenDeleteQuickly
 from testcases.tc0057_recycle_bin_delete_behaviour_validation import TestCase0057RecycleBinDeleteBehaviourValidation
+from testcases.tc0058_monitor_download_only_cleanup_cadence import TestCase0058MonitorDownloadOnlyCleanupCadence
 
 def build_test_suite() -> list:
     return [
@@ -129,6 +130,7 @@ def build_test_suite() -> list:
         TestCase0055UploadOnlyRemoveSourceFolders(),
         TestCase0056MonitorModeCreateThenDeleteQuickly(),
         TestCase0057RecycleBinDeleteBehaviourValidation(),
+        TestCase0058MonitorDownloadOnlyCleanupCadence(),
     ]
 
 
