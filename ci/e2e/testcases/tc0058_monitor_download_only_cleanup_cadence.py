@@ -16,7 +16,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
     name = "monitor download-only cleanup cadence"
     description = (
         "Validate monitor_authoritative_sync behaviour for --monitor --download-only "
-        "--cleanup-local-files using one monitor pass per policy mode"
+        "--cleanup-local-files using one debug-logged monitor pass per policy mode"
     )
 
     SYNC_COMPLETE_PATTERN = "Sync with Microsoft OneDrive is complete"
@@ -362,6 +362,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             "--monitor",
             "--download-only",
             "--verbose",
+            "--verbose",
             "--single-directory",
             root_name,
             "--syncdir",
@@ -399,33 +400,42 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             details["target_removed_after_single_monitor_pass"] = removed
             details["local_anchor_exists_after_single_monitor_pass"] = local_anchor.is_file()
 
-            try:
-                app_log_text = (app_log_dir / "root.onedrive.log").read_text(errors="replace")
-            except FileNotFoundError:
-                app_log_text = ""
+            # These policy markers are DEBUG-level messages. The monitor command
+            # intentionally uses --verbose twice above so that they are emitted in
+            # normal CI, not only in the framework's debug rerun. Read both process
+            # stdout/stderr and the application log because logging destinations can
+            # differ across harness/debug paths.
+            monitor_log_text_parts: list[str] = []
+            for candidate in (monitor_stdout, monitor_stderr, app_log_dir / "root.onedrive.log"):
+                try:
+                    monitor_log_text_parts.append(candidate.read_text(errors="replace"))
+                except FileNotFoundError:
+                    pass
+            monitor_log_text = "\n".join(monitor_log_text_parts)
 
             authoritative_marker = "Unsetting fullScanTrueUpRequired after authoritative cleanup pass"
             deferred_marker = "Using native /delta for this pass; authoritative cleanup deferred until monitor full-scan cadence"
             full_scan_true_marker = "Perform a Full Scan True-Up: true"
 
-            details["authoritative_cleanup_marker_seen"] = authoritative_marker in app_log_text
-            details["deferred_cleanup_marker_seen"] = deferred_marker in app_log_text
-            details["full_scan_true_marker_seen"] = full_scan_true_marker in app_log_text
+            details["authoritative_cleanup_marker_seen"] = authoritative_marker in monitor_log_text
+            details["deferred_cleanup_marker_seen"] = deferred_marker in monitor_log_text
+            details["full_scan_true_marker_seen"] = full_scan_true_marker in monitor_log_text
+            details["monitor_log_text_bytes_checked"] = len(monitor_log_text)
 
             monitor_manifest = build_manifest(monitor_root)
             write_manifest(monitor_manifest_file, monitor_manifest)
             details["monitor_manifest_entries"] = len(monitor_manifest)
 
             if monitor_authoritative_sync in ("monitor_and_signal", "monitor_interval") and include_cleanup_local_files:
-                if authoritative_marker not in app_log_text or full_scan_true_marker not in app_log_text:
+                if authoritative_marker not in monitor_log_text or full_scan_true_marker not in monitor_log_text:
                     self._write_metadata(metadata_file, details)
                     return False, f"{scenario_name}: expected authoritative cleanup monitor pass was not logged", artifacts, details
 
             if monitor_authoritative_sync == "monitor_fullscan_frequency" and include_cleanup_local_files:
-                if deferred_marker not in app_log_text:
+                if deferred_marker not in monitor_log_text:
                     self._write_metadata(metadata_file, details)
                     return False, f"{scenario_name}: expected deferred native /delta monitor pass was not logged", artifacts, details
-                if authoritative_marker in app_log_text or full_scan_true_marker in app_log_text:
+                if authoritative_marker in monitor_log_text or full_scan_true_marker in monitor_log_text:
                     self._write_metadata(metadata_file, details)
                     return False, f"{scenario_name}: unexpected authoritative cleanup/full-scan marker was logged", artifacts, details
 
