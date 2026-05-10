@@ -1257,8 +1257,18 @@ int main(string[] cliArgs) {
 					
 					// If full scan at a specific frequency enabled?
 					if (fullScanFrequency > 0) {
-						// Full Scan set for some 'frequency' - do we flag to perform a full scan of the online data?
-						if (fullScanFrequencyLoopCount > fullScanFrequency) {
+						// Fetch configuration option
+						string monitorAuthoritativeSync = appConfig.getValueString("monitor_authoritative_sync");
+					
+						// Preserve existing behaviour for the explicit legacy modes.
+						// Do not force first-loop authoritative cleanup when the user has selected
+						// monitor_fullscan_frequency, as that mode must only run authoritative cleanup
+						// on the configured full-scan cadence.
+						if ((monitorLoopFullCount == 1) && appConfig.getValueBool("download_only") && appConfig.getValueBool("cleanup_local_files") && ((monitorAuthoritativeSync == "monitor_and_signal") || (monitorAuthoritativeSync == "monitor_interval"))) {
+							if (debugLogging) {addLogEntry("Enabling Full Scan True Up on first monitor loop after startup", ["debug"]);}
+							appConfig.fullScanTrueUpRequired = true;
+						} else if (fullScanFrequencyLoopCount > fullScanFrequency) {
+							// Full Scan set for some 'frequency' - do we flag to perform a full scan of the online data?
 							// set full scan trigger for true up
 							if (debugLogging) {addLogEntry("Enabling Full Scan True Up (fullScanFrequencyLoopCount > fullScanFrequency), resetting fullScanFrequencyLoopCount = 1", ["debug"]);}
 							fullScanFrequencyLoopCount = 1;
@@ -1601,7 +1611,14 @@ void oneDriveOnlineCallback() {
 	// If we are doing --upload-only however .. we need to 'ignore' online change
 	if (!appConfig.getValueBool("upload_only")) {
 		// We are not doing an --upload-only scenario .. sync online change --> local
+		appConfig.monitorSyncTriggeredByApiSignal = true;
+		scope(exit) {
+			appConfig.monitorSyncTriggeredByApiSignal = false;
+		}
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
+		if (syncEngineInstance.authoritativeCleanupPassUsedInLastSync) {
+			syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
+		}
 	}
 	if (appConfig.getValueBool("monitor")) {
 		// Handle inotify events
