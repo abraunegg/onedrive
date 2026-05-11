@@ -4081,6 +4081,8 @@ class SyncEngine {
 				if (!dryRun) {
 					// Attempt to download the file as there is enough free space locally
 					OneDriveApi downloadFileOneDriveApiInstance;
+					bool hasDownloadedStreamedQuickXorHash = false;
+					string downloadedStreamedQuickXorHash;
 					
 					try {	
 						// Initialise API instance
@@ -4093,7 +4095,15 @@ class SyncEngine {
 						}
 						
 						// Perform the download with any applicable set offset
-						downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset);
+						auto downloadResponse = downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset);
+						if (downloadResponse !is null) {
+							hasDownloadedStreamedQuickXorHash = downloadResponse.hasStreamedQuickXorHash;
+							downloadedStreamedQuickXorHash = downloadResponse.streamedQuickXorHash;
+						} else {
+							if (debugLogging) {
+								addLogEntry("downloadResponse is null", ["debug"]);
+							}
+						}
 						
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						downloadFileOneDriveApiInstance.releaseCurlEngine();
@@ -4176,8 +4186,18 @@ class SyncEngine {
 							
 							if (!OneDriveFileXORHash.empty) {
 								onlineFileHash = OneDriveFileXORHash;
-								// Calculate the QuickXOHash for this file
-								downloadedFileHash = computeQuickXorHash(newItemPath);
+								// Use the streamed QuickXorHash from the completed download when available; otherwise calculate the QuickXorHash for this file
+								if (hasDownloadedStreamedQuickXorHash) {
+									if (debugLogging) {
+										addLogEntry("Using stream calculated hash", ["debug"]);
+									}
+									downloadedFileHash = downloadedStreamedQuickXorHash;
+								} else {
+									if (debugLogging) {
+										addLogEntry("Must generate file hash", ["debug"]);
+									}
+									downloadedFileHash = computeQuickXorHash(newItemPath);
+								}
 							} else {
 								onlineFileHash = OneDriveFileSHA256Hash;
 								// Fallback: Calculate the SHA256 Hash for this file

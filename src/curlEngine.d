@@ -111,6 +111,14 @@ class CurlResponse {
 	HTTP.StatusLine statusLine;
 	char[] content;
 
+	// Streamed download hash metadata. These values are populated only when
+	// curlEngine.download() receives a complete file from byte zero. Resumed
+	// downloads intentionally leave these disabled because only the remaining
+	// byte range is streamed through the receive callback.
+	bool hasStreamedQuickXorHash;
+	string streamedQuickXorHash;
+	ulong streamedHashBytes;
+
 	this() {
 		reset();
 	}
@@ -128,6 +136,9 @@ class CurlResponse {
 		responseHeaders = null;
 		statusLine.reset();
 		content = [];
+		hasStreamedQuickXorHash = false;
+		streamedQuickXorHash = "";
+		streamedHashBytes = 0;
 	}
 
 	void addRequestHeader(const(char)[] name, const(char)[] value) {
@@ -555,9 +566,20 @@ class CurlEngine {
 			string rangeHeader = format("bytes=%d-", resumeFromOffset);
 			addRequestHeader("Range", rangeHeader);
 		}
+
+		// Streaming hashes are only valid when this download starts at byte zero.
+		// For resumed downloads, the receive callback only sees the remaining byte
+		// range, so callers must continue to use the existing full-file fallback.
+		bool enableStreamedHash = (resumeFromOffset <= 0);
+		QuickXorStreamHasher quickXorStreamHasher;
+		ulong streamedHashBytes = 0;
 		
 		// Receive data
 		http.onReceive = (ubyte[] data) {
+			if (enableStreamedHash) {
+				quickXorStreamHasher.update(data);
+				streamedHashBytes += data.length;
+			}
 			file.rawWrite(data);
 			return data.length;
 		};
@@ -575,6 +597,14 @@ class CurlEngine {
 
 		// Update response and return response
 		response.update(&http);
+		if (enableStreamedHash) {
+			response.streamedQuickXorHash = quickXorStreamHasher.finishB64();
+			response.hasStreamedQuickXorHash = true;
+			response.streamedHashBytes = streamedHashBytes;
+		}
+		
+		// Return the response which now has the file has generated from the download stream
+		if (debugLogging) {addLogEntry("response.streamedQuickXorHash = " ~ response.streamedQuickXorHash, ["debug"]);}
 		return response;
 	}
 
