@@ -26,6 +26,7 @@ class TestCase0059WebSocketRemoteUploadNotification(MonitorModeTestCaseBase):
         "Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.",
     ]
     WEBSOCKET_PING_PONG_PATTERN = "DEBUG: SOCKETIO: Socket.IO ping received"
+    WEBSOCKET_SIGNAL_PATTERN = "DEBUG: Received 1 signal(s) from WebSocket handler"
 
     def _build_monitor_config_text(self, sync_dir: Path, app_log_dir: Path) -> str:
         return (
@@ -85,6 +86,9 @@ class TestCase0059WebSocketRemoteUploadNotification(MonitorModeTestCaseBase):
     def _count_sync_complete_markers(self, stdout_file: Path, stderr_file: Path, app_log_dir: Path) -> int:
         return self._read_monitor_log_text(stdout_file, stderr_file, app_log_dir).count(self.SYNC_COMPLETE_PATTERN)
 
+    def _count_websocket_signal_markers(self, stdout_file: Path, stderr_file: Path, app_log_dir: Path) -> int:
+        return self._read_monitor_log_text(stdout_file, stderr_file, app_log_dir).count(self.WEBSOCKET_SIGNAL_PATTERN)
+
     def _wait_for_remote_upload_download(
         self,
         *,
@@ -93,7 +97,7 @@ class TestCase0059WebSocketRemoteUploadNotification(MonitorModeTestCaseBase):
         stdout_file: Path,
         stderr_file: Path,
         app_log_dir: Path,
-        sync_complete_count_before_upload: int,
+        websocket_signal_count_before_upload: int,
         timeout_seconds: int,
         poll_interval: float = 0.5,
     ) -> tuple[bool, str]:
@@ -108,9 +112,14 @@ class TestCase0059WebSocketRemoteUploadNotification(MonitorModeTestCaseBase):
                 if actual_content != expected_content:
                     return False, "downloaded file content did not match uploaded content"
 
-                sync_complete_count = self._count_sync_complete_markers(stdout_file, stderr_file, app_log_dir)
-                if sync_complete_count > sync_complete_count_before_upload:
-                    return True, ""
+                websocket_signal_count = self._count_websocket_signal_markers(stdout_file, stderr_file, app_log_dir)
+                if websocket_signal_count <= websocket_signal_count_before_upload:
+                    return False, (
+                        "downloaded file was present and content matched, but no new WebSocket "
+                        "signal marker was logged after the remote upload"
+                    )
+
+                return True, ""
 
             time.sleep(poll_interval)
 
@@ -278,7 +287,14 @@ class TestCase0059WebSocketRemoteUploadNotification(MonitorModeTestCaseBase):
                 monitor_stderr,
                 app_log_dir,
             )
+            websocket_signal_count_before_upload = self._count_websocket_signal_markers(
+                monitor_stdout,
+                monitor_stderr,
+                app_log_dir,
+            )
             details["sync_complete_count_before_remote_upload"] = sync_complete_count_before_upload
+            details["websocket_signal_count_before_remote_upload"] = websocket_signal_count_before_upload
+            details["websocket_signal_pattern"] = self.WEBSOCKET_SIGNAL_PATTERN
 
             write_text_file(uploaded_uploader_path, uploaded_content)
             details["uploaded_uploader_path_exists_after_write"] = uploaded_uploader_path.is_file()
@@ -319,13 +335,18 @@ class TestCase0059WebSocketRemoteUploadNotification(MonitorModeTestCaseBase):
                 stdout_file=monitor_stdout,
                 stderr_file=monitor_stderr,
                 app_log_dir=app_log_dir,
-                sync_complete_count_before_upload=sync_complete_count_before_upload,
+                websocket_signal_count_before_upload=websocket_signal_count_before_upload,
                 timeout_seconds=120,
             )
             details["remote_upload_downloaded_by_monitor"] = downloaded
             details["download_failure_reason"] = download_failure_reason
             details["uploaded_monitor_path_exists"] = uploaded_monitor_path.is_file()
             details["sync_complete_count_after_remote_upload"] = self._count_sync_complete_markers(
+                monitor_stdout,
+                monitor_stderr,
+                app_log_dir,
+            )
+            details["websocket_signal_count_after_remote_upload"] = self._count_websocket_signal_markers(
                 monitor_stdout,
                 monitor_stderr,
                 app_log_dir,
