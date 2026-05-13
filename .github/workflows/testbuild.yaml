@@ -3,14 +3,9 @@ name: Linux Test Build
 on:
   push:
     branches: [ "master" ]
-    paths:
-      - 'src/**'
-      - '.github/workflows/testbuild.yaml'
   pull_request:
     branches: [ "master" ]
-    paths:
-      - 'src/**'
-      - '.github/workflows/testbuild.yaml'
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,25 +17,68 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - name: Determine if test build is required
+      id: changes
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          changed_files="$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)"
+        else
+          before_sha="${{ github.event.before }}"
+          current_sha="${{ github.sha }}"
+
+          if [[ "${before_sha}" =~ ^0+$ ]]; then
+            changed_files="$(git diff --name-only HEAD~1 HEAD || git ls-files)"
+          else
+            changed_files="$(git diff --name-only "${before_sha}" "${current_sha}")"
+          fi
+        fi
+
+        echo "Changed files:"
+        printf '%s\n' "${changed_files}"
+
+        if printf '%s\n' "${changed_files}" | grep -Eq '^(src/|\.github/workflows/testbuild\.yaml$)'; then
+          echo "code_changed=true" >> "${GITHUB_OUTPUT}"
+          echo "Linux test build is required."
+        else
+          echo "code_changed=false" >> "${GITHUB_OUTPUT}"
+          echo "Linux test build is not required for this change set."
+        fi
+
+    - name: Linux test build not required
+      if: steps.changes.outputs.code_changed != 'true'
+      run: |
+        echo "No src/ or .github/workflows/testbuild.yaml changes detected."
+        echo "Emitting successful Linux Test Build status without running the compile job."
+
     - name: Update Image
+      if: steps.changes.outputs.code_changed == 'true'
       run: |
         sudo apt-get clean
         sudo apt-get update -y
 
     - name: Install build-essential
+      if: steps.changes.outputs.code_changed == 'true'
       run: sudo apt install -y build-essential
       
     - name: Install build-dependencies
+      if: steps.changes.outputs.code_changed == 'true'
       run: sudo apt install -y libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc libdbus-1-dev
 
     - name: Configure
+      if: steps.changes.outputs.code_changed == 'true'
       run: ./configure
       
     - name: Compile
+      if: steps.changes.outputs.code_changed == 'true'
       run: make clean; make;
 
     - name: Install
+      if: steps.changes.outputs.code_changed == 'true'
       run: sudo make install
       
     - name: Run
+      if: steps.changes.outputs.code_changed == 'true'
       run: onedrive --version
