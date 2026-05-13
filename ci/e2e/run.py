@@ -70,6 +70,7 @@ from testcases.tc0055_upload_only_remove_source_folders import TestCase0055Uploa
 from testcases.tc0056_monitor_mode_create_then_delete_quickly import TestCase0056MonitorModeCreateThenDeleteQuickly
 from testcases.tc0057_recycle_bin_delete_behaviour_validation import TestCase0057RecycleBinDeleteBehaviourValidation
 from testcases.tc0058_monitor_download_only_cleanup_cadence import TestCase0058MonitorDownloadOnlyCleanupCadence
+from testcases.tc0059_websocket_remote_upload_notification import TestCase0059WebSocketRemoteUploadNotification
 
 def build_test_suite() -> list:
     return [
@@ -131,6 +132,7 @@ def build_test_suite() -> list:
         TestCase0056MonitorModeCreateThenDeleteQuickly(),
         TestCase0057RecycleBinDeleteBehaviourValidation(),
         TestCase0058MonitorDownloadOnlyCleanupCadence(),
+        TestCase0059WebSocketRemoteUploadNotification(),
     ]
 
 
