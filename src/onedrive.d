@@ -1137,13 +1137,13 @@ class OneDriveApi {
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
 	JSONValue simpleUpload(string localPath, string parentDriveId, string parentId, string filename) {
 		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/content";
-		return put(url, localPath);
+		return put(url, localPath, false, null, 0, 0, true, true);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
 	JSONValue simpleUploadReplace(string localPath, string driveId, string id) {
 		string url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content";
-		return put(url, localPath);
+		return put(url, localPath, false, null, 0, 0, true, true);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createuploadsession
@@ -1174,7 +1174,9 @@ class OneDriveApi {
 		checkAccessTokenExpired();
 		
 		// Perform the HTTP PUT action to upload the file fragment
-		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize);
+		bool startUploadStreamHash = (offset == 0);
+		bool finishUploadStreamHash = ((offset + offsetSize) == fileSize);
+		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize, startUploadStreamHash, finishUploadStreamHash);
 	}
 	
 	// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#resuming-an-in-progress-upload
@@ -1936,12 +1938,23 @@ class OneDriveApi {
 		}, validateJSONResponse, callingFunction, lineno);
 	}
 	
-	private JSONValue put(const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+	private JSONValue put(const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0, bool startUploadStreamHash=false, bool finishUploadStreamHash=false, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.put, url, skipToken, response);
+			if (startUploadStreamHash) {
+				curlEngine.beginUploadStreamHash();
+			}
 			curlEngine.setFile(filepath, contentRange, offset, offsetSize);
-			return curlEngine.execute();
+			auto uploadResponse = curlEngine.execute();
+			if (finishUploadStreamHash) {
+				curlEngine.finishUploadStreamHash(uploadResponse);
+				if (debugLogging) {
+					addLogEntry("response.hasStreamedQuickXorHash = " ~ to!string(response.hasStreamedQuickXorHash), ["debug"]);
+					addLogEntry("response.streamedQuickXorHash = " ~ response.streamedQuickXorHash, ["debug"]);
+				}
+			}
+			return uploadResponse;
 		}, validateJSONResponse, callingFunction, lineno);
 	}
 
@@ -1985,6 +1998,15 @@ class OneDriveApi {
 				if (response.hasResponse) {
 					// Process the response
 					result = response.json();
+
+					// Preserve any streamed QuickXorHash calculated by curlEngine against
+					// the JSON response returned to callers. This keeps upload validation
+					// able to consume the streamed hash without changing the public upload
+					// return type away from JSONValue.
+					if (response.hasStreamedQuickXorHash && (result.type() == JSONType.object)) {
+						result["streamedQuickXorHash"] = JSONValue(response.streamedQuickXorHash);
+					}
+
 					// Print response if 'debugHTTPSResponse' is flagged
 					if (debugHTTPSResponse){
 						if (debugLogging) {addLogEntry("Microsoft Graph API Response: " ~ response.dumpResponse(), ["debug"]);}

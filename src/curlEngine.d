@@ -298,13 +298,16 @@ class CurlEngine {
 	SysTime releaseTimestamp;
 	ulong maxIdleTime;
 	private long resumeFromOffset = -1;
+	private bool uploadStreamHashActive = false;
+	private QuickXorStreamHasher uploadQuickXorStreamHasher;
+	private ulong uploadStreamHashBytes = 0;
 	
-    this() {
-        http = HTTP();   // Directly initializes HTTP using its default constructor
-        response = null; // Initialize as null
+	this() {
+		http = HTTP();   // Directly initializes HTTP using its default constructor
+		response = null; // Initialize as null
 		internalThreadId = generateAlphanumericString(); // Give this CurlEngine instance a unique ID
 		if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("Created new CurlEngine instance id: " ~ to!string(internalThreadId), ["debug"]);}
-    }
+	}
 
 	// The destructor should only clean up resources owned directly by this CurlEngine instance
 	~this() {
@@ -323,7 +326,7 @@ class CurlEngine {
 		object.destroy(http);
 		// ThreadId needs to be set to null
 		internalThreadId = null;
-    }
+	}
 		
 	// We are releasing a curl instance back to the pool
 	void releaseEngine() {
@@ -339,15 +342,15 @@ class CurlEngine {
 		
 		// cleanup this curl instance before putting it back in the pool
 		cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
-        synchronized (CurlEngine.classinfo) {
-            curlEnginePool ~= this;
+		synchronized (CurlEngine.classinfo) {
+			curlEnginePool ~= this;
 			if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine curlEnginePool size after release: " ~ to!string(curlEnginePool.length), ["debug"]);}
-        }
+		}
 		// Perform Garbage Collection
 		GC.collect();
 		// Return free memory to the OS
 		GC.minimize();
-    }
+	}
 	
 	// Setup a specific SIGPIPE Signal handler due to curl bugs that ignore CurlOption.nosignal
 	void setupSIGPIPESignalHandler() {
@@ -511,8 +514,43 @@ class CurlEngine {
 		};
 		
 		addRequestHeader("Content-Type", "application/octet-stream");
-		http.onSend = data => uploadFile.rawRead(data).length;
+		http.onSend = (void[] data) {
+			auto bytesRead = uploadFile.rawRead(data);
+			if (uploadStreamHashActive && (bytesRead.length > 0)) {
+				uploadQuickXorStreamHasher.update(cast(ubyte[]) bytesRead);
+				uploadStreamHashBytes += bytesRead.length;
+			}
+			return bytesRead.length;
+		};
 		http.contentLength = offsetSize;
+	}
+
+	void beginUploadStreamHash() {
+		uploadQuickXorStreamHasher = QuickXorStreamHasher();
+		uploadStreamHashBytes = 0;
+		uploadStreamHashActive = true;
+	}
+
+	void cancelUploadStreamHash() {
+		uploadStreamHashActive = false;
+		uploadStreamHashBytes = 0;
+	}
+
+	void finishUploadStreamHash(CurlResponse uploadResponse = null) {
+		if (!uploadStreamHashActive) {
+			return;
+		}
+
+		if (uploadResponse !is null) {
+			response = uploadResponse;
+		} else {
+			setResponseHolder(null);
+		}
+
+		response.streamedQuickXorHash = uploadQuickXorStreamHasher.finishB64();
+		response.hasStreamedQuickXorHash = true;
+		response.streamedHashBytes = uploadStreamHashBytes;
+		cancelUploadStreamHash();
 	}
 	
 	void setZeroContentLength() {
@@ -602,8 +640,8 @@ class CurlEngine {
 			response.hasStreamedQuickXorHash = true;
 			response.streamedHashBytes = streamedHashBytes;
 		}
-		
-		// Return the response which now has the file has generated from the download stream
+
+		// Return the response which now has the file hash generated from the download stream
 		if (debugLogging) {addLogEntry("response.streamedQuickXorHash = " ~ response.streamedQuickXorHash, ["debug"]);}
 		return response;
 	}
