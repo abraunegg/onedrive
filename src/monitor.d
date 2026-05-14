@@ -185,6 +185,29 @@ struct ActionHolder {
 	Action[] actions;
 	size_t[string] srcMap;
 
+	private string normaliseMonitorPath(string path) {
+		if (path.empty) return path;
+		return (path[0] == '.') ? path : "./" ~ path;
+	}
+
+	private bool isSameOrChildPath(string parent, string candidate) {
+		string normalisedParent = normaliseMonitorPath(parent);
+		string normalisedCandidate = normaliseMonitorPath(candidate);
+
+		return (normalisedCandidate == normalisedParent) || startsWith(normalisedCandidate, normalisedParent ~ "/");
+	}
+
+	private string rebasePath(string fromRoot, string toRoot, string candidate) {
+		string normalisedFromRoot = normaliseMonitorPath(fromRoot);
+		string normalisedCandidate = normaliseMonitorPath(candidate);
+
+		if (normalisedCandidate == normalisedFromRoot) {
+			return toRoot;
+		}
+
+		return toRoot ~ normalisedCandidate[normalisedFromRoot.length .. $];
+	}
+
 	void append(ActionType type, string src, string dst=null) {
 		size_t[] pendingTargets;
 		switch (type) {
@@ -197,6 +220,15 @@ struct ActionHolder {
 			case ActionType.createDir:
 				break;
 			case ActionType.deleted:
+				foreach (action; actions) {
+					if (action.skipped) continue;
+					if (action.type == ActionType.moved && isSameOrChildPath(action.src, src)) {
+						// A delete for an item underneath a pending move is an inotify artefact of the move.
+						// The parent move will update Microsoft OneDrive without deleting child items.
+						return;
+					}
+				}
+
 				if (src in srcMap) {
 					size_t pendingTarget = srcMap[src];
 					// Skip operations require reading local file that is gone
@@ -218,23 +250,20 @@ struct ActionHolder {
 						switch (actions[i].type) {
 							case ActionType.changed:
 							case ActionType.createDir:
-								// check if the source is the prefix of the target
-								string prefix = src ~ "/";
-								string target = actions[i].src;
-								if (prefix[0] != '.')
-									prefix = "./" ~ prefix;
-								if (target[0] != '.')
-									target = "./" ~ target;
-								string comm = commonPrefix(prefix, target);
-								if (src == actions[i].src || comm.length == prefix.length) {
-									// Hold operations require reading local file that is moved after the target is moved online
+								if (isSameOrChildPath(src, actions[i].src)) {
+									// Hold operations requiring local reads until after the target is moved online.
 									pendingTargets ~= i;
 									actions[i].skipped = true;
 									srcMap.remove(actions[i].src);
-									if (comm.length == target.length)
-										actions[i].src = dst;
-									else
-										actions[i].src = dst ~ target[comm.length - 1 .. target.length];
+									actions[i].src = rebasePath(src, dst, actions[i].src);
+								}
+								break;
+							case ActionType.deleted:
+								if (isSameOrChildPath(src, actions[i].src)) {
+									// Suppress delete notifications for children of a moved directory.
+									// These are artefacts of the local move and must not become remote deletes.
+									actions[i].skipped = true;
+									srcMap.remove(actions[i].src);
 								}
 								break;
 							default:
