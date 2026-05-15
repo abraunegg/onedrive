@@ -12790,11 +12790,20 @@ class SyncEngine {
 				if (hasFileSize(uploadResponse) && hasQuickXorHash(uploadResponse)) {
 					uploadFileSize = uploadResponse["size"].integer;
 					uploadFileHash = uploadResponse["file"]["hashes"]["quickXorHash"].str;
-					if (("streamedQuickXorHash" in uploadResponse) && (uploadResponse["streamedQuickXorHash"].type() == JSONType.string) && (!uploadResponse["streamedQuickXorHash"].str.empty)) {
-						if (debugLogging) {addLogEntry("Using streamed QuickXorHash for upload integrity validation", ["debug"]);}
-						localFileHash = uploadResponse["streamedQuickXorHash"].str;
+					
+					// Do we use the upload stream calculated hash or do we generate the hash?
+					if (!appConfig.getValueBool("disable_upload_hash_streaming")) {
+						// Use the upload stream calculated hash
+						if (("streamedQuickXorHash" in uploadResponse) && (uploadResponse["streamedQuickXorHash"].type() == JSONType.string) && (!uploadResponse["streamedQuickXorHash"].str.empty)) {
+							if (debugLogging) {addLogEntry("Using streamed QuickXorHash for upload integrity validation", ["debug"]);}
+							localFileHash = uploadResponse["streamedQuickXorHash"].str;
+						} else {
+							if (debugLogging) {addLogEntry("Generating QuickXorHash for upload integrity validation", ["debug"]);}
+							localFileHash = computeQuickXorHash(localFilePath);
+						}
 					} else {
-						if (debugLogging) {addLogEntry("Generating QuickXorHash for upload integrity validation", ["debug"]);}
+						// Calculate the hash
+						if (debugLogging) {addLogEntry("Forcing the generation QuickXorHash for upload integrity validation", ["debug"]);}
 						localFileHash = computeQuickXorHash(localFilePath);
 					}
 				} else {

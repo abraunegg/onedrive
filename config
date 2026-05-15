@@ -52,6 +52,9 @@
 ## This setting controls whether the application will set the permissions on files and directories using the values of 'sync_dir_permissions' and 'sync_file_permissions'.
 #disable_permission_set = "false"
 
+## This setting controls whether the client uses hash values calculated while streaming file uploads.
+#disable_upload_hash_streaming = "false"
+
 ## This option determines whether the client will conduct integrity validation on files uploaded to Microsoft OneDrive.
 #disable_upload_validation = "false"
 
