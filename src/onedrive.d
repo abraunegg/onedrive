@@ -1941,6 +1941,12 @@ class OneDriveApi {
 	private JSONValue put(const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0, bool startUploadStreamHash=false, bool finishUploadStreamHash=false, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
+			scope(failure) {
+				if (startUploadStreamHash) {
+					curlEngine.cancelUploadStreamHash();
+				}
+			}
+
 			connect(HTTP.Method.put, url, skipToken, response);
 			if (startUploadStreamHash) {
 				curlEngine.beginUploadStreamHash();
