@@ -60,9 +60,9 @@ class AccountDetailsException: Exception {
 }
 
 class SyncException: Exception {
-    @nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__) {
-        super(msg, file, line);
-    }
+	@nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__) {
+		super(msg, file, line);
+	}
 }
 
 struct DriveDetailsCache {
@@ -159,7 +159,7 @@ class SyncEngine {
 	// However, when downloading files from SharePoint, the OneDrive API will not advise the correct file size 
 	// which means that the application thinks the file download has failed as the size is different / hash is different
 	// See: https://github.com/abraunegg/onedrive/discussions/1667
-    bool disableDownloadValidation = false;
+	bool disableDownloadValidation = false;
 	
 	// Do we configure to disable the upload validation routine due to --disable-upload-validation
 	// We will always validate our uploads
@@ -4081,6 +4081,8 @@ class SyncEngine {
 				if (!dryRun) {
 					// Attempt to download the file as there is enough free space locally
 					OneDriveApi downloadFileOneDriveApiInstance;
+					bool hasDownloadedStreamedQuickXorHash = false;
+					string downloadedStreamedQuickXorHash;
 					
 					try {	
 						// Initialise API instance
@@ -4093,7 +4095,15 @@ class SyncEngine {
 						}
 						
 						// Perform the download with any applicable set offset
-						downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset);
+						auto downloadResponse = downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset);
+						if (downloadResponse !is null) {
+							hasDownloadedStreamedQuickXorHash = downloadResponse.hasStreamedQuickXorHash;
+							downloadedStreamedQuickXorHash = downloadResponse.streamedQuickXorHash;
+						} else {
+							if (debugLogging) {
+								addLogEntry("downloadResponse is null", ["debug"]);
+							}
+						}
 						
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						downloadFileOneDriveApiInstance.releaseCurlEngine();
@@ -4176,8 +4186,18 @@ class SyncEngine {
 							
 							if (!OneDriveFileXORHash.empty) {
 								onlineFileHash = OneDriveFileXORHash;
-								// Calculate the QuickXOHash for this file
-								downloadedFileHash = computeQuickXorHash(newItemPath);
+								// Use the streamed QuickXorHash from the completed download when available; otherwise calculate the QuickXorHash for this file
+								if (hasDownloadedStreamedQuickXorHash) {
+									if (debugLogging) {
+										addLogEntry("Using stream calculated hash", ["debug"]);
+									}
+									downloadedFileHash = downloadedStreamedQuickXorHash;
+								} else {
+									if (debugLogging) {
+										addLogEntry("Must generate file hash", ["debug"]);
+									}
+									downloadedFileHash = computeQuickXorHash(newItemPath);
+								}
 							} else {
 								onlineFileHash = OneDriveFileSHA256Hash;
 								// Fallback: Calculate the SHA256 Hash for this file
@@ -6539,7 +6559,7 @@ class SyncEngine {
 
 							// Avoid duplicating the shared-folder anchor if it is already present.
 							if (!selfBuiltPath.startsWith("/" ~ sharedFolderAnchorPath ~ "/") &&
-							    selfBuiltPath != "/" ~ sharedFolderAnchorPath) {
+								selfBuiltPath != "/" ~ sharedFolderAnchorPath) {
 								selfBuiltPath = sharedFolderAnchorPath ~ selfBuiltPath;
 								if (debugLogging) {addLogEntry("selfBuiltPath after full shared-folder anchor update = " ~ to!string(selfBuiltPath), ["debug"]);}
 							} else {
@@ -12770,7 +12790,22 @@ class SyncEngine {
 				if (hasFileSize(uploadResponse) && hasQuickXorHash(uploadResponse)) {
 					uploadFileSize = uploadResponse["size"].integer;
 					uploadFileHash = uploadResponse["file"]["hashes"]["quickXorHash"].str;
-					localFileHash = computeQuickXorHash(localFilePath);
+					
+					// Do we use the upload stream calculated hash or do we generate the hash?
+					if (!appConfig.getValueBool("disable_upload_hash_streaming")) {
+						// Use the upload stream calculated hash
+						if (("streamedQuickXorHash" in uploadResponse) && (uploadResponse["streamedQuickXorHash"].type() == JSONType.string) && (!uploadResponse["streamedQuickXorHash"].str.empty)) {
+							if (debugLogging) {addLogEntry("Using streamed QuickXorHash for upload integrity validation", ["debug"]);}
+							localFileHash = uploadResponse["streamedQuickXorHash"].str;
+						} else {
+							if (debugLogging) {addLogEntry("Generating QuickXorHash for upload integrity validation", ["debug"]);}
+							localFileHash = computeQuickXorHash(localFilePath);
+						}
+					} else {
+						// Calculate the hash
+						if (debugLogging) {addLogEntry("Forcing the generation QuickXorHash for upload integrity validation", ["debug"]);}
+						localFileHash = computeQuickXorHash(localFilePath);
+					}
 				} else {
 					if (verboseLogging) {
 						addLogEntry("Online file validation unable to be performed: input JSON whilst valid did not contain data which could be validated", ["verbose"]);
@@ -13438,8 +13473,8 @@ class SyncEngine {
 							}
 							// If a share-password was passed use it when creating the link 
 							if (strip(appConfig.getValueString("share_password")) != "") {
-                                                                accessScope["password"] = appConfig.getValueString("share_password");
-                                                        }
+																accessScope["password"] = appConfig.getValueString("share_password");
+														}
 							
 							// Try and create the shareable file link
 							try {

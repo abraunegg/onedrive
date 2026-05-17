@@ -21,6 +21,7 @@ Before reading this document, please ensure you are running application version 
   - [disable_download_validation](#disable_download_validation)
   - [disable_notifications](#disable_notifications)
   - [disable_permission_set](#disable_permission_set)
+  - [disable_upload_hash_streaming](#disable_upload_hash_streaming)
   - [disable_upload_validation](#disable_upload_validation)
   - [disable_version_check](#disable_version_check)
   - [disable_websocket_support](#disable_websocket_support)
@@ -320,6 +321,17 @@ _**Value Type:**_ Boolean
 _**Default Value:**_ False
 
 _**Config Example:**_ `disable_permission_set = "false"` or `disable_permission_set = "true"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+### disable_upload_hash_streaming
+_**Description:**_ This setting controls whether the client uses hash values calculated while streaming file uploads. When set to `false`, the client will use upload-streamed hash values where available and valid, falling back to the traditional local hash generation path if upload hash streaming is unavailable or fails. When set to `true`, the client will ignore hash values calculated during upload streaming and will always generate upload hashes using the traditional local file hash generation path. This option is primarily intended as a compatibility and diagnostic fail-safe for upload scenarios where Microsoft OneDrive or SharePoint may modify uploaded file content or metadata after upload, causing the hash later reported by Microsoft Graph to differ from the hash calculated during the upload stream.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `disable_upload_hash_streaming = "false"` or `disable_upload_hash_streaming = "true"`
 
 _**CLI Option Use:**_ *None - this is a config file option only*
 

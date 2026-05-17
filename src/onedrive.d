@@ -1137,13 +1137,13 @@ class OneDriveApi {
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
 	JSONValue simpleUpload(string localPath, string parentDriveId, string parentId, string filename) {
 		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/content";
-		return put(url, localPath);
+		return put(url, localPath, false, null, 0, 0, true, true);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
 	JSONValue simpleUploadReplace(string localPath, string driveId, string id) {
 		string url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content";
-		return put(url, localPath);
+		return put(url, localPath, false, null, 0, 0, true, true);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createuploadsession
@@ -1174,7 +1174,9 @@ class OneDriveApi {
 		checkAccessTokenExpired();
 		
 		// Perform the HTTP PUT action to upload the file fragment
-		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize);
+		bool startUploadStreamHash = (offset == 0);
+		bool finishUploadStreamHash = ((offset + offsetSize) == fileSize);
+		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize, startUploadStreamHash, finishUploadStreamHash);
 	}
 	
 	// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#resuming-an-in-progress-upload
@@ -1263,7 +1265,7 @@ class OneDriveApi {
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
-	void downloadById(const(char)[] driveId, const(char)[] itemId, string saveToPath, long fileSize, JSONValue onlineHash, long resumeOffset = 0) {
+	CurlResponse downloadById(const(char)[] driveId, const(char)[] itemId, string saveToPath, long fileSize, JSONValue onlineHash, long resumeOffset = 0) {
 		// Set this function name
 		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
 	
@@ -1312,7 +1314,13 @@ class OneDriveApi {
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ itemId ~ "/content?AVOverride=1";
 		
 		// Download file using the URL created above
-		downloadFile(driveId, itemId, url, saveToPath, fileSize, onlineHash, resumeOffset);
+		CurlResponse downloadResponse = downloadFile(driveId, itemId, url, saveToPath, fileSize, onlineHash, resumeOffset);
+		if (downloadResponse !is null) {
+			if (debugLogging) {
+				addLogEntry("downloadById() downloadResponse.hasStreamedQuickXorHash = " ~ to!string(downloadResponse.hasStreamedQuickXorHash), ["debug"]);
+				addLogEntry("downloadById() downloadResponse.streamedQuickXorHash = " ~ downloadResponse.streamedQuickXorHash, ["debug"]);
+			}
+		}
 		
 		// Does downloaded file now exist locally?
 		if (exists(saveToPath)) {
@@ -1326,6 +1334,10 @@ class OneDriveApi {
 				if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ saveToPath, ["debug"]);}
 			}
 		}
+
+		// Return the CurlResponse from the completed download so callers can inspect
+		// any metadata populated by curlEngine.download(), such as streamed hashes.
+		return downloadResponse;
 	}
 	
 	// Return the actual siteSearchUrl being used and/or requested when performing 'siteQuery = onedrive.o365SiteSearch(nextLink);' call
@@ -1585,7 +1597,7 @@ class OneDriveApi {
 	}
 	
 	// Download a file based on the URL request
-	private void downloadFile(const(char)[] driveId, const(char)[] itemId, const(char)[] url, string filename, long fileSize, JSONValue onlineHash, long resumeOffset = 0, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+	private CurlResponse downloadFile(const(char)[] driveId, const(char)[] itemId, const(char)[] url, string filename, long fileSize, JSONValue onlineHash, long resumeOffset = 0, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
 
@@ -1625,7 +1637,15 @@ class OneDriveApi {
 		// Validate the JSON response
 		bool validateJSONResponse = false;
 
+		// Preserve the final CurlResponse returned by curlEngine.download() so it can
+		// be returned to the caller after oneDriveErrorHandlerWrapper() completes.
+		CurlResponse downloadResponse = null;
+
 		oneDriveErrorHandlerWrapper((CurlResponse response) {
+			if (debugLogging) {
+				addLogEntry("downloadFile() wrapper response.hasStreamedQuickXorHash before download = " ~ to!string(response.hasStreamedQuickXorHash), ["debug"]);
+				addLogEntry("downloadFile() wrapper response.streamedQuickXorHash before download = " ~ response.streamedQuickXorHash, ["debug"]);
+			}
 			connect(HTTP.Method.get, url, false, response);
 
 			if (fileSize >= thresholdFileSize) {
@@ -1841,8 +1861,23 @@ class OneDriveApi {
 				// No progress bar, no resumable download
 			}
 
+			// Ensure curlEngine.download() continues to populate the wrapper-owned
+			// CurlResponse, preserving metadata such as streamed hashes.
+			curlEngine.setResponseHolder(response);
+
 			// Capture the result of the download action
 			auto result = curlEngine.download(originalFilename, downloadFilename);
+			if (result !is null) {
+				if (debugLogging) {
+					addLogEntry("downloadFile() result.hasStreamedQuickXorHash = " ~ to!string(result.hasStreamedQuickXorHash), ["debug"]);
+					addLogEntry("downloadFile() result.streamedQuickXorHash = " ~ result.streamedQuickXorHash, ["debug"]);
+				}
+			}
+			if (debugLogging) {
+				addLogEntry("downloadFile() wrapper response.hasStreamedQuickXorHash after download = " ~ to!string(response.hasStreamedQuickXorHash), ["debug"]);
+				addLogEntry("downloadFile() wrapper response.streamedQuickXorHash after download = " ~ response.streamedQuickXorHash, ["debug"]);
+			}
+			downloadResponse = result;
 
 			// Safe remove 'threadResumeDownloadFilePath' as if we get to this point, the file has been downloaded successfully
 			safeRemove(threadResumeDownloadFilePath);
@@ -1853,6 +1888,15 @@ class OneDriveApi {
 			// Return the applicable result
 			return result;
 		}, validateJSONResponse, callingFunction, lineno);
+
+		// Return the CurlResponse captured from the successful download attempt.
+		if (downloadResponse !is null) {
+			if (debugLogging) {
+				addLogEntry("downloadFile() final downloadResponse.hasStreamedQuickXorHash = " ~ to!string(downloadResponse.hasStreamedQuickXorHash), ["debug"]);
+				addLogEntry("downloadFile() final downloadResponse.streamedQuickXorHash = " ~ downloadResponse.streamedQuickXorHash, ["debug"]);
+			}
+		}
+		return downloadResponse;
 	}
 
 	// Save the resume download data
@@ -1894,12 +1938,29 @@ class OneDriveApi {
 		}, validateJSONResponse, callingFunction, lineno);
 	}
 	
-	private JSONValue put(const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+	private JSONValue put(const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0, bool startUploadStreamHash=false, bool finishUploadStreamHash=false, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
+			scope(failure) {
+				if (startUploadStreamHash) {
+					curlEngine.cancelUploadStreamHash();
+				}
+			}
+
 			connect(HTTP.Method.put, url, skipToken, response);
+			if (startUploadStreamHash) {
+				curlEngine.beginUploadStreamHash();
+			}
 			curlEngine.setFile(filepath, contentRange, offset, offsetSize);
-			return curlEngine.execute();
+			auto uploadResponse = curlEngine.execute();
+			if (finishUploadStreamHash) {
+				curlEngine.finishUploadStreamHash(uploadResponse);
+				if (debugLogging) {
+					addLogEntry("response.hasStreamedQuickXorHash = " ~ to!string(response.hasStreamedQuickXorHash), ["debug"]);
+					addLogEntry("response.streamedQuickXorHash = " ~ response.streamedQuickXorHash, ["debug"]);
+				}
+			}
+			return uploadResponse;
 		}, validateJSONResponse, callingFunction, lineno);
 	}
 
@@ -1943,6 +2004,15 @@ class OneDriveApi {
 				if (response.hasResponse) {
 					// Process the response
 					result = response.json();
+
+					// Preserve any streamed QuickXorHash calculated by curlEngine against
+					// the JSON response returned to callers. This keeps upload validation
+					// able to consume the streamed hash without changing the public upload
+					// return type away from JSONValue.
+					if (response.hasStreamedQuickXorHash && (result.type() == JSONType.object)) {
+						result["streamedQuickXorHash"] = JSONValue(response.streamedQuickXorHash);
+					}
+
 					// Print response if 'debugHTTPSResponse' is flagged
 					if (debugHTTPSResponse){
 						if (debugLogging) {addLogEntry("Microsoft Graph API Response: " ~ response.dumpResponse(), ["debug"]);}
