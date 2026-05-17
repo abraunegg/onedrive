@@ -425,8 +425,8 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
         return f"Syncing this OneDrive Business Shared Folder: {shared_folder_path.strip('/')}"
 
     def _build_scenarios(self) -> list[BusinessSharedFolderSyncListScenario]:
-        core = "Documents/BSF_CORE"
-        mixed = "Documents/BSF_MIXED_FILES"
+        core = "Data/BSF_CORE"
+        mixed = "Data/BSF_MIXED_FILES"
         core_dataset_a = f"{core}/DATASET_A"
         core_dataset_b = f"{core}/DATASET_B"
         core_files = f"{core_dataset_b}/files"
@@ -488,23 +488,37 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             mixed_deep_file,
         )
 
+        sharepoint_root = "Data Monitoring - Documents"
+        sharepoint_root_deep_file = f"{sharepoint_root}/Data Monitoring/Updates/debug_output.log"
+        user_root_apostrophe = "Issue_3613 - Folder with ' in it"
+        user_root_empty = "test user's files - Empty_Folder"
+        user_root_subfolder = "test user's files - Sub Folder 3"
+        user_root_subfolder_deep_file = f"{user_root_subfolder}/awerqwerqwer/file0.data"
+        user_root_container = "User Shared Folders/test user's files - Top Folder"
+        user_root_container_logging = f"{user_root_container}/Logging"
+        user_root_container_samba = f"{user_root_container}/samba4-dependancies/Logging Update"
+        jenkins_1 = "Jenkins_1"
+        jenkins_2 = "Jenkins_2"
+        jenkins_1_deep_file = f"{jenkins_1}/LatestBuilds/today/dummy.file"
+        jenkins_2_file = f"{jenkins_2}/new_directory/another_new_file.txt"
+
         return [
             BusinessSharedFolderSyncListScenario(
                 scenario_id="SL-0001",
-                description="rooted include of BSF_CORE shared folder tree with trailing slash",
+                description="rooted include of Data/BSF_CORE shared folder tree with trailing slash",
                 sync_list=[f"/{core}/"],
                 expected_entries=self._entries_under(core),
                 required_present=[f"{core}/DATASET_A/Document1.docx", f"{core_dataset_b}/README.txt"],
-                required_absent=[f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_absent=[f"{mixed_dataset_a}/Document2.docx", "Data/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
                 required_stdout_markers=[self._marker(core)],
             ),
             BusinessSharedFolderSyncListScenario(
                 scenario_id="SL-0002",
-                description="rooted include of BSF_MIXED_FILES shared folder tree without trailing slash",
+                description="rooted include of Data/BSF_MIXED_FILES shared folder tree without trailing slash",
                 sync_list=[f"/{mixed}"],
                 expected_entries=self._entries_under(mixed),
                 required_present=[f"{mixed_dataset_a}/Document2.docx", mixed_deep_file],
-                required_absent=[f"{core_dataset_b}/README.txt", "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_absent=[f"{core_dataset_b}/README.txt", "Data/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
                 required_stdout_markers=[self._marker(mixed)],
             ),
             BusinessSharedFolderSyncListScenario(
@@ -611,7 +625,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 ],
                 expected_entries=both_shared_folders,
                 required_present=[f"{core_dataset_b}/README.txt", f"{mixed_dataset_a}/Document2.docx", mixed_deep_file],
-                required_absent=["Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_absent=["Data/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
                 required_stdout_markers=[self._marker(core), self._marker(mixed)],
             ),
             BusinessSharedFolderSyncListScenario(
@@ -620,7 +634,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 sync_list=[f"/{core}/DATASET_*/", f"/{mixed}/DATASET_B/"],
                 expected_entries=dataset_b_pair + self._entries_under(core_dataset_a),
                 required_present=[f"{core_dataset_a}/Document1.docx", f"{core_dataset_b}/README.txt", mixed_deep_file],
-                required_absent=[f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_absent=[f"{mixed_dataset_a}/Document2.docx", "Data/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
                 required_stdout_markers=[self._marker(core), self._marker(mixed)],
             ),
             BusinessSharedFolderSyncListScenario(
@@ -727,7 +741,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 ],
                 expected_entries=self._entries_under(core),
                 required_present=[f"{core_dataset_b}/README.txt", f"{core_upload_target}/"],
-                required_absent=[f"{core}_RENAMED/", f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_absent=[f"{core}_RENAMED/", f"{mixed_dataset_a}/Document2.docx", "Data/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
                 required_stdout_markers=[self._marker(core)],
             ),
             BusinessSharedFolderSyncListScenario(
@@ -739,7 +753,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                     + self._entries_under(mixed_upload_target)
                 )),
                 required_present=[mixed_deep_file, f"{mixed_upload_target}/"],
-                required_absent=[f"{core_dataset_b}/README.txt", f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/L2/L3/deepfile.txt"],
+                required_absent=[f"{core_dataset_b}/README.txt", f"{mixed_dataset_a}/Document2.docx", "Data/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/L2/L3/deepfile.txt"],
                 required_stdout_markers=[self._marker(mixed)],
             ),
             BusinessSharedFolderSyncListScenario(
@@ -751,7 +765,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 ],
                 expected_entries=self._entries_under(core),
                 required_present=[f"{core_dataset_b}/README.txt", f"{core_files}/", f"{core_files}/data.txt"],
-                required_absent=[f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_absent=[f"{mixed_dataset_a}/Document2.docx", "Data/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
                 required_stdout_markers=[self._marker(core)],
                 cleanup_local_stale_files=[f"{core}/DATASET_B/files/bsftc0003-local-stale.txt"],
             ),
@@ -780,7 +794,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 ],
                 expected_entries=sorted(set(self._entries_under(core_dataset_a) + self._entries_under(mixed_dataset_a))),
                 required_present=[f"{core_dataset_a}/Document1.docx", f"{mixed_dataset_a}/Document2.docx", f"{mixed_dataset_a}/Presentation5.pptx"],
-                required_absent=[f"{core_dataset_b}/README.txt", mixed_deep_file, "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_absent=[f"{core_dataset_b}/README.txt", mixed_deep_file, "Data/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
                 required_stdout_markers=[self._marker(core), self._marker(mixed)],
             ),
             BusinessSharedFolderSyncListScenario(
@@ -795,7 +809,88 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                     + self._entries_exact(mixed_deep_file)
                 )),
                 required_present=[f"{core_dataset_b}/README.txt", mixed_deep_file],
-                required_absent=[f"{core_files}/data.txt", f"{mixed_dataset_a}/Document2.docx", "Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
+                required_absent=[f"{core_files}/data.txt", f"{mixed_dataset_a}/Document2.docx", "Data/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
                 required_stdout_markers=[self._marker(core), self._marker(mixed)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0028",
+                description="rooted include of SharePoint-backed root Business shared folder",
+                sync_list=[f"/{sharepoint_root}/"],
+                expected_entries=self._entries_under(sharepoint_root),
+                required_present=[sharepoint_root_deep_file],
+                required_absent=[f"{core_dataset_b}/README.txt", f"{user_root_container}/FirstBackup.spg"],
+                required_stdout_markers=[self._marker(sharepoint_root)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0029",
+                description="rooted include of user-owned root Business shared folder containing an apostrophe",
+                sync_list=[f"/{user_root_apostrophe}/"],
+                expected_entries=self._entries_under(user_root_apostrophe),
+                required_present=[f"{user_root_apostrophe}/local-file.txt", f"{user_root_apostrophe}/file14.data"],
+                required_absent=[sharepoint_root_deep_file, f"{user_root_container}/FirstBackup.spg"],
+                required_stdout_markers=[self._marker(user_root_apostrophe)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0030",
+                description="rooted include of user-owned shared folder below renamed container folder",
+                sync_list=[f"/{user_root_container}/"],
+                expected_entries=self._entries_under(user_root_container),
+                required_present=[
+                    f"{user_root_container}/FirstBackup.spg",
+                    f"{user_root_container_logging}/sync.d",
+                    f"{user_root_container_samba}/README.md",
+                ],
+                required_absent=[f"{user_root_apostrophe}/local-file.txt", sharepoint_root_deep_file],
+                required_stdout_markers=[self._marker(user_root_container)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0031",
+                description="exact include of empty user-owned Business shared folder at account root",
+                sync_list=[f"/{user_root_empty}/"],
+                expected_entries=self._entries_under(user_root_empty),
+                required_present=[f"{user_root_empty}/"],
+                required_absent=[user_root_subfolder_deep_file, f"{user_root_container}/FirstBackup.spg"],
+                required_stdout_markers=[self._marker(user_root_empty)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0032",
+                description="deep include below user-owned Business shared folder at account root",
+                sync_list=[f"/{user_root_subfolder}/awerqwerqwer/file0.data"],
+                expected_entries=self._entries_exact(user_root_subfolder_deep_file),
+                required_present=[user_root_subfolder_deep_file],
+                required_absent=[f"{user_root_subfolder}/awerqwerqwer/file1.data", f"{user_root_container}/FirstBackup.spg"],
+                required_stdout_markers=[self._marker(user_root_subfolder)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0033",
+                description="multiple user-owned root Business shared folders without sibling leakage",
+                sync_list=[
+                    f"/{jenkins_1}/LatestBuilds/today/dummy.file",
+                    f"/{jenkins_2}/new_directory/another_new_file.txt",
+                ],
+                expected_entries=sorted(set(
+                    self._entries_exact(jenkins_1_deep_file)
+                    + self._entries_exact(jenkins_2_file)
+                )),
+                required_present=[jenkins_1_deep_file, jenkins_2_file],
+                required_absent=[f"{jenkins_1}/OldBuilds/7-11-2021/dummy.file", f"{jenkins_2}/newfile.txt"],
+                required_stdout_markers=[self._marker(jenkins_1), self._marker(jenkins_2)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0034",
+                description="mixed SharePoint-backed and user-owned Business shared-folder exact includes",
+                sync_list=[
+                    f"/{sharepoint_root_deep_file}",
+                    f"/{user_root_container_logging}/sync.d",
+                    f"/{core_dataset_b}/README.txt",
+                ],
+                expected_entries=sorted(set(
+                    self._entries_exact(sharepoint_root_deep_file)
+                    + self._entries_exact(f"{user_root_container_logging}/sync.d")
+                    + self._entries_exact(f"{core_dataset_b}/README.txt")
+                )),
+                required_present=[sharepoint_root_deep_file, f"{user_root_container_logging}/sync.d", f"{core_dataset_b}/README.txt"],
+                required_absent=[f"{user_root_container_logging}/log.d", f"{core_files}/data.txt", f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(sharepoint_root), self._marker(user_root_container), self._marker(core)],
             ),
         ]
