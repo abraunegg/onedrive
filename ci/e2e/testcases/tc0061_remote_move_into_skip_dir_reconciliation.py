@@ -8,21 +8,21 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
 class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
     case_id = "0061"
     name = "remote move into skip_dir reconciliation"
     description = (
-        "Validate that items remotely moved from an included path into a skipped directory "
-        "are removed from the old local path, are not downloaded into the skipped path, "
-        "and remain present online at the skipped destination"
+        "Validate that an existing skip_dir-configured client reconciles a remote-side "
+        "move from an included path into a skipped path using the same local root, "
+        "configuration directory, and items.sqlite3 state established before the move"
     )
 
     def _build_skip_config_text(self, sync_dir: Path, skipped_relative: str) -> str:
         return (
-            "# tc0061 skip_dir client config\n"
+            "# tc0061 skip-aware Linux client config\n"
             f'sync_dir = "{sync_dir}"\n'
             'bypass_data_preservation = "true"\n'
             f'skip_dir = "{skipped_relative}"\n'
@@ -31,7 +31,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
 
     def _build_unfiltered_config_text(self, sync_dir: Path) -> str:
         return (
-            "# tc0061 unfiltered mutator / verifier config\n"
+            "# tc0061 unfiltered remote-side mutator / verifier config\n"
             f'sync_dir = "{sync_dir}"\n'
             'bypass_data_preservation = "true"\n'
         )
@@ -43,7 +43,6 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
         command: list[str],
         stdout_file: Path,
         stderr_file: Path,
-        artifacts: list[str],
         details: dict[str, object],
         detail_key: str,
     ):
@@ -51,9 +50,19 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
         result = run_command(command, cwd=context.repo_root)
         write_text_file(stdout_file, result.stdout)
         write_text_file(stderr_file, result.stderr)
-        artifacts.extend([str(stdout_file), str(stderr_file)])
         details[f"{detail_key}_returncode"] = result.returncode
         return result
+
+    def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
+        write_text_file(
+            metadata_file,
+            "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+        )
+
+    def _list_files_under(self, root: Path) -> list[str]:
+        if not root.exists():
+            return []
+        return sorted(str(path.relative_to(root)) for path in root.rglob("*") if path.is_file())
 
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
@@ -65,18 +74,23 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
         case_log_dir = layout.log_dir
         state_dir = layout.state_dir
 
-        skip_sync_root = case_work_dir / "skip-client-syncroot"
-        mutator_sync_root = case_work_dir / "mutator-syncroot"
-        verify_sync_root = case_work_dir / "verify-syncroot"
-        skip_conf = case_work_dir / "conf-skip-client"
-        mutator_conf = case_work_dir / "conf-mutator"
-        verify_conf = case_work_dir / "conf-verify"
+        linux_sync_root = case_work_dir / "linux-skip-client-syncroot"
+        mutator_sync_root = case_work_dir / "remote-mutator-syncroot"
+        verify_sync_root = case_work_dir / "remote-truth-verify-syncroot"
+
+        linux_conf = case_work_dir / "conf-linux-skip-client"
+        mutator_conf = case_work_dir / "conf-remote-mutator"
+        verify_conf = case_work_dir / "conf-remote-truth-verify"
+
+        reset_directory(linux_sync_root)
+        reset_directory(mutator_sync_root)
+        reset_directory(verify_sync_root)
 
         root_name = f"ZZ_E2E_TC0061_{context.run_id}_{os.getpid()}"
         dcim_relative = f"{root_name}/Pictures/DCIM"
         archive_relative = f"{root_name}/Pictures/Archive"
         archive_2025_relative = f"{archive_relative}/2025"
-        skipped_relative = f"{root_name}/Pictures/Archive"
+        skipped_relative = archive_relative
 
         source_files = {
             f"{dcim_relative}/photo-001.txt": "TC0061 photo 001\n",
@@ -89,8 +103,8 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
         }
 
         context.prepare_minimal_config_dir(
-            skip_conf,
-            self._build_skip_config_text(skip_sync_root, skipped_relative),
+            linux_conf,
+            self._build_skip_config_text(linux_sync_root, skipped_relative),
         )
         context.prepare_minimal_config_dir(
             mutator_conf,
@@ -102,9 +116,27 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
         )
 
         for relative_path, content in source_files.items():
-            write_text_file(skip_sync_root / relative_path, content)
+            write_text_file(linux_sync_root / relative_path, content)
 
-        artifacts: list[str] = []
+        phase_files = {
+            "seed": (case_log_dir / "phase1_linux_seed_stdout.log", case_log_dir / "phase1_linux_seed_stderr.log"),
+            "mutator_download": (case_log_dir / "phase2_mutator_download_stdout.log", case_log_dir / "phase2_mutator_download_stderr.log"),
+            "mutator_move_upload": (case_log_dir / "phase3_mutator_move_upload_stdout.log", case_log_dir / "phase3_mutator_move_upload_stderr.log"),
+            "reconcile": (case_log_dir / "phase4_linux_skip_reconcile_stdout.log", case_log_dir / "phase4_linux_skip_reconcile_stderr.log"),
+            "verify": (case_log_dir / "phase5_remote_truth_verify_stdout.log", case_log_dir / "phase5_remote_truth_verify_stderr.log"),
+        }
+
+        linux_manifest_file = state_dir / "linux_skip_client_manifest_after_reconcile.txt"
+        verify_manifest_file = state_dir / "remote_truth_manifest.txt"
+        metadata_file = state_dir / "metadata.txt"
+
+        artifacts = [
+            *(str(path) for pair in phase_files.values() for path in pair),
+            str(linux_manifest_file),
+            str(verify_manifest_file),
+            str(metadata_file),
+        ]
+
         details: dict[str, object] = {
             "root_name": root_name,
             "dcim_relative": dcim_relative,
@@ -113,26 +145,18 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
             "skipped_relative": skipped_relative,
             "source_files": sorted(source_files),
             "moved_files": sorted(moved_files),
-            "skip_sync_root": str(skip_sync_root),
+            "linux_sync_root": str(linux_sync_root),
             "mutator_sync_root": str(mutator_sync_root),
             "verify_sync_root": str(verify_sync_root),
+            "linux_conf": str(linux_conf),
+            "mutator_conf": str(mutator_conf),
+            "verify_conf": str(verify_conf),
+            "linux_items_db": str(linux_conf / "items.sqlite3"),
         }
 
-        seed_stdout = case_log_dir / "seed_stdout.log"
-        seed_stderr = case_log_dir / "seed_stderr.log"
-        mutator_download_stdout = case_log_dir / "mutator_download_stdout.log"
-        mutator_download_stderr = case_log_dir / "mutator_download_stderr.log"
-        mutator_upload_stdout = case_log_dir / "mutator_upload_stdout.log"
-        mutator_upload_stderr = case_log_dir / "mutator_upload_stderr.log"
-        reconcile_stdout = case_log_dir / "reconcile_stdout.log"
-        reconcile_stderr = case_log_dir / "reconcile_stderr.log"
-        verify_stdout = case_log_dir / "verify_stdout.log"
-        verify_stderr = case_log_dir / "verify_stderr.log"
-        local_manifest_file = state_dir / "skip_client_manifest.txt"
-        verify_manifest_file = state_dir / "remote_verify_manifest.txt"
-        metadata_file = state_dir / "metadata.txt"
-        artifacts.extend([str(local_manifest_file), str(verify_manifest_file), str(metadata_file)])
-
+        # Phase 1: seed the remote source path using the same skip_dir-configured
+        # Linux client that will later reconcile. This establishes the real local
+        # root + items.sqlite3 baseline for /Pictures/DCIM before the remote move.
         seed_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -142,24 +166,28 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
             "--resync-auth",
             "--single-directory",
             root_name,
-            "--syncdir",
-            str(skip_sync_root),
             "--confdir",
-            str(skip_conf),
+            str(linux_conf),
         ]
         seed_result = self._run_phase(
             context=context,
             command=seed_command,
-            stdout_file=seed_stdout,
-            stderr_file=seed_stderr,
-            artifacts=artifacts,
+            stdout_file=phase_files["seed"][0],
+            stderr_file=phase_files["seed"][1],
             details=details,
-            detail_key="seed",
+            detail_key="phase1_linux_seed",
         )
         if seed_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return self.fail_result(self.case_id, self.name, f"Seed sync failed with status {seed_result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Linux seed phase failed with status {seed_result.returncode}", artifacts, details)
 
+        details["linux_items_db_exists_after_seed"] = (linux_conf / "items.sqlite3").is_file()
+        details["linux_source_files_exist_after_seed"] = {
+            relative: (linux_sync_root / relative).is_file() for relative in source_files
+        }
+
+        # Phase 2: create an unfiltered second-client view of the remote tree.
+        # This represents the machine / OneDrive side that will perform the move.
         mutator_download_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -170,28 +198,28 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
             "--resync-auth",
             "--single-directory",
             root_name,
-            "--syncdir",
-            str(mutator_sync_root),
             "--confdir",
             str(mutator_conf),
         ]
         mutator_download_result = self._run_phase(
             context=context,
             command=mutator_download_command,
-            stdout_file=mutator_download_stdout,
-            stderr_file=mutator_download_stderr,
-            artifacts=artifacts,
+            stdout_file=phase_files["mutator_download"][0],
+            stderr_file=phase_files["mutator_download"][1],
             details=details,
-            detail_key="mutator_download",
+            detail_key="phase2_mutator_download",
         )
         if mutator_download_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return self.fail_result(self.case_id, self.name, f"Mutator download failed with status {mutator_download_result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Mutator download phase failed with status {mutator_download_result.returncode}", artifacts, details)
 
-        for source_relative, _content in source_files.items():
+        for source_relative in source_files:
             source_path = mutator_sync_root / source_relative
             destination_relative = source_relative.replace(dcim_relative, archive_2025_relative, 1)
             destination_path = mutator_sync_root / destination_relative
+            if not source_path.is_file():
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name, f"Mutator did not download expected source before move: {source_relative}", artifacts, details)
             destination_path.parent.mkdir(parents=True, exist_ok=True)
             source_path.rename(destination_path)
 
@@ -199,31 +227,40 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
         if dcim_mutator_path.exists():
             shutil.rmtree(dcim_mutator_path)
 
-        mutator_upload_command = [
+        details["mutator_source_files_exist_after_local_move"] = {
+            relative: (mutator_sync_root / relative).exists() for relative in source_files
+        }
+        details["mutator_destination_files_exist_after_local_move"] = {
+            relative: (mutator_sync_root / relative).is_file() for relative in moved_files
+        }
+
+        # Phase 3: propagate the move through the mutator client without --resync.
+        # Because the mutator has DB state from phase 2, this is the closest harness
+        # approximation of a remote-side move before the Linux skip client sees it.
+        mutator_move_upload_command = [
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
             "--verbose",
             "--single-directory",
             root_name,
-            "--syncdir",
-            str(mutator_sync_root),
             "--confdir",
             str(mutator_conf),
         ]
-        mutator_upload_result = self._run_phase(
+        mutator_move_upload_result = self._run_phase(
             context=context,
-            command=mutator_upload_command,
-            stdout_file=mutator_upload_stdout,
-            stderr_file=mutator_upload_stderr,
-            artifacts=artifacts,
+            command=mutator_move_upload_command,
+            stdout_file=phase_files["mutator_move_upload"][0],
+            stderr_file=phase_files["mutator_move_upload"][1],
             details=details,
-            detail_key="mutator_upload",
+            detail_key="phase3_mutator_move_upload",
         )
-        if mutator_upload_result.returncode != 0:
+        if mutator_move_upload_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return self.fail_result(self.case_id, self.name, f"Mutator upload failed with status {mutator_upload_result.returncode}", artifacts, details)
+            return self.fail_result(self.case_id, self.name, f"Mutator move/upload phase failed with status {mutator_move_upload_result.returncode}", artifacts, details)
 
+        # Phase 4: reconcile the original skip_dir-configured Linux client using
+        # the same sync root and same items.sqlite3 state from phase 1. No --resync.
         reconcile_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -231,21 +268,21 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
             "--verbose",
             "--single-directory",
             root_name,
-            "--syncdir",
-            str(skip_sync_root),
             "--confdir",
-            str(skip_conf),
+            str(linux_conf),
         ]
         reconcile_result = self._run_phase(
             context=context,
             command=reconcile_command,
-            stdout_file=reconcile_stdout,
-            stderr_file=reconcile_stderr,
-            artifacts=artifacts,
+            stdout_file=phase_files["reconcile"][0],
+            stderr_file=phase_files["reconcile"][1],
             details=details,
-            detail_key="reconcile",
+            detail_key="phase4_linux_skip_reconcile",
         )
 
+        # Phase 5: unfiltered verification only. This phase intentionally does not
+        # use skip_dir because its purpose is to prove the remote truth still has
+        # the moved archive files and no longer has the old DCIM files.
         verify_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -256,63 +293,88 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
             "--resync-auth",
             "--single-directory",
             root_name,
-            "--syncdir",
-            str(verify_sync_root),
             "--confdir",
             str(verify_conf),
         ]
         verify_result = self._run_phase(
             context=context,
             command=verify_command,
-            stdout_file=verify_stdout,
-            stderr_file=verify_stderr,
-            artifacts=artifacts,
+            stdout_file=phase_files["verify"][0],
+            stderr_file=phase_files["verify"][1],
             details=details,
-            detail_key="verify",
+            detail_key="phase5_remote_truth_verify",
         )
 
-        local_manifest = build_manifest(skip_sync_root)
+        linux_manifest = build_manifest(linux_sync_root)
         verify_manifest = build_manifest(verify_sync_root)
-        write_manifest(local_manifest_file, local_manifest)
+        write_manifest(linux_manifest_file, linux_manifest)
         write_manifest(verify_manifest_file, verify_manifest)
 
-        details["local_manifest"] = local_manifest
-        details["verify_manifest"] = verify_manifest
-        details["local_dcim_exists"] = (skip_sync_root / dcim_relative).exists()
-        details["local_archive_exists"] = (skip_sync_root / archive_relative).exists()
-        details["verify_dcim_exists"] = (verify_sync_root / dcim_relative).exists()
-        details["verify_archive_2025_exists"] = (verify_sync_root / archive_2025_relative).exists()
+        reconcile_output = phase_files["reconcile"][0].read_text(encoding="utf-8", errors="replace")
+        reconcile_errors = phase_files["reconcile"][1].read_text(encoding="utf-8", errors="replace")
+        reconcile_combined = reconcile_output + "\n" + reconcile_errors
+
+        details.update(
+            {
+                "linux_manifest": linux_manifest,
+                "verify_manifest": verify_manifest,
+                "linux_dcim_exists_after_reconcile": (linux_sync_root / dcim_relative).exists(),
+                "linux_archive_exists_after_reconcile": (linux_sync_root / archive_relative).exists(),
+                "verify_dcim_exists": (verify_sync_root / dcim_relative).exists(),
+                "verify_archive_2025_exists": (verify_sync_root / archive_2025_relative).exists(),
+                "linux_source_dir_files_after_reconcile": self._list_files_under(linux_sync_root / dcim_relative),
+                "linux_archive_dir_files_after_reconcile": self._list_files_under(linux_sync_root / archive_relative),
+                "verify_source_dir_files": self._list_files_under(verify_sync_root / dcim_relative),
+                "skip_dir_visible_in_reconcile_output": ("skip_dir" in reconcile_combined and skipped_relative in reconcile_combined),
+                "archive_download_logged_in_reconcile": any(
+                    f"Downloading file: {moved_relative}" in reconcile_combined for moved_relative in moved_files
+                ),
+            }
+        )
         self._write_metadata(metadata_file, details)
 
         failures: list[str] = []
         if reconcile_result.returncode != 0:
-            failures.append(f"Reconcile sync failed with status {reconcile_result.returncode}")
+            failures.append(f"Linux skip_dir reconciliation failed with status {reconcile_result.returncode}")
         if verify_result.returncode != 0:
-            failures.append(f"Remote verification failed with status {verify_result.returncode}")
+            failures.append(f"Remote truth verification failed with status {verify_result.returncode}")
+
+        if not details["linux_items_db_exists_after_seed"]:
+            failures.append("Linux skip client did not preserve items.sqlite3 after seed phase")
+
+        if not details["skip_dir_visible_in_reconcile_output"]:
+            failures.append("Reconcile phase output did not show skip_dir active for the Linux client")
+
+        if details["archive_download_logged_in_reconcile"]:
+            failures.append("Linux skip_dir reconcile phase attempted to download skipped archive files")
 
         for source_relative in source_files:
-            if source_relative in local_manifest or (skip_sync_root / source_relative).exists():
-                failures.append(f"Skipped client still contains old included source path after remote move: {source_relative}")
+            if source_relative in linux_manifest or (linux_sync_root / source_relative).exists():
+                failures.append(f"Linux skip client still contains old included source file after remote move: {source_relative}")
             if source_relative in verify_manifest or (verify_sync_root / source_relative).exists():
-                failures.append(f"Remote verification still contains old included source path after move: {source_relative}")
+                failures.append(f"Remote truth still contains old included source file after move: {source_relative}")
+
+        if details["linux_source_dir_files_after_reconcile"]:
+            failures.append(f"Linux skip client retained files under old source directory: {details['linux_source_dir_files_after_reconcile']}")
+        if details["verify_source_dir_files"]:
+            failures.append(f"Remote truth retained files under old source directory: {details['verify_source_dir_files']}")
 
         for moved_relative, expected_content in moved_files.items():
-            local_moved_path = skip_sync_root / moved_relative
+            linux_moved_path = linux_sync_root / moved_relative
             verify_moved_path = verify_sync_root / moved_relative
-            if local_moved_path.exists():
-                failures.append(f"Skipped client downloaded skipped destination unexpectedly: {moved_relative}")
+            if linux_moved_path.exists():
+                failures.append(f"Linux skip client downloaded skipped destination unexpectedly: {moved_relative}")
+            if moved_relative in linux_manifest:
+                failures.append(f"Linux skip client manifest contains skipped destination unexpectedly: {moved_relative}")
             if not verify_moved_path.is_file():
-                failures.append(f"Remote verification is missing moved skipped destination: {moved_relative}")
+                failures.append(f"Remote truth is missing moved skipped destination: {moved_relative}")
             elif verify_moved_path.read_text(encoding="utf-8", errors="replace") != expected_content:
-                failures.append(f"Remote verification content mismatch for moved skipped destination: {moved_relative}")
+                failures.append(f"Remote truth content mismatch for moved skipped destination: {moved_relative}")
+
+        if details["linux_archive_dir_files_after_reconcile"]:
+            failures.append(f"Linux skip client contains files under skipped archive directory: {details['linux_archive_dir_files_after_reconcile']}")
 
         if failures:
             return self.fail_result(self.case_id, self.name, "; ".join(failures), artifacts, details)
 
         return self.pass_result(self.case_id, self.name, artifacts, details)
-
-    def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
-        write_text_file(
-            metadata_file,
-            "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-        )
