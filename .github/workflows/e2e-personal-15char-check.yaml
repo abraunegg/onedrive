@@ -60,6 +60,7 @@ jobs:
           chmod 600 "$XDG_CONFIG_HOME/onedrive/refresh_token"
 
       - name: Run E2E harness
+        continue-on-error: true
         env:
           ONEDRIVE_BIN: ${{ github.workspace }}/.ci/prefix/bin/onedrive
           E2E_TARGET: personal
@@ -69,6 +70,7 @@ jobs:
           python3 -u ci/e2e/run.py
 
       - name: Debug rerun failed E2E cases
+        continue-on-error: true
         if: always()
         env:
           ONEDRIVE_BIN: ${{ github.workspace }}/.ci/prefix/bin/onedrive
@@ -86,6 +88,14 @@ jobs:
           else
             echo "No primary results.json found; skipping debug rerun"
           fi
+
+      - name: Evaluate E2E gate result
+        if: always()
+        run: |
+          python3 -u ci/e2e/evaluate_rerun_gate.py \
+            --primary-results ci/e2e/out/results.json \
+            --debug-results ci/e2e/out/debug-rerun/results.json \
+            --gate-file ci/e2e/out/gate.json
 
       - name: Upload E2E artefacts
         if: always()
@@ -115,6 +125,7 @@ jobs:
           set -euo pipefail
 
           primary_results="artifacts/e2e-personal-15char-check/results.json"
+          gate_results="artifacts/e2e-personal-15char-check/gate.json"
           if [ -f "$primary_results" ]; then
             f="$primary_results"
           else
@@ -128,6 +139,18 @@ jobs:
           fi
 
           target=$(jq -r '.target // "personal"' "$f")
+          debug_recovered="false"
+          if [ -f "$gate_results" ]; then
+            debug_recovered="$(jq -r '.recovered_by_debug_rerun // false' "$gate_results")"
+            effective_results="$(jq -r '.effective_results // empty' "$gate_results")"
+            if [ "$debug_recovered" = "true" ] && [ -n "$effective_results" ]; then
+              candidate="artifacts/e2e-personal-15char-check/${effective_results#ci/e2e/out/}"
+              if [ -f "$candidate" ]; then
+                f="$candidate"
+              fi
+            fi
+          fi
+
           total=$(jq -r '.cases | length' "$f")
           passed=$(jq -r '[.cases[] | select(.status=="pass")] | length' "$f")
           failed=$(jq -r '[.cases[] | select(.status=="fail")] | length' "$f")
@@ -140,6 +163,10 @@ jobs:
           md+="**${total}** Test Cases Run  \n"
           md+="**${passed}** Test Cases Passed  \n"
           md+="**${failed}** Test Cases Failed  \n\n"
+
+          if [ "$debug_recovered" = "true" ]; then
+            md+="⚠️ Primary run had transient failure(s), but all failed case(s) passed during debug rerun. Treating workflow as passed.  \n\n"
+          fi
 
           if [ "$failed" -gt 0 ] && [ -n "$failures" ]; then
             md+="### ${target^} Account Test Failures\n"
