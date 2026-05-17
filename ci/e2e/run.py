@@ -72,6 +72,7 @@ from testcases.tc0057_recycle_bin_delete_behaviour_validation import TestCase005
 from testcases.tc0058_monitor_download_only_cleanup_cadence import TestCase0058MonitorDownloadOnlyCleanupCadence
 from testcases.tc0059_websocket_remote_upload_notification import TestCase0059WebSocketRemoteUploadNotification
 from testcases.tc0060_monitor_mode_local_move_no_delete_reupload import TestCase0060MonitorModeLocalMoveNoDeleteReupload
+from testcases.tc0061_remote_move_into_skip_dir_reconciliation import TestCase0061RemoteMoveIntoSkipDirReconciliation
 
 def build_test_suite() -> list:
     return [
@@ -135,6 +136,7 @@ def build_test_suite() -> list:
         TestCase0058MonitorDownloadOnlyCleanupCadence(),
         TestCase0059WebSocketRemoteUploadNotification(),
         TestCase0060MonitorModeLocalMoveNoDeleteReupload(),
+        TestCase0061RemoteMoveIntoSkipDirReconciliation(),
     ]
 
 
