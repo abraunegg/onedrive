@@ -12,11 +12,12 @@ from framework.utils import command_to_string, reset_directory, run_command, wri
 
 class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
     case_id = "0061"
-    name = "remote move into skip_dir reconciliation"
+    name = "remote move into skip_dir removes stale local source files"
     description = (
-        "Validate that an existing skip_dir-configured client reconciles a remote-side "
-        "move from an included path into a skipped path using the same local root, "
-        "configuration directory, and items.sqlite3 state established before the move"
+        "Validate that an existing skip_dir-configured client removes stale local "
+        "source files after a second synced endpoint moves those files from an "
+        "included path into a skipped path, while preserving unrelated files that "
+        "remain in the original source directory"
     )
 
     SYNC_COMPLETE_PATTERN = "Sync with Microsoft OneDrive is complete"
@@ -134,14 +135,22 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         archive_2025_relative = f"{archive_relative}/2025"
         skipped_relative = "Pictures/Archive"
 
-        source_files = {
+        # Keep one file behind in DCIM to model Norbert's clarified case:
+        # only selected files are moved out to the skipped archive path, while
+        # the source directory remains valid because it still contains other
+        # synced content.
+        moved_source_files = {
             f"{dcim_relative}/photo-001.txt": "TC0061 photo 001\n",
             f"{dcim_relative}/photo-002.txt": "TC0061 photo 002\n",
             f"{dcim_relative}/photo-003.txt": "TC0061 photo 003\n",
         }
+        retained_source_files = {
+            f"{dcim_relative}/keep-synced.txt": "TC0061 file intentionally retained in DCIM\n",
+        }
+        source_files = {**moved_source_files, **retained_source_files}
         moved_files = {
             path.replace(dcim_relative, archive_2025_relative, 1): content
-            for path, content in source_files.items()
+            for path, content in moved_source_files.items()
         }
 
         context.prepare_minimal_config_dir(
@@ -188,6 +197,8 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             "archive_2025_relative": archive_2025_relative,
             "skipped_relative": skipped_relative,
             "source_files": sorted(source_files),
+            "moved_source_files": sorted(moved_source_files),
+            "retained_source_files": sorted(retained_source_files),
             "moved_files": sorted(moved_files),
             "linux_sync_root": str(linux_sync_root),
             "mutator_sync_root": str(mutator_sync_root),
@@ -347,7 +358,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             move_results: dict[str, bool] = {}
             current_log_offset = mutation_log_start_offset
 
-            for source_relative in sorted(source_files):
+            for source_relative in sorted(moved_source_files):
                 destination_relative = source_relative.replace(dcim_relative, archive_2025_relative, 1)
                 source_path = mutator_sync_root / source_relative
                 destination_path = mutator_sync_root / destination_relative
@@ -384,7 +395,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             details["mutator_required_move_patterns"] = required_move_patterns
             details["mutator_per_file_move_results"] = move_results
 
-            mutator_move_processed = all(move_results.get(relative, False) for relative in sorted(source_files))
+            mutator_move_processed = all(move_results.get(relative, False) for relative in sorted(moved_source_files))
             details["mutator_move_processed"] = mutator_move_processed
             details["mutator_post_move_bad_markers"] = self._contains_bad_monitor_move_side_effects(mutator_post_move_log_segment)
             details["mutator_post_move_log_segment_length"] = len(mutator_post_move_log_segment)
@@ -504,16 +515,35 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         if details["archive_download_logged_in_reconcile"]:
             failures.append("Linux skip_dir reconcile phase attempted to download skipped archive files")
 
-        for source_relative in source_files:
+        for source_relative in moved_source_files:
             if source_relative in linux_manifest or (linux_sync_root / source_relative).exists():
-                failures.append(f"Linux skip client still contains old included source file after remote move: {source_relative}")
+                failures.append(f"Linux skip client still contains stale moved source file after remote move into skip_dir: {source_relative}")
             if source_relative in verify_manifest or (verify_sync_root / source_relative).exists():
-                failures.append(f"Remote truth still contains old included source file after move: {source_relative}")
+                failures.append(f"Remote truth still contains old moved source file after move: {source_relative}")
 
-        if details["linux_source_dir_files_after_reconcile"]:
-            failures.append(f"Linux skip client retained files under old source directory: {details['linux_source_dir_files_after_reconcile']}")
-        if details["verify_source_dir_files"]:
-            failures.append(f"Remote truth retained files under old source directory: {details['verify_source_dir_files']}")
+        for retained_relative, expected_content in retained_source_files.items():
+            linux_retained_path = linux_sync_root / retained_relative
+            verify_retained_path = verify_sync_root / retained_relative
+            if not linux_retained_path.is_file():
+                failures.append(f"Linux skip client removed retained source file unexpectedly: {retained_relative}")
+            elif linux_retained_path.read_text(encoding="utf-8", errors="replace") != expected_content:
+                failures.append(f"Linux skip client retained source content mismatch: {retained_relative}")
+            if not verify_retained_path.is_file():
+                failures.append(f"Remote truth is missing retained source file unexpectedly: {retained_relative}")
+            elif verify_retained_path.read_text(encoding="utf-8", errors="replace") != expected_content:
+                failures.append(f"Remote truth retained source content mismatch: {retained_relative}")
+
+        expected_linux_source_dir_files = sorted(str(Path(relative).relative_to(dcim_relative)) for relative in retained_source_files)
+        if details["linux_source_dir_files_after_reconcile"] != expected_linux_source_dir_files:
+            failures.append(
+                "Linux skip client source directory contents after reconcile are incorrect: "
+                f"expected {expected_linux_source_dir_files}, got {details['linux_source_dir_files_after_reconcile']}"
+            )
+        if details["verify_source_dir_files"] != expected_linux_source_dir_files:
+            failures.append(
+                "Remote truth source directory contents after move are incorrect: "
+                f"expected {expected_linux_source_dir_files}, got {details['verify_source_dir_files']}"
+            )
 
         for moved_relative, expected_content in moved_files.items():
             linux_moved_path = linux_sync_root / moved_relative
