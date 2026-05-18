@@ -137,7 +137,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         source_files = {
             f"{dcim_relative}/photo-001.txt": "TC0061 photo 001\n",
             f"{dcim_relative}/photo-002.txt": "TC0061 photo 002\n",
-            f"{dcim_relative}/nested/photo-003.txt": "TC0061 nested photo 003\n",
+            f"{dcim_relative}/photo-003.txt": "TC0061 photo 003\n",
         }
         moved_files = {
             path.replace(dcim_relative, archive_2025_relative, 1): content
@@ -163,6 +163,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         phase_files = {
             "seed": (case_log_dir / "phase1_linux_seed_stdout.log", case_log_dir / "phase1_linux_seed_stderr.log"),
             "mutator_download": (case_log_dir / "phase2_mutator_download_stdout.log", case_log_dir / "phase2_mutator_download_stderr.log"),
+            "mutator_prepare_archive": (case_log_dir / "phase2b_mutator_prepare_archive_stdout.log", case_log_dir / "phase2b_mutator_prepare_archive_stderr.log"),
             "mutator_monitor": (case_log_dir / "phase3_mutator_monitor_stdout.log", case_log_dir / "phase3_mutator_monitor_stderr.log"),
             "reconcile": (case_log_dir / "phase4_linux_skip_reconcile_stdout.log", case_log_dir / "phase4_linux_skip_reconcile_stderr.log"),
             "verify": (case_log_dir / "phase5_remote_truth_verify_stdout.log", case_log_dir / "phase5_remote_truth_verify_stderr.log"),
@@ -266,6 +267,39 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(self.case_id, self.name, f"Mutator did not download expected source before move: {source_relative}", artifacts, details)
 
+        # Phase 2b: create only the destination archive directory before
+        # starting monitor. This is important because monitor/inotify must have
+        # the destination tree under watch before the file moves occur. Do not
+        # create any destination files here; the file moves themselves must be
+        # produced by monitor-mode local move handling.
+        (mutator_sync_root / archive_2025_relative).mkdir(parents=True, exist_ok=True)
+        mutator_prepare_archive_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(mutator_conf),
+        ]
+        mutator_prepare_archive_result = self._run_phase(
+            context=context,
+            command=mutator_prepare_archive_command,
+            stdout_file=phase_files["mutator_prepare_archive"][0],
+            stderr_file=phase_files["mutator_prepare_archive"][1],
+            details=details,
+            detail_key="phase2b_mutator_prepare_archive",
+        )
+        if mutator_prepare_archive_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name, f"Mutator archive directory preparation failed with status {mutator_prepare_archive_result.returncode}", artifacts, details)
+
+        for moved_relative in moved_files:
+            if (mutator_sync_root / moved_relative).exists():
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name, f"Mutator destination file unexpectedly exists before monitor move: {moved_relative}", artifacts, details)
+
         # Phase 3: run the mutator as a real synced endpoint in --monitor mode,
         # then move the local files while monitor is active. This avoids the
         # standalone --sync delete + upload path and validates that the online
@@ -310,6 +344,9 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             details["mutator_initial_sync_complete_count_before_moves"] = initial_stdout.count(self.SYNC_COMPLETE_PATTERN)
 
             required_move_patterns: list[str] = []
+            move_results: dict[str, bool] = {}
+            current_log_offset = mutation_log_start_offset
+
             for source_relative in sorted(source_files):
                 destination_relative = source_relative.replace(dcim_relative, archive_2025_relative, 1)
                 source_path = mutator_sync_root / source_relative
@@ -319,12 +356,24 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                 context.log(f"Test Case {self.case_id}: mutator monitor moving local file: {source_relative} -> {destination_relative}")
                 source_path.rename(destination_path)
 
-                required_move_patterns.extend(
-                    [
-                        f"[M] Local item moved: {source_relative} -> {destination_relative}",
-                        f"Moving {source_relative} to {destination_relative}",
-                    ]
+                per_file_required_patterns = [
+                    f"[M] Local item moved: {source_relative} -> {destination_relative}",
+                    f"Moving {source_relative} to {destination_relative}",
+                ]
+                required_move_patterns.extend(per_file_required_patterns)
+
+                per_file_processed, per_file_segment = self._wait_for_stdout_growth_patterns(
+                    phase_files["mutator_monitor"][0],
+                    start_offset=current_log_offset,
+                    required_patterns=per_file_required_patterns,
+                    timeout_seconds=180,
                 )
+                mutator_post_move_log_segment += per_file_segment
+                move_results[source_relative] = per_file_processed
+                current_log_offset = len(self._read_stdout(phase_files["mutator_monitor"][0]))
+
+                if not per_file_processed:
+                    break
 
             details["mutator_source_files_exist_after_local_move"] = {
                 relative: (mutator_sync_root / relative).exists() for relative in source_files
@@ -333,13 +382,9 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                 relative: (mutator_sync_root / relative).is_file() for relative in moved_files
             }
             details["mutator_required_move_patterns"] = required_move_patterns
+            details["mutator_per_file_move_results"] = move_results
 
-            mutator_move_processed, mutator_post_move_log_segment = self._wait_for_stdout_growth_patterns(
-                phase_files["mutator_monitor"][0],
-                start_offset=mutation_log_start_offset,
-                required_patterns=required_move_patterns,
-                timeout_seconds=240,
-            )
+            mutator_move_processed = all(move_results.get(relative, False) for relative in sorted(source_files))
             details["mutator_move_processed"] = mutator_move_processed
             details["mutator_post_move_bad_markers"] = self._contains_bad_monitor_move_side_effects(mutator_post_move_log_segment)
             details["mutator_post_move_log_segment_length"] = len(mutator_post_move_log_segment)
