@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 
-from framework.base import E2ETestCase
+from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
-class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
+class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
     case_id = "0061"
     name = "remote move into skip_dir reconciliation"
     description = (
@@ -20,18 +19,33 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
         "configuration directory, and items.sqlite3 state established before the move"
     )
 
-    def _build_skip_config_text(self, sync_dir: Path, skipped_relative: str) -> str:
-        return (
-            "# tc0061 skip-aware Linux client config\n"
-            f'sync_dir = "{sync_dir}"\n'
-            'bypass_data_preservation = "true"\n'
-            f'skip_dir = "{skipped_relative}"\n'
-            'skip_dir_strict_match = "true"\n'
+    SYNC_COMPLETE_PATTERN = "Sync with Microsoft OneDrive is complete"
+
+    def _build_skip_config_text(self, sync_dir: Path) -> str:
+        return self._build_config_text(
+            sync_dir,
+            sync_dir.parent / "linux-skip-client-app-logs",
+            extra_config_lines=[
+                'skip_dir = "Pictures/Archive"',
+                'skip_dir_strict_match = "true"',
+            ],
+        )
+
+    def _build_mutator_monitor_config_text(self, sync_dir: Path, app_log_dir: Path) -> str:
+        return self._build_config_text(
+            sync_dir,
+            app_log_dir,
+            extra_config_lines=[
+                # This testcase uses the mutator as the remote-side synced endpoint.
+                # Keep WebSocket disabled so the online move is driven by local
+                # inotify move detection rather than remote notification timing.
+                'disable_websocket_support = "true"',
+            ],
         )
 
     def _build_unfiltered_config_text(self, sync_dir: Path) -> str:
         return (
-            "# tc0061 unfiltered remote-side mutator / verifier config\n"
+            "# tc0061 unfiltered remote truth verifier config\n"
             f'sync_dir = "{sync_dir}"\n'
             'bypass_data_preservation = "true"\n'
         )
@@ -53,16 +67,43 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
         details[f"{detail_key}_returncode"] = result.returncode
         return result
 
-    def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
-        write_text_file(
-            metadata_file,
-            "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-        )
-
     def _list_files_under(self, root: Path) -> list[str]:
         if not root.exists():
             return []
         return sorted(str(path.relative_to(root)) for path in root.rglob("*") if path.is_file())
+
+    def _contains_bad_monitor_move_side_effects(self, log_segment: str) -> list[str]:
+        bad_markers = [
+            "Trying to delete this item as requested:",
+            "The local item has been deleted:",
+            "Uploading new file:",
+            "Uploading changed file:",
+            "Deleted local items to delete on Microsoft OneDrive:",
+        ]
+        return [marker for marker in bad_markers if marker in log_segment]
+
+    def _wait_for_stdout_growth_patterns(
+        self,
+        stdout_file: Path,
+        *,
+        start_offset: int,
+        required_patterns: list[str],
+        timeout_seconds: int = 180,
+        poll_interval: float = 0.5,
+    ) -> tuple[bool, str]:
+        import time
+
+        deadline = time.time() + timeout_seconds
+        latest_segment = ""
+
+        while time.time() < deadline:
+            content = self._read_stdout(stdout_file)
+            latest_segment = content[start_offset:]
+            if all(pattern in latest_segment for pattern in required_patterns):
+                return True, latest_segment
+            time.sleep(poll_interval)
+
+        return False, latest_segment
 
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
@@ -81,6 +122,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
         linux_conf = case_work_dir / "conf-linux-skip-client"
         mutator_conf = case_work_dir / "conf-remote-mutator"
         verify_conf = case_work_dir / "conf-remote-truth-verify"
+        mutator_app_log_dir = case_log_dir / "mutator-app-logs"
 
         reset_directory(linux_sync_root)
         reset_directory(mutator_sync_root)
@@ -90,7 +132,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
         dcim_relative = f"{root_name}/Pictures/DCIM"
         archive_relative = f"{root_name}/Pictures/Archive"
         archive_2025_relative = f"{archive_relative}/2025"
-        skipped_relative = archive_relative
+        skipped_relative = "Pictures/Archive"
 
         source_files = {
             f"{dcim_relative}/photo-001.txt": "TC0061 photo 001\n",
@@ -104,11 +146,11 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
 
         context.prepare_minimal_config_dir(
             linux_conf,
-            self._build_skip_config_text(linux_sync_root, skipped_relative),
+            self._build_skip_config_text(linux_sync_root),
         )
         context.prepare_minimal_config_dir(
             mutator_conf,
-            self._build_unfiltered_config_text(mutator_sync_root),
+            self._build_mutator_monitor_config_text(mutator_sync_root, mutator_app_log_dir),
         )
         context.prepare_minimal_config_dir(
             verify_conf,
@@ -121,7 +163,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
         phase_files = {
             "seed": (case_log_dir / "phase1_linux_seed_stdout.log", case_log_dir / "phase1_linux_seed_stderr.log"),
             "mutator_download": (case_log_dir / "phase2_mutator_download_stdout.log", case_log_dir / "phase2_mutator_download_stderr.log"),
-            "mutator_move_upload": (case_log_dir / "phase3_mutator_move_upload_stdout.log", case_log_dir / "phase3_mutator_move_upload_stderr.log"),
+            "mutator_monitor": (case_log_dir / "phase3_mutator_monitor_stdout.log", case_log_dir / "phase3_mutator_monitor_stderr.log"),
             "reconcile": (case_log_dir / "phase4_linux_skip_reconcile_stdout.log", case_log_dir / "phase4_linux_skip_reconcile_stderr.log"),
             "verify": (case_log_dir / "phase5_remote_truth_verify_stdout.log", case_log_dir / "phase5_remote_truth_verify_stderr.log"),
         }
@@ -135,6 +177,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
             str(linux_manifest_file),
             str(verify_manifest_file),
             str(metadata_file),
+            str(mutator_app_log_dir),
         ]
 
         details: dict[str, object] = {
@@ -152,6 +195,8 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
             "mutator_conf": str(mutator_conf),
             "verify_conf": str(verify_conf),
             "linux_items_db": str(linux_conf / "items.sqlite3"),
+            "mutator_items_db": str(mutator_conf / "items.sqlite3"),
+            "mutator_websocket_disabled": True,
         }
 
         # Phase 1: seed the remote source path using the same skip_dir-configured
@@ -187,7 +232,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
         }
 
         # Phase 2: create an unfiltered second-client view of the remote tree.
-        # This represents the machine / OneDrive side that will perform the move.
+        # This represents the machine / OneDrive endpoint that will perform the move.
         mutator_download_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -213,51 +258,113 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
             self._write_metadata(metadata_file, details)
             return self.fail_result(self.case_id, self.name, f"Mutator download phase failed with status {mutator_download_result.returncode}", artifacts, details)
 
+        details["mutator_items_db_exists_after_download"] = (mutator_conf / "items.sqlite3").is_file()
+
         for source_relative in source_files:
             source_path = mutator_sync_root / source_relative
-            destination_relative = source_relative.replace(dcim_relative, archive_2025_relative, 1)
-            destination_path = mutator_sync_root / destination_relative
             if not source_path.is_file():
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(self.case_id, self.name, f"Mutator did not download expected source before move: {source_relative}", artifacts, details)
-            destination_path.parent.mkdir(parents=True, exist_ok=True)
-            source_path.rename(destination_path)
 
-        dcim_mutator_path = mutator_sync_root / dcim_relative
-        if dcim_mutator_path.exists():
-            shutil.rmtree(dcim_mutator_path)
-
-        details["mutator_source_files_exist_after_local_move"] = {
-            relative: (mutator_sync_root / relative).exists() for relative in source_files
-        }
-        details["mutator_destination_files_exist_after_local_move"] = {
-            relative: (mutator_sync_root / relative).is_file() for relative in moved_files
-        }
-
-        # Phase 3: propagate the move through the mutator client without --resync.
-        # Because the mutator has DB state from phase 2, this is the closest harness
-        # approximation of a remote-side move before the Linux skip client sees it.
-        mutator_move_upload_command = [
+        # Phase 3: run the mutator as a real synced endpoint in --monitor mode,
+        # then move the local files while monitor is active. This avoids the
+        # standalone --sync delete + upload path and validates that the online
+        # change is produced by monitor local-move handling.
+        mutator_monitor_command = [
             context.onedrive_bin,
             "--display-running-config",
-            "--sync",
+            "--monitor",
+            "--verbose",
             "--verbose",
             "--single-directory",
             root_name,
             "--confdir",
             str(mutator_conf),
         ]
-        mutator_move_upload_result = self._run_phase(
-            context=context,
-            command=mutator_move_upload_command,
-            stdout_file=phase_files["mutator_move_upload"][0],
-            stderr_file=phase_files["mutator_move_upload"][1],
-            details=details,
-            detail_key="phase3_mutator_move_upload",
+        context.log(f"Executing Test Case {self.case_id} phase3_mutator_monitor: {command_to_string(mutator_monitor_command)}")
+        process, initial_sync_complete = self._launch_monitor_process(
+            context,
+            mutator_monitor_command,
+            phase_files["mutator_monitor"][0],
+            phase_files["mutator_monitor"][1],
+            startup_timeout_seconds=300,
         )
-        if mutator_move_upload_result.returncode != 0:
+
+        mutator_move_processed = False
+        mutator_post_move_log_segment = ""
+        try:
+            details["mutator_monitor_initial_sync_complete"] = initial_sync_complete
+            if not initial_sync_complete:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(
+                    self.case_id,
+                    self.name,
+                    "Mutator monitor did not complete initial sync before local moves",
+                    artifacts,
+                    details,
+                )
+
+            initial_stdout = self._read_stdout(phase_files["mutator_monitor"][0])
+            mutation_log_start_offset = len(initial_stdout)
+            details["mutator_move_log_start_offset"] = mutation_log_start_offset
+            details["mutator_initial_sync_complete_count_before_moves"] = initial_stdout.count(self.SYNC_COMPLETE_PATTERN)
+
+            required_move_patterns: list[str] = []
+            for source_relative in sorted(source_files):
+                destination_relative = source_relative.replace(dcim_relative, archive_2025_relative, 1)
+                source_path = mutator_sync_root / source_relative
+                destination_path = mutator_sync_root / destination_relative
+                destination_path.parent.mkdir(parents=True, exist_ok=True)
+
+                context.log(f"Test Case {self.case_id}: mutator monitor moving local file: {source_relative} -> {destination_relative}")
+                source_path.rename(destination_path)
+
+                required_move_patterns.extend(
+                    [
+                        f"[M] Local item moved: {source_relative} -> {destination_relative}",
+                        f"Moving {source_relative} to {destination_relative}",
+                    ]
+                )
+
+            details["mutator_source_files_exist_after_local_move"] = {
+                relative: (mutator_sync_root / relative).exists() for relative in source_files
+            }
+            details["mutator_destination_files_exist_after_local_move"] = {
+                relative: (mutator_sync_root / relative).is_file() for relative in moved_files
+            }
+            details["mutator_required_move_patterns"] = required_move_patterns
+
+            mutator_move_processed, mutator_post_move_log_segment = self._wait_for_stdout_growth_patterns(
+                phase_files["mutator_monitor"][0],
+                start_offset=mutation_log_start_offset,
+                required_patterns=required_move_patterns,
+                timeout_seconds=240,
+            )
+            details["mutator_move_processed"] = mutator_move_processed
+            details["mutator_post_move_bad_markers"] = self._contains_bad_monitor_move_side_effects(mutator_post_move_log_segment)
+            details["mutator_post_move_log_segment_length"] = len(mutator_post_move_log_segment)
+        finally:
+            self._shutdown_monitor_process(process, details)
+
+        if not mutator_move_processed:
             self._write_metadata(metadata_file, details)
-            return self.fail_result(self.case_id, self.name, f"Mutator move/upload phase failed with status {mutator_move_upload_result.returncode}", artifacts, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Mutator monitor did not log all local file move operations before shutdown",
+                artifacts,
+                details,
+            )
+
+        if details["mutator_post_move_bad_markers"]:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Mutator monitor move processing logged delete/re-upload side effects: {details['mutator_post_move_bad_markers']}",
+                artifacts,
+                details,
+            )
 
         # Phase 4: reconcile the original skip_dir-configured Linux client using
         # the same sync root and same items.sqlite3 state from phase 1. No --resync.
@@ -325,7 +432,9 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
                 "linux_source_dir_files_after_reconcile": self._list_files_under(linux_sync_root / dcim_relative),
                 "linux_archive_dir_files_after_reconcile": self._list_files_under(linux_sync_root / archive_relative),
                 "verify_source_dir_files": self._list_files_under(verify_sync_root / dcim_relative),
-                "skip_dir_visible_in_reconcile_output": ("skip_dir" in reconcile_combined and skipped_relative in reconcile_combined),
+                "skip_dir_visible_in_reconcile_output": (
+                    "skip_dir" in reconcile_combined and skipped_relative in reconcile_combined
+                ),
                 "archive_download_logged_in_reconcile": any(
                     f"Downloading file: {moved_relative}" in reconcile_combined for moved_relative in moved_files
                 ),
@@ -341,6 +450,8 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(E2ETestCase):
 
         if not details["linux_items_db_exists_after_seed"]:
             failures.append("Linux skip client did not preserve items.sqlite3 after seed phase")
+        if not details["mutator_items_db_exists_after_download"]:
+            failures.append("Mutator client did not preserve items.sqlite3 after download phase")
 
         if not details["skip_dir_visible_in_reconcile_output"]:
             failures.append("Reconcile phase output did not show skip_dir active for the Linux client")
