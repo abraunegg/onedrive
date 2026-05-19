@@ -593,6 +593,10 @@ ZSH_COMPLETION_DIR
 BASH_COMPLETION_DIR
 bashcompdir
 COMPLETIONS
+BUILD_FUSE_FALSE
+BUILD_FUSE_TRUE
+FUSE_LIBS
+FUSE_CFLAGS
 dynamic_linker_LIBS
 bsd_inotify_LIBS
 NOTIFICATIONS
@@ -668,6 +672,7 @@ enable_version_check
 with_systemdsystemunitdir
 with_systemduserunitdir
 enable_notifications
+enable_fuse
 enable_completions
 with_bash_completion_dir
 with_zsh_completion_dir
@@ -690,6 +695,8 @@ dbus_CFLAGS
 dbus_LIBS
 notify_CFLAGS
 notify_LIBS
+FUSE_CFLAGS
+FUSE_LIBS
 bashcompdir'
 
 
@@ -1303,6 +1310,7 @@ Optional Features:
   --disable-version-check Disable checks of compiler version during configure
                           time
   --enable-notifications  Enable desktop notifications via libnotify
+  --disable-fuse          Disable FUSE on-demand support (default: enabled)
   --enable-completions    Install shell completions for bash, zsh, and fish
   --enable-debug          Pass debug option to the compiler
 
@@ -1338,6 +1346,8 @@ Some influential environment variables:
   notify_CFLAGS
               C compiler flags for notify, overriding pkg-config
   notify_LIBS linker flags for notify, overriding pkg-config
+  FUSE_CFLAGS C compiler flags for FUSE, overriding pkg-config
+  FUSE_LIBS   linker flags for FUSE, overriding pkg-config
   bashcompdir value of completionsdir for bash-completion, overriding
               pkg-config
 
@@ -2704,6 +2714,235 @@ esac
 
 
 
+# Check whether --enable-fuse was given.
+if test "${enable_fuse+set}" = set; then :
+  enableval=$enable_fuse; enable_fuse=$enableval
+else
+  enable_fuse=yes
+fi
+
+
+have_fuse=no
+
+if test "x$enable_fuse" = "xyes"; then :
+
+
+
+
+
+
+
+
+if test "x$ac_cv_env_PKG_CONFIG_set" != "xset"; then
+	if test -n "$ac_tool_prefix"; then
+  # Extract the first word of "${ac_tool_prefix}pkg-config", so it can be a program name with args.
+set dummy ${ac_tool_prefix}pkg-config; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_PKG_CONFIG+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $PKG_CONFIG in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_PKG_CONFIG="$PKG_CONFIG" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_path_PKG_CONFIG="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  ;;
+esac
+fi
+PKG_CONFIG=$ac_cv_path_PKG_CONFIG
+if test -n "$PKG_CONFIG"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $PKG_CONFIG" >&5
+$as_echo "$PKG_CONFIG" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+fi
+if test -z "$ac_cv_path_PKG_CONFIG"; then
+  ac_pt_PKG_CONFIG=$PKG_CONFIG
+  # Extract the first word of "pkg-config", so it can be a program name with args.
+set dummy pkg-config; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_ac_pt_PKG_CONFIG+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $ac_pt_PKG_CONFIG in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_ac_pt_PKG_CONFIG="$ac_pt_PKG_CONFIG" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_path_ac_pt_PKG_CONFIG="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  ;;
+esac
+fi
+ac_pt_PKG_CONFIG=$ac_cv_path_ac_pt_PKG_CONFIG
+if test -n "$ac_pt_PKG_CONFIG"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_pt_PKG_CONFIG" >&5
+$as_echo "$ac_pt_PKG_CONFIG" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+  if test "x$ac_pt_PKG_CONFIG" = x; then
+    PKG_CONFIG=""
+  else
+    case $cross_compiling:$ac_tool_warned in
+yes:)
+{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: using cross tools not prefixed with host triplet" >&5
+$as_echo "$as_me: WARNING: using cross tools not prefixed with host triplet" >&2;}
+ac_tool_warned=yes ;;
+esac
+    PKG_CONFIG=$ac_pt_PKG_CONFIG
+  fi
+else
+  PKG_CONFIG="$ac_cv_path_PKG_CONFIG"
+fi
+
+fi
+if test -n "$PKG_CONFIG"; then
+	_pkg_min_version=0.9.0
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking pkg-config is at least version $_pkg_min_version" >&5
+$as_echo_n "checking pkg-config is at least version $_pkg_min_version... " >&6; }
+	if $PKG_CONFIG --atleast-pkgconfig-version $_pkg_min_version; then
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+	else
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+		PKG_CONFIG=""
+	fi
+fi
+
+  # Require FUSE3 by default
+
+pkg_failed=no
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for FUSE" >&5
+$as_echo_n "checking for FUSE... " >&6; }
+
+if test -n "$FUSE_CFLAGS"; then
+    pkg_cv_FUSE_CFLAGS="$FUSE_CFLAGS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"fuse3\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "fuse3") 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_FUSE_CFLAGS=`$PKG_CONFIG --cflags "fuse3" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+if test -n "$FUSE_LIBS"; then
+    pkg_cv_FUSE_LIBS="$FUSE_LIBS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"fuse3\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "fuse3") 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_FUSE_LIBS=`$PKG_CONFIG --libs "fuse3" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+
+
+
+if test $pkg_failed = yes; then
+   	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
+        _pkg_short_errors_supported=yes
+else
+        _pkg_short_errors_supported=no
+fi
+        if test $_pkg_short_errors_supported = yes; then
+	        FUSE_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "fuse3" 2>&1`
+        else
+	        FUSE_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "fuse3" 2>&1`
+        fi
+	# Put the nasty error message in config.log where it belongs
+	echo "$FUSE_PKG_ERRORS" >&5
+
+
+	as_fn_error $? "libfuse3 development files not found. Please install fuse3-devel (Red Hat | Fedora | CentOS), libfuse3-dev (Debian | Ubuntu), fuse3 (Arch | Manjaro) or rerun with --disable-fuse" "$LINENO" 5
+
+elif test $pkg_failed = untried; then
+     	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+	as_fn_error $? "libfuse3 development files not found. Please install fuse3-devel (Red Hat | Fedora | CentOS), libfuse3-dev (Debian | Ubuntu), fuse3 (Arch | Manjaro) or rerun with --disable-fuse" "$LINENO" 5
+
+else
+	FUSE_CFLAGS=$pkg_cv_FUSE_CFLAGS
+	FUSE_LIBS=$pkg_cv_FUSE_LIBS
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+    have_fuse=yes
+
+$as_echo "#define HAVE_FUSE 1" >>confdefs.h
+
+
+fi
+
+fi
+
+ if test "x$have_fuse" = "xyes"; then
+  BUILD_FUSE_TRUE=
+  BUILD_FUSE_FALSE='#'
+else
+  BUILD_FUSE_TRUE='#'
+  BUILD_FUSE_FALSE=
+fi
+
+
+
+
+
 # Check whether --enable-completions was given.
 if test "${enable_completions+set}" = set; then :
   enableval=$enable_completions;
@@ -2956,6 +3195,10 @@ LIBOBJS=$ac_libobjs
 LTLIBOBJS=$ac_ltlibobjs
 
 
+if test -z "${BUILD_FUSE_TRUE}" && test -z "${BUILD_FUSE_FALSE}"; then
+  as_fn_error $? "conditional \"BUILD_FUSE\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
 
 : "${CONFIG_STATUS=./config.status}"
 ac_write_fail=0

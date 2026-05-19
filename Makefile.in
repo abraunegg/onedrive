@@ -28,7 +28,8 @@ NOTIFICATIONS = @NOTIFICATIONS@
 HAVE_SYSTEMD = @HAVE_SYSTEMD@
 systemduserunitdir = @systemduserunitdir@
 systemdsystemunitdir = @systemdsystemunitdir@
-all_libs = @curl_LIBS@ @sqlite_LIBS@ @dbus_LIBS@ @notify_LIBS@ @bsd_inotify_LIBS@ @dynamic_linker_LIBS@
+all_libs = @curl_LIBS@ @sqlite_LIBS@ @dbus_LIBS@ @notify_LIBS@ @bsd_inotify_LIBS@ @dynamic_linker_LIBS@ @FUSE_LIBS@
+
 COMPLETIONS = @COMPLETIONS@
 BASH_COMPLETION_DIR = @BASH_COMPLETION_DIR@
 ZSH_COMPLETION_DIR = @ZSH_COMPLETION_DIR@
@@ -43,6 +44,7 @@ VERSION_DCFLAG = @VERSION_DCFLAG@
 LINKER_DCFLAG = @LINKER_DCFLAG@
 OUTPUT_DCFLAG = @OUTPUT_DCFLAG@
 WERROR_DCFLAG = @WERROR_DCFLAG@
+FUSE_CFLAGS = @FUSE_CFLAGS@
 
 DCFLAGS += $(WERROR_DCFLAG)
 ifeq ($(DEBUG),yes)
@@ -86,7 +88,10 @@ SOURCES = \
 	src/xattr.d \
 	src/intune.d \
 	src/socketio.d \
-	src/curlWebsockets.d
+	src/curlWebsockets.d \
+	src/c/fuse/common.d \
+	src/c/fuse/fuse.d \
+	src/fused/fuse.d
 
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
@@ -109,7 +114,8 @@ onedrive: $(SOURCES)
 	else \
 		echo $(version) > version ; \
 	fi
-	$(DC) -J. $(GUI_NOTIFICATIONS) $(DCFLAGS) $^ $(addprefix $(LINKER_DCFLAG),$(all_libs)) $(OUTPUT_DCFLAG)$@
+	$(DC) -J. $(GUI_NOTIFICATIONS) $(DCFLAGS) $(FUSE_CFLAGS) $^ $(addprefix $(LINKER_DCFLAG),$(all_libs)) $(OUTPUT_DCFLAG)$@
+
 
 install: all
 	mkdir -p $(DESTDIR)$(bindir)
