@@ -212,6 +212,8 @@ class TestCase0028ControlCharacterNonUtf8FilenameValidation(E2ETestCase):
             "--download-only",
             "--resync",
             "--resync-auth",
+            "--single-directory",
+            root_name,
             "--confdir",
             str(verify_conf),
         ]
