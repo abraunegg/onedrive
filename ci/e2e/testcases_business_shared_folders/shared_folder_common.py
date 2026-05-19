@@ -12,95 +12,193 @@ from framework.manifest import build_typed_manifest, write_manifest
 from framework.utils import command_to_string, ensure_directory, write_text_file
 
 
-# Keep this suite intentionally focused on the stable Business Shared Folder
-# fixtures. The backing Business account contains other ad-hoc / legacy data;
-# validating the entire account tree would make these tests brittle for no
-# additional coverage value.
-REQUIRED_TYPED_MANIFEST_ENTRIES = [
-    'Documents/',
-    'Documents/BSF_CORE/',
-    'Documents/BSF_CORE/DATASET_A/',
-    'Documents/BSF_CORE/DATASET_A/Document1.docx',
-    'Documents/BSF_CORE/DATASET_A/image0.png',
-    'Documents/BSF_CORE/DATASET_A/image1.png',
-    'Documents/BSF_CORE/DATASET_A/image2.png',
-    'Documents/BSF_CORE/DATASET_A/image3.png',
-    'Documents/BSF_CORE/DATASET_A/image4.png',
-    'Documents/BSF_CORE/DATASET_B/',
-    'Documents/BSF_CORE/DATASET_B/README.txt',
-    'Documents/BSF_CORE/DATASET_B/empty-dir/',
-    'Documents/BSF_CORE/DATASET_B/files/',
-    'Documents/BSF_CORE/DATASET_B/files/data.txt',
-    'Documents/BSF_CORE/DATASET_B/files/image0.png',
-    'Documents/BSF_CORE/DATASET_B/files/image1.png',
-    'Documents/BSF_CORE/DATASET_B/nested/',
-    'Documents/BSF_CORE/DATASET_B/nested/exclude/',
-    'Documents/BSF_CORE/DATASET_B/nested/exclude/exclude.txt',
-    'Documents/BSF_CORE/DATASET_B/nested/keep/',
-    'Documents/BSF_CORE/DATASET_B/nested/keep/keep.txt',
-    'Documents/BSF_CORE/DATASET_B/nested/upload-target/',
-    'Documents/BSF_CORE/TOP_LEVEL/',
-    'Documents/BSF_CORE/TOP_LEVEL/PROJECTS/',
-    'Documents/BSF_CORE/TOP_LEVEL/PROJECTS/2026/',
-    'Documents/BSF_CORE/TOP_LEVEL/PROJECTS/2026/Week10/',
-    'Documents/BSF_CORE/TOP_LEVEL/PROJECTS/2026/Week10/debug_output.log',
-    'Documents/BSF_FILTER_MATRIX/',
-    'Documents/BSF_FILTER_MATRIX/CORE/',
-    'Documents/BSF_FILTER_MATRIX/CORE/README.txt',
-    'Documents/BSF_FILTER_MATRIX/CORE/empty-dir/',
-    'Documents/BSF_FILTER_MATRIX/CORE/files/',
-    'Documents/BSF_FILTER_MATRIX/CORE/files/data.txt',
-    'Documents/BSF_FILTER_MATRIX/CORE/files/image0.png',
-    'Documents/BSF_FILTER_MATRIX/CORE/files/image1.png',
-    'Documents/BSF_FILTER_MATRIX/CORE/nested/',
-    'Documents/BSF_FILTER_MATRIX/CORE/nested/exclude/',
-    'Documents/BSF_FILTER_MATRIX/CORE/nested/exclude/exclude.txt',
-    'Documents/BSF_FILTER_MATRIX/CORE/nested/keep/',
-    'Documents/BSF_FILTER_MATRIX/CORE/nested/keep/keep.txt',
-    'Documents/BSF_FILTER_MATRIX/CORE/nested/upload-target/',
-    'Documents/BSF_FILTER_MATRIX/DEEP_SOURCE/',
-    'Documents/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/',
-    'Documents/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/L2/',
-    'Documents/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/L2/L3/',
-    'Documents/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/L2/L3/deepfile.txt',
-    'Documents/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/L2/L3/upload-target/',
-    'Documents/BSF_FILTER_MATRIX/MINIMAL/',
-    'Documents/BSF_FILTER_MATRIX/MINIMAL/single.txt',
-    'Documents/BSF_FILTER_MATRIX/RENAME_ME/',
-    'Documents/BSF_FILTER_MATRIX/RENAME_ME/original.txt',
-    'Documents/BSF_FILTER_MATRIX/RENAME_ME/upload-target/',
-    'Documents/BSF_FILTER_MATRIX/TREE/',
-    'Documents/BSF_FILTER_MATRIX/TREE/A/',
-    'Documents/BSF_FILTER_MATRIX/TREE/A/B/',
-    'Documents/BSF_FILTER_MATRIX/TREE/A/B/C/',
-    'Documents/BSF_FILTER_MATRIX/TREE/A/B/C/tree.txt',
-    'Documents/BSF_FILTER_MATRIX/WIDE_SET/',
-    *[f'Documents/BSF_FILTER_MATRIX/WIDE_SET/file{i:02d}.txt' for i in range(50)],
-    'Documents/BSF_MIXED_FILES/',
-    'Documents/BSF_MIXED_FILES/DATASET_A/',
-    'Documents/BSF_MIXED_FILES/DATASET_A/Document2.docx',
-    'Documents/BSF_MIXED_FILES/DATASET_A/Presentation1.pptx',
-    'Documents/BSF_MIXED_FILES/DATASET_A/Presentation2.pptx',
-    'Documents/BSF_MIXED_FILES/DATASET_A/Presentation3.pptx',
-    'Documents/BSF_MIXED_FILES/DATASET_A/Presentation4.pptx',
-    'Documents/BSF_MIXED_FILES/DATASET_A/Presentation5.pptx',
-    'Documents/BSF_MIXED_FILES/DATASET_B/',
-    'Documents/BSF_MIXED_FILES/DATASET_B/L1/',
-    'Documents/BSF_MIXED_FILES/DATASET_B/L1/L2/',
-    'Documents/BSF_MIXED_FILES/DATASET_B/L1/L2/L3/',
-    'Documents/BSF_MIXED_FILES/DATASET_B/L1/L2/L3/deepfile.txt',
-    'Documents/BSF_MIXED_FILES/DATASET_B/L1/L2/L3/upload-target/',
-]
+# Keep this suite intentionally focused on the canonical immutable Business
+# Shared Folder fixture. This fixture intentionally contains a mix of:
+#   - SharePoint-backed Business Shared Folders below Data/
+#   - SharePoint-backed Business Shared Folders at the account root
+#   - user-owned Business Shared Folders at the account root
+#   - user-owned Business Shared Folders below a renamed container folder
+#   - default-drive/owned content below Data/BSF_FILTER_MATRIX
+#
+# Do not replace this with a whole-account assertion unless the online fixture
+# is intentionally changed. The backing Business account may contain other
+# ad-hoc / legacy data; validating only this known immutable topology keeps the
+# test deterministic while still proving the critical path handling.
+
+def _dir(path: str) -> str:
+    return path.rstrip("/") + "/"
+
+
+def _files(prefix: str, names: list[str]) -> list[str]:
+    return [f"{prefix.rstrip('/')}/{name}" for name in names]
+
+
+def _dirs(*paths: str) -> list[str]:
+    return [_dir(path) for path in paths]
+
+
+REQUIRED_TYPED_MANIFEST_ENTRIES = sorted(set(
+    _dirs(
+        "Data",
+        "Data/BSF_CORE",
+        "Data/BSF_CORE/DATASET_A",
+        "Data/BSF_CORE/DATASET_B",
+        "Data/BSF_CORE/DATASET_B/empty-dir",
+        "Data/BSF_CORE/DATASET_B/files",
+        "Data/BSF_CORE/DATASET_B/nested",
+        "Data/BSF_CORE/DATASET_B/nested/exclude",
+        "Data/BSF_CORE/DATASET_B/nested/keep",
+        "Data/BSF_CORE/DATASET_B/nested/upload-target",
+        "Data/BSF_CORE/TOP_LEVEL",
+        "Data/BSF_CORE/TOP_LEVEL/PROJECTS",
+        "Data/BSF_CORE/TOP_LEVEL/PROJECTS/2026",
+        "Data/BSF_CORE/TOP_LEVEL/PROJECTS/2026/Week10",
+        "Data/BSF_FILTER_MATRIX",
+        "Data/BSF_FILTER_MATRIX/CORE",
+        "Data/BSF_FILTER_MATRIX/CORE/empty-dir",
+        "Data/BSF_FILTER_MATRIX/CORE/files",
+        "Data/BSF_FILTER_MATRIX/CORE/nested",
+        "Data/BSF_FILTER_MATRIX/CORE/nested/exclude",
+        "Data/BSF_FILTER_MATRIX/CORE/nested/keep",
+        "Data/BSF_FILTER_MATRIX/CORE/nested/upload-target",
+        "Data/BSF_FILTER_MATRIX/DEEP_SOURCE",
+        "Data/BSF_FILTER_MATRIX/DEEP_SOURCE/L1",
+        "Data/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/L2",
+        "Data/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/L2/L3",
+        "Data/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/L2/L3/upload-target",
+        "Data/BSF_FILTER_MATRIX/MINIMAL",
+        "Data/BSF_FILTER_MATRIX/RENAME_ME",
+        "Data/BSF_FILTER_MATRIX/RENAME_ME/upload-target",
+        "Data/BSF_FILTER_MATRIX/TREE",
+        "Data/BSF_FILTER_MATRIX/TREE/A",
+        "Data/BSF_FILTER_MATRIX/TREE/A/B",
+        "Data/BSF_FILTER_MATRIX/TREE/A/B/C",
+        "Data/BSF_FILTER_MATRIX/WIDE_SET",
+        "Data/BSF_MIXED_FILES",
+        "Data/BSF_MIXED_FILES/DATASET_A",
+        "Data/BSF_MIXED_FILES/DATASET_B",
+        "Data/BSF_MIXED_FILES/DATASET_B/L1",
+        "Data/BSF_MIXED_FILES/DATASET_B/L1/L2",
+        "Data/BSF_MIXED_FILES/DATASET_B/L1/L2/L3",
+        "Data/BSF_MIXED_FILES/DATASET_B/L1/L2/L3/upload-target",
+        "Data Monitoring - Documents",
+        "Data Monitoring - Documents/Data Monitoring",
+        "Data Monitoring - Documents/Data Monitoring/Updates",
+        "Issue_3613 - Folder with ' in it",
+        "Jenkins_1",
+        "Jenkins_1/LatestBuilds",
+        "Jenkins_1/LatestBuilds/8-11-2021",
+        "Jenkins_1/LatestBuilds/9-11-2021",
+        "Jenkins_1/LatestBuilds/today",
+        "Jenkins_1/LatestBuilds/yesterday",
+        "Jenkins_1/OldBuilds",
+        "Jenkins_1/OldBuilds/7-11-2021",
+        "Jenkins_1/upload_only",
+        "Jenkins_2",
+        "Jenkins_2/another_new_dir_renamed",
+        "Jenkins_2/asdfasdfasdf",
+        "Jenkins_2/different_set_of_data",
+        "Jenkins_2/new_directory",
+        "test user's files - Empty_Folder",
+        "test user's files - Sub Folder 3",
+        "test user's files - Sub Folder 3/awerqwerqwer",
+        "User Shared Folders",
+        "User Shared Folders/test user's files - Top Folder",
+        "User Shared Folders/test user's files - Top Folder/Logging",
+        "User Shared Folders/test user's files - Top Folder/samba4",
+        "User Shared Folders/test user's files - Top Folder/samba4-dependancies",
+        "User Shared Folders/test user's files - Top Folder/samba4-dependancies/Logging Update",
+    )
+    + _files(
+        "Data/BSF_CORE/DATASET_A",
+        ["Document1.docx", "image0.png", "image1.png", "image2.png", "image3.png", "image4.png"],
+    )
+    + _files("Data/BSF_CORE/DATASET_B", ["README.txt"])
+    + _files("Data/BSF_CORE/DATASET_B/files", ["data.txt", "image0.png", "image1.png"])
+    + _files("Data/BSF_CORE/DATASET_B/nested/exclude", ["exclude.txt"])
+    + _files("Data/BSF_CORE/DATASET_B/nested/keep", ["keep.txt"])
+    + _files("Data/BSF_CORE/TOP_LEVEL/PROJECTS/2026/Week10", ["debug_output.log"])
+    + _files("Data/BSF_FILTER_MATRIX/CORE", ["README.txt"])
+    + _files("Data/BSF_FILTER_MATRIX/CORE/files", ["data.txt", "image0.png", "image1.png"])
+    + _files("Data/BSF_FILTER_MATRIX/CORE/nested/exclude", ["exclude.txt"])
+    + _files("Data/BSF_FILTER_MATRIX/CORE/nested/keep", ["keep.txt"])
+    + _files("Data/BSF_FILTER_MATRIX/DEEP_SOURCE/L1/L2/L3", ["deepfile.txt"])
+    + _files("Data/BSF_FILTER_MATRIX/MINIMAL", ["single.txt"])
+    + _files("Data/BSF_FILTER_MATRIX/RENAME_ME", ["original.txt"])
+    + _files("Data/BSF_FILTER_MATRIX/TREE/A/B/C", ["tree.txt"])
+    + _files("Data/BSF_FILTER_MATRIX/WIDE_SET", [f"file{i:02d}.txt" for i in range(50)])
+    + _files(
+        "Data/BSF_MIXED_FILES/DATASET_A",
+        [
+            "Document2.docx",
+            "Presentation1.pptx",
+            "Presentation2.pptx",
+            "Presentation3.pptx",
+            "Presentation4.pptx",
+            "Presentation5.pptx",
+        ],
+    )
+    + _files("Data/BSF_MIXED_FILES/DATASET_B/L1/L2/L3", ["deepfile.txt"])
+    + _files("Data Monitoring - Documents/Data Monitoring/Updates", ["debug_output.log"])
+    + _files(
+        "Issue_3613 - Folder with ' in it",
+        ["file10.data", "file11.data", "file12.data", "file13.data", "file14.data", "local-file.txt"],
+    )
+    + _files("Jenkins_1/LatestBuilds/8-11-2021", ["dummy.file"])
+    + _files("Jenkins_1/LatestBuilds/9-11-2021", ["dummy.file"])
+    + _files("Jenkins_1/LatestBuilds/today", ["dummy.file"])
+    + _files("Jenkins_1/LatestBuilds/yesterday", ["dummy.file"])
+    + _files("Jenkins_1/OldBuilds/7-11-2021", ["dummy.file"])
+    + _files("Jenkins_1/upload_only", ["asdfasdfasdf.txt"])
+    + _files("Jenkins_2/another_new_dir_renamed", ["asdfasdfasdfasdfasdf.txt"])
+    + _files("Jenkins_2/asdfasdfasdf", ["asdfasdfasd.txt"])
+    + _files("Jenkins_2/different_set_of_data", ["file0.data"])
+    + _files("Jenkins_2/new_directory", ["another_new_file.txt"])
+    + _files("Jenkins_2", ["newfile.txt"])
+    + _files("test user's files - Sub Folder 3/awerqwerqwer", [f"file{i}.data" for i in range(5)])
+    + _files(
+        "User Shared Folders/test user's files - Top Folder",
+        ["asdfasdfasdf.txt", "FirstBackup.spg", "qewrqwerwqer.txt"],
+    )
+    + _files("User Shared Folders/test user's files - Top Folder/Logging", ["multidownload.d", "progressBar.d", "sync.d"])
+    + _files("User Shared Folders/test user's files - Top Folder/samba4", ["samba-4.9.18-1.el6.src.rpm"])
+    + _files(
+        "User Shared Folders/test user's files - Top Folder/samba4-dependancies",
+        [
+            "cmocka-1.1.1-0.el7.src.rpm",
+            "jansson-2.11-1.el6.src.rpm",
+            "jansson-2.11-2.el7.src.rpm",
+            "libldb-1.4.3-1.el6.src.rpm",
+            "libldb-1.4.3-2.el6.src.rpm",
+            "libldb-1.4.3-3.el6.src.rpm",
+            "libldb-1.4.6-1.el6.src.rpm",
+            "libldb-1.4.7-1.el6.src.rpm",
+            "libldb-1.4.8-1.el6.src.rpm",
+            "libldb-1.4.8-2.el6.src.rpm",
+            "libtalloc-2.1.14-1.el6.src.rpm",
+            "libtdb-1.3.16-1.el6.src.rpm",
+            "libtevent-0.9.37-1.el6.src.rpm",
+            "libtevent-0.9.37-2.el6.src.rpm",
+            "lmdb-0.9.18-1.el6.src.rpm",
+        ],
+    )
+    + _files(
+        "User Shared Folders/test user's files - Top Folder/samba4-dependancies/Logging Update",
+        ["dnotify.d", "log.d", "notify.d", "README.md"],
+    )
+))
 
 REQUIRED_STDOUT_MARKERS = [
     'Account Type:          business',
-    # Only folders that the client identifies as shortcut-backed Business Shared
-    # Folders are required to emit this marker. BSF_FILTER_MATRIX is validated
-    # via manifest presence below, but the current online fixture is enumerated
-    # as normal default-drive content rather than reported as a Business Shared
-    # Folder marker in stdout.
-    'Syncing this OneDrive Business Shared Folder: Documents/BSF_CORE',
-    'Syncing this OneDrive Business Shared Folder: Documents/BSF_MIXED_FILES',
+    'Syncing this OneDrive Business Shared Folder: Data/BSF_CORE',
+    'Syncing this OneDrive Business Shared Folder: Data/BSF_MIXED_FILES',
+    'Syncing this OneDrive Business Shared Folder: Data Monitoring - Documents',
+    "Syncing this OneDrive Business Shared Folder: Issue_3613 - Folder with ' in it",
+    "Syncing this OneDrive Business Shared Folder: User Shared Folders/test user's files - Top Folder",
+    "Syncing this OneDrive Business Shared Folder: test user's files - Empty_Folder",
+    "Syncing this OneDrive Business Shared Folder: test user's files - Sub Folder 3",
+    'Syncing this OneDrive Business Shared Folder: Jenkins_2',
+    'Syncing this OneDrive Business Shared Folder: Jenkins_1',
     'Sync with Microsoft OneDrive is complete',
 ]
 

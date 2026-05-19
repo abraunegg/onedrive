@@ -111,6 +111,14 @@ class CurlResponse {
 	HTTP.StatusLine statusLine;
 	char[] content;
 
+	// Streamed download hash metadata. These values are populated only when
+	// curlEngine.download() receives a complete file from byte zero. Resumed
+	// downloads intentionally leave these disabled because only the remaining
+	// byte range is streamed through the receive callback.
+	bool hasStreamedQuickXorHash;
+	string streamedQuickXorHash;
+	ulong streamedHashBytes;
+
 	this() {
 		reset();
 	}
@@ -128,6 +136,9 @@ class CurlResponse {
 		responseHeaders = null;
 		statusLine.reset();
 		content = [];
+		hasStreamedQuickXorHash = false;
+		streamedQuickXorHash = "";
+		streamedHashBytes = 0;
 	}
 
 	void addRequestHeader(const(char)[] name, const(char)[] value) {
@@ -287,13 +298,16 @@ class CurlEngine {
 	SysTime releaseTimestamp;
 	ulong maxIdleTime;
 	private long resumeFromOffset = -1;
+	private bool uploadStreamHashActive = false;
+	private QuickXorStreamHasher uploadQuickXorStreamHasher;
+	private ulong uploadStreamHashBytes = 0;
 	
-    this() {
-        http = HTTP();   // Directly initializes HTTP using its default constructor
-        response = null; // Initialize as null
+	this() {
+		http = HTTP();   // Directly initializes HTTP using its default constructor
+		response = null; // Initialize as null
 		internalThreadId = generateAlphanumericString(); // Give this CurlEngine instance a unique ID
 		if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("Created new CurlEngine instance id: " ~ to!string(internalThreadId), ["debug"]);}
-    }
+	}
 
 	// The destructor should only clean up resources owned directly by this CurlEngine instance
 	~this() {
@@ -312,7 +326,7 @@ class CurlEngine {
 		object.destroy(http);
 		// ThreadId needs to be set to null
 		internalThreadId = null;
-    }
+	}
 		
 	// We are releasing a curl instance back to the pool
 	void releaseEngine() {
@@ -328,15 +342,15 @@ class CurlEngine {
 		
 		// cleanup this curl instance before putting it back in the pool
 		cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
-        synchronized (CurlEngine.classinfo) {
-            curlEnginePool ~= this;
+		synchronized (CurlEngine.classinfo) {
+			curlEnginePool ~= this;
 			if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine curlEnginePool size after release: " ~ to!string(curlEnginePool.length), ["debug"]);}
-        }
+		}
 		// Perform Garbage Collection
 		GC.collect();
 		// Return free memory to the OS
 		GC.minimize();
-    }
+	}
 	
 	// Setup a specific SIGPIPE Signal handler due to curl bugs that ignore CurlOption.nosignal
 	void setupSIGPIPESignalHandler() {
@@ -500,8 +514,43 @@ class CurlEngine {
 		};
 		
 		addRequestHeader("Content-Type", "application/octet-stream");
-		http.onSend = data => uploadFile.rawRead(data).length;
+		http.onSend = (void[] data) {
+			auto bytesRead = uploadFile.rawRead(data);
+			if (uploadStreamHashActive && (bytesRead.length > 0)) {
+				uploadQuickXorStreamHasher.update(cast(ubyte[]) bytesRead);
+				uploadStreamHashBytes += bytesRead.length;
+			}
+			return bytesRead.length;
+		};
 		http.contentLength = offsetSize;
+	}
+
+	void beginUploadStreamHash() {
+		uploadQuickXorStreamHasher = QuickXorStreamHasher();
+		uploadStreamHashBytes = 0;
+		uploadStreamHashActive = true;
+	}
+
+	void cancelUploadStreamHash() {
+		uploadStreamHashActive = false;
+		uploadStreamHashBytes = 0;
+	}
+
+	void finishUploadStreamHash(CurlResponse uploadResponse = null) {
+		if (!uploadStreamHashActive) {
+			return;
+		}
+
+		if (uploadResponse !is null) {
+			response = uploadResponse;
+		} else {
+			setResponseHolder(null);
+		}
+
+		response.streamedQuickXorHash = uploadQuickXorStreamHasher.finishB64();
+		response.hasStreamedQuickXorHash = true;
+		response.streamedHashBytes = uploadStreamHashBytes;
+		cancelUploadStreamHash();
 	}
 	
 	void setZeroContentLength() {
@@ -555,9 +604,20 @@ class CurlEngine {
 			string rangeHeader = format("bytes=%d-", resumeFromOffset);
 			addRequestHeader("Range", rangeHeader);
 		}
+
+		// Streaming hashes are only valid when this download starts at byte zero.
+		// For resumed downloads, the receive callback only sees the remaining byte
+		// range, so callers must continue to use the existing full-file fallback.
+		bool enableStreamedHash = (resumeFromOffset <= 0);
+		QuickXorStreamHasher quickXorStreamHasher;
+		ulong streamedHashBytes = 0;
 		
 		// Receive data
 		http.onReceive = (ubyte[] data) {
+			if (enableStreamedHash) {
+				quickXorStreamHasher.update(data);
+				streamedHashBytes += data.length;
+			}
 			file.rawWrite(data);
 			return data.length;
 		};
@@ -575,6 +635,14 @@ class CurlEngine {
 
 		// Update response and return response
 		response.update(&http);
+		if (enableStreamedHash) {
+			response.streamedQuickXorHash = quickXorStreamHasher.finishB64();
+			response.hasStreamedQuickXorHash = true;
+			response.streamedHashBytes = streamedHashBytes;
+		}
+
+		// Return the response which now has the file hash generated from the download stream
+		if (debugLogging) {addLogEntry("response.streamedQuickXorHash = " ~ response.streamedQuickXorHash, ["debug"]);}
 		return response;
 	}
 

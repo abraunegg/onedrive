@@ -407,6 +407,8 @@ class ApplicationConfig {
 		boolValues["cleanup_local_files"] = false;
 		// Perform a permanentDelete on deletion activities
 		boolValues["permanent_delete"] = false;
+		// Disable the consumption of upload hash streaming
+		boolValues["disable_upload_hash_streaming"] = false;
 		
 		// Controls how the application handles the Microsoft SharePoint 'feature' of modifying all PDF, MS Office & HTML files with added XML content post upload
 		// - There are 2 ways to solve this:
@@ -1653,112 +1655,113 @@ class ApplicationConfig {
 		} else {
 			configFileStatusMessage = "false - using application defaults";
 		}
-		addLogEntry("Configuration file found in config location  = " ~ configFileStatusMessage);
+		addLogEntry("Configuration file found in config location   = " ~ configFileStatusMessage);
 		
 		// Display where various files should live
 		// - items.sqlite3
 		// - sync_list
 		// If using the 'system' directory, (/etc/onedrive) for the config file, these should always live in the 'users' home directory
-		addLogEntry("Applicable 'sync_list' location              = " ~ syncListFilePath);
-		addLogEntry("Applicable 'items.sqlite3' location          = " ~ databaseFilePath);
+		addLogEntry("Applicable 'sync_list' location               = " ~ syncListFilePath);
+		addLogEntry("Applicable 'items.sqlite3' location           = " ~ databaseFilePath);
 		
 		// Is config option drive_id configured?
-		addLogEntry("Config option 'drive_id'                     = " ~ getValueString("drive_id"));
+		addLogEntry("Config option 'drive_id'                      = " ~ getValueString("drive_id"));
 		
 		// Config Options as per 'config' file
-		addLogEntry("Config option 'sync_dir'                     = " ~ getValueString("sync_dir"));
+		addLogEntry("Config option 'sync_dir'                      = " ~ getValueString("sync_dir"));
 		
 		// authentication
-		addLogEntry("Config option 'use_intune_sso'               = " ~ to!string(getValueBool("use_intune_sso")));
-		addLogEntry("Config option 'use_device_auth'              = " ~ to!string(getValueBool("use_device_auth")));
+		addLogEntry("Config option 'use_intune_sso'                = " ~ to!string(getValueBool("use_intune_sso")));
+		addLogEntry("Config option 'use_device_auth'               = " ~ to!string(getValueBool("use_device_auth")));
 				
 		// logging and notifications
-		addLogEntry("Config option 'enable_logging'               = " ~ to!string(getValueBool("enable_logging")));
-		addLogEntry("Config option 'log_dir'                      = " ~ getValueString("log_dir"));
-		addLogEntry("Config option 'disable_notifications'        = " ~ to!string(getValueBool("disable_notifications")));
+		addLogEntry("Config option 'enable_logging'                = " ~ to!string(getValueBool("enable_logging")));
+		addLogEntry("Config option 'log_dir'                       = " ~ getValueString("log_dir"));
+		addLogEntry("Config option 'disable_notifications'         = " ~ to!string(getValueBool("disable_notifications")));
 		
 		// skip files and directory and 'matching' policy
-		addLogEntry("Config option 'skip_dir'                     = " ~ getValueString("skip_dir"));
-		addLogEntry("Config option 'skip_dir_strict_match'        = " ~ to!string(getValueBool("skip_dir_strict_match")));
-		addLogEntry("Config option 'skip_file'                    = " ~ getValueString("skip_file"));
-		addLogEntry("Config option 'skip_dotfiles'                = " ~ to!string(getValueBool("skip_dotfiles")));
-		addLogEntry("Config option 'skip_symlinks'                = " ~ to!string(getValueBool("skip_symlinks")));
-		addLogEntry("Config option 'skip_size'                    = " ~ to!string(getValueLong("skip_size")));
+		addLogEntry("Config option 'skip_dir'                      = " ~ getValueString("skip_dir"));
+		addLogEntry("Config option 'skip_dir_strict_match'         = " ~ to!string(getValueBool("skip_dir_strict_match")));
+		addLogEntry("Config option 'skip_file'                     = " ~ getValueString("skip_file"));
+		addLogEntry("Config option 'skip_dotfiles'                 = " ~ to!string(getValueBool("skip_dotfiles")));
+		addLogEntry("Config option 'skip_symlinks'                 = " ~ to!string(getValueBool("skip_symlinks")));
+		addLogEntry("Config option 'skip_size'                     = " ~ to!string(getValueLong("skip_size")));
 		
 		// --monitor sync process options
-		addLogEntry("Config option 'monitor_interval'             = " ~ to!string(getValueLong("monitor_interval")));
-		addLogEntry("Config option 'monitor_log_frequency'        = " ~ to!string(getValueLong("monitor_log_frequency")));
-		addLogEntry("Config option 'monitor_fullscan_frequency'   = " ~ to!string(getValueLong("monitor_fullscan_frequency")));
-		addLogEntry("Config option 'monitor_authoritative_sync'   = " ~ getValueString("monitor_authoritative_sync"));
-		addLogEntry("Config option 'disable_websocket_support'    = " ~ to!string(getValueBool("disable_websocket_support")));
+		addLogEntry("Config option 'monitor_interval'              = " ~ to!string(getValueLong("monitor_interval")));
+		addLogEntry("Config option 'monitor_log_frequency'         = " ~ to!string(getValueLong("monitor_log_frequency")));
+		addLogEntry("Config option 'monitor_fullscan_frequency'    = " ~ to!string(getValueLong("monitor_fullscan_frequency")));
+		addLogEntry("Config option 'monitor_authoritative_sync'    = " ~ getValueString("monitor_authoritative_sync"));
+		addLogEntry("Config option 'disable_websocket_support'     = " ~ to!string(getValueBool("disable_websocket_support")));
 		
 		// sync process and method
-		addLogEntry("Config option 'read_only_auth_scope'         = " ~ to!string(getValueBool("read_only_auth_scope")));
-		addLogEntry("Config option 'dry_run'                      = " ~ to!string(getValueBool("dry_run")));
-		addLogEntry("Config option 'upload_only'                  = " ~ to!string(getValueBool("upload_only")));
-		addLogEntry("Config option 'download_only'                = " ~ to!string(getValueBool("download_only")));
-		addLogEntry("Config option 'local_first'                  = " ~ to!string(getValueBool("local_first")));
-		addLogEntry("Config option 'check_nosync'                 = " ~ to!string(getValueBool("check_nosync")));
-		addLogEntry("Config option 'check_nomount'                = " ~ to!string(getValueBool("check_nomount")));
-		addLogEntry("Config option 'resync'                       = " ~ to!string(getValueBool("resync")));
-		addLogEntry("Config option 'resync_auth'                  = " ~ to!string(getValueBool("resync_auth")));
-		addLogEntry("Config option 'cleanup_local_files'          = " ~ to!string(getValueBool("cleanup_local_files")));
-		addLogEntry("Config option 'disable_permission_set'       = " ~ to!string(getValueBool("disable_permission_set")));
-		addLogEntry("Config option 'transfer_order'               = " ~ getValueString("transfer_order"));
-		addLogEntry("Config option 'delay_inotify_processing'     = " ~ to!string(getValueBool("delay_inotify_processing")));
-		addLogEntry("Config option 'inotify_delay'                = " ~ to!string(getValueLong("inotify_delay")));
-		addLogEntry("Config option 'display_transfer_metrics'     = " ~ to!string(getValueBool("display_transfer_metrics")));
-		addLogEntry("Config option 'force_session_upload'         = " ~ to!string(getValueBool("force_session_upload")));
-		addLogEntry("Config option 'file_fragment_size'           = " ~ to!string(getValueLong("file_fragment_size")));
+		addLogEntry("Config option 'read_only_auth_scope'          = " ~ to!string(getValueBool("read_only_auth_scope")));
+		addLogEntry("Config option 'dry_run'                       = " ~ to!string(getValueBool("dry_run")));
+		addLogEntry("Config option 'upload_only'                   = " ~ to!string(getValueBool("upload_only")));
+		addLogEntry("Config option 'download_only'                 = " ~ to!string(getValueBool("download_only")));
+		addLogEntry("Config option 'local_first'                   = " ~ to!string(getValueBool("local_first")));
+		addLogEntry("Config option 'check_nosync'                  = " ~ to!string(getValueBool("check_nosync")));
+		addLogEntry("Config option 'check_nomount'                 = " ~ to!string(getValueBool("check_nomount")));
+		addLogEntry("Config option 'resync'                        = " ~ to!string(getValueBool("resync")));
+		addLogEntry("Config option 'resync_auth'                   = " ~ to!string(getValueBool("resync_auth")));
+		addLogEntry("Config option 'cleanup_local_files'           = " ~ to!string(getValueBool("cleanup_local_files")));
+		addLogEntry("Config option 'disable_permission_set'        = " ~ to!string(getValueBool("disable_permission_set")));
+		addLogEntry("Config option 'transfer_order'                = " ~ getValueString("transfer_order"));
+		addLogEntry("Config option 'delay_inotify_processing'      = " ~ to!string(getValueBool("delay_inotify_processing")));
+		addLogEntry("Config option 'inotify_delay'                 = " ~ to!string(getValueLong("inotify_delay")));
+		addLogEntry("Config option 'display_transfer_metrics'      = " ~ to!string(getValueBool("display_transfer_metrics")));
+		addLogEntry("Config option 'force_session_upload'          = " ~ to!string(getValueBool("force_session_upload")));
+		addLogEntry("Config option 'file_fragment_size'            = " ~ to!string(getValueLong("file_fragment_size")));
 		
 		// data integrity
-		addLogEntry("Config option 'classify_as_big_delete'       = " ~ to!string(getValueLong("classify_as_big_delete")));
-		addLogEntry("Config option 'disable_upload_validation'    = " ~ to!string(getValueBool("disable_upload_validation")));
-		addLogEntry("Config option 'disable_download_validation'  = " ~ to!string(getValueBool("disable_download_validation")));
-		addLogEntry("Config option 'bypass_data_preservation'     = " ~ to!string(getValueBool("bypass_data_preservation")));
-		addLogEntry("Config option 'no_remote_delete'             = " ~ to!string(getValueBool("no_remote_delete")));
-		addLogEntry("Config option 'remove_source_files'          = " ~ to!string(getValueBool("remove_source_files")));
-		addLogEntry("Config option 'sync_dir_permissions'         = " ~ to!string(getValueLong("sync_dir_permissions")));
-		addLogEntry("Config option 'sync_file_permissions'        = " ~ to!string(getValueLong("sync_file_permissions")));
-		addLogEntry("Config option 'space_reservation'            = " ~ to!string(getValueLong("space_reservation")));
-		addLogEntry("Config option 'permanent_delete'             = " ~ to!string(getValueBool("permanent_delete")));
-		addLogEntry("Config option 'write_xattr_data'             = " ~ to!string(getValueBool("write_xattr_data")));
-		addLogEntry("Config option 'create_new_file_version'      = " ~ to!string(getValueBool("create_new_file_version")));
+		addLogEntry("Config option 'classify_as_big_delete'        = " ~ to!string(getValueLong("classify_as_big_delete")));
+		addLogEntry("Config option 'disable_upload_hash_streaming' = " ~ to!string(getValueBool("disable_upload_hash_streaming")));
+		addLogEntry("Config option 'disable_upload_validation'     = " ~ to!string(getValueBool("disable_upload_validation")));
+		addLogEntry("Config option 'disable_download_validation'   = " ~ to!string(getValueBool("disable_download_validation")));
+		addLogEntry("Config option 'bypass_data_preservation'      = " ~ to!string(getValueBool("bypass_data_preservation")));
+		addLogEntry("Config option 'no_remote_delete'              = " ~ to!string(getValueBool("no_remote_delete")));
+		addLogEntry("Config option 'remove_source_files'           = " ~ to!string(getValueBool("remove_source_files")));
+		addLogEntry("Config option 'sync_dir_permissions'          = " ~ to!string(getValueLong("sync_dir_permissions")));
+		addLogEntry("Config option 'sync_file_permissions'         = " ~ to!string(getValueLong("sync_file_permissions")));
+		addLogEntry("Config option 'space_reservation'             = " ~ to!string(getValueLong("space_reservation")));
+		addLogEntry("Config option 'permanent_delete'              = " ~ to!string(getValueBool("permanent_delete")));
+		addLogEntry("Config option 'write_xattr_data'              = " ~ to!string(getValueBool("write_xattr_data")));
+		addLogEntry("Config option 'create_new_file_version'       = " ~ to!string(getValueBool("create_new_file_version")));
 		
 		// curl operations
-		addLogEntry("Config option 'application_id'               = " ~ getValueString("application_id"));
-		addLogEntry("Config option 'azure_ad_endpoint'            = " ~ getValueString("azure_ad_endpoint"));
-		addLogEntry("Config option 'azure_tenant_id'              = " ~ getValueString("azure_tenant_id"));
-		addLogEntry("Config option 'user_agent'                   = " ~ getValueString("user_agent"));
-		addLogEntry("Config option 'force_http_11'                = " ~ to!string(getValueBool("force_http_11")));
-		addLogEntry("Config option 'debug_https'                  = " ~ to!string(getValueBool("debug_https")));
-		addLogEntry("Config option 'rate_limit'                   = " ~ to!string(getValueLong("rate_limit")));
-		addLogEntry("Config option 'operation_timeout'            = " ~ to!string(getValueLong("operation_timeout")));
-		addLogEntry("Config option 'dns_timeout'                  = " ~ to!string(getValueLong("dns_timeout")));
-		addLogEntry("Config option 'connect_timeout'              = " ~ to!string(getValueLong("connect_timeout")));
-		addLogEntry("Config option 'data_timeout'                 = " ~ to!string(getValueLong("data_timeout")));
-		addLogEntry("Config option 'ip_protocol_version'          = " ~ to!string(getValueLong("ip_protocol_version")));
-		addLogEntry("Config option 'threads'                      = " ~ to!string(getValueLong("threads")));
-		addLogEntry("Config option 'max_curl_idle'                = " ~ to!string(getValueLong("max_curl_idle")));
+		addLogEntry("Config option 'application_id'                = " ~ getValueString("application_id"));
+		addLogEntry("Config option 'azure_ad_endpoint'             = " ~ getValueString("azure_ad_endpoint"));
+		addLogEntry("Config option 'azure_tenant_id'               = " ~ getValueString("azure_tenant_id"));
+		addLogEntry("Config option 'user_agent'                    = " ~ getValueString("user_agent"));
+		addLogEntry("Config option 'force_http_11'                 = " ~ to!string(getValueBool("force_http_11")));
+		addLogEntry("Config option 'debug_https'                   = " ~ to!string(getValueBool("debug_https")));
+		addLogEntry("Config option 'rate_limit'                    = " ~ to!string(getValueLong("rate_limit")));
+		addLogEntry("Config option 'operation_timeout'             = " ~ to!string(getValueLong("operation_timeout")));
+		addLogEntry("Config option 'dns_timeout'                   = " ~ to!string(getValueLong("dns_timeout")));
+		addLogEntry("Config option 'connect_timeout'               = " ~ to!string(getValueLong("connect_timeout")));
+		addLogEntry("Config option 'data_timeout'                  = " ~ to!string(getValueLong("data_timeout")));
+		addLogEntry("Config option 'ip_protocol_version'           = " ~ to!string(getValueLong("ip_protocol_version")));
+		addLogEntry("Config option 'threads'                       = " ~ to!string(getValueLong("threads")));
+		addLogEntry("Config option 'max_curl_idle'                 = " ~ to!string(getValueLong("max_curl_idle")));
 		
 		// GUI notifications
 		version(Notifications) {
-			addLogEntry("Environment var 'XDG_RUNTIME_DIR'            = " ~ to!string(xdg_exists));
-			addLogEntry("Environment var 'DBUS_SESSION_BUS_ADDRESS'   = " ~ to!string(dbus_exists));
-			addLogEntry("Config option 'notify_file_actions'          = " ~ to!string(getValueBool("notify_file_actions")));
+			addLogEntry("Environment var 'XDG_RUNTIME_DIR'             = " ~ to!string(xdg_exists));
+			addLogEntry("Environment var 'DBUS_SESSION_BUS_ADDRESS'    = " ~ to!string(dbus_exists));
+			addLogEntry("Config option 'notify_file_actions'           = " ~ to!string(getValueBool("notify_file_actions")));
 		} else {
-			addLogEntry("Compile time option --enable-notifications   = false");
+			addLogEntry("Compile time option --enable-notifications    = false");
 		}
 		
 		// Recycle Bin 
-		addLogEntry("Config option 'use_recycle_bin'              = " ~ to!string(getValueBool("use_recycle_bin")));
-		addLogEntry("Config option 'recycle_bin_path'             = " ~ getValueString("recycle_bin_path"));
+		addLogEntry("Config option 'use_recycle_bin'               = " ~ to!string(getValueBool("use_recycle_bin")));
+		addLogEntry("Config option 'recycle_bin_path'              = " ~ getValueString("recycle_bin_path"));
 				
 		// Is sync_list configured and contains entries?
 		if (exists(syncListFilePath) && getSize(syncListFilePath) > 0) {
 			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
-			addLogEntry("Selective sync 'sync_list' configured        = true");
-			addLogEntry("sync_list config option 'sync_root_files'    = " ~ to!string(getValueBool("sync_root_files")));
+			addLogEntry("Selective sync 'sync_list' configured         = true");
+			addLogEntry("sync_list config option 'sync_root_files'     = " ~ to!string(getValueBool("sync_root_files")));
 			addLogEntry("sync_list contents:");
 			// Output the sync_list contents
 			auto syncListFile = File(syncListFilePath, "r");
@@ -1776,42 +1779,42 @@ class ApplicationConfig {
 			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
 			if (exists(syncListFilePath) && getSize(syncListFilePath) == 0) {
 				// 'sync_list' file exists, no entries
-				addLogEntry("Selective sync 'sync_list' configured        = file exists but contains zero data");
+				addLogEntry("Selective sync 'sync_list' configured         = file exists but contains zero data");
 			} else {
 				// no 'sync_list' file
-				addLogEntry("Selective sync 'sync_list' configured        = false");
+				addLogEntry("Selective sync 'sync_list' configured         = false");
 			}
 		}
 		
 		// Is sync_business_shared_items enabled and configured ?
 		addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
-		addLogEntry("Config option 'sync_business_shared_items'   = " ~ to!string(getValueBool("sync_business_shared_items")));
+		addLogEntry("Config option 'sync_business_shared_items'    = " ~ to!string(getValueBool("sync_business_shared_items")));
 		if (getValueBool("sync_business_shared_items")) {
 			// display what the shared files directory will be
-			addLogEntry("Config option 'Shared Files Directory'       = " ~ configuredBusinessSharedFilesDirectoryName);
+			addLogEntry("Config option 'Shared Files Directory'        = " ~ configuredBusinessSharedFilesDirectoryName);
 		}
 		
 		// Are webhooks enabled?
 		addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
-		addLogEntry("Config option 'webhook_enabled'              = " ~ to!string(getValueBool("webhook_enabled")));
+		addLogEntry("Config option 'webhook_enabled'               = " ~ to!string(getValueBool("webhook_enabled")));
 		if (getValueBool("webhook_enabled")) {
-			addLogEntry("Config option 'webhook_public_url'           = " ~ getValueString("webhook_public_url"));
-			addLogEntry("Config option 'webhook_listening_host'       = " ~ getValueString("webhook_listening_host"));
-			addLogEntry("Config option 'webhook_listening_port'       = " ~ to!string(getValueLong("webhook_listening_port")));
-			addLogEntry("Config option 'webhook_expiration_interval'  = " ~ to!string(getValueLong("webhook_expiration_interval")));
-			addLogEntry("Config option 'webhook_renewal_interval'     = " ~ to!string(getValueLong("webhook_renewal_interval")));
-			addLogEntry("Config option 'webhook_retry_interval'       = " ~ to!string(getValueLong("webhook_retry_interval")));
+			addLogEntry("Config option 'webhook_public_url'            = " ~ getValueString("webhook_public_url"));
+			addLogEntry("Config option 'webhook_listening_host'        = " ~ getValueString("webhook_listening_host"));
+			addLogEntry("Config option 'webhook_listening_port'        = " ~ to!string(getValueLong("webhook_listening_port")));
+			addLogEntry("Config option 'webhook_expiration_interval'   = " ~ to!string(getValueLong("webhook_expiration_interval")));
+			addLogEntry("Config option 'webhook_renewal_interval'      = " ~ to!string(getValueLong("webhook_renewal_interval")));
+			addLogEntry("Config option 'webhook_retry_interval'        = " ~ to!string(getValueLong("webhook_retry_interval")));
 		}
 		
 		if (getValueBool("display_running_config")) {
 			addLogEntry();
 			addLogEntry("--------------------DEVELOPER_OPTIONS----------------------------");
-			addLogEntry("Config option 'force_children_scan'          = " ~ to!string(getValueBool("force_children_scan")));
-			addLogEntry("Config option 'monitor_max_loop'             = " ~ to!string(getValueLong("monitor_max_loop")));
-			addLogEntry("Config option 'display_memory'               = " ~ to!string(getValueBool("display_memory")));
-			addLogEntry("Config option 'display_sync_options'         = " ~ to!string(getValueBool("display_sync_options")));
-			addLogEntry("Config option 'display_processing_time'      = " ~ to!string(getValueBool("display_processing_time")));
-			addLogEntry("Config option 'force_xfer_abort'             = " ~ to!string(getValueBool("force_xfer_abort")));
+			addLogEntry("Config option 'force_children_scan'           = " ~ to!string(getValueBool("force_children_scan")));
+			addLogEntry("Config option 'monitor_max_loop'              = " ~ to!string(getValueLong("monitor_max_loop")));
+			addLogEntry("Config option 'display_memory'                = " ~ to!string(getValueBool("display_memory")));
+			addLogEntry("Config option 'display_sync_options'          = " ~ to!string(getValueBool("display_sync_options")));
+			addLogEntry("Config option 'display_processing_time'       = " ~ to!string(getValueBool("display_processing_time")));
+			addLogEntry("Config option 'force_xfer_abort'              = " ~ to!string(getValueBool("force_xfer_abort")));
 		}
 		
 		// Close out config output

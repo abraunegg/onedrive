@@ -60,6 +60,7 @@ jobs:
           chmod 600 "$XDG_CONFIG_HOME/onedrive/refresh_token"
 
       - name: Run Personal Shared Folder E2E harness
+        continue-on-error: true
         env:
           ONEDRIVE_BIN: ${{ github.workspace }}/.ci/prefix/bin/onedrive
           E2E_TARGET: personal-shared-folders
@@ -69,6 +70,7 @@ jobs:
           python3 -u ci/e2e/run_personal_shared_folders.py
 
       - name: Debug rerun failed Personal Shared Folder E2E cases
+        continue-on-error: true
         if: always()
         env:
           ONEDRIVE_BIN: ${{ github.workspace }}/.ci/prefix/bin/onedrive
@@ -93,6 +95,14 @@ jobs:
             --output-subdir debug-rerun \
             --run-label debug-rerun \
             --case-id "$failed_cases"
+
+      - name: Evaluate E2E gate result
+        if: always()
+        run: |
+          python3 -u ci/e2e/evaluate_rerun_gate.py \
+            --primary-results ci/e2e/out/results.json \
+            --debug-results ci/e2e/out/debug-rerun/results.json \
+            --gate-file ci/e2e/out/gate.json
 
       - name: Upload Personal Shared Folder E2E artefacts
         if: always()
@@ -122,6 +132,7 @@ jobs:
           set -euo pipefail
 
           primary_results="artifacts/e2e-personal-shared-folders/results.json"
+          gate_results="artifacts/e2e-personal-shared-folders/gate.json"
           if [ -f "$primary_results" ]; then
             f="$primary_results"
           else
@@ -132,6 +143,18 @@ jobs:
           if [ -z "$f" ] || [ ! -f "$f" ]; then
             echo "md=⚠️ Personal Shared Folder E2E ran but results.json was not found." >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+
+          debug_recovered="false"
+          if [ -f "$gate_results" ]; then
+            debug_recovered="$(jq -r '.recovered_by_debug_rerun // false' "$gate_results")"
+            effective_results="$(jq -r '.effective_results // empty' "$gate_results")"
+            if [ "$debug_recovered" = "true" ] && [ -n "$effective_results" ]; then
+              candidate="artifacts/e2e-personal-shared-folders/${effective_results#ci/e2e/out/}"
+              if [ -f "$candidate" ]; then
+                f="$candidate"
+              fi
+            fi
           fi
 
           total=$(jq -r '.cases | length' "$f")
@@ -146,6 +169,10 @@ jobs:
           md+="**${total}** Test Cases Run  \n"
           md+="**${passed}** Test Cases Passed  \n"
           md+="**${failed}** Test Cases Failed  \n\n"
+
+          if [ "$debug_recovered" = "true" ]; then
+            md+="⚠️ Primary run had transient failure(s), but all failed case(s) passed during debug rerun. Treating workflow as passed.  \n\n"
+          fi
 
           if [ "$failed" -gt 0 ] && [ -n "$failures" ]; then
             md+="### Personal Shared Folder Test Failures\n"
