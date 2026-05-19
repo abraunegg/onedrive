@@ -1,0 +1,110 @@
+name: macOS Test Build
+
+on:
+  push:
+    branches:
+      - master
+      - feature/**
+    paths:
+      - 'src/**'
+      - 'ci/**'
+      - '.github/workflows/macos-testbuild.yaml'
+      - 'configure'
+      - 'Makefile.in'
+      - 'DUB.json'
+      - 'dub.json'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'src/**'
+      - 'ci/**'
+      - '.github/workflows/macos-testbuild.yaml'
+      - 'configure'
+      - 'Makefile.in'
+      - 'DUB.json'
+      - 'dub.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos-build:
+    name: macOS ${{ matrix.macos }} test build
+    runs-on: ${{ matrix.macos }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        macos:
+          - macos-14
+          - macos-15
+
+    steps:
+      - name: Checkout repository with full history and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: recursive
+
+      - name: Fetch tags for version generation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin 'refs/tags/*:refs/tags/*' || true
+          git describe --tags || echo "No tags available; build will use package version fallback"
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew update
+          brew install ldc pkg-config curl sqlite
+
+      - name: Configure Homebrew build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          BREW_PREFIX="$(brew --prefix)"
+          {
+            echo "PATH=$BREW_PREFIX/opt/ldc/bin:$BREW_PREFIX/opt/curl/bin:$BREW_PREFIX/bin:$PATH"
+            echo "PKG_CONFIG_PATH=$BREW_PREFIX/opt/curl/lib/pkgconfig:$BREW_PREFIX/opt/sqlite/lib/pkgconfig:$BREW_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+            echo "CPPFLAGS=-I$BREW_PREFIX/opt/curl/include -I$BREW_PREFIX/opt/sqlite/include ${CPPFLAGS:-}"
+            echo "LDFLAGS=-L$BREW_PREFIX/opt/curl/lib -L$BREW_PREFIX/opt/sqlite/lib ${LDFLAGS:-}"
+          } >> "$GITHUB_ENV"
+
+      - name: Show toolchain versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname -a
+          ldc2 --version
+          pkg-config --modversion libcurl
+          pkg-config --modversion sqlite3
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./configure
+
+      - name: Compile
+        shell: bash
+        run: |
+          set -euo pipefail
+          make clean
+          make -j"$(sysctl -n hw.ncpu)"
+
+      - name: Install
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo make install
+
+      - name: Run version sanity check
+        shell: bash
+        run: |
+          set -euo pipefail
+          onedrive --version
