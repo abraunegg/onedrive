@@ -75,14 +75,14 @@ class OneDriveApi {
 	// API Endpoint Constants
 	immutable string defaultDriveUrlAPIEndpoint = "/v1.0/me/drive";
 	immutable string defaultDriveByIdUrlAPIEndpoint = "/v1.0/drives/";
-	immutable string defaultSharedWithMeUrlAPIEndpoint = "/v1.0/me/drive/sharedWithMe";
 	immutable string defaultItemByIdUrlAPIEndpoint = "/v1.0/me/drive/items/";
 	immutable string defaultItemByPathUrlAPIEndpoint = "/v1.0/me/drive/root:/";
 	immutable string defaultSiteSearchUrlAPIEndpoint = "/v1.0/sites?search";
 	immutable string defaultSiteDriveUrlAPIEndpoint = "/v1.0/sites/";
 	immutable string defaultSubscriptionUrlAPIEndpoint = "/v1.0/subscriptions";
 	immutable string defaultWebsocketEndpointAPIEndpoint = "/v1.0/me/drive/root/subscriptions/socketIo";
-	
+	immutable string defaultSearchQueryUrlAPIEndpoint = "/v1.0/search/query";
+		
 	// Class variables
 	string clientId = "";
 	string companyName = "";
@@ -92,7 +92,6 @@ class OneDriveApi {
 	string tokenUrl = "";
 	string driveUrl = "";
 	string driveByIdUrl = "";
-	string sharedWithMeUrl = "";
 	string itemByIdUrl = "";
 	string itemByPathUrl = "";
 	string siteSearchUrl = "";
@@ -102,6 +101,7 @@ class OneDriveApi {
 	string authScope = "";
 	string websocketEndpoint = "";
 	string websocketEndpointAPIEndpoint = defaultWebsocketEndpointAPIEndpoint;
+	string searchQueryUrl = "";
 	const(char)[] refreshToken = "";
 	bool dryRun = false;
 	bool keepAlive = false;
@@ -118,9 +118,6 @@ class OneDriveApi {
 		driveUrl = appConfig.globalGraphEndpoint ~ defaultDriveUrlAPIEndpoint;
 		driveByIdUrl = appConfig.globalGraphEndpoint ~ defaultDriveByIdUrlAPIEndpoint;
 
-		// What is 'shared with me' Query
-		sharedWithMeUrl = appConfig.globalGraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
-
 		// Item Queries
 		itemByIdUrl = appConfig.globalGraphEndpoint ~ defaultItemByIdUrlAPIEndpoint;
 		itemByPathUrl = appConfig.globalGraphEndpoint ~ defaultItemByPathUrlAPIEndpoint;
@@ -134,6 +131,9 @@ class OneDriveApi {
 		
 		// WebSocket Endpoint - sets the default: /v1.0/me/drive/root/subscriptions/socketIo
 		websocketEndpoint = appConfig.globalGraphEndpoint ~ websocketEndpointAPIEndpoint;
+		
+		// Search Queries
+		searchQueryUrl = appConfig.globalGraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 	}
 	
 	// The destructor should only clean up resources owned directly by this instance
@@ -277,12 +277,12 @@ class OneDriveApi {
 				// Office 365 / SharePoint Queries
 				siteSearchUrl = appConfig.usl4GraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
 				siteDriveUrl = appConfig.usl4GraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
-				// Shared With Me
-				sharedWithMeUrl = appConfig.usl4GraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 				// Subscriptions
 				subscriptionUrl = appConfig.usl4GraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.usl4GraphEndpoint ~ websocketEndpointAPIEndpoint;
+				// Search Queries
+				searchQueryUrl = appConfig.usl4GraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 				break;
 			case "USL5":
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD for US Government Endpoints (DOD)");
@@ -308,12 +308,12 @@ class OneDriveApi {
 				// Office 365 / SharePoint Queries
 				siteSearchUrl = appConfig.usl5GraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
 				siteDriveUrl = appConfig.usl5GraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
-				// Shared With Me
-				sharedWithMeUrl = appConfig.usl5GraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 				// Subscriptions
 				subscriptionUrl = appConfig.usl5GraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.usl5GraphEndpoint ~ websocketEndpointAPIEndpoint;
+				// Search Queries
+				searchQueryUrl = appConfig.usl5GraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 				break;
 			case "DE":
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD Germany");
@@ -339,12 +339,12 @@ class OneDriveApi {
 				// Office 365 / SharePoint Queries
 				siteSearchUrl = appConfig.deGraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
 				siteDriveUrl = appConfig.deGraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
-				// Shared With Me
-				sharedWithMeUrl = appConfig.deGraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 				// Subscriptions
 				subscriptionUrl = appConfig.deGraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.deGraphEndpoint ~ websocketEndpointAPIEndpoint;
+				// Search Queries
+				searchQueryUrl = appConfig.deGraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 				break;
 			case "CN":
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring AD China operated by VNET");
@@ -370,12 +370,12 @@ class OneDriveApi {
 				// Office 365 / SharePoint Queries
 				siteSearchUrl = appConfig.cnGraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
 				siteDriveUrl = appConfig.cnGraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
-				// Shared With Me
-				sharedWithMeUrl = appConfig.cnGraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 				// Subscriptions
 				subscriptionUrl = appConfig.cnGraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.cnGraphEndpoint ~ websocketEndpointAPIEndpoint;
+				// Search Queries
+				searchQueryUrl = appConfig.cnGraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 				break;
 			// Default - all other entries
 			default:
@@ -455,8 +455,6 @@ class OneDriveApi {
 			// Drive Queries
 			addLogEntry("Configured driveUrl:          " ~ driveUrl, ["debug"]);
 			addLogEntry("Configured driveByIdUrl:      " ~ driveByIdUrl, ["debug"]);
-			// Shared With Me
-			addLogEntry("Configured sharedWithMeUrl:   " ~ sharedWithMeUrl, ["debug"]);
 			// Item Queries
 			addLogEntry("Configured itemByIdUrl:       " ~ itemByIdUrl, ["debug"]);
 			addLogEntry("Configured itemByPathUrl:     " ~ itemByPathUrl, ["debug"]);
@@ -465,6 +463,8 @@ class OneDriveApi {
 			addLogEntry("Configured siteDriveUrl:      " ~ siteDriveUrl, ["debug"]);
 			// Websocket 
 			addLogEntry("Configured websocketEndpoint: " ~ websocketEndpoint, ["debug"]);
+			// Search Queries
+			addLogEntry("Configured searchQueryUrl:    " ~ searchQueryUrl, ["debug"]);
 		}
 	}
 	
@@ -1002,10 +1002,414 @@ class OneDriveApi {
 		return get(url);
 	}
 	
-	// Return all the items that are shared with the user
-	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme
+	// Return a JSON structure simulating the depreciated 'sharedWithMe' API response data
 	JSONValue getSharedWithMe() {
-		return get(sharedWithMeUrl);
+		addLogEntry("Using Microsoft Graph Search API to enumerate OneDrive Business Shared Files", ["verbose"]);
+
+		JSONValue sharedWithMeCompatibleResponse = [
+			"value": JSONValue(JSONValue[].init)
+		];
+
+		JSONValue[] candidateItems;
+		JSONValue[] sharedItems;
+		bool[string] candidateIds;
+
+		string ownOneDriveWebUrl = "";
+		string ownDisplayName = "";
+		string ownEmail = "";
+
+		JSONValue defaultRootDetails = getDefaultRootDetails();
+		if (("webUrl" in defaultRootDetails) && (defaultRootDetails["webUrl"].type == JSONType.string)) {
+			ownOneDriveWebUrl = defaultRootDetails["webUrl"].str;
+		}
+
+		JSONValue defaultDriveDetails = getDefaultDriveDetails();
+		if (("owner" in defaultDriveDetails) &&
+			(defaultDriveDetails["owner"].type == JSONType.object) &&
+			("user" in defaultDriveDetails["owner"]) &&
+			(defaultDriveDetails["owner"]["user"].type == JSONType.object)) {
+
+			if (("displayName" in defaultDriveDetails["owner"]["user"]) &&
+				(defaultDriveDetails["owner"]["user"]["displayName"].type == JSONType.string)) {
+				ownDisplayName = defaultDriveDetails["owner"]["user"]["displayName"].str;
+			}
+
+			if (("email" in defaultDriveDetails["owner"]["user"]) &&
+				(defaultDriveDetails["owner"]["user"]["email"].type == JSONType.string)) {
+				ownEmail = defaultDriveDetails["owner"]["user"]["email"].str;
+			}
+		}
+
+		string searchQueryString = buildBusinessSharedItemsSearchQuery(ownOneDriveWebUrl, ownDisplayName, ownEmail);
+
+		if (debugLogging) {
+			addLogEntry("Microsoft Graph Search API queryString: " ~ searchQueryString, ["debug"]);
+		}
+
+		uint from = 0;
+		immutable uint pageSize = 100;
+		bool moreResultsAvailable = true;
+
+		while (moreResultsAvailable) {
+			JSONValue searchRequest = [
+				"requests": JSONValue([
+					JSONValue([
+						"entityTypes": JSONValue([
+							JSONValue("driveItem")
+						]),
+						"query": JSONValue([
+							"queryString": JSONValue(searchQueryString)
+						]),
+						"from": JSONValue(from),
+						"size": JSONValue(pageSize),
+						"fields": JSONValue([
+							JSONValue("id"),
+							JSONValue("name"),
+							JSONValue("webUrl"),
+							JSONValue("createdBy"),
+							JSONValue("lastModifiedBy"),
+							JSONValue("createdDateTime"),
+							JSONValue("lastModifiedDateTime"),
+							JSONValue("size"),
+							JSONValue("file"),
+							JSONValue("folder"),
+							JSONValue("fileSystemInfo"),
+							JSONValue("parentReference")
+						])
+					])
+				])
+			];
+
+			JSONValue searchResponse = post(searchQueryUrl, searchRequest.toString());
+
+			moreResultsAvailable = false;
+
+			if (!("value" in searchResponse)) break;
+
+			foreach (searchResult; searchResponse["value"].array) {
+				if (!("hitsContainers" in searchResult)) continue;
+
+				foreach (hitsContainer; searchResult["hitsContainers"].array) {
+					if (("moreResultsAvailable" in hitsContainer) &&
+						(hitsContainer["moreResultsAvailable"].type == JSONType.true_)) {
+						moreResultsAvailable = true;
+					}
+
+					if (!("hits" in hitsContainer)) continue;
+
+					foreach (hit; hitsContainer["hits"].array) {
+						if (!("resource" in hit)) continue;
+
+						JSONValue resource = hit["resource"];
+
+						if (!isValidSearchDriveItem(resource, ownOneDriveWebUrl, ownDisplayName, ownEmail)) {
+							if (debugLogging) {
+								addLogEntry("Skipping Graph Search result because it is not a valid Business Shared File/Folder candidate: " ~ to!string(resource), ["debug"]);
+							}
+							continue;
+						}
+
+						string remoteDriveId = resource["parentReference"]["driveId"].str;
+						string remoteItemId = resource["id"].str;
+						string uniqueKey = remoteDriveId ~ ":" ~ remoteItemId;
+
+						if (uniqueKey in candidateIds) {
+							continue;
+						}
+
+						candidateIds[uniqueKey] = true;
+						candidateItems ~= parseJSON(resource.toString());
+					}
+				}
+			}
+
+			from += pageSize;
+		}
+
+		foreach (resource; candidateItems) {
+			if (isGraphSearchDescendantItem(resource, candidateIds)) {
+				if (debugLogging) {
+					addLogEntry("Skipping Graph Search descendant item: " ~ resource["name"].str, ["debug"]);
+				}
+				continue;
+			}
+
+			sharedItems ~= convertSearchDriveItemToSharedWithMeItem(resource);
+		}
+
+		sharedWithMeCompatibleResponse["value"] = JSONValue(sharedItems);
+
+		if (debugLogging) {
+			addLogEntry("Microsoft Graph Search API candidate item count: " ~ to!string(candidateItems.length), ["debug"]);
+			addLogEntry("Microsoft Graph Search API normalised shared item count: " ~ to!string(sharedItems.length), ["debug"]);
+		}
+
+		return sharedWithMeCompatibleResponse;
+	}
+
+	private string buildBusinessSharedItemsSearchQuery(string ownOneDriveWebUrl, string ownDisplayName, string ownEmail) {
+		string queryString = "(IsDocument:true OR IsDocument:false)";
+
+		if (ownDisplayName != "") {
+			queryString ~= ` AND NOT(CreatedBy:"` ~ escapeKqlString(ownDisplayName) ~ `")`;
+			queryString ~= ` AND NOT(Author:"` ~ escapeKqlString(ownDisplayName) ~ `")`;
+		}
+
+		if (ownEmail != "") {
+			queryString ~= ` AND NOT(CreatedBy:"` ~ escapeKqlString(ownEmail) ~ `")`;
+			queryString ~= ` AND NOT(Author:"` ~ escapeKqlString(ownEmail) ~ `")`;
+		}
+
+		if (ownOneDriveWebUrl != "") {
+			queryString ~= ` AND NOT(path:"` ~ escapeKqlString(ownOneDriveWebUrl) ~ `")`;
+		}
+
+		return queryString;
+	}
+
+	private string escapeKqlString(string value) {
+		return value.replace(`\`, `\\`).replace(`"`, `\"`);
+	}
+
+	private bool isValidSearchDriveItem(JSONValue resource, string ownOneDriveWebUrl, string ownDisplayName, string ownEmail) {
+		if (resource.type != JSONType.object) return false;
+
+		if (!("id" in resource) || resource["id"].type != JSONType.string) return false;
+		if (!("name" in resource) || resource["name"].type != JSONType.string) return false;
+
+		if (!("parentReference" in resource) || resource["parentReference"].type != JSONType.object) return false;
+		if (!("driveId" in resource["parentReference"]) || resource["parentReference"]["driveId"].type != JSONType.string) return false;
+
+		if (resource["parentReference"]["driveId"].str == appConfig.defaultDriveId) return false;
+
+		if (!searchResultRepresentsFile(resource) && !searchResultRepresentsFolder(resource)) return false;
+
+		if (("webUrl" in resource) &&
+			(resource["webUrl"].type == JSONType.string) &&
+			(ownOneDriveWebUrl != "") &&
+			resource["webUrl"].str.startsWith(ownOneDriveWebUrl)) {
+			return false;
+		}
+
+		if (wasCreatedByCurrentUser(resource, ownDisplayName, ownEmail)) {
+			return false;
+		}
+
+		string itemName = resource["name"].str;
+
+		string[] blockedNames = [
+			"__siteIcon__.png",
+			"__siteIcon__.jpg",
+			"PointPublishing.aspx",
+			"VideoEmbedHost.aspx"
+		];
+
+		foreach (blockedName; blockedNames) {
+			if (itemName == blockedName) return false;
+		}
+
+		if (("createdBy" in resource) &&
+			(resource["createdBy"].type == JSONType.object) &&
+			("user" in resource["createdBy"]) &&
+			(resource["createdBy"]["user"].type == JSONType.object) &&
+			("displayName" in resource["createdBy"]["user"]) &&
+			(resource["createdBy"]["user"]["displayName"].type == JSONType.string) &&
+			(resource["createdBy"]["user"]["displayName"].str == "System Account")) {
+			return false;
+		}
+
+		return true;
+	}
+
+	private bool searchResultRepresentsFolder(JSONValue resource) {
+		if (("folder" in resource) !is null) {
+			return true;
+		}
+
+		if (("file" in resource) is null) {
+			return false;
+		}
+
+		if (resource["file"].type != JSONType.object) {
+			return false;
+		}
+
+		if (!("mimeType" in resource["file"]) ||
+			resource["file"]["mimeType"].type != JSONType.string) {
+			return false;
+		}
+
+		if (resource["file"]["mimeType"].str != "application/octet-stream") {
+			return false;
+		}
+
+		if (!("size" in resource)) {
+			return false;
+		}
+
+		return jsonNumberIsZero(resource["size"]);
+	}
+
+	private bool searchResultRepresentsFile(JSONValue resource) {
+		if (searchResultRepresentsFolder(resource)) {
+			return false;
+		}
+
+		return (("file" in resource) !is null);
+	}
+
+	private bool jsonNumberIsZero(JSONValue value) {
+		if (value.type == JSONType.integer) {
+			return value.integer == 0;
+		}
+
+		if (value.type == JSONType.uinteger) {
+			return value.uinteger == 0;
+		}
+
+		if (value.type == JSONType.float_) {
+			return value.floating == 0;
+		}
+
+		return false;
+	}
+
+	private bool wasCreatedByCurrentUser(JSONValue resource, string ownDisplayName, string ownEmail) {
+		if (!("createdBy" in resource)) return false;
+		if (resource["createdBy"].type != JSONType.object) return false;
+		if (!("user" in resource["createdBy"])) return false;
+		if (resource["createdBy"]["user"].type != JSONType.object) return false;
+
+		if ((ownDisplayName != "") &&
+			("displayName" in resource["createdBy"]["user"]) &&
+			(resource["createdBy"]["user"]["displayName"].type == JSONType.string) &&
+			(resource["createdBy"]["user"]["displayName"].str == ownDisplayName)) {
+			return true;
+		}
+
+		if ((ownEmail != "") &&
+			("email" in resource["createdBy"]["user"]) &&
+			(resource["createdBy"]["user"]["email"].type == JSONType.string) &&
+			(resource["createdBy"]["user"]["email"].str == ownEmail)) {
+			return true;
+		}
+
+		return false;
+	}
+
+	private bool isGraphSearchDescendantItem(JSONValue resource, bool[string] candidateIds) {
+		if (!("parentReference" in resource)) return false;
+		if (resource["parentReference"].type != JSONType.object) return false;
+
+		if (!("driveId" in resource["parentReference"])) return false;
+		if (resource["parentReference"]["driveId"].type != JSONType.string) return false;
+
+		if (!("id" in resource["parentReference"])) return false;
+		if (resource["parentReference"]["id"].type != JSONType.string) return false;
+
+		string parentKey = resource["parentReference"]["driveId"].str ~ ":" ~ resource["parentReference"]["id"].str;
+
+		return (parentKey in candidateIds) !is null;
+	}
+
+	private JSONValue convertSearchDriveItemToSharedWithMeItem(JSONValue resource) {
+		JSONValue sharedItem = parseJSON("{}");
+		JSONValue remoteItem = parseJSON("{}");
+
+		string[] directFields = [
+			"id",
+			"name",
+			"size",
+			"webUrl",
+			"createdDateTime",
+			"lastModifiedDateTime",
+			"parentReference"
+		];
+
+		foreach (fieldName; directFields) {
+			if ((fieldName in resource) && (resource[fieldName].type != JSONType.null_)) {
+				sharedItem[fieldName] = parseJSON(resource[fieldName].toString());
+				remoteItem[fieldName] = parseJSON(resource[fieldName].toString());
+			}
+		}
+
+		bool isFile = searchResultRepresentsFile(resource);
+		bool isFolder = searchResultRepresentsFolder(resource);
+
+		if (isFile) {
+			sharedItem["file"] = parseJSON(resource["file"].toString());
+			remoteItem["file"] = parseJSON(resource["file"].toString());
+		}
+
+		if (isFolder) {
+			sharedItem["folder"] = parseJSON("{}");
+			remoteItem["folder"] = parseJSON("{}");
+		}
+
+		if ("fileSystemInfo" in resource) {
+			sharedItem["fileSystemInfo"] = parseJSON(resource["fileSystemInfo"].toString());
+			remoteItem["fileSystemInfo"] = parseJSON(resource["fileSystemInfo"].toString());
+		} else {
+			JSONValue fallbackFSI = JSONValue([
+				"lastModifiedDateTime": JSONValue(
+					("lastModifiedDateTime" in resource)
+						? resource["lastModifiedDateTime"].str
+						: Clock.currTime(UTC()).toISOExtString()
+				)
+			]);
+
+			sharedItem["fileSystemInfo"] = parseJSON(fallbackFSI.toString());
+			remoteItem["fileSystemInfo"] = parseJSON(fallbackFSI.toString());
+		}
+
+		JSONValue sharedFacet = buildSearchSharedFacet(resource);
+
+		sharedItem["shared"] = parseJSON(sharedFacet.toString());
+		remoteItem["shared"] = parseJSON(sharedFacet.toString());
+
+		sharedItem["remoteItem"] = remoteItem;
+
+		return sharedItem;
+	}
+
+	private JSONValue buildSearchSharedFacet(JSONValue resource) {
+		JSONValue sharedFacet = parseJSON(`{"sharedBy":{"user":{}}}`);
+
+		string displayName = "";
+		string email = "";
+
+		if (("createdBy" in resource) &&
+			(resource["createdBy"].type == JSONType.object) &&
+			("user" in resource["createdBy"]) &&
+			(resource["createdBy"]["user"].type == JSONType.object)) {
+
+			if (("displayName" in resource["createdBy"]["user"]) &&
+				(resource["createdBy"]["user"]["displayName"].type == JSONType.string)) {
+				displayName = resource["createdBy"]["user"]["displayName"].str;
+			}
+
+			if (("email" in resource["createdBy"]["user"]) &&
+				(resource["createdBy"]["user"]["email"].type == JSONType.string)) {
+				email = resource["createdBy"]["user"]["email"].str;
+			}
+		}
+
+		if (displayName == "") {
+			displayName = "Unknown";
+		}
+
+		sharedFacet["sharedBy"]["user"]["displayName"] = JSONValue(displayName);
+
+		if (email != "") {
+			sharedFacet["sharedBy"]["user"]["email"] = JSONValue(email);
+		}
+
+		if (("createdDateTime" in resource) &&
+			(resource["createdDateTime"].type == JSONType.string)) {
+			sharedFacet["sharedDateTime"] = JSONValue(resource["createdDateTime"].str);
+		}
+
+		return sharedFacet;
 	}
 	
 	// Create a shareable link for an existing file on OneDrive based on the accessScope JSON permissions
