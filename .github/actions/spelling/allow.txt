@@ -228,6 +228,7 @@ keepass
 keyboxd
 keyutils
 kotlin
+Kql
 krb
 kservices
 kubuntu
@@ -522,6 +523,7 @@ tval
 typecons
 uda
 udas
+uinteger
 ulnow
 uload
 ultotal

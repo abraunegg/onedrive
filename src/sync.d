@@ -15138,8 +15138,11 @@ class SyncEngine {
 					string sharedByName;
 					string sharedByEmail;
 					
+					// Output Query Result
+					addLogEntry(debugLogBreakType1);
+					
 					// Debug response output
-					if (debugLogging) {addLogEntry("shared folder entry: " ~ to!string(searchResult), ["debug"]);}
+					if (debugLogging) {addLogEntry("shared item entry: " ~ to!string(searchResult), ["debug"]);}
 					
 					// Configure 'who' this was shared by
 					if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
@@ -15152,8 +15155,7 @@ class SyncEngine {
 						}
 					}
 					
-					// Output query result
-					addLogEntry(debugLogBreakType1);
+					// File or Folder
 					if (isItemFile(searchResult)) {
 						addLogEntry("Shared File:     " ~ to!string(searchResult["name"].str));
 					} else {

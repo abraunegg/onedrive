@@ -20,6 +20,9 @@ from testcases_business_shared_folders.bsftc0002_clean_monitor_pull_down import 
 from testcases_business_shared_folders.bsftc0003_sync_list_validation import (
     BusinessSharedFolderTestCase0003SyncListValidation,
 )
+from testcases_business_shared_folders.bsftc0004_shared_files_pull_down import (
+    BusinessSharedFolderTestCase0004SharedFilesPullDown,
+)
 
 
 def build_test_suite() -> list:
@@ -27,6 +30,7 @@ def build_test_suite() -> list:
         BusinessSharedFolderTestCase0001CleanSyncPullDown(),
         BusinessSharedFolderTestCase0002CleanMonitorPullDown(),
         BusinessSharedFolderTestCase0003SyncListValidation(),
+        BusinessSharedFolderTestCase0004SharedFilesPullDown(),
     ]
 
 
