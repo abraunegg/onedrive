@@ -2464,8 +2464,8 @@ class OneDriveApi {
 					}
 					
 					// If we get to this point, there is no error from http.perform() on re-try
-					// If retryAttempts is greater than 1, it means we were re-trying the request
-					if (retryAttempts > 1) {
+					// If retryAttempts is greater than 0, it means we were re-trying the request
+					if (retryAttempts > 0) {
 						// unset the fresh connect option as this then creates performance issues if left enabled
 						unsetFreshConnectOption();
 					}
