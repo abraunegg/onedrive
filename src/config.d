@@ -1306,9 +1306,6 @@ class ApplicationConfig {
 				"get-sharepoint-drive-id",
 					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library",
 					&stringValues["sharepoint_library_name"],
-				"get-O365-drive-id",
-					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library (DEPRECATED)",
-					&stringValues["sharepoint_library_name"],
 				"list-shared-items",
 					"List OneDrive Business Shared Items",
 					&boolValues["list_business_shared_items"],
@@ -1398,9 +1395,6 @@ class ApplicationConfig {
 					&stringValues["share_password"],
 				"sync|s",
 					"Perform a synchronisation with Microsoft OneDrive",
-					&boolValues["synchronize"],
-				"synchronize",
-					"Perform a synchronisation with Microsoft OneDrive (DEPRECATED)",
 					&boolValues["synchronize"],
 				"sync-root-files",
 					"Sync all files in sync_dir root when using sync_list",
@@ -1606,23 +1600,30 @@ class ApplicationConfig {
 	void checkDeprecatedOptions(string[] cliArgs) {
 	
 		bool deprecatedCommandsFound = false;
-	
+
 		foreach (cliArg; cliArgs) {
 			// Check each CLI arg for items that have been deprecated
+			// If the CLI arg is not listed in updateFromArgs() we never hit this code as the removed CLI option generates:
+			//      Unrecognized option XXXXXX
+			//      Try 'onedrive -h' for more information
 			
-			// --synchronize deprecated in v2.5.0, will be removed in future version
+			/**
+			
+			// --synchronize has been deprecated (30/5/2026)
 			if (cliArg == "--synchronize") {
 				addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
 				addLogEntry("DEPRECIATION WARNING: --synchronize has been deprecated in favour of --sync or -s");
 				deprecatedCommandsFound = true;
 			}
 			
-			// --get-O365-drive-id deprecated in v2.5.0, will be removed in future version
+			// --get-O365-drive-id has been deprecated (30/5/2026)
 			if (cliArg == "--get-O365-drive-id") {
 				addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
 				addLogEntry("DEPRECIATION WARNING: --get-O365-drive-id has been deprecated in favour of --get-sharepoint-drive-id");
 				deprecatedCommandsFound = true;
 			}
+			**/
+			
 		}
 	
 		if (deprecatedCommandsFound) {
@@ -3294,7 +3295,6 @@ void outputLongHelp(Option[] opt) {
 			"--destination-directory",
 			"--download-file",
 			"--get-file-link",
-			"--get-O365-drive-id",
 			"--get-sharepoint-drive-id",
 			"--log-dir",
 			"--min-notify-changes",

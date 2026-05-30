@@ -456,7 +456,7 @@ int main(string[] cliArgs) {
 	// Check for --dry-run operation or a 'no-sync' operation where the 'dry-run' DB copy should be used
 	// If this has been requested, we need to ensure that all actions are performed against the dry-run database copy, and, 
 	// no actual action takes place - such as deleting files if deleted online, moving files if moved online or local, downloading new & changed files, uploading new & changed files
-	if (dryRun || (noSyncTaskOperationRequested)) {
+	if (dryRun || noSyncTaskOperationRequested) {
 		// Cleanup any existing dry-run elements ... these should never be left hanging around and should be cleaned up first
 		cleanupDatabaseFiles(appConfig.databaseFilePathDryRun);
 		
@@ -477,10 +477,17 @@ int main(string[] cliArgs) {
 					addLogEntry("DRY-RUN: No database copy created for --dry-run due to --resync also being used");
 				}
 			}
-			
-			// update runtimeDatabaseFile now that we are using the dry run path
-			runtimeDatabaseFile = appConfig.databaseFilePathDryRun;
+		} else {
+			// A no-sync operation must not attempt to open the live database, because the normal client may already be running.
+			// Use the dry-run database path so these query-style operations can execute while --monitor owns the live DB.
+			if (exists(appConfig.databaseFilePath)) {
+				if (debugLogging) {addLogEntry("Copying items.sqlite3 to items-dryrun.sqlite3 to use for no-sync operations", ["debug"]);}
+				copy(appConfig.databaseFilePath, appConfig.databaseFilePathDryRun);
+			}
 		}
+		
+		// update runtimeDatabaseFile now that we are using the dry run path
+		runtimeDatabaseFile = appConfig.databaseFilePathDryRun;
 	} else {
 		// Cleanup any existing dry-run elements ... these should never be left hanging around
 		cleanupDatabaseFiles(appConfig.databaseFilePathDryRun);

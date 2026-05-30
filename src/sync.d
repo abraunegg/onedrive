@@ -3965,8 +3965,10 @@ class SyncEngine {
 		// Create a JSONValue to store the online hash for resumable file checking
 		JSONValue onlineHash;
 		
-		// Capture what time this download started
-		SysTime downloadStartTime = Clock.currTime();
+		// Capture workflow and transfer timing for this download
+		SysTime downloadWorkflowStartTime = Clock.currTime();
+		SysTime downloadTransferStartTime = downloadWorkflowStartTime;
+		SysTime downloadTransferEndTime = downloadWorkflowStartTime;
 		
 		// Download item specifics
 		string downloadItemId = onedriveJSONItem["id"].str;
@@ -4095,7 +4097,9 @@ class SyncEngine {
 						}
 						
 						// Perform the download with any applicable set offset
+						downloadTransferStartTime = Clock.currTime();
 						auto downloadResponse = downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset);
+						downloadTransferEndTime = Clock.currTime();
 						if (downloadResponse !is null) {
 							hasDownloadedStreamedQuickXorHash = downloadResponse.hasStreamedQuickXorHash;
 							downloadedStreamedQuickXorHash = downloadResponse.streamedQuickXorHash;
@@ -4381,7 +4385,7 @@ class SyncEngine {
 				addLogEntry("Downloading file: " ~ newItemPath ~ " ... done", fileTransferNotifications());
 				
 				// As no download failure, calculate transfer metrics in a consistent manner
-				displayTransferMetrics(newItemPath, jsonFileSize, downloadStartTime, Clock.currTime());
+				displayTransferMetrics(newItemPath, jsonFileSize, downloadTransferStartTime, downloadTransferEndTime, downloadWorkflowStartTime, Clock.currTime());
 				
 				// Save this item into the database
 				saveItem(onedriveJSONItem);
@@ -6997,8 +7001,10 @@ class SyncEngine {
 		// Flag for if space is available online
 		bool spaceAvailableOnline = false;
 		
-		// Capture what time this upload started
+		// Capture workflow and transfer timing for this upload
 		SysTime uploadStartTime = Clock.currTime();
+		SysTime uploadTransferStartTime = uploadStartTime;
+		SysTime uploadTransferEndTime = uploadStartTime;
 		
 		// When we are uploading OneDrive Business Shared Files, we need to be targeting the right driveId and itemId
 		string targetDriveId;
@@ -7163,7 +7169,7 @@ class SyncEngine {
 			if (thisFileSizeLocal <= maxUploadFileSize) {
 				// Attempt to upload the modified file
 				// Error handling is in performModifiedFileUpload(), and the JSON that is responded with - will either be null or a valid JSON object containing the upload result
-				uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
+				uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal, uploadTransferStartTime, uploadTransferEndTime);
 				
 				// Evaluate the returned JSON uploadResponse
 				// If there was an error uploading the file, uploadResponse should be empty and invalid
@@ -7207,7 +7213,7 @@ class SyncEngine {
 			addLogEntry("Uploading modified file: " ~ localFilePath ~ " ... done", fileTransferNotifications());
 			
 			// As no upload failure, calculate transfer metrics in a consistent manner
-			displayTransferMetrics(localFilePath, thisFileSizeLocal, uploadStartTime, Clock.currTime());
+			displayTransferMetrics(localFilePath, thisFileSizeLocal, uploadTransferStartTime, uploadTransferEndTime, uploadStartTime, Clock.currTime());
 			
 			// What do we save to the DB? Is this a OneDrive Business Shared File?
 			if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
@@ -7421,7 +7427,7 @@ class SyncEngine {
 	}
 			
 	// Perform the upload of a locally modified file to OneDrive
-	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal) {
+	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal, out SysTime uploadTransferStartTime, out SysTime uploadTransferEndTime) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -7567,7 +7573,9 @@ class SyncEngine {
 			if ((thisFileSizeLocal == 0) || (useSimpleUpload)) {
 				// Must use Simple Upload to replace the file online
 				try {
+					uploadTransferStartTime = Clock.currTime();
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUploadReplace(localFilePath, targetDriveId, targetItemId);
+					uploadTransferEndTime = Clock.currTime();
 				} catch (OneDriveException exception) {
 					// HTTP request returned status code 403
 					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
@@ -7637,7 +7645,9 @@ class SyncEngine {
 						uploadSessionData["currentETag"] = currentOnlineItemData.eTag;
 						
 						// attempt the session upload using the session data provided
-						uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSizeLocal, uploadSessionData, threadUploadSessionFilePath);
+						uploadTransferStartTime = Clock.currTime();
+							uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSizeLocal, uploadSessionData, threadUploadSessionFilePath);
+							uploadTransferEndTime = Clock.currTime();
 					} catch (OneDriveException exception) {
 						// Handle all other HTTP status codes
 						// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
@@ -10102,8 +10112,10 @@ class SyncEngine {
 		// Create the OneDriveAPI Upload Instance
 		OneDriveApi uploadFileOneDriveApiInstance;
 		
-		// Capture what time this upload started
+		// Capture workflow and transfer timing for this upload
 		SysTime uploadStartTime = Clock.currTime();
+		SysTime uploadTransferStartTime = uploadStartTime;
+		SysTime uploadTransferEndTime = uploadStartTime;
 		
 		// Is this a dry-run scenario?
 		if (!dryRun) {
@@ -10143,7 +10155,9 @@ class SyncEngine {
 					uploadFileOneDriveApiInstance.initialise();
 				
 					// Attempt to upload the zero byte file using simpleUpload for all account types
+					uploadTransferStartTime = Clock.currTime();
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUpload(fileToUpload, parentItem.driveId, parentItem.id, baseName(fileToUpload));
+					uploadTransferEndTime = Clock.currTime();
 					uploadFailed = false;
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
 					
@@ -10234,7 +10248,9 @@ class SyncEngine {
 						// We have a valid Upload Session Data we can use
 						try {
 							// Try and perform the upload session
+							uploadTransferStartTime = Clock.currTime();
 							uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSize, uploadSessionData, threadUploadSessionFilePath);
+							uploadTransferEndTime = Clock.currTime();
 							
 							// Was exitHandlerTriggered flagged
 							if (!exitHandlerTriggered) {
@@ -10284,7 +10300,7 @@ class SyncEngine {
 		if (!uploadFailed) {
 			// Upload did not fail ...
 			// As no upload failure, calculate transfer metrics in a consistent manner
-			displayTransferMetrics(fileToUpload, thisFileSize, uploadStartTime, Clock.currTime());
+			displayTransferMetrics(fileToUpload, thisFileSize, uploadTransferStartTime, uploadTransferEndTime, uploadStartTime, Clock.currTime());
 			
 			// OK as the upload did not fail, we need to save the response from OneDrive, but it has to be a valid JSON response
 			if (uploadResponse.type() == JSONType.object) {
@@ -15823,7 +15839,7 @@ class SyncEngine {
 	}
 	
 	// Calculate the transfer metrics for the file to aid in performance discussions when they are raised
-	void displayTransferMetrics(string fileTransferred, long transferredBytes, SysTime transferStartTime, SysTime transferEndTime) {
+	void displayTransferMetrics(string fileTransferred, long transferredBytes, SysTime transferStartTime, SysTime transferEndTime, SysTime workflowStartTime, SysTime workflowEndTime) {
 		// We only calculate this if 'display_transfer_metrics' is enabled or we are doing debug logging
 		if (appConfig.getValueBool("display_transfer_metrics") || debugLogging) {
 		
@@ -15843,11 +15859,16 @@ class SyncEngine {
 			if (transferredBytes > 0) {
 				// Calculate transfer metrics
 				auto transferDuration = transferEndTime - transferStartTime;
+				auto workflowDuration = workflowEndTime - workflowStartTime;
 				double transferDurationAsSeconds = (transferDuration.total!"msecs"/1e3); // msec --> seconds
-				double transferSpeedAsMbps = ((transferredBytes / transferDurationAsSeconds) / 1024 / 1024); // bytes --> Mbps
+				double workflowDurationAsSeconds = (workflowDuration.total!"msecs"/1e3); // msec --> seconds
+				double transferSpeedAsMbps = 0;
+				if (transferDurationAsSeconds > 0) {
+					transferSpeedAsMbps = ((transferredBytes * 8.0) / transferDurationAsSeconds) / 1_000_000; // bytes/sec --> Mbps
+				}
 				
 				// Output the transfer metrics
-				string transferMetrics = format("File: %s | Size: %d Bytes | Duration: %.2f Seconds | Speed: %.2f Mbps (approx)", fileTransferred, transferredBytes, transferDurationAsSeconds, transferSpeedAsMbps);
+				string transferMetrics = format("File: %s | Size: %d Bytes | Transfer: %.2f Seconds | End-to-End: %.2f Seconds | Speed: %.2f Mbps (approx)", fileTransferred, transferredBytes, transferDurationAsSeconds, workflowDurationAsSeconds, transferSpeedAsMbps);
 				addLogEntry("Transfer Metrics - " ~ transferMetrics);
 				
 			} else {
