@@ -1,152 +1,262 @@
-#!/usr/bin/env python3
-"""
-Business Shared Folders Test Case 0005:
-Validate that --get-sharepoint-drive-id '*' can run successfully while the same
-configuration directory is already being used by a live --monitor process.
+from __future__ import annotations
 
-This test intentionally uses the same --confdir, items.sqlite3 and refresh_token
-as the running monitor process. Any output indicating that another onedrive
-process is already running is a failure.
-"""
-
-import argparse
-import os
-import signal
 import subprocess
-import sys
-import tempfile
-import time
-from pathlib import Path
 
-
-SETTLED_MARKER = "Sync with Microsoft OneDrive is complete"
-EXPECTED_QUERY_LINE = "Office 365 Library Name Query: *"
-EXPECTED_RESULT_HEADER = "The following SharePoint site names were returned:"
-BUG_MARKERS = (
-    "application is already running",
-    "database is locked",
-    "blocked by another process",
+from framework.base import E2ETestCase
+from framework.context import E2EContext
+from framework.result import TestResult
+from framework.utils import command_to_string, run_command, write_text_file
+from testcases_business_shared_folders.shared_folder_common import (
+    case_sync_root,
+    reset_local_sync_root,
+    stop_monitor_process,
+    wait_for_stdout_marker,
+    write_case_config,
 )
 
 
-def run_cmd(cmd, *, cwd=None, timeout=300):
-    return subprocess.run(
-        cmd,
-        cwd=cwd,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        timeout=timeout,
-        check=False,
+EXPECTED_QUERY_LINE = "Office 365 Library Name Query: *"
+EXPECTED_RESULT_HEADER = "The following SharePoint site names were returned:"
+
+EXPECTED_SITE_MARKERS = [
+    "Data Monitoring",
+    "Shared_Folder_Testing",
+]
+
+BUG_MARKERS = [
+    "application is already running",
+    "database is locked",
+    "blocked by another process",
+]
+
+
+class BusinessSharedFolderTestCase0005GetSharePointDriveIdWhileMonitoring(E2ETestCase):
+    case_id = "bsftc0005"
+    name = "get-sharepoint-drive-id while monitor active"
+    description = (
+        "Validate that --get-sharepoint-drive-id '*' can run successfully using the "
+        "same configuration directory while a --monitor client process is already active"
     )
 
+    def run(self, context: E2EContext) -> TestResult:
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name=self.case_id,
+            ensure_refresh_token=True,
+        )
 
-def wait_for_monitor_settle(proc, log_path, timeout):
-    deadline = time.time() + timeout
-    last = ""
-    while time.time() < deadline:
-        if proc.poll() is not None:
-            try:
-                last = log_path.read_text(errors="replace")
-            except FileNotFoundError:
-                last = ""
-            raise RuntimeError(
-                f"monitor process exited before initial sync settled; rc={proc.returncode}\n{last[-4000:]}"
-            )
-        try:
-            last = log_path.read_text(errors="replace")
-        except FileNotFoundError:
-            last = ""
-        if SETTLED_MARKER in last:
-            return last
-        time.sleep(2)
-    raise TimeoutError(f"monitor process did not settle within {timeout} seconds\n{last[-4000:]}")
+        sync_root = case_sync_root(self.case_id)
+        confdir = layout.work_dir / "conf"
+        reset_local_sync_root(sync_root)
+        write_case_config(context, confdir, self.case_id)
 
+        monitor_stdout_file = layout.log_dir / "monitor_stdout.log"
+        monitor_stderr_file = layout.log_dir / "monitor_stderr.log"
+        query_stdout_file = layout.log_dir / "query_stdout.log"
+        query_stderr_file = layout.log_dir / "query_stderr.log"
+        metadata_file = layout.state_dir / "metadata.txt"
+        failure_markers_file = layout.state_dir / "failure_markers.txt"
+        missing_markers_file = layout.state_dir / "missing_expected_markers.txt"
 
-def stop_monitor(proc):
-    if proc.poll() is not None:
-        return
-    proc.send_signal(signal.SIGINT)
-    try:
-        proc.wait(timeout=60)
-    except subprocess.TimeoutExpired:
-        proc.terminate()
-        try:
-            proc.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=30)
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--onedrive-bin", default=os.environ.get("ONEDRIVE_BIN", "./onedrive"))
-    parser.add_argument("--confdir", required=True)
-    parser.add_argument("--sync-dir", required=True)
-    parser.add_argument("--settle-timeout", type=int, default=900)
-    args = parser.parse_args()
-
-    onedrive_bin = str(Path(args.onedrive_bin).resolve())
-    confdir = str(Path(args.confdir).resolve())
-    sync_dir = str(Path(args.sync_dir).resolve())
-
-    with tempfile.TemporaryDirectory(prefix="bsftc0005-") as tmp:
-        monitor_log = Path(tmp) / "monitor.log"
-        query_log = Path(tmp) / "query.log"
-
-        monitor_cmd = [
-            onedrive_bin,
-            "--confdir", confdir,
-            "--syncdir", sync_dir,
+        monitor_command = [
+            context.onedrive_bin,
             "--monitor",
             "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--confdir",
+            str(confdir),
         ]
 
-        with monitor_log.open("w", encoding="utf-8") as fp:
-            monitor_proc = subprocess.Popen(
-                monitor_cmd,
-                stdout=fp,
-                stderr=subprocess.STDOUT,
+        query_command = [
+            context.onedrive_bin,
+            "--get-sharepoint-drive-id",
+            "*",
+            "--confdir",
+            str(confdir),
+        ]
+
+        context.log(f"Executing Test Case {self.case_id} monitor: {command_to_string(monitor_command)}")
+
+        with monitor_stdout_file.open("w", encoding="utf-8") as monitor_stdout_fp, \
+             monitor_stderr_file.open("w", encoding="utf-8") as monitor_stderr_fp:
+
+            monitor_process = subprocess.Popen(
+                monitor_command,
+                cwd=str(context.repo_root),
+                stdout=monitor_stdout_fp,
+                stderr=monitor_stderr_fp,
                 text=True,
             )
 
-        try:
-            wait_for_monitor_settle(monitor_proc, monitor_log, args.settle_timeout)
+            try:
+                initial_sync_complete = wait_for_stdout_marker(
+                    monitor_stdout_file,
+                    "Sync with Microsoft OneDrive is complete",
+                    timeout_seconds=1200,
+                )
 
-            query_cmd = [
-                onedrive_bin,
-                "--confdir", confdir,
-                "--syncdir", sync_dir,
-                "--get-sharepoint-drive-id", "*",
-            ]
-            result = run_cmd(query_cmd, timeout=300)
-            query_log.write_text(result.stdout, encoding="utf-8")
+                if not initial_sync_complete:
+                    monitor_returncode = stop_monitor_process(monitor_process)
+                    reason = "monitor mode did not complete initial sync before SharePoint library query"
+                    self._write_case_metadata(
+                        metadata_file,
+                        monitor_command=monitor_command,
+                        query_command=query_command,
+                        monitor_returncode=monitor_returncode,
+                        query_returncode=None,
+                        sync_root=sync_root,
+                        confdir=confdir,
+                        initial_sync_complete=initial_sync_complete,
+                        failures=[reason],
+                    )
+                    return self.fail_result(
+                        self.case_id,
+                        self.name,
+                        reason,
+                        self._artifacts(
+                            monitor_stdout_file,
+                            monitor_stderr_file,
+                            query_stdout_file,
+                            query_stderr_file,
+                            metadata_file,
+                            failure_markers_file,
+                            missing_markers_file,
+                        ),
+                        {
+                            "monitor_command": monitor_command,
+                            "query_command": query_command,
+                            "monitor_returncode": monitor_returncode,
+                            "initial_sync_complete": initial_sync_complete,
+                            "sync_root": str(sync_root),
+                            "config_dir": str(confdir),
+                        },
+                    )
 
-            output_lower = result.stdout.lower()
-            failures = []
-            if result.returncode != 0:
-                failures.append(f"--get-sharepoint-drive-id exited with status {result.returncode}")
-            if EXPECTED_QUERY_LINE not in result.stdout:
-                failures.append("expected SharePoint wildcard query line was not printed")
-            if EXPECTED_RESULT_HEADER not in result.stdout:
-                failures.append("expected SharePoint site result header was not printed")
-            for marker in BUG_MARKERS:
-                if marker in output_lower:
-                    failures.append(f"unexpected live-client/database-lock failure marker present: {marker}")
+                context.log(f"Executing Test Case {self.case_id} query: {command_to_string(query_command)}")
+                query_result = run_command(query_command, cwd=context.repo_root)
 
-            if failures:
-                print("Test Case 0005: get-sharepoint-drive-id while monitor active — FAILED")
-                for failure in failures:
-                    print(f" - {failure}")
-                print("\n--- query output ---")
-                print(result.stdout[-8000:])
-                return 1
+                write_text_file(query_stdout_file, query_result.stdout)
+                write_text_file(query_stderr_file, query_result.stderr)
 
-            print("Test Case 0005: get-sharepoint-drive-id while monitor active — PASSED")
-            return 0
-        finally:
-            stop_monitor(monitor_proc)
+                query_output = f"{query_result.stdout}\n{query_result.stderr}"
+                query_output_lower = query_output.lower()
 
+                missing_markers = []
+                failure_markers = []
+                failures = []
 
-if __name__ == "__main__":
-    sys.exit(main())
+                expected_markers = [
+                    EXPECTED_QUERY_LINE,
+                    EXPECTED_RESULT_HEADER,
+                    *EXPECTED_SITE_MARKERS,
+                ]
+
+                for marker in expected_markers:
+                    if marker not in query_output:
+                        missing_markers.append(marker)
+
+                for marker in BUG_MARKERS:
+                    if marker in query_output_lower:
+                        failure_markers.append(marker)
+
+                if query_result.returncode != 0:
+                    failures.append(f"--get-sharepoint-drive-id exited with status {query_result.returncode}")
+
+                if missing_markers:
+                    failures.append("expected SharePoint library enumeration output was not present")
+
+                if failure_markers:
+                    failures.append("unexpected active-client or database-lock failure marker was present")
+
+                write_text_file(missing_markers_file, "\n".join(missing_markers) + ("\n" if missing_markers else ""))
+                write_text_file(failure_markers_file, "\n".join(failure_markers) + ("\n" if failure_markers else ""))
+
+                monitor_returncode = stop_monitor_process(monitor_process)
+
+                self._write_case_metadata(
+                    metadata_file,
+                    monitor_command=monitor_command,
+                    query_command=query_command,
+                    monitor_returncode=monitor_returncode,
+                    query_returncode=query_result.returncode,
+                    sync_root=sync_root,
+                    confdir=confdir,
+                    initial_sync_complete=initial_sync_complete,
+                    failures=failures,
+                    missing_markers=missing_markers,
+                    failure_markers=failure_markers,
+                )
+
+                artifacts = self._artifacts(
+                    monitor_stdout_file,
+                    monitor_stderr_file,
+                    query_stdout_file,
+                    query_stderr_file,
+                    metadata_file,
+                    failure_markers_file,
+                    missing_markers_file,
+                )
+
+                details = {
+                    "monitor_command": monitor_command,
+                    "query_command": query_command,
+                    "monitor_returncode": monitor_returncode,
+                    "query_returncode": query_result.returncode,
+                    "initial_sync_complete": initial_sync_complete,
+                    "sync_root": str(sync_root),
+                    "config_dir": str(confdir),
+                    "missing_markers": missing_markers,
+                    "failure_markers": failure_markers,
+                }
+
+                if monitor_returncode not in (0, 130, -2):
+                    failures.append(f"monitor mode exited with unexpected status {monitor_returncode}")
+
+                if failures:
+                    return self.fail_result(
+                        self.case_id,
+                        self.name,
+                        "; ".join(failures),
+                        artifacts,
+                        details,
+                    )
+
+                return self.pass_result(self.case_id, self.name, artifacts, details)
+
+            finally:
+                stop_monitor_process(monitor_process)
+
+    def _artifacts(self, *paths) -> list[str]:
+        return [str(path) for path in paths]
+
+    def _write_case_metadata(
+        self,
+        metadata_file,
+        *,
+        monitor_command,
+        query_command,
+        monitor_returncode,
+        query_returncode,
+        sync_root,
+        confdir,
+        initial_sync_complete,
+        failures,
+        missing_markers=None,
+        failure_markers=None,
+    ) -> None:
+        lines = [
+            f"case_id={self.case_id}",
+            f"name={self.name}",
+            f"monitor_command={command_to_string(monitor_command)}",
+            f"query_command={command_to_string(query_command)}",
+            f"monitor_returncode={monitor_returncode}",
+            f"query_returncode={query_returncode}",
+            f"sync_root={sync_root}",
+            f"config_dir={confdir}",
+            f"initial_sync_complete={initial_sync_complete}",
+            f"failures={failures!r}",
+            f"missing_markers={missing_markers or []!r}",
+            f"failure_markers={failure_markers or []!r}",
+        ]
+        write_text_file(metadata_file, "\n".join(lines) + "\n")
