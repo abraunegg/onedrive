@@ -282,10 +282,6 @@ Force the use of HTTP 1.1 for all operations.
 Force a synchronisation of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules.
 
 .TP
-\fB\-\-get-O365-drive-id\fR \fIARG\fR
-Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library (DEPRECATED).
-
-.TP
 \fB\-\-get-file-link\fR \fIARG\fR
 Display the file link of a synced file.
 
@@ -415,10 +411,6 @@ Sync OneDrive Business Shared Files to the local filesystem.
 Specify the local directory used for synchronisation to OneDrive.
 
 .TP
-\fB\-\-synchronize\fR
-Perform a synchronisation with Microsoft OneDrive (DEPRECATED).
-
-.TP
 \fB\-\-threads\fR \fIARG\fR
 Specify a value for the number of worker threads used for parallel upload and download operations.
 
@@ -437,6 +429,13 @@ Print the version and exit.
 .TP
 \fB\-\-with-editing-perms\fR
 Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>.
+
+.SH DEPRECATED OPTIONS
+The following options have been deprecated:
+.TP
+\fB\-\-synchronize\fR
+.TP
+\fB\-\-get-O365-drive-id\fR
 
 .SH DOCUMENTATION
 All documentation is available on GitHub: https://github.com/abraunegg/onedrive/tree/master/docs/
