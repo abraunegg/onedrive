@@ -428,6 +428,36 @@ user@hostname:~$
 > 2. Use a private/incognito browser session or a clean browser profile
 > 3. Temporarily disable URL-filtering/privacy extensions for the Microsoft login pages (uBlock Origin / ClearURLs / Brave Shields / similar), then retry
 
+#### Business / Enterprise Authentication and Admin Consent
+When using Microsoft OneDrive Personal accounts, application authorisation is typically granted directly by the user during the authentication process.
+
+In Microsoft 365 Business, Enterprise, Education, Government, or other Microsoft Entra ID managed environments, application access may be restricted by organisational security policies. In these environments, users may be unable to authorise the application themselves and may receive messages indicating that administrator approval is required.
+
+If administrator approval is required, a Microsoft Entra ID administrator must review and grant consent for the application before users within the organisation can successfully authenticate and use the client.
+
+The OneDrive Client for Linux uses delegated Microsoft Graph API permissions and, in most environments, does not require any modification of the application source code or the creation of a custom Microsoft Entra ID application registration.
+
+To simplify administrator approval, a tenant-specific administrator consent URL can be generated using:
+```
+onedrive --display-admin-consent-url
+```
+This option requires the configuration value azure_tenant_id to be set in the user configuration file. The tenant identifier may be either the Microsoft Entra ID tenant GUID or the tenant domain name, for example:
+```
+azure_tenant_id = "example.onmicrosoft.com"
+```
+or
+```
+azure_tenant_id = "0c4be462-a1ab-499b-99e0-da08ce52a2cc"
+```
+The generated URL should be provided to the Microsoft Entra ID administrator responsible for approving applications within the organisation.
+
+Administrator consent is typically a one-time action for a Microsoft Entra ID tenant. Once consent has been granted, users can authenticate and reauthenticate normally, including when using `--reauth`.
+
+If you are uncertain whether administrator approval is required in your environment, contact your Microsoft 365 or Microsoft Entra ID administrator before attempting further authentication troubleshooting.
+
+> [!IMPORTANT]
+> Some organisations prohibit users from granting consent to applications. In these environments, authentication will fail until approval has been granted by a Microsoft Entra ID administrator.
+
 
 #### Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker 
 To use this method of authentication, you must add the following configuration to your 'config' file:
