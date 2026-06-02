@@ -441,7 +441,7 @@ To simplify administrator approval, a tenant-specific administrator consent URL 
 ```
 onedrive --display-admin-consent-url
 ```
-This option requires the configuration value azure_tenant_id to be set in the user configuration file. The tenant identifier may be either the Microsoft Entra ID tenant GUID or the tenant domain name, for example:
+This option requires the configuration value `azure_tenant_id` to be set in the user configuration file. The tenant identifier may be either the Microsoft Entra ID tenant GUID or the tenant domain name, for example:
 ```
 azure_tenant_id = "example.onmicrosoft.com"
 ```
