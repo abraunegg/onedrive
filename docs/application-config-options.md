@@ -88,6 +88,7 @@ Before reading this document, please ensure you are running application version 
   - [CLI Option: --create-directory](#cli-option---create-directory)
   - [CLI Option: --create-share-link](#cli-option---create-share-link)
   - [CLI Option: --destination-directory](#cli-option---destination-directory)
+  - [CLI Option: --display-admin-consent-url](#cli-option---display-admin-consent-url)
   - [CLI Option: --display-config](#cli-option---display-config)
   - [CLI Option: --display-sync-status](#cli-option---display-sync-status)
   - [CLI Option: --display-quota](#cli-option---display-quota)
@@ -370,7 +371,6 @@ _**Default Value:**_ False
 _**Config Example:**_ `disable_websocket_support = "false"` or `disable_websocket_support = "true"`
 
 _**CLI Option Use:**_ *None - this is a config file option only*
-
 
 ### display_manager_integration
 _**Description:**_ Controls whether the client integrates the configured 'sync_dir' with the desktop’s file manager (e.g. Nautilus for GNOME, Dolphin for KDE), adding it as a “special place” in the sidebar and setting a custom OneDrive folder icon where supported.
@@ -1435,6 +1435,11 @@ _**Usage Example:**_ `onedrive --source-directory 'path/as/source/' --destinatio
 
 > [!IMPORTANT]
 > All specified paths are relative to your configured 'sync_dir'.
+
+### CLI Option: --display-admin-consent-url
+_**Description:**_ This CLI option displays a tenant-specific Microsoft Entra ID administrator consent URL for environments where administrator approval is required before users can authenticate and use the client.
+
+_**Usage Example:**_ `onedrive --display-admin-consent-url`
 
 ### CLI Option: --display-config
 _**Description:**_ This CLI option will display the effective application configuration

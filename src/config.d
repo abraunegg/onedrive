@@ -1266,7 +1266,7 @@ class ApplicationConfig {
 					"Disable upload validation when uploading to OneDrive",
 					&boolValues["disable_upload_validation"],
 				"display-admin-consent-url",
-					"Display the Microsoft Entra ID administrator consent URL for the configured tenant",
+					"Displays a tenant-specific Microsoft Entra ID administrator consent URL for environments where administrator approval is required before users can authenticate and use the client",
 					&boolValues["display_admin_consent_url"],
 				"display-config",
 					"Display what options the client will use as currently configured. No synchronisation will be performed",
