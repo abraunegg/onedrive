@@ -447,13 +447,31 @@ azure_tenant_id = "example.onmicrosoft.com"
 ```
 or
 ```
-azure_tenant_id = "0c4be462-a1ab-499b-99e0-da08ce52a2cc"
+azure_tenant_id = "0c4be463-a1ab-499b-99e0-da08ce52a2cc"
 ```
-The generated URL should be provided to the Microsoft Entra ID administrator responsible for approving applications within the organisation.
+The generated URL should be provided to the Microsoft Entra ID administrator responsible for approving applications within the organisation:
+```
+onedrive --display-admin-consent-url
+...
+Attempting to contact the Microsoft OneDrive Service
+Successfully reached the Microsoft OneDrive Service
+Configuring Global Azure AD Endpoints - Single Tenant Application
+
+Please authorise this application by visiting the following Microsoft Entra ID admin consent URL: 
+
+https://login.microsoftonline.com/0c4be463-a1ab-499b-99e0-da08ce52a2cc/v2.0/adminconsent?client_id=d50ca740-c83f-4d1b-b616-12c519384f0c&scope=Files.ReadWrite%20Files.ReadWrite.All%20Sites.ReadWrite.All%20offline_access&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
+
+Open this URL as a Microsoft Entra ID administrator to grant tenant-wide consent. Nothing from this process needs to be pasted back into this application.
+
+After administrator consent has been granted, run the normal authentication process again.
+```
 
 Administrator consent is typically a one-time action for a Microsoft Entra ID tenant. Once consent has been granted, users can authenticate and reauthenticate normally, including when using `--reauth`.
 
 If you are uncertain whether administrator approval is required in your environment, contact your Microsoft 365 or Microsoft Entra ID administrator before attempting further authentication troubleshooting.
+
+> [!TIP]
+> To obtain the required 'azure_tenant_id' details, sign in to your Microsoft Entra Admin Center and review the details under Identity -> Overview
 
 > [!IMPORTANT]
 > Some organisations prohibit users from granting consent to applications. In these environments, authentication will fail until approval has been granted by a Microsoft Entra ID administrator.

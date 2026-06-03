@@ -828,8 +828,12 @@ int main(string[] cliArgs) {
 			}
 		} else {
 			// API could not be initialised
-			addLogEntry("The OneDrive API could not be initialised");
-			return EXIT_FAILURE;
+			if (!appConfig.getValueBool("display_admin_consent_url")) {
+				addLogEntry("The OneDrive API could not be initialised");
+				return EXIT_FAILURE;
+			} else {
+				return EXIT_SUCCESS;
+			}
 		}
 	}
 	

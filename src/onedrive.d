@@ -721,115 +721,155 @@ class OneDriveApi {
 					return false;
 				}
 			} else {
-				// Use OAuth2 Interactive Authorisation Flow (application default)
-				char[] response;
-				// What URL should be presented to the user to access
-				string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
-				// Configure automated authentication if --auth-files authUrlFilePath:responseUrlFilePath is being used
-				string authFilesString = appConfig.getValueString("auth_files");
-				string authResponseString = appConfig.getValueString("auth_response");
-			
-				if (!authResponseString.empty) {
-					// read the response from authResponseString
-					response = cast(char[]) authResponseString;
-				} else if (authFilesString != "") {
-					string[] authFiles = authFilesString.split(":");
-					string authUrlFilePath = authFiles[0];
-					string responseUrlFilePath = authFiles[1];
-					
-					try {
-						auto authUrlFile = File(authUrlFilePath, "w");
-						authUrlFile.write(url);
-						authUrlFile.close();
-					} catch (FileException exception) {
-						// There was a file system error
-						// display the error message
-						displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
-						// Must force exit here, allow logging to be done
-						forceExit();
-					} catch (ErrnoException exception) {
-						// There was a file system error
-						// display the error message
-						displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
-						// Must force exit here, allow logging to be done
-						forceExit();
-					}
-
-					// Log we are now waiting
-					addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
-					
-					while (!exists(responseUrlFilePath)) {
-						Thread.sleep(dur!("msecs")(100));
-					}
-
-					// read response from provided from OneDrive
-					try {
-						response = cast(char[]) read(responseUrlFilePath);
-					} catch (OneDriveException exception) {
-						// exception generated
-						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-						return false;
-					}
-
-					// try to remove auth files one at a time
-					try {
-						std.file.remove(authUrlFilePath);
+				// Do we display the admin consent URL or the normal OAuth2 URL
+				if (!appConfig.getValueBool("display_admin_consent_url")) {
+					// Use OAuth2 Interactive Authorisation Flow (application default)
+					char[] response;
+					// What URL should be presented to the user to access
+					string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
+					// Configure automated authentication if --auth-files authUrlFilePath:responseUrlFilePath is being used
+					string authFilesString = appConfig.getValueString("auth_files");
+					string authResponseString = appConfig.getValueString("auth_response");
+				
+					if (!authResponseString.empty) {
+						// read the response from authResponseString
+						response = cast(char[]) authResponseString;
+					} else if (authFilesString != "") {
+						string[] authFiles = authFilesString.split(":");
+						string authUrlFilePath = authFiles[0];
+						string responseUrlFilePath = authFiles[1];
 						
-					} catch (FileException exception) {
-						addLogEntry("Cannot remove --auth-files elements - details below");
-						// There was a file system error - display the error message
-						displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
-						return false;
-					}
-					
-					try {
-						std.file.remove(responseUrlFilePath);
-					} catch (FileException exception) {
-						addLogEntry("Cannot remove --auth-files elements - details below");
-						// There was a file system error - display the error message
-						displayFileSystemErrorMessage(exception.msg, thisFunctionName, responseUrlFilePath);
-						return false;
-					}
-				} else {
-					// If we are not running in --dry-run mode, prompt the user to authorise the application
-					if (!appConfig.getValueBool("dry_run")) {
-						// Notify the user of the next step: visit the URL to authorise the client
-						addLogEntry();
-						addLogEntry(authoriseApplicationRequest, ["consoleOnly"]);
-						addLogEntry(url ~ "\n", ["consoleOnly"]);
+						try {
+							auto authUrlFile = File(authUrlFilePath, "w");
+							authUrlFile.write(url);
+							authUrlFile.close();
+						} catch (FileException exception) {
+							// There was a file system error
+							// display the error message
+							displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
+							// Must force exit here, allow logging to be done
+							forceExit();
+						} catch (ErrnoException exception) {
+							// There was a file system error
+							// display the error message
+							displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
+							// Must force exit here, allow logging to be done
+							forceExit();
+						}
+
+						// Log we are now waiting
+						addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
 						
-						// Prompt the user to paste the full redirect URI (copied from the browser after login)
-						addLogEntry("After completing the authorisation in your browser, copy the full redirect URI (from the address bar) and paste it below.\n", ["consoleOnly"]);
-						addLogEntry("Paste redirect URI here: ", ["consoleOnlyNoNewLine"]);
+						while (!exists(responseUrlFilePath)) {
+							Thread.sleep(dur!("msecs")(100));
+						}
+
+						// read response from provided from OneDrive
+						try {
+							response = cast(char[]) read(responseUrlFilePath);
+						} catch (OneDriveException exception) {
+							// exception generated
+							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+							return false;
+						}
+
+						// try to remove auth files one at a time
+						try {
+							std.file.remove(authUrlFilePath);
+							
+						} catch (FileException exception) {
+							addLogEntry("Cannot remove --auth-files elements - details below");
+							// There was a file system error - display the error message
+							displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
+							return false;
+						}
 						
-						// Read the user's pasted response URI
-						readln(response);
-						// Flag that a response URI has been received - at this point could be valid or invalid
-						appConfig.applicationAuthoriseResponseURIReceived = true;
+						try {
+							std.file.remove(responseUrlFilePath);
+						} catch (FileException exception) {
+							addLogEntry("Cannot remove --auth-files elements - details below");
+							// There was a file system error - display the error message
+							displayFileSystemErrorMessage(exception.msg, thisFunctionName, responseUrlFilePath);
+							return false;
+						}
 					} else {
-						// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
-						addLogEntry();
-						addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
-						addLogEntry();
-						addLogEntry("To authorise the application please use your original command without '--dry-run'.");
-						addLogEntry();
-						addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
-						addLogEntry();
-						forceExit();
+						// If we are not running in --dry-run mode, prompt the user to authorise the application
+						if (!appConfig.getValueBool("dry_run")) {
+							// Notify the user of the next step: visit the URL to authorise the client
+							addLogEntry();
+							addLogEntry(authoriseApplicationRequest, ["consoleOnly"]);
+							addLogEntry(url ~ "\n", ["consoleOnly"]);
+							
+							// Prompt the user to paste the full redirect URI (copied from the browser after login)
+							addLogEntry("After completing the authorisation in your browser, copy the full redirect URI (from the address bar) and paste it below.\n", ["consoleOnly"]);
+							addLogEntry("Paste redirect URI here: ", ["consoleOnlyNoNewLine"]);
+							
+							// Read the user's pasted response URI
+							readln(response);
+							// Flag that a response URI has been received - at this point could be valid or invalid
+							appConfig.applicationAuthoriseResponseURIReceived = true;
+						} else {
+							// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
+							addLogEntry();
+							addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
+							addLogEntry();
+							addLogEntry("To authorise the application please use your original command without '--dry-run'.");
+							addLogEntry();
+							addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
+							addLogEntry();
+							forceExit();
+						}
 					}
-				}
-				
-				// match the authorisation code
-				auto c = matchFirst(strip(response), r"(?:[?&]code=)([^&]+)");
-				
-				if (c.empty) {
-					addLogEntry("An empty or invalid response uri was entered");
+					
+					// match the authorisation code
+					auto c = matchFirst(strip(response), r"(?:[?&]code=)([^&]+)");
+					
+					if (c.empty) {
+						addLogEntry("An empty or invalid response uri was entered");
+						return false;
+					}
+					c.popFront(); // skip the whole match
+					string authCode = decodeComponent(c.front);
+					redeemToken(authCode);
+					return true;
+				} else {
+					// Display the Microsoft Entra ID administrator consent URL for the configured tenant
+					// https://login.microsoftonline.com/<azure_tenant_id>/v2.0/adminconsent?client_id=d50ca740-c83f-4d1b-b616-12c519384f0c&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
+					
+					// Tenant Check
+					if ((tenantId != "common") && (!appConfig.getValueString("azure_tenant_id").empty)) {
+						// Tenant OK
+					} else {
+						// Tenant has not been configured
+						addLogEntry();
+						addLogEntry("ERROR: Unable to determine Microsoft Entra ID tenant. Please configure 'azure_tenant_id' with your tenant identifier.");
+						addLogEntry();
+						return false;
+					}
+					
+					// Configure the authentication scope
+					if (appConfig.getValueBool("read_only_auth_scope")) {
+						// read-only authentication scopes has been requested
+						authScope = "&scope=Files.Read%20Files.Read.All%20Sites.Read.All%20offline_access";
+					} else {
+						// read-write authentication scopes will be used (default)
+						authScope = "&scope=Files.ReadWrite%20Files.ReadWrite.All%20Sites.ReadWrite.All%20offline_access";
+					}
+					
+					// Build the required consent URL
+					string consent_url = "https://login.microsoftonline.com/" ~ tenantId ~ "/v2.0/adminconsent?client_id=" ~ clientId ~ authScope ~ "&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient";
+					
+					// Display the required URL
+					addLogEntry();
+					addLogEntry("Please authorise this application by visiting the following Microsoft Entra ID admin consent URL: ");
+					addLogEntry();
+					addLogEntry(consent_url);
+					addLogEntry();
+					addLogEntry("Open this URL as a Microsoft Entra ID administrator to grant tenant-wide consent. Nothing from this process needs to be pasted back into this application.");
+					addLogEntry();
+					addLogEntry("After administrator consent has been granted, run the normal authentication process again.");
 					return false;
 				}
-				c.popFront(); // skip the whole match
-				string authCode = decodeComponent(c.front);
-				redeemToken(authCode);
-				return true;
 			}
 		}
 	}
