@@ -74,7 +74,7 @@ from testcases.tc0059_websocket_remote_upload_notification import TestCase0059We
 from testcases.tc0060_monitor_mode_local_move_no_delete_reupload import TestCase0060MonitorModeLocalMoveNoDeleteReupload
 from testcases.tc0061_remote_move_into_skip_dir_reconciliation import TestCase0061RemoteMoveIntoSkipDirReconciliation
 from testcases.tc0062_transfer_metrics_validation import TestCase0062TransferMetricsValidation
-from testcases.tc0063_download_sibling_after_case_rename_filesystem_race import TestCase0063DownloadSiblingAfterCaseRenameFilesystemRace
+from testcases.tc0063_local_parent_rename_during_download import TestCase0063LocalParentRenameDuringDownload
 
 def build_test_suite() -> list:
     return [
@@ -140,8 +140,9 @@ def build_test_suite() -> list:
         #TestCase0060MonitorModeLocalMoveNoDeleteReupload(),
         #TestCase0061RemoteMoveIntoSkipDirReconciliation(),
         #TestCase0062TransferMetricsValidation(),
-        TestCase0063DownloadSiblingAfterCaseRenameFilesystemRace(),
+        TestCase0063LocalParentRenameDuringDownload(),
     ]
+
 
 def _normalise_case_id(value: str) -> str:
     text = value.strip()
