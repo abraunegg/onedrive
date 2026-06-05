@@ -1695,8 +1695,9 @@ class OneDriveApi {
 		string parentalPath = dirName(saveToPath);
 
 		// Does the parental path exist locally?
-		if (!exists(parentalPath)) {
-			try {
+		try {
+			if (!exists(parentalPath)) {
+				// Path does not exist
 				if (debugLogging) {addLogEntry("Requested local parental path does not exist, creating directory structure: " ~ parentalPath, ["debug"]);}
 				mkdirRecurse(parentalPath);
 				// Has the user disabled the setting of filesystem permissions?
@@ -1708,10 +1709,10 @@ class OneDriveApi {
 					// Use inherited permissions
 					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ parentalPath, ["debug"]);}
 				}
-			} catch (FileException exception) {
-				// display the error message
-				displayFileSystemErrorMessage(exception.msg, thisFunctionName, parentalPath);
 			}
+		} catch (FileException exception) {
+			// display the error message
+			displayFileSystemErrorMessage(exception.msg, thisFunctionName, parentalPath);
 		}
 
 		// Create the URL to download the file
@@ -1727,16 +1728,21 @@ class OneDriveApi {
 		}
 		
 		// Does downloaded file now exist locally?
-		if (exists(saveToPath)) {
-			// Has the user disabled the setting of filesystem permissions?
-			if (!appConfig.getValueBool("disable_permission_set")) {
-				// File was downloaded successfully - configure the applicable permissions for the file
-				if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
-				saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
-			} else {
-				// Use inherited permissions
-				if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ saveToPath, ["debug"]);}
+		try {
+			if (exists(saveToPath)) {
+				// Has the user disabled the setting of filesystem permissions?
+				if (!appConfig.getValueBool("disable_permission_set")) {
+					// File was downloaded successfully - configure the applicable permissions for the file
+					if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
+					saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
+				} else {
+					// Use inherited permissions
+					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ saveToPath, ["debug"]);}
+				}
 			}
+		} catch (FileException exception) {
+			// display the error message
+			displayFileSystemErrorMessage(exception.msg, thisFunctionName, saveToPath);
 		}
 
 		// Return the CurlResponse from the completed download so callers can inspect
