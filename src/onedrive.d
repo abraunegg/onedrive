@@ -42,26 +42,51 @@ class OneDriveException : Exception {
 	@property JSONValue error() const {
 		return _error;
 	}
-	
+
 	this(int httpStatusCode, string reason, const CurlResponse response, string file = __FILE__, size_t line = __LINE__) {
 		this.httpStatusCode = httpStatusCode;
 		this.response = response;
 		this._error = response.json();
-		
+
+		string msg;
 		if (this.httpStatusCode == 9999) {
-			string msg = format("OneDrive operation failed before a valid HTTP response status was available (%s)\n%s", reason, toJSON(_error, true));
+			msg = format(
+				"OneDrive operation failed before a valid HTTP response status was available (%s)\n%s",
+				reason,
+				toJSON(_error, true)
+			);
 		} else {
-			string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(_error, true));
+			msg = format(
+				"HTTP request returned status code %d (%s)\n%s",
+				httpStatusCode,
+				reason,
+				toJSON(_error, true)
+			);
 		}
+
 		super(msg, file, line);
 	}
 
 	this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__) {
 		this.httpStatusCode = httpStatusCode;
 		this.response = null;
+
+		string msg;
+		if (this.httpStatusCode == 9999) {
+			msg = format(
+				"OneDrive operation failed before a valid HTTP response status was available (%s)",
+				reason
+			);
+		} else {
+			msg = format(
+				"HTTP request returned status code %d (%s)",
+				httpStatusCode,
+				reason
+			);
+		}
+
 		super(msg, file, line);
 	}
-	
 }
 
 // Define the 'OneDriveError' class
