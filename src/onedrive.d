@@ -42,12 +42,17 @@ class OneDriveException : Exception {
 	@property JSONValue error() const {
 		return _error;
 	}
-
+	
 	this(int httpStatusCode, string reason, const CurlResponse response, string file = __FILE__, size_t line = __LINE__) {
 		this.httpStatusCode = httpStatusCode;
 		this.response = response;
 		this._error = response.json();
-		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(_error, true));
+		
+		if (this.httpStatusCode == 9999) {
+			string msg = format("OneDrive operation failed before a valid HTTP response status was available (%s)\n%s", reason, toJSON(_error, true));
+		} else {
+			string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(_error, true));
+		}
 		super(msg, file, line);
 	}
 
@@ -56,6 +61,7 @@ class OneDriveException : Exception {
 		this.response = null;
 		super(msg, file, line);
 	}
+	
 }
 
 // Define the 'OneDriveError' class
@@ -2692,8 +2698,7 @@ class OneDriveApi {
 			} catch (FileException exception) {
 				// There was a file system error - display the error message
 				displayFileSystemErrorMessage(exception.msg, callingFunction, ""); // as we have no file path reference here, use a blank input
-				throw new OneDriveException(0, "There was a file system error during OneDrive request: " ~ exception.msg, response);
-			
+				throw new OneDriveException(9999, "There was a local file system error during OneDrive request: " ~ exception.msg, response);
 			// A OneDriveError was thrown
 			} catch (OneDriveError exception) {
 				// Disk space error or SSL error caused a OneDriveError to be thrown
