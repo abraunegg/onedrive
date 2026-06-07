@@ -21,6 +21,7 @@ INSTALL = @INSTALL@
 # Icon install locations (system-wide hicolor theme)
 ICON_THEMEDIR      = $(datadir)/icons/hicolor
 ICON_PLACES_DIR    = $(ICON_THEMEDIR)/scalable/places
+ICON_APPS_DIR      = $(ICON_THEMEDIR)/scalable/apps
 ICON_SOURCE_SVG    = contrib/images/onedrive.svg
 ICON_TARGET_SVG    = onedrive.svg
 
@@ -149,6 +150,9 @@ endif
 	# --- OneDrive folder icon (hicolor) ---
 	mkdir -p $(DESTDIR)$(ICON_PLACES_DIR)
 	$(INSTALL) -m 0644 $(ICON_SOURCE_SVG) $(DESTDIR)$(ICON_PLACES_DIR)/$(ICON_TARGET_SVG)
+	# --- OneDrive application icon (notifications / desktop integration) ---
+	mkdir -p $(DESTDIR)$(ICON_APPS_DIR)
+	$(INSTALL) -m 0644 $(ICON_SOURCE_SVG) $(DESTDIR)$(ICON_APPS_DIR)/$(ICON_TARGET_SVG)
 	# Refresh icon cache only when installing to the live system (not during staged DESTDIR installs)
 	# and only if the theme directory is a proper theme (has index.theme)
 	if [ -z "$(DESTDIR)" ] && command -v gtk-update-icon-cache >/dev/null 2>&1 \
@@ -182,6 +186,8 @@ ifeq ($(COMPLETIONS),yes)
 endif
 	# --- OneDrive folder icon (hicolor) ---
 	rm -f $(DESTDIR)$(ICON_PLACES_DIR)/$(ICON_TARGET_SVG)
+	# --- OneDrive application icon (notifications / desktop integration) ---
+	rm -f $(DESTDIR)$(ICON_APPS_DIR)/$(ICON_TARGET_SVG)
 	# Refresh icon cache if removing from the live system and index.theme exists
 	if [ -z "$(DESTDIR)" ] && command -v gtk-update-icon-cache >/dev/null 2>&1 \
 	   && [ -f "$(ICON_THEMEDIR)/index.theme" ]; then \
