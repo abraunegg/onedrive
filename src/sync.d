@@ -2876,9 +2876,25 @@ class SyncEngine {
 		if (!exitHandlerTriggered) {
 			// Are there any items to download post fetching and processing the /delta data?
 			if (!fileJSONItemsToDownload.empty) {
-				// There are elements to download
-				addLogEntry("Number of items to download from Microsoft OneDrive: " ~ to!string(fileJSONItemsToDownload.length));
-				downloadOneDriveItems();
+				// If we are in a --local-first & --mirror-local-state scenario, we need to delete the online file rather than download it
+				if ((appConfig.getValueBool("local_first")) && (appConfig.getValueBool("mirror_local_state"))) {
+					// There are elements to removed online
+					addLogEntry("Number of items to remove from Microsoft OneDrive due to --local-first & --mirror-local-state: " ~ to!string(fileJSONItemsToDownload.length));
+					
+					// For each file to delete, compute the path the issue the online deletion request
+					foreach (onedriveJSONItem; fileJSONItemsToDownload) {
+						// Compute the path online
+						string newItemPath = computePathFromJSON(onedriveJSONItem);
+					
+						// This file needs to be deleted online
+						deleteJSONItem(onedriveJSONItem, newItemPath);
+					}
+				} else {
+					// There are elements to download
+					addLogEntry("Number of items to download from Microsoft OneDrive: " ~ to!string(fileJSONItemsToDownload.length));
+					downloadOneDriveItems();
+				}
+				
 				// Cleanup array memory
 				fileJSONItemsToDownload = [];
 			}
@@ -3262,81 +3278,90 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		// To create a path, 'newItemPath' must not be empty
-		if (!newItemPath.empty) {
-			// Update the logging output to be consistent
-			if (verboseLogging) {addLogEntry("Attempting to create local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
-			if (!dryRun) {
-				try {
-					// Create the new directory
-					if (debugLogging) {addLogEntry("Requested local path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);}
-					mkdirRecurse(newItemPath);
-					
-					// Log that the local directory creation was successful
-					if (verboseLogging) {addLogEntry("Created local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
-					
-					// Has the user disabled the setting of filesystem permissions?
-					if (!appConfig.getValueBool("disable_permission_set")) {
-						// Configure the applicable permissions for the folder
-						if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);}
-						newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
-					} else {
-						// Use inherited permissions
-						if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ newItemPath, ["debug"]);}
+		// If we are in a --local-first & --mirror-local-state scenario, we need to delete the online folder rather than create it
+		if ((appConfig.getValueBool("local_first")) && (appConfig.getValueBool("mirror_local_state"))) {
+			// Why are we doing this?
+			addLogEntry("Deleting online folder due to --local-first & --mirror-local-state");
+			// This folder needs to be deleted online
+			deleteJSONItem(onedriveJSONItem, newItemPath);
+		} else {
+			// To create a path, 'newItemPath' must not be empty
+			if (!newItemPath.empty) {
+				// Update the logging output to be consistent
+				if (verboseLogging) {addLogEntry("Attempting to create local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
+				if (!dryRun) {
+					try {
+						// Create the new directory
+						if (debugLogging) {addLogEntry("Requested local path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);}
+						mkdirRecurse(newItemPath);
+						
+						// Log that the local directory creation was successful
+						if (verboseLogging) {addLogEntry("Created local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
+						
+						// Has the user disabled the setting of filesystem permissions?
+						if (!appConfig.getValueBool("disable_permission_set")) {
+							// Configure the applicable permissions for the folder
+							if (debugLogging) {addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);}
+							newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermissions());
+						} else {
+							// Use inherited permissions
+							if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ newItemPath, ["debug"]);}
+						}
+						
+						// Update the time of the folder to match the last modified time as is provided by OneDrive
+						// If there are any files then downloaded into this folder, the last modified time will get 
+						// updated by the local Operating System with the latest timestamp - as this is normal operation
+						// as the directory has been modified
+						// Set the timestamp, logging and error handling done within function
+						setLocalPathTimestamp(dryRun, newItemPath, newDatabaseItem.mtime);
+						
+						// Save the newDatabaseItem to the database
+						saveDatabaseItem(newDatabaseItem);
+					} catch (FileException e) {
+						// display the error message
+						displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath);
 					}
-					
-					// Update the time of the folder to match the last modified time as is provided by OneDrive
-					// If there are any files then downloaded into this folder, the last modified time will get 
-					// updated by the local Operating System with the latest timestamp - as this is normal operation
-					// as the directory has been modified
-					// Set the timestamp, logging and error handling done within function
-					setLocalPathTimestamp(dryRun, newItemPath, newDatabaseItem.mtime);
-					
+				} else {
+					// Log that the local directory creation is not occurring due to --dry-run
+					if (verboseLogging) {addLogEntry("DRY-RUN: Not creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
+					// we dont create the directory, but we need to track that we 'faked it'
+					idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
 					// Save the newDatabaseItem to the database
 					saveDatabaseItem(newDatabaseItem);
-				} catch (FileException e) {
-					// display the error message
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath);
 				}
-			} else {
-				// Log that the local directory creation is not occurring due to --dry-run
-				if (verboseLogging) {addLogEntry("DRY-RUN: Not creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);}
-				// we dont create the directory, but we need to track that we 'faked it'
-				idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
-				// Save the newDatabaseItem to the database
-				saveDatabaseItem(newDatabaseItem);
-			}
-			
-			// With the 'newDatabaseItem' saved to the database, regardless of --dry-run situation - was that new database item a 'remote' item?
-			// Is this folder that has been created locally a 'Shared Folder' online?
-			// This should be applicable for all account types
-			if (newDatabaseItem.type == ItemType.remote) {
-				// yes this is a remote item type
-				if (debugLogging) {addLogEntry("The 'newDatabaseItem' (handleLocalDirectoryCreation) is a remote item type - we need to create all of the associated database tie records for this database entry" , ["debug"]);}
 				
-				string relocatedFolderDriveId;
-				string relocatedFolderParentId;
-				
-				// Is this a relocated Shared Folder? OneDrive Personal and Business supports the relocation of Shared Folder links to other folders
-				// Is this parentId equal to our defaultRootId .. if not it is highly likely that this Shared Folder is in a sub folder in our online folder structure
-				if (newDatabaseItem.parentId != appConfig.defaultRootId) {
-					// The parentId is not our defaultRootId .. most likely a relocated shared folder
-					if (debugLogging) {
-						addLogEntry("The folder path for this Shared Folder is not our account root, thus is a relocated Shared Folder item. We must pass in the correct parent details for this Shared Folder 'root' object" , ["debug"]);
-						// What are we setting
-						addLogEntry("Setting relocatedFolderDriveId to:  " ~ newDatabaseItem.driveId);
-						addLogEntry("Setting relocatedFolderParentId to: " ~ newDatabaseItem.parentId);
-					}
+				// With the 'newDatabaseItem' saved to the database, regardless of --dry-run situation - was that new database item a 'remote' item?
+				// Is this folder that has been created locally a 'Shared Folder' online?
+				// This should be applicable for all account types
+				if (newDatabaseItem.type == ItemType.remote) {
+					// yes this is a remote item type
+					if (debugLogging) {addLogEntry("The 'newDatabaseItem' (handleLocalDirectoryCreation) is a remote item type - we need to create all of the associated database tie records for this database entry" , ["debug"]);}
 					
-					// Configure the relocated folders data
-					relocatedFolderDriveId = newDatabaseItem.driveId;
-					relocatedFolderParentId = newDatabaseItem.parentId;
+					string relocatedFolderDriveId;
+					string relocatedFolderParentId;
+					
+					// Is this a relocated Shared Folder? OneDrive Personal and Business supports the relocation of Shared Folder links to other folders
+					// Is this parentId equal to our defaultRootId .. if not it is highly likely that this Shared Folder is in a sub folder in our online folder structure
+					if (newDatabaseItem.parentId != appConfig.defaultRootId) {
+						// The parentId is not our defaultRootId .. most likely a relocated shared folder
+						if (debugLogging) {
+							addLogEntry("The folder path for this Shared Folder is not our account root, thus is a relocated Shared Folder item. We must pass in the correct parent details for this Shared Folder 'root' object" , ["debug"]);
+							// What are we setting
+							addLogEntry("Setting relocatedFolderDriveId to:  " ~ newDatabaseItem.driveId);
+							addLogEntry("Setting relocatedFolderParentId to: " ~ newDatabaseItem.parentId);
+						}
+						
+						// Configure the relocated folders data
+						relocatedFolderDriveId = newDatabaseItem.driveId;
+						relocatedFolderParentId = newDatabaseItem.parentId;
+					}
+				
+					// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
+					// We pass in the JSON element so we can create the right records + if this is a relocated shared folder, give the local parental record identifier
+					createRequiredSharedFolderDatabaseRecords(onedriveJSONItem, relocatedFolderDriveId, relocatedFolderParentId);
 				}
-			
-				// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
-				// We pass in the JSON element so we can create the right records + if this is a relocated shared folder, give the local parental record identifier
-				createRequiredSharedFolderDatabaseRecords(onedriveJSONItem, relocatedFolderDriveId, relocatedFolderParentId);
 			}
+		
 		}
 		
 		// Display function processing time if configured to do so
@@ -10796,7 +10821,6 @@ class SyncEngine {
 		return uploadResponse;
 	}
 
-	
 	// Delete an item on OneDrive
 	void uploadDeletedItem(Item itemToDelete, string path) {
 		// Function Start Time
@@ -10822,7 +10846,6 @@ class SyncEngine {
 				if (verboseLogging) {addLogEntry("Skipping remote file delete as --upload-only & --no-remote-delete configured", ["verbose"]);}
 			}
 		} else {
-			
 			// Is this a --download-only operation?
 			if (!appConfig.getValueBool("download_only")) {
 				// Process the delete - delete the object online
@@ -10983,7 +11006,7 @@ class SyncEngine {
 					}
 				} else {
 					// log that this is a dry-run activity
-					addLogEntry("DRY-RUN: No delete activity");
+					addLogEntry("DRY-RUN: Not performing online delete activity due to --dry-run");
 				}
 			} else {
 				// --download-only operation, we are not uploading any delete event to OneDrive
@@ -10997,6 +11020,87 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
+	
+	// Delete a JSON item on OneDrive
+	void deleteJSONItem(JSONValue onedriveJSONItem, string newItemPath) {
+		// Function Start Time
+		SysTime functionStartTime;
+		string logKey;
+		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+		// Only set this if we are generating performance processing times
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			functionStartTime = Clock.currTime();
+			logKey = generateAlphanumericString();
+			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+	
+		OneDriveApi uploadDeletedItemOneDriveApiInstance;
+		Item itemToDelete = makeItem(onedriveJSONItem);
+		
+		//string path = buildNormalizedPath(computeItemPath(itemToDelete.driveId, itemToDelete.id));
+			
+		// Process the delete - delete the object online
+		if ((itemToDelete.type == ItemType.dir)) {
+			addLogEntry("Deleting online folder from Microsoft OneDrive: " ~ ensureStartsWithDotSlash(newItemPath), fileTransferNotifications());
+		} else {
+			addLogEntry("Deleting online file from Microsoft OneDrive: " ~ ensureStartsWithDotSlash(newItemPath), fileTransferNotifications());
+		}
+			
+		// Are we in a --dry-run scenario?
+		if (!dryRun) {
+			// We are not in a dry run scenario
+			if (debugLogging) {
+				addLogEntry("onedriveJSONItem to delete: " ~ to!string(onedriveJSONItem), ["debug"]);
+				// what item are we trying to delete?
+				addLogEntry("Attempting to delete this single item id: " ~ itemToDelete.id ~ " from drive: " ~ itemToDelete.driveId, ["debug"]);
+			}
+			
+			// Try the online deletion using the 'itemToDelete' values
+			try {
+				// Create new OneDrive API Instance
+				uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
+				uploadDeletedItemOneDriveApiInstance.initialise();
+			
+				if (!permanentDelete) {
+					// Perform the delete via the default OneDrive API instance
+					uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
+				} else {
+					// Perform the permanent delete via the default OneDrive API instance
+					uploadDeletedItemOneDriveApiInstance.permanentDeleteById(itemToDelete.driveId, itemToDelete.id);
+				}
+				
+				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+				uploadDeletedItemOneDriveApiInstance.releaseCurlEngine();
+				uploadDeletedItemOneDriveApiInstance = null;
+				// Perform Garbage Collection
+				GC.collect();
+			
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 404) {
+					// item.id, item.eTag could not be found on the specified driveId
+					if (verboseLogging) {addLogEntry("OneDrive reported: The resource could not be found to be deleted.", ["verbose"]);}
+				}
+				
+				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+				uploadDeletedItemOneDriveApiInstance.releaseCurlEngine();
+				uploadDeletedItemOneDriveApiInstance = null;
+				// Perform Garbage Collection
+				GC.collect();
+			}
+		} else {
+			// log that this is a dry-run activity
+			addLogEntry("DRY-RUN: Not performing online delete activity due to --dry-run");
+		}
+			
+		
+		
+		// Display function processing time if configured to do so
+		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+			// Combine module name & running Function
+			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+	}
+	
 	
 	// Get the children of an item id from the database
 	Item[] getChildren(string driveId, string id) {
