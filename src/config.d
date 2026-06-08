@@ -1214,7 +1214,8 @@ class ApplicationConfig {
 		boolValues["sync_business_shared_files"] = false;
 		boolValues["force_sync"] = false;
 		boolValues["with_editing_perms"] = false;
-		
+		boolValues["display_admin_consent_url"] = false;
+				
 		// Specific options for CLI input handling
 		stringValues["sync_dir_cli"] = "";
 		
@@ -1268,6 +1269,9 @@ class ApplicationConfig {
 				"disable-upload-validation",
 					"Disable upload validation when uploading to OneDrive",
 					&boolValues["disable_upload_validation"],
+				"display-admin-consent-url",
+					"Displays a tenant-specific Microsoft Entra ID administrator consent URL for environments where administrator approval is required before users can authenticate and use the client",
+					&boolValues["display_admin_consent_url"],
 				"display-config",
 					"Display what options the client will use as currently configured. No synchronisation will be performed",
 					&boolValues["display_config"],
