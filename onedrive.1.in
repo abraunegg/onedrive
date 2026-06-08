@@ -239,6 +239,10 @@ Do not use desktop notifications in monitor mode.
 \fB\-\-disable-upload-validation\fR
 Disable upload validation when uploading to OneDrive.
 
+.TB
+\fB\-\-display-admin-consent-url\fR
+Displays a tenant-specific Microsoft Entra ID administrator consent URL for environments where administrator approval is required before users can authenticate and use the client.
+
 .TP
 \fB\-\-display-quota\fR
 Display the quota status of the client. No synchronisation will be performed.
@@ -308,6 +312,10 @@ Directory where logging output is saved to, needs to end with a slash.
 .TP
 \fB\-\-logout\fR
 Log out the current user.
+
+.TP
+\fB\-\-mirror-local-state\fR 
+When used with \fB\-\-local-first\fR, removes remote-only files and directories from Microsoft OneDrive to make the online state match the local filesystem.
 
 .TP
 \fB\-\-modified-by\fR \fIARG\fR
