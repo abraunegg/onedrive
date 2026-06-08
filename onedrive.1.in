@@ -310,6 +310,10 @@ Directory where logging output is saved to, needs to end with a slash.
 Log out the current user.
 
 .TP
+\fB\-\-mirror-local-state\fR 
+When used with \fB\-\-local-first\fR, removes remote-only files and directories from Microsoft OneDrive to make the online state match the local filesystem.
+
+.TP
 \fB\-\-modified-by\fR \fIARG\fR
 Display the last modified by details of a given path.
 
