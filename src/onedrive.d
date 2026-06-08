@@ -47,13 +47,44 @@ class OneDriveException : Exception {
 		this.httpStatusCode = httpStatusCode;
 		this.response = response;
 		this._error = response.json();
-		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(_error, true));
+
+		string msg;
+		if (this.httpStatusCode == 9999) {
+			msg = format(
+				"OneDrive operation failed before a valid HTTP response status was available (%s)\n%s",
+				reason,
+				toJSON(_error, true)
+			);
+		} else {
+			msg = format(
+				"HTTP request returned status code %d (%s)\n%s",
+				httpStatusCode,
+				reason,
+				toJSON(_error, true)
+			);
+		}
+
 		super(msg, file, line);
 	}
 
 	this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__) {
 		this.httpStatusCode = httpStatusCode;
 		this.response = null;
+
+		string msg;
+		if (this.httpStatusCode == 9999) {
+			msg = format(
+				"OneDrive operation failed before a valid HTTP response status was available (%s)",
+				reason
+			);
+		} else {
+			msg = format(
+				"HTTP request returned status code %d (%s)",
+				httpStatusCode,
+				reason
+			);
+		}
+
 		super(msg, file, line);
 	}
 }
@@ -1695,8 +1726,9 @@ class OneDriveApi {
 		string parentalPath = dirName(saveToPath);
 
 		// Does the parental path exist locally?
-		if (!exists(parentalPath)) {
-			try {
+		try {
+			if (!exists(parentalPath)) {
+				// Path does not exist
 				if (debugLogging) {addLogEntry("Requested local parental path does not exist, creating directory structure: " ~ parentalPath, ["debug"]);}
 				mkdirRecurse(parentalPath);
 				// Has the user disabled the setting of filesystem permissions?
@@ -1708,10 +1740,10 @@ class OneDriveApi {
 					// Use inherited permissions
 					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ parentalPath, ["debug"]);}
 				}
-			} catch (FileException exception) {
-				// display the error message
-				displayFileSystemErrorMessage(exception.msg, thisFunctionName, parentalPath);
 			}
+		} catch (FileException exception) {
+			// display the error message
+			displayFileSystemErrorMessage(exception.msg, thisFunctionName, parentalPath);
 		}
 
 		// Create the URL to download the file
@@ -1727,16 +1759,21 @@ class OneDriveApi {
 		}
 		
 		// Does downloaded file now exist locally?
-		if (exists(saveToPath)) {
-			// Has the user disabled the setting of filesystem permissions?
-			if (!appConfig.getValueBool("disable_permission_set")) {
-				// File was downloaded successfully - configure the applicable permissions for the file
-				if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
-				saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
-			} else {
-				// Use inherited permissions
-				if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ saveToPath, ["debug"]);}
+		try {
+			if (exists(saveToPath)) {
+				// Has the user disabled the setting of filesystem permissions?
+				if (!appConfig.getValueBool("disable_permission_set")) {
+					// File was downloaded successfully - configure the applicable permissions for the file
+					if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
+					saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
+				} else {
+					// Use inherited permissions
+					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ saveToPath, ["debug"]);}
+				}
 			}
+		} catch (FileException exception) {
+			// display the error message
+			displayFileSystemErrorMessage(exception.msg, thisFunctionName, saveToPath);
 		}
 
 		// Return the CurlResponse from the completed download so callers can inspect
@@ -2686,8 +2723,7 @@ class OneDriveApi {
 			} catch (FileException exception) {
 				// There was a file system error - display the error message
 				displayFileSystemErrorMessage(exception.msg, callingFunction, ""); // as we have no file path reference here, use a blank input
-				throw new OneDriveException(0, "There was a file system error during OneDrive request: " ~ exception.msg, response);
-			
+				throw new OneDriveException(9999, "There was a local file system error during OneDrive request: " ~ exception.msg, response);
 			// A OneDriveError was thrown
 			} catch (OneDriveError exception) {
 				// Disk space error or SSL error caused a OneDriveError to be thrown
