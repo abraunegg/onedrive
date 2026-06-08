@@ -474,7 +474,11 @@ class ApplicationConfig {
 		
 		// Disable GitHub Version check
 		boolValues["disable_version_check"] = false;
-				
+
+		// Mirror the local state online
+		// Can only be used with --local-first
+		boolValues["mirror_local_state"] = false;
+
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -1325,6 +1329,9 @@ class ApplicationConfig {
 				"logout",
 					"Log out the current user",
 					&boolValues["logout"],
+				"mirror-local-state",
+					"Mirror the local state to Microsoft OneDrive online",
+					&boolValues["mirror_local_state"],
 				"modified-by",
 					"Display the last modified by details of a given path",
 					&stringValues["modified_by"],
@@ -1705,6 +1712,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'upload_only'                   = " ~ to!string(getValueBool("upload_only")));
 		addLogEntry("Config option 'download_only'                 = " ~ to!string(getValueBool("download_only")));
 		addLogEntry("Config option 'local_first'                   = " ~ to!string(getValueBool("local_first")));
+		addLogEntry("Config option 'mirror_local_state'            = " ~ to!string(getValueBool("mirror_local_state")));
 		addLogEntry("Config option 'check_nosync'                  = " ~ to!string(getValueBool("check_nosync")));
 		addLogEntry("Config option 'check_nomount'                 = " ~ to!string(getValueBool("check_nomount")));
 		addLogEntry("Config option 'resync'                        = " ~ to!string(getValueBool("resync")));

@@ -41,6 +41,7 @@ Before reading this document, please ensure you are running application version 
   - [local_first](#local_first)
   - [log_dir](#log_dir)
   - [max_curl_idle](#max_curl_idle)
+  - [mirror_local_state](#mirror_local_state)
   - [monitor_authoritative_sync](#monitor_authoritative_sync)
   - [monitor_fullscan_frequency](#monitor_fullscan_frequency)
   - [monitor_interval](#monitor_interval)
@@ -576,6 +577,24 @@ _**CLI Option Use:**_ *None - this is a config file option only*
 
 > [!IMPORTANT]
 > It is strongly recommended not to modify this setting without conducting thorough network testing. Changing this option may lead to unexpected behaviour or connectivity issues, especially if upstream network devices handle idle connections in non-standard ways.
+
+### mirror_local_state
+_**Description:**_ When used with `local_first = "true"` or `--local-first`, the local filesystem is treated as the authoritative source of truth and Microsoft OneDrive is reconciled to match the local state. Any files or directories that exist online but do not exist locally will be removed from Microsoft OneDrive rather than downloaded to the local filesystem. This option is intended for users who require the online state to become an exact mirror of the local filesystem, including the removal of remote-only content.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `mirror_local_state = "false"` or `mirror_local_state = "true"`
+
+_**CLI Option Use:**_ `--mirror-local-state`
+
+> [!IMPORTANT]
+> This option requires `local_first = "true"` or the use of `--local-first`.
+>
+> This option cannot be used with `--upload-only`.
+>
+> Enabling this option may result in the permanent removal of files and directories from Microsoft OneDrive that do not exist locally. It is strongly recommended to first validate the intended actions using `--dry-run`.
 
 ### monitor_authoritative_sync
 _**Description:**_ This configuration option controls the authoritative cleanup behaviour in `--monitor` mode when using `--download-only --cleanup-local-files`.
