@@ -73,6 +73,10 @@ from testcases.tc0058_monitor_download_only_cleanup_cadence import TestCase0058M
 from testcases.tc0059_websocket_remote_upload_notification import TestCase0059WebSocketRemoteUploadNotification
 from testcases.tc0060_monitor_mode_local_move_no_delete_reupload import TestCase0060MonitorModeLocalMoveNoDeleteReupload
 from testcases.tc0061_remote_move_into_skip_dir_reconciliation import TestCase0061RemoteMoveIntoSkipDirReconciliation
+from testcases.tc0062_transfer_metrics_validation import TestCase0062TransferMetricsValidation
+from testcases.tc0063_local_parent_rename_during_download import TestCase0063LocalParentRenameDuringDownload
+from testcases.tc0064_mirror_local_state_remote_cleanup import TestCase0064MirrorLocalStateRemoteCleanup
+
 
 def build_test_suite() -> list:
     return [
@@ -137,6 +141,9 @@ def build_test_suite() -> list:
         TestCase0059WebSocketRemoteUploadNotification(),
         TestCase0060MonitorModeLocalMoveNoDeleteReupload(),
         TestCase0061RemoteMoveIntoSkipDirReconciliation(),
+        TestCase0062TransferMetricsValidation(),
+        TestCase0063LocalParentRenameDuringDownload(),
+        TestCase0064MirrorLocalStateRemoteCleanup(),
     ]
 
 

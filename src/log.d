@@ -150,7 +150,7 @@ class LogBuffer {
 		// Use dnotify's functionality for GUI notifications, if GUI notification support has been compiled in
 		version(Notifications) {
 			try {
-				auto n = new Notification("OneDrive Client for Linux", message, "dialog-information");
+				auto n = new Notification("OneDrive Client for Linux", message, "onedrive-notifications");
 				n.show();
 			} catch (NotificationError e) {
 				addLogEntry("Unable to send notification to the D-Bus message bus daemon, disabling GUI notifications: " ~ e.message);

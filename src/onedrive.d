@@ -47,13 +47,44 @@ class OneDriveException : Exception {
 		this.httpStatusCode = httpStatusCode;
 		this.response = response;
 		this._error = response.json();
-		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(_error, true));
+
+		string msg;
+		if (this.httpStatusCode == 9999) {
+			msg = format(
+				"OneDrive operation failed before a valid HTTP response status was available (%s)\n%s",
+				reason,
+				toJSON(_error, true)
+			);
+		} else {
+			msg = format(
+				"HTTP request returned status code %d (%s)\n%s",
+				httpStatusCode,
+				reason,
+				toJSON(_error, true)
+			);
+		}
+
 		super(msg, file, line);
 	}
 
 	this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__) {
 		this.httpStatusCode = httpStatusCode;
 		this.response = null;
+
+		string msg;
+		if (this.httpStatusCode == 9999) {
+			msg = format(
+				"OneDrive operation failed before a valid HTTP response status was available (%s)",
+				reason
+			);
+		} else {
+			msg = format(
+				"HTTP request returned status code %d (%s)",
+				httpStatusCode,
+				reason
+			);
+		}
+
 		super(msg, file, line);
 	}
 }
@@ -75,14 +106,14 @@ class OneDriveApi {
 	// API Endpoint Constants
 	immutable string defaultDriveUrlAPIEndpoint = "/v1.0/me/drive";
 	immutable string defaultDriveByIdUrlAPIEndpoint = "/v1.0/drives/";
-	immutable string defaultSharedWithMeUrlAPIEndpoint = "/v1.0/me/drive/sharedWithMe";
 	immutable string defaultItemByIdUrlAPIEndpoint = "/v1.0/me/drive/items/";
 	immutable string defaultItemByPathUrlAPIEndpoint = "/v1.0/me/drive/root:/";
 	immutable string defaultSiteSearchUrlAPIEndpoint = "/v1.0/sites?search";
 	immutable string defaultSiteDriveUrlAPIEndpoint = "/v1.0/sites/";
 	immutable string defaultSubscriptionUrlAPIEndpoint = "/v1.0/subscriptions";
 	immutable string defaultWebsocketEndpointAPIEndpoint = "/v1.0/me/drive/root/subscriptions/socketIo";
-	
+	immutable string defaultSearchQueryUrlAPIEndpoint = "/v1.0/search/query";
+		
 	// Class variables
 	string clientId = "";
 	string companyName = "";
@@ -92,7 +123,6 @@ class OneDriveApi {
 	string tokenUrl = "";
 	string driveUrl = "";
 	string driveByIdUrl = "";
-	string sharedWithMeUrl = "";
 	string itemByIdUrl = "";
 	string itemByPathUrl = "";
 	string siteSearchUrl = "";
@@ -102,6 +132,7 @@ class OneDriveApi {
 	string authScope = "";
 	string websocketEndpoint = "";
 	string websocketEndpointAPIEndpoint = defaultWebsocketEndpointAPIEndpoint;
+	string searchQueryUrl = "";
 	const(char)[] refreshToken = "";
 	bool dryRun = false;
 	bool keepAlive = false;
@@ -118,9 +149,6 @@ class OneDriveApi {
 		driveUrl = appConfig.globalGraphEndpoint ~ defaultDriveUrlAPIEndpoint;
 		driveByIdUrl = appConfig.globalGraphEndpoint ~ defaultDriveByIdUrlAPIEndpoint;
 
-		// What is 'shared with me' Query
-		sharedWithMeUrl = appConfig.globalGraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
-
 		// Item Queries
 		itemByIdUrl = appConfig.globalGraphEndpoint ~ defaultItemByIdUrlAPIEndpoint;
 		itemByPathUrl = appConfig.globalGraphEndpoint ~ defaultItemByPathUrlAPIEndpoint;
@@ -134,6 +162,9 @@ class OneDriveApi {
 		
 		// WebSocket Endpoint - sets the default: /v1.0/me/drive/root/subscriptions/socketIo
 		websocketEndpoint = appConfig.globalGraphEndpoint ~ websocketEndpointAPIEndpoint;
+		
+		// Search Queries
+		searchQueryUrl = appConfig.globalGraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 	}
 	
 	// The destructor should only clean up resources owned directly by this instance
@@ -277,12 +308,12 @@ class OneDriveApi {
 				// Office 365 / SharePoint Queries
 				siteSearchUrl = appConfig.usl4GraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
 				siteDriveUrl = appConfig.usl4GraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
-				// Shared With Me
-				sharedWithMeUrl = appConfig.usl4GraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 				// Subscriptions
 				subscriptionUrl = appConfig.usl4GraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.usl4GraphEndpoint ~ websocketEndpointAPIEndpoint;
+				// Search Queries
+				searchQueryUrl = appConfig.usl4GraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 				break;
 			case "USL5":
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD for US Government Endpoints (DOD)");
@@ -308,12 +339,12 @@ class OneDriveApi {
 				// Office 365 / SharePoint Queries
 				siteSearchUrl = appConfig.usl5GraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
 				siteDriveUrl = appConfig.usl5GraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
-				// Shared With Me
-				sharedWithMeUrl = appConfig.usl5GraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 				// Subscriptions
 				subscriptionUrl = appConfig.usl5GraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.usl5GraphEndpoint ~ websocketEndpointAPIEndpoint;
+				// Search Queries
+				searchQueryUrl = appConfig.usl5GraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 				break;
 			case "DE":
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD Germany");
@@ -339,12 +370,12 @@ class OneDriveApi {
 				// Office 365 / SharePoint Queries
 				siteSearchUrl = appConfig.deGraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
 				siteDriveUrl = appConfig.deGraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
-				// Shared With Me
-				sharedWithMeUrl = appConfig.deGraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 				// Subscriptions
 				subscriptionUrl = appConfig.deGraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.deGraphEndpoint ~ websocketEndpointAPIEndpoint;
+				// Search Queries
+				searchQueryUrl = appConfig.deGraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 				break;
 			case "CN":
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring AD China operated by VNET");
@@ -370,12 +401,12 @@ class OneDriveApi {
 				// Office 365 / SharePoint Queries
 				siteSearchUrl = appConfig.cnGraphEndpoint ~ defaultSiteSearchUrlAPIEndpoint;
 				siteDriveUrl = appConfig.cnGraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
-				// Shared With Me
-				sharedWithMeUrl = appConfig.cnGraphEndpoint ~ defaultSharedWithMeUrlAPIEndpoint;
 				// Subscriptions
 				subscriptionUrl = appConfig.cnGraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.cnGraphEndpoint ~ websocketEndpointAPIEndpoint;
+				// Search Queries
+				searchQueryUrl = appConfig.cnGraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 				break;
 			// Default - all other entries
 			default:
@@ -455,8 +486,6 @@ class OneDriveApi {
 			// Drive Queries
 			addLogEntry("Configured driveUrl:          " ~ driveUrl, ["debug"]);
 			addLogEntry("Configured driveByIdUrl:      " ~ driveByIdUrl, ["debug"]);
-			// Shared With Me
-			addLogEntry("Configured sharedWithMeUrl:   " ~ sharedWithMeUrl, ["debug"]);
 			// Item Queries
 			addLogEntry("Configured itemByIdUrl:       " ~ itemByIdUrl, ["debug"]);
 			addLogEntry("Configured itemByPathUrl:     " ~ itemByPathUrl, ["debug"]);
@@ -465,6 +494,8 @@ class OneDriveApi {
 			addLogEntry("Configured siteDriveUrl:      " ~ siteDriveUrl, ["debug"]);
 			// Websocket 
 			addLogEntry("Configured websocketEndpoint: " ~ websocketEndpoint, ["debug"]);
+			// Search Queries
+			addLogEntry("Configured searchQueryUrl:    " ~ searchQueryUrl, ["debug"]);
 		}
 	}
 	
@@ -721,115 +752,155 @@ class OneDriveApi {
 					return false;
 				}
 			} else {
-				// Use OAuth2 Interactive Authorisation Flow (application default)
-				char[] response;
-				// What URL should be presented to the user to access
-				string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
-				// Configure automated authentication if --auth-files authUrlFilePath:responseUrlFilePath is being used
-				string authFilesString = appConfig.getValueString("auth_files");
-				string authResponseString = appConfig.getValueString("auth_response");
-			
-				if (!authResponseString.empty) {
-					// read the response from authResponseString
-					response = cast(char[]) authResponseString;
-				} else if (authFilesString != "") {
-					string[] authFiles = authFilesString.split(":");
-					string authUrlFilePath = authFiles[0];
-					string responseUrlFilePath = authFiles[1];
-					
-					try {
-						auto authUrlFile = File(authUrlFilePath, "w");
-						authUrlFile.write(url);
-						authUrlFile.close();
-					} catch (FileException exception) {
-						// There was a file system error
-						// display the error message
-						displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
-						// Must force exit here, allow logging to be done
-						forceExit();
-					} catch (ErrnoException exception) {
-						// There was a file system error
-						// display the error message
-						displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
-						// Must force exit here, allow logging to be done
-						forceExit();
-					}
-
-					// Log we are now waiting
-					addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
-					
-					while (!exists(responseUrlFilePath)) {
-						Thread.sleep(dur!("msecs")(100));
-					}
-
-					// read response from provided from OneDrive
-					try {
-						response = cast(char[]) read(responseUrlFilePath);
-					} catch (OneDriveException exception) {
-						// exception generated
-						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-						return false;
-					}
-
-					// try to remove auth files one at a time
-					try {
-						std.file.remove(authUrlFilePath);
+				// Do we display the admin consent URL or the normal OAuth2 URL
+				if (!appConfig.getValueBool("display_admin_consent_url")) {
+					// Use OAuth2 Interactive Authorisation Flow (application default)
+					char[] response;
+					// What URL should be presented to the user to access
+					string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
+					// Configure automated authentication if --auth-files authUrlFilePath:responseUrlFilePath is being used
+					string authFilesString = appConfig.getValueString("auth_files");
+					string authResponseString = appConfig.getValueString("auth_response");
+				
+					if (!authResponseString.empty) {
+						// read the response from authResponseString
+						response = cast(char[]) authResponseString;
+					} else if (authFilesString != "") {
+						string[] authFiles = authFilesString.split(":");
+						string authUrlFilePath = authFiles[0];
+						string responseUrlFilePath = authFiles[1];
 						
-					} catch (FileException exception) {
-						addLogEntry("Cannot remove --auth-files elements - details below");
-						// There was a file system error - display the error message
-						displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
-						return false;
-					}
-					
-					try {
-						std.file.remove(responseUrlFilePath);
-					} catch (FileException exception) {
-						addLogEntry("Cannot remove --auth-files elements - details below");
-						// There was a file system error - display the error message
-						displayFileSystemErrorMessage(exception.msg, thisFunctionName, responseUrlFilePath);
-						return false;
-					}
-				} else {
-					// If we are not running in --dry-run mode, prompt the user to authorise the application
-					if (!appConfig.getValueBool("dry_run")) {
-						// Notify the user of the next step: visit the URL to authorise the client
-						addLogEntry();
-						addLogEntry(authoriseApplicationRequest, ["consoleOnly"]);
-						addLogEntry(url ~ "\n", ["consoleOnly"]);
+						try {
+							auto authUrlFile = File(authUrlFilePath, "w");
+							authUrlFile.write(url);
+							authUrlFile.close();
+						} catch (FileException exception) {
+							// There was a file system error
+							// display the error message
+							displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
+							// Must force exit here, allow logging to be done
+							forceExit();
+						} catch (ErrnoException exception) {
+							// There was a file system error
+							// display the error message
+							displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
+							// Must force exit here, allow logging to be done
+							forceExit();
+						}
+
+						// Log we are now waiting
+						addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
 						
-						// Prompt the user to paste the full redirect URI (copied from the browser after login)
-						addLogEntry("After completing the authorisation in your browser, copy the full redirect URI (from the address bar) and paste it below.\n", ["consoleOnly"]);
-						addLogEntry("Paste redirect URI here: ", ["consoleOnlyNoNewLine"]);
+						while (!exists(responseUrlFilePath)) {
+							Thread.sleep(dur!("msecs")(100));
+						}
+
+						// read response from provided from OneDrive
+						try {
+							response = cast(char[]) read(responseUrlFilePath);
+						} catch (OneDriveException exception) {
+							// exception generated
+							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+							return false;
+						}
+
+						// try to remove auth files one at a time
+						try {
+							std.file.remove(authUrlFilePath);
+							
+						} catch (FileException exception) {
+							addLogEntry("Cannot remove --auth-files elements - details below");
+							// There was a file system error - display the error message
+							displayFileSystemErrorMessage(exception.msg, thisFunctionName, authUrlFilePath);
+							return false;
+						}
 						
-						// Read the user's pasted response URI
-						readln(response);
-						// Flag that a response URI has been received - at this point could be valid or invalid
-						appConfig.applicationAuthoriseResponseURIReceived = true;
+						try {
+							std.file.remove(responseUrlFilePath);
+						} catch (FileException exception) {
+							addLogEntry("Cannot remove --auth-files elements - details below");
+							// There was a file system error - display the error message
+							displayFileSystemErrorMessage(exception.msg, thisFunctionName, responseUrlFilePath);
+							return false;
+						}
 					} else {
-						// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
-						addLogEntry();
-						addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
-						addLogEntry();
-						addLogEntry("To authorise the application please use your original command without '--dry-run'.");
-						addLogEntry();
-						addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
-						addLogEntry();
-						forceExit();
+						// If we are not running in --dry-run mode, prompt the user to authorise the application
+						if (!appConfig.getValueBool("dry_run")) {
+							// Notify the user of the next step: visit the URL to authorise the client
+							addLogEntry();
+							addLogEntry(authoriseApplicationRequest, ["consoleOnly"]);
+							addLogEntry(url ~ "\n", ["consoleOnly"]);
+							
+							// Prompt the user to paste the full redirect URI (copied from the browser after login)
+							addLogEntry("After completing the authorisation in your browser, copy the full redirect URI (from the address bar) and paste it below.\n", ["consoleOnly"]);
+							addLogEntry("Paste redirect URI here: ", ["consoleOnlyNoNewLine"]);
+							
+							// Read the user's pasted response URI
+							readln(response);
+							// Flag that a response URI has been received - at this point could be valid or invalid
+							appConfig.applicationAuthoriseResponseURIReceived = true;
+						} else {
+							// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
+							addLogEntry();
+							addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Application authorisation cannot be completed when using the '--dry-run' option.");
+							addLogEntry();
+							addLogEntry("To authorise the application please use your original command without '--dry-run'.");
+							addLogEntry();
+							addLogEntry("To exclusively authorise the application without performing any additional actions, do not add '--sync' or '--monitor' to your command line.");
+							addLogEntry();
+							forceExit();
+						}
 					}
-				}
-				
-				// match the authorisation code
-				auto c = matchFirst(strip(response), r"(?:[?&]code=)([^&]+)");
-				
-				if (c.empty) {
-					addLogEntry("An empty or invalid response uri was entered");
+					
+					// match the authorisation code
+					auto c = matchFirst(strip(response), r"(?:[?&]code=)([^&]+)");
+					
+					if (c.empty) {
+						addLogEntry("An empty or invalid response uri was entered");
+						return false;
+					}
+					c.popFront(); // skip the whole match
+					string authCode = decodeComponent(c.front);
+					redeemToken(authCode);
+					return true;
+				} else {
+					// Display the Microsoft Entra ID administrator consent URL for the configured tenant
+					// https://login.microsoftonline.com/<azure_tenant_id>/v2.0/adminconsent?client_id=d50ca740-c83f-4d1b-b616-12c519384f0c&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
+					
+					// Tenant Check
+					if ((tenantId != "common") && (!appConfig.getValueString("azure_tenant_id").empty)) {
+						// Tenant OK
+					} else {
+						// Tenant has not been configured
+						addLogEntry();
+						addLogEntry("ERROR: Unable to determine Microsoft Entra ID tenant. Please configure 'azure_tenant_id' with your tenant identifier.");
+						addLogEntry();
+						return false;
+					}
+					
+					// Configure the authentication scope
+					if (appConfig.getValueBool("read_only_auth_scope")) {
+						// read-only authentication scopes has been requested
+						authScope = "&scope=Files.Read%20Files.Read.All%20Sites.Read.All%20offline_access";
+					} else {
+						// read-write authentication scopes will be used (default)
+						authScope = "&scope=Files.ReadWrite%20Files.ReadWrite.All%20Sites.ReadWrite.All%20offline_access";
+					}
+					
+					// Build the required consent URL
+					string consent_url = "https://login.microsoftonline.com/" ~ tenantId ~ "/v2.0/adminconsent?client_id=" ~ clientId ~ authScope ~ "&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient";
+					
+					// Display the required URL
+					addLogEntry();
+					addLogEntry("Please authorise this application by visiting the following Microsoft Entra ID admin consent URL: ");
+					addLogEntry();
+					addLogEntry(consent_url);
+					addLogEntry();
+					addLogEntry("Open this URL as a Microsoft Entra ID administrator to grant tenant-wide consent. Nothing from this process needs to be pasted back into this application.");
+					addLogEntry();
+					addLogEntry("After administrator consent has been granted, run the normal authentication process again.");
 					return false;
 				}
-				c.popFront(); // skip the whole match
-				string authCode = decodeComponent(c.front);
-				redeemToken(authCode);
-				return true;
 			}
 		}
 	}
@@ -1002,10 +1073,414 @@ class OneDriveApi {
 		return get(url);
 	}
 	
-	// Return all the items that are shared with the user
-	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme
+	// Return a JSON structure simulating the depreciated 'sharedWithMe' API response data
 	JSONValue getSharedWithMe() {
-		return get(sharedWithMeUrl);
+		addLogEntry("Using Microsoft Graph Search API to enumerate OneDrive Business Shared Files", ["verbose"]);
+
+		JSONValue sharedWithMeCompatibleResponse = [
+			"value": JSONValue(JSONValue[].init)
+		];
+
+		JSONValue[] candidateItems;
+		JSONValue[] sharedItems;
+		bool[string] candidateIds;
+
+		string ownOneDriveWebUrl = "";
+		string ownDisplayName = "";
+		string ownEmail = "";
+
+		JSONValue defaultRootDetails = getDefaultRootDetails();
+		if (("webUrl" in defaultRootDetails) && (defaultRootDetails["webUrl"].type == JSONType.string)) {
+			ownOneDriveWebUrl = defaultRootDetails["webUrl"].str;
+		}
+
+		JSONValue defaultDriveDetails = getDefaultDriveDetails();
+		if (("owner" in defaultDriveDetails) &&
+			(defaultDriveDetails["owner"].type == JSONType.object) &&
+			("user" in defaultDriveDetails["owner"]) &&
+			(defaultDriveDetails["owner"]["user"].type == JSONType.object)) {
+
+			if (("displayName" in defaultDriveDetails["owner"]["user"]) &&
+				(defaultDriveDetails["owner"]["user"]["displayName"].type == JSONType.string)) {
+				ownDisplayName = defaultDriveDetails["owner"]["user"]["displayName"].str;
+			}
+
+			if (("email" in defaultDriveDetails["owner"]["user"]) &&
+				(defaultDriveDetails["owner"]["user"]["email"].type == JSONType.string)) {
+				ownEmail = defaultDriveDetails["owner"]["user"]["email"].str;
+			}
+		}
+
+		string searchQueryString = buildBusinessSharedItemsSearchQuery(ownOneDriveWebUrl, ownDisplayName, ownEmail);
+
+		if (debugLogging) {
+			addLogEntry("Microsoft Graph Search API queryString: " ~ searchQueryString, ["debug"]);
+		}
+
+		uint from = 0;
+		immutable uint pageSize = 100;
+		bool moreResultsAvailable = true;
+
+		while (moreResultsAvailable) {
+			JSONValue searchRequest = [
+				"requests": JSONValue([
+					JSONValue([
+						"entityTypes": JSONValue([
+							JSONValue("driveItem")
+						]),
+						"query": JSONValue([
+							"queryString": JSONValue(searchQueryString)
+						]),
+						"from": JSONValue(from),
+						"size": JSONValue(pageSize),
+						"fields": JSONValue([
+							JSONValue("id"),
+							JSONValue("name"),
+							JSONValue("webUrl"),
+							JSONValue("createdBy"),
+							JSONValue("lastModifiedBy"),
+							JSONValue("createdDateTime"),
+							JSONValue("lastModifiedDateTime"),
+							JSONValue("size"),
+							JSONValue("file"),
+							JSONValue("folder"),
+							JSONValue("fileSystemInfo"),
+							JSONValue("parentReference")
+						])
+					])
+				])
+			];
+
+			JSONValue searchResponse = post(searchQueryUrl, searchRequest.toString());
+
+			moreResultsAvailable = false;
+
+			if (!("value" in searchResponse)) break;
+
+			foreach (searchResult; searchResponse["value"].array) {
+				if (!("hitsContainers" in searchResult)) continue;
+
+				foreach (hitsContainer; searchResult["hitsContainers"].array) {
+					if (("moreResultsAvailable" in hitsContainer) &&
+						(hitsContainer["moreResultsAvailable"].type == JSONType.true_)) {
+						moreResultsAvailable = true;
+					}
+
+					if (!("hits" in hitsContainer)) continue;
+
+					foreach (hit; hitsContainer["hits"].array) {
+						if (!("resource" in hit)) continue;
+
+						JSONValue resource = hit["resource"];
+
+						if (!isValidSearchDriveItem(resource, ownOneDriveWebUrl, ownDisplayName, ownEmail)) {
+							if (debugLogging) {
+								addLogEntry("Skipping Graph Search result because it is not a valid Business Shared File/Folder candidate: " ~ to!string(resource), ["debug"]);
+							}
+							continue;
+						}
+
+						string remoteDriveId = resource["parentReference"]["driveId"].str;
+						string remoteItemId = resource["id"].str;
+						string uniqueKey = remoteDriveId ~ ":" ~ remoteItemId;
+
+						if (uniqueKey in candidateIds) {
+							continue;
+						}
+
+						candidateIds[uniqueKey] = true;
+						candidateItems ~= parseJSON(resource.toString());
+					}
+				}
+			}
+
+			from += pageSize;
+		}
+
+		foreach (resource; candidateItems) {
+			if (isGraphSearchDescendantItem(resource, candidateIds)) {
+				if (debugLogging) {
+					addLogEntry("Skipping Graph Search descendant item: " ~ resource["name"].str, ["debug"]);
+				}
+				continue;
+			}
+
+			sharedItems ~= convertSearchDriveItemToSharedWithMeItem(resource);
+		}
+
+		sharedWithMeCompatibleResponse["value"] = JSONValue(sharedItems);
+
+		if (debugLogging) {
+			addLogEntry("Microsoft Graph Search API candidate item count: " ~ to!string(candidateItems.length), ["debug"]);
+			addLogEntry("Microsoft Graph Search API normalised shared item count: " ~ to!string(sharedItems.length), ["debug"]);
+		}
+
+		return sharedWithMeCompatibleResponse;
+	}
+
+	private string buildBusinessSharedItemsSearchQuery(string ownOneDriveWebUrl, string ownDisplayName, string ownEmail) {
+		string queryString = "(IsDocument:true OR IsDocument:false)";
+
+		if (ownDisplayName != "") {
+			queryString ~= ` AND NOT(CreatedBy:"` ~ escapeKqlString(ownDisplayName) ~ `")`;
+			queryString ~= ` AND NOT(Author:"` ~ escapeKqlString(ownDisplayName) ~ `")`;
+		}
+
+		if (ownEmail != "") {
+			queryString ~= ` AND NOT(CreatedBy:"` ~ escapeKqlString(ownEmail) ~ `")`;
+			queryString ~= ` AND NOT(Author:"` ~ escapeKqlString(ownEmail) ~ `")`;
+		}
+
+		if (ownOneDriveWebUrl != "") {
+			queryString ~= ` AND NOT(path:"` ~ escapeKqlString(ownOneDriveWebUrl) ~ `")`;
+		}
+
+		return queryString;
+	}
+
+	private string escapeKqlString(string value) {
+		return value.replace(`\`, `\\`).replace(`"`, `\"`);
+	}
+
+	private bool isValidSearchDriveItem(JSONValue resource, string ownOneDriveWebUrl, string ownDisplayName, string ownEmail) {
+		if (resource.type != JSONType.object) return false;
+
+		if (!("id" in resource) || resource["id"].type != JSONType.string) return false;
+		if (!("name" in resource) || resource["name"].type != JSONType.string) return false;
+
+		if (!("parentReference" in resource) || resource["parentReference"].type != JSONType.object) return false;
+		if (!("driveId" in resource["parentReference"]) || resource["parentReference"]["driveId"].type != JSONType.string) return false;
+
+		if (resource["parentReference"]["driveId"].str == appConfig.defaultDriveId) return false;
+
+		if (!searchResultRepresentsFile(resource) && !searchResultRepresentsFolder(resource)) return false;
+
+		if (("webUrl" in resource) &&
+			(resource["webUrl"].type == JSONType.string) &&
+			(ownOneDriveWebUrl != "") &&
+			resource["webUrl"].str.startsWith(ownOneDriveWebUrl)) {
+			return false;
+		}
+
+		if (wasCreatedByCurrentUser(resource, ownDisplayName, ownEmail)) {
+			return false;
+		}
+
+		string itemName = resource["name"].str;
+
+		string[] blockedNames = [
+			"__siteIcon__.png",
+			"__siteIcon__.jpg",
+			"PointPublishing.aspx",
+			"VideoEmbedHost.aspx"
+		];
+
+		foreach (blockedName; blockedNames) {
+			if (itemName == blockedName) return false;
+		}
+
+		if (("createdBy" in resource) &&
+			(resource["createdBy"].type == JSONType.object) &&
+			("user" in resource["createdBy"]) &&
+			(resource["createdBy"]["user"].type == JSONType.object) &&
+			("displayName" in resource["createdBy"]["user"]) &&
+			(resource["createdBy"]["user"]["displayName"].type == JSONType.string) &&
+			(resource["createdBy"]["user"]["displayName"].str == "System Account")) {
+			return false;
+		}
+
+		return true;
+	}
+
+	private bool searchResultRepresentsFolder(JSONValue resource) {
+		if (("folder" in resource) !is null) {
+			return true;
+		}
+
+		if (("file" in resource) is null) {
+			return false;
+		}
+
+		if (resource["file"].type != JSONType.object) {
+			return false;
+		}
+
+		if (!("mimeType" in resource["file"]) ||
+			resource["file"]["mimeType"].type != JSONType.string) {
+			return false;
+		}
+
+		if (resource["file"]["mimeType"].str != "application/octet-stream") {
+			return false;
+		}
+
+		if (!("size" in resource)) {
+			return false;
+		}
+
+		return jsonNumberIsZero(resource["size"]);
+	}
+
+	private bool searchResultRepresentsFile(JSONValue resource) {
+		if (searchResultRepresentsFolder(resource)) {
+			return false;
+		}
+
+		return (("file" in resource) !is null);
+	}
+
+	private bool jsonNumberIsZero(JSONValue value) {
+		if (value.type == JSONType.integer) {
+			return value.integer == 0;
+		}
+
+		if (value.type == JSONType.uinteger) {
+			return value.uinteger == 0;
+		}
+
+		if (value.type == JSONType.float_) {
+			return value.floating == 0;
+		}
+
+		return false;
+	}
+
+	private bool wasCreatedByCurrentUser(JSONValue resource, string ownDisplayName, string ownEmail) {
+		if (!("createdBy" in resource)) return false;
+		if (resource["createdBy"].type != JSONType.object) return false;
+		if (!("user" in resource["createdBy"])) return false;
+		if (resource["createdBy"]["user"].type != JSONType.object) return false;
+
+		if ((ownDisplayName != "") &&
+			("displayName" in resource["createdBy"]["user"]) &&
+			(resource["createdBy"]["user"]["displayName"].type == JSONType.string) &&
+			(resource["createdBy"]["user"]["displayName"].str == ownDisplayName)) {
+			return true;
+		}
+
+		if ((ownEmail != "") &&
+			("email" in resource["createdBy"]["user"]) &&
+			(resource["createdBy"]["user"]["email"].type == JSONType.string) &&
+			(resource["createdBy"]["user"]["email"].str == ownEmail)) {
+			return true;
+		}
+
+		return false;
+	}
+
+	private bool isGraphSearchDescendantItem(JSONValue resource, bool[string] candidateIds) {
+		if (!("parentReference" in resource)) return false;
+		if (resource["parentReference"].type != JSONType.object) return false;
+
+		if (!("driveId" in resource["parentReference"])) return false;
+		if (resource["parentReference"]["driveId"].type != JSONType.string) return false;
+
+		if (!("id" in resource["parentReference"])) return false;
+		if (resource["parentReference"]["id"].type != JSONType.string) return false;
+
+		string parentKey = resource["parentReference"]["driveId"].str ~ ":" ~ resource["parentReference"]["id"].str;
+
+		return (parentKey in candidateIds) !is null;
+	}
+
+	private JSONValue convertSearchDriveItemToSharedWithMeItem(JSONValue resource) {
+		JSONValue sharedItem = parseJSON("{}");
+		JSONValue remoteItem = parseJSON("{}");
+
+		string[] directFields = [
+			"id",
+			"name",
+			"size",
+			"webUrl",
+			"createdDateTime",
+			"lastModifiedDateTime",
+			"parentReference"
+		];
+
+		foreach (fieldName; directFields) {
+			if ((fieldName in resource) && (resource[fieldName].type != JSONType.null_)) {
+				sharedItem[fieldName] = parseJSON(resource[fieldName].toString());
+				remoteItem[fieldName] = parseJSON(resource[fieldName].toString());
+			}
+		}
+
+		bool isFile = searchResultRepresentsFile(resource);
+		bool isFolder = searchResultRepresentsFolder(resource);
+
+		if (isFile) {
+			sharedItem["file"] = parseJSON(resource["file"].toString());
+			remoteItem["file"] = parseJSON(resource["file"].toString());
+		}
+
+		if (isFolder) {
+			sharedItem["folder"] = parseJSON("{}");
+			remoteItem["folder"] = parseJSON("{}");
+		}
+
+		if ("fileSystemInfo" in resource) {
+			sharedItem["fileSystemInfo"] = parseJSON(resource["fileSystemInfo"].toString());
+			remoteItem["fileSystemInfo"] = parseJSON(resource["fileSystemInfo"].toString());
+		} else {
+			JSONValue fallbackFSI = JSONValue([
+				"lastModifiedDateTime": JSONValue(
+					("lastModifiedDateTime" in resource)
+						? resource["lastModifiedDateTime"].str
+						: Clock.currTime(UTC()).toISOExtString()
+				)
+			]);
+
+			sharedItem["fileSystemInfo"] = parseJSON(fallbackFSI.toString());
+			remoteItem["fileSystemInfo"] = parseJSON(fallbackFSI.toString());
+		}
+
+		JSONValue sharedFacet = buildSearchSharedFacet(resource);
+
+		sharedItem["shared"] = parseJSON(sharedFacet.toString());
+		remoteItem["shared"] = parseJSON(sharedFacet.toString());
+
+		sharedItem["remoteItem"] = remoteItem;
+
+		return sharedItem;
+	}
+
+	private JSONValue buildSearchSharedFacet(JSONValue resource) {
+		JSONValue sharedFacet = parseJSON(`{"sharedBy":{"user":{}}}`);
+
+		string displayName = "";
+		string email = "";
+
+		if (("createdBy" in resource) &&
+			(resource["createdBy"].type == JSONType.object) &&
+			("user" in resource["createdBy"]) &&
+			(resource["createdBy"]["user"].type == JSONType.object)) {
+
+			if (("displayName" in resource["createdBy"]["user"]) &&
+				(resource["createdBy"]["user"]["displayName"].type == JSONType.string)) {
+				displayName = resource["createdBy"]["user"]["displayName"].str;
+			}
+
+			if (("email" in resource["createdBy"]["user"]) &&
+				(resource["createdBy"]["user"]["email"].type == JSONType.string)) {
+				email = resource["createdBy"]["user"]["email"].str;
+			}
+		}
+
+		if (displayName == "") {
+			displayName = "Unknown";
+		}
+
+		sharedFacet["sharedBy"]["user"]["displayName"] = JSONValue(displayName);
+
+		if (email != "") {
+			sharedFacet["sharedBy"]["user"]["email"] = JSONValue(email);
+		}
+
+		if (("createdDateTime" in resource) &&
+			(resource["createdDateTime"].type == JSONType.string)) {
+			sharedFacet["sharedDateTime"] = JSONValue(resource["createdDateTime"].str);
+		}
+
+		return sharedFacet;
 	}
 	
 	// Create a shareable link for an existing file on OneDrive based on the accessScope JSON permissions
@@ -1291,8 +1766,9 @@ class OneDriveApi {
 		string parentalPath = dirName(saveToPath);
 
 		// Does the parental path exist locally?
-		if (!exists(parentalPath)) {
-			try {
+		try {
+			if (!exists(parentalPath)) {
+				// Path does not exist
 				if (debugLogging) {addLogEntry("Requested local parental path does not exist, creating directory structure: " ~ parentalPath, ["debug"]);}
 				mkdirRecurse(parentalPath);
 				// Has the user disabled the setting of filesystem permissions?
@@ -1304,10 +1780,10 @@ class OneDriveApi {
 					// Use inherited permissions
 					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ parentalPath, ["debug"]);}
 				}
-			} catch (FileException exception) {
-				// display the error message
-				displayFileSystemErrorMessage(exception.msg, thisFunctionName, parentalPath);
 			}
+		} catch (FileException exception) {
+			// display the error message
+			displayFileSystemErrorMessage(exception.msg, thisFunctionName, parentalPath);
 		}
 
 		// Create the URL to download the file
@@ -1323,16 +1799,21 @@ class OneDriveApi {
 		}
 		
 		// Does downloaded file now exist locally?
-		if (exists(saveToPath)) {
-			// Has the user disabled the setting of filesystem permissions?
-			if (!appConfig.getValueBool("disable_permission_set")) {
-				// File was downloaded successfully - configure the applicable permissions for the file
-				if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
-				saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
-			} else {
-				// Use inherited permissions
-				if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ saveToPath, ["debug"]);}
+		try {
+			if (exists(saveToPath)) {
+				// Has the user disabled the setting of filesystem permissions?
+				if (!appConfig.getValueBool("disable_permission_set")) {
+					// File was downloaded successfully - configure the applicable permissions for the file
+					if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
+					saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
+				} else {
+					// Use inherited permissions
+					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ saveToPath, ["debug"]);}
+				}
 			}
+		} catch (FileException exception) {
+			// display the error message
+			displayFileSystemErrorMessage(exception.msg, thisFunctionName, saveToPath);
 		}
 
 		// Return the CurlResponse from the completed download so callers can inspect
@@ -2060,8 +2541,8 @@ class OneDriveApi {
 					}
 					
 					// If we get to this point, there is no error from http.perform() on re-try
-					// If retryAttempts is greater than 1, it means we were re-trying the request
-					if (retryAttempts > 1) {
+					// If retryAttempts is greater than 0, it means we were re-trying the request
+					if (retryAttempts > 0) {
 						// unset the fresh connect option as this then creates performance issues if left enabled
 						unsetFreshConnectOption();
 					}
@@ -2282,8 +2763,7 @@ class OneDriveApi {
 			} catch (FileException exception) {
 				// There was a file system error - display the error message
 				displayFileSystemErrorMessage(exception.msg, callingFunction, ""); // as we have no file path reference here, use a blank input
-				throw new OneDriveException(0, "There was a file system error during OneDrive request: " ~ exception.msg, response);
-			
+				throw new OneDriveException(9999, "There was a local file system error during OneDrive request: " ~ exception.msg, response);
 			// A OneDriveError was thrown
 			} catch (OneDriveError exception) {
 				// Disk space error or SSL error caused a OneDriveError to be thrown

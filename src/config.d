@@ -474,7 +474,11 @@ class ApplicationConfig {
 		
 		// Disable GitHub Version check
 		boolValues["disable_version_check"] = false;
-				
+
+		// Mirror the local state online
+		// Can only be used with --local-first
+		boolValues["mirror_local_state"] = false;
+
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -1210,7 +1214,8 @@ class ApplicationConfig {
 		boolValues["sync_business_shared_files"] = false;
 		boolValues["force_sync"] = false;
 		boolValues["with_editing_perms"] = false;
-		
+		boolValues["display_admin_consent_url"] = false;
+				
 		// Specific options for CLI input handling
 		stringValues["sync_dir_cli"] = "";
 		
@@ -1264,6 +1269,9 @@ class ApplicationConfig {
 				"disable-upload-validation",
 					"Disable upload validation when uploading to OneDrive",
 					&boolValues["disable_upload_validation"],
+				"display-admin-consent-url",
+					"Displays a tenant-specific Microsoft Entra ID administrator consent URL for environments where administrator approval is required before users can authenticate and use the client",
+					&boolValues["display_admin_consent_url"],
 				"display-config",
 					"Display what options the client will use as currently configured. No synchronisation will be performed",
 					&boolValues["display_config"],
@@ -1306,9 +1314,6 @@ class ApplicationConfig {
 				"get-sharepoint-drive-id",
 					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library",
 					&stringValues["sharepoint_library_name"],
-				"get-O365-drive-id",
-					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library (DEPRECATED)",
-					&stringValues["sharepoint_library_name"],
 				"list-shared-items",
 					"List OneDrive Business Shared Items",
 					&boolValues["list_business_shared_items"],
@@ -1324,6 +1329,9 @@ class ApplicationConfig {
 				"logout",
 					"Log out the current user",
 					&boolValues["logout"],
+				"mirror-local-state",
+					"Mirror the local state to Microsoft OneDrive online",
+					&boolValues["mirror_local_state"],
 				"modified-by",
 					"Display the last modified by details of a given path",
 					&stringValues["modified_by"],
@@ -1398,9 +1406,6 @@ class ApplicationConfig {
 					&stringValues["share_password"],
 				"sync|s",
 					"Perform a synchronisation with Microsoft OneDrive",
-					&boolValues["synchronize"],
-				"synchronize",
-					"Perform a synchronisation with Microsoft OneDrive (DEPRECATED)",
 					&boolValues["synchronize"],
 				"sync-root-files",
 					"Sync all files in sync_dir root when using sync_list",
@@ -1606,23 +1611,30 @@ class ApplicationConfig {
 	void checkDeprecatedOptions(string[] cliArgs) {
 	
 		bool deprecatedCommandsFound = false;
-	
+
 		foreach (cliArg; cliArgs) {
 			// Check each CLI arg for items that have been deprecated
+			// If the CLI arg is not listed in updateFromArgs() we never hit this code as the removed CLI option generates:
+			//      Unrecognized option XXXXXX
+			//      Try 'onedrive -h' for more information
 			
-			// --synchronize deprecated in v2.5.0, will be removed in future version
+			/**
+			
+			// --synchronize has been deprecated (30/5/2026)
 			if (cliArg == "--synchronize") {
 				addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
 				addLogEntry("DEPRECIATION WARNING: --synchronize has been deprecated in favour of --sync or -s");
 				deprecatedCommandsFound = true;
 			}
 			
-			// --get-O365-drive-id deprecated in v2.5.0, will be removed in future version
+			// --get-O365-drive-id has been deprecated (30/5/2026)
 			if (cliArg == "--get-O365-drive-id") {
 				addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
 				addLogEntry("DEPRECIATION WARNING: --get-O365-drive-id has been deprecated in favour of --get-sharepoint-drive-id");
 				deprecatedCommandsFound = true;
 			}
+			**/
+			
 		}
 	
 		if (deprecatedCommandsFound) {
@@ -1700,6 +1712,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'upload_only'                   = " ~ to!string(getValueBool("upload_only")));
 		addLogEntry("Config option 'download_only'                 = " ~ to!string(getValueBool("download_only")));
 		addLogEntry("Config option 'local_first'                   = " ~ to!string(getValueBool("local_first")));
+		addLogEntry("Config option 'mirror_local_state'            = " ~ to!string(getValueBool("mirror_local_state")));
 		addLogEntry("Config option 'check_nosync'                  = " ~ to!string(getValueBool("check_nosync")));
 		addLogEntry("Config option 'check_nomount'                 = " ~ to!string(getValueBool("check_nomount")));
 		addLogEntry("Config option 'resync'                        = " ~ to!string(getValueBool("resync")));
@@ -3294,7 +3307,6 @@ void outputLongHelp(Option[] opt) {
 			"--destination-directory",
 			"--download-file",
 			"--get-file-link",
-			"--get-O365-drive-id",
 			"--get-sharepoint-drive-id",
 			"--log-dir",
 			"--min-notify-changes",

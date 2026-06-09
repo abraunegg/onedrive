@@ -20,6 +20,12 @@ from testcases_business_shared_folders.bsftc0002_clean_monitor_pull_down import 
 from testcases_business_shared_folders.bsftc0003_sync_list_validation import (
     BusinessSharedFolderTestCase0003SyncListValidation,
 )
+from testcases_business_shared_folders.bsftc0004_shared_files_pull_down import (
+    BusinessSharedFolderTestCase0004SharedFilesPullDown,
+)
+from testcases_business_shared_folders.bsftc0005_get_sharepoint_drive_id_while_monitoring import (
+    BusinessSharedFolderTestCase0005GetSharePointDriveIdWhileMonitoring,
+)
 
 
 def build_test_suite() -> list:
@@ -27,6 +33,8 @@ def build_test_suite() -> list:
         BusinessSharedFolderTestCase0001CleanSyncPullDown(),
         BusinessSharedFolderTestCase0002CleanMonitorPullDown(),
         BusinessSharedFolderTestCase0003SyncListValidation(),
+        BusinessSharedFolderTestCase0004SharedFilesPullDown(),
+        BusinessSharedFolderTestCase0005GetSharePointDriveIdWhileMonitoring(),
     ]
 
 
