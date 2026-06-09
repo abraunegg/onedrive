@@ -52,6 +52,7 @@ BuildRequires: dbus-devel
 Requires:     sqlite >= 3.7.15
 Requires:     libcurl
 Requires:     dbus
+Requires:     hicolor-icon-theme
 
 %if 0%{?with_systemd}
 Requires(post):    systemd
@@ -98,6 +99,8 @@ install -D -m 0644 contrib/systemd/onedrive.service %{buildroot}%{_userunitdir}/
 %config %{_sysconfdir}/logrotate.d/onedrive
 %{_mandir}/man1/%{name}.1.gz
 %{_bindir}/%{name}
+%{_datadir}/icons/hicolor/scalable/places/onedrive.svg
+%{_datadir}/icons/hicolor/scalable/apps/onedrive-notifications.svg
 %if 0%{?with_systemd}
 %if 0%{?rhel_unitdir}
 %{_unitdir}/%{name}.service
