@@ -279,8 +279,23 @@ class OneDriveApi {
 				// Authentication
 				authUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
 				deviceAuthUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/devicecode";
-				redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				tokenUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
+				
+				// Redirect URL
+				if (clientId == appConfig.defaultApplicationId) {
+					// application_id == default
+					// The default application registration uses the common native-client redirect URI.
+					// Do not tenant-substitute this URI when azure_tenant_id is configured.
+					if (debugLogging) {
+						addLogEntry("Global Azure AD Endpoint using default application_id, redirectUrl remains aligned to common nativeclient redirect URI", ["debug"]);
+					}
+					redirectUrl = appConfig.globalAuthEndpoint ~ "/common/oauth2/nativeclient";
+				} else {
+					// custom application_id
+					// Preserve existing behaviour for custom application registrations.
+					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				}
+				
 				// WebSocket Endpoint
 				websocketEndpoint = appConfig.globalGraphEndpoint ~ websocketEndpointAPIEndpoint;
 				break;

@@ -466,6 +466,18 @@ Open this URL as a Microsoft Entra ID administrator to grant tenant-wide consent
 After administrator consent has been granted, run the normal authentication process again.
 ```
 
+> [!IMPORTANT]
+> When using the default OneDrive Client for Linux application registration, the redirect URI remains:
+>
+> `https://login.microsoftonline.com/common/oauth2/nativeclient`
+>
+> even when `azure_tenant_id` is configured for a single Microsoft Entra ID tenant.
+>
+> This behaviour is required because the default application registration is configured with the Microsoft Identity Platform using the common native-client redirect URI.
+>
+> The `azure_tenant_id` value is used to scope authentication and token issuance to a specific tenant, but does not change the redirect URI used by the default application registration.
+
+
 Administrator consent is typically a one-time action for a Microsoft Entra ID tenant. Once consent has been granted, users can authenticate and reauthenticate normally, including when using `--reauth`.
 
 If you are uncertain whether administrator approval is required in your environment, contact your Microsoft 365 or Microsoft Entra ID administrator before attempting further authentication troubleshooting.
@@ -475,6 +487,36 @@ If you are uncertain whether administrator approval is required in your environm
 
 > [!IMPORTANT]
 > Some organisations prohibit users from granting consent to applications. In these environments, authentication will fail until approval has been granted by a Microsoft Entra ID administrator.
+
+> [!IMPORTANT]
+> **Handling a AADSTS50011 response**
+>
+> If authentication fails with:
+>
+> `AADSTS50011: The redirect URI specified in the request does not match the redirect URIs configured for the application`
+>
+> Microsoft Entra ID is rejecting the redirect URI supplied during authentication.
+>
+> **Common causes:**
+>
+> * Using a custom `application_id` where the configured redirect URI does not match the application registration
+> * Using an application registration that has not been configured as a Public Client Application
+> * Missing or incorrectly configured native client redirect URI within the Microsoft Entra ID application registration
+> * Application registration changes not yet replicated across Microsoft Entra ID
+>
+> **For users of the default OneDrive Client for Linux application registration:**
+>
+> The application uses:
+>
+> `https://login.microsoftonline.com/common/oauth2/nativeclient`
+>
+> as the redirect URI, regardless of whether `azure_tenant_id` is configured.
+>
+> If this error occurs while using the default application registration, please upgrade to the latest application release and re-run:
+>
+> ```
+> onedrive --reauth
+> ```
 
 
 #### Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker 
