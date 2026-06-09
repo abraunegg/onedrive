@@ -474,7 +474,11 @@ class ApplicationConfig {
 		
 		// Disable GitHub Version check
 		boolValues["disable_version_check"] = false;
-				
+
+		// Mirror the local state online
+		// Can only be used with --local-first
+		boolValues["mirror_local_state"] = false;
+
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -1210,7 +1214,8 @@ class ApplicationConfig {
 		boolValues["sync_business_shared_files"] = false;
 		boolValues["force_sync"] = false;
 		boolValues["with_editing_perms"] = false;
-		
+		boolValues["display_admin_consent_url"] = false;
+				
 		// Specific options for CLI input handling
 		stringValues["sync_dir_cli"] = "";
 		
@@ -1264,6 +1269,9 @@ class ApplicationConfig {
 				"disable-upload-validation",
 					"Disable upload validation when uploading to OneDrive",
 					&boolValues["disable_upload_validation"],
+				"display-admin-consent-url",
+					"Displays a tenant-specific Microsoft Entra ID administrator consent URL for environments where administrator approval is required before users can authenticate and use the client",
+					&boolValues["display_admin_consent_url"],
 				"display-config",
 					"Display what options the client will use as currently configured. No synchronisation will be performed",
 					&boolValues["display_config"],
@@ -1321,6 +1329,9 @@ class ApplicationConfig {
 				"logout",
 					"Log out the current user",
 					&boolValues["logout"],
+				"mirror-local-state",
+					"Mirror the local state to Microsoft OneDrive online",
+					&boolValues["mirror_local_state"],
 				"modified-by",
 					"Display the last modified by details of a given path",
 					&stringValues["modified_by"],
@@ -1701,6 +1712,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'upload_only'                   = " ~ to!string(getValueBool("upload_only")));
 		addLogEntry("Config option 'download_only'                 = " ~ to!string(getValueBool("download_only")));
 		addLogEntry("Config option 'local_first'                   = " ~ to!string(getValueBool("local_first")));
+		addLogEntry("Config option 'mirror_local_state'            = " ~ to!string(getValueBool("mirror_local_state")));
 		addLogEntry("Config option 'check_nosync'                  = " ~ to!string(getValueBool("check_nosync")));
 		addLogEntry("Config option 'check_nomount'                 = " ~ to!string(getValueBool("check_nomount")));
 		addLogEntry("Config option 'resync'                        = " ~ to!string(getValueBool("resync")));

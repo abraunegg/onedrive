@@ -58,6 +58,15 @@
 ## This option determines whether the client will conduct integrity validation on files uploaded to Microsoft OneDrive.
 #disable_upload_validation = "false"
 
+## This setting controls whether the application checks for newer versions of the client.
+#disable_version_check = "false"
+
+## Disable Microsoft OneDrive WebSocket support and use polling based change detection instead.
+#disable_websocket_support = "false"
+
+## This setting controls whether integration with the desktop display manager is enabled.
+#display_manager_integration = "false"
+
 ## This option will include the running config of the application at application startup.
 #display_running_config = "false"
 
@@ -88,6 +97,9 @@
 ## This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the local timestamp of the file
 #force_session_upload = "false"
 
+## Delay in seconds before processing inotify events.
+#inotify_delay = "10"
+
 ## This setting controls the application IP protocol used when communicating with Microsoft OneDrive.
 #ip_protocol_version = "0"
 
@@ -100,8 +112,8 @@
 ## This configuration option controls the number of seconds a cURL engine is considered stale and destroyed after last use.
 #max_curl_idle = "120"
 
-## This configuration option controls how often a full scan of your data is performed in monitor mode.
-#monitor_fullscan_frequency = "12"
+## Mirror local file and folder state to OneDrive when using local-first synchronisation.
+#mirror_local_state = "false"
 
 ## Controls when --monitor --download-only --cleanup-local-files performs
 ## authoritative cleanup using a generated delta/full online state pass.
@@ -110,6 +122,9 @@
 ## Valid values: monitor_and_signal | monitor_interval | monitor_fullscan_frequency
 ## Default: monitor_and_signal
 #monitor_authoritative_sync = "monitor_and_signal"
+
+## This configuration option controls how often a full scan of your data is performed in monitor mode.
+#monitor_fullscan_frequency = "12"
 
 ## This setting determines how often the sync loop runs in --monitor mode.
 #monitor_interval = "300"
@@ -124,7 +139,7 @@
 #notify_file_actions = "false"
 
 ## This configuration controls the maximum amount of time a file operation is allowed to take.
-#operation_timeout = "3600"
+#operation_timeout = "0"
 
 ## Permanently delete online items when removed locally. Bypasses OneDrive recycle bin.
 #permanent_delete = "false"
@@ -140,6 +155,9 @@
 
 ## This option removes the local file after a successful upload to OneDrive.
 #remove_source_files = "false"
+
+## This option removes the local folder after a successful upload to OneDrive.
+#remove_source_folders = "false"
 
 ## This configuration controls whether a full resync is performed at application startup.
 #resync = "false"
@@ -193,10 +211,10 @@
 #upload_only = "false"
 
 ## Authenticate using the Microsoft OAuth2 Device Authorisation Flow
-#use_device_auth = "true"
+#use_device_auth = "false"
 
 ## Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker
-#use_intune_sso = "true"
+#use_intune_sso = "false"
 
 ## This configuration option controls the application function to move online deleted files to a 'Recycle Bin' on your system.
 #use_recycle_bin = "false"
