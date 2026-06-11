@@ -1366,6 +1366,12 @@ class SyncEngine {
 			getDeltaDataOneDriveApiInstance = new OneDriveApi(appConfig);
 			getDeltaDataOneDriveApiInstance.initialise();
 
+			// Throttle forced garbage collection during native /delta enumeration.
+			// jsonItemsToProcess grows during enumeration and remains live until later
+			// processing, so forcing a full GC for every response bundle causes repeated
+			// scans of an increasingly large live heap.
+			enum long deltaEnumerationGcInterval = 100;
+
 			// Get the /delta changes via the OneDrive API
 			// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need this while loop
 			while (true) {
@@ -1380,8 +1386,6 @@ class SyncEngine {
 				
 				// Ensure deltaChanges is empty before we query /delta
 				deltaChanges = null;
-				// Perform Garbage Collection
-				GC.collect();
 				
 				// getDeltaChangesByItemId has the re-try logic for transient errors
 				deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink, getDeltaDataOneDriveApiInstance);
@@ -1402,7 +1406,7 @@ class SyncEngine {
 					}
 				}
 				
-				long nrChanges = count(deltaChanges["value"].array);
+				long nrChanges = deltaChanges["value"].array.length;
 				int changeCount = 0;
 				
 				if (appConfig.verbosityCount == 0) {
@@ -1478,9 +1482,10 @@ class SyncEngine {
 				// We have a valid deltaChanges JSON array. This means we have at least 200+ JSON items to process.
 				// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
 				auto jsonArrayToProcess = deltaChanges["value"].array;
+				jsonItemsToProcess.reserve(jsonItemsToProcess.length + cast(size_t)nrChanges);
 				
 				// To allow for better debugging, what are all the JSON elements in the array the API responded with in this set?
-				if (count(jsonArrayToProcess) > 0) {
+				if (jsonArrayToProcess.length > 0) {
 					if (debugLogging) {
 						string debugLogHeader = format("=============================== jsonArrayToProcess - response bundle %s ===================================", to!string(responseBundleCount));
 						addLogEntry(debugLogHeader, ["debug"]);
@@ -1500,8 +1505,6 @@ class SyncEngine {
 				
 				// Clear up this data
 				jsonArrayToProcess = null;
-				// Perform Garbage Collection
-				GC.collect();
 				
 				// Is latestDeltaLink matching deltaChanges["@odata.deltaLink"].str ?
 				if ("@odata.deltaLink" in deltaChanges) {
@@ -1513,8 +1516,11 @@ class SyncEngine {
 				
 				// Cleanup deltaChanges as this is no longer needed
 				deltaChanges = null;
-				// Perform Garbage Collection
-				GC.collect();
+				
+				// Perform throttled garbage collection during large native /delta enumeration
+				if ((responseBundleCount % deltaEnumerationGcInterval) == 0) {
+					GC.collect();
+				}
 				
 				// Sleep for a while to avoid busy-waiting
 				Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
@@ -1608,7 +1614,7 @@ class SyncEngine {
 			// deltaChanges must be a valid JSON object / array of data
 			if (deltaChanges.type() == JSONType.object) {
 				// How many changes were returned?
-				long nrChanges = count(deltaChanges["value"].array);
+				long nrChanges = deltaChanges["value"].array.length;
 				int changeCount = 0;
 				if (debugLogging) {addLogEntry("API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["debug"]);}
 				// Update the count of items received
@@ -1616,7 +1622,8 @@ class SyncEngine {
 				
 				// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
 				auto jsonArrayToProcess = deltaChanges["value"].array;
-				foreach (onedriveJSONItem; deltaChanges["value"].array) {
+				jsonItemsToProcess.reserve(jsonItemsToProcess.length + cast(size_t)nrChanges);
+				foreach (onedriveJSONItem; jsonArrayToProcess) {
 					// increment change count for this item
 					changeCount++;
 					// Process the received OneDrive object item JSON for this JSON bundle
