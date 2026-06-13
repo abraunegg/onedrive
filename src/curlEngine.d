@@ -62,9 +62,17 @@ private __gshared {
 }
 
 private void* loadCurlLib() {
-	// Respect LD_LIBRARY_PATH etc.
-	auto h = dlopen("libcurl.so.4", RTLD_NOW);
-	if (h is null) h = dlopen("libcurl.so", RTLD_NOW);
+	// Whilst libcurl should be loaded?
+	version (OSX) {
+		auto h = dlopen("libcurl.4.dylib", RTLD_NOW);
+		if (h is null) h = dlopen("libcurl.dylib", RTLD_NOW);
+		if (h is null) h = dlopen("/opt/homebrew/opt/curl/lib/libcurl.4.dylib", RTLD_NOW);
+		if (h is null) h = dlopen("/usr/local/opt/curl/lib/libcurl.4.dylib", RTLD_NOW);
+	} else {
+		// Respect LD_LIBRARY_PATH etc.
+		auto h = dlopen("libcurl.so.4", RTLD_NOW);
+		if (h is null) h = dlopen("libcurl.so", RTLD_NOW);
+	}
 	return h;
 }
 

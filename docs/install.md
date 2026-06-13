@@ -28,6 +28,8 @@
 ## Overview
 This document explains how to install or upgrade the OneDrive Client for Linux.
 
+macOS support is currently experimental and requires building the client from source.
+
 The preferred installation method is to use pre-built distribution packages wherever they are available and current. On some distributions, particularly Debian, Ubuntu, Linux Mint, and Raspberry Pi OS, the versions provided in the default distribution repositories are outdated and unsupported. These must not be used.
 
 If your distribution provides a current maintained package, you should install the client from your package manager. If your distribution does not provide a supported package, or you need to build the client for a custom or minimal environment, building from source is supported and documented below.
@@ -60,7 +62,7 @@ Before continuing, identify your Linux distribution and follow the installation 
 | Fedora                                 | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)                              |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/fedora_rawhide/onedrive.svg?header=" alt="Fedora Rawhide package" width="46" height="20"></a>| Install via: `sudo dnf install onedrive` |
 | FreeBSD                                | [onedrive](https://www.freshports.org/net/onedrive)                                                      |<a href="https://www.freshports.org/net/onedrive"><img src="https://repology.org/badge/version-for-repo/freebsd/onedrive.svg?header=" alt="FreeBSD package" width="46" height="20"></a>| Install via: `pkg install onedrive` |
 | Gentoo                                 | [onedrive](https://packages.gentoo.org/packages/net-misc/onedrive)                                       |<a href="https://packages.gentoo.org/packages/net-misc/onedrive"><img src="https://repology.org/badge/version-for-repo/gentoo/onedrive.svg?header=" alt="Gentoo package" width="46" height="20"></a>| Install via: `sudo emerge net-misc/onedrive` |
-| Homebrew                               | [onedrive-cli](https://formulae.brew.sh/formula/onedrive-cli)                                            |<a href="https://formulae.brew.sh/formula/onedrive-cli"><img src="https://repology.org/badge/version-for-repo/homebrew/onedrive-cli.svg?header=" alt="Homebrew package" width="46" height="20"></a> | Install via: `brew install onedrive-cli` |
+| Homebrew                               | [onedrive-cli](https://formulae.brew.sh/formula/onedrive-cli)                                            |<a href="https://formulae.brew.sh/formula/onedrive-cli"><img src="https://repology.org/badge/version-for-repo/homebrew/onedrive-cli.svg?header=" alt="Homebrew package" width="46" height="20"></a> | **Linux only at this time.** macOS users must build from source |
 | Linux Mint 21.x                        | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_22_04/onedrive.svg?header=" alt="Ubuntu 22.04 package" width="46" height="20"></a> | Install from the openSUSE Build Service (OBS) repository by following the [Ubuntu / Debian Package Installation Guide](ubuntu-package-install.md) |
 | Linux Mint 22.x                        | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://community.linuxmint.com/software/view/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_24_04/onedrive.svg?header=" alt="Ubuntu 24.04 package" width="46" height="20"></a> | Install from the openSUSE Build Service (OBS) repository by following the [Ubuntu / Debian Package Installation Guide](ubuntu-package-install.md) |
 | Linux Mint Debian Edition 6            | [onedrive](https://community.linuxmint.com/software/view/onedrive)                                       |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_12/onedrive.svg?header=" alt="Debian 12 package" width="46" height="20"></a>| Install from the openSUSE Build Service (OBS) repository by following the [Ubuntu / Debian Package Installation Guide](ubuntu-package-install.md) |
@@ -244,6 +246,23 @@ pkg install libnotify
 sudo emerge --onlydeps net-misc/onedrive
 ```
 
+#### macOS
+
+> [!NOTE]
+> macOS support is currently **source-build only**. There is no officially supported Homebrew formula for macOS at this time.
+
+Install required dependencies using Homebrew:
+
+```text
+brew install git make pkg-config curl sqlite ldc
+```
+
+> [!IMPORTANT]
+> macOS uses **Apple FSEvents** for filesystem monitoring instead of Linux inotify.
+>
+> Behaviour when using `--monitor` may differ from Linux, particularly for rename and move operations.
+
+
 #### MX Linux 25
  ```text
 sudo apt install build-essential
@@ -373,6 +392,28 @@ deactivate
 > ./configure DC=gdc
 > ```
 
+
+
+
+#### Building on macOS using LDC
+
+You must first **activate** the compiler environment before building. For example:
+```text
+source ~/dlang/ldc-*/activate
+```
+
+Once the compiler is activated, clone, build and install the client:
+```text
+git clone https://github.com/abraunegg/onedrive.git
+cd onedrive
+./configure
+make clean; make;
+sudo make install
+deactivate
+```
+
+> [!NOTE]
+> macOS does not use systemd. Any systemd service installation options are not applicable.
 
 #### Building on FreeBSD using gmake
 ```text

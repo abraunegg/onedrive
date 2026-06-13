@@ -594,6 +594,7 @@ BASH_COMPLETION_DIR
 bashcompdir
 COMPLETIONS
 dynamic_linker_LIBS
+macos_fsevents_LIBS
 bsd_inotify_LIBS
 NOTIFICATIONS
 notify_LIBS
@@ -2685,6 +2686,18 @@ fi
         ;;
     *)
         bsd_inotify_LIBS=""
+        ;;
+esac
+
+
+
+# Conditionally set macOS FSEvents framework linker flags
+case "$(uname -s)" in
+    Darwin)
+        macos_fsevents_LIBS="-framework CoreServices -framework CoreFoundation"
+        ;;
+    *)
+        macos_fsevents_LIBS=""
         ;;
 esac
 
