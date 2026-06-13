@@ -1299,10 +1299,6 @@ JSONValue fetchOnlineURLContent(string url) {
 		// Shut http down and destroy
 		http.shutdown();
 		object.destroy(http);
-		// Perform Garbage Collection
-		GC.collect();
-		// Return free memory to the OS
-		GC.minimize();
 	}
 	
 	// Configure the URL to access

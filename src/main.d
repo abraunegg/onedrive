@@ -1384,6 +1384,8 @@ int main(string[] cliArgs) {
 					releaseAllCurlInstances(); // Release all CurlEngine instances
 					if (debugLogging) {addLogEntry("CurlEngine Pool Size POST Cleanup: " ~ to!string(curlEnginePoolLength()) , ["debug"]);}
 					
+					
+					
 					// Display memory details before garbage collection
 					if (displayMemoryUsage) {
 						addLogEntry("Monitor Loop Count:   " ~ to!string(monitorLoopFullCount));
@@ -1395,11 +1397,13 @@ int main(string[] cliArgs) {
 						displayMemoryUsagePreGC();
 					}
 					// Perform Garbage Collection
-					GC.collect();
+					//GC.collect();
 					// Return free memory to the OS
-					GC.minimize();
+					//GC.minimize();
 					// Display memory details after garbage collection
 					if (displayMemoryUsage) displayMemoryUsagePostGC();
+					
+					
 					
 					// Log that this loop is complete
 					if (debugLogging) {addLogEntry(loopStopOutputMessage, ["debug"]);}
