@@ -1331,7 +1331,7 @@ int main(string[] cliArgs) {
 						}
 					}
 					
-					// How long has the application been running for?
+					// How long has the application been currently running for?
 					auto elapsedTime = Clock.currTime() - applicationStartTime;
 					if (debugLogging) {addLogEntry("Application run-time thus far: " ~ to!string(elapsedTime), ["debug"]);}
 					
@@ -1384,6 +1384,9 @@ int main(string[] cliArgs) {
 					if (debugLogging) {addLogEntry("CurlEngine Pool Size PRE Cleanup: " ~ to!string(curlEnginePoolLength()), ["debug"]);}
 					releaseAllCurlInstances(); // Release all CurlEngine instances
 					if (debugLogging) {addLogEntry("CurlEngine Pool Size POST Cleanup: " ~ to!string(curlEnginePoolLength()) , ["debug"]);}
+					
+					// Update elapsedTime post monitor loop actions
+					elapsedTime = Clock.currTime() - applicationStartTime;
 					
 					// Display monitor loop memory details
 					if (displayMemoryUsage) {
