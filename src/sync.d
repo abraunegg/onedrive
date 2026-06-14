@@ -2,7 +2,6 @@
 module syncEngine;
 
 // What does this module require to function?
-import core.memory;
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.thread;
 import core.time;
@@ -1105,8 +1104,7 @@ class SyncEngine {
 		databaseItemsToDeleteOnline = [];
 		pathsRetained = [];
 		
-		// Perform Garbage Collection on this destroyed curl engine
-		GC.collect();
+		// Log completion of cleanup
 		if (debugLogging) {addLogEntry("Cleaning of internal arrays complete", ["debug"]);}
 		
 		// Display function processing time if configured to do so
@@ -1360,12 +1358,6 @@ class SyncEngine {
 			getDeltaDataOneDriveApiInstance = new OneDriveApi(appConfig);
 			getDeltaDataOneDriveApiInstance.initialise();
 
-			// Throttle forced garbage collection during native /delta enumeration.
-			// jsonItemsToProcess grows during enumeration and remains live until later
-			// processing, so forcing a full GC for every response bundle causes repeated
-			// scans of an increasingly large live heap.
-			enum long deltaEnumerationGcInterval = 100;
-
 			// Get the /delta changes via the OneDrive API
 			// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need this while loop
 			while (true) {
@@ -1510,11 +1502,6 @@ class SyncEngine {
 				
 				// Cleanup deltaChanges as this is no longer needed
 				deltaChanges = null;
-				
-				// Perform throttled garbage collection during large native /delta enumeration
-				if ((responseBundleCount % deltaEnumerationGcInterval) == 0) {
-					GC.collect();
-				}
 				
 				// Sleep for a while to avoid busy-waiting
 				Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
