@@ -4,6 +4,7 @@ module syncEngine;
 // What does this module require to function?
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.stdc.errno : ENOENT, ENOTDIR;
+import core.memory : GC;   // streamfix: explicit GC.collect() at each flush boundary (heap is already small there)
 import core.thread;
 import core.time;
 import std.algorithm;
@@ -100,6 +101,10 @@ class SyncEngine {
 	string[3][] idsToDelete;
 	// Array of JSON items which are files or directories that are not 'root', skipped or to be deleted, that need to be processed
 	JSONValue[] jsonItemsToProcess;
+	// Streaming flush threshold: when jsonItemsToProcess reaches this many items during /delta
+	// enumeration, process & clear it (at a bundle boundary) to keep peak memory ~O(threshold)
+	// instead of O(drive) and avoid the O(n^2) GC re-mark that stalled large first syncs.
+	enum size_t streamFlushThreshold = 5000;
 	// Array of JSON items which are files that are not 'root', skipped or to be deleted, that need to be downloaded
 	JSONValue[] fileJSONItemsToDownload;
 	// Array of paths that failed to download
@@ -1489,7 +1494,14 @@ class SyncEngine {
 					// This will determine its initial applicability and perform some initial processing on the JSON if required
 					processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);
 				}
-				
+
+				// Streaming: once this bundle pushed the accumulator past the threshold, process and
+				// clear it now. Done at a bundle boundary so API parent-before-child ordering is never
+				// broken; keeps peak memory bounded instead of growing to the size of the whole drive.
+				if (jsonItemsToProcess.length >= streamFlushThreshold) {
+					flushAccumulatedJSONItems();
+				}
+
 				// Clear up this data
 				jsonArrayToProcess = null;
 				
@@ -1637,42 +1649,16 @@ class SyncEngine {
 			addLogEntry("Number of JSON items submitted for further processing is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
 		}
 		
-		// Are there items to process?
+		// Flush any residual accumulated items. The bulk were already streamed during enumeration
+		// (flushAccumulatedJSONItems() at each bundle threshold) to keep peak memory bounded; this
+		// processes the tail left after the final bundle.
 		if (jsonItemsToProcess.length > 0) {
-			// Lets deal with the JSON items in a batch process
-			size_t batchSize = 500;
-			long batchCount = (jsonItemsToProcess.length + batchSize - 1) / batchSize;
-			long batchesProcessed = 0;
-			
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (!appConfig.suppressLoggingOutput) {
 				addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable JSON items received from Microsoft OneDrive", appConfig.verbosityCount);
 			}
-			
-			// For each batch, process the JSON items that need to be now processed.
-			// 'root' and deleted objects have already been handled
-			foreach (batchOfJSONItems; jsonItemsToProcess.chunks(batchSize)) {
-				// Chunk the total items to process into 500 lot items
-				batchesProcessed++;
-				if (appConfig.verbosityCount == 0) {
-					// Dynamic output for a non-verbose run so that the user knows something is happening
-					if (!appConfig.suppressLoggingOutput) {
-						addProcessingDotEntry();
-					}
-				} else {
-					if (verboseLogging) {addLogEntry("Processing OneDrive JSON item batch [" ~ to!string(batchesProcessed) ~ "/" ~ to!string(batchCount) ~ "] to ensure consistent local state", ["verbose"]);}
-				}	
-					
-				// Process the batch
-				processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount);
-				
-				// To finish off the JSON processing items, this is needed to reflect this in the log
-				if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
-				
-				// For this set of items, perform a DB PASSIVE checkpoint
-				itemDB.performCheckpoint("PASSIVE");
-			}
-			
+			// Process & clear the residual window (also drains any remaining download JSON)
+			flushAccumulatedJSONItems();
 			if (appConfig.verbosityCount == 0) {
 				// close off '.' output
 				if (!appConfig.suppressLoggingOutput) {
@@ -1680,31 +1666,35 @@ class SyncEngine {
 					completeProcessingDots();
 				}
 			}
-			
-			// Debug output - what was processed
-			if (debugLogging) {
-				addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
-				addLogEntry("Number of JSON items processed was: " ~ to!string(processedCount), ["debug"]);
-				addLogEntry("", ["debug"]);
-				string jsonProcessingCompleteLineEntry = format("Processing of JSON items from driveId %s and itemId %s is complete", driveIdToQuery, itemIdToQuery);
-				addLogEntry(jsonProcessingCompleteLineEntry, ["debug"]);
-				addLogEntry("", ["debug"]);
-			}
-			
-			// Notification to user regarding number of objects received from OneDrive API
-			if (jsonItemsReceived >= 300000) {
-				// 'driveIdToQuery' should be the drive where the JSON responses came from
-				string objectsExceedLimitWarning = format("WARNING: The number of objects stored online in '%s' exceeds Microsoft OneDrive's recommended limit. This may cause unreliable application behaviour due to inconsistent or incomplete API responses. Immediate action is strongly advised to avoid data integrity issues.", driveIdToQuery);
-				addLogEntry(objectsExceedLimitWarning, ["info", "notify"]);
-			}
-			
-			// Free up memory and items processed as it is pointless now having this data around
-			jsonItemsToProcess = [];
-		} else {
+		}
+
+		// Debug output - total processed across all streamed + residual batches
+		if (debugLogging) {
+			addLogEntry("Number of JSON items processed was: " ~ to!string(processedCount), ["debug"]);
+			addLogEntry("", ["debug"]);
+			string jsonProcessingCompleteLineEntry = format("Processing of JSON items from driveId %s and itemId %s is complete", driveIdToQuery, itemIdToQuery);
+			addLogEntry(jsonProcessingCompleteLineEntry, ["debug"]);
+			addLogEntry("", ["debug"]);
+		}
+
+		// Notification to user regarding number of objects received from OneDrive API
+		if (jsonItemsReceived >= 300000) {
+			// 'driveIdToQuery' should be the drive where the JSON responses came from
+			string objectsExceedLimitWarning = format("WARNING: The number of objects stored online in '%s' exceeds Microsoft OneDrive's recommended limit. This may cause unreliable application behaviour due to inconsistent or incomplete API responses. Immediate action is strongly advised to avoid data integrity issues.", driveIdToQuery);
+			addLogEntry(objectsExceedLimitWarning, ["info", "notify"]);
+		}
+
+		// If nothing applicable was processed across the entire run (streamed + residual), inform the user
+		if (processedCount == 0) {
 			if (!appConfig.suppressLoggingOutput) {
 				addLogEntry("No changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
 			}
 		}
+
+		// Free up memory; processed items are no longer needed
+		jsonItemsToProcess = [];
+		// Perform Garbage Collection
+		GC.collect();
 		
 		// Keep the DriveDetailsCache array with unique entries only
 		DriveDetailsCache cachedOnlineDriveData;
@@ -2811,6 +2801,50 @@ class SyncEngine {
 		}
 	}
 	
+	// Stream-process the currently-accumulated jsonItemsToProcess through the existing 500-item
+	// chunked processor, then clear it. Safe to call repeatedly DURING /delta enumeration: the
+	// OneDrive API delivers parents before children, and each batch upserts items into
+	// items.sqlite3 before the next batch's children are looked up, so moving the chunk boundary
+	// earlier (streaming) preserves ordering while bounding peak memory to ~O(batch) instead of
+	// O(drive). This removes the O(n^2) GC re-mark that stalled large first syncs.
+	// IMPORTANT: the deltaLink is NOT saved here (that stays in processDownloadActivities(), run
+	// once after enumeration) so a mid-stream crash safely re-enumerates next run; skippedItems is
+	// likewise NOT cleared here (it must persist across the whole enumeration).
+	void flushAccumulatedJSONItems() {
+		if (jsonItemsToProcess.length == 0) return;
+		// Lets deal with the JSON items in a batch process
+		size_t batchSize = 500;
+		long batchCount = (jsonItemsToProcess.length + batchSize - 1) / batchSize;
+		long batchesProcessed = 0;
+		// For each batch, process the JSON items that need to be now processed.
+		// 'root' and deleted objects have already been handled during enumeration.
+		foreach (batchOfJSONItems; jsonItemsToProcess.chunks(batchSize)) {
+			batchesProcessed++;
+			if (appConfig.verbosityCount == 0) {
+				// Dynamic output for a non-verbose run so that the user knows something is happening
+				if (!appConfig.suppressLoggingOutput) { addProcessingDotEntry(); }
+			} else {
+				if (verboseLogging) {addLogEntry("Processing OneDrive JSON item batch [" ~ to!string(batchesProcessed) ~ "/" ~ to!string(batchCount) ~ "] to ensure consistent local state", ["verbose"]);}
+			}
+			// Process the batch
+			processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount);
+			// To finish off the JSON processing items, this is needed to reflect this in the log
+			if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
+			// For this set of items, perform a DB PASSIVE checkpoint
+			itemDB.performCheckpoint("PASSIVE");
+		}
+		// Drain accumulated download JSON too, so it does not grow unbounded across the whole
+		// drive. Only safe to drain early when no global transfer ordering is requested; a
+		// configured transfer_order keeps the end-of-run sorted download in processDownloadActivities().
+		if ((appConfig.getValueString("transfer_order") == "default") && (!fileJSONItemsToDownload.empty)) {
+			downloadOneDriveItems();
+			fileJSONItemsToDownload = [];
+		}
+		// Free the processed window; heap drops back to ~O(batch) so this GC is now cheap.
+		jsonItemsToProcess = [];
+		GC.collect();
+	}
+
 	// Perform the download of any required objects in parallel
 	void processDownloadActivities() {
 		// Function Start Time
