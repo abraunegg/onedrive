@@ -1413,7 +1413,6 @@ int main(string[] cliArgs) {
 							GC.minimize(); // Return free memory to the operating system
 							// Update time gate
 							lastMonitorGcCleanup = monitorGcCleanupTime;
-							addLogEntry("lastMonitorGcCleanup set to = " ~ to!string(lastMonitorGcCleanup));
 						}
 					}
 					
