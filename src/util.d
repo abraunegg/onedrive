@@ -1299,10 +1299,6 @@ JSONValue fetchOnlineURLContent(string url) {
 		// Shut http down and destroy
 		http.shutdown();
 		object.destroy(http);
-		// Perform Garbage Collection
-		GC.collect();
-		// Return free memory to the OS
-		GC.minimize();
 	}
 	
 	// Configure the URL to access
@@ -1829,58 +1825,47 @@ string generateAlphanumericString(size_t length = 16) {
     return to!string(randomString);
 }
 
-// Display internal memory stats pre garbage collection
-void displayMemoryUsagePreGC() {
-	// Display memory usage
+// Display internal memory stats and RSS details
+void displayMemoryUsageDetails() {
+	// The Resident Set Size (RSS) represents the amount of physical memory currently
+	// mapped into the process address space. RSS includes application data, runtime
+	// allocations, thread stacks, shared libraries, memory-mapped files, allocator
+	// arenas, and other memory retained by the process.
+	//
+	// RSS does not directly indicate active memory usage. Memory that has been
+	// allocated and retained for future reuse may continue to contribute to RSS even
+	// when it is no longer actively being used by the application.
+	//
+	// Long-running applications may experience changes in RSS as workload patterns
+	// change, internal caches grow or shrink, and the runtime adjusts heap capacity.
+	// As such, RSS should be observed as a trend over time rather than interpreted as
+	// an indication of current memory demand or the presence of a memory leak.
+	
 	addLogEntry();
-	addLogEntry("Memory Usage PRE Garbage Collection (KB)");
+	addLogEntry("Memory Usage (KB)");
 	addLogEntry("-----------------------------------------------------");
-	writeMemoryStats();
-	addLogEntry();
-}
-
-// Display internal memory stats post garbage collection + RSS (actual memory being used)
-void displayMemoryUsagePostGC() {
-    // Display memory usage title
-    addLogEntry("Memory Usage POST Garbage Collection (KB)");
-    addLogEntry("-----------------------------------------------------");
-    writeMemoryStats();  // Assuming this function logs memory stats correctly
-
-    // Query the actual Resident Set Size (RSS) for the PID
-    pid_t pid = getCurrentPID();
-    ulong rss = getRSS(pid);
-
-    // Check and log the previous RSS value
-    if (previousRSS != 0) {
-        addLogEntry("previous Resident Set Size (RSS)         = " ~ to!string(previousRSS) ~ " KB");
-        
-        // Calculate and log the difference in RSS
-        long difference = rss - previousRSS;  // 'difference' can be negative, use 'long' to handle it
-        string sign = difference > 0 ? "+" : (difference < 0 ? "" : "");  // Determine the sign for display, no sign for zero
-        addLogEntry("difference in Resident Set Size (RSS)    = " ~ sign ~ to!string(difference) ~ " KB");
-    }
-    
-    // Update previous RSS with the new value
-    previousRSS = rss;
-    
-    // Closeout
-	addLogEntry();
-}
-
-// Write internal memory stats
-void writeMemoryStats() {
-	addLogEntry("current memory usedSize                  = " ~ to!string((GC.stats.usedSize/1024))); // number of used bytes on the GC heap (might only get updated after a collection)
-	addLogEntry("current memory freeSize                  = " ~ to!string((GC.stats.freeSize/1024))); // number of free bytes on the GC heap (might only get updated after a collection)
-	addLogEntry("current memory allocatedInCurrentThread  = " ~ to!string((GC.stats.allocatedInCurrentThread/1024))); // number of bytes allocated for current thread since program start
+	addLogEntry("current memory usedSize                  = " ~ to!string((GC.stats.usedSize/1024))); // Amount of GC-managed heap memory currently occupied by live objects
+	addLogEntry("current memory freeSize                  = " ~ to!string((GC.stats.freeSize/1024))); // Amount of GC-managed heap memory currently reserved and available for future allocations
+	addLogEntry("current memory allocatedInCurrentThread  = " ~ to!string((GC.stats.allocatedInCurrentThread/1024))); // Running total of memory allocated by this thread; this value is cumulative and does not indicate current memory usage
 	
 	// Query the actual Resident Set Size (RSS) for the PID
 	pid_t pid = getCurrentPID();
-	ulong rss = getRSS(pid);
-	// The RSS includes all memory that is currently marked as occupied by the process. 
-	// Over time, the heap can become fragmented. Even after garbage collection, fragmented memory blocks may not be contiguous enough to be returned to the OS, leading to an increase in the reported memory usage despite having free space.
-	// This includes memory that might not be actively used but has not been returned to the system. 
-	// The GC.minimize() function can sometimes cause an increase in RSS due to how memory pages are managed and freed.
-	addLogEntry("current Resident Set Size (RSS)          = " ~ to!string(rss)  ~ " KB"); // actual memory in RAM used by the process at this point in time
+	ulong currentRSS = getRSS(pid);
+	addLogEntry("current Resident Set Size (RSS)          = " ~ to!string(currentRSS) ~ " KB");
+	
+	// Calculate difference
+	if (previousRSS != 0) {
+		addLogEntry("previous Resident Set Size (RSS)         = " ~ to!string(previousRSS) ~ " KB");
+		// Delta between current and previous RSS
+		long rssDifference = cast(long) currentRSS - cast(long) previousRSS;
+		string sign = rssDifference > 0 ? "+" : (rssDifference < 0 ? "" : "");
+		addLogEntry("difference in Resident Set Size (RSS)    = " ~ sign ~ to!string(rssDifference) ~ " KB");
+	}
+	
+	// Update the previous RSS value
+	previousRSS = currentRSS;
+	addLogEntry("-----------------------------------------------------");
+	addLogEntry();
 }
 
 // Return the username of the UID running the 'onedrive' process

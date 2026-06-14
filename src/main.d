@@ -1200,6 +1200,7 @@ int main(string[] cliArgs) {
 			ulong monitorLogOutputLoopCount = 0;
 			MonoTime lastCheckTime = MonoTime.currTime();
 			MonoTime lastGitHubCheckTime = MonoTime.currTime();
+			SysTime lastMonitorGcCleanup = Clock.currTime();
 			
 			while (performFileSystemMonitoring) {
 				if (shutdownRequested()) {
@@ -1384,22 +1385,36 @@ int main(string[] cliArgs) {
 					releaseAllCurlInstances(); // Release all CurlEngine instances
 					if (debugLogging) {addLogEntry("CurlEngine Pool Size POST Cleanup: " ~ to!string(curlEnginePoolLength()) , ["debug"]);}
 					
-					// Display memory details before garbage collection
+					// Display monitor loop memory details
 					if (displayMemoryUsage) {
 						addLogEntry("Monitor Loop Count:   " ~ to!string(monitorLoopFullCount));
+
 						// Get the current time in the local timezone
 						auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
 						addLogEntry("Timestamp:            " ~ to!string(timeStamp));
 						addLogEntry("Application Run Time: " ~ to!string(elapsedTime));
-						// Display memory stats before GC cleanup
-						displayMemoryUsagePreGC();
+						
+						// Display memory consumption details
+						displayMemoryUsageDetails();
 					}
-					// Perform Garbage Collection
-					GC.collect();
-					// Return free memory to the OS
-					GC.minimize();
-					// Display memory details after garbage collection
-					if (displayMemoryUsage) displayMemoryUsagePostGC();
+					
+					// Perform coarse GC cleanup for long-running monitor processes.
+					// This is intentionally time-gated and only runs at most once every 24 hours,
+					// after sync processing has completed and the client is idle.
+					auto monitorGcCleanupTime = Clock.currTime();
+					if (lastMonitorGcCleanup == SysTime.min || (monitorGcCleanupTime - lastMonitorGcCleanup) >= dur!"hours"(24)) {
+						// Avoid running this during initial startup; only run after the application
+						// has been active for at least 24 hours.
+						if (elapsedTime >= dur!"hours"(24)) {
+							// Log what we are doing
+							addLogEntry("Performing scheduled monitor-mode memory cleanup after 24 hours of runtime");
+							// Perform GC actions
+							GC.collect();  // Perform Garbage Collection
+							GC.minimize(); // Return free memory to the operating system
+							// Update time gate
+							lastMonitorGcCleanup = monitorGcCleanupTime;
+						}
+					}
 					
 					// Log that this loop is complete
 					if (debugLogging) {addLogEntry(loopStopOutputMessage, ["debug"]);}

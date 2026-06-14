@@ -526,8 +526,6 @@ class OneDriveApi {
 		}
 		// Release the response
 		response = null;
-		// Perform Garbage Collection
-		GC.collect();
 	}
 
 	// Authenticate this client against Microsoft OneDrive API using one of the 3 authentication methods this client supports
