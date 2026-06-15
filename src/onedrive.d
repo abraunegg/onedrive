@@ -30,6 +30,7 @@ import log;
 import util;
 import curlEngine;
 import intune;
+import localAuth;
 
 // Define the 'OneDriveException' class
 class OneDriveException : Exception {
@@ -839,6 +840,32 @@ class OneDriveApi {
 					} else {
 						// If we are not running in --dry-run mode, prompt the user to authorise the application
 						if (!appConfig.getValueBool("dry_run")) {
+							// Prefer local loopback browser authentication when we are running under a GUI.
+							// If this cannot be used, preserve the existing manual paste workflow.
+							if (shouldAttemptLocalBrowserAuth(appConfig)) {
+								string originalRedirectUrl = redirectUrl;
+								ushort localAuthPort = findAvailableLocalAuthPort();
+								if (localAuthPort != 0) {
+									redirectUrl = buildLocalAuthRedirectUri(localAuthPort);
+									url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ encodeComponent(redirectUrl);
+									addLogEntry();
+									addLogEntry("Opening the Microsoft authorisation URL in your default browser ...", ["consoleOnly"]);
+									addLogEntry("Waiting for the Microsoft authorisation response on " ~ redirectUrl, ["consoleOnly"]);
+									LocalAuthResponse localAuthResponse = performLocalBrowserAuth(url, localAuthPort);
+									if (localAuthResponse.success) {
+										appConfig.applicationAuthoriseResponseURIReceived = true;
+										redeemToken(localAuthResponse.code);
+										return true;
+									}
+									addLogEntry("Local browser authentication did not complete successfully; falling back to manual redirect URI entry.", ["consoleOnly"]);
+									if (!localAuthResponse.error.empty) {
+										addLogEntry("Local browser authentication detail: " ~ localAuthResponse.error, ["debug"]);
+									}
+								}
+								redirectUrl = originalRedirectUrl;
+								url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
+							}
+
 							// Notify the user of the next step: visit the URL to authorise the client
 							addLogEntry();
 							addLogEntry(authoriseApplicationRequest, ["consoleOnly"]);
