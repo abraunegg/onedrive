@@ -362,9 +362,67 @@ This client supports the following methods to authenticate the application with 
 * Supports OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
 
 #### Interactive Authentication using OAuth2 and a redirect URI
-When you run the application for the first time, you'll be prompted to open a specific URL in your web browser. This URL takes you to the Microsoft login page, where you’ll sign in with your Microsoft Account and grant the application permission to access your files.
+When you run the application for the first time, the recommended authentication method is interactive browser-based OAuth2 authentication. The application will direct you to the Microsoft login page, where you sign in with your Microsoft Account and grant the application permission to access your files.
 
-After granting permission, your browser will redirect you to a blank page, or a page that displays this message: 
+When the application detects that it is running inside a graphical desktop session, it will automatically open the Microsoft authorisation URL in your default browser and listen locally for the Microsoft authorisation response. In this mode, you do **not** need to manually copy and paste the redirect URI from your browser back into the terminal.
+
+When no graphical desktop session is detected, or when the local browser-based authentication flow cannot be used, the application will fall back to the existing manual copy-and-paste authentication method.
+
+##### Graphical Desktop Authentication using the Local Browser Redirect
+When running inside a supported graphical desktop environment, the application will open your default browser and wait for the Microsoft authorisation response on:
+
+```text
+http://127.0.0.1:53100/
+```
+
+This local listener is only used during the authentication process. It binds only to the loopback interface, does not require any inbound firewall changes, and is closed once authentication has completed or failed.
+
+**Example Terminal Session within Graphical Desktop session:**
+```text
+user@hostname:~$ onedrive
+D-Bus message bus daemon is available; GUI notifications are now enabled
+Using IPv4 and IPv6 (if configured) for all network operations
+Attempting to contact the Microsoft OneDrive Service
+Successfully reached the Microsoft OneDrive Service
+Configuring Global Azure AD Endpoints
+
+Opening the Microsoft authorisation URL in your default browser ...
+Waiting for the browser authorisation response on http://127.0.0.1:53100/
+
+The application has been successfully authorised, but no extra command options have been specified.
+
+Please use 'onedrive --help' for further assistance in regards to running this application.
+
+user@hostname:~$
+```
+
+**Graphical Desktop OAuth2 Authentication Process Illustrated:**
+
+Fedora graphical authentication example:
+
+![fedora_gui_auth_browser_opened_placeholder](./images/fedora_gui_auth_browser_opened_placeholder.png)
+
+![fedora_gui_auth_microsoft_login_placeholder](./images/fedora_gui_auth_microsoft_login_placeholder.png)
+
+![fedora_gui_auth_complete_placeholder](./images/fedora_gui_auth_complete_placeholder.png)
+
+Ubuntu graphical authentication example:
+
+![ubuntu_gui_auth_browser_opened_placeholder](./images/ubuntu_gui_auth_browser_opened_placeholder.png)
+
+![ubuntu_gui_auth_microsoft_login_placeholder](./images/ubuntu_gui_auth_microsoft_login_placeholder.png)
+
+![ubuntu_gui_auth_complete_placeholder](./images/ubuntu_gui_auth_complete_placeholder.png)
+
+> [!IMPORTANT]
+> The local authentication listener is only started for the duration of the authentication process and only listens on `127.0.0.1`. No external system can connect to this listener unless it already has access to the local machine.
+
+##### Manual Browser Authentication using Copy and Paste
+If the application is not running inside a graphical desktop session, or if the graphical browser authentication process cannot be used, the application will use the manual browser authentication method.
+
+In this mode, you will be prompted to open a specific URL in your web browser. This URL takes you to the Microsoft login page, where you sign in with your Microsoft Account and grant the application permission to access your files.
+
+After granting permission, your browser will redirect you to a blank page, or a page that displays this message:
 
 ![microsoft-auth-display-message](./images/microsoft-auth-display-message.png)
 
@@ -393,10 +451,10 @@ The application has been successfully authorised, but no extra command options h
 
 Please use 'onedrive --help' for further assistance in regards to running this application.
 
-user@hostname:~$ 
+user@hostname:~$
 ```
 
-**Interactive OAuth2 Authentication Process Illustrated:**
+**Manual OAuth2 Authentication Process Illustrated:**
 ![initial_auth_url_access_redacted](./images/initial_auth_url_access_redacted.png)
 
 ![copy_redirect_uri_to_application](./images/authorise_client_before_copy_with_arrow.png)
@@ -595,7 +653,7 @@ You will have ~15 minutes before the code expires.
 > If using a Personal Microsoft OneDrive account (e.g., @outlook.com or @hotmail.com), please complete authentication using the interactive authentication method detailed above.
 >
 > **Further Reading:**  
-> 📚 [Microsoft Documentation — OAuth 2.0 device authorisation grant](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code)
+> [Microsoft Documentation — OAuth 2.0 device authorisation grant](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code)
 
 ### Display Your Applicable Runtime Configuration
 To verify the configuration that the application will use, use the following command:

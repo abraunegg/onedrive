@@ -9,7 +9,8 @@ import std.concurrency;
 import std.conv;
 import std.datetime;
 import std.exception;
-import std.process : spawnProcess;
+import std.process : spawnProcess, Config;
+import std.stdio : File;
 import std.socket;
 import std.string;
 import std.uri;
@@ -71,7 +72,19 @@ ushort findAvailableLocalAuthPort() {
 
 bool openUrlInDefaultBrowser(string url) {
 	try {
-		auto p = spawnProcess(["xdg-open", url]);
+		auto devNullIn = File("/dev/null", "r");
+		auto devNullOut = File("/dev/null", "w");
+		auto devNullErr = File("/dev/null", "w");
+
+		spawnProcess(
+			["xdg-open", url],
+			devNullIn,
+			devNullOut,
+			devNullErr,
+			null,
+			Config.detached
+		);
+
 		return true;
 	} catch (Exception e) {
 		addLogEntry("Unable to open the authorisation URL with xdg-open: " ~ e.msg, ["debug"]);

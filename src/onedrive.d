@@ -850,7 +850,7 @@ class OneDriveApi {
 									url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ encodeComponent(redirectUrl);
 									addLogEntry();
 									addLogEntry("Opening the Microsoft authorisation URL in your default browser ...", ["consoleOnly"]);
-									addLogEntry("Waiting for the browser authorisation response on " ~ redirectUrl, ["consoleOnly"]);
+									addLogEntry("Waiting for the Microsoft authorisation response on " ~ redirectUrl, ["consoleOnly"]);
 									LocalAuthResponse localAuthResponse = performLocalBrowserAuth(url, localAuthPort);
 									if (localAuthResponse.success) {
 										appConfig.applicationAuthoriseResponseURIReceived = true;
