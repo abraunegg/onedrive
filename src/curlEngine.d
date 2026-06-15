@@ -11,7 +11,6 @@ import std.format;
 import std.json;
 import std.stdio;
 import std.range;
-import core.memory;
 import core.sys.posix.signal;
 // Required for WebSocket Support
 import core.stdc.stdlib : getenv;
@@ -354,10 +353,6 @@ class CurlEngine {
 			curlEnginePool ~= this;
 			if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine curlEnginePool size after release: " ~ to!string(curlEnginePool.length), ["debug"]);}
 		}
-		// Perform Garbage Collection
-		GC.collect();
-		// Return free memory to the OS
-		GC.minimize();
 	}
 	
 	// Setup a specific SIGPIPE Signal handler due to curl bugs that ignore CurlOption.nosignal
@@ -712,10 +707,6 @@ class CurlEngine {
 			object.destroy(http); // Destroy, however we cant set to null
 			if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("Stopped HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);}
 		}
-		// Perform Garbage Collection
-		GC.collect();
-		// Return free memory to the OS
-		GC.minimize();
 	}
 	
 	// Disable SSL certificate peer verification for libcurl operations.
@@ -850,8 +841,6 @@ void releaseAllCurlInstances() {
 				// It's safe to destroy the object here assuming no other references exist
 				object.destroy(curlEngineInstance); // Destroy, then set to null
 				curlEngineInstance = null;
-				// Perform Garbage Collection on this destroyed curl engine
-				GC.collect();
 				// Log release
 				if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine destroyed", ["debug"]);}
 			}
@@ -860,10 +849,6 @@ void releaseAllCurlInstances() {
 			curlEnginePool.length = 0; // More explicit than curlEnginePool = [];
 		}
 	}
-	// Perform Garbage Collection on the destroyed curl engines
-	GC.collect();
-	// Return free memory to the OS
-	GC.minimize();
 	// Log that all curl engines have been released
 	if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine releaseAllCurlInstances() completed", ["debug"]);}
 }

@@ -89,7 +89,8 @@ SOURCES = \
 	src/xattr.d \
 	src/intune.d \
 	src/socketio.d \
-	src/curlWebsockets.d
+	src/curlWebsockets.d \
+	src/localAuth.d
 
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
