@@ -366,7 +366,7 @@ When you run the application for the first time, the recommended authentication 
 
 When the application detects that it is running inside a graphical desktop session, it will automatically open the Microsoft authorisation URL in your default browser and listen locally for the Microsoft authorisation response. In this mode, you do **not** need to manually copy and paste the redirect URI from your browser back into the terminal.
 
-When no graphical desktop session is detected, or when the local browser-based authentication flow cannot be used, the application will fall back to the existing manual copy-and-paste authentication method.
+When no graphical desktop session is detected, or when the local browser-based authentication flow cannot be used, the application will fall back to the existing manual copy-and-paste authentication method. This fallback behaviour may also occur when running remotely via SSH, inside containers, under WSL, or when no supported browser launch mechanism is available.
 
 ##### Graphical Desktop Authentication using the Local Browser Redirect
 When running inside a supported graphical desktop environment, the application will open your default browser and wait for the Microsoft authorisation response on:
@@ -400,22 +400,18 @@ user@hostname:~$
 
 Fedora graphical authentication example:
 
-![fedora_gui_auth_browser_opened_placeholder](./images/fedora_gui_auth_browser_opened_placeholder.png)
+![fedora_gui_auth_start](./images/fedora_gui_auth_start.png)
 
-![fedora_gui_auth_microsoft_login_placeholder](./images/fedora_gui_auth_microsoft_login_placeholder.png)
-
-![fedora_gui_auth_complete_placeholder](./images/fedora_gui_auth_complete_placeholder.png)
+![fedora_gui_auth_complete](./images/fedora_gui_auth_complete.png)
 
 Ubuntu graphical authentication example:
 
-![ubuntu_gui_auth_browser_opened_placeholder](./images/ubuntu_gui_auth_browser_opened_placeholder.png)
+![ubuntu_gui_auth_start](./images/ubuntu_gui_auth_start.png)
 
-![ubuntu_gui_auth_microsoft_login_placeholder](./images/ubuntu_gui_auth_microsoft_login_placeholder.png)
-
-![ubuntu_gui_auth_complete_placeholder](./images/ubuntu_gui_auth_complete_placeholder.png)
+![ubuntu_gui_auth_complete](./images/ubuntu_gui_auth_complete.png)
 
 > [!IMPORTANT]
-> The local authentication listener is only started for the duration of the authentication process and only listens on `127.0.0.1`. No external system can connect to this listener unless it already has access to the local machine.
+> The local authentication listener is only started for the duration of the authentication process and only listens on `127.0.0.1`. No external system can connect to this listener because it only binds to the local loopback interface (`127.0.0.1`).
 
 ##### Manual Browser Authentication using Copy and Paste
 If the application is not running inside a graphical desktop session, or if the graphical browser authentication process cannot be used, the application will use the manual browser authentication method.
@@ -469,13 +465,15 @@ user@hostname:~$
 > [!IMPORTANT]
 > **Handling a AADSTS70000 response**
 >
-> If you paste the redirect URI back into the CLI and receive:
-> `AADSTS70000: The provided value for the 'code' parameter is not valid.`
+> If authentication fails with:
+> ```
+> AADSTS70000: The provided value for the 'code' parameter is not valid.`
+> ```
 > this is **not a client bug**.
 >
 > Microsoft authorisation codes are single-use and short-lived, so the code you pasted is no longer redeemable.
 >
-> **Common causes:**
+> **Common causes when using manual browser authentication:**
 > * Browser extensions / privacy tools modifying the redirect URL (for example, ad-blockers or 'remove tracking parameters' features within browsers)
 > * Copying the wrong URL (ensure you copy from the browser address bar immediately after consent)
 > * Refreshing the page or reusing the same redirect URI (codes can only be redeemed once)
@@ -547,7 +545,7 @@ If you are uncertain whether administrator approval is required in your environm
 > Some organisations prohibit users from granting consent to applications. In these environments, authentication will fail until approval has been granted by a Microsoft Entra ID administrator.
 
 > [!IMPORTANT]
-> **Handling a AADSTS50011 response**
+> **Handling an AADSTS50011 response**
 >
 > If authentication fails with:
 >
@@ -559,23 +557,34 @@ If you are uncertain whether administrator approval is required in your environm
 >
 > * Using a custom `application_id` where the configured redirect URI does not match the application registration
 > * Using an application registration that has not been configured as a Public Client Application
-> * Missing or incorrectly configured native client redirect URI within the Microsoft Entra ID application registration
+> * Missing or incorrectly configured redirect URI entries within the Microsoft Entra ID application registration
+> * Using a custom Microsoft Entra ID application registration that does not include both redirect URIs required by the authentication method being used
 > * Application registration changes not yet replicated across Microsoft Entra ID
 >
 > **For users of the default OneDrive Client for Linux application registration:**
 >
-> The application uses:
+> The application may use one of the following redirect URIs during authentication:
 >
-> `https://login.microsoftonline.com/common/oauth2/nativeclient`
+> * `http://127.0.0.1:53100/` (browser-based authentication when a graphical desktop environment is detected)
+> * `https://login.microsoftonline.com/common/oauth2/nativeclient` (manual browser authentication fallback)
 >
-> as the redirect URI, regardless of whether `azure_tenant_id` is configured.
+> If you are using a custom Microsoft Entra ID application registration, ensure that both redirect URIs are configured correctly and that the application is configured as a Public Client Application.
 >
-> If this error occurs while using the default application registration, please upgrade to the latest application release and re-run:
+> If this error occurs while using the default application registration, ensure you are running the latest application release, allow time for Microsoft Entra ID application registration changes to replicate, then re-run:
 >
 > ```
 > onedrive --reauth
 > ```
 
+> [!IMPORTANT]
+> When using a custom Microsoft Entra ID application registration via `application_id`, ensure that the following redirect URIs are configured in your application registration:
+>
+> * `http://127.0.0.1:53100/`
+> * `https://login.microsoftonline.com/common/oauth2/nativeclient`
+>
+> The first redirect URI is used for browser-based authentication within graphical desktop sessions. The second redirect URI is used for manual browser authentication and as a fallback authentication method.
+>
+> Failure to configure both redirect URIs may result in authentication failures such as `AADSTS50011`.
 
 #### Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker 
 To use this method of authentication, you must add the following configuration to your 'config' file:
