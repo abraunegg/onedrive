@@ -1202,7 +1202,7 @@ int main(string[] cliArgs) {
 			MonoTime lastGitHubCheckTime = MonoTime.currTime();
 			SysTime lastMonitorGcCleanup = Clock.currTime();
 			
-			while (performFileSystemMonitoring) {
+			monitorLoop: while (performFileSystemMonitoring) {
 				if (shutdownRequested()) {
 					addShutdownTelemetry("monitor loop detected shutdown request before processing new work");
 					performFileSystemMonitoring = false;
@@ -1475,7 +1475,9 @@ int main(string[] cliArgs) {
 						}
 						
 						// ALWAYS wait for FS worker, but only track webhook/websocket if NOT '--upload-only'
-						int res = 1;
+						// res == 0 means the wait expired naturally; res > 0 means the filesystem
+						// monitor worker observed inotify activity; res == -1 means worker failure.
+						int res = 0;
 						bool onlineSignal = false;
 						bool shutdownDetectedDuringWait = false;
 
@@ -1490,8 +1492,48 @@ int main(string[] cliArgs) {
 						if (debugLogging) {
 							addLogEntry("worker status = " ~ to!string(res), ["debug"]);
 							if (!appConfig.getValueBool("upload_only")) {
-								addLogEntry("notificationReceived = " ~ to!string(onlineSignal), ["debug"]);
+								addLogEntry("WebSocket|Webhook Notification Received = " ~ to!string(onlineSignal), ["debug"]);
 							}
+						}
+						
+						// Worker failure remains outside '--upload-only' filter
+						if (res == -1) {
+							addLogEntry("ERROR: Monitor worker failed.");
+							monitorFailures = true;
+							performFileSystemMonitoring = false;
+							break monitorLoop;
+						}
+						
+						// A positive worker status is a real local filesystem wake-up.
+						// Consume the pending inotify data immediately, before re-arming
+						// the worker. Do not just jump to the top of the monitor loop:
+						// that can re-enter the sleep/re-arm path after an empty lightweight
+						// pass and leave already-queued worker wake messages to churn.
+						if (res > 0) {
+							if (debugLogging) {addLogEntry("Local filesystem monitor wake-up detected; processing pending inotify events", ["debug"]);}
+							processInotifyEvents(true);
+							
+							// Drain any stale local worker wake messages that were already
+							// queued before the inotify events were consumed. These messages
+							// no longer represent new work and must not immediately re-trigger
+							// the monitor sleep/wake cycle.
+							int drainedLocalWakeMessages = 0;
+							int staleWorkerStatus = 0;
+							while (receiveTimeout(dur!"msecs"(0), (int msg) {
+								staleWorkerStatus = msg;
+								drainedLocalWakeMessages++;
+							})) {
+								if (staleWorkerStatus == -1) {
+									addLogEntry("ERROR: Monitor worker failed.");
+									monitorFailures = true;
+									performFileSystemMonitoring = false;
+									break monitorLoop;
+								}
+							}
+							if (debugLogging && drainedLocalWakeMessages > 0) {
+								addLogEntry("Drained stale local filesystem monitor wake message(s): " ~ to!string(drainedLocalWakeMessages), ["debug"]);
+							}
+							continue monitorLoop;
 						}
 						
 						// Empirical evidence shows that Microsoft often sends multiple
@@ -1546,12 +1588,6 @@ int main(string[] cliArgs) {
 							}
 						}
 
-						// Worker failure remains outside '--upload-only' filter
-						if (res == -1) {
-							addLogEntry("ERROR: Monitor worker failed.");
-							monitorFailures = true;
-							performFileSystemMonitoring = false;
-						}
 					} else {
 						// no hooks available, nothing to check
 						if (sleepInterruptibly(sleepTime, "monitor idle sleep")) {

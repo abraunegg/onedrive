@@ -115,29 +115,52 @@ class MonitorBackgroundWorker {
 
 		while (isAlive) {
 			fd_set fds;
-			FD_ZERO (&fds);
+			FD_ZERO(&fds);
 			FD_SET(fd, &fds);
-			// Listen for messages from the caller
-			FD_SET((cast()p).readEnd.fileno, &fds);
-			
-			res = select(FD_SETSIZE, &fds, null, null, null);
 
-			if(res == -1) {
-				if(errno() == EINTR) {
-					// Received an interrupt signal but no events are available
-					// directly watch again
-				} else {
-					// Error occurred, tell caller to terminate.
-					callerTid.send(-1);
-					break;
+			// Listen for shutdown / interrupt wakeups from the control pipe.
+			int controlPipeFd = (cast()p).readEnd.fileno;
+			FD_SET(controlPipeFd, &fds);
+
+			// select() only needs to scan up to the highest fd + 1.
+			int maxFd = max(fd, controlPipeFd) + 1;
+			res = select(maxFd, &fds, null, null, null);
+
+			if (res == -1) {
+				if (errno() == EINTR) {
+					// Interrupted by signal; re-arm the wait.
+					continue;
 				}
-			} else {
-				// Wake up caller
+
+				// Error occurred, tell caller to terminate.
+				callerTid.send(-1);
+				break;
+			}
+
+			// Control-pipe readiness is not filesystem activity. It is used to
+			// unblock select() during interrupt/shutdown, so drain it and do not
+			// report a local monitor wake-up to main.d.
+			if (FD_ISSET(controlPipeFd, &fds)) {
+				try {
+					(cast()p).readEnd.readln();
+				} catch (Exception) {
+					// Ignore control-pipe drain errors during shutdown.
+				}
+
+				if (!isAlive) break;
+				continue;
+			}
+
+			// Only inotify fd readiness should wake the caller for local
+			// filesystem processing.
+			if (FD_ISSET(fd, &fds)) {
 				callerTid.send(1);
 
 				// wait for the caller to be ready
 				if (isAlive)
 					isAlive = receiveOnly!bool();
+
+				continue;
 			}
 		}
 	}
