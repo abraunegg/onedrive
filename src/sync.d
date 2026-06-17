@@ -10879,12 +10879,15 @@ class SyncEngine {
 						actualItemToDelete = itemToDelete;
 					}
 					
+					// Track if the remote delete operation completed successfully before removing the item from the local database
+					bool onlineDeleteCompleted = false;
+
 					// Try the online deletion using the 'actualItemToDelete' values
 					try {
 						// Create new OneDrive API Instance
 						uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
 						uploadDeletedItemOneDriveApiInstance.initialise();
-					
+
 						if (!permanentDelete) {
 							// Perform the delete via the default OneDrive API instance
 							uploadDeletedItemOneDriveApiInstance.deleteById(actualItemToDelete.driveId, actualItemToDelete.id);
@@ -10892,7 +10895,11 @@ class SyncEngine {
 							// Perform the permanent delete via the default OneDrive API instance
 							uploadDeletedItemOneDriveApiInstance.permanentDeleteById(actualItemToDelete.driveId, actualItemToDelete.id);
 						}
-						
+
+						// The OneDrive API call returned without exception
+						onlineDeleteCompleted = true;
+						addLogEntry("Successfully deleted item from Microsoft OneDrive: " ~ path, fileTransferNotifications());
+
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						uploadDeletedItemOneDriveApiInstance.releaseCurlEngine();
 						uploadDeletedItemOneDriveApiInstance = null;
@@ -10900,15 +10907,25 @@ class SyncEngine {
 						if (e.httpStatusCode == 404) {
 							// item.id, item.eTag could not be found on the specified driveId
 							if (verboseLogging) {addLogEntry("OneDrive reported: The resource could not be found to be deleted.", ["verbose"]);}
+							// A 404 is considered successful for local cleanup because the item is already absent online
+							onlineDeleteCompleted = true;
+						} else {
+							addLogEntry("ERROR: Failed to delete item from Microsoft OneDrive: " ~ path, ["error"]);
+							addLogEntry("ERROR: HTTP response code: " ~ to!string(e.httpStatusCode), ["error"]);
+							displayOneDriveErrorMessage(e.msg, thisFunctionName);
 						}
-						
+
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						uploadDeletedItemOneDriveApiInstance.releaseCurlEngine();
 						uploadDeletedItemOneDriveApiInstance = null;
 					}
-					
-					// Delete the reference in the local database - use the original input
-					itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
+
+					// Delete the reference in the local database - use the original input, but only after a successful remote delete
+					if (onlineDeleteCompleted) {
+						itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
+					} else {
+						addLogEntry("WARNING: Retaining local database entry because remote delete did not complete: " ~ path);
+					}
 					
 					// Was the original item a 'Shared Folder' ?
 					if (remoteShortcutLinkItem.type == ItemType.remote) {
@@ -10978,7 +10995,7 @@ class SyncEngine {
 				// Create new OneDrive API Instance
 				uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
 				uploadDeletedItemOneDriveApiInstance.initialise();
-			
+
 				if (!permanentDelete) {
 					// Perform the delete via the default OneDrive API instance
 					uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
@@ -10986,7 +11003,10 @@ class SyncEngine {
 					// Perform the permanent delete via the default OneDrive API instance
 					uploadDeletedItemOneDriveApiInstance.permanentDeleteById(itemToDelete.driveId, itemToDelete.id);
 				}
-				
+
+				// The OneDrive API call returned without exception
+				addLogEntry("Successfully deleted item from Microsoft OneDrive: " ~ ensureStartsWithDotSlash(newItemPath), fileTransferNotifications());
+
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				uploadDeletedItemOneDriveApiInstance.releaseCurlEngine();
 				uploadDeletedItemOneDriveApiInstance = null;
@@ -10994,8 +11014,12 @@ class SyncEngine {
 				if (e.httpStatusCode == 404) {
 					// item.id, item.eTag could not be found on the specified driveId
 					if (verboseLogging) {addLogEntry("OneDrive reported: The resource could not be found to be deleted.", ["verbose"]);}
+				} else {
+					addLogEntry("ERROR: Failed to delete item from Microsoft OneDrive: " ~ ensureStartsWithDotSlash(newItemPath), ["error"]);
+					addLogEntry("ERROR: HTTP response code: " ~ to!string(e.httpStatusCode), ["error"]);
+					displayOneDriveErrorMessage(e.msg, thisFunctionName);
 				}
-				
+
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				uploadDeletedItemOneDriveApiInstance.releaseCurlEngine();
 				uploadDeletedItemOneDriveApiInstance = null;
