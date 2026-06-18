@@ -1187,7 +1187,6 @@ int main(string[] cliArgs) {
 			// Immutables
 			immutable auto checkOnlineInterval = dur!"seconds"(appConfig.getValueLong("monitor_interval"));
 			immutable auto githubCheckInterval = dur!"seconds"(86400);
-			immutable auto localEchoDebounce = dur!"seconds"(10);
 			immutable ulong fullScanFrequency = appConfig.getValueLong("monitor_fullscan_frequency");
 			immutable ulong logOutputSuppressionInterval = appConfig.getValueLong("monitor_log_frequency");
 			immutable bool webhookEnabled = appConfig.getValueBool("webhook_enabled");
@@ -1551,27 +1550,17 @@ int main(string[] cliArgs) {
 								if (more) {
 									signalCount++;
 								} else {
-									auto now = MonoTime.currTime();
-									auto sinceLocal = now - lastLocalWrite;
-									if (sinceLocal < localEchoDebounce) {
-										if (debugLogging) {
-											addLogEntry(
-												"Debounced online refresh signal (" ~
-												to!string(sinceLocal.total!"msecs"()) ~ " ms since local write; threshold " ~
-												to!string(localEchoDebounce.total!"msecs"()) ~ " ms)",
-												["debug"]
-											);
-										}
-										
-										// Ignore this reflection; skip the immediate online scan.
-										// Next push or the regular monitor cadence will pick up genuine remote changes.
-										break;
-									}
-									
+									// Always process online notifications from WebSocket/Webhook handlers.
+									// These signals do not contain item-level change detail, so the delta endpoint
+									// remains the source of truth for determining whether the notification reflects
+									// a genuine remote change, a local echo, or multiple coalesced changes.
+									// Do not drop the signal here; doing so can delay or miss required online
+									// reconciliation until the next regular monitor interval.
+							
 									// Get the signal timestamp - this is as close as possible to when this was received
 									SysTime signalTimeStamp = Clock.currTime();
 									signalTimeStamp.fracSecs = Duration.zero;
-									
+							
 									// Log what signal we received
 									if (webhookEnabled) {
 										string webhookLogEntry = format("Received %s signal(s) from Webhook handler (%s)", to!string(signalCount), to!string(signalTimeStamp));
@@ -1580,14 +1569,13 @@ int main(string[] cliArgs) {
 										string websocketLogEntry = format("Received %s signal(s) from WebSocket handler (%s)", to!string(signalCount), to!string(signalTimeStamp));
 										addLogEntry(websocketLogEntry);
 									}
-									
+							
 									// Perform online callback action
 									oneDriveOnlineCallback();
 									break;
 								}
 							}
 						}
-
 					} else {
 						// no hooks available, nothing to check
 						if (sleepInterruptibly(sleepTime, "monitor idle sleep")) {
@@ -1666,29 +1654,59 @@ void printMissingOperationalSwitchesError() {
 
 // Function used for WebSocket or Webhook callbacks to perform specific activities
 void oneDriveOnlineCallback() {
-	// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
+	// WebSocket / Webhook notifications indicate that Microsoft OneDrive has reported
+	// an online change. Treat this callback as an online-first reconciliation trigger.
+	//
+	// Important:
+	// Any online -> local activity performed below can itself generate local filesystem
+	// monitor events. Those events are side-effects of this reconciliation pass and must
+	// not be replayed as user initiated local changes after the online sync has completed.
+
+	// If we are in a --download-only method of operation, there is no filesystem monitoring,
+	// so there are no inotify events to check.
 	if (!appConfig.getValueBool("download_only")) {
-		// Handle inotify events
+		// Before processing the online notification, handle any already-pending local
+		// inotify events. These events existed before this online reconciliation pass and
+		// should still be treated as genuine local activity.
 		processInotifyEvents(true);
 	}
 
-	// Sync any online change down to the local disk
-	// If we are doing --upload-only however .. we need to 'ignore' online change
+	// Sync any online change down to the local disk.
+	// If we are doing --upload-only however, we need to ignore online changes.
 	if (!appConfig.getValueBool("upload_only")) {
-		// We are not doing an --upload-only scenario .. sync online change --> local
+		// We are not doing an --upload-only scenario; sync online change --> local.
 		appConfig.monitorSyncTriggeredByApiSignal = true;
 		scope(exit) {
 			appConfig.monitorSyncTriggeredByApiSignal = false;
 		}
+
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
+
+		// Online -> local reconciliation may create, modify or delete local filesystem
+		// objects. These local filesystem events are expected side-effects of applying
+		// remote state and must be cancelled/drained rather than processed as local user
+		// changes. Processing them here can cause the monitor loop to race against its own
+		// downloads/deletes and can incorrectly re-queue or undo work just completed.
+		if (appConfig.getValueBool("monitor")) {
+			processInotifyEvents(false);
+		}
+
 		if (syncEngineInstance.authoritativeCleanupPassUsedInLastSync) {
 			syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
+
+			// The authoritative cleanup / consistency pass may also touch local state.
+			// Drain those monitor events as reconciliation side-effects as well.
+			if (appConfig.getValueBool("monitor")) {
+				processInotifyEvents(false);
+			}
 		}
 	}
-	if (appConfig.getValueBool("monitor")) {
-		// Handle inotify events
-		processInotifyEvents(true);
-	}
+
+	// Do not process inotify events again here.
+	//
+	// For this callback path, any events generated after syncOneDriveAccountToLocalDisk()
+	// are expected fallout from applying remote changes. They have already been drained
+	// above. The normal monitor loop will process future genuine local changes.
 }
 
 // Perform only an upload of data when using --upload-only
