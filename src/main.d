@@ -52,6 +52,8 @@ OneDriveSocketIo oneDriveSocketIo;
 // Class variables
 // Flag for performing a synchronised shutdown
 bool shutdownInProgress = false;
+// Guard to ensure global shutdown cleanup is only performed once.
+bool synchronisedExitProcessAlreadyPerformed = false;
 // Flag if a --dry-run is being performed, as, on shutdown, once config is destroyed, we have no reference here
 bool dryRun = false;
 // Configure the runtime database file path so that it is available to us on shutdown so objects can be destroyed and removed if required
@@ -2068,7 +2070,18 @@ bool shutdownRequested() {
 }
 
 void addShutdownTelemetry(string message) {
-	addLogEntry("SHUTDOWN TRACE: " ~ message, ["debug"]);
+	try {
+		if (loggingStillInitialised() && loggingActive()) {
+			addLogEntry("SHUTDOWN TRACE: " ~ message, ["debug"]);
+		} else if (debugLogging) {
+			// The async logger may already be stopped during late shutdown.
+			// Only fall back to stderr when debug logging is enabled so normal
+			// users do not see internal shutdown telemetry on clean exit.
+			stderr.writeln("SHUTDOWN TRACE: ", message);
+		}
+	} catch (Throwable) {
+		// Shutdown telemetry must never destabilise process teardown.
+	}
 }
 
 bool sleepInterruptibly(Duration totalSleep, string reason) {
@@ -2138,14 +2151,27 @@ bool waitForMonitorEventsInterruptibly(Duration totalWait, bool uploadOnly, ref 
 // Handle application exit
 void performSynchronisedExitProcess(string scopeCaller = null) {
 	synchronized {
+		immutable string caller = scopeCaller.length ? scopeCaller : "unknown";
+
+		// This function tears down global process resources. It must only run once.
+		// A later scope(exit), scope(failure), signal, or explicit exit path may still
+		// arrive after logging, database, monitor, or configuration objects have been
+		// destroyed. Re-running shutdown at that point risks use-after-free behaviour.
+		if (synchronisedExitProcessAlreadyPerformed) {
+			addShutdownTelemetry("duplicate performSynchronisedExitProcess call ignored from scope: " ~ caller);
+			return;
+		}
+
+		synchronisedExitProcessAlreadyPerformed = true;
+
 		// Perform cleanup and shutdown of various services and resources
 		try {
 			// Log who called this function
-			if (debugLogging) {addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);}
-			addShutdownTelemetry("performSynchronisedExitProcess entered by scope: " ~ (scopeCaller.length ? scopeCaller : "unknown"));
+			if (debugLogging && loggingStillInitialised() && loggingActive()) {addLogEntry("performSynchronisedExitProcess called by: " ~ caller, ["debug"]);}
+			addShutdownTelemetry("performSynchronisedExitProcess entered by scope: " ~ caller);
 			addShutdownTelemetry("planned final exit code: " ~ to!string(requestedExitCode) ~ ", termination signal: " ~ to!string(terminationSignal));
 			// Remove Desktop integration
-			if(performFileSystemMonitoring) {
+			if (performFileSystemMonitoring && appConfig !is null) {
 				// Was desktop integration enabled?
 				if (appConfig.getValueBool("display_manager_integration")) {
 					// Attempt removal
@@ -2172,8 +2198,8 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			// Shutdown application logging
 			shutdownApplicationLogging();
 		} catch (Exception e) {
-            addLogEntry("Error during performStandardExitProcess: " ~ e.toString(), ["error"]);
-        }
+			addShutdownTelemetry("Error during performSynchronisedExitProcess: " ~ e.toString());
+		}
 	}
 }
 
@@ -2278,8 +2304,7 @@ void shutdownApplicationLogging() {
 	// Log that we are exiting
 	if (loggingStillInitialised()) {
 		if (loggingActive()) {
-			// join all threads
-			thread_joinAll();
+			// Log action
 			if (debugLogging) {addLogEntry("Application is exiting", ["debug"]);}
 			addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
 			// Destroy the shared logging buffer which flushes any remaining logs

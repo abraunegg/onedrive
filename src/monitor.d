@@ -46,13 +46,16 @@ class MonitorBackgroundWorker {
 	int fd;
 	Pipe p;
 	bool isAlive;
+	bool workerExited;
 
 	this() {
 		isAlive = true;
+		workerExited = false;
 		p = pipe();
 	}
 
 	shared void initialise() {
+		workerExited = false;
 		fd = inotify_init();
 		if (fd < 0) throw new MonitorException("inotify_init failed");
 	}
@@ -110,8 +113,13 @@ class MonitorBackgroundWorker {
 		// On failure, send -1 to caller
 		int res;
 
+		// Mark the worker as exited regardless of which shutdown/error path is used.
+		scope(exit) {
+			workerExited = true;
+		}
+
 		// wait for the caller to be ready
-		receiveOnly!int();
+		receiveOnly!bool();
 
 		while (isAlive) {
 			fd_set fds;
@@ -165,10 +173,18 @@ class MonitorBackgroundWorker {
 		}
 	}
 
+	shared bool hasExited() {
+		return workerExited;
+	}
+
 	shared void interrupt() {
 		isAlive = false;
-		(cast()p).writeEnd.writeln("done");
-		(cast()p).writeEnd.flush();
+		try {
+			(cast()p).writeEnd.writeln("done");
+			(cast()p).writeEnd.flush();
+		} catch (Exception) {
+			// The control pipe may already be closed during shutdown.
+		}
 	}
 
 	shared void shutdown() {
@@ -176,9 +192,15 @@ class MonitorBackgroundWorker {
 		if (fd > 0) {
 			close(fd);
 			fd = 0;
+		}
+
+		try {
 			(cast()p).close();
+		} catch (Exception) {
+			// The control pipe may already be closed or partially initialised.
 		}
 	}
+
 }
 
 void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid) {
@@ -356,9 +378,17 @@ final class Monitor {
 		inotifyMutex = new Mutex(); // Define a Mutex for thread-safe access
 	}
 	
-	// The destructor should only clean up resources owned directly by this instance
+	// The destructor should only clean up resources owned directly by this instance.
+	// shutdown() is responsible for stopping the worker before this object is destroyed.
 	~this() {
-		object.destroy(worker);
+		if (worker !is null) {
+			try {
+				worker.shutdown();
+			} catch (Exception) {
+				// Destructors must not throw during process teardown.
+			}
+			worker = null;
+		}
 	}
 	
 	// Initialise the monitor class
@@ -402,15 +432,37 @@ final class Monitor {
 			return;
 		initialised = false;
 
-		// Interrupt the worker to allow removal of inotify watch descriptors
-		worker.interrupt();
+		// Interrupt the worker so select() wakes if it is waiting on inotify.
+		if (worker !is null) {
+			worker.interrupt();
+		}
 
-		// Remove all the inotify watch descriptors
+		// Remove all the inotify watch descriptors before closing the fd.
 		removeAll();
 
-		// Notify the worker that the monitor has been shutdown
-		worker.interrupt();
-		send(false);
+		// Notify the worker that the monitor has been shutdown. This unblocks the
+		// worker if it has already sent a wake-up and is waiting for the main thread
+		// to acknowledge whether monitoring should continue.
+		try {
+			send(false);
+		} catch (Exception) {
+			// The worker may already have exited during shutdown.
+		}
+
+		if (worker !is null) {
+			worker.interrupt();
+
+			// Do not allow Monitor destruction to race with the worker thread still
+			// running inside MonitorBackgroundWorker.watch().
+			foreach (_; 0 .. 100) {
+				if (worker.hasExited()) {
+					break;
+				}
+				Thread.sleep(dur!"msecs"(20));
+			}
+
+			worker.shutdown();
+		}
 
 		inotifyMutex.lock();
 		try {
@@ -419,6 +471,7 @@ final class Monitor {
 			inotifyMutex.unlock();
 		}
 	}
+
 
 	// Recursively add this path to be monitored
 	private void addRecursive(string dirname) {
