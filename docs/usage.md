@@ -362,9 +362,63 @@ This client supports the following methods to authenticate the application with 
 * Supports OAuth2 Device Authorisation Flow for Microsoft Entra ID accounts
 
 #### Interactive Authentication using OAuth2 and a redirect URI
-When you run the application for the first time, you'll be prompted to open a specific URL in your web browser. This URL takes you to the Microsoft login page, where you’ll sign in with your Microsoft Account and grant the application permission to access your files.
+When you run the application for the first time, the recommended authentication method is interactive browser-based OAuth2 authentication. The application will direct you to the Microsoft login page, where you sign in with your Microsoft Account and grant the application permission to access your files.
 
-After granting permission, your browser will redirect you to a blank page, or a page that displays this message: 
+When the application detects that it is running inside a graphical desktop session, it will automatically open the Microsoft authorisation URL in your default browser and listen locally for the Microsoft authorisation response. In this mode, you do **not** need to manually copy and paste the redirect URI from your browser back into the terminal.
+
+When no graphical desktop session is detected, or when the local browser-based authentication flow cannot be used, the application will fall back to the existing manual copy-and-paste authentication method. This fallback behaviour may also occur when running remotely via SSH, inside containers, under WSL, or when no supported browser launch mechanism is available.
+
+##### Graphical Desktop Authentication using the Local Browser Redirect
+When running inside a supported graphical desktop environment, the application will open your default browser and wait for the Microsoft authorisation response on:
+
+```text
+http://127.0.0.1:53100/
+```
+
+This local listener is only used during the authentication process. It binds only to the loopback interface, does not require any inbound firewall changes, and is closed once authentication has completed or failed.
+
+**Example Terminal Session within Graphical Desktop session:**
+```text
+user@hostname:~$ onedrive
+D-Bus message bus daemon is available; GUI notifications are now enabled
+Using IPv4 and IPv6 (if configured) for all network operations
+Attempting to contact the Microsoft OneDrive Service
+Successfully reached the Microsoft OneDrive Service
+Configuring Global Azure AD Endpoints
+
+Opening the Microsoft authorisation URL in your default browser ...
+Waiting for the browser authorisation response on http://127.0.0.1:53100/
+
+The application has been successfully authorised, but no extra command options have been specified.
+
+Please use 'onedrive --help' for further assistance in regards to running this application.
+
+user@hostname:~$
+```
+
+**Graphical Desktop OAuth2 Authentication Process Illustrated:**
+
+Fedora graphical authentication example:
+
+![fedora_gui_auth_start](./images/fedora_gui_auth_start.png)
+
+![fedora_gui_auth_complete](./images/fedora_gui_auth_complete.png)
+
+Ubuntu graphical authentication example:
+
+![ubuntu_gui_auth_start](./images/ubuntu_gui_auth_start.png)
+
+![ubuntu_gui_auth_complete](./images/ubuntu_gui_auth_complete.png)
+
+> [!IMPORTANT]
+> The local authentication listener is only started for the duration of the authentication process and only listens on `127.0.0.1`. No external system can connect to this listener because it only binds to the local loopback interface (`127.0.0.1`).
+
+##### Manual Browser Authentication using Copy and Paste
+If the application is not running inside a graphical desktop session, or if the graphical browser authentication process cannot be used, the application will use the manual browser authentication method.
+
+In this mode, you will be prompted to open a specific URL in your web browser. This URL takes you to the Microsoft login page, where you sign in with your Microsoft Account and grant the application permission to access your files.
+
+After granting permission, your browser will redirect you to a blank page, or a page that displays this message:
 
 ![microsoft-auth-display-message](./images/microsoft-auth-display-message.png)
 
@@ -393,10 +447,10 @@ The application has been successfully authorised, but no extra command options h
 
 Please use 'onedrive --help' for further assistance in regards to running this application.
 
-user@hostname:~$ 
+user@hostname:~$
 ```
 
-**Interactive OAuth2 Authentication Process Illustrated:**
+**Manual OAuth2 Authentication Process Illustrated:**
 ![initial_auth_url_access_redacted](./images/initial_auth_url_access_redacted.png)
 
 ![copy_redirect_uri_to_application](./images/authorise_client_before_copy_with_arrow.png)
@@ -411,13 +465,15 @@ user@hostname:~$
 > [!IMPORTANT]
 > **Handling a AADSTS70000 response**
 >
-> If you paste the redirect URI back into the CLI and receive:
-> `AADSTS70000: The provided value for the 'code' parameter is not valid.`
+> If authentication fails with:
+> ```
+> AADSTS70000: The provided value for the 'code' parameter is not valid.`
+> ```
 > this is **not a client bug**.
 >
 > Microsoft authorisation codes are single-use and short-lived, so the code you pasted is no longer redeemable.
 >
-> **Common causes:**
+> **Common causes when using manual browser authentication:**
 > * Browser extensions / privacy tools modifying the redirect URL (for example, ad-blockers or 'remove tracking parameters' features within browsers)
 > * Copying the wrong URL (ensure you copy from the browser address bar immediately after consent)
 > * Refreshing the page or reusing the same redirect URI (codes can only be redeemed once)
@@ -466,6 +522,18 @@ Open this URL as a Microsoft Entra ID administrator to grant tenant-wide consent
 After administrator consent has been granted, run the normal authentication process again.
 ```
 
+> [!IMPORTANT]
+> When using the default OneDrive Client for Linux application registration, the redirect URI remains:
+>
+> `https://login.microsoftonline.com/common/oauth2/nativeclient`
+>
+> even when `azure_tenant_id` is configured for a single Microsoft Entra ID tenant.
+>
+> This behaviour is required because the default application registration is configured with the Microsoft Identity Platform using the common native-client redirect URI.
+>
+> The `azure_tenant_id` value is used to scope authentication and token issuance to a specific tenant, but does not change the redirect URI used by the default application registration.
+
+
 Administrator consent is typically a one-time action for a Microsoft Entra ID tenant. Once consent has been granted, users can authenticate and reauthenticate normally, including when using `--reauth`.
 
 If you are uncertain whether administrator approval is required in your environment, contact your Microsoft 365 or Microsoft Entra ID administrator before attempting further authentication troubleshooting.
@@ -476,6 +544,47 @@ If you are uncertain whether administrator approval is required in your environm
 > [!IMPORTANT]
 > Some organisations prohibit users from granting consent to applications. In these environments, authentication will fail until approval has been granted by a Microsoft Entra ID administrator.
 
+> [!IMPORTANT]
+> **Handling an AADSTS50011 response**
+>
+> If authentication fails with:
+>
+> `AADSTS50011: The redirect URI specified in the request does not match the redirect URIs configured for the application`
+>
+> Microsoft Entra ID is rejecting the redirect URI supplied during authentication.
+>
+> **Common causes:**
+>
+> * Using a custom `application_id` where the configured redirect URI does not match the application registration
+> * Using an application registration that has not been configured as a Public Client Application
+> * Missing or incorrectly configured redirect URI entries within the Microsoft Entra ID application registration
+> * Using a custom Microsoft Entra ID application registration that does not include both redirect URIs required by the authentication method being used
+> * Application registration changes not yet replicated across Microsoft Entra ID
+>
+> **For users of the default OneDrive Client for Linux application registration:**
+>
+> The application may use one of the following redirect URIs during authentication:
+>
+> * `http://127.0.0.1:53100/` (browser-based authentication when a graphical desktop environment is detected)
+> * `https://login.microsoftonline.com/common/oauth2/nativeclient` (manual browser authentication fallback)
+>
+> If you are using a custom Microsoft Entra ID application registration, ensure that both redirect URIs are configured correctly and that the application is configured as a Public Client Application.
+>
+> If this error occurs while using the default application registration, ensure you are running the latest application release, allow time for Microsoft Entra ID application registration changes to replicate, then re-run:
+>
+> ```
+> onedrive --reauth
+> ```
+
+> [!IMPORTANT]
+> When using a custom Microsoft Entra ID application registration via `application_id`, ensure that the following redirect URIs are configured in your application registration:
+>
+> * `http://127.0.0.1:53100/`
+> * `https://login.microsoftonline.com/common/oauth2/nativeclient`
+>
+> The first redirect URI is used for browser-based authentication within graphical desktop sessions. The second redirect URI is used for manual browser authentication and as a fallback authentication method.
+>
+> Failure to configure both redirect URIs may result in authentication failures such as `AADSTS50011`.
 
 #### Single Sign-On (SSO) via Intune using the Microsoft Identity Device Broker 
 To use this method of authentication, you must add the following configuration to your 'config' file:
@@ -553,7 +662,7 @@ You will have ~15 minutes before the code expires.
 > If using a Personal Microsoft OneDrive account (e.g., @outlook.com or @hotmail.com), please complete authentication using the interactive authentication method detailed above.
 >
 > **Further Reading:**  
-> 📚 [Microsoft Documentation — OAuth 2.0 device authorisation grant](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code)
+> [Microsoft Documentation — OAuth 2.0 device authorisation grant](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code)
 
 ### Display Your Applicable Runtime Configuration
 To verify the configuration that the application will use, use the following command:

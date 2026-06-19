@@ -92,6 +92,7 @@ SOURCES = \
 	src/intune.d \
 	src/socketio.d \
 	src/curlWebsockets.d \
+	src/localAuth.d \
 	src/c/fuse/common.d \
 	src/c/fuse/fuse.d \
 	src/fused/fuse.d

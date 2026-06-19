@@ -141,7 +141,7 @@ _**Valid Values:**_ USL4, USL5, DE, CN
 _**Config Example:**_ `azure_ad_endpoint = "DE"`
 
 ### azure_tenant_id
-_**Description:**_ This config option allows the locking of the client to a specific single tenant and will configure your client to use the specified tenant id in its Azure AD and Graph endpoint URIs, instead of "common". The tenant id may be the GUID Directory ID or the fully qualified tenant name.
+_**Description:**_ This configuration option restricts authentication and token acquisition to a specific Microsoft Entra ID tenant. When configured, the client will use the specified tenant identifier when constructing Microsoft Entra ID authentication endpoints and tenant-specific Microsoft Graph API requests, rather than using the multi-tenant `common` endpoint.
 
 _**Value Type:**_ String
 
@@ -150,7 +150,10 @@ _**Default Value:**_ *Empty* - not required for normal operation
 _**Config Example:**_ `azure_tenant_id = "example.onmicrosoft.us"` or `azure_tenant_id = "0c4be462-a1ab-499b-99e0-da08ce52a2cc"`
 
 > [!IMPORTANT]
-> Must be configured if 'azure_ad_endpoint' is configured.
+> This option must be configured when using `azure_ad_endpoint` or the `--display-admin-consent-url` CLI option.
+
+> [!NOTE]
+> This option is commonly used in Microsoft 365 Business, Enterprise, Education, Government, and other managed Microsoft Entra ID environments where authentication must be restricted to a specific tenant rather than using the multi-tenant `common` endpoint.
 
 ### bypass_data_preservation
 _**Description:**_ This config option allows the disabling of preserving local data by renaming the local file in the event of data conflict. If this is enabled, you will experience data loss on your local data as the local file will be over-written with data from OneDrive online. Use with care and caution.
@@ -1459,6 +1462,22 @@ _**Usage Example:**_ `onedrive --source-directory 'path/as/source/' --destinatio
 _**Description:**_ This CLI option displays a tenant-specific Microsoft Entra ID administrator consent URL for environments where administrator approval is required before users can authenticate and use the client.
 
 _**Usage Example:**_ `onedrive --display-admin-consent-url`
+
+> [!IMPORTANT]
+> This option does not authenticate the user and does not generate a refresh token.
+>
+> The generated URL must be opened by a Microsoft Entra ID administrator to grant tenant-wide consent for the application. Nothing from this process needs to be pasted back into the client.
+>
+> After administrator consent has been granted, users must complete the normal authentication process by running `onedrive` or `onedrive --reauth`.
+
+> [!IMPORTANT]
+> This option requires 'azure_tenant_id' to be configured.
+>
+> The tenant identifier is used only to generate the Microsoft Entra ID administrator consent endpoint. The OAuth native-client redirect URI must remain the registered application redirect URI:
+>
+> `https://login.microsoftonline.com/common/oauth2/nativeclient`
+>
+> Do not manually replace `common` in the redirect URI with the tenant ID unless you are using your own custom Microsoft Entra ID application registration and that exact redirect URI has been registered for that application.
 
 ### CLI Option: --display-config
 _**Description:**_ This CLI option will display the effective application configuration

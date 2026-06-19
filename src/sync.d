@@ -2,7 +2,6 @@
 module syncEngine;
 
 // What does this module require to function?
-import core.memory;
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.thread;
 import core.time;
@@ -700,9 +699,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		getDefaultDriveApiInstance.releaseCurlEngine();
 		getDefaultDriveApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -776,9 +773,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		getDefaultRootApiInstance.releaseCurlEngine();
 		getDefaultRootApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -1109,8 +1104,7 @@ class SyncEngine {
 		databaseItemsToDeleteOnline = [];
 		pathsRetained = [];
 		
-		// Perform Garbage Collection on this destroyed curl engine
-		GC.collect();
+		// Log completion of cleanup
 		if (debugLogging) {addLogEntry("Cleaning of internal arrays complete", ["debug"]);}
 		
 		// Display function processing time if configured to do so
@@ -1319,9 +1313,7 @@ class SyncEngine {
 		deltaLinkCache.driveId = null;
 		deltaLinkCache.itemId = null;
 		deltaLinkCache.latestDeltaLink = null;
-		// Perform Garbage Collection
-		GC.collect();
-				
+						
 		// What /delta query do we use?
 		if (!generatedSimulatedDeltaResponse) {
 			// This should be the majority default pathway application use
@@ -1380,8 +1372,6 @@ class SyncEngine {
 				
 				// Ensure deltaChanges is empty before we query /delta
 				deltaChanges = null;
-				// Perform Garbage Collection
-				GC.collect();
 				
 				// getDeltaChangesByItemId has the re-try logic for transient errors
 				deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink, getDeltaDataOneDriveApiInstance);
@@ -1402,7 +1392,7 @@ class SyncEngine {
 					}
 				}
 				
-				long nrChanges = count(deltaChanges["value"].array);
+				long nrChanges = deltaChanges["value"].array.length;
 				int changeCount = 0;
 				
 				if (appConfig.verbosityCount == 0) {
@@ -1478,9 +1468,10 @@ class SyncEngine {
 				// We have a valid deltaChanges JSON array. This means we have at least 200+ JSON items to process.
 				// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
 				auto jsonArrayToProcess = deltaChanges["value"].array;
+				jsonItemsToProcess.reserve(jsonItemsToProcess.length + cast(size_t)nrChanges);
 				
 				// To allow for better debugging, what are all the JSON elements in the array the API responded with in this set?
-				if (count(jsonArrayToProcess) > 0) {
+				if (jsonArrayToProcess.length > 0) {
 					if (debugLogging) {
 						string debugLogHeader = format("=============================== jsonArrayToProcess - response bundle %s ===================================", to!string(responseBundleCount));
 						addLogEntry(debugLogHeader, ["debug"]);
@@ -1500,8 +1491,6 @@ class SyncEngine {
 				
 				// Clear up this data
 				jsonArrayToProcess = null;
-				// Perform Garbage Collection
-				GC.collect();
 				
 				// Is latestDeltaLink matching deltaChanges["@odata.deltaLink"].str ?
 				if ("@odata.deltaLink" in deltaChanges) {
@@ -1513,8 +1502,6 @@ class SyncEngine {
 				
 				// Cleanup deltaChanges as this is no longer needed
 				deltaChanges = null;
-				// Perform Garbage Collection
-				GC.collect();
 				
 				// Sleep for a while to avoid busy-waiting
 				Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
@@ -1523,9 +1510,7 @@ class SyncEngine {
 			// Terminate getDeltaDataOneDriveApiInstance here
 			getDeltaDataOneDriveApiInstance.releaseCurlEngine();
 			getDeltaDataOneDriveApiInstance = null;
-			// Perform Garbage Collection on this destroyed curl engine
-			GC.collect();
-			
+						
 			// To finish off the JSON processing items, this is needed to reflect this in the log
 			if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
 			
@@ -1547,8 +1532,6 @@ class SyncEngine {
 			
 			// Cleanup deltaChanges as this is no longer needed
 			deltaChanges = null;
-			// Perform Garbage Collection
-			GC.collect();
 		} else {
 			// Why are we generating a /delta response
 			if (debugLogging) {
@@ -1608,7 +1591,7 @@ class SyncEngine {
 			// deltaChanges must be a valid JSON object / array of data
 			if (deltaChanges.type() == JSONType.object) {
 				// How many changes were returned?
-				long nrChanges = count(deltaChanges["value"].array);
+				long nrChanges = deltaChanges["value"].array.length;
 				int changeCount = 0;
 				if (debugLogging) {addLogEntry("API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["debug"]);}
 				// Update the count of items received
@@ -1616,7 +1599,8 @@ class SyncEngine {
 				
 				// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
 				auto jsonArrayToProcess = deltaChanges["value"].array;
-				foreach (onedriveJSONItem; deltaChanges["value"].array) {
+				jsonItemsToProcess.reserve(jsonItemsToProcess.length + cast(size_t)nrChanges);
+				foreach (onedriveJSONItem; jsonArrayToProcess) {
 					// increment change count for this item
 					changeCount++;
 					// Process the received OneDrive object item JSON for this JSON bundle
@@ -1638,16 +1622,11 @@ class SyncEngine {
 			
 			// Cleanup deltaChanges as this is no longer needed
 			deltaChanges = null;
-			
-			// Perform Garbage Collection
-			GC.collect();
 		}
 		
 		// Cleanup deltaChanges as this is no longer needed
 		deltaChanges = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// We have JSON items received from the OneDrive API
 		if (debugLogging) {
 			addLogEntry("Number of JSON Objects received from OneDrive API:                 " ~ to!string(jsonItemsReceived), ["debug"]);
@@ -1720,9 +1699,6 @@ class SyncEngine {
 			
 			// Free up memory and items processed as it is pointless now having this data around
 			jsonItemsToProcess = [];
-			
-			// Perform Garbage Collection on this destroyed curl engine
-			GC.collect();
 		} else {
 			if (!appConfig.suppressLoggingOutput) {
 				addLogEntry("No changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
@@ -3480,9 +3456,7 @@ class SyncEngine {
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				onlineParentOneDriveApiInstance.releaseCurlEngine();
 				onlineParentOneDriveApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
-				
+								
 				// Display function processing time if configured to do so
 				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 					// Combine module name & running Function
@@ -3499,9 +3473,7 @@ class SyncEngine {
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				onlineParentOneDriveApiInstance.releaseCurlEngine();
 				onlineParentOneDriveApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
-				
+								
 				// Display function processing time if configured to do so
 				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 					// Combine module name & running Function
@@ -3621,9 +3593,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		onlineParentOneDriveApiInstance.releaseCurlEngine();
 		onlineParentOneDriveApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -4134,12 +4104,12 @@ class SyncEngine {
 							}
 						}
 						
-						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+						// OneDrive API Instance Cleanup - Shutdown API and free curl object.
+						// Do not force GC collection here: downloadFileItem() runs once per file
+						// inside the parallel download worker pool, and forcing a full GC after
+						// every downloaded file causes repeated stop-the-world mark scans.
 						downloadFileOneDriveApiInstance.releaseCurlEngine();
 						downloadFileOneDriveApiInstance = null;
-						// Perform Garbage Collection
-						GC.collect();
-						
 					} catch (OneDriveException exception) {
 						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset); generated a OneDriveException", ["debug"]);}
 						
@@ -4724,8 +4694,6 @@ class SyncEngine {
 				addLogEntry("CODING TO DO: Hitting this failure error output after getting a httpStatusCode != 410 when the API responded the deltaLink was invalid");
 				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				deltaChangesBundle = null;
-				// Perform Garbage Collection
-				GC.collect();
 			}
 		}
 		
@@ -5348,9 +5316,7 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			uploadLastModifiedTimeApiInstance.releaseCurlEngine();
 			uploadLastModifiedTimeApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
-			
+						
 			// Do we actually save the response?
 			// Special case here .. if the DB record item (originItem) is a remote object, thus, if we save the 'response' we will have a DB FOREIGN KEY constraint failed problem
 			//  Update 'originItem.mtime' with the correct timestamp
@@ -5404,8 +5370,6 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			uploadLastModifiedTimeApiInstance.releaseCurlEngine();
 			uploadLastModifiedTimeApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
 		}
 		
 		// Display function processing time if configured to do so
@@ -6924,8 +6888,6 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		onlinePathOneDriveApiInstance.releaseCurlEngine();
 		onlinePathOneDriveApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
 		
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -7083,9 +7045,7 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			checkFileOneDriveApiInstance.releaseCurlEngine();
 			checkFileOneDriveApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
-			
+						
 			// Turn 'fileDetailsFromOneDrive' into a DB item
 			if (fileDetailsFromOneDrive.type() == JSONType.object) {
 				// Yes
@@ -7699,9 +7659,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		uploadFileOneDriveApiInstance.releaseCurlEngine();
 		uploadFileOneDriveApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -7769,9 +7727,6 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			getCurrentDriveQuotaApiInstance.releaseCurlEngine();
 			getCurrentDriveQuotaApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
-			
 		} catch (OneDriveException e) {
 			if (debugLogging) {addLogEntry("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException", ["debug"]);}
 			// If an exception occurs, it's unclear if quota is restricted, but quota details are not available
@@ -7782,8 +7737,6 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			getCurrentDriveQuotaApiInstance.releaseCurlEngine();
 			getCurrentDriveQuotaApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
 			return result;
 		}
 		
@@ -9255,8 +9208,6 @@ class SyncEngine {
 							createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
 							// Free object and memory
 							createDirectoryOnlineOneDriveApiInstance = null;
-							// Perform Garbage Collection
-							GC.collect();
 						} else {
 							// some other error from OneDrive was returned - display what it is
 							addLogEntry("OneDrive generated an error when creating this path: " ~ thisNewPathToCreate);
@@ -9265,8 +9216,6 @@ class SyncEngine {
 							createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
 							// Free object and memory
 							createDirectoryOnlineOneDriveApiInstance = null;
-							// Perform Garbage Collection
-							GC.collect();
 						}
 						
 						// Display function processing time if configured to do so
@@ -9291,9 +9240,7 @@ class SyncEngine {
 				createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
 				// Free object and memory
 				createDirectoryOnlineOneDriveApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
-				
+								
 				// Display function processing time if configured to do so
 				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 					// Combine module name & running Function
@@ -9386,9 +9333,7 @@ class SyncEngine {
 							// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 							createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
 							createDirectoryOnlineOneDriveApiInstance = null;
-							// Perform Garbage Collection
-							GC.collect();
-							
+														
 							// Display function processing time if configured to do so
 							if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 								// Combine module name & running Function
@@ -9414,9 +9359,7 @@ class SyncEngine {
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
 				createDirectoryOnlineOneDriveApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
-				
+								
 				// Display function processing time if configured to do so
 				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 					// Combine module name & running Function
@@ -9438,9 +9381,7 @@ class SyncEngine {
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
 				createDirectoryOnlineOneDriveApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
-				
+								
 				// Display function processing time if configured to do so
 				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 					// Combine module name & running Function
@@ -9458,9 +9399,7 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
 			createDirectoryOnlineOneDriveApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
-			
+						
 			// Display function processing time if configured to do so
 			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 				// Combine module name & running Function
@@ -9567,9 +9506,7 @@ class SyncEngine {
 		raceConditionResolutionOneDriveApiInstance.releaseCurlEngine();
 		// Free object and memory
 		raceConditionResolutionOneDriveApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -9953,9 +9890,7 @@ class SyncEngine {
 								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 								checkFileOneDriveApiInstance.releaseCurlEngine();
 								checkFileOneDriveApiInstance = null;
-								// Perform Garbage Collection
-								GC.collect();
-								
+																
 								// No 404 which means a file was found with the path we are trying to upload to
 								if (debugLogging) {addLogEntry("fileDetailsFromOneDrive JSON data after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);}
 																
@@ -10035,9 +9970,7 @@ class SyncEngine {
 								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 								checkFileOneDriveApiInstance.releaseCurlEngine();
 								checkFileOneDriveApiInstance = null;
-								// Perform Garbage Collection
-								GC.collect();
-								
+																
 								// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
 								if (exception.httpStatusCode == 404) {
 									// The file has been checked, client side filtering checked, does not exist online - we need to upload it
@@ -10189,9 +10122,6 @@ class SyncEngine {
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
 					uploadFileOneDriveApiInstance = null;
-					// Perform Garbage Collection
-					GC.collect();
-					
 				} catch (OneDriveException exception) {
 					// An error was responded with - what was it
 					// Default operation if not 408,429,503,504 errors
@@ -10202,10 +10132,7 @@ class SyncEngine {
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
-					uploadFileOneDriveApiInstance = null;
-					// Perform Garbage Collection
-					GC.collect();
-					
+					uploadFileOneDriveApiInstance = null;				
 				} catch (FileException e) {
 					// display the error message
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
@@ -10214,8 +10141,6 @@ class SyncEngine {
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
 					uploadFileOneDriveApiInstance = null;
-					// Perform Garbage Collection
-					GC.collect();
 				}
 			} else {
 				// Initialise API for session upload
@@ -10311,8 +10236,6 @@ class SyncEngine {
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				uploadFileOneDriveApiInstance.releaseCurlEngine();
 				uploadFileOneDriveApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
 			}
 		} else {
 			// We are in a --dry-run scenario
@@ -10956,12 +10879,15 @@ class SyncEngine {
 						actualItemToDelete = itemToDelete;
 					}
 					
+					// Track if the remote delete operation completed successfully before removing the item from the local database
+					bool onlineDeleteCompleted = false;
+
 					// Try the online deletion using the 'actualItemToDelete' values
 					try {
 						// Create new OneDrive API Instance
 						uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
 						uploadDeletedItemOneDriveApiInstance.initialise();
-					
+
 						if (!permanentDelete) {
 							// Perform the delete via the default OneDrive API instance
 							uploadDeletedItemOneDriveApiInstance.deleteById(actualItemToDelete.driveId, actualItemToDelete.id);
@@ -10969,28 +10895,37 @@ class SyncEngine {
 							// Perform the permanent delete via the default OneDrive API instance
 							uploadDeletedItemOneDriveApiInstance.permanentDeleteById(actualItemToDelete.driveId, actualItemToDelete.id);
 						}
-						
+
+						// The OneDrive API call returned without exception
+						onlineDeleteCompleted = true;
+						addLogEntry("Successfully deleted item from Microsoft OneDrive: " ~ path, fileTransferNotifications());
+
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						uploadDeletedItemOneDriveApiInstance.releaseCurlEngine();
 						uploadDeletedItemOneDriveApiInstance = null;
-						// Perform Garbage Collection
-						GC.collect();
-					
 					} catch (OneDriveException e) {
 						if (e.httpStatusCode == 404) {
 							// item.id, item.eTag could not be found on the specified driveId
 							if (verboseLogging) {addLogEntry("OneDrive reported: The resource could not be found to be deleted.", ["verbose"]);}
+							// A 404 is considered successful for local cleanup because the item is already absent online
+							onlineDeleteCompleted = true;
+						} else {
+							addLogEntry("ERROR: Failed to delete item from Microsoft OneDrive: " ~ path, ["error"]);
+							addLogEntry("ERROR: HTTP response code: " ~ to!string(e.httpStatusCode), ["error"]);
+							displayOneDriveErrorMessage(e.msg, thisFunctionName);
 						}
-						
+
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						uploadDeletedItemOneDriveApiInstance.releaseCurlEngine();
 						uploadDeletedItemOneDriveApiInstance = null;
-						// Perform Garbage Collection
-						GC.collect();
 					}
-					
-					// Delete the reference in the local database - use the original input
-					itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
+
+					// Delete the reference in the local database - use the original input, but only after a successful remote delete
+					if (onlineDeleteCompleted) {
+						itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
+					} else {
+						addLogEntry("WARNING: Retaining local database entry because remote delete did not complete: " ~ path);
+					}
 					
 					// Was the original item a 'Shared Folder' ?
 					if (remoteShortcutLinkItem.type == ItemType.remote) {
@@ -11060,7 +10995,7 @@ class SyncEngine {
 				// Create new OneDrive API Instance
 				uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
 				uploadDeletedItemOneDriveApiInstance.initialise();
-			
+
 				if (!permanentDelete) {
 					// Perform the delete via the default OneDrive API instance
 					uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
@@ -11068,24 +11003,26 @@ class SyncEngine {
 					// Perform the permanent delete via the default OneDrive API instance
 					uploadDeletedItemOneDriveApiInstance.permanentDeleteById(itemToDelete.driveId, itemToDelete.id);
 				}
-				
+
+				// The OneDrive API call returned without exception
+				addLogEntry("Successfully deleted item from Microsoft OneDrive: " ~ ensureStartsWithDotSlash(newItemPath), fileTransferNotifications());
+
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				uploadDeletedItemOneDriveApiInstance.releaseCurlEngine();
 				uploadDeletedItemOneDriveApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
-			
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 404) {
 					// item.id, item.eTag could not be found on the specified driveId
 					if (verboseLogging) {addLogEntry("OneDrive reported: The resource could not be found to be deleted.", ["verbose"]);}
+				} else {
+					addLogEntry("ERROR: Failed to delete item from Microsoft OneDrive: " ~ ensureStartsWithDotSlash(newItemPath), ["error"]);
+					addLogEntry("ERROR: HTTP response code: " ~ to!string(e.httpStatusCode), ["error"]);
+					displayOneDriveErrorMessage(e.msg, thisFunctionName);
 				}
-				
+
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				uploadDeletedItemOneDriveApiInstance.releaseCurlEngine();
 				uploadDeletedItemOneDriveApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
 			}
 		} else {
 			// log that this is a dry-run activity
@@ -11184,8 +11121,6 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		performReverseDeletionOneDriveApiInstance.releaseCurlEngine();
 		performReverseDeletionOneDriveApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
 		
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -11606,9 +11541,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		fetchDriveDetailsOneDriveApiInstance.releaseCurlEngine();
 		fetchDriveDetailsOneDriveApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Do we have details we can use?
 		if (hasParentReferenceDriveId(remoteDriveDetails)) {
 			// We have a [parentReference][driveId] reference driveId to use
@@ -11775,9 +11708,6 @@ class SyncEngine {
 				generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
 				generateDeltaResponseOneDriveApiInstance = null;
 				
-				// Perform Garbage Collection
-				GC.collect();
-				
 				// Must force exit here, allow logging to be done
 				forceExit();
 			}
@@ -11840,9 +11770,7 @@ class SyncEngine {
 				generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
 				// Free object and memory
 				generateDeltaResponseOneDriveApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
-				
+								
 				// Return the generated JSON response
 				return selfGeneratedDeltaResponse;
 			} else {
@@ -11902,9 +11830,7 @@ class SyncEngine {
 			generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
 			// Free object and memory
 			generateDeltaResponseOneDriveApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
-			
+						
 			// Must force exit here, allow logging to be done
 			forceExit();
 		}
@@ -12034,9 +11960,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
 		generateDeltaResponseOneDriveApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -12176,9 +12100,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		queryChildrenOneDriveApiInstance.releaseCurlEngine();
 		queryChildrenOneDriveApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -12518,9 +12440,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		queryOneDriveForSpecificPath.releaseCurlEngine();
 		queryOneDriveForSpecificPath = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Output our search results
 		if (debugLogging) {addLogEntry("queryOneDriveForSpecificPathAndCreateIfMissing.getPathDetailsAPIResponse = " ~ to!string(getPathDetailsAPIResponse), ["debug"]);}
 		
@@ -12642,9 +12562,7 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			deleteByPathNoSyncAPIInstance.releaseCurlEngine();
 			deleteByPathNoSyncAPIInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
-		
+					
 			// Log that an error was generated
 			if (debugLogging) {addLogEntry("deleteByPathNoSyncAPIInstance.getPathDetails(path) generated a OneDriveException", ["debug"]);}
 			if (exception.httpStatusCode == 404) {
@@ -12693,9 +12611,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		deleteByPathNoSyncAPIInstance.releaseCurlEngine();
 		deleteByPathNoSyncAPIInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -12860,9 +12776,7 @@ class SyncEngine {
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				movePathOnlineApiInstance.releaseCurlEngine();
 				movePathOnlineApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
-				
+								
 				// Save the move response from OneDrive in the database
 				if (isMoveSuccess && response.type() == JSONType.object) {
 					saveItem(response);
@@ -13061,8 +12975,6 @@ class SyncEngine {
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					querySharePointLibraryNameApiInstance.releaseCurlEngine();
 					querySharePointLibraryNameApiInstance = null;
-					// Perform Garbage Collection
-					GC.collect();
 					return;
 				}
 				
@@ -13081,8 +12993,6 @@ class SyncEngine {
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					querySharePointLibraryNameApiInstance.releaseCurlEngine();
 					querySharePointLibraryNameApiInstance = null;
-					// Perform Garbage Collection
-					GC.collect();
 					return;
 				}
 				
@@ -13094,8 +13004,6 @@ class SyncEngine {
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				querySharePointLibraryNameApiInstance.releaseCurlEngine();
 				querySharePointLibraryNameApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
 				return;
 			}
 			
@@ -13127,8 +13035,6 @@ class SyncEngine {
 									// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 									querySharePointLibraryNameApiInstance.releaseCurlEngine();
 									querySharePointLibraryNameApiInstance = null;
-									// Perform Garbage Collection
-									GC.collect();
 									return;
 								}
 								
@@ -13168,8 +13074,6 @@ class SyncEngine {
 									// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 									querySharePointLibraryNameApiInstance.releaseCurlEngine();
 									querySharePointLibraryNameApiInstance = null;
-									// Perform Garbage Collection
-									GC.collect();
 									return;
 								}
 							}
@@ -13226,8 +13130,6 @@ class SyncEngine {
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				querySharePointLibraryNameApiInstance.releaseCurlEngine();
 				querySharePointLibraryNameApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
 				return;
 			}
 			
@@ -13263,9 +13165,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		querySharePointLibraryNameApiInstance.releaseCurlEngine();
 		querySharePointLibraryNameApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -13402,9 +13302,7 @@ class SyncEngine {
 		// Terminate getDeltaDataOneDriveApiInstance here
 		getDeltaDataOneDriveApiInstance.releaseCurlEngine();
 		getDeltaDataOneDriveApiInstance = null;
-		// Perform Garbage Collection on this destroyed curl engine
-		GC.collect();
-		
+				
 		// Needed after printing out '....' when fetching changes from OneDrive API
 		if (appConfig.verbosityCount == 0) {
 			completeProcessingDots();
@@ -13532,8 +13430,6 @@ class SyncEngine {
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						queryOneDriveForFileDetailsApiInstance.releaseCurlEngine();
 						queryOneDriveForFileDetailsApiInstance = null;
-						// Perform Garbage Collection
-						GC.collect();
 						return;
 					}
 					
@@ -13620,8 +13516,6 @@ class SyncEngine {
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					queryOneDriveForFileDetailsApiInstance.releaseCurlEngine();
 					queryOneDriveForFileDetailsApiInstance = null;
-					// Perform Garbage Collection
-					GC.collect();
 				}
 			}
 			
@@ -13676,16 +13570,11 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			getCurrentDriveQuotaApiInstance.releaseCurlEngine();
 			getCurrentDriveQuotaApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
-			
 		} catch (OneDriveException e) {
 			if (debugLogging) {addLogEntry("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException", ["debug"]);}
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			getCurrentDriveQuotaApiInstance.releaseCurlEngine();
 			getCurrentDriveQuotaApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
 		}
 		
 		// validate that currentDriveQuota is a JSON value
@@ -14200,11 +14089,8 @@ class SyncEngine {
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				validateUploadSessionFileDataApiInstance.releaseCurlEngine();
 				validateUploadSessionFileDataApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
 				
 				// no error .. potentially all still valid
-				
 			} catch (OneDriveException e) {
 				// handle any onedrive error response as invalid
 				if (debugLogging) {addLogEntry("SESSION-RESUME: Invalid response when using uploadUrl in: " ~ sessionFilePath, ["debug"]);}
@@ -14212,9 +14098,7 @@ class SyncEngine {
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				validateUploadSessionFileDataApiInstance.releaseCurlEngine();
 				validateUploadSessionFileDataApiInstance = null;
-				// Perform Garbage Collection
-				GC.collect();
-				
+								
 				// Display function processing time if configured to do so
 				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 					// Combine module name & running Function
@@ -14473,9 +14357,7 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			validateResumableDownloadFileDataApiInstance.releaseCurlEngine();
 			validateResumableDownloadFileDataApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
-			
+						
 			// no error .. potentially all still valid
 		} catch (OneDriveException e) {
 			// handle any onedrive error response as invalid
@@ -14484,9 +14366,7 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			validateResumableDownloadFileDataApiInstance.releaseCurlEngine();
 			validateResumableDownloadFileDataApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
-			
+						
 			// Display function processing time if configured to do so
 			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 				// Combine module name & running Function
@@ -14585,9 +14465,7 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			uploadFileOneDriveApiInstance.releaseCurlEngine();
 			uploadFileOneDriveApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
-						
+									
 			// Was the response from the OneDrive API a valid JSON item?
 			if (uploadResponse.type() == JSONType.object) {
 				// A valid JSON object was returned - session resumption upload successful
@@ -14868,9 +14746,7 @@ class SyncEngine {
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						checkFileOneDriveApiInstance.releaseCurlEngine();
 						checkFileOneDriveApiInstance = null;
-						// Perform Garbage Collection
-						GC.collect();
-						
+												
 						// Display function processing time if configured to do so
 						if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 							// Combine module name & running Function
@@ -14902,9 +14778,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		checkFileOneDriveApiInstance.releaseCurlEngine();
 		checkFileOneDriveApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -15171,9 +15045,6 @@ class SyncEngine {
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					getPathDetailsApiInstance.releaseCurlEngine();
 					getPathDetailsApiInstance = null;
-					// Perform Garbage Collection
-					GC.collect();
-			
 				} catch (OneDriveException e) {
 					// Display error message
 					displayOneDriveErrorMessage(e.msg, thisFunctionName);
@@ -15181,8 +15052,6 @@ class SyncEngine {
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					getPathDetailsApiInstance.releaseCurlEngine();
 					getPathDetailsApiInstance = null;
-					// Perform Garbage Collection
-					GC.collect();
 					return;
 				}
 			}
@@ -15228,9 +15097,6 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			sharedWithMeOneDriveApiInstance.releaseCurlEngine();
 			sharedWithMeOneDriveApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
-			
 		} catch (OneDriveException e) {
 			// Display error message
 			displayOneDriveErrorMessage(e.msg, thisFunctionName);
@@ -15238,8 +15104,6 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			sharedWithMeOneDriveApiInstance.releaseCurlEngine();
 			sharedWithMeOneDriveApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
 			return;
 		}
 		
@@ -15353,8 +15217,6 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			sharedWithMeOneDriveApiInstance.releaseCurlEngine();
 			sharedWithMeOneDriveApiInstance = null;
-			// Perform Garbage Collection
-			GC.collect();
 			return;
 		}
 		
@@ -15576,9 +15438,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		sharedWithMeOneDriveApiInstance.releaseCurlEngine();
 		sharedWithMeOneDriveApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -16145,9 +16005,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		queryWebsocketURLApiInstance.releaseCurlEngine();
 		queryWebsocketURLApiInstance = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -16200,8 +16058,6 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			queryPathDetailsOnline.releaseCurlEngine();
 			queryPathDetailsOnline = null;
-			// Perform Garbage Collection
-			GC.collect();
 			
 			// Return .. nothing to do
 			return;
@@ -16230,9 +16086,7 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		queryPathDetailsOnline.releaseCurlEngine();
 		queryPathDetailsOnline = null;
-		// Perform Garbage Collection
-		GC.collect();
-		
+				
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
