@@ -1187,7 +1187,6 @@ int main(string[] cliArgs) {
 			// Immutables
 			immutable auto checkOnlineInterval = dur!"seconds"(appConfig.getValueLong("monitor_interval"));
 			immutable auto githubCheckInterval = dur!"seconds"(86400);
-			immutable auto localEchoDebounce = dur!"seconds"(10);
 			immutable ulong fullScanFrequency = appConfig.getValueLong("monitor_fullscan_frequency");
 			immutable ulong logOutputSuppressionInterval = appConfig.getValueLong("monitor_log_frequency");
 			immutable bool webhookEnabled = appConfig.getValueBool("webhook_enabled");
@@ -1202,7 +1201,7 @@ int main(string[] cliArgs) {
 			MonoTime lastGitHubCheckTime = MonoTime.currTime();
 			SysTime lastMonitorGcCleanup = Clock.currTime();
 			
-			while (performFileSystemMonitoring) {
+			monitorLoop: while (performFileSystemMonitoring) {
 				if (shutdownRequested()) {
 					addShutdownTelemetry("monitor loop detected shutdown request before processing new work");
 					performFileSystemMonitoring = false;
@@ -1211,10 +1210,16 @@ int main(string[] cliArgs) {
 				// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file - the disk may have been ejected ..
 				checkForNoMountScenario();
 			
-				// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
-				if (!appConfig.getValueBool("download_only")) {
-					// Process any inotify events
-					processInotifyEvents(true);
+				// Do not eagerly process inotify events at the top of the monitor loop.
+				// Local filesystem work must be handled only when the monitor worker reports
+				// a local wake-up, otherwise it can interleave with the scheduled main sync
+				// loop and mix local upload work into remote reconciliation phases.
+				//
+				// In --download-only mode, local filesystem events must never be processed
+				// as upload work; however, any queued local monitor events should still be
+				// drained/discarded so stale local wake-ups cannot accumulate.
+				if (appConfig.getValueBool("download_only")) {
+					drainLocalMonitorEventsOnly();
 				}
 				
 				// WebSocket and Webhook Notification Handling
@@ -1355,8 +1360,9 @@ int main(string[] cliArgs) {
 							performStandardSyncProcess(localPath, filesystemMonitor);
 						}
 						
-						// Handle any new inotify events
-						processInotifyEvents(true);
+						// Do not process queued local inotify work here. The scheduled main sync
+						// has completed its reconciliation phases; genuine local events that
+						// arrived during the sync remain queued for the monitor worker path.
 						
 						// Detail the outcome of the sync process
 						displaySyncOutcome();
@@ -1475,7 +1481,9 @@ int main(string[] cliArgs) {
 						}
 						
 						// ALWAYS wait for FS worker, but only track webhook/websocket if NOT '--upload-only'
-						int res = 1;
+						// res == 0 means the wait expired naturally; res > 0 means the filesystem
+						// monitor worker observed inotify activity; res == -1 means worker failure.
+						int res = 0;
 						bool onlineSignal = false;
 						bool shutdownDetectedDuringWait = false;
 
@@ -1490,8 +1498,53 @@ int main(string[] cliArgs) {
 						if (debugLogging) {
 							addLogEntry("worker status = " ~ to!string(res), ["debug"]);
 							if (!appConfig.getValueBool("upload_only")) {
-								addLogEntry("notificationReceived = " ~ to!string(onlineSignal), ["debug"]);
+								addLogEntry("WebSocket|Webhook Notification Received = " ~ to!string(onlineSignal), ["debug"]);
 							}
+						}
+						
+						// Worker failure remains outside '--upload-only' filter
+						if (res == -1) {
+							addLogEntry("ERROR: Monitor worker failed.");
+							monitorFailures = true;
+							performFileSystemMonitoring = false;
+							break monitorLoop;
+						}
+						
+						// A positive worker status is a real local filesystem wake-up.
+						// Consume the pending inotify data immediately, before re-arming
+						// the worker. Do not just jump to the top of the monitor loop:
+						// that can re-enter the sleep/re-arm path after an empty lightweight
+						// pass and leave already-queued worker wake messages to churn.
+						if (res > 0) {
+							if (appConfig.getValueBool("download_only")) {
+								if (debugLogging) {addLogEntry("Local filesystem monitor wake-up detected in --download-only mode; draining pending inotify events without processing", ["debug"]);}
+								drainLocalMonitorEventsOnly();
+							} else {
+								if (debugLogging) {addLogEntry("Local filesystem monitor wake-up detected; processing pending inotify events", ["debug"]);}
+								processInotifyEvents(true);
+							}
+							
+							// Drain any stale local worker wake messages that were already
+							// queued before the inotify events were consumed. These messages
+							// no longer represent new work and must not immediately re-trigger
+							// the monitor sleep/wake cycle.
+							int drainedLocalWakeMessages = 0;
+							int staleWorkerStatus = 0;
+							while (receiveTimeout(dur!"msecs"(0), (int msg) {
+								staleWorkerStatus = msg;
+								drainedLocalWakeMessages++;
+							})) {
+								if (staleWorkerStatus == -1) {
+									addLogEntry("ERROR: Monitor worker failed.");
+									monitorFailures = true;
+									performFileSystemMonitoring = false;
+									break monitorLoop;
+								}
+							}
+							if (debugLogging && drainedLocalWakeMessages > 0) {
+								addLogEntry("Drained stale local filesystem monitor wake message(s): " ~ to!string(drainedLocalWakeMessages), ["debug"]);
+							}
+							continue monitorLoop;
 						}
 						
 						// Empirical evidence shows that Microsoft often sends multiple
@@ -1509,27 +1562,17 @@ int main(string[] cliArgs) {
 								if (more) {
 									signalCount++;
 								} else {
-									auto now = MonoTime.currTime();
-									auto sinceLocal = now - lastLocalWrite;
-									if (sinceLocal < localEchoDebounce) {
-										if (debugLogging) {
-											addLogEntry(
-												"Debounced online refresh signal (" ~
-												to!string(sinceLocal.total!"msecs"()) ~ " ms since local write; threshold " ~
-												to!string(localEchoDebounce.total!"msecs"()) ~ " ms)",
-												["debug"]
-											);
-										}
-										
-										// Ignore this reflection; skip the immediate online scan.
-										// Next push or the regular monitor cadence will pick up genuine remote changes.
-										break;
-									}
-									
+									// Always process online notifications from WebSocket/Webhook handlers.
+									// These signals do not contain item-level change detail, so the delta endpoint
+									// remains the source of truth for determining whether the notification reflects
+									// a genuine remote change, a local echo, or multiple coalesced changes.
+									// Do not drop the signal here; doing so can delay or miss required online
+									// reconciliation until the next regular monitor interval.
+							
 									// Get the signal timestamp - this is as close as possible to when this was received
 									SysTime signalTimeStamp = Clock.currTime();
 									signalTimeStamp.fracSecs = Duration.zero;
-									
+							
 									// Log what signal we received
 									if (webhookEnabled) {
 										string webhookLogEntry = format("Received %s signal(s) from Webhook handler (%s)", to!string(signalCount), to!string(signalTimeStamp));
@@ -1538,19 +1581,12 @@ int main(string[] cliArgs) {
 										string websocketLogEntry = format("Received %s signal(s) from WebSocket handler (%s)", to!string(signalCount), to!string(signalTimeStamp));
 										addLogEntry(websocketLogEntry);
 									}
-									
+							
 									// Perform online callback action
 									oneDriveOnlineCallback();
 									break;
 								}
 							}
-						}
-
-						// Worker failure remains outside '--upload-only' filter
-						if (res == -1) {
-							addLogEntry("ERROR: Monitor worker failed.");
-							monitorFailures = true;
-							performFileSystemMonitoring = false;
 						}
 					} else {
 						// no hooks available, nothing to check
@@ -1630,46 +1666,63 @@ void printMissingOperationalSwitchesError() {
 
 // Function used for WebSocket or Webhook callbacks to perform specific activities
 void oneDriveOnlineCallback() {
-	// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
-	if (!appConfig.getValueBool("download_only")) {
-		// Handle inotify events
-		processInotifyEvents(true);
-	}
+	// WebSocket / Webhook notifications indicate that Microsoft OneDrive has reported
+	// an online change. Treat this callback as an online-first reconciliation trigger.
+	//
+	// Important:
+	// Any online -> local activity performed below can itself generate local filesystem
+	// monitor events. Those events are side-effects of this reconciliation pass and must
+	// not be replayed as user initiated local changes after the online sync has completed.
 
-	// Sync any online change down to the local disk
-	// If we are doing --upload-only however .. we need to 'ignore' online change
+	// Do not process real local inotify work before an online callback.
+	// WebSocket/Webhook notifications are remote-only reconciliation triggers;
+	// any queued local work must wait until this online pass has completed.
+
+	// Sync any online change down to the local disk.
+	// If we are doing --upload-only however, we need to ignore online changes.
 	if (!appConfig.getValueBool("upload_only")) {
-		// We are not doing an --upload-only scenario .. sync online change --> local
+		// We are not doing an --upload-only scenario; sync online change --> local.
 		appConfig.monitorSyncTriggeredByApiSignal = true;
 		scope(exit) {
 			appConfig.monitorSyncTriggeredByApiSignal = false;
 		}
+
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
+
+		// Online -> local reconciliation may create, modify or delete local filesystem
+		// objects. These local filesystem events are expected side-effects of applying
+		// remote state and must be cancelled/drained rather than processed as local user
+		// changes. Processing them here can cause the monitor loop to race against its own
+		// downloads/deletes and can incorrectly re-queue or undo work just completed.
+		drainLocalMonitorEventsOnly();
+
 		if (syncEngineInstance.authoritativeCleanupPassUsedInLastSync) {
 			syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
+
+			// The authoritative cleanup / consistency pass may also touch local state.
+			// Drain those monitor events as reconciliation side-effects as well.
+			drainLocalMonitorEventsOnly();
 		}
 	}
-	if (appConfig.getValueBool("monitor")) {
-		// Handle inotify events
-		processInotifyEvents(true);
-	}
+
+	// Do not process inotify events again here.
+	//
+	// For this callback path, any events generated after syncOneDriveAccountToLocalDisk()
+	// are expected fallout from applying remote changes. They have already been drained
+	// above. The normal monitor loop will process future genuine local changes.
 }
 
 // Perform only an upload of data when using --upload-only
 void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = null) {
 	// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 	syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
-	if (appConfig.getValueBool("monitor")) {
-		// Handle any inotify events whilst the DB was being scanned
-		processInotifyEvents(true);
-	}
+	// Do not process queued inotify events in the middle of the upload-only pass.
+	// This pass already scans local state and uploads it; additional monitor events
+	// remain queued for the normal local wake-up path after this pass completes.
 	
 	// Scan the configured 'sync_dir' for new data to upload
 	syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
-	if (appConfig.getValueBool("monitor")) {
-		// Handle any new inotify events whilst the local filesystem was being scanned
-		processInotifyEvents(true);
-	}
+	// Do not process queued inotify events in the middle of the upload-only pass.
 }
 
 // Perform the normal application sync process
@@ -1690,24 +1743,19 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		// Local data first 
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
-		if (appConfig.getValueBool("monitor")) {
-			// Handle any inotify events whilst the DB was being scanned
-			processInotifyEvents(true);
-		}
+		// Do not process queued inotify events in the middle of the standard sync pass.
+		// The active sync mode owns the engine until it completes; genuine local events
+		// remain queued for the monitor worker path.
 		
 		// Scan the configured 'sync_dir' for new data to upload to OneDrive
 		syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
-		if (appConfig.getValueBool("monitor")) {
-			// Handle any new inotify events whilst the local filesystem was being scanned
-			processInotifyEvents(true);
-		}
+		// Do not process queued inotify events in the middle of the standard sync pass.
 		
 		// Download data from OneDrive last
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
-		if (appConfig.getValueBool("monitor")) {
-			// Cancel out any inotify events from downloading data
-			processInotifyEvents(false);
-		}
+		// Drain any local monitor events generated by applying remote state.
+		// These events are reconciliation side-effects, not user initiated local work.
+		drainLocalMonitorEventsOnly();
 		
 		// At this point, we have done a sync from:
 		// local  -> online
@@ -1723,27 +1771,22 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		// Normal sync process
 		// Download data from OneDrive first
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
-		if (appConfig.getValueBool("monitor")) {
-			// Cancel out any inotify events from downloading data
-			processInotifyEvents(false);
-		}
+		// Drain any local monitor events generated by applying remote state.
+		// These events are reconciliation side-effects, not user initiated local work.
+		drainLocalMonitorEventsOnly();
 		
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
-		if (appConfig.getValueBool("monitor")) {
-			// Handle any inotify events whilst the DB was being scanned
-			processInotifyEvents(true);
-		}
+		// Do not process queued inotify events in the middle of the standard sync pass.
+		// The active sync mode owns the engine until it completes; genuine local events
+		// remain queued for the monitor worker path.
 			
 		// Is --download-only NOT configured?
 		if (!appConfig.getValueBool("download_only")) {
 		
 			// Scan the configured 'sync_dir' for new data to upload to OneDrive
 			syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
-			if (appConfig.getValueBool("monitor")) {
-				// Handle any new inotify events whilst the local filesystem was being scanned
-				processInotifyEvents(true);
-			}
+			// Do not process queued inotify events in the middle of the standard sync pass.
 			
 			// If we are not doing a 'force_children_scan' perform a true-up
 			// 'force_children_scan' is used when using /children rather than /delta and it is not efficient to re-run this exact same process twice
@@ -1757,10 +1800,9 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 					// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'
 					// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
 					syncEngineInstance.syncOneDriveAccountToLocalDisk();
-					if (appConfig.getValueBool("monitor")) {
-						// Cancel out any inotify events from downloading data
-						processInotifyEvents(false);
-					}
+					// Drain any local monitor events generated by applying remote state.
+					// These events are reconciliation side-effects, not user initiated local work.
+					drainLocalMonitorEventsOnly();
 				} else {
 					// exitHandlerTriggered triggered
 					if (debugLogging) {addLogEntry("Not performing a last examination of online data due to application exit request", ["debug"]);}
@@ -1781,6 +1823,18 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			appConfig.setValueBool("resync" , false);
 		}
 	}
+}
+
+// Drain and discard queued local filesystem monitor events without processing them.
+// This is used after online -> local reconciliation and during --download-only
+// monitor loops, where local filesystem notifications must not be replayed as
+// user initiated upload work.
+void drainLocalMonitorEventsOnly() {
+	if ((filesystemMonitor is null) || (!filesystemMonitor.initialised)) {
+		return;
+	}
+
+	processInotifyEvents(false);
 }
 
 // Process any inotify events

@@ -115,29 +115,52 @@ class MonitorBackgroundWorker {
 
 		while (isAlive) {
 			fd_set fds;
-			FD_ZERO (&fds);
+			FD_ZERO(&fds);
 			FD_SET(fd, &fds);
-			// Listen for messages from the caller
-			FD_SET((cast()p).readEnd.fileno, &fds);
-			
-			res = select(FD_SETSIZE, &fds, null, null, null);
 
-			if(res == -1) {
-				if(errno() == EINTR) {
-					// Received an interrupt signal but no events are available
-					// directly watch again
-				} else {
-					// Error occurred, tell caller to terminate.
-					callerTid.send(-1);
-					break;
+			// Listen for shutdown / interrupt wakeups from the control pipe.
+			int controlPipeFd = (cast()p).readEnd.fileno;
+			FD_SET(controlPipeFd, &fds);
+
+			// select() only needs to scan up to the highest fd + 1.
+			int maxFd = max(fd, controlPipeFd) + 1;
+			res = select(maxFd, &fds, null, null, null);
+
+			if (res == -1) {
+				if (errno() == EINTR) {
+					// Interrupted by signal; re-arm the wait.
+					continue;
 				}
-			} else {
-				// Wake up caller
+
+				// Error occurred, tell caller to terminate.
+				callerTid.send(-1);
+				break;
+			}
+
+			// Control-pipe readiness is not filesystem activity. It is used to
+			// unblock select() during interrupt/shutdown, so drain it and do not
+			// report a local monitor wake-up to main.d.
+			if (FD_ISSET(controlPipeFd, &fds)) {
+				try {
+					(cast()p).readEnd.readln();
+				} catch (Exception) {
+					// Ignore control-pipe drain errors during shutdown.
+				}
+
+				if (!isAlive) break;
+				continue;
+			}
+
+			// Only inotify fd readiness should wake the caller for local
+			// filesystem processing.
+			if (FD_ISSET(fd, &fds)) {
 				callerTid.send(1);
 
 				// wait for the caller to be ready
 				if (isAlive)
 					isAlive = receiveOnly!bool();
+
+				continue;
 			}
 		}
 	}
@@ -546,7 +569,7 @@ final class Monitor {
 		}
 	}
 
-	// Remove a watch descriptor
+	// Remove all watch descriptors
 	private void removeAll() {
 		string[int] copy;
 
@@ -557,22 +580,46 @@ final class Monitor {
 			inotifyMutex.unlock();
 		}
 
-		// Loop through the watch descriptors and remove
+		// Loop through the watch descriptors and remove. During shutdown or high churn,
+		// inotify may already have invalidated a watch and emitted IN_IGNORED. Treat
+		// those already-removed watches as cleanup success so shutdown cannot be
+		// interrupted by stale watch descriptors.
 		foreach (wd, path; copy) {
 			remove(wd);
 		}
 	}
 
+	// Remove a watch descriptor
 	private void remove(int wd) {
 		string dirname;
 		int ret;
+		int savedErrno;
 
 		inotifyMutex.lock();
 		try {
-			assert(wd in wdToDirName);
+			// The watch may already have been removed by the kernel and cleaned up via
+			// an IN_IGNORED event. This is not an error for shutdown/removal cleanup.
+			if ((wd in wdToDirName) is null) {
+				if (debugLogging) {addLogEntry("inotify watch descriptor already removed from internal map: wd=" ~ wd.to!string, ["debug"]);}
+				return;
+			}
+
 			dirname = wdToDirName[wd];
 			ret = worker.removeInotifyWatch(wd);
-			if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
+			savedErrno = errno();
+
+			if (ret < 0) {
+				// EINVAL indicates that the watch descriptor is no longer valid. This can
+				// occur legitimately if the watched directory was deleted/moved or the
+				// kernel already removed the watch before explicit cleanup. Remove our
+				// bookkeeping entry and continue.
+				if (savedErrno == EINVAL) {
+					if (debugLogging) {addLogEntry("Ignoring already-invalid inotify watch during removal: wd=" ~ wd.to!string ~ ", path=" ~ dirname, ["debug"]);}
+				} else {
+					throw new MonitorException("inotify_rm_watch failed");
+				}
+			}
+
 			wdToDirName.remove(wd);
 		} finally {
 			inotifyMutex.unlock();
@@ -602,7 +649,19 @@ final class Monitor {
 
 		foreach (idx, wd; matchingWds) {
 			int ret = worker.removeInotifyWatch(wd);
-			if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
+			int savedErrno = errno();
+
+			if (ret < 0) {
+				// EINVAL indicates that the watch descriptor is already invalid. This can
+				// happen when the watched path has already disappeared or when an IN_IGNORED
+				// event has already invalidated the watch. Treat this as successful cleanup
+				// and remove the internal bookkeeping entry.
+				if (savedErrno == EINVAL) {
+					if (debugLogging) {addLogEntry("Ignoring already-invalid inotify watch during path removal: wd=" ~ wd.to!string ~ ", path=" ~ matchingPaths[idx], ["debug"]);}
+				} else {
+					throw new MonitorException("inotify_rm_watch failed");
+				}
+			}
 
 			inotifyMutex.lock();
 			try {
