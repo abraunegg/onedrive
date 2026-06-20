@@ -149,18 +149,13 @@ class TestCase0054MonitorModeAtomicSaveEditorReplaceWorkflow(MonitorModeTestCase
                 [f"Uploading modified file: {target_relative} ... done"],
                 [f"Uploading new file: {target_relative} ... done"],
             ]
-            post_mutation_sync_complete, post_mutation_log_segment = self._wait_for_post_mutation_sync_complete(
+            mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
                 monitor_stdout,
                 start_offset=mutation_log_start_offset,
+                alternative_pattern_groups=pattern_groups,
                 timeout_seconds=180,
             )
-            mutation_processed = False
-            matched_group = -1
-            for idx, group in enumerate(pattern_groups):
-                if all(pattern in post_mutation_log_segment for pattern in group):
-                    mutation_processed = True
-                    matched_group = idx
-                    break
+            post_mutation_sync_complete = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
             details["post_mutation_sync_complete"] = post_mutation_sync_complete
             details["mutation_processed"] = mutation_processed
             details["matched_pattern_group_index"] = matched_group

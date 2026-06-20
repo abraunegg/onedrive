@@ -100,18 +100,13 @@ class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCase
                 [f"[M] Local item moved: {old_dir_relative} -> {new_dir_relative}", f"Moving {old_dir_relative} to {new_dir_relative}"],
                 [f"Deleting item from Microsoft OneDrive: {old_file_relative}", f"Uploading new file: {new_file_relative} ... done"],
             ]
-            post_mutation_sync_complete, post_mutation_log_segment = self._wait_for_post_mutation_sync_complete(
+            mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
                 monitor_stdout,
                 start_offset=mutation_log_start_offset,
+                alternative_pattern_groups=groups,
                 timeout_seconds=180,
             )
-            mutation_processed = False
-            matched_group = -1
-            for idx, group in enumerate(groups):
-                if all(pattern in post_mutation_log_segment for pattern in group):
-                    mutation_processed = True
-                    matched_group = idx
-                    break
+            post_mutation_sync_complete = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
             details["post_mutation_sync_complete"] = post_mutation_sync_complete
             details["mutation_processed"] = mutation_processed
             details["matched_pattern_group_index"] = matched_group

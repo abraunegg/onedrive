@@ -112,19 +112,14 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
                 [f"[M] Local item moved: {rename_old_relative} -> {rename_new_relative}", f"Moving {rename_old_relative} to {rename_new_relative}"],
                 [f"Deleting item from Microsoft OneDrive: {rename_old_relative}", f"Uploading new file: {rename_new_relative} ... done"],
             ]
-            post_mutation_sync_complete, post_mutation_log_segment = self._wait_for_post_mutation_sync_complete(
+            fixed_ok, rename_ok, matched_group, post_mutation_log_segment = self._wait_for_required_patterns_and_any_group(
                 monitor_stdout,
                 start_offset=mutation_log_start_offset,
+                required_patterns=fixed_patterns,
+                alternative_pattern_groups=rename_groups,
                 timeout_seconds=180,
             )
-            fixed_ok = all(pattern in post_mutation_log_segment for pattern in fixed_patterns)
-            rename_ok = False
-            matched_group = -1
-            for idx, group in enumerate(rename_groups):
-                if all(pattern in post_mutation_log_segment for pattern in group):
-                    rename_ok = True
-                    matched_group = idx
-                    break
+            post_mutation_sync_complete = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
             details["post_mutation_sync_complete"] = post_mutation_sync_complete
             details["fixed_patterns_observed"] = fixed_ok
             details["rename_patterns_observed"] = rename_ok

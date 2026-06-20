@@ -229,12 +229,13 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
             required_patterns = [
                 f"Deleting item from Microsoft OneDrive: {delete_relative}",
             ]
-            post_mutation_sync_complete, post_mutation_log_segment = self._wait_for_post_mutation_sync_complete(
+            mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
                 start_offset=mutation_log_start_offset,
+                required_patterns=required_patterns,
                 timeout_seconds=180,
             )
-            mutation_processed = all(pattern in post_mutation_log_segment for pattern in required_patterns)
+            post_mutation_sync_complete = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
             details["post_mutation_sync_complete"] = post_mutation_sync_complete
             details["mutation_processed"] = mutation_processed
             details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)

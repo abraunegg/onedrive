@@ -222,13 +222,20 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
                     details,
                 )
 
-            post_mutation_sync_complete, post_mutation_log_segment = self._wait_for_post_mutation_sync_complete(
+            required_patterns = [
+                f"Processing: {relative_path}",
+                "The file has not changed",
+            ]
+            mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
                 start_offset=mutation_log_start_offset,
+                required_patterns=required_patterns,
                 timeout_seconds=60,
             )
-            details["post_mutation_sync_complete"] = post_mutation_sync_complete
+            details["post_mutation_sync_complete"] = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
+            details["mutation_processed"] = mutation_processed
             details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
+            details["mutation_required_patterns"] = required_patterns
             details["monitor_observed_processing"] = f"Processing: {relative_path}" in post_mutation_log_segment
             details["monitor_reported_no_change"] = "The file has not changed" in post_mutation_log_segment
             details["monitor_reported_upload"] = f"Uploading modified file: {relative_path} ... done" in post_mutation_log_segment

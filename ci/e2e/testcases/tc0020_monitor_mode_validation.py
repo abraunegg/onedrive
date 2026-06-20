@@ -103,14 +103,19 @@ class TestCase0020MonitorModeValidation(MonitorModeTestCaseBase):
                 )
 
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, stdout_file, details)
-            write_text_file(sync_root / root_name / "monitor-added.txt", "added while monitor mode was running\n")
-            post_mutation_sync_complete, post_mutation_log_segment = self._wait_for_post_mutation_sync_complete(
+            monitor_added_relative = f"{root_name}/monitor-added.txt"
+            write_text_file(sync_root / monitor_added_relative, "added while monitor mode was running\n")
+            required_patterns = [f"Uploading new file: {monitor_added_relative} ... done"]
+            mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 stdout_file,
                 start_offset=mutation_log_start_offset,
+                required_patterns=required_patterns,
                 timeout_seconds=180,
             )
-            details["post_mutation_sync_complete"] = post_mutation_sync_complete
+            details["post_mutation_sync_complete"] = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
+            details["mutation_processed"] = mutation_processed
             details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
+            details["mutation_required_patterns"] = required_patterns
         finally:
             self._shutdown_monitor_process(process, details)
 

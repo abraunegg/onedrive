@@ -114,13 +114,23 @@ class TestCase0056MonitorModeCreateThenDeleteQuickly(MonitorModeTestCaseBase):
                 transient_local.unlink()
             details["transient_exists_after_local_delete"] = transient_local.exists()
 
-            post_mutation_sync_complete, post_mutation_log_segment = self._wait_for_post_mutation_sync_complete(
+            pattern_groups = [
+                [f"[M] Local item deleted: {transient_relative}"],
+                [f"[M] New local file added: {transient_relative}"],
+                [f"Uploading new file: {transient_relative} ... done"],
+                [f"Deleting item from Microsoft OneDrive: {transient_relative}"],
+            ]
+            mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
                 monitor_stdout,
                 start_offset=mutation_log_start_offset,
-                timeout_seconds=120,
+                alternative_pattern_groups=pattern_groups,
+                timeout_seconds=60,
             )
-            details["post_mutation_sync_complete"] = post_mutation_sync_complete
+            details["post_mutation_sync_complete"] = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
+            details["mutation_processed"] = mutation_processed
+            details["matched_pattern_group_index"] = matched_group
             details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
+            details["mutation_pattern_groups"] = pattern_groups
             if process.poll() is not None:
                 early_failure = f"Monitor process exited before shutdown with status {process.returncode} after transient create/delete workflow"
 

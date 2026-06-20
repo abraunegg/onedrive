@@ -68,6 +68,58 @@ class MonitorModeTestCaseBase(E2ETestCase):
             return ""
         return content[start_offset:]
 
+    def _read_app_logs(self, app_log_dir: Path) -> str:
+        if not app_log_dir.exists():
+            return ""
+
+        segments: list[str] = []
+        for log_file in sorted(path for path in app_log_dir.rglob("*.log") if path.is_file()):
+            try:
+                segments.append(log_file.read_text(encoding="utf-8", errors="replace"))
+            except OSError:
+                continue
+        return "\n".join(segments)
+
+    def _read_app_logs_from_offset(self, app_log_dir: Path, start_offset: int) -> str:
+        content = self._read_app_logs(app_log_dir)
+        if start_offset <= 0:
+            return content
+        if start_offset >= len(content):
+            return ""
+        return content[start_offset:]
+
+    def _monitor_app_log_dir_for_stdout(self, stdout_file: Path) -> Path:
+        return stdout_file.parent / "app-logs"
+
+    def _remember_monitor_app_log_offset(self, stdout_file: Path, offset: int) -> None:
+        if not hasattr(self, "_monitor_app_log_start_offsets"):
+            self._monitor_app_log_start_offsets = {}
+        self._monitor_app_log_start_offsets[str(stdout_file)] = offset
+
+    def _monitor_app_log_start_offset(self, stdout_file: Path) -> int:
+        offsets = getattr(self, "_monitor_app_log_start_offsets", {})
+        return int(offsets.get(str(stdout_file), 0))
+
+    def _read_monitor_output_from_offsets(self, stdout_file: Path, stdout_start_offset: int) -> str:
+        """Read post-mutation monitor evidence from stdout and the app log.
+
+        Local monitor event processing does not always emit another global
+        sync-complete marker after an inotify wake.  The stable evidence is the
+        per-event upload/delete/move output, and that may be present in stdout,
+        the configured application log, or both depending on verbosity and CI
+        buffering.  Offset both streams so assertions only inspect activity that
+        happened after the test mutation.
+        """
+        stdout_segment = self._read_stdout_from_offset(stdout_file, stdout_start_offset)
+        app_log_dir = self._monitor_app_log_dir_for_stdout(stdout_file)
+        app_log_segment = self._read_app_logs_from_offset(
+            app_log_dir,
+            self._monitor_app_log_start_offset(stdout_file),
+        )
+        if stdout_segment and app_log_segment:
+            return stdout_segment + "\n" + app_log_segment
+        return stdout_segment or app_log_segment
+
     def _wait_for_initial_sync_complete(
         self,
         stdout_file: Path,
@@ -130,7 +182,7 @@ class MonitorModeTestCaseBase(E2ETestCase):
         quiet_seconds: float = 3.0,
         timeout_seconds: int = 30,
     ) -> int:
-        """Wait for monitor readiness and return the post-mutation log offset."""
+        """Wait for monitor readiness and return the post-mutation stdout offset."""
         ready = self._wait_for_monitor_stdout_quiet(
             process,
             stdout_file,
@@ -138,9 +190,13 @@ class MonitorModeTestCaseBase(E2ETestCase):
             timeout_seconds=timeout_seconds,
         )
         content = self._read_stdout(stdout_file)
+        app_log_content = self._read_app_logs(self._monitor_app_log_dir_for_stdout(stdout_file))
+        self._remember_monitor_app_log_offset(stdout_file, len(app_log_content))
         details["monitor_ready_after_initial_sync"] = ready
         details["initial_sync_complete_count_before_mutation"] = content.count(self.SYNC_COMPLETE_PATTERN)
+        details["app_log_sync_complete_count_before_mutation"] = app_log_content.count(self.SYNC_COMPLETE_PATTERN)
         details["mutation_log_start_offset"] = len(content)
+        details["mutation_app_log_start_offset"] = len(app_log_content)
         return len(content)
 
     def _wait_for_monitor_patterns(
@@ -154,7 +210,7 @@ class MonitorModeTestCaseBase(E2ETestCase):
         deadline = time.time() + timeout_seconds
 
         while time.time() < deadline:
-            content = self._read_stdout_from_offset(stdout_file, start_offset)
+            content = self._read_monitor_output_from_offsets(stdout_file, start_offset)
             if all(pattern in content for pattern in required_patterns):
                 return True
             time.sleep(poll_interval)
@@ -174,7 +230,7 @@ class MonitorModeTestCaseBase(E2ETestCase):
         latest_segment = ""
 
         while time.time() < deadline:
-            latest_segment = self._read_stdout_from_offset(stdout_file, start_offset)
+            latest_segment = self._read_monitor_output_from_offsets(stdout_file, start_offset)
             if all(pattern in latest_segment for pattern in required_patterns):
                 return True, latest_segment
             time.sleep(poll_interval)
@@ -192,7 +248,7 @@ class MonitorModeTestCaseBase(E2ETestCase):
         deadline = time.time() + timeout_seconds
 
         while time.time() < deadline:
-            content = self._read_stdout_from_offset(stdout_file, start_offset)
+            content = self._read_monitor_output_from_offsets(stdout_file, start_offset)
             for idx, group in enumerate(alternative_pattern_groups):
                 if all(pattern in content for pattern in group):
                     return True, idx
@@ -213,13 +269,49 @@ class MonitorModeTestCaseBase(E2ETestCase):
         latest_segment = ""
 
         while time.time() < deadline:
-            latest_segment = self._read_stdout_from_offset(stdout_file, start_offset)
+            latest_segment = self._read_monitor_output_from_offsets(stdout_file, start_offset)
             for idx, group in enumerate(alternative_pattern_groups):
                 if all(pattern in latest_segment for pattern in group):
                     return True, idx, latest_segment
             time.sleep(poll_interval)
 
         return False, -1, latest_segment
+
+    def _wait_for_required_patterns_and_any_group(
+        self,
+        stdout_file: Path,
+        *,
+        start_offset: int,
+        required_patterns: list[str],
+        alternative_pattern_groups: list[list[str]],
+        timeout_seconds: int = 120,
+        poll_interval: float = 0.5,
+    ) -> tuple[bool, bool, int, str]:
+        """Wait until all fixed patterns and one alternative group are observed."""
+        deadline = time.time() + timeout_seconds
+        latest_segment = ""
+        matched_group = -1
+
+        while time.time() < deadline:
+            latest_segment = self._read_monitor_output_from_offsets(stdout_file, start_offset)
+            fixed_ok = all(pattern in latest_segment for pattern in required_patterns)
+            matched_group = -1
+            for idx, group in enumerate(alternative_pattern_groups):
+                if all(pattern in latest_segment for pattern in group):
+                    matched_group = idx
+                    break
+            group_ok = matched_group >= 0
+            if fixed_ok and group_ok:
+                return True, True, matched_group, latest_segment
+            time.sleep(poll_interval)
+
+        fixed_ok = all(pattern in latest_segment for pattern in required_patterns)
+        matched_group = -1
+        for idx, group in enumerate(alternative_pattern_groups):
+            if all(pattern in latest_segment for pattern in group):
+                matched_group = idx
+                break
+        return fixed_ok, matched_group >= 0, matched_group, latest_segment
 
     def _wait_for_post_mutation_sync_complete(
         self,
@@ -230,6 +322,12 @@ class MonitorModeTestCaseBase(E2ETestCase):
         poll_interval: float = 0.5,
         quiet_seconds_after_marker: float = 3.0,
     ) -> tuple[bool, str]:
+        """Wait for a post-mutation global sync-complete marker when a test needs it.
+
+        Most local inotify tests should not use this helper.  Local event handling
+        can complete successfully without emitting another global sync-complete
+        line, so those tests should wait for their event-specific patterns instead.
+        """
         deadline = time.time() + timeout_seconds
         latest_segment = ""
         marker_seen = False
@@ -237,7 +335,7 @@ class MonitorModeTestCaseBase(E2ETestCase):
         quiet_started_at: float | None = None
 
         while time.time() < deadline:
-            latest_segment = self._read_stdout_from_offset(stdout_file, start_offset)
+            latest_segment = self._read_monitor_output_from_offsets(stdout_file, start_offset)
             now = time.time()
 
             if self.SYNC_COMPLETE_PATTERN in latest_segment:
