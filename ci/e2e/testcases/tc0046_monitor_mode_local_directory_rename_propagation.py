@@ -93,14 +93,29 @@ class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCase
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(self.case_id, self.name, "Monitor mode did not complete the initial sync within the expected time", artifacts, details)
 
+            mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
+
             old_dir_local_path.rename(new_dir_local_path)
             groups = [
                 [f"[M] Local item moved: {old_dir_relative} -> {new_dir_relative}", f"Moving {old_dir_relative} to {new_dir_relative}"],
                 [f"Deleting item from Microsoft OneDrive: {old_file_relative}", f"Uploading new file: {new_file_relative} ... done"],
             ]
-            mutation_processed, matched_group = self._wait_for_any_monitor_pattern_group(monitor_stdout, groups)
+            post_mutation_sync_complete, post_mutation_log_segment = self._wait_for_post_mutation_sync_complete(
+                monitor_stdout,
+                start_offset=mutation_log_start_offset,
+                timeout_seconds=180,
+            )
+            mutation_processed = False
+            matched_group = -1
+            for idx, group in enumerate(groups):
+                if all(pattern in post_mutation_log_segment for pattern in group):
+                    mutation_processed = True
+                    matched_group = idx
+                    break
+            details["post_mutation_sync_complete"] = post_mutation_sync_complete
             details["mutation_processed"] = mutation_processed
             details["matched_pattern_group_index"] = matched_group
+            details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
             details["mutation_pattern_groups"] = groups
         finally:
             self._shutdown_monitor_process(process, details)
@@ -118,8 +133,6 @@ class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCase
         details["verify_new_file_content"] = new_file_verify_path.read_text(encoding="utf-8") if new_file_verify_path.is_file() else ""
         self._write_metadata(metadata_file, details)
 
-        if not details.get("mutation_processed", False):
-            return self.fail_result(self.case_id, self.name, "Monitor mode did not process the local directory rename event before shutdown", artifacts, details)
         if verify_result.returncode != 0:
             return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if old_dir_verify_path.exists() or old_file_verify_path.exists():

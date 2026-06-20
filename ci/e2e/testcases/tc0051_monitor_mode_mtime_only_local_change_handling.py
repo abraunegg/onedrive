@@ -198,6 +198,8 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
                     details,
                 )
 
+            mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
+
             local_mtime_before_touch = int(local_file_path.stat().st_mtime)
             touched_epoch = max(int(time.time()), local_mtime_before_touch, baseline_verified_mtime) + 120
             os.utime(local_file_path, (touched_epoch, touched_epoch))
@@ -220,14 +222,17 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
                     details,
                 )
 
-            # Give monitor mode enough time to observe and reconcile the touched file.
-            time.sleep(15)
-
-            monitor_stdout_content = self._read_stdout(monitor_stdout)
-            details["monitor_observed_processing"] = f"Processing: {relative_path}" in monitor_stdout_content
-            details["monitor_reported_no_change"] = "The file has not changed" in monitor_stdout_content
-            details["monitor_reported_upload"] = f"Uploading modified file: {relative_path} ... done" in monitor_stdout_content
-            details["monitor_reported_local_change_event"] = f"[M] Local file changed: {relative_path}" in monitor_stdout_content
+            post_mutation_sync_complete, post_mutation_log_segment = self._wait_for_post_mutation_sync_complete(
+                monitor_stdout,
+                start_offset=mutation_log_start_offset,
+                timeout_seconds=60,
+            )
+            details["post_mutation_sync_complete"] = post_mutation_sync_complete
+            details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
+            details["monitor_observed_processing"] = f"Processing: {relative_path}" in post_mutation_log_segment
+            details["monitor_reported_no_change"] = "The file has not changed" in post_mutation_log_segment
+            details["monitor_reported_upload"] = f"Uploading modified file: {relative_path} ... done" in post_mutation_log_segment
+            details["monitor_reported_local_change_event"] = f"[M] Local file changed: {relative_path}" in post_mutation_log_segment
         finally:
             self._shutdown_monitor_process(process, details)
 

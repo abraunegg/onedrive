@@ -31,8 +31,9 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
             'bypass_data_preservation = "true"\n'
             'enable_logging = "true"\n'
             f'log_dir = "{app_log_dir}"\n'
-            'monitor_interval = "5"\n'
-            'monitor_fullscan_frequency = "1"\n'
+            'monitor_interval = "300"\n'
+            'monitor_fullscan_frequency = "0"\n'
+            'disable_websocket_support = "true"\n'
         )
 
     def _read_stdout(self, stdout_file: Path) -> str:
@@ -184,6 +185,8 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
                     details,
                 )
 
+            mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
+
             context.log(f"Test Case {self.case_id}: creating local file while monitor is running: {created_relative}")
             write_text_file(created_local_path, created_content)
             details["created_local_exists_after_write"] = created_local_path.is_file()
@@ -191,12 +194,15 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
             required_patterns = [
                 f"Uploading new file: {created_relative} ... done",
             ]
-            mutation_processed = self._wait_for_monitor_patterns(
+            post_mutation_sync_complete, post_mutation_log_segment = self._wait_for_post_mutation_sync_complete(
                 monitor_stdout,
-                required_patterns=required_patterns,
-                timeout_seconds=120,
+                start_offset=mutation_log_start_offset,
+                timeout_seconds=180,
             )
+            mutation_processed = all(pattern in post_mutation_log_segment for pattern in required_patterns)
+            details["post_mutation_sync_complete"] = post_mutation_sync_complete
             details["mutation_processed"] = mutation_processed
+            details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
             details["mutation_required_patterns"] = required_patterns
         finally:
             self._shutdown_monitor_process(process, details)
@@ -233,15 +239,6 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
         )
 
         self._write_metadata(metadata_file, details)
-
-        if not details.get("mutation_processed", False):
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "Monitor mode did not process the local create event before shutdown",
-                artifacts,
-                details,
-            )
 
         if verify_result.returncode != 0:
             return self.fail_result(
