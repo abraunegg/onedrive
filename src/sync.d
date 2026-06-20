@@ -3,6 +3,7 @@ module syncEngine;
 
 // What does this module require to function?
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
+import core.stdc.errno : ENOENT, ENOTDIR;
 import core.thread;
 import core.time;
 import std.algorithm;
@@ -7579,9 +7580,16 @@ class SyncEngine {
 						// Display what the error is
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
-				} catch (FileException e) {
+				} catch (ErrnoException exception) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, localFilePath);
+					if (isLocalPathDisappearance(exception)) {
+						addLogEntry("File disappeared locally before upload: " ~ localFilePath);
+					} else {
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
+					}
+				} catch (FileException exception) {
+					// filesystem error
+					displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
 				}
 			} else {
 				// As this is a unique thread, the sessionFilePath for where we save the data needs to be unique
@@ -10122,6 +10130,18 @@ class SyncEngine {
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
 					uploadFileOneDriveApiInstance = null;
+				} catch (ErrnoException exception) {
+					// There was a file system error - display the error message
+					if (isLocalPathDisappearance(exception)) {
+						addLogEntry("File disappeared locally before upload: " ~ fileToUpload);
+					} else {
+						addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+					}
+					
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+					uploadFileOneDriveApiInstance.releaseCurlEngine();
+					uploadFileOneDriveApiInstance = null;
 				} catch (OneDriveException exception) {
 					// An error was responded with - what was it
 					// Default operation if not 408,429,503,504 errors
@@ -10133,10 +10153,10 @@ class SyncEngine {
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
 					uploadFileOneDriveApiInstance = null;				
-				} catch (FileException e) {
+				} catch (FileException exception) {
 					// display the error message
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, fileToUpload);
+					displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -10650,8 +10670,7 @@ class SyncEngine {
 					displayOneDriveErrorMessage(e.msg, thisFunctionName);
 					// set uploadResponse to null as the fragment upload was in error twice
 					uploadResponse = null;
-					
-				} catch (std.exception.ErrnoException e) {
+				} catch (ErrnoException e) {
 					// There was a file system error - display the error message
 					displayFileSystemErrorMessage(e.msg, thisFunctionName, newUploadSession["localPath"].str);
 					return uploadResponse;
@@ -16092,5 +16111,9 @@ class SyncEngine {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
+	}
+	
+	private bool isLocalPathDisappearance(ErrnoException e) {
+		return (e.errno == ENOENT) || (e.errno == ENOTDIR);
 	}
 }
