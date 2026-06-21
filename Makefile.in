@@ -31,7 +31,7 @@ NOTIFICATIONS = @NOTIFICATIONS@
 HAVE_SYSTEMD = @HAVE_SYSTEMD@
 systemduserunitdir = @systemduserunitdir@
 systemdsystemunitdir = @systemdsystemunitdir@
-all_libs = @curl_LIBS@ @sqlite_LIBS@ @dbus_LIBS@ @notify_LIBS@ @bsd_inotify_LIBS@ @dynamic_linker_LIBS@
+all_libs = @curl_LIBS@ @sqlite_LIBS@ @dbus_LIBS@ @notify_LIBS@ @bsd_inotify_LIBS@ @macos_fsevents_LIBS@ @dynamic_linker_LIBS@
 COMPLETIONS = @COMPLETIONS@
 BASH_COMPLETION_DIR = @BASH_COMPLETION_DIR@
 ZSH_COMPLETION_DIR = @ZSH_COMPLETION_DIR@
@@ -109,7 +109,7 @@ distclean: clean
 
 onedrive: $(SOURCES)
 	if [ -f .git/HEAD ] ; then \
-		git describe --tags > version ; \
+		git describe --tags > version 2>/dev/null || echo $(version) > version ; \
 	else \
 		echo $(version) > version ; \
 	fi
