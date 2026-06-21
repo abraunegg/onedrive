@@ -7108,7 +7108,18 @@ class SyncEngine {
 		remainingFreeSpace = cachedOnlineDriveData.quotaRemaining;
 		
 		// Get the file size from the actual file
-		long thisFileSizeLocal = getSize(localFilePath);
+		long thisFileSizeLocal;
+		try {
+			thisFileSizeLocal = getSize(localFilePath);
+		} catch (FileException exception) {
+			// The local source file can disappear between the changed-item scan and the parallel upload worker processing it.
+			if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+				addLogEntry("File disappeared locally before modified upload: " ~ localFilePath);
+				return;
+			}
+
+			throw exception;
+		}
 		
 		// Get the file size from the DB data, if DB data was returned, otherwise we have zero size value from the DB
 		long thisFileSizeFromDB;
