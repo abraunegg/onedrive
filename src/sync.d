@@ -7580,16 +7580,17 @@ class SyncEngine {
 						// Display what the error is
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
-				} catch (ErrnoException exception) {
-					// filesystem error
-					if (isLocalPathDisappearance(exception)) {
-						addLogEntry("File disappeared locally before upload: " ~ localFilePath);
-					} else {
-						displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
-					}
 				} catch (FileException exception) {
 					// filesystem error
 					displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
+				} catch (ErrnoException exception) {
+					// The local source file can disappear between the pre-upload checks and curlEngine opening it.
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("File disappeared locally before modified upload: " ~ localFilePath);
+					} else {
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
+					}
+					uploadResponse = null;
 				}
 			} else {
 				// As this is a unique thread, the sessionFilePath for where we save the data needs to be unique
@@ -9983,7 +9984,7 @@ class SyncEngine {
 								if (exception.httpStatusCode == 404) {
 									// The file has been checked, client side filtering checked, does not exist online - we need to upload it
 									if (debugLogging) {addLogEntry("fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload); generated a 404 - file does not exist online - must upload it", ["debug"]);}
-									uploadFailed = performNewFileUpload(parentItem, fileToUpload, thisFileSize);
+									uploadFailed = performNewFileUpload(parentItem, fileToUpload, thisFileSize, zeroDataTraversal);
 								} else {
 									// some other error
 									// Default operation if not 408,429,503,504 errors
@@ -10031,6 +10032,7 @@ class SyncEngine {
 		} else {
 			// File disappeared before upload
 			addLogEntry("File disappeared locally before upload: " ~ fileToUpload);
+			zeroDataTraversal = true;
 			// dont set uploadFailed = true; as the file disappeared before upload, thus nothing here failed
 		}
 
@@ -10057,7 +10059,7 @@ class SyncEngine {
 	}
 		
 	// Perform the actual upload to OneDrive
-	bool performNewFileUpload(Item parentItem, string fileToUpload, long thisFileSize) {
+	bool performNewFileUpload(Item parentItem, string fileToUpload, long thisFileSize, ref bool zeroDataTraversal) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -10130,18 +10132,6 @@ class SyncEngine {
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
 					uploadFileOneDriveApiInstance = null;
-				} catch (ErrnoException exception) {
-					// There was a file system error - display the error message
-					if (isLocalPathDisappearance(exception)) {
-						addLogEntry("File disappeared locally before upload: " ~ fileToUpload);
-					} else {
-						addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
-						displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
-					}
-					
-					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
-					uploadFileOneDriveApiInstance.releaseCurlEngine();
-					uploadFileOneDriveApiInstance = null;
 				} catch (OneDriveException exception) {
 					// An error was responded with - what was it
 					// Default operation if not 408,429,503,504 errors
@@ -10157,6 +10147,20 @@ class SyncEngine {
 					// display the error message
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 					displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+					
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+					uploadFileOneDriveApiInstance.releaseCurlEngine();
+					uploadFileOneDriveApiInstance = null;
+				} catch (ErrnoException exception) {
+					// The local source file can disappear between the pre-upload exists/read checks and curlEngine opening it.
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("File disappeared locally before upload: " ~ fileToUpload);
+						uploadFailed = false;
+						zeroDataTraversal = true;
+					} else {
+						addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+					}
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -10264,8 +10268,8 @@ class SyncEngine {
 			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
 		}
 		
-		// If no upload failure, calculate transfer metrics, perform integrity validation
-		if (!uploadFailed) {
+		// If a real upload occurred, calculate transfer metrics, perform integrity validation
+		if (!uploadFailed && !zeroDataTraversal) {
 			// Upload did not fail ...
 			// As no upload failure, calculate transfer metrics in a consistent manner
 			displayTransferMetrics(fileToUpload, thisFileSize, uploadTransferStartTime, uploadTransferEndTime, uploadStartTime, Clock.currTime());
@@ -10663,22 +10667,23 @@ class SyncEngine {
 						uploadResponse = null;
 						return uploadResponse;
 					}
-				} catch (OneDriveException e) {
+				} catch (OneDriveException exception) {
 					// OneDrive threw another error on retry
 					if (verboseLogging) {addLogEntry("Retry to upload fragment failed", ["verbose"]);}
 					// display what the error is
-					displayOneDriveErrorMessage(e.msg, thisFunctionName);
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					// set uploadResponse to null as the fragment upload was in error twice
 					uploadResponse = null;
-				} catch (ErrnoException e) {
+					
+				} catch (std.exception.ErrnoException exception) {
 					// There was a file system error - display the error message
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, newUploadSession["localPath"].str);
+					displayFileSystemErrorMessage(exception.msg, thisFunctionName, newUploadSession["localPath"].str);
 					return uploadResponse;
 				}
-			} catch (ErrnoException e) {
+			} catch (ErrnoException exception) {
 				// There was a file system error
 				// display the error message
-				displayFileSystemErrorMessage(e.msg, thisFunctionName, uploadSessionData["localPath"].str);
+				displayFileSystemErrorMessage(exception.msg, thisFunctionName, uploadSessionData["localPath"].str);
 				uploadResponse = null;
 				return uploadResponse;
 			}
@@ -16111,9 +16116,5 @@ class SyncEngine {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
-	}
-	
-	private bool isLocalPathDisappearance(ErrnoException e) {
-		return (e.errno == ENOENT) || (e.errno == ENOTDIR);
 	}
 }
