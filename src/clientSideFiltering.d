@@ -24,6 +24,7 @@ class ClientSideFiltering {
 	string[] syncListAnywherePathOnly; // These are 'include' rules that do not start with a '/', thus are to be searched anywhere for inclusion
 	Regex!char fileMask;
 	Regex!char directoryMask;
+	bool hasDirectoryMaskEntries = false;
 	bool skipDirStrictMatch = false;
 	bool skipDotfiles = false;
 	
@@ -220,6 +221,14 @@ class ClientSideFiltering {
 
 	// Configure the regex that will be used for 'skip_dir'
 	void setDirMask(const(char)[] dirmask) {
+		hasDirectoryMaskEntries = false;
+		foreach(entry; to!string(dirmask).split("|")) {
+			if (!strip(entry).empty) {
+				hasDirectoryMaskEntries = true;
+				break;
+			}
+		}
+
 		directoryMask = wild2regex(dirmask);
 		if (debugLogging) {addLogEntry("Selective Sync Directory Mask: " ~ to!string(directoryMask), ["debug"]);}
 	}
@@ -257,6 +266,10 @@ class ClientSideFiltering {
 	bool isDirNameExcluded(string inputPath) {
 		// Returns true if the inputPath matches a skip_dir config entry (directoryMask)
 		// Returns false if no match
+
+		if (!hasDirectoryMaskEntries) {
+			return false;
+		}
 
 		if (debugLogging) {
 			addLogEntry("skip_dir evaluation for: " ~ inputPath, ["debug"]);
@@ -297,10 +310,18 @@ class ClientSideFiltering {
 		// Also test trailing-slash equivalence for directory roots
 		// (treat "Documents" and "Documents/" the same, but do not create "//")
 		string[] expanded;
-		foreach (c; candidates) {
+		void addExpandedCandidate(string c) {
+			if (c.empty) return;
+			foreach (e; expanded) {
+				if (e == c) return;
+			}
 			expanded ~= c;
+		}
+
+		foreach (c; candidates) {
+			addExpandedCandidate(c);
 			if (c.length > 1 && c[$ - 1] != '/') {
-				expanded ~= (c ~ "/");
+				addExpandedCandidate(c ~ "/");
 			}
 		}
 		candidates = expanded;
@@ -321,11 +342,22 @@ class ClientSideFiltering {
 		if (!skipDirStrictMatch) {
 			if (debugLogging) addLogEntry("No Strict Matching Enforced - testing individual path segments", ["debug"]);
 
+			string[] segmentCandidates;
+			void addSegmentCandidate(string c) {
+				if (c.empty) return;
+				foreach (e; segmentCandidates) {
+					if (e == c) return;
+				}
+				segmentCandidates ~= c;
+			}
+
 			foreach (c; candidates) {
 				// buildNormalizedPath may introduce a leading '/', so we keep it as-is
 				// and let pathSplitter do its job. We are matching segments, not full paths here.
-				string path = buildNormalizedPath(c);
+				addSegmentCandidate(buildNormalizedPath(c));
+			}
 
+			foreach (path; segmentCandidates) {
 				if (debugLogging) addLogEntry("skip_dir segment test path: " ~ path, ["debug"]);
 
 				foreach_reverse(seg; pathSplitter(path)) {
