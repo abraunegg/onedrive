@@ -728,19 +728,29 @@ final class Monitor {
 	}
 
 	// Return the file path from an inotify event
-	private string getPath(const(inotify_event)* event) {
-		string path;
+	private bool getPath(const(inotify_event)* event, out string path) {
+		path = null;
 
 		inotifyMutex.lock();
 		try {
-			path = wdToDirName[event.wd];
+			auto dirname = event.wd in wdToDirName;
+			if (dirname is null) {
+				// Under heavy churn or shutdown, inotify can still deliver queued
+				// events for a watch descriptor that has already been removed from
+				// the internal map. Treat those as stale events rather than allowing
+				// associative-array indexing to raise a RangeError.
+				if (debugLogging) {addLogEntry("Ignoring stale inotify event for removed watch descriptor: wd=" ~ event.wd.to!string ~ ", mask=" ~ event.mask.to!string, ["debug"]);}
+				return false;
+			}
+
+			path = *dirname;
 		} finally {
 			inotifyMutex.unlock();
 		}
 
 		if (event.len > 0) path ~= fromStringz(event.name.ptr);
 		if (debugLogging) {addLogEntry("inotify path event for: " ~ path, ["debug"]);}
-		return path;
+		return true;
 	}
 
 	// Update
@@ -822,7 +832,9 @@ final class Monitor {
 					}
 
 					// if the event is not to be ignored, obtain path
-					path = getPath(event);
+					if (!getPath(event, path)) {
+						goto skip;
+					}
 					// configure the skip_dir & skip skip_file comparison item
 					evalPath = path.strip('.');
 					
