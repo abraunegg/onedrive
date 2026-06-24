@@ -287,6 +287,20 @@ struct ActionHolder {
 							break;
 					}
 				}
+
+				// If a parent directory delete arrives after child deletes, collapse the
+				// child delete actions into the parent delete. Linux commonly reports
+				// rm -rf as file deletes followed by the directory delete. Processing
+				// only the parent preserves the intended recursive delete operation and
+				// avoids leaving empty remote directories behind if child deletes were
+				// observed first.
+				foreach (ref action; actions) {
+					if (action.skipped) continue;
+					if (action.type == ActionType.deleted && isSameOrChildPath(src, action.src) && normaliseMonitorPath(src) != normaliseMonitorPath(action.src)) {
+						action.skipped = true;
+						srcMap.remove(action.src);
+					}
+				}
 				break;
 			case ActionType.moved:
 				for(int i = 0; i < actions.length; i++) {
@@ -754,7 +768,7 @@ final class Monitor {
 	}
 
 	// Update
-	void update(bool useCallbacks = true) {
+	void update(bool useCallbacks = true, bool processDeletesWhenDraining = false) {
 		if(!initialised)
 			return;
 	
@@ -905,7 +919,7 @@ final class Monitor {
 							movedNotDeleted.remove(path); // Ignore delete for moved files
 						} else {
 							if (debugLogging) {addLogEntry("event IN_DELETE: " ~ path, ["debug"]);}
-							if (useCallbacks) actionHolder.append(ActionType.deleted, path);
+							if (useCallbacks || processDeletesWhenDraining) actionHolder.append(ActionType.deleted, path);
 						}
 					} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
 						if (debugLogging) {addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);}
@@ -938,7 +952,7 @@ final class Monitor {
 			// Assume that the items moved outside the watched directory have been deleted
 			foreach (cookie, path; cookieToPath) {
 				if (debugLogging) {addLogEntry("Deleting cookie|watch (post loop): " ~ path, ["debug"]);}
-				if (useCallbacks) onDelete(path);
+				if (useCallbacks || processDeletesWhenDraining) onDelete(path);
 				remove(path);
 				cookieToPath.remove(cookie);
 			}
