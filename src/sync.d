@@ -3086,7 +3086,17 @@ class SyncEngine {
 				if (debugLogging) {addLogEntry("The item to sync exists locally but is potentially not in the local database - otherwise this would be handled as changed item", ["debug"]);}
 				
 				// Which object is newer? The local file or the remote file?
-				SysTime localModifiedTime = timeLastModified(newItemPath).toUTC();
+				SysTime localModifiedTime;
+				try {
+					localModifiedTime = timeLastModified(newItemPath).toUTC();
+				} catch (FileException exception) {
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("File disappeared locally before timestamp comparison: " ~ newItemPath);
+					} else {
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, newItemPath);
+					}
+					return;
+				}
 				SysTime itemModifiedTime = newDatabaseItem.mtime;
 				// Reduce time resolution to seconds before comparing
 				localModifiedTime.fracSecs = Duration.zero;
@@ -4534,7 +4544,17 @@ class SyncEngine {
 			}
 			
 			// Get time values
-			SysTime localModifiedTime = timeLastModified(path).toUTC();
+			SysTime localModifiedTime;
+			try {
+				localModifiedTime = timeLastModified(path).toUTC();
+			} catch (FileException exception) {
+				if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+					addLogEntry("File disappeared locally before sync state timestamp comparison: " ~ path);
+				} else {
+					displayFileSystemErrorMessage(exception.msg, thisFunctionName, path);
+				}
+				return false;
+			}
 			SysTime itemModifiedTime = item.mtime;
 			// Reduce time resolution to seconds before comparing
 			localModifiedTime.fracSecs = Duration.zero;
@@ -5675,7 +5695,17 @@ class SyncEngine {
 				// Can we actually read the local file?
 				if (readLocalFile(localFilePath)){
 					// File is readable
-					SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+					SysTime localModifiedTime;
+					try {
+						localModifiedTime = timeLastModified(localFilePath).toUTC();
+					} catch (FileException exception) {
+						if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+							addLogEntry("File disappeared locally before database consistency timestamp comparison: " ~ localFilePath);
+						} else {
+							displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
+						}
+						return;
+					}
 					SysTime itemModifiedTime = dbItem.mtime;
 					// Reduce time resolution to seconds before comparing
 					itemModifiedTime.fracSecs = Duration.zero;
@@ -7115,10 +7145,10 @@ class SyncEngine {
 			// The local source file can disappear between the changed-item scan and the parallel upload worker processing it.
 			if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
 				addLogEntry("File disappeared locally before modified upload: " ~ localFilePath);
-				return;
+			} else {
+				displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
 			}
-
-			throw exception;
+			return;
 		}
 		
 		// Get the file size from the DB data, if DB data was returned, otherwise we have zero size value from the DB
@@ -7239,7 +7269,17 @@ class SyncEngine {
 				
 				// Update the date / time of the file online to match the local item
 				// Get the local file last modified time
-				SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+				SysTime localModifiedTime;
+				try {
+					localModifiedTime = timeLastModified(localFilePath).toUTC();
+				} catch (FileException exception) {
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("File disappeared locally after modified upload; skipping online timestamp update: " ~ localFilePath);
+					} else {
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
+					}
+					return;
+				}
 				// Drop fractional seconds for upload timestamp modification as Microsoft OneDrive does not support fractional seconds
 				localModifiedTime.fracSecs = Duration.zero;
 				
@@ -7530,7 +7570,17 @@ class SyncEngine {
 				Item onlineFile = makeItem(currentOnlineJSONData);
 				
 				// Which file is technically newer? The local file or the remote file?
-				SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+				SysTime localModifiedTime;
+				try {
+					localModifiedTime = timeLastModified(localFilePath).toUTC();
+				} catch (FileException exception) {
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("File disappeared locally before modified upload timestamp comparison: " ~ localFilePath);
+					} else {
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
+					}
+					return uploadResponse;
+				}
 				SysTime onlineModifiedTime = onlineFile.mtime;
 				
 				// Reduce time resolution to seconds before comparing
@@ -9962,7 +10012,17 @@ class SyncEngine {
 									
 									// Which file is technically newer? The local file or the remote file?
 									Item onlineFile = makeItem(fileDetailsFromOneDrive);
-									SysTime localModifiedTime = timeLastModified(fileToUpload).toUTC();
+									SysTime localModifiedTime;
+									try {
+										localModifiedTime = timeLastModified(fileToUpload).toUTC();
+									} catch (FileException exception) {
+										if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+											addLogEntry("File disappeared locally before new-file conflict timestamp comparison: " ~ fileToUpload);
+										} else {
+											displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+										}
+										return;
+									}
 									SysTime onlineModifiedTime = onlineFile.mtime;
 									
 									// Reduce time resolution to seconds before comparing
@@ -10297,7 +10357,18 @@ class SyncEngine {
 						
 						// Update the file modified time on OneDrive and save item details to database
 						// Update the item's metadata on OneDrive
-						SysTime mtime = timeLastModified(fileToUpload).toUTC();
+						SysTime mtime;
+						try {
+							mtime = timeLastModified(fileToUpload).toUTC();
+						} catch (FileException exception) {
+							if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+								addLogEntry("File disappeared locally after upload: " ~ fileToUpload);
+							} else {
+								displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+							}
+							// Return upload status
+							return uploadFailed;
+						}
 						mtime.fracSecs = Duration.zero;
 						string newFileId = uploadResponse["id"].str;
 						string newFileETag = uploadResponse["eTag"].str;
@@ -10386,7 +10457,18 @@ class SyncEngine {
 		JSONValue uploadSession;
 		
 		// Calculate modification time
-		SysTime localFileLastModifiedTime = timeLastModified(fileToUpload).toUTC();
+		SysTime localFileLastModifiedTime;
+		try {
+			localFileLastModifiedTime = timeLastModified(fileToUpload).toUTC();
+		} catch (FileException exception) {
+			if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+				addLogEntry("File disappeared locally before upload session creation: " ~ fileToUpload);
+			} else {
+				displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+			}
+			uploadSession = null;
+			return uploadSession;
+		}
 		localFileLastModifiedTime.fracSecs = Duration.zero;
 		
 		// Construct the fileSystemInfo JSON component needed to create the Upload Session
@@ -11191,7 +11273,21 @@ class SyncEngine {
 		
 		string fakeDriveId = appConfig.defaultDriveId;
 		string fakeRootId = appConfig.defaultRootId;
-		SysTime mtime = exists(path) ? timeLastModified(path).toUTC() : Clock.currTime(UTC());
+		SysTime mtime;
+		if (exists(path)) {
+			try {
+				mtime = timeLastModified(path).toUTC();
+			} catch (FileException exception) {
+				if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+					addLogEntry("File disappeared locally while creating fake response timestamp data: " ~ path);
+				} else {
+					displayFileSystemErrorMessage(exception.msg, thisFunctionName, path);
+				}
+				mtime = Clock.currTime(UTC());
+			}
+		} else {
+			mtime = Clock.currTime(UTC());
+		}
 		auto sha1 = new SHA1Digest();
 		ubyte[] fakedOneDriveItemValues = sha1.digest(path);
 		JSONValue fakeResponse;
@@ -12758,7 +12854,16 @@ class SyncEngine {
 				SysTime mtime;
 				if (appConfig.getValueBool("monitor")) {
 					// Use the newPath modified timestamp
-					mtime = timeLastModified(newPath).toUTC();
+					try {
+						mtime = timeLastModified(newPath).toUTC();
+					} catch (FileException exception) {
+						if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+							addLogEntry("Moved local item disappeared before timestamp update: " ~ newPath);
+						} else {
+							displayFileSystemErrorMessage(exception.msg, thisFunctionName, newPath);
+						}
+						return;
+					}
 				} else {
 					// Use the current system time
 					mtime = Clock.currTime().toUTC();
