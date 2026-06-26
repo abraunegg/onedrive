@@ -189,6 +189,8 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
+            "--single-directory",
+            root_name,
             "--confdir",
             str(conf_seeder),
         ]

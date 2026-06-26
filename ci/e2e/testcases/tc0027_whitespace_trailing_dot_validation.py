@@ -110,6 +110,8 @@ class TestCase0027WhitespaceTrailingDotValidation(E2ETestCase):
             "--verbose",
             "--resync",
             "--resync-auth",
+            "--single-directory",
+            root_name,
             "--confdir",
             str(confdir),
         ]
@@ -126,6 +128,8 @@ class TestCase0027WhitespaceTrailingDotValidation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
+            "--single-directory",
+            root_name,
             "--confdir",
             str(confdir),
         ]
@@ -145,6 +149,8 @@ class TestCase0027WhitespaceTrailingDotValidation(E2ETestCase):
             "--download-only",
             "--resync",
             "--resync-auth",
+            "--single-directory",
+            root_name,
             "--confdir",
             str(verify_conf),
         ]
