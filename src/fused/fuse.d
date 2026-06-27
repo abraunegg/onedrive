@@ -374,7 +374,7 @@ export class Operations
     /**
      * Truncate a file to the given length.
      * Params:
-     *   path   = The path to the file to trunate.
+     *   path   = The path to the file to truncate.
      *   length = Truncate file to this given length.
      */
     void truncate(const(char)[] path, ulong length)
