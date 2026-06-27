@@ -97,7 +97,7 @@ extern (System)
 }
 
 
-/* mappping of the fuse_main macro in fuse.h */
+/* mapping of the fuse_main macro in fuse.h */
 int fuse_main(int argc, char** argv, fuse_operations* op, void* user_data)
 {
     return fuse_main_real(argc, argv, op, fuse_operations.sizeof, user_data);

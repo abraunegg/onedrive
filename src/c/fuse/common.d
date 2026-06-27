@@ -88,7 +88,7 @@ extern (System) {
         uint keep_cache = 1;
 
         /** Indicates a flush operation.  Set in flush operation, also
-          maybe set in highlevel lock operation and lowlevel release
+          may be set in high-level lock operation and low-level release
           operation. Introduced in version 2.6 */
         uint flush = 1;
 

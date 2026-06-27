@@ -56,7 +56,7 @@ private void attach()
  * A template to wrap C function calls and support exceptions to indicate
  * errors.
  *
- * The templates passes the Operations object to the lambda as the first
+ * The template passes the Operations object to the lambda as the first
  * argument.
  */
 private auto call(alias fn)()
@@ -80,7 +80,7 @@ private auto call(alias fn)()
     }
 }
 
-/* C calling convention compatible function to hand into libfuse which wrap
+/* C calling convention compatible function wrappers to hand into libfuse which wrap
  * the call to our Operations object.
  *
  * Note that we convert our * char pointer to an array using the
@@ -411,7 +411,7 @@ export class Operations
      *
      * Params:
      *   path = The path to check.
-     *   mode = An flag indicating what to check for. See access(2) for
+     *   mode = A flag indicating what to check for. See access(2) for
      *          supported modes.
      * Returns: True on success otherwise false.
      */
@@ -436,7 +436,7 @@ export class Operations
      * Sets access and modification time.
      *
      * Params:
-     *   path = The patch to modify.
+     *   path = The path to modify.
      *   time = The time to set.
      */
     void utime(const(char)[] path, utimbuf* time)
@@ -585,7 +585,7 @@ public:
         static if(length.max < cargs.length.max)
         {
             /* This is an unsafe cast that we need to do for C compat.
-               Enforce unlike assert will be checked in opt-builds as well. */
+               enforce, unlike assert, will be checked in optimised builds as well. */
             import std.exception : enforce;
             enforce(length >= 0);
             enforce(length == cargs.length);

@@ -316,7 +316,6 @@ ltmain
 Lyncredible
 makepkg
 mangleof
-mappping
 maxfiles
 mayne
 mbr
