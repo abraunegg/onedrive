@@ -3,6 +3,7 @@ module syncEngine;
 
 // What does this module require to function?
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
+import core.stdc.errno : ENOENT, ENOTDIR;
 import core.thread;
 import core.time;
 import std.algorithm;
@@ -3085,7 +3086,17 @@ class SyncEngine {
 				if (debugLogging) {addLogEntry("The item to sync exists locally but is potentially not in the local database - otherwise this would be handled as changed item", ["debug"]);}
 				
 				// Which object is newer? The local file or the remote file?
-				SysTime localModifiedTime = timeLastModified(newItemPath).toUTC();
+				SysTime localModifiedTime;
+				try {
+					localModifiedTime = timeLastModified(newItemPath).toUTC();
+				} catch (FileException exception) {
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("File disappeared locally before timestamp comparison: " ~ newItemPath);
+					} else {
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, newItemPath);
+					}
+					return;
+				}
 				SysTime itemModifiedTime = newDatabaseItem.mtime;
 				// Reduce time resolution to seconds before comparing
 				localModifiedTime.fracSecs = Duration.zero;
@@ -4533,7 +4544,17 @@ class SyncEngine {
 			}
 			
 			// Get time values
-			SysTime localModifiedTime = timeLastModified(path).toUTC();
+			SysTime localModifiedTime;
+			try {
+				localModifiedTime = timeLastModified(path).toUTC();
+			} catch (FileException exception) {
+				if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+					addLogEntry("File disappeared locally before sync state timestamp comparison: " ~ path);
+				} else {
+					displayFileSystemErrorMessage(exception.msg, thisFunctionName, path);
+				}
+				return false;
+			}
 			SysTime itemModifiedTime = item.mtime;
 			// Reduce time resolution to seconds before comparing
 			localModifiedTime.fracSecs = Duration.zero;
@@ -5674,7 +5695,17 @@ class SyncEngine {
 				// Can we actually read the local file?
 				if (readLocalFile(localFilePath)){
 					// File is readable
-					SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+					SysTime localModifiedTime;
+					try {
+						localModifiedTime = timeLastModified(localFilePath).toUTC();
+					} catch (FileException exception) {
+						if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+							addLogEntry("File disappeared locally before database consistency timestamp comparison: " ~ localFilePath);
+						} else {
+							displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
+						}
+						return;
+					}
 					SysTime itemModifiedTime = dbItem.mtime;
 					// Reduce time resolution to seconds before comparing
 					itemModifiedTime.fracSecs = Duration.zero;
@@ -7107,7 +7138,18 @@ class SyncEngine {
 		remainingFreeSpace = cachedOnlineDriveData.quotaRemaining;
 		
 		// Get the file size from the actual file
-		long thisFileSizeLocal = getSize(localFilePath);
+		long thisFileSizeLocal;
+		try {
+			thisFileSizeLocal = getSize(localFilePath);
+		} catch (FileException exception) {
+			// The local source file can disappear between the changed-item scan and the parallel upload worker processing it.
+			if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+				addLogEntry("File disappeared locally before modified upload: " ~ localFilePath);
+			} else {
+				displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
+			}
+			return;
+		}
 		
 		// Get the file size from the DB data, if DB data was returned, otherwise we have zero size value from the DB
 		long thisFileSizeFromDB;
@@ -7227,7 +7269,17 @@ class SyncEngine {
 				
 				// Update the date / time of the file online to match the local item
 				// Get the local file last modified time
-				SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+				SysTime localModifiedTime;
+				try {
+					localModifiedTime = timeLastModified(localFilePath).toUTC();
+				} catch (FileException exception) {
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("File disappeared locally after modified upload; skipping online timestamp update: " ~ localFilePath);
+					} else {
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
+					}
+					return;
+				}
 				// Drop fractional seconds for upload timestamp modification as Microsoft OneDrive does not support fractional seconds
 				localModifiedTime.fracSecs = Duration.zero;
 				
@@ -7518,7 +7570,17 @@ class SyncEngine {
 				Item onlineFile = makeItem(currentOnlineJSONData);
 				
 				// Which file is technically newer? The local file or the remote file?
-				SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+				SysTime localModifiedTime;
+				try {
+					localModifiedTime = timeLastModified(localFilePath).toUTC();
+				} catch (FileException exception) {
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("File disappeared locally before modified upload timestamp comparison: " ~ localFilePath);
+					} else {
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
+					}
+					return uploadResponse;
+				}
 				SysTime onlineModifiedTime = onlineFile.mtime;
 				
 				// Reduce time resolution to seconds before comparing
@@ -7579,9 +7641,17 @@ class SyncEngine {
 						// Display what the error is
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
-				} catch (FileException e) {
+				} catch (FileException exception) {
 					// filesystem error
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, localFilePath);
+					displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
+				} catch (ErrnoException exception) {
+					// The local source file can disappear between the pre-upload checks and curlEngine opening it.
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("File disappeared locally before modified upload: " ~ localFilePath);
+					} else {
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
+					}
+					uploadResponse = null;
 				}
 			} else {
 				// As this is a unique thread, the sessionFilePath for where we save the data needs to be unique
@@ -9942,7 +10012,17 @@ class SyncEngine {
 									
 									// Which file is technically newer? The local file or the remote file?
 									Item onlineFile = makeItem(fileDetailsFromOneDrive);
-									SysTime localModifiedTime = timeLastModified(fileToUpload).toUTC();
+									SysTime localModifiedTime;
+									try {
+										localModifiedTime = timeLastModified(fileToUpload).toUTC();
+									} catch (FileException exception) {
+										if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+											addLogEntry("File disappeared locally before new-file conflict timestamp comparison: " ~ fileToUpload);
+										} else {
+											displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+										}
+										return;
+									}
 									SysTime onlineModifiedTime = onlineFile.mtime;
 									
 									// Reduce time resolution to seconds before comparing
@@ -9975,7 +10055,7 @@ class SyncEngine {
 								if (exception.httpStatusCode == 404) {
 									// The file has been checked, client side filtering checked, does not exist online - we need to upload it
 									if (debugLogging) {addLogEntry("fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload); generated a 404 - file does not exist online - must upload it", ["debug"]);}
-									uploadFailed = performNewFileUpload(parentItem, fileToUpload, thisFileSize);
+									uploadFailed = performNewFileUpload(parentItem, fileToUpload, thisFileSize, zeroDataTraversal);
 								} else {
 									// some other error
 									// Default operation if not 408,429,503,504 errors
@@ -10023,6 +10103,7 @@ class SyncEngine {
 		} else {
 			// File disappeared before upload
 			addLogEntry("File disappeared locally before upload: " ~ fileToUpload);
+			zeroDataTraversal = true;
 			// dont set uploadFailed = true; as the file disappeared before upload, thus nothing here failed
 		}
 
@@ -10049,7 +10130,7 @@ class SyncEngine {
 	}
 		
 	// Perform the actual upload to OneDrive
-	bool performNewFileUpload(Item parentItem, string fileToUpload, long thisFileSize) {
+	bool performNewFileUpload(Item parentItem, string fileToUpload, long thisFileSize, ref bool zeroDataTraversal) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -10133,10 +10214,24 @@ class SyncEngine {
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
 					uploadFileOneDriveApiInstance = null;				
-				} catch (FileException e) {
+				} catch (FileException exception) {
 					// display the error message
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, fileToUpload);
+					displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+					
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+					uploadFileOneDriveApiInstance.releaseCurlEngine();
+					uploadFileOneDriveApiInstance = null;
+				} catch (ErrnoException exception) {
+					// The local source file can disappear between the pre-upload exists/read checks and curlEngine opening it.
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("File disappeared locally before upload: " ~ fileToUpload);
+						uploadFailed = false;
+						zeroDataTraversal = true;
+					} else {
+						addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+					}
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -10244,8 +10339,8 @@ class SyncEngine {
 			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
 		}
 		
-		// If no upload failure, calculate transfer metrics, perform integrity validation
-		if (!uploadFailed) {
+		// If a real upload occurred, calculate transfer metrics, perform integrity validation
+		if (!uploadFailed && !zeroDataTraversal) {
 			// Upload did not fail ...
 			// As no upload failure, calculate transfer metrics in a consistent manner
 			displayTransferMetrics(fileToUpload, thisFileSize, uploadTransferStartTime, uploadTransferEndTime, uploadStartTime, Clock.currTime());
@@ -10262,7 +10357,18 @@ class SyncEngine {
 						
 						// Update the file modified time on OneDrive and save item details to database
 						// Update the item's metadata on OneDrive
-						SysTime mtime = timeLastModified(fileToUpload).toUTC();
+						SysTime mtime;
+						try {
+							mtime = timeLastModified(fileToUpload).toUTC();
+						} catch (FileException exception) {
+							if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+								addLogEntry("File disappeared locally after upload: " ~ fileToUpload);
+							} else {
+								displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+							}
+							// Return upload status
+							return uploadFailed;
+						}
 						mtime.fracSecs = Duration.zero;
 						string newFileId = uploadResponse["id"].str;
 						string newFileETag = uploadResponse["eTag"].str;
@@ -10351,7 +10457,18 @@ class SyncEngine {
 		JSONValue uploadSession;
 		
 		// Calculate modification time
-		SysTime localFileLastModifiedTime = timeLastModified(fileToUpload).toUTC();
+		SysTime localFileLastModifiedTime;
+		try {
+			localFileLastModifiedTime = timeLastModified(fileToUpload).toUTC();
+		} catch (FileException exception) {
+			if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+				addLogEntry("File disappeared locally before upload session creation: " ~ fileToUpload);
+			} else {
+				displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+			}
+			uploadSession = null;
+			return uploadSession;
+		}
 		localFileLastModifiedTime.fracSecs = Duration.zero;
 		
 		// Construct the fileSystemInfo JSON component needed to create the Upload Session
@@ -10643,23 +10760,23 @@ class SyncEngine {
 						uploadResponse = null;
 						return uploadResponse;
 					}
-				} catch (OneDriveException e) {
+				} catch (OneDriveException exception) {
 					// OneDrive threw another error on retry
 					if (verboseLogging) {addLogEntry("Retry to upload fragment failed", ["verbose"]);}
 					// display what the error is
-					displayOneDriveErrorMessage(e.msg, thisFunctionName);
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					// set uploadResponse to null as the fragment upload was in error twice
 					uploadResponse = null;
 					
-				} catch (std.exception.ErrnoException e) {
+				} catch (std.exception.ErrnoException exception) {
 					// There was a file system error - display the error message
-					displayFileSystemErrorMessage(e.msg, thisFunctionName, newUploadSession["localPath"].str);
+					displayFileSystemErrorMessage(exception.msg, thisFunctionName, newUploadSession["localPath"].str);
 					return uploadResponse;
 				}
-			} catch (ErrnoException e) {
+			} catch (ErrnoException exception) {
 				// There was a file system error
 				// display the error message
-				displayFileSystemErrorMessage(e.msg, thisFunctionName, uploadSessionData["localPath"].str);
+				displayFileSystemErrorMessage(exception.msg, thisFunctionName, uploadSessionData["localPath"].str);
 				uploadResponse = null;
 				return uploadResponse;
 			}
@@ -11156,7 +11273,21 @@ class SyncEngine {
 		
 		string fakeDriveId = appConfig.defaultDriveId;
 		string fakeRootId = appConfig.defaultRootId;
-		SysTime mtime = exists(path) ? timeLastModified(path).toUTC() : Clock.currTime(UTC());
+		SysTime mtime;
+		if (exists(path)) {
+			try {
+				mtime = timeLastModified(path).toUTC();
+			} catch (FileException exception) {
+				if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+					addLogEntry("File disappeared locally while creating fake response timestamp data: " ~ path);
+				} else {
+					displayFileSystemErrorMessage(exception.msg, thisFunctionName, path);
+				}
+				mtime = Clock.currTime(UTC());
+			}
+		} else {
+			mtime = Clock.currTime(UTC());
+		}
 		auto sha1 = new SHA1Digest();
 		ubyte[] fakedOneDriveItemValues = sha1.digest(path);
 		JSONValue fakeResponse;
@@ -12723,7 +12854,16 @@ class SyncEngine {
 				SysTime mtime;
 				if (appConfig.getValueBool("monitor")) {
 					// Use the newPath modified timestamp
-					mtime = timeLastModified(newPath).toUTC();
+					try {
+						mtime = timeLastModified(newPath).toUTC();
+					} catch (FileException exception) {
+						if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+							addLogEntry("Moved local item disappeared before timestamp update: " ~ newPath);
+						} else {
+							displayFileSystemErrorMessage(exception.msg, thisFunctionName, newPath);
+						}
+						return;
+					}
 				} else {
 					// Use the current system time
 					mtime = Clock.currTime().toUTC();

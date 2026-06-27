@@ -46,13 +46,16 @@ class MonitorBackgroundWorker {
 	int fd;
 	Pipe p;
 	bool isAlive;
+	bool workerExited;
 
 	this() {
 		isAlive = true;
+		workerExited = false;
 		p = pipe();
 	}
 
 	shared void initialise() {
+		workerExited = false;
 		fd = inotify_init();
 		if (fd < 0) throw new MonitorException("inotify_init failed");
 	}
@@ -110,8 +113,13 @@ class MonitorBackgroundWorker {
 		// On failure, send -1 to caller
 		int res;
 
+		// Mark the worker as exited regardless of which shutdown/error path is used.
+		scope(exit) {
+			workerExited = true;
+		}
+
 		// wait for the caller to be ready
-		receiveOnly!int();
+		receiveOnly!bool();
 
 		while (isAlive) {
 			fd_set fds;
@@ -165,10 +173,18 @@ class MonitorBackgroundWorker {
 		}
 	}
 
+	shared bool hasExited() {
+		return workerExited;
+	}
+
 	shared void interrupt() {
 		isAlive = false;
-		(cast()p).writeEnd.writeln("done");
-		(cast()p).writeEnd.flush();
+		try {
+			(cast()p).writeEnd.writeln("done");
+			(cast()p).writeEnd.flush();
+		} catch (Exception) {
+			// The control pipe may already be closed during shutdown.
+		}
 	}
 
 	shared void shutdown() {
@@ -176,9 +192,15 @@ class MonitorBackgroundWorker {
 		if (fd > 0) {
 			close(fd);
 			fd = 0;
+		}
+
+		try {
 			(cast()p).close();
+		} catch (Exception) {
+			// The control pipe may already be closed or partially initialised.
 		}
 	}
+
 }
 
 void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid) {
@@ -265,6 +287,20 @@ struct ActionHolder {
 							break;
 					}
 				}
+
+				// If a parent directory delete arrives after child deletes, collapse the
+				// child delete actions into the parent delete. Linux commonly reports
+				// rm -rf as file deletes followed by the directory delete. Processing
+				// only the parent preserves the intended recursive delete operation and
+				// avoids leaving empty remote directories behind if child deletes were
+				// observed first.
+				foreach (ref action; actions) {
+					if (action.skipped) continue;
+					if (action.type == ActionType.deleted && isSameOrChildPath(src, action.src) && normaliseMonitorPath(src) != normaliseMonitorPath(action.src)) {
+						action.skipped = true;
+						srcMap.remove(action.src);
+					}
+				}
 				break;
 			case ActionType.moved:
 				for(int i = 0; i < actions.length; i++) {
@@ -327,8 +363,12 @@ final class Monitor {
 	
 	// Configure Private Class Variables
 	shared(MonitorBackgroundWorker) worker;
-	// map every inotify watch descriptor to its directory
+	// map every inotify watch descriptor to its normalised directory path
 	private string[int] wdToDirName;
+	// reverse map used to keep watch registration idempotent
+	private int[string] dirNameToWd;
+	// flag set when the monitor stream reports lost events
+	private bool monitorStateDirty = false;
 	// map the inotify cookies of move_from events to their path
 	private string[int] cookieToPath;
 	// buffer to receive the inotify events
@@ -356,9 +396,17 @@ final class Monitor {
 		inotifyMutex = new Mutex(); // Define a Mutex for thread-safe access
 	}
 	
-	// The destructor should only clean up resources owned directly by this instance
+	// The destructor should only clean up resources owned directly by this instance.
+	// shutdown() is responsible for stopping the worker before this object is destroyed.
 	~this() {
-		object.destroy(worker);
+		if (worker !is null) {
+			try {
+				worker.shutdown();
+			} catch (Exception) {
+				// Destructors must not throw during process teardown.
+			}
+			worker = null;
+		}
 	}
 	
 	// Initialise the monitor class
@@ -402,23 +450,163 @@ final class Monitor {
 			return;
 		initialised = false;
 
-		// Interrupt the worker to allow removal of inotify watch descriptors
-		worker.interrupt();
+		// Interrupt the worker so select() wakes if it is waiting on inotify.
+		if (worker !is null) {
+			worker.interrupt();
+		}
 
-		// Remove all the inotify watch descriptors
+		// Remove all the inotify watch descriptors before closing the fd.
 		removeAll();
 
-		// Notify the worker that the monitor has been shutdown
-		worker.interrupt();
-		send(false);
+		// Notify the worker that the monitor has been shutdown. This unblocks the
+		// worker if it has already sent a wake-up and is waiting for the main thread
+		// to acknowledge whether monitoring should continue.
+		try {
+			send(false);
+		} catch (Exception) {
+			// The worker may already have exited during shutdown.
+		}
+
+		if (worker !is null) {
+			worker.interrupt();
+
+			// Do not allow Monitor destruction to race with the worker thread still
+			// running inside MonitorBackgroundWorker.watch().
+			foreach (_; 0 .. 100) {
+				if (worker.hasExited()) {
+					break;
+				}
+				Thread.sleep(dur!"msecs"(20));
+			}
+
+			worker.shutdown();
+		}
 
 		inotifyMutex.lock();
 		try {
 			wdToDirName = null;
+			dirNameToWd = null;
+			cookieToPath = null;
+			movedNotDeleted = null;
 		} finally {
 			inotifyMutex.unlock();
 		}
 	}
+
+
+	// Return a stable monitor bookkeeping key for a path.
+	// All internal watch maps use this form so that these variants are treated
+	// as the same directory: ./path, path, path/.
+	private string normaliseWatchPath(string path) {
+		if (path.empty) return ".";
+
+		string normalisedPath = buildNormalizedPath(path);
+
+		if (normalisedPath.empty || normalisedPath == "./") return ".";
+		if (normalisedPath.startsWith("./")) normalisedPath = normalisedPath[2 .. $];
+
+		while ((normalisedPath.length > 1) && normalisedPath.endsWith("/")) {
+			normalisedPath = normalisedPath[0 .. $-1];
+		}
+
+		if (normalisedPath.empty) return ".";
+		return normalisedPath;
+	}
+
+	private string watchPathToEventPrefix(string watchPath) {
+		return (watchPath == ".") ? "" : watchPath ~ "/";
+	}
+
+	private bool isSameOrChildWatchPath(string parent, string candidate) {
+		string parentPath = normaliseWatchPath(parent);
+		string candidatePath = normaliseWatchPath(candidate);
+
+		return (candidatePath == parentPath) || startsWith(candidatePath, parentPath ~ "/");
+	}
+
+	private string rebaseWatchPath(string fromRoot, string toRoot, string candidate) {
+		string normalisedFromRoot = normaliseWatchPath(fromRoot);
+		string normalisedToRoot = normaliseWatchPath(toRoot);
+		string normalisedCandidate = normaliseWatchPath(candidate);
+
+		if (normalisedCandidate == normalisedFromRoot) return normalisedToRoot;
+		return normalisedToRoot ~ normalisedCandidate[normalisedFromRoot.length .. $];
+	}
+
+	private bool isWatchRegistered(string dirname) {
+		string key = normaliseWatchPath(dirname);
+
+		inotifyMutex.lock();
+		try {
+			return (key in dirNameToWd) !is null;
+		} finally {
+			inotifyMutex.unlock();
+		}
+	}
+
+	private void registerWatchDescriptor(int wd, string dirname) {
+		string key = normaliseWatchPath(dirname);
+
+		inotifyMutex.lock();
+		try {
+			// If this watch descriptor was already associated with another path,
+			// remove the old reverse entry before recording the new canonical path.
+			auto previousPath = wd in wdToDirName;
+			if (previousPath !is null) {
+				dirNameToWd.remove(*previousPath);
+			}
+
+			// If the directory path was already associated with another descriptor,
+			// drop that stale descriptor mapping. The path-level reverse map is the
+			// source of truth for idempotency.
+			auto previousWd = key in dirNameToWd;
+			if ((previousWd !is null) && (*previousWd != wd)) {
+				wdToDirName.remove(*previousWd);
+			}
+
+			wdToDirName[wd] = key;
+			dirNameToWd[key] = wd;
+		} finally {
+			inotifyMutex.unlock();
+		}
+	}
+
+	private bool unregisterWatchDescriptor(int wd, out string dirname) {
+		dirname = null;
+
+		inotifyMutex.lock();
+		try {
+			auto existingPath = wd in wdToDirName;
+			if (existingPath is null) return false;
+
+			dirname = *existingPath;
+			wdToDirName.remove(wd);
+
+			auto existingWd = dirname in dirNameToWd;
+			if ((existingWd !is null) && (*existingWd == wd)) {
+				dirNameToWd.remove(dirname);
+			}
+
+			return true;
+		} finally {
+			inotifyMutex.unlock();
+		}
+	}
+
+	private void clearTransientEventState() {
+		cookieToPath = null;
+		movedNotDeleted = null;
+		object.destroy(actionHolder);
+	}
+
+	bool isMonitorStateDirty() {
+		return monitorStateDirty;
+	}
+
+	void clearMonitorStateDirty() {
+		monitorStateDirty = false;
+	}
+
 
 	// Recursively add this path to be monitored
 	private void addRecursive(string dirname) {
@@ -502,23 +690,30 @@ final class Monitor {
 				}
 			}
 			
+			// Only directories need inotify watches. File changes are reported by
+			// the watch on the parent directory. Avoid file-level watches because
+			// they cannot be maintained safely under rapid create/delete churn.
+			if (!isDir(dirname)) {
+				return;
+			}
+
+			// Avoid duplicate watch descriptors for the same directory when the
+			// same path is seen as ./path, path, or path/.
+			if (isWatchRegistered(dirname)) {
+				if (debugLogging) {addLogEntry("Skipping duplicate inotify watch registration for: " ~ dirname, ["debug"]);}
+				return;
+			}
+
 			// passed all potential exclusions
-			// add inotify watch for this path / directory / file
+			// add inotify watch for this directory
 			if (debugLogging) {addLogEntry("Calling worker.addInotifyWatch() for this dirname: " ~ dirname, ["debug"]);}
 			int wd = worker.addInotifyWatch(dirname);
 			if (wd > 0) {
-				inotifyMutex.lock();
-				try {
-					wdToDirName[wd] = buildNormalizedPath(dirname) ~ "/";
-				} finally {
-					inotifyMutex.unlock();
-				}
+				registerWatchDescriptor(wd, dirname);
 			}
 			
-			// if this is a directory, recursively add this path
-			if (isDir(dirname)) {
-				traverseDirectory(dirname);
-			}
+			// recursively add child directories
+			traverseDirectory(dirname);
 		// Catch any FileException error which is generated
 		} catch (std.file.FileException e) {
 			// Standard filesystem error
@@ -585,113 +780,248 @@ final class Monitor {
 		// those already-removed watches as cleanup success so shutdown cannot be
 		// interrupted by stale watch descriptors.
 		foreach (wd, path; copy) {
-			remove(wd);
+			// removeAll() is used during full monitor teardown / shutdown. In that
+			// scenario it is useful to keep the existing verbose teardown logging.
+			remove(wd, true);
 		}
 	}
 
 	// Remove a watch descriptor
-	private void remove(int wd) {
+	private void remove(int wd, bool verboseRemovalLog = false) {
 		string dirname;
 		int ret;
 		int savedErrno;
 
 		inotifyMutex.lock();
 		try {
-			// The watch may already have been removed by the kernel and cleaned up via
-			// an IN_IGNORED event. This is not an error for shutdown/removal cleanup.
-			if ((wd in wdToDirName) is null) {
+			auto existingPath = wd in wdToDirName;
+			if (existingPath is null) {
 				if (debugLogging) {addLogEntry("inotify watch descriptor already removed from internal map: wd=" ~ wd.to!string, ["debug"]);}
 				return;
 			}
-
-			dirname = wdToDirName[wd];
-			ret = worker.removeInotifyWatch(wd);
-			savedErrno = errno();
-
-			if (ret < 0) {
-				// EINVAL indicates that the watch descriptor is no longer valid. This can
-				// occur legitimately if the watched directory was deleted/moved or the
-				// kernel already removed the watch before explicit cleanup. Remove our
-				// bookkeeping entry and continue.
-				if (savedErrno == EINVAL) {
-					if (debugLogging) {addLogEntry("Ignoring already-invalid inotify watch during removal: wd=" ~ wd.to!string ~ ", path=" ~ dirname, ["debug"]);}
-				} else {
-					throw new MonitorException("inotify_rm_watch failed");
-				}
-			}
-
-			wdToDirName.remove(wd);
+			dirname = *existingPath;
 		} finally {
 			inotifyMutex.unlock();
 		}
 
-		if (verboseLogging) {addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ dirname, ["verbose"]);}
+		ret = worker.removeInotifyWatch(wd);
+		savedErrno = errno();
+
+		if (ret < 0) {
+			// EINVAL indicates that the watch descriptor is no longer valid. This can
+			// occur legitimately if the watched directory was deleted/moved or the
+			// kernel already removed the watch before explicit cleanup. Remove our
+			// bookkeeping entry and continue.
+			if (savedErrno == EINVAL) {
+				if (debugLogging) {addLogEntry("Ignoring already-invalid inotify watch during removal: wd=" ~ wd.to!string ~ ", path=" ~ dirname, ["debug"]);}
+			} else {
+				throw new MonitorException("inotify_rm_watch failed");
+			}
+		}
+
+		string removedPath;
+		unregisterWatchDescriptor(wd, removedPath);
+
+		// Runtime directory delete/move cleanup can remove many watches at once,
+		// especially on FreeBSD where the backend may not silently invalidate child
+		// watches before our explicit recursive cleanup runs. Keep that normal
+		// runtime cleanup out of verbose output, but retain it for debug diagnostics.
+		// Full teardown / shutdown still passes verboseRemovalLog=true.
+		if (verboseRemovalLog && verboseLogging) {
+			addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ dirname, ["verbose"]);
+		} else if (debugLogging) {
+			addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ dirname, ["debug"]);
+		}
 	}
 
-	// Remove the watch descriptors associated to the given path
+	// Remove the watch descriptors associated with the given path and all child paths.
 	private void remove(const(char)[] path) {
-		string[] matchingPaths;
-		int[] matchingWds;
+		removeWatchTree(path.idup);
+	}
 
-		path ~= "/";
+	private void removeWatchTree(string path) {
+		int[] matchingWds;
+		string key = normaliseWatchPath(path);
 
 		inotifyMutex.lock();
 		try {
 			foreach (wd, dirname; wdToDirName) {
-				if (dirname.startsWith(path)) {
+				if (isSameOrChildWatchPath(key, dirname)) {
 					matchingWds ~= wd;
-					matchingPaths ~= dirname;
 				}
 			}
 		} finally {
 			inotifyMutex.unlock();
 		}
 
-		foreach (idx, wd; matchingWds) {
-			int ret = worker.removeInotifyWatch(wd);
-			int savedErrno = errno();
+		foreach (wd; matchingWds) {
+			// Normal runtime recursive cleanup should not produce verbose output for
+			// every child watch descriptor. The individual removals remain visible at
+			// debug level via remove().
+			remove(wd, false);
+		}
 
-			if (ret < 0) {
-				// EINVAL indicates that the watch descriptor is already invalid. This can
-				// happen when the watched path has already disappeared or when an IN_IGNORED
-				// event has already invalidated the watch. Treat this as successful cleanup
-				// and remove the internal bookkeeping entry.
-				if (savedErrno == EINVAL) {
-					if (debugLogging) {addLogEntry("Ignoring already-invalid inotify watch during path removal: wd=" ~ wd.to!string ~ ", path=" ~ matchingPaths[idx], ["debug"]);}
-				} else {
-					throw new MonitorException("inotify_rm_watch failed");
+		if ((matchingWds.length > 0) && debugLogging) {
+			addLogEntry("Removed " ~ matchingWds.length.to!string ~ " inotify watch descriptor(s) for directory tree: " ~ key, ["debug"]);
+		}
+	}
+
+	private void rebaseWatchTree(string fromRoot, string toRoot) {
+		string oldRoot = normaliseWatchPath(fromRoot);
+		string newRoot = normaliseWatchPath(toRoot);
+		string[int] copy;
+		uint rebasedCount = 0;
+
+		inotifyMutex.lock();
+		try {
+			copy = wdToDirName.dup;
+
+			foreach (wd, dirname; copy) {
+				if (!isSameOrChildWatchPath(oldRoot, dirname)) continue;
+
+				string rebasedPath = rebaseWatchPath(oldRoot, newRoot, dirname);
+
+				auto existingWd = rebasedPath in dirNameToWd;
+				if ((existingWd !is null) && (*existingWd != wd)) {
+					// This should not normally happen after idempotent registration, but if a
+					// previous buggy run produced duplicate path state, prefer the watch that
+					// is already being rebased and drop the stale reverse entry.
+					wdToDirName.remove(*existingWd);
 				}
-			}
 
-			inotifyMutex.lock();
+				dirNameToWd.remove(dirname);
+				wdToDirName[wd] = rebasedPath;
+				dirNameToWd[rebasedPath] = wd;
+				rebasedCount++;
+			}
+		} finally {
+			inotifyMutex.unlock();
+		}
+
+		if ((rebasedCount > 0) && debugLogging) {
+			addLogEntry("Rebased " ~ rebasedCount.to!string ~ " inotify watch descriptor(s) from " ~ oldRoot ~ " to " ~ newRoot, ["debug"]);
+		}
+	}
+
+	private void pruneStaleWatches() {
+		int[] staleWds;
+		string[int] copy;
+
+		inotifyMutex.lock();
+		try {
+			copy = wdToDirName.dup;
+		} finally {
+			inotifyMutex.unlock();
+		}
+
+		foreach (wd, dirname; copy) {
+			if (dirname == ".") continue;
+
 			try {
-				wdToDirName.remove(wd);
-			} finally {
-				inotifyMutex.unlock();
+				if (!exists(dirname) || !isDir(dirname)) {
+					staleWds ~= wd;
+				}
+			} catch (FileException) {
+				staleWds ~= wd;
 			}
+		}
 
-			if (verboseLogging) {addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ matchingPaths[idx], ["verbose"]);}
+		foreach (wd; staleWds) {
+			// Stale watch pruning is normal runtime housekeeping; keep verbose output
+			// quiet and expose individual removals only at debug level.
+			remove(wd, false);
+		}
+
+		if ((staleWds.length > 0) && debugLogging) {
+			addLogEntry("Pruned " ~ staleWds.length.to!string ~ " stale inotify watch descriptor(s)", ["debug"]);
 		}
 	}
 
 	// Return the file path from an inotify event
-	private string getPath(const(inotify_event)* event) {
-		string path;
+	private bool getPath(const(inotify_event)* event, out string path) {
+		path = null;
 
 		inotifyMutex.lock();
 		try {
-			path = wdToDirName[event.wd];
+			auto dirname = event.wd in wdToDirName;
+			if (dirname is null) {
+				// Under heavy churn or shutdown, inotify can still deliver queued
+				// events for a watch descriptor that has already been removed from
+				// the internal map. Treat those as stale events rather than allowing
+				// associative-array indexing to raise a RangeError.
+				if (debugLogging) {addLogEntry("Ignoring stale inotify event for removed watch descriptor: wd=" ~ event.wd.to!string ~ ", mask=" ~ event.mask.to!string, ["debug"]);}
+				return false;
+			}
+
+			path = watchPathToEventPrefix(*dirname);
 		} finally {
 			inotifyMutex.unlock();
 		}
 
-		if (event.len > 0) path ~= fromStringz(event.name.ptr);
+		if (event.len > 0) {
+			path ~= fromStringz(event.name.ptr);
+		} else if (path.empty) {
+			path = ".";
+		} else if (path.endsWith("/")) {
+			path = path[0 .. $-1];
+		}
+
 		if (debugLogging) {addLogEntry("inotify path event for: " ~ path, ["debug"]);}
-		return path;
+		return true;
+	}
+
+	private void drainPendingEventsOnly(ref pollfd fds) {
+		size_t drainedEvents = 0;
+
+		while (true) {
+			bool hasNotification = false;
+			int sleep_counter = 0;
+
+			// Preserve the existing short batching window, but do not resolve paths,
+			// update watches, evaluate filters, or invoke callbacks. This path is
+			// used when callers explicitly want queued local events cancelled.
+			while (sleep_counter < 5) {
+				int ret = poll(&fds, 1, 0);
+				if (ret == -1) throw new MonitorException("poll failed");
+				else if (ret == 0) break;
+
+				hasNotification = true;
+				size_t length = read(worker.fd, buffer.ptr, buffer.length);
+				if (length == -1) throw new MonitorException("read failed");
+
+				int i = 0;
+				while (i < length) {
+					inotify_event *event = cast(inotify_event*) &buffer[i];
+
+					if (event.mask & IN_IGNORED) {
+						string ignoredPath;
+						unregisterWatchDescriptor(event.wd, ignoredPath);
+					} else if (event.mask & IN_Q_OVERFLOW) {
+						monitorStateDirty = true;
+						clearTransientEventState();
+						throw new MonitorException("inotify queue overflow: some events may be lost");
+					}
+
+					drainedEvents++;
+					i += inotify_event.sizeof + event.len;
+				}
+
+				if (poll(&fds, 1, 0) == 0) {
+					sleep_counter += 1;
+					Thread.sleep(dur!"seconds"(1));
+				}
+			}
+
+			if (!hasNotification) break;
+		}
+
+		if ((drainedEvents > 0) && debugLogging) {
+			addLogEntry("Drained " ~ drainedEvents.to!string ~ " stale local filesystem monitor event(s) without processing", ["debug"]);
+		}
 	}
 
 	// Update
-	void update(bool useCallbacks = true) {
+	void update(bool useCallbacks = true, bool processDeletesWhenDraining = false) {
 		if(!initialised)
 			return;
 	
@@ -699,6 +1029,12 @@ final class Monitor {
 			fd: worker.fd,
 			events: POLLIN
 		};
+
+		if (!useCallbacks && !processDeletesWhenDraining) {
+			clearTransientEventState();
+			drainPendingEventsOnly(fds);
+			return;
+		}
 
 		while (true) {
 			bool hasNotification = false;
@@ -756,20 +1092,21 @@ final class Monitor {
 					
 					// skip events that need to be ignored
 					if (event.mask & IN_IGNORED) {
-						// forget the directory associated to the watch descriptor
-						inotifyMutex.lock();
-						try {
-							wdToDirName.remove(event.wd);
-						} finally {
-							inotifyMutex.unlock();
-						}
+						// The backend has invalidated this watch descriptor. Keep both
+						// descriptor->path and path->descriptor maps in sync.
+						string ignoredPath;
+						unregisterWatchDescriptor(event.wd, ignoredPath);
 						goto skip;
 					} else if (event.mask & IN_Q_OVERFLOW) {
+						monitorStateDirty = true;
+						clearTransientEventState();
 						throw new MonitorException("inotify queue overflow: some events may be lost");
 					}
 
 					// if the event is not to be ignored, obtain path
-					path = getPath(event);
+					if (!getPath(event, path)) {
+						goto skip;
+					}
 					// configure the skip_dir & skip skip_file comparison item
 					evalPath = path.strip('.');
 					
@@ -808,15 +1145,19 @@ final class Monitor {
 						movedNotDeleted[path] = true; // Mark as moved, not deleted
 					} else if (event.mask & IN_MOVED_TO) {
 						if (debugLogging) {addLogEntry("event IN_MOVED_TO: " ~ path, ["debug"]);}
-						if (event.mask & IN_ISDIR) addRecursive(path);
 						auto from = event.cookie in cookieToPath;
 						if (from) {
+							// A watched directory moved inside the sync tree keeps its underlying
+							// watch descriptors. Rebase the stored paths instead of adding another
+							// recursive watch tree for the same directory hierarchy.
+							if (event.mask & IN_ISDIR) rebaseWatchTree(*from, path);
 							cookieToPath.remove(event.cookie);
 							if (useCallbacks) actionHolder.append(ActionType.moved, *from, path);
 							movedNotDeleted.remove(*from); // Clear moved status
 						} else {
-							// Handle file moved in from outside
+							// Handle item moved in from outside the watched tree.
 							if (event.mask & IN_ISDIR) {
+								addRecursive(path);
 								if (useCallbacks) actionHolder.append(ActionType.createDir, path);
 							} else {
 								if (useCallbacks) actionHolder.append(ActionType.changed, path);
@@ -835,12 +1176,22 @@ final class Monitor {
 							addRecursive(path);
 							if (useCallbacks) actionHolder.append(ActionType.createDir, path);
 						}
+					} else if (event.mask & IN_DELETE_SELF) {
+						if (debugLogging) {addLogEntry("event IN_DELETE_SELF: " ~ path, ["debug"]);}
+						removeWatchTree(path);
+						if (useCallbacks || processDeletesWhenDraining) actionHolder.append(ActionType.deleted, path);
+					} else if (event.mask & IN_MOVE_SELF) {
+						// Do not remove the watch here. Directory moves inside the watched tree
+						// are reconciled via the matching parent IN_MOVED_FROM/IN_MOVED_TO
+						// cookie pair, where the watch tree is rebased to the new path.
+						if (debugLogging) {addLogEntry("event IN_MOVE_SELF: " ~ path, ["debug"]);}
 					} else if (event.mask & IN_DELETE) {
 						if (path in movedNotDeleted) {
 							movedNotDeleted.remove(path); // Ignore delete for moved files
 						} else {
 							if (debugLogging) {addLogEntry("event IN_DELETE: " ~ path, ["debug"]);}
-							if (useCallbacks) actionHolder.append(ActionType.deleted, path);
+							if (event.mask & IN_ISDIR) removeWatchTree(path);
+							if (useCallbacks || processDeletesWhenDraining) actionHolder.append(ActionType.deleted, path);
 						}
 					} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
 						if (debugLogging) {addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);}
@@ -853,8 +1204,7 @@ final class Monitor {
 						}
 						if (useCallbacks) actionHolder.append(ActionType.changed, path);
 					} else {
-						addLogEntry("inotify event unhandled: " ~ path);
-						assert(0);
+						if (debugLogging) {addLogEntry("Ignoring unhandled inotify event for path: " ~ path ~ ", mask=" ~ event.mask.to!string, ["debug"]);}
 					}
 
 					skip:
@@ -870,13 +1220,21 @@ final class Monitor {
 			if (!hasNotification) break;
 			processChanges();
 
-			// Assume that the items moved outside the watched directory have been deleted
-			foreach (cookie, path; cookieToPath) {
+			// Assume that the items moved outside the watched directory have been deleted.
+			// Iterate over a copy because cookieToPath is mutated during cleanup.
+			auto cookieToPathCopy = cookieToPath.dup;
+			foreach (cookie, path; cookieToPathCopy) {
 				if (debugLogging) {addLogEntry("Deleting cookie|watch (post loop): " ~ path, ["debug"]);}
-				if (useCallbacks) onDelete(path);
-				remove(path);
+				if (useCallbacks || processDeletesWhenDraining) onDelete(path);
+				removeWatchTree(path);
 				cookieToPath.remove(cookie);
+				movedNotDeleted.remove(path);
 			}
+
+			// Any lost delete/move events can leave stale watch entries behind. Prune
+			// against the current filesystem before the monitor loop goes idle again.
+			pruneStaleWatches();
+
 			// Debug Log that all inotify events are flushed
 			if (debugLogging) {addLogEntry("inotify events flushed", ["debug"]);}
 		}

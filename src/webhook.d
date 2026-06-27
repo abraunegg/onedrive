@@ -2,7 +2,8 @@
 module webhook;
 
 // What does this module require to function?
-import core.atomic : atomicOp;
+import core.atomic : atomicLoad, atomicOp, atomicStore;
+import core.thread : Thread;
 import std.datetime;
 import std.concurrency;
 import std.json;
@@ -20,6 +21,7 @@ class OneDriveWebhook {
 	private ushort port;
 	private Tid parentTid;
 	private bool started;
+	private shared bool serverThreadExited = true;
 
     private ApplicationConfig appConfig;
 	private OneDriveApi oneDriveApiInstance;
@@ -52,11 +54,19 @@ class OneDriveWebhook {
 		
 		this.started = true;
 		this.count = 0;
+		atomicStore(serverThreadExited, false);
 
 		server.listeningHost = this.host;
 		server.listeningPort = this.port;
 
-		spawn(&serveImpl, cast(shared) this);
+		try {
+			spawn(&serveImpl, cast(shared) this);
+		} catch (Throwable t) {
+			atomicStore(serverThreadExited, true);
+			this.started = false;
+			throw t;
+		}
+
 		addLogEntry("Started OneDrive API Webhook server");
 
 		// Subscriptions
@@ -68,7 +78,9 @@ class OneDriveWebhook {
     void stop() {
         if (!this.started)
             return;
-        server.stop();
+
+		server.stop();
+		waitForServerThreadExit();
         this.started = false;
 
 		addLogEntry("Stopped OneDrive API Webhook server");
@@ -81,9 +93,11 @@ class OneDriveWebhook {
 			logSubscriptionError(e);
 		}
 		// Release API instance back to the pool
-		oneDriveApiInstance.releaseCurlEngine();
-		object.destroy(oneDriveApiInstance);
-		oneDriveApiInstance = null;
+		if (oneDriveApiInstance !is null) {
+			oneDriveApiInstance.releaseCurlEngine();
+			object.destroy(oneDriveApiInstance);
+			oneDriveApiInstance = null;
+		}
 	}
 
 	private static void handle(shared OneDriveWebhook _this, Cgi cgi) {
@@ -112,7 +126,30 @@ class OneDriveWebhook {
 		}
 	}
 
+	private void waitForServerThreadExit() {
+		enum int stepMs = 100;
+		int waitedMs = 0;
+
+		while (!atomicLoad(serverThreadExited)) {
+			Thread.sleep(dur!"msecs"(stepMs));
+			waitedMs += stepMs;
+
+			if (debugLogging && (waitedMs % 1000 == 0)) {
+				addLogEntry("Waiting for OneDrive API Webhook server thread to exit", ["debug"]);
+			}
+		}
+	}
+
     private static void serveImpl(shared OneDriveWebhook _this) {
+		auto self = cast(OneDriveWebhook)_this;
+
+		scope(exit) {
+			atomicStore(self.serverThreadExited, true);
+			if (debugLogging) {
+				addLogEntry("OneDrive API Webhook server thread exited", ["debug"]);
+			}
+		}
+
 		_this.server.serveEmbeddedHttp!(handle, OneDriveWebhook)(_this);
 	}
 
