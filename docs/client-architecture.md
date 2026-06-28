@@ -61,15 +61,20 @@ When using the client with the `--local-first` option, the sync flow is reversed
 > [!IMPORTANT]
 > Using a network mount point such as NFS, CIFS, SMB, Windows Network Share or Samba Network Share as your `sync_dir` has significant change-detection and performance implications.
 >
-> These network-backed filesystems should be treated as not providing usable `inotify` support for this client. `inotify` support is essential for Monitor Mode to detect local filesystem changes in real time. When `sync_dir` is located on a network mount, local file changes may not generate `inotify` events at all, meaning the client cannot immediately detect those changes as they occur.
+> These network-backed filesystems should be treated as not providing reliable or complete `inotify` support for this client. `inotify` support is essential for Monitor Mode to detect local filesystem changes in real time.
 >
-> In this configuration, synchronisation between the local filesystem and Microsoft OneDrive will rely on scheduled monitor sync cycles controlled by `monitor_interval`, rather than immediate local filesystem event detection.
+> Some network mount configurations may generate `inotify` events for changes made by the same host that is running this client. For example, creating or modifying a file from the local machine against a mounted CIFS/SMB share may appear to work when tested with tools such as `inotifywait`.
 >
-> Additionally, local filesystem notifications on network mounts do not behave the same way as they do on local disks. Changes made directly on the NAS, file server, or from another client may not be reported to this client. On very large sync trees this can be expensive, because the local database consistency check and local filesystem scan must validate state across the mounted filesystem.
+> However, this does not mean the network mount provides reliable `inotify` behaviour for synchronisation purposes. Changes made directly on the NAS (such as Synology File Station or similar), file server, Windows share host, or from another device or client accessing the same share may not generate any `inotify` events on the host running this client. In those cases, the client receives no immediate local filesystem notification at all.
+>
+> In this configuration, synchronisation between the local filesystem and Microsoft OneDrive must rely on scheduled monitor sync cycles controlled by `monitor_interval`, rather than immediate local filesystem event detection.
+>
+> On very large sync trees this can be expensive, because the local database consistency check and local filesystem scan must validate state across the mounted filesystem. Network-backed filesystems are often significantly slower than local disks for metadata-heavy operations.
 >
 > This limitation is caused by network filesystem and operating system notification behaviour, and is outside the control of this client.
 >
-> For large datasets, local storage is strongly preferred. If a network-backed `sync_dir` is required, test Monitor Mode behaviour and scan duration carefully before relying on it for unattended operation.
+> For large datasets, local storage is strongly preferred. If a network-backed `sync_dir` is required, test Monitor Mode behaviour, `inotifywait` behaviour, and scan duration carefully before relying on it for unattended operation.
+
 
 ## OneDrive Client for Linux High Level Activity Flows
 

@@ -720,6 +720,7 @@ onedrive -m
 > This method of use is used when enabling a systemd service to run the application in the background.
 
 In `--monitor` mode, the client performs recurring synchronisation cycles. A synchronisation cycle may be started because:
+* the client has started or restarted and is performing its initial synchronisation pass;
 * the configured `monitor_interval` has elapsed;
 * a local filesystem event has been detected by the monitor engine;
 * a Microsoft OneDrive API signal has been received via WebSocket or webhook support.
