@@ -740,7 +740,7 @@ The log message:
 
 ```text
 Performing a database consistency and integrity check on locally stored data
-````
+```
 
 means the client is validating its local database state against the local filesystem. It does not, by itself, mean that the client is performing an online full-scan true-up.
 
@@ -2274,7 +2274,7 @@ To confirm whether an online full-scan true-up is occurring, run the client with
 
 ```text
 onedrive --monitor --verbose --verbose
-````
+```
 
 Relevant debug messages include:
 

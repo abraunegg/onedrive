@@ -30,7 +30,7 @@ The application operational processes have several high level key stages:
 
 3. **Process JSON Responses:** The client processes each JSON response to determine if it represents a 'root' or 'deleted' item. Items not marked as 'root' or 'deleted' are temporarily stored for further processing. For 'root' or 'deleted' items, the client processes them immediately, otherwise, the client evaluates the items against client-side filtering rules to decide whether to discard them or to process and save them in the local database cache for actions like creating directories or downloading files.
 
-4. **Local Cache Database Processing for Data Integrity:** The client processes its local cache database to check for data integrity and differences compared to the OneDrive storage. If differences are found, such as a file or folder change including deletions, the client uploads these changes to OneDrive. Responses from the API, including item metadata, are saved to the local cache database.
+4. **Local Cache Database Processing for Data Integrity:** The client processes its local cache database to validate known local state against the local filesystem and Microsoft OneDrive metadata. This stage helps detect state inconsistencies and ensures that the client has an accurate view of items already known to the application. Upload decisions for new local content are handled separately by the local filesystem scan.
 
 5. **Local Filesystem Scanning:** The client scans the local filesystem for new files or folders. Each new item is checked against client-side filtering rules. If an item passes the filtering, it is uploaded to OneDrive. Otherwise, it is discarded if it doesn't meet the filtering criteria.
 

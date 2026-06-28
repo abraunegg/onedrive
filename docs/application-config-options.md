@@ -638,6 +638,7 @@ monitor_fullscan_frequency
 >    * API-signal-triggered syncs and normal scheduled monitor interval syncs remain faster between authoritative cleanup passes.
 >    * When using this policy, a `monitor_fullscan_frequency` value greater than `0` defers authoritative cleanup to that cadence.
 >    * When using this policy, a `monitor_fullscan_frequency` value of `0` makes cleanup authoritative on every monitor sync cycle.
+>    * This zero-value behaviour applies only to the authoritative cleanup cadence used by `monitor_authoritative_sync = "monitor_fullscan_frequency"`. It does not mean that scheduled online full-scan true-up is enabled when `monitor_fullscan_frequency = "0"`.
 
 
 ### monitor_fullscan_frequency
