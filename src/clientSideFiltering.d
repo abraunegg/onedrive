@@ -168,7 +168,7 @@ class ClientSideFiltering {
 
 			// Legacy include root rule
 			if (cleanLine == "/*" || cleanLine == "/") {
-				string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(cleanLine) ~ "' detected. Please use 'sync_root_files = \"true\"' or --sync-root-files option to sync files in the root path.";
+				string errorMessage = "ERROR: Invalid sync_list rule '" ~ to!string(cleanLine) ~ "' detected. Please use 'sync_root_files = \"true\"' or --sync-root-files option to sync files in the root path. To sync directories in the root path, include them manually, as '" ~ to!string(cleanLine) ~ "' is not permitted.";
 				addLogEntry();
 				addLogEntry(errorMessage, ["info", "notify"]);
 				addLogEntry();
