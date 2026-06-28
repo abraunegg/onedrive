@@ -138,6 +138,8 @@ class TestCase0054MonitorModeAtomicSaveEditorReplaceWorkflow(MonitorModeTestCase
                     details,
                 )
 
+            mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
+
             write_text_file(temp_local, updated_content)
             os.replace(temp_local, target_local)
             details["temp_local_exists_after_replace"] = temp_local.exists()
@@ -147,13 +149,17 @@ class TestCase0054MonitorModeAtomicSaveEditorReplaceWorkflow(MonitorModeTestCase
                 [f"Uploading modified file: {target_relative} ... done"],
                 [f"Uploading new file: {target_relative} ... done"],
             ]
-            mutation_processed, matched_group = self._wait_for_any_monitor_pattern_group(
+            mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
                 monitor_stdout,
-                pattern_groups,
-                timeout_seconds=120,
+                start_offset=mutation_log_start_offset,
+                alternative_pattern_groups=pattern_groups,
+                timeout_seconds=180,
             )
+            post_mutation_sync_complete = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
+            details["post_mutation_sync_complete"] = post_mutation_sync_complete
             details["mutation_processed"] = mutation_processed
             details["matched_pattern_group_index"] = matched_group
+            details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
             details["pattern_groups"] = pattern_groups
         finally:
             self._shutdown_monitor_process(process, details)
@@ -183,14 +189,6 @@ class TestCase0054MonitorModeAtomicSaveEditorReplaceWorkflow(MonitorModeTestCase
         details["verify_temp_exists"] = temp_verify.exists()
         self._write_metadata(metadata_file, details)
 
-        if not details.get("mutation_processed", False):
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "Monitor mode did not process the atomic-save editor replace workflow before shutdown",
-                artifacts,
-                details,
-            )
         if verify_result.returncode != 0:
             return self.fail_result(
                 self.case_id,

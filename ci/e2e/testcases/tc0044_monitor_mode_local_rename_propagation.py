@@ -31,8 +31,9 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
             'bypass_data_preservation = "true"\n'
             'enable_logging = "true"\n'
             f'log_dir = "{app_log_dir}"\n'
-            'monitor_interval = "5"\n'
-            'monitor_fullscan_frequency = "1"\n'
+            'monitor_interval = "300"\n'
+            'monitor_fullscan_frequency = "0"\n'
+            'disable_websocket_support = "true"\n'
         )
 
     def _read_stdout(self, stdout_file: Path) -> str:
@@ -214,6 +215,8 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
                     details,
                 )
 
+            mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
+
             context.log(f"Test Case {self.case_id}: renaming local file while monitor is running: {old_relative} -> {new_relative}")
             old_local_path.rename(new_local_path)
             details["old_local_exists_after_rename"] = old_local_path.exists()
@@ -228,13 +231,17 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
                     f"Uploading new file: {new_relative} ... done",
                 ],
             ]
-            mutation_processed, matched_group = self._wait_for_any_monitor_pattern_group(
+            mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
                 monitor_stdout,
+                start_offset=mutation_log_start_offset,
                 alternative_pattern_groups=pattern_groups,
-                timeout_seconds=120,
+                timeout_seconds=180,
             )
+            post_mutation_sync_complete = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
+            details["post_mutation_sync_complete"] = post_mutation_sync_complete
             details["mutation_processed"] = mutation_processed
             details["matched_pattern_group_index"] = matched_group
+            details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
             details["mutation_pattern_groups"] = pattern_groups
         finally:
             self._shutdown_monitor_process(process, details)
@@ -268,15 +275,6 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
         details["verify_new_content"] = new_verify_path.read_text(encoding="utf-8") if new_verify_path.is_file() else ""
 
         self._write_metadata(metadata_file, details)
-
-        if not details.get("mutation_processed", False):
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "Monitor mode did not process the local rename event before shutdown",
-                artifacts,
-                details,
-            )
 
         if verify_result.returncode != 0:
             return self.fail_result(

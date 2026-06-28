@@ -1850,20 +1850,33 @@ void displayMemoryUsageDetails() {
 	
 	// Query the actual Resident Set Size (RSS) for the PID
 	pid_t pid = getCurrentPID();
-	ulong currentRSS = getRSS(pid);
-	addLogEntry("current Resident Set Size (RSS)          = " ~ to!string(currentRSS) ~ " KB");
-	
-	// Calculate difference
-	if (previousRSS != 0) {
-		addLogEntry("previous Resident Set Size (RSS)         = " ~ to!string(previousRSS) ~ " KB");
-		// Delta between current and previous RSS
-		long rssDifference = cast(long) currentRSS - cast(long) previousRSS;
-		string sign = rssDifference > 0 ? "+" : (rssDifference < 0 ? "" : "");
-		addLogEntry("difference in Resident Set Size (RSS)    = " ~ sign ~ to!string(rssDifference) ~ " KB");
+	ulong currentRSS;
+	version (FreeBSD) {
+		currentRSS = getRSSFreeBSD(pid);
+	} else version (linux) {
+		currentRSS = getRSSLinux(pid);
+	} else {
+		currentRSS = getRSS(pid);
 	}
 	
-	// Update the previous RSS value
-	previousRSS = currentRSS;
+	if (currentRSS != 0) {
+		addLogEntry("current Resident Set Size (RSS)          = " ~ to!string(currentRSS) ~ " KB");
+		
+		// Calculate difference
+		if (previousRSS != 0) {
+			addLogEntry("previous Resident Set Size (RSS)         = " ~ to!string(previousRSS) ~ " KB");
+			// Delta between current and previous RSS
+			long rssDifference = cast(long) currentRSS - cast(long) previousRSS;
+			string sign = rssDifference > 0 ? "+" : (rssDifference < 0 ? "" : "");
+			addLogEntry("difference in Resident Set Size (RSS)    = " ~ sign ~ to!string(rssDifference) ~ " KB");
+		}
+		
+		// Update the previous RSS value only after a valid RSS sample
+		previousRSS = currentRSS;
+	} else {
+		addLogEntry("current Resident Set Size (RSS)          = unavailable");
+	}
+	
 	addLogEntry("-----------------------------------------------------");
 	addLogEntry();
 }
@@ -2008,48 +2021,156 @@ void forceExit() {
 
 // Get the current PID of the application
 pid_t getCurrentPID() {
-    // The '/proc/self' is a symlink to the current process's proc directory
-    string path = "/proc/self/stat";
-    
-    // Read the content of the stat file
-    string content;
-    try {
-        content = readText(path);
-    } catch (Exception e) {
-        writeln("Failed to read stat file: ", e.msg);
-        return 0;
-    }
-
-    // The first value in the stat file is the PID
-    auto parts = split(content);
-    return to!pid_t(parts[0]);  // Convert the first part to pid_t
+	return getpid();
 }
 
 // Access the Resident Set Size (RSS) based on the PID of the running application
 ulong getRSS(pid_t pid) {
-    // Construct the path to the statm file for the given PID
-    string path = format("/proc/%s/statm", to!string(pid));
+	version (FreeBSD) {
+		return getRSSFreeBSD(pid);
+	} else version (linux) {
+		return getRSSLinux(pid);
+	} else {
+		return 0;
+	}
+}
 
-    // Read the content of the file
-    string content;
-    try {
-        content = readText(path);
-    } catch (Exception e) {
-        writeln("Failed to read statm file: ", e.msg);
-        return 0;
-    }
+// Access the Resident Set Size (RSS) using the Linux /proc filesystem
+ulong getRSSLinux(pid_t pid) {
+	if (pid <= 0) {
+		return 0;
+	}
+	
+	// Construct the path to the statm file for the given PID
+	string path = format("/proc/%s/statm", to!string(pid));
 
-    // Split the content and get the RSS (second value)
-    auto stats = split(content);
-    if (stats.length < 2) {
-        writeln("Unexpected format in statm file.");
-        return 0;
-    }
+	// Read the content of the file
+	string content;
+	try {
+		content = readText(path);
+	} catch (Exception e) {
+		addLogEntry("Failed to read statm file: " ~ e.msg);
+		return 0;
+	}
 
-    // RSS is in pages, convert it to kilobytes
-    ulong rssPages = to!ulong(stats[1]);
-    ulong rssKilobytes = rssPages * sysconf(_SC_PAGESIZE) / 1024;
-    return rssKilobytes;
+	// Split the content and get the RSS (second value)
+	auto stats = split(content);
+	if (stats.length < 2) {
+		addLogEntry("Unexpected format in statm file: " ~ path);
+		return 0;
+	}
+
+	// RSS is in pages, convert it to kilobytes
+	ulong rssPages;
+	try {
+		rssPages = to!ulong(stats[1]);
+	} catch (Exception e) {
+		addLogEntry("Failed to parse RSS page count from statm file: " ~ path ~ " : " ~ e.msg);
+		return 0;
+	}
+	
+	auto pageSize = sysconf(_SC_PAGESIZE);
+	if (pageSize <= 0) {
+		addLogEntry("Failed to determine system page size while calculating Linux RSS");
+		return 0;
+	}
+	
+	ulong rssKilobytes = (rssPages * cast(ulong) pageSize) / 1024;
+	return rssKilobytes;
+}
+
+// Access the Resident Set Size (RSS) using FreeBSD-native process telemetry
+ulong getRSSFreeBSD(pid_t pid) {
+	if (pid <= 0) {
+		return 0;
+	}
+	
+	version (FreeBSD) {
+		import core.sys.freebsd.sys.sysctl : CTL_KERN, KERN_PROC, KERN_PROC_PID, sysctl;
+		import core.sys.freebsd.sys.types : segsz_t, vm_size_t;
+		import core.sys.posix.signal : sigset_t;
+		import core.sys.posix.sys.types : gid_t, uid_t;
+		
+		// DRuntime does not expose sys/user.h as a portable kinfo_proc binding, so
+		// define only the stable kinfo_proc prefix required to reach ki_rssize.
+		// The full sysctl result is still queried into a correctly-sized byte buffer.
+		extern(C) struct FreeBSDKinfoProcRSSPrefix {
+			int ki_structsize;
+			int ki_layout;
+			void* ki_args;
+			void* ki_paddr;
+			void* ki_addr;
+			void* ki_tracep;
+			void* ki_textvp;
+			void* ki_fd;
+			void* ki_vmspace;
+			const(void)* ki_wchan;
+			pid_t ki_pid;
+			pid_t ki_ppid;
+			pid_t ki_pgid;
+			pid_t ki_tpgid;
+			pid_t ki_sid;
+			pid_t ki_tsid;
+			short ki_jobc;
+			short ki_spare_short1;
+			uint ki_tdev_freebsd11;
+			sigset_t ki_siglist;
+			sigset_t ki_sigmask;
+			sigset_t ki_sigignore;
+			sigset_t ki_sigcatch;
+			uid_t ki_uid;
+			uid_t ki_ruid;
+			uid_t ki_svuid;
+			gid_t ki_rgid;
+			gid_t ki_svgid;
+			short ki_ngroups;
+			short ki_spare_short2;
+			gid_t[16] ki_groups;
+			vm_size_t ki_size;
+			segsz_t ki_rssize;
+		}
+		
+		int[4] mib = [
+			CTL_KERN,
+			KERN_PROC,
+			KERN_PROC_PID,
+			cast(int) pid
+		];
+		
+		size_t processInfoLength;
+		if (sysctl(mib.ptr, cast(uint) mib.length, null, &processInfoLength, null, 0) != 0) {
+			addLogEntry("Failed to determine FreeBSD process RSS buffer size via sysctl for PID: " ~ to!string(pid));
+			return 0;
+		}
+		
+		if (processInfoLength < FreeBSDKinfoProcRSSPrefix.sizeof) {
+			addLogEntry("Failed to query FreeBSD process RSS via sysctl: returned process information is too small for PID: " ~ to!string(pid));
+			return 0;
+		}
+		
+		auto processInfo = new ubyte[](processInfoLength);
+		if (sysctl(mib.ptr, cast(uint) mib.length, processInfo.ptr, &processInfoLength, null, 0) != 0) {
+			addLogEntry("Failed to query FreeBSD process RSS via sysctl for PID: " ~ to!string(pid));
+			return 0;
+		}
+		
+		if (processInfoLength < FreeBSDKinfoProcRSSPrefix.sizeof) {
+			addLogEntry("Failed to query FreeBSD process RSS via sysctl: incomplete process information returned for PID: " ~ to!string(pid));
+			return 0;
+		}
+		
+		auto processInfoPrefix = cast(FreeBSDKinfoProcRSSPrefix*) processInfo.ptr;
+		auto pageSize = sysconf(_SC_PAGESIZE);
+		if (pageSize <= 0) {
+			addLogEntry("Failed to determine system page size while calculating FreeBSD RSS");
+			return 0;
+		}
+		
+		// FreeBSD reports ki_rssize in pages.
+		return (cast(ulong) processInfoPrefix.ki_rssize * cast(ulong) pageSize) / 1024;
+	} else {
+		return 0;
+	}
 }
 
 // Getting around the @nogc problem

@@ -110,6 +110,8 @@ class TestCase0027WhitespaceTrailingDotValidation(E2ETestCase):
             "--verbose",
             "--resync",
             "--resync-auth",
+            "--single-directory",
+            root_name,
             "--confdir",
             str(confdir),
         ]
@@ -126,6 +128,8 @@ class TestCase0027WhitespaceTrailingDotValidation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
+            "--single-directory",
+            root_name,
             "--confdir",
             str(confdir),
         ]
@@ -145,6 +149,8 @@ class TestCase0027WhitespaceTrailingDotValidation(E2ETestCase):
             "--download-only",
             "--resync",
             "--resync-auth",
+            "--single-directory",
+            root_name,
             "--confdir",
             str(verify_conf),
         ]
@@ -236,22 +242,24 @@ class TestCase0027WhitespaceTrailingDotValidation(E2ETestCase):
                     details,
                 )
 
-        expected_skip_markers = [
-            'Skipping item - invalid name (Microsoft Naming Convention): ./'
-            + f"{root_name}/trailing-space.txt ",
-            'Skipping item - invalid name (Microsoft Naming Convention): ./'
-            + f"{root_name}/trailing-dot.txt.",
-            'Skipping item - invalid name (Microsoft Naming Convention): ./'
-            + f"{root_name}/trailing-space-dir ",
-            'Skipping item - invalid name (Microsoft Naming Convention): ./'
-            + f"{root_name}/trailing-dot-dir.",
+        expected_skip_paths = [
+            f"{root_name}/trailing-space.txt ",
+            f"{root_name}/trailing-dot.txt.",
+            f"{root_name}/trailing-space-dir ",
+            f"{root_name}/trailing-dot-dir.",
         ]
-        for marker in expected_skip_markers:
-            if marker not in combined_output:
+        marker_prefix = "Skipping item - invalid name (Microsoft Naming Convention): "
+        for expected_path in expected_skip_paths:
+            possible_markers = [
+                marker_prefix + expected_path,
+                marker_prefix + "./" + expected_path,
+            ]
+            if not any(marker in combined_output for marker in possible_markers):
                 return self.fail_result(
                     self.case_id,
                     self.name,
-                    f"Expected whitespace/trailing-dot skip marker not found: {marker}",
+                    "Expected whitespace/trailing-dot skip marker not found for: "
+                    + expected_path,
                     artifacts,
                     details,
                 )

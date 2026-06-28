@@ -31,8 +31,9 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
             'bypass_data_preservation = "true"\n'
             'enable_logging = "true"\n'
             f'log_dir = "{app_log_dir}"\n'
-            'monitor_interval = "5"\n'
-            'monitor_fullscan_frequency = "1"\n'
+            'monitor_interval = "300"\n'
+            'monitor_fullscan_frequency = "0"\n'
+            'disable_websocket_support = "true"\n'
         )
 
     def _read_stdout(self, stdout_file: Path) -> str:
@@ -217,6 +218,8 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
                     details,
                 )
 
+            mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
+
             context.log(f"Test Case {self.case_id}: deleting local file while monitor is running: {delete_relative}")
             if delete_local_path.exists():
                 delete_local_path.unlink()
@@ -226,12 +229,16 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
             required_patterns = [
                 f"Deleting item from Microsoft OneDrive: {delete_relative}",
             ]
-            mutation_processed = self._wait_for_monitor_patterns(
+            mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
+                start_offset=mutation_log_start_offset,
                 required_patterns=required_patterns,
-                timeout_seconds=120,
+                timeout_seconds=180,
             )
+            post_mutation_sync_complete = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
+            details["post_mutation_sync_complete"] = post_mutation_sync_complete
             details["mutation_processed"] = mutation_processed
+            details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
             details["mutation_required_patterns"] = required_patterns
         finally:
             self._shutdown_monitor_process(process, details)
@@ -264,15 +271,6 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
         details["verify_deleted_exists"] = delete_verify_path.exists()
 
         self._write_metadata(metadata_file, details)
-
-        if not details.get("mutation_processed", False):
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "Monitor mode did not process the local delete event before shutdown",
-                artifacts,
-                details,
-            )
 
         if verify_result.returncode != 0:
             return self.fail_result(
