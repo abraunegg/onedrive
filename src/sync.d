@@ -7493,6 +7493,9 @@ class SyncEngine {
 		string targetParentId;
 		string targetItemId;
 		
+		// Track if we populate online data
+		bool haveCurrentOnlineItemData = false;
+		
 		// Is this a remote target?
 		if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
 			// This is a remote file
@@ -7534,7 +7537,7 @@ class SyncEngine {
 				
 				// Make a reusable item from this online JSON data
 				currentOnlineItemData = makeItem(currentOnlineJSONData);
-				
+				haveCurrentOnlineItemData = true;
 			} else {
 				// no valid JSON response - greater potential for a 412 error to occur if we are creating a session upload
 				if (debugLogging) {addLogEntry("Online data returned was invalid - using database eTag value", ["debug"]);}
@@ -7567,7 +7570,10 @@ class SyncEngine {
 			if ((thisFileSizeLocal > 0) && (currentOnlineJSONData.type() == JSONType.object)) {
 				// Issue #2626 | Case 2-1 
 				// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially constituting online data loss
-				Item onlineFile = makeItem(currentOnlineJSONData);
+				if (!haveCurrentOnlineItemData) {
+					currentOnlineItemData = makeItem(currentOnlineJSONData);
+					haveCurrentOnlineItemData = true;
+				}
 				
 				// Which file is technically newer? The local file or the remote file?
 				SysTime localModifiedTime;
@@ -7581,7 +7587,7 @@ class SyncEngine {
 					}
 					return uploadResponse;
 				}
-				SysTime onlineModifiedTime = onlineFile.mtime;
+				SysTime onlineModifiedTime = currentOnlineItemData.mtime;
 				
 				// Reduce time resolution to seconds before comparing
 				localModifiedTime.fracSecs = Duration.zero;
@@ -7592,7 +7598,7 @@ class SyncEngine {
 					// Online File is actually newer than the locally modified file
 					if (debugLogging) {
 						addLogEntry("currentOnlineJSONData: " ~ to!string(currentOnlineJSONData), ["debug"]);
-						addLogEntry("onlineFile:    " ~ to!string(onlineFile), ["debug"]);
+						addLogEntry("currentOnlineItemData:    " ~ to!string(currentOnlineItemData), ["debug"]);
 						addLogEntry("database item: " ~ to!string(dbItem), ["debug"]);
 					}
 					addLogEntry("Skipping uploading this item as a locally modified file, will upload as a new file (online file already exists and is newer): " ~ localFilePath);
@@ -7739,7 +7745,7 @@ class SyncEngine {
 		// Return JSON
 		return uploadResponse;
 	}
-		
+	
 	// Query the OneDrive API using the provided driveId to get the latest quota details
 	string[3][] getRemainingFreeSpaceOnline(string sourceDriveId) {
 		// Function Start Time
@@ -11089,8 +11095,6 @@ class SyncEngine {
 		OneDriveApi uploadDeletedItemOneDriveApiInstance;
 		Item itemToDelete = makeItem(onedriveJSONItem);
 		
-		//string path = buildNormalizedPath(computeItemPath(itemToDelete.driveId, itemToDelete.id));
-			
 		// Process the delete - delete the object online
 		if ((itemToDelete.type == ItemType.dir)) {
 			addLogEntry("Deleting online folder from Microsoft OneDrive: " ~ ensureStartsWithDotSlash(newItemPath), fileTransferNotifications());
@@ -11403,7 +11407,6 @@ class SyncEngine {
 								addLogEntry(logMessage, ["debug"]);
 							}
 							item.driveId = jsonItem["parentReference"]["driveId"].str;
-						
 						}
 						
 						// Issue #3115 - Validate driveId length
