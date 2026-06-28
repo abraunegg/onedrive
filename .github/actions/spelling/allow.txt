@@ -223,6 +223,7 @@ infodir
 initted
 initval
 inodes
+inotifywait
 intercambio
 iocp
 ioop
@@ -546,6 +547,7 @@ swp
 symcode
 syncable
 syncdir
+Synology
 sysconf
 sysconfdir
 systemdsystemunitdir
