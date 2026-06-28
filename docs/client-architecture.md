@@ -30,7 +30,7 @@ The application operational processes have several high level key stages:
 
 3. **Process JSON Responses:** The client processes each JSON response to determine if it represents a 'root' or 'deleted' item. Items not marked as 'root' or 'deleted' are temporarily stored for further processing. For 'root' or 'deleted' items, the client processes them immediately, otherwise, the client evaluates the items against client-side filtering rules to decide whether to discard them or to process and save them in the local database cache for actions like creating directories or downloading files.
 
-4. **Local Cache Database Processing for Data Integrity:** The client processes its local cache database to check for data integrity and differences compared to the OneDrive storage. If differences are found, such as a file or folder change including deletions, the client uploads these changes to OneDrive. Responses from the API, including item metadata, are saved to the local cache database.
+4. **Local Cache Database Processing for Data Integrity:** The client processes its local cache database to validate known local state against the local filesystem and Microsoft OneDrive metadata. This stage helps detect state inconsistencies and ensures that the client has an accurate view of items already known to the application. Upload decisions for new local content are handled separately by the local filesystem scan.
 
 5. **Local Filesystem Scanning:** The client scans the local filesystem for new files or folders. Each new item is checked against client-side filtering rules. If an item passes the filtering, it is uploaded to OneDrive. Otherwise, it is discarded if it doesn't meet the filtering criteria.
 
@@ -59,7 +59,22 @@ When using the client with the `--local-first` option, the sync flow is reversed
 > When using `--monitor --local-first`, file system watches (via inotify) will detect local deletions. This event will automatically trigger removal of the online file, and if exists and matches the local data, the file online will be removed.
 
 > [!IMPORTANT]
-> Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
+> Using a network mount point such as NFS, CIFS, SMB, Windows Network Share or Samba Network Share as your `sync_dir` has significant change-detection and performance implications.
+>
+> These network-backed filesystems should be treated as not providing reliable or complete `inotify` support for this client. `inotify` support is essential for Monitor Mode to detect local filesystem changes in real time.
+>
+> Some network mount configurations may generate `inotify` events for changes made by the same host that is running this client. For example, creating or modifying a file from the local machine against a mounted CIFS/SMB share may appear to work when tested with tools such as `inotifywait`.
+>
+> However, this does not mean the network mount provides reliable `inotify` behaviour for synchronisation purposes. Changes made directly on the NAS (such as Synology File Station or similar), file server, Windows share host, or from another device or client accessing the same share may not generate any `inotify` events on the host running this client. In those cases, the client receives no immediate local filesystem notification at all.
+>
+> In this configuration, synchronisation between the local filesystem and Microsoft OneDrive must rely on scheduled monitor sync cycles controlled by `monitor_interval`, rather than immediate local filesystem event detection.
+>
+> On very large sync trees this can be expensive, because the local database consistency check and local filesystem scan must validate state across the mounted filesystem. Network-backed filesystems are often significantly slower than local disks for metadata-heavy operations.
+>
+> This limitation is caused by network filesystem and operating system notification behaviour, and is outside the control of this client.
+>
+> For large datasets, local storage is strongly preferred. If a network-backed `sync_dir` is required, test Monitor Mode behaviour, `inotifywait` behaviour, and scan duration carefully before relying on it for unattended operation.
+
 
 ## OneDrive Client for Linux High Level Activity Flows
 
@@ -107,32 +122,64 @@ This exclusion process can be illustrated by the following activity diagram. A '
 ## Understanding how the client processes online state
 When you see `Fetching items from the OneDrive API for Drive ID:` or `Generating a /delta response from the OneDrive API for this Drive ID:` the client isn’t stuck—it’s working through paged change sets from Microsoft Graph using your current delta token, reconciling them with the local database, and safely scheduling work. Microsoft Graph returns paged results and signals either `@odata.nextLink` (more pages to fetch) or `@odata.deltaLink` (caught up; keep this token for next time) - the client follows those links until it reaches a stable point. Page sizing and paging behaviour are controlled by the Microsoft Graph API service.
 
+The client performs several different reconciliation activities during a sync cycle. These should not all be described as a "full scan". An online full-scan true-up, a local database consistency check and a local filesystem scan are separate activities with different purposes.
+
 ### What a typical cycle looks like
 1. **Fetching online state**
     * **Application Output:** `Fetching items from the OneDrive API for Drive ID: …` or `Generating a /delta response from the OneDrive API for this Drive ID:`
-    * The client requests the next page of changes using your current delta token.
+    * The client normally requests the next page of changes using the current Microsoft Graph `/delta` token.
+    * If an online full-scan true-up is required, the client deliberately does not use the stored `/delta` token for that pass.
 2. **Processing received items**
     * **Application Output:** `Processing N applicable changes and items received from Microsoft OneDrive`
     * Each item received is classified (add/update/delete/excluded), matched against local state, and queued for action.
 3. **Execute required actions**
-    * Download new or modified files, Delete local data that has been deleted online, Create new local directories
+    * Download new or modified files, delete local data that has been deleted online, and create new local directories.
 4. **Database Integrity**
     * **Application Output:** `Performing a database consistency and integrity check on locally stored data`
-    * Integrity pass to prevent state corruption
+    * This validates the local database state against the local filesystem to prevent state corruption.
+    * This is a local database/filesystem validation pass. It is not the same as an online full-scan true-up.
 5. **Local scan for new local data**
     * **Application Output:** `Scanning the local file system '…' for new data to upload`
-    * Traverse local filesystem, honouring client side filtering rules
+    * Traverse the local filesystem, honouring client side filtering rules, to identify new local data that may need to be uploaded.
 6. **True-Up**
     * **Application Output:** `Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process`
-    * Final scan of online to ensure that everything is in the state it is meant to be
+    * Final online examination to ensure that recent Microsoft OneDrive state has been reconciled.
+
+### Monitor mode full-scan cadence
+In `--monitor` mode, synchronisation can be triggered by more than one source:
+
+* the configured `monitor_interval` has elapsed;
+* a local filesystem event has been detected by the monitor engine;
+* a Microsoft OneDrive API signal has been received via WebSocket or webhook support.
+
+`monitor_interval` controls the scheduled idle sync interval. It does not prevent a sync from occurring earlier when a local filesystem event or Microsoft OneDrive API signal is received.
+
+`monitor_fullscan_frequency` controls the scheduled online full-scan true-up cadence in `--monitor` mode. It does not disable the local database consistency and integrity check, and it does not disable the local filesystem scan used to identify local data that may need to be uploaded.
+
+The following log message refers to local database/filesystem validation, not an online full-scan true-up:
+
+```text
+Performing a database consistency and integrity check on locally stored data
+```
+
+To confirm whether an online full-scan true-up is occurring, use debug logging and check for messages such as:
+
+```text
+Full Scan Frequency Loop Number: ...
+Perform a Full Scan True-Up: true|false
+Performing a full scan of online data to ensure consistent local state
+Using database stored deltaLink
+Using cached deltaLink
+```
 
 ### Why first runs or --resync take longer
 A first run (or a deliberate `--resync`) must enumerate the entire tree to establish a known-good baseline; subsequent incremental runs are much faster because the delta token limits work to just the changes since last time.
 
 ### What affects performance the most
 * **Item count & Online structure:** Many folders and files dominate metadata work leading to more metadata churn
-* **Network** Latency and throughput directly affect how quickly we can iterate Microsoft Graph API responses and transfer content.
+* **Network:** Latency and throughput directly affect how quickly we can iterate Microsoft Graph API responses and transfer content.
 * **Local Disk & filesystem:** SSDs perform metadata and DB work far faster than spinning disks or remote mounts. Your filesystem type (e.g., ext4, XFS, ZFS) matters and should be tuned appropriately.
+* **Network-backed `sync_dir`:** NFS, CIFS, SMB, Windows Network Share and Samba Network Share mounts can be slow for metadata-heavy operations and should be treated as not providing usable `inotify` support for this client.
 * **File Indexing:** Disable File Indexing (Tracker, Baloo, Searchmonkey, Pinot and others) as these are adding latency and disk I/O to your operations slowing down your performance.
 * **CPU & memory:** Classification and hashing are CPU-bound; insufficient RAM or swap can slow DB and traversal work.
 
