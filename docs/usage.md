@@ -72,6 +72,7 @@ Before reading this document, please ensure you are running application version 
   - [How to start a user systemd service at boot without user login?](#how-to-start-a-user-systemd-service-at-boot-without-user-login)
   - [How to access Microsoft OneDrive service through a proxy](#how-to-access-microsoft-onedrive-service-through-a-proxy)
   - [How to set up SELinux for a sync folder outside of the home folder](#how-to-set-up-selinux-for-a-sync-folder-outside-of-the-home-folder)
+  - [Why do I see `Performing a database consistency and integrity check on locally stored data` every monitor cycle?](#why-do-i-see-performing-a-database-consistency-and-integrity-check-on-locally-stored-data-every-monitor-cycle)
 - [Advanced Configuration of the OneDrive Client for Linux](#advanced-configuration-of-the-onedrive-client-for-linux)
 - [Overview of all OneDrive Client for Linux CLI Options](#overview-of-all-onedrive-client-for-linux-cli-options)
 
@@ -717,6 +718,34 @@ onedrive -m
 ```
 > [!NOTE]
 > This method of use is used when enabling a systemd service to run the application in the background.
+
+In `--monitor` mode, the client performs recurring synchronisation cycles. A synchronisation cycle may be started because:
+* the client has started or restarted and is performing its initial synchronisation pass;
+* the configured `monitor_interval` has elapsed;
+* a local filesystem event has been detected by the monitor engine;
+* a Microsoft OneDrive API signal has been received via WebSocket or webhook support.
+
+The application configuration option `monitor_interval` is the scheduled idle interval. It is not a guarantee that no synchronisation work can occur before that interval has elapsed.
+
+A normal synchronisation cycle may include several different activities:
+
+1. querying Microsoft OneDrive for online changes;
+2. processing received online changes;
+3. performing a database consistency and integrity check against locally stored data;
+4. scanning the local filesystem for new local data to upload, when uploads are enabled;
+5. performing a final online true-up to ensure the local and online state are reconciled.
+
+These activities are not all the same thing.
+
+The log message:
+
+```text
+Performing a database consistency and integrity check on locally stored data
+```
+
+means the client is validating its local database state against the local filesystem. It does not, by itself, mean that the client is performing an online full-scan true-up.
+
+The configuration option `monitor_fullscan_frequency` only controls the scheduled online full-scan true-up cadence in `--monitor` mode. An online full-scan true-up is when the client deliberately does not use the stored Microsoft Graph `/delta` link for that pass and instead performs a broader online reconciliation pass. The database consistency check and local filesystem scan may still occur during normal monitor sync cycles.
 
 Two common errors can occur when using monitor mode:
 *   Initialisation failure
@@ -1778,7 +1807,17 @@ By default, the location where your Microsoft OneDrive data is stored, is within
 To change this location, the application configuration option 'sync_dir' is used to specify a new local directory where your Microsoft OneDrive data should be stored.
 
 > [!IMPORTANT]
-> Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of local file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
+> Using a network mount point such as NFS, CIFS, SMB, Windows Network Share or Samba Network Share as your `sync_dir` has significant change-detection and performance implications.
+>
+> These network-backed filesystems should be treated as not providing usable `inotify` support for this client. `inotify` support is essential for Monitor Mode to detect local filesystem changes in real time. When `sync_dir` is located on a network mount, local file changes may not generate `inotify` events at all, meaning the client cannot immediately detect those changes as they occur.
+>
+> In this configuration, synchronisation between the local filesystem and Microsoft OneDrive will rely on scheduled monitor sync cycles controlled by `monitor_interval`, rather than immediate local filesystem event detection.
+>
+> Additionally, local filesystem notifications on network mounts do not behave the same way as they do on local disks. Changes made directly on the NAS, file server, or from another client may not be reported to this client. On very large sync trees this can be expensive, because the local database consistency check and local filesystem scan must validate state across the mounted filesystem.
+>
+> This limitation is caused by network filesystem and operating system notification behaviour, and is outside the control of this client.
+>
+> For large datasets, local storage is strongly preferred. If a network-backed `sync_dir` is required, test Monitor Mode behaviour and scan duration carefully before relying on it for unattended operation.
 
 ### How do I safely remove my local sync_dir without deleting my OneDrive data?
 > [!CAUTION]
@@ -2226,6 +2265,33 @@ sudo semanage fcontext -d /path/to/onedriveSyncFolder
 sudo restorecon -R -v /path/to/onedriveSyncFolder
 ```
 
+### Why do I see `Performing a database consistency and integrity check on locally stored data` every monitor cycle?
+
+This message refers to the local database/filesystem consistency pass. It is not the same as an online full-scan true-up.
+
+`monitor_fullscan_frequency` controls how often the client performs an online full-scan true-up in `--monitor` mode. It does not disable the local database consistency check and does not disable the local filesystem scan used to identify local changes that may need to be uploaded.
+
+To confirm whether an online full-scan true-up is occurring, run the client with debug logging:
+
+```text
+onedrive --monitor --verbose --verbose
+```
+
+Relevant debug messages include:
+
+```text
+Full Scan Frequency Loop Number: ...
+Perform a Full Scan True-Up: true|false
+Performing a full scan of online data to ensure consistent local state
+Using database stored deltaLink
+Using cached deltaLink
+```
+
+If `Perform a Full Scan True-Up` is `false`, the client should use the cached or database-stored `/delta` link where applicable. Seeing the local database consistency message in the same sync cycle does not mean `monitor_fullscan_frequency` has been ignored.
+
+
+
+
 ## Advanced Configuration of the OneDrive Client for Linux
 
 Refer to [advanced-usage.md](advanced-usage.md) for further details on the following topics:
@@ -2332,7 +2398,7 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
   --monitor -m
       Keep monitoring for local and remote changes
   --monitor-fullscan-frequency '<path or required value>'
-      Number of sync runs before performing a full local scan of the synced directory
+      Number of scheduled monitor-interval sync cycles before performing an online full-scan true-up. This does not disable the local database consistency check.
   --monitor-interval '<path or required value>'
       Number of seconds by which each sync operation is undertaken when idle under monitor mode
   --monitor-log-frequency '<path or required value>'
