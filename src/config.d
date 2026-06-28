@@ -1342,7 +1342,7 @@ class ApplicationConfig {
 					"Number of seconds by which each sync operation is undertaken when idle under monitor mode",
 					&longValues["monitor_interval"],
 				"monitor-fullscan-frequency",
-					"Number of sync runs before performing a full local scan of the synced directory",
+					"Number of scheduled monitor-interval sync cycles before performing an online full-scan true-up. This does not disable the local database consistency check.",
 					&longValues["monitor_fullscan_frequency"],
 				"monitor-log-frequency",
 					"Frequency of logging in monitor mode",

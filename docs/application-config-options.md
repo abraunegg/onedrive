@@ -621,13 +621,28 @@ monitor_fullscan_frequency
 > This option is only applicable when using `--monitor --download-only --cleanup-local-files`. In all other scenarios, this setting is ignored.
 
 > [!NOTE]
-> `monitor_and_signal` performs authoritative cleanup on each monitor interval and each API signal. This is the most aggressive mode and may significantly increase Microsoft Graph API usage when push notifications are frequent.
-> `monitor_interval` performs authoritative cleanup on scheduled monitor intervals only. API-signal-triggered syncs remain fast and defer local cleanup until the next monitor interval.
-> `monitor_fullscan_frequency` performs authoritative cleanup based on `monitor_fullscan_frequency` cadence and is the default. API-signal-triggered syncs and monitor interval syncs remain fast between authoritative passes.
-> When `monitor_authoritative_sync = "monitor_fullscan_frequency"`, a `monitor_fullscan_frequency` value greater than `0` defers authoritative cleanup to that cadence; `0` makes cleanup authoritative on every monitor sync cycle.
+> This option controls when local cleanup is treated as authoritative in monitor mode for `--download-only --cleanup-local-files`.
+> 
+> Valid values:
+> * `monitor_and_signal`
+>    * Authoritative cleanup is performed on scheduled monitor interval syncs and on API-signal-triggered syncs.
+>    * This is the default behaviour.
+>    * This is the most aggressive mode and may increase Microsoft Graph API usage when push notifications are frequent.
+>
+> * `monitor_interval`
+>    * Authoritative cleanup is performed on scheduled monitor interval syncs only.
+>    * API-signal-triggered syncs remain faster and defer authoritative local cleanup until the next scheduled monitor interval.
+>
+> * `monitor_fullscan_frequency`
+>    * Authoritative cleanup is performed only when the `monitor_fullscan_frequency` cadence is reached.
+>    * API-signal-triggered syncs and normal scheduled monitor interval syncs remain faster between authoritative cleanup passes.
+>    * When using this policy, a `monitor_fullscan_frequency` value greater than `0` defers authoritative cleanup to that cadence.
+>    * When using this policy, a `monitor_fullscan_frequency` value of `0` makes cleanup authoritative on every monitor sync cycle.
+>    * This zero-value behaviour applies only to the authoritative cleanup cadence used by `monitor_authoritative_sync = "monitor_fullscan_frequency"`. It does not mean that scheduled online full-scan true-up is enabled when `monitor_fullscan_frequency = "0"`.
+
 
 ### monitor_fullscan_frequency
-_**Description:**_ This configuration option controls the number of 'monitor_interval' iterations between when a full scan of your data is performed to ensure data integrity and consistency.
+_**Description:**_ This configuration option controls the number of scheduled `monitor_interval` sync cycles between online full-scan true-up passes when running in `--monitor` mode.
 
 _**Value Type:**_ Integer
 
@@ -638,10 +653,38 @@ _**Config Example:**_ `monitor_fullscan_frequency = "24"`
 _**CLI Option Use:**_ `--monitor-fullscan-frequency '24'`
 
 > [!NOTE]
-> By default without configuration, 'monitor_fullscan_frequency' is set to 12. In this default state, this means that a full scan is performed every 'monitor_interval' x 'monitor_fullscan_frequency' = 3600 seconds. This setting is only applicable when running in `--monitor` mode. Setting this configuration option to '0' will *disable* the full scan of your data online.
+> This option controls the online full-scan true-up cadence. An online full-scan true-up is when the client deliberately does not use the stored Microsoft Graph `/delta` link for that pass and instead performs a broader online reconciliation pass to ensure local and online state remain consistent. 
+>
+> By default, `monitor_fullscan_frequency` is set to `12`. With the default `monitor_interval` value of `300` seconds, this means an online full-scan true-up is scheduled approximately every:
+> ```text
+> monitor_interval * monitor_fullscan_frequency
+> 300 * 12 = 3600 seconds
+> ```
+>
+> Setting this option to `0` disables the scheduled online full-scan true-up in normal monitor operation.
+
+> [!IMPORTANT]
+> This option does not disable the local database consistency and integrity check.
+>
+> The log message:
+> ```text
+> Performing a database consistency and integrity check on locally stored data
+> ```
+>
+> refers to local database/filesystem validation. It may appear during normal sync processing and should not be used as proof that an online full-scan true-up has occurred.
+>
+> To diagnose whether an online full-scan true-up is occurring, use debug logging and check for messages such as:
+
+> ```text
+> Full Scan Frequency Loop Number: ...
+> Perform a Full Scan True-Up: true|false
+> Performing a full scan of online data to ensure consistent local state
+> Using database stored deltaLink
+> Using cached deltaLink
+> ```
 
 ### monitor_interval
-_**Description:**_ This configuration setting determines how often the synchronisation loops run in --monitor mode, measured in seconds. When this time period elapses, the client will check for online changes in Microsoft OneDrive, conduct integrity checks on local data and scan the local 'sync_dir' to identify any new content that hasn't been uploaded yet.
+_**Description:**_ This configuration setting determines how often scheduled synchronisation loops run in `--monitor` mode when the client is otherwise idle, measured in seconds. When this interval elapses, the client will perform a monitor sync cycle. This may include checking for online changes in Microsoft OneDrive, conducting integrity checks on local data, and scanning the local `sync_dir` to identify new local content that has not yet been uploaded.
 
 _**Value Type:**_ Integer
 
@@ -651,8 +694,12 @@ _**Config Example:**_ `monitor_interval = "600"`
 
 _**CLI Option Use:**_ `--monitor-interval '600'`
 
-> [!NOTE]
+> [!IMPORTANT]
 > A minimum value of 300 is enforced for this configuration setting.
+
+> [!NOTE]
+> `monitor_interval` is the scheduled idle interval. A sync cycle may also be triggered earlier by local filesystem activity or by Microsoft OneDrive API signals via WebSocket or webhook support.
+
 
 ### monitor_log_frequency
 _**Description:**_ This configuration option controls the suppression of frequently printed log items to the system console when using `--monitor` mode. The aim of this configuration item is to reduce the log output when near zero sync activity is occurring.
@@ -694,7 +741,9 @@ Syncing changes from Microsoft OneDrive ...
 Sync with Microsoft OneDrive is complete
 ```
 > [!NOTE]
-> The additional log output `Performing a database consistency and integrity check on locally stored data ...` will only be displayed when this activity is occurring which is triggered by 'monitor_fullscan_frequency'.
+> The additional log output `Performing a database consistency and integrity check on locally stored data ...` refers to the local database/filesystem consistency pass. This activity is part of normal sync processing and is not controlled by `monitor_fullscan_frequency`.
+>
+> `monitor_log_frequency` only controls suppression of repeated normal monitor output when the client is not running in verbose mode. It does not change the sync logic.
 
 > [!NOTE]
 > If verbose application output is being used (`--verbose`), then this configuration setting has zero effect, as application verbose output takes priority over application output suppression.
