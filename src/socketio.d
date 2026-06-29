@@ -138,6 +138,19 @@ private:
 		return atomicLoad(self.pleaseStop);
 	}
 
+	// Idle WebSocket receive waits are deliberately bounded so shutdown,
+	// subscription expiry checks, and notification URL renewal checks remain
+	// responsive while avoiding the previous 20ms idle polling loop.
+	enum int websocketIdleReadWaitMs = 1000;
+	enum int websocketHandshakeReadWaitMs = 250;
+
+	static int waitForWebSocketReadable(OneDriveSocketIo self, curlWebsockets.CurlWebSocket ws, int timeoutMs) {
+		if (stopRequested(self)) return -2;
+		auto waitRc = ws.waitReadable(timeoutMs);
+		if (stopRequested(self)) return -2;
+		return waitRc;
+	}
+
 	static bool interruptibleSleep(OneDriveSocketIo self, long totalMs, int stepMs = 100) {
 		long sleptMs = 0;
 		while (sleptMs < totalMs) {
@@ -365,10 +378,21 @@ private:
 							lastPingAt = Clock.currTime(UTC());
 						}
 
-						// Receive message
+						// Receive message. When the WebSocket is idle, wait on the
+						// active socket becoming readable instead of polling every 20ms.
 						auto msg = self.ws.recvText();
 						if (msg.length == 0) {
-							if (!interruptibleSleep(self, 20, 20)) return;
+							if (!self.ws.isConnected()) {
+								logSocketIOOutput("WebSocket disconnected while receiving; restarting WebSocket");
+								break;
+							}
+
+							auto waitRc = waitForWebSocketReadable(self, self.ws, websocketIdleReadWaitMs);
+							if (waitRc == -2) return;
+							if (waitRc < 0) {
+								logSocketIOOutput("WebSocket readability wait failed; restarting WebSocket");
+								break;
+							}
 							continue;
 						}
 
@@ -495,7 +519,17 @@ private:
 
 			auto msg = ws.recvText();
 			if (msg.length == 0) {
-				if (!interruptibleSleep(self, 25, 25)) return false;
+				if (!ws.isConnected()) {
+					logSocketIOOutput("WebSocket disconnected during Socket.IO open handshake");
+					return false;
+				}
+
+				auto waitRc = waitForWebSocketReadable(self, ws, websocketHandshakeReadWaitMs);
+				if (waitRc == -2) return false;
+				if (waitRc < 0) {
+					logSocketIOOutput("WebSocket readability wait failed during Socket.IO open handshake");
+					return false;
+				}
 				continue;
 			}
 

@@ -10,7 +10,9 @@ import etc.c.curl : CURL, CURLcode, curl_easy_cleanup, curl_easy_getinfo,
 	curl_easy_init, curl_easy_perform, curl_easy_recv, curl_easy_reset,
 	curl_easy_send, curl_easy_setopt;
 
+import core.stdc.errno;
 import core.stdc.string : memcpy, memmove;
+import core.sys.posix.poll;
 import core.time        : MonoTime, dur;
 import std.array        : Appender, appender;
 import std.base64       : Base64;
@@ -59,6 +61,11 @@ private:
 	enum int  CURLOPT_HTTP_VERSION      = 84;   // CURLOPT_HTTP_VERSION
 	enum int  CURLOPT_SSL_ENABLE_ALPN   = 226;  // CURLOPT_SSL_ENABLE_ALPN
 	enum int  CURLOPT_SSL_ENABLE_NPN    = 225;  // CURLOPT_SSL_ENABLE_NPN
+
+	// libcurl info / result constants used by CONNECT_ONLY receive handling
+	// CURLINFO_ACTIVESOCKET = CURLINFO_SOCKET + 44 = 0x500000 + 44
+	enum int  CURLINFO_ACTIVESOCKET     = 0x50002C;
+	enum int  CURLE_AGAIN_CODE          = 81;
 
 	// HTTP version flags (for CURLOPT_HTTP_VERSION)
 	enum long CURL_HTTP_VERSION_NONE           = 0;
@@ -193,6 +200,15 @@ public:
 						logCurlWebsocketOutput("Timeout waiting for HTTP upgrade response");
 						return -6;
 					}
+
+					// Avoid a tight curl_easy_recv(CURLE_AGAIN) loop while waiting
+					// for the server's HTTP 101 upgrade response. The WebSocket
+					// worker is not yet marked connected here, but the active
+					// CONNECT_ONLY socket is already available from libcurl.
+					if (waitReadable(250) < 0) {
+						logCurlWebsocketOutput("Failed waiting for HTTP upgrade response readability");
+						return -5;
+					}
 					continue;
 				}
 				hdrs ~= cast(const(char)[]) tmp[0 .. cast(size_t)got];
@@ -309,6 +325,43 @@ public:
 		}
 	}
 
+	// Wait until the active libcurl CONNECT_ONLY socket is readable.
+	// Returns 1 when readable, 0 on timeout or EINTR, and -1 on socket/error.
+	int waitReadable(int timeoutMs) {
+		if (curl is null) return -1;
+
+		int activeSocket = -1;
+		auto infoRc = curl_easy_getinfo(curl, cast(int)CURLINFO_ACTIVESOCKET, &activeSocket);
+		if (infoRc != 0 || activeSocket < 0) {
+			logCurlWebsocketOutput("Unable to obtain active WebSocket socket from libcurl");
+			return -1;
+		}
+
+		if (timeoutMs < 0) timeoutMs = 0;
+
+		pollfd fds;
+		fds.fd = activeSocket;
+		fds.events = POLLIN;
+		fds.revents = 0;
+
+		int pollRc = poll(&fds, 1, timeoutMs);
+		if (pollRc == 0) return 0;
+		if (pollRc < 0) {
+			if (errno == EINTR) return 0;
+			logCurlWebsocketOutput("poll() failed while waiting for WebSocket readability");
+			return -1;
+		}
+
+		if ((fds.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+			logCurlWebsocketOutput("WebSocket socket reported poll error/hangup/invalid state");
+			websocketConnected = false;
+			return -1;
+		}
+
+		if ((fds.revents & POLLIN) != 0) return 1;
+		return 0;
+	}
+
 private:
 	struct ParsedUrl {
 		bool   ok;
@@ -420,7 +473,16 @@ private:
 	int recvSome(ubyte[] buf) {
 		size_t got = 0;
 		auto rc = curl_easy_recv(curl, cast(void*)buf.ptr, buf.length, &got);
-		if (rc != 0) return 0; // treat EAGAIN etc. as "no bytes now"
+		if (rc != 0) {
+			if (cast(int)rc == CURLE_AGAIN_CODE) {
+				return 0; // socket would block; caller should wait for readability
+			}
+
+			websocketConnected = false;
+			logCurlWebsocketOutput("curl_easy_recv failed while receiving WebSocket data");
+			return -1;
+		}
+
 		return cast(int)got;
 	}
 
