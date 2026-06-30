@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Implemented GUI-based OAuth callback handling using local loopback listener (#3750)
 
 ### Changed
-*   Enhance logging output for safeSetTimes() when the client runtime user does not the file requiring timestamp change (#3654)
+*   Enhance logging output for safeSetTimes() when the client runtime user does not own the file requiring timestamp changes (#3654)
 *   Optimise monitor cleanup cadence for download-only mode (#3697)
 *   Improve delta processing performance and reduce GC overhead (#3746)
 *   Reduce forced garbage collection in synchronisation and CurlEngine cleanup paths (#3748)
@@ -40,12 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Fix Bug: Fix SIGSEGV on shutdown, implement signal-safe termination handling, and preserve itemdb thread safety (#3687)
 *   Fix Bug: Fix to prevent new transfers during SIGINT shutdown and support forced transfer abort (#3691)
 *   Fix Bug: Fix relocated shared-folder shortcut path reconstruction (#3690)
-*   Fix Bug: Fix that included empty directories from 'sync_list' are added to the database but not created locally (#3703)
+*   Fix Bug: Fix that empty directories included by 'sync_list' are added to the database but not created locally (#3703)
 *   Fix Bug: Fix 'sync_list' wildcard exclusion rules can incorrectly exclude ancestor directories (#3707)
 *   Fix Bug: Fix that 'azure_tenant_id' entries for intune based authentication were being ignored (#3711)
 *   Fix Bug: Fix inotify move handling so local file and directory moves within sync_dir are processed as remote moves instead of delete/re-upload operations. (#3720)
-*   Fix Bug: Fix that Microsoft Graph API 'sharedWithMe' has been officially deprecated impacting --sync-shared-files functionality (#3729)
-*   Fix Bug: Fix that application cannot query SharePoint Shared Library - 'onedrive' application is already running (#3734)
+*   Fix Bug: Fix impact of the official Microsoft Graph API 'sharedWithMe' deprecation on --sync-shared-files functionality (#3729)
+*   Fix Bug: Fix SharePoint Shared Library query failure where the application incorrectly reports that 'onedrive' is already running (#3734)
 *   Fix Bug: Fix that curlEngine 'fresh_connect' option may not be reset after successful retry, impacting connection reuse (#3735)
 *   Fix Bug: Fix that Transfer Metrics duration includes non-transfer processing time (#3737)
 *   Fix Bug: Fix download error handling so filesystem attribute failures are handled cleanly instead of interrupting file downloads. (#3741)
@@ -56,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Fix Bug: Harden monitor lifecycle, event handling, and DB reconciliation (#3756)
 *   Fix Bug: Avoid duplicate online item conversion during modified file upload (#3759)
 *   Fix Bug: Reduce idle CPU usage in WebSocket monitor loop (#3762)
+*   Fix Bug: Add the missing `remove_source_folders` entry to `--display-config` output. (#3764)
 
 ### Updated
 *   Updated all supported Docker build environments to use current upstream base images and toolchains for improved security, maintenance, and long-term support.
