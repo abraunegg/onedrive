@@ -10,10 +10,10 @@ dnl - commit the changed files (configure.ac, configure)
 dnl - tag the release
 
 AC_PREREQ([2.69])
-AC_INIT([onedrive],[v2.5.10], [https://github.com/abraunegg/onedrive], [onedrive])
+AC_INIT([onedrive],[v2.5.11], [https://github.com/abraunegg/onedrive], [onedrive])
+PACKAGE_DATE="June 2026"
+
 AC_CONFIG_SRCDIR([src/main.d])
-
-
 AC_ARG_VAR([DC], [D compiler executable])
 AC_ARG_VAR([DCFLAGS], [flags for D compiler])
 
@@ -21,7 +21,6 @@ dnl necessary programs: install, pkg-config
 AC_PROG_INSTALL
 PKG_PROG_PKG_CONFIG
 
-PACKAGE_DATE="January 2026"
 AC_SUBST([PACKAGE_DATE])
 
 dnl Determine D compiler

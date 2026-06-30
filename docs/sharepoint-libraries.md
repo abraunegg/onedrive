@@ -112,16 +112,16 @@ onedrive --confdir="~/.config/SharePoint_My_Library_Name" --display-config
 
 Test your new configuration using the `--dry-run` option to validate the application configuration:
 ```text
-onedrive --confdir="~/.config/SharePoint_My_Library_Name" --synchronize --verbose --dry-run
+onedrive --confdir="~/.config/SharePoint_My_Library_Name" --sync --verbose --dry-run
 ```
 
 > [!IMPORTANT]
 > As this is a *new* configuration, the application will be required to be re-authorised the first time this command is run with the new configuration.
 
 ## 6. Sync the SharePoint Library as required
-Sync the SharePoint Library to your system with either `--synchronize` or `--monitor` operations:
+Sync the SharePoint Library to your system with either `--sync` or `--monitor` operations:
 ```text
-onedrive --confdir="~/.config/SharePoint_My_Library_Name" --synchronize --verbose
+onedrive --confdir="~/.config/SharePoint_My_Library_Name" --sync --verbose
 ```
 
 ```text

@@ -2353,6 +2353,8 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
       Do not use desktop notifications in monitor mode
   --disable-upload-validation
       Disable upload validation when uploading to OneDrive
+  --display-admin-consent-url
+      Displays a tenant-specific Microsoft Entra ID administrator consent URL for environments where administrator approval is required before users can authenticate and use the client
   --display-config
       Display what options the client will use as currently configured. No synchronisation will be performed
   --display-quota
@@ -2377,8 +2379,6 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
       Force the use of HTTP 1.1 for all operations
   --force-sync
       Force a synchronisation of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules
-  --get-O365-drive-id '<path or required value>'
-      Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library (DEPRECATED)
   --get-file-link '<path or required value>'
       Display the file link of a synced file
   --get-sharepoint-drive-id '<path or required value>'
@@ -2393,6 +2393,8 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
       Directory where logging output is saved to, needs to end with a slash
   --logout
       Log out the current user
+  --mirror-local-state
+      Mirror the local state to Microsoft OneDrive online
   --modified-by '<path or required value>'
       Display the last modified by details of a given path
   --monitor -m
@@ -2447,8 +2449,6 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
       Sync OneDrive Business Shared Files to the local filesystem
   --syncdir '<path or required value>'
       Specify the local directory used for synchronisation to OneDrive
-  --synchronize
-      Perform a synchronisation with Microsoft OneDrive (DEPRECATED)
   --threads
       Specify a value for the number of worker threads used for parallel upload and download operations
   --upload-only
@@ -2459,6 +2459,7 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
       Print the version and exit
   --with-editing-perms
       Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>
+
 ```
 
 Refer to [application-config-options.md](application-config-options.md) for in-depth details on all application options. 

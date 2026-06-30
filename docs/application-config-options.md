@@ -115,8 +115,6 @@ Before reading this document, please ensure you are running application version 
 - [Deprecated Configuration File and CLI Options](#deprecated-configuration-file-and-cli-options)
   - [force_http_2](#force_http_2)
   - [min_notify_changes](#min_notify_changes)
-  - [CLI Option: --synchronize](#cli-option---synchronize)
-
 
 ## Configuration File Options
 
@@ -1541,7 +1539,7 @@ _**Usage Example:**_ `onedrive --display-sync-status`
 > [!TIP]
 > This option can also use the `--single-directory` option to determine the sync status of a specific directory within the configured 'sync_dir'
 
-### CLI Option: ---display-quota
+### CLI Option: --display-quota
 _**Description:**_ This CLI option will display the quota status of the account drive id or the configured 'drive_id' value
 
 _**Usage Example:**_ `onedrive --display-quota`
@@ -1585,7 +1583,7 @@ _**Usage Example:**_ `onedrive --get-file-link 'relative/path/to/your/file.txt'`
 > The path that you should use *must* be relative to your 'sync_dir'
 
 ### CLI Option: --get-sharepoint-drive-id
-_**Description:**_ This CLI option queries the OneDrive API and return's the Office 365 Drive ID for a given Office 365 SharePoint Shared Library that can then be used with 'drive_id' to sync a specific SharePoint Library.
+_**Description:**_ This CLI option queries the OneDrive API and return's the Microsoft 365 Drive ID for a given SharePoint document library that can then be used with 'drive_id' to sync a specific SharePoint Library.
 
 _**Usage Example:**_ `onedrive --get-sharepoint-drive-id '*'` or `onedrive --get-sharepoint-drive-id 'PointPublishing Hub Site'`
 
@@ -1737,9 +1735,4 @@ _**Deprecated CLI Option:**_ `--min-notify-changes '50'`
 
 _**Reason for depreciation:**_ Application has been totally re-written. When this item was introduced, it was done so to reduce spamming of all events to the GUI desktop.
 
-### CLI Option: --synchronize
-_**Description:**_ Perform a synchronisation with Microsoft OneDrive
 
-_**Deprecated CLI Option:**_ `--synchronize`
-
-_**Reason for depreciation:**_ `--synchronize` has been deprecated in favour of `--sync` or `-s`

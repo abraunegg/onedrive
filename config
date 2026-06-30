@@ -98,7 +98,7 @@
 #force_session_upload = "false"
 
 ## Delay in seconds before processing inotify events.
-#inotify_delay = "10"
+#inotify_delay = "5"
 
 ## This setting controls the application IP protocol used when communicating with Microsoft OneDrive.
 #ip_protocol_version = "0"
@@ -107,7 +107,7 @@
 #local_first = "false"
 
 ## This setting controls the custom application log path when 'enable_logging' has been enabled.
-#log_dir = ""
+#log_dir = "/var/log/onedrive"
 
 ## This configuration option controls the number of seconds a cURL engine is considered stale and destroyed after last use.
 #max_curl_idle = "120"
@@ -151,7 +151,7 @@
 #read_only_auth_scope = "false"
 
 ## This configuration option allows you to specify the 'Recycle Bin' path for the application. This is only used if 'use_recycle_bin' is enabled.
-#recycle_bin_path = "/path/to/desired/location/"
+#recycle_bin_path = "~/.local/share/Trash/"
 
 ## This option removes the local file after a successful upload to OneDrive.
 #remove_source_files = "false"
@@ -219,8 +219,8 @@
 ## This configuration option controls the application function to move online deleted files to a 'Recycle Bin' on your system.
 #use_recycle_bin = "false"
 
-## Custom User-Agent string for requests to OneDrive. If you change this, you will get throttled by the Microsoft Graph API. Change with caution.
-#user_agent = "ISV|abraunegg|OneDrive Client for Linux/vX.Y.Z-A-bcdefghi"
+## Custom User-Agent string for requests to OneDrive. The default value is generated dynamically from the compiled client version. If you change this, you will get throttled by the Microsoft Graph API. Change with caution.
+#user_agent = "ISV|abraunegg|OneDrive Client for Linux/<compiled-version>"
 
 ## Enable webhook-based remote update notifications in monitor mode.
 #webhook_enabled = "false"
@@ -228,8 +228,8 @@
 ## Time in seconds before webhook subscription expires.
 #webhook_expiration_interval = "600"
 
-## IP address to listen on for incoming webhook updates.
-#webhook_listening_host = "0.0.0.0"
+## Optional IP address or host to bind for incoming webhook updates. Empty uses the runtime default listener binding.
+#webhook_listening_host = ""
 
 ## TCP port to listen on for incoming webhook updates.
 #webhook_listening_port = "8888"
@@ -245,3 +245,26 @@
 
 ## Write xattr metadata fields (createdBy, lastModifiedBy) to synced files.
 #write_xattr_data = "false"
+
+###################################################################################################
+## Developer / diagnostic options.
+## These options are primarily intended for debugging, performance analysis, testing and controlled 
+## development scenarios.
+
+## Display application memory usage while running.
+#display_memory = "false"
+
+## Exit monitor mode after this many monitor loops. A value of 0 disables this limit.
+#monitor_max_loop = "0"
+
+## Display sync option state passed into sync processing.
+#display_sync_options = "false"
+
+## Force the client to use /children rather than /delta when querying changes.
+#force_children_scan = "false"
+
+## Display internal function processing times when debug logging is enabled.
+#display_processing_time = "false"
+
+## Force active file transfers to abort during application shutdown.
+#force_xfer_abort = "false"
