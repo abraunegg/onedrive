@@ -37,7 +37,7 @@ BuildRequires: ldc >= %{ldc_minver}
 %endif
 
 Name:       onedrive
-Version:    2.5.10
+Version:    2.5.11
 Release:    1%{?dist}
 Summary:    OneDrive Client for Linux
 Group:      System Environment/Network
@@ -116,7 +116,10 @@ install -D -m 0644 contrib/systemd/onedrive.service %{buildroot}%{_userunitdir}/
 
 
 %changelog
-* Fri Jan 20 2026 - 2.5.10-1
+* Tue Jun 30 2026 - 2.5.11-1
+- Release v2.5.11 with new features, bug fixes, and enhancements
+
+* Fri Jan 30 2026 - 2.5.10-1
 - Release v2.5.10 with new features, bug fixes, and enhancements
 
 * Thu Nov 06 2025 - 2.5.9-1

@@ -2,6 +2,69 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.11 - 2026-06-30
+
+### Added
+*   Added CI smoke test for monitor-mode clean shutdown across Ubuntu and Fedora (#3678)
+*   Added support for Microsoft Identity Broker 3.0.1 (#3686)
+*   Added push-triggered E2E testing across Personal, Business and SharePoint accounts with 64 test cases and dedicated Shared Folder testing (#3644)
+*   Implemented stream hashing to support 'on-demand' development work (#3653)
+*   Added --mirror-local-state to ensure online state is a mirror of local state (#3742)
+*   Added capability to display the Admin Consent URL via --display-admin-consent-url (#3739)
+*   Added a new SVG notification icon for improved desktop integration with GNOME and KDE environments. (#3743)
+*   Implemented GUI-based OAuth callback handling using local loopback listener (#3750)
+
+### Changed
+*   Enhance logging output for safeSetTimes() when the client runtime user does not own the file requiring timestamp changes (#3654)
+*   Optimise monitor cleanup cadence for download-only mode (#3697)
+*   Improve delta processing performance and reduce GC overhead (#3746)
+*   Reduce forced garbage collection in synchronisation and CurlEngine cleanup paths (#3748)
+*   Improve remote deletion success and failure logging (#3752)
+*   Optimise client-side filtering directory mask evaluation (#3755)
+*   Clarify error message for 'sync_list' rule (#3761)
+
+### Removed
+*   Remove from code deprecated commands (--synchronize and --get-O365-drive-id) in v2.5.0  (#3732)
+
+### Fixed
+*   Fix Bug: Fix that the internal websocket trigger is not woken to sync with --download-only (#3631)
+*   Fix Bug: Fix internal crash when WebSocket initialisation fails in monitor mode (#3639)
+*   Fix Bug: Fix that broken symlinks log error despite 'skip_symlinks = true' (#3656)
+*   Fix Bug: Fix 'sync_list' retention handling so --download-only --cleanup-local-files no longer removes directories that should be preserved (#3657)
+*   Fix Bug: Fix 'skip_size' flagging for local files is respected (#3659)
+*   Fix Bug: Fix reserved Windows device name validation to block names with extensions (e.g. CON.txt, NUL.tar.gz) (#3661)
+*   Fix Bug: Fix crash when parsing invalid 'resume_download.*' metadata during --resync (#3668)
+*   Fix Bug: Fix to ensure use of local timestamp when uploading files when using --upload-only & --local-first (#3669)
+*   Fix Bug: Fix SIGSEGV during shutdown caused by logging subsystem teardown race condition (#3676)
+*   Fix Bug: Fix to defer local directory recreation when processing simulated /delta response (#3682)
+*   Fix Bug: Fix SIGSEGV on shutdown, implement signal-safe termination handling, and preserve itemdb thread safety (#3687)
+*   Fix Bug: Fix to prevent new transfers during SIGINT shutdown and support forced transfer abort (#3691)
+*   Fix Bug: Fix relocated shared-folder shortcut path reconstruction (#3690)
+*   Fix Bug: Fix that empty directories included by 'sync_list' are added to the database but not created locally (#3703)
+*   Fix Bug: Fix 'sync_list' wildcard exclusion rules can incorrectly exclude ancestor directories (#3707)
+*   Fix Bug: Fix that 'azure_tenant_id' entries for intune based authentication were being ignored (#3711)
+*   Fix Bug: Fix inotify move handling so local file and directory moves within sync_dir are processed as remote moves instead of delete/re-upload operations. (#3720)
+*   Fix Bug: Fix impact of the official Microsoft Graph API 'sharedWithMe' deprecation on --sync-shared-files functionality (#3729)
+*   Fix Bug: Fix SharePoint Shared Library query failure where the application incorrectly reports that 'onedrive' is already running (#3734)
+*   Fix Bug: Fix that curlEngine 'fresh_connect' option may not be reset after successful retry, impacting connection reuse (#3735)
+*   Fix Bug: Fix that Transfer Metrics duration includes non-transfer processing time (#3737)
+*   Fix Bug: Fix download error handling so filesystem attribute failures are handled cleanly instead of interrupting file downloads. (#3741)
+*   Fix Bug: Fix single-tenant authentication redirect URI handling and add administrator consent support (#3745)
+*   Fix Bug: Fix elapsedTime calculation for monitor loop cycles (#3749)
+*   Fix Bug: Fix monitor mode stability and long-running delta processing efficiency (#3754)
+*   Fix Bug: Fix FreeBSD RSS memory telemetry calculation (#3757)
+*   Fix Bug: Harden monitor lifecycle, event handling, and DB reconciliation (#3756)
+*   Fix Bug: Avoid duplicate online item conversion during modified file upload (#3759)
+*   Fix Bug: Reduce idle CPU usage in WebSocket monitor loop (#3762)
+*   Fix Bug: Add the missing `remove_source_folders` entry to `--display-config` output. (#3764)
+
+### Updated
+*   Updated all supported Docker build environments to use current upstream base images and toolchains for improved security, maintenance, and long-term support.
+*   Updated completion files to align to release application functionality
+*   Updated 'config' file to align to release application functionality
+*   Updated documentation
+
+
 ## 2.5.10 - 2026-01-30
 
 ### Added
