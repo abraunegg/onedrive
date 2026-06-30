@@ -2,7 +2,7 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 2.5.11 - 2026-01-30
+## 2.5.11 - 2026-06-30
 
 ### Added
 *   Added CI smoke test for monitor-mode clean shutdown across Ubuntu and Fedora (#3678)
