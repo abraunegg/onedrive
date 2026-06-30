@@ -1734,6 +1734,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'bypass_data_preservation'      = " ~ to!string(getValueBool("bypass_data_preservation")));
 		addLogEntry("Config option 'no_remote_delete'              = " ~ to!string(getValueBool("no_remote_delete")));
 		addLogEntry("Config option 'remove_source_files'           = " ~ to!string(getValueBool("remove_source_files")));
+		addLogEntry("Config option 'remove_source_folders'         = " ~ to!string(getValueBool("remove_source_folders")));
 		addLogEntry("Config option 'sync_dir_permissions'          = " ~ to!string(getValueLong("sync_dir_permissions")));
 		addLogEntry("Config option 'sync_file_permissions'         = " ~ to!string(getValueLong("sync_file_permissions")));
 		addLogEntry("Config option 'space_reservation'             = " ~ to!string(getValueLong("space_reservation")));
