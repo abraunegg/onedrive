@@ -111,7 +111,7 @@ To download a copy of the default configuration template, run:
 .nf
 \fB
 mkdir -p ~/.config/onedrive
-wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/onedrive/config
+wget https://raw.githubusercontent.com/abraunegg/onedrive/@PACKAGE_VERSION@/config -O ~/.config/onedrive/config
 \fP
 .fi
 
@@ -143,13 +143,15 @@ These configurable options and the 'sync_list' file provide users with the flexi
 After changing any Client Side Filtering rule, a full re-synchronisation must be performed using --resync
 
 .SH FIRST RUN
-Once you've installed the application, you'll need to authorise it using your Microsoft OneDrive Account. This can be done by simply running the application without any additional command switches.
+Once you've installed the application, you'll need to authorise it using your Microsoft OneDrive account. This can be done by simply running the application without any additional command switches.
 .TP
-Please be aware that some companies may require you to explicitly add this app to the Microsoft MyApps portal. To add an approved app to your apps, click on the ellipsis in the top-right corner and select "Request new apps." On the next page, you can add this app. If it's not listed, you should make a request through your IT department.
+Please be aware that some organisations may require administrator approval before this client can be used. If administrator consent is required, use \fB--display-admin-consent-url\fP to generate the appropriate Microsoft Entra ID administrator consent URL for your tenant.
 .TP
-When you run the application for the first time, you'll be prompted to open a specific URL using your web browser, where you'll need to log in to your Microsoft Account and grant the application permission to access your files. After granting permission to the application, you'll be redirected to a blank page. Simply copy the URI from the blank page and paste it into the application.
+When run for the first time in a supported graphical environment, the client will attempt to open the Microsoft authorisation URL in your default web browser and listen for the authorisation response on the local loopback callback address \fBhttp://127.0.0.1:53100/\fP. After you sign in and grant access, authentication should complete automatically and you may close the browser window.
 .TP
-This process authenticates your application with your account information, and it is now ready to use to sync your data between your local system and Microsoft OneDrive.
+If local browser authentication cannot be used, the client will fall back to the manual authentication flow. In that mode, open the displayed URL in your browser, sign in, grant access, then copy the full redirect URI from the browser address bar and paste it back into the application.
+.TP
+This process authenticates the application with your account information, after which the client is ready to sync your data between your local system and Microsoft OneDrive.
 
 .SH GUI NOTIFICATIONS
 If the client has been compiled with support for notifications, the client will send notifications about client activity via libnotify to the GUI via DBus when the client is being run in --monitor mode.
@@ -239,7 +241,7 @@ Do not use desktop notifications in monitor mode.
 \fB\-\-disable-upload-validation\fR
 Disable upload validation when uploading to OneDrive.
 
-.TB
+.TP
 \fB\-\-display-admin-consent-url\fR
 Displays a tenant-specific Microsoft Entra ID administrator consent URL for environments where administrator approval is required before users can authenticate and use the client.
 
@@ -291,7 +293,7 @@ Display the file link of a synced file.
 
 .TP
 \fB\-\-get-sharepoint-drive-id\fR \fIARG\fR
-Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library.
+Query and return the Microsoft 365 Drive ID for a given SharePoint document library.
 
 .TP
 \fB\-\-help\fR, \fB\-h\fR
@@ -438,16 +440,9 @@ Print the version and exit.
 \fB\-\-with-editing-perms\fR
 Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>.
 
-.SH DEPRECATED OPTIONS
-The following options have been deprecated:
-.TP
-\fB\-\-synchronize\fR
-.TP
-\fB\-\-get-O365-drive-id\fR
-
 .SH DOCUMENTATION
 All documentation is available on GitHub: https://github.com/abraunegg/onedrive/tree/master/docs/
 
 
 .SH SEE ALSO
-.BR curl(1),
+.BR curl(1)
