@@ -57,6 +57,12 @@ __gshared MonoTime lastLocalWrite;
 // util module variable
 ulong previousRSS;
 
+version (OpenBSD) {
+	// OpenBSD libc sysctl(2) declaration for native process telemetry.
+	// Keep this at module scope so D links against libc's C symbol `sysctl`.
+	extern(C) int sysctl(const(int)* name, uint namelen, void* oldp, size_t* oldlenp, void* newp, size_t newlen);
+}
+
 struct DesktopHints {
     bool gnome;
     bool kde;
@@ -945,39 +951,154 @@ bool isValidUTF16(string path) {
     return true;
 }
 
-// Validate that the provided string is a valid date time stamp in UTC format
-bool isValidUTCDateTime(string dateTimeString) {
-    // Regular expression for validating the string against UTC datetime format
-	// Allows for an optional fractional second part (e.g., .123 or .123456789)
-	auto pattern = regex(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$");
-		
+// Parse a Microsoft Graph UTC timestamp into SysTime without using SysTime.fromISOExtString()
+// as the validator. This avoids parsing the same timestamp twice and gives callers a parsed
+// value they can reuse.
+bool parseUTCDateTime(string dateTimeString, out SysTime parsedTime) {
 	// Validate for UTF-8 first
 	if (!isValidUTF8Timestamp(dateTimeString)) {
 		if (dateTimeString.empty) {
-			// empty string
 			addLogEntry("BAD TIMESTAMP (UTF-8 FAIL): empty string");
 		} else {
-			// log string that caused UTF-8 failure
 			addLogEntry("BAD TIMESTAMP (UTF-8 FAIL): " ~ dateTimeString);
 		}
 		return false;
 	}
-	
-	// First, check if the string matches the pattern
-	if (!match(dateTimeString, pattern)) {
-		addLogEntry("BAD TIMESTAMP (REGEX FAIL): " ~ dateTimeString);
+
+	// Check timestamp against what is a valid format shape
+	if (!isGraphUtcTimestampShape(dateTimeString)) {
+		addLogEntry("BAD TIMESTAMP (FORMAT FAIL): " ~ dateTimeString);
 		return false;
 	}
 
-	// Attempt to parse the string into a DateTime object
+	int parseFixedWidthDigits(const(char)[] s, size_t offset, size_t count) {
+		int value = 0;
+
+		foreach (i; 0 .. count) {
+			immutable c = s[offset + i];
+			if ((c < '0') || (c > '9')) {
+				return -1;
+			}
+			value = (value * 10) + cast(int)(c - '0');
+		}
+
+		return value;
+	}
+
+	int year = parseFixedWidthDigits(dateTimeString, 0, 4);
+	int month = parseFixedWidthDigits(dateTimeString, 5, 2);
+	int day = parseFixedWidthDigits(dateTimeString, 8, 2);
+	int hour = parseFixedWidthDigits(dateTimeString, 11, 2);
+	int minute = parseFixedWidthDigits(dateTimeString, 14, 2);
+	int second = parseFixedWidthDigits(dateTimeString, 17, 2);
+
+	if ((year < 0) || (month < 0) || (day < 0) || (hour < 0) || (minute < 0) || (second < 0)) {
+		addLogEntry("BAD TIMESTAMP (DIGIT PARSE FAIL): " ~ dateTimeString);
+		return false;
+	}
+
+	long fractionalHnsecs = 0;
+
+	// Fraction starts after "YYYY-MM-DDTHH:MM:SS."
+	if ((dateTimeString.length > 20) && (dateTimeString[19] == '.')) {
+		size_t digitsUsed = 0;
+		size_t fractionEnd = dateTimeString.length - 1; // trailing Z
+
+		foreach (i; 20 .. fractionEnd) {
+			immutable c = dateTimeString[i];
+
+			if ((c < '0') || (c > '9')) {
+				addLogEntry("BAD TIMESTAMP (FRACTION PARSE FAIL): " ~ dateTimeString);
+				return false;
+			}
+
+			// SysTime stores fractional seconds in hnsecs / 100ns units.
+			// Preserve the first 7 fractional digits and ignore smaller precision.
+			if (digitsUsed < 7) {
+				fractionalHnsecs = (fractionalHnsecs * 10) + cast(long)(c - '0');
+				digitsUsed++;
+			}
+		}
+
+		while (digitsUsed < 7) {
+			fractionalHnsecs *= 10;
+			digitsUsed++;
+		}
+	}
+
 	try {
-		auto dt = SysTime.fromISOExtString(dateTimeString);
+		parsedTime = SysTime(DateTime(year, month, day, hour, minute, second), UTC());
+
+		if (fractionalHnsecs > 0) {
+			parsedTime.fracSecs = dur!"hnsecs"(fractionalHnsecs);
+		}
+
 		return true;
-	} catch (TimeException) {
+	} catch (Exception e) {
 		addLogEntry("BAD TIMESTAMP (CONVERSION FAIL): " ~ dateTimeString);
 		return false;
 	}
 }
+
+// Validate that the provided string is a valid date time stamp in UTC format
+bool isValidUTCDateTime(string dateTimeString) {
+		SysTime parsedTime;
+		return parseUTCDateTime(dateTimeString, parsedTime);
+}
+
+// Does the timestamp, as provided by the Microsoft GraphAPI, conform to the correct shape?
+// - This is a better way to determine this than using a regex function
+bool isGraphUtcTimestampShape(const(char)[] s) {
+	bool allDigits(size_t start, size_t end) {
+		if (end > s.length) return false;
+
+		foreach (c; s[start .. end]) {
+			if (c < '0' || c > '9') {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	// Minimum: 2026-07-01T05:13:03Z = 20 chars
+	// Maximum currently allowed by existing code: 30 chars
+	if (s.length < 20 || s.length > 30) {
+		return false;
+	}
+
+	if (!allDigits(0, 4)) return false;
+	if (s[4] != '-') return false;
+	if (!allDigits(5, 7)) return false;
+	if (s[7] != '-') return false;
+	if (!allDigits(8, 10)) return false;
+	if (s[10] != 'T') return false;
+	if (!allDigits(11, 13)) return false;
+	if (s[13] != ':') return false;
+	if (!allDigits(14, 16)) return false;
+	if (s[16] != ':') return false;
+	if (!allDigits(17, 19)) return false;
+	if (s[$ - 1] != 'Z') return false;
+
+	// No fractional seconds
+	if (s.length == 20) {
+		return true;
+	}
+
+	// Fractional seconds: .123Z, .1234567Z, etc.
+	if (s[19] != '.') {
+		return false;
+	}
+
+	// Require at least one fractional digit before Z
+	if (s.length <= 21) {
+		return false;
+	}
+
+	return allDigits(20, s.length - 1);
+}
+
+
 
 // Does the path contain any HTML URL encoded items (e.g., '%20' for space)
 bool containsURLEncodedItems(string path) {
@@ -1534,7 +1655,11 @@ bool hasParentReference(const ref JSONValue item) {
 }
 
 bool hasParentReferenceDriveId(JSONValue item) {
-	return ("driveId" in item["parentReference"]) != null;
+	if (hasParentReference(item)) {
+		return ("driveId" in item["parentReference"]) != null;
+	} else {
+		return false;
+	}
 }
 
 bool hasParentReferenceId(JSONValue item) {
@@ -1853,6 +1978,8 @@ void displayMemoryUsageDetails() {
 	ulong currentRSS;
 	version (FreeBSD) {
 		currentRSS = getRSSFreeBSD(pid);
+	} else version (OpenBSD) {
+		currentRSS = getRSSOpenBSD(pid);
 	} else version (linux) {
 		currentRSS = getRSSLinux(pid);
 	} else {
@@ -2028,6 +2155,8 @@ pid_t getCurrentPID() {
 ulong getRSS(pid_t pid) {
 	version (FreeBSD) {
 		return getRSSFreeBSD(pid);
+	} else version (OpenBSD) {
+		return getRSSOpenBSD(pid);
 	} else version (linux) {
 		return getRSSLinux(pid);
 	} else {
@@ -2168,6 +2297,128 @@ ulong getRSSFreeBSD(pid_t pid) {
 		
 		// FreeBSD reports ki_rssize in pages.
 		return (cast(ulong) processInfoPrefix.ki_rssize * cast(ulong) pageSize) / 1024;
+	} else {
+		return 0;
+	}
+}
+
+// Access the Resident Set Size (RSS) using OpenBSD-native process telemetry
+ulong getRSSOpenBSD(pid_t pid) {
+	if (pid <= 0) {
+		return 0;
+	}
+	
+	version (OpenBSD) {
+		enum CTL_KERN = 1;
+		enum KERN_PROC = 66;
+		enum KERN_PROC_PID = 1;
+		enum KI_NGROUPS = 16;
+		enum KI_MAXCOMLEN = 24;
+		enum KI_WMESGLEN = 8;
+		enum KI_MAXLOGNAME = 32;
+		
+		// DRuntime does not expose OpenBSD's sys/sysctl.h kinfo_proc binding.
+		// Define only the stable kinfo_proc prefix required to reach p_vm_rssize.
+		extern(C) struct OpenBSDKinfoProcRSSPrefix {
+			ulong p_forw;
+			ulong p_back;
+			ulong p_paddr;
+			ulong p_addr;
+			ulong p_fd;
+			ulong p_stats;
+			ulong p_limit;
+			ulong p_vmspace;
+			ulong p_sigacts;
+			ulong p_sess;
+			ulong p_tsess;
+			ulong p_ru;
+			int p_eflag;
+			int p_exitsig;
+			int p_flag;
+			int p_pid;
+			int p_ppid;
+			int p_sid;
+			int p__pgid;
+			int p_tpgid;
+			uint p_uid;
+			uint p_ruid;
+			uint p_gid;
+			uint p_rgid;
+			uint[KI_NGROUPS] p_groups;
+			short p_ngroups;
+			short p_jobc;
+			uint p_tdev;
+			uint p_estcpu;
+			uint p_rtime_sec;
+			uint p_rtime_usec;
+			int p_cpticks;
+			uint p_pctcpu;
+			uint p_swtime;
+			uint p_slptime;
+			int p_schedflags;
+			ulong p_uticks;
+			ulong p_sticks;
+			ulong p_iticks;
+			ulong p_tracep;
+			int p_traceflag;
+			int p_holdcnt;
+			int p_siglist;
+			uint p_sigmask;
+			uint p_sigignore;
+			uint p_sigcatch;
+			byte p_stat;
+			ubyte p_priority;
+			ubyte p_usrpri;
+			ubyte p_nice;
+			ushort p_xstat;
+			ushort p_spare;
+			char[KI_MAXCOMLEN] p_comm;
+			char[KI_WMESGLEN] p_wmesg;
+			ulong p_wchan;
+			char[KI_MAXLOGNAME] p_login;
+			int p_vm_rssize;
+		}
+		
+		int[6] mib = [
+			CTL_KERN,
+			KERN_PROC,
+			KERN_PROC_PID,
+			cast(int) pid,
+			cast(int) OpenBSDKinfoProcRSSPrefix.sizeof,
+			1
+		];
+		
+		size_t processInfoLength;
+		if (sysctl(mib.ptr, cast(uint) mib.length, null, &processInfoLength, null, 0) != 0) {
+			addLogEntry("Failed to determine OpenBSD process RSS buffer size via sysctl for PID: " ~ to!string(pid));
+			return 0;
+		}
+		
+		if (processInfoLength < OpenBSDKinfoProcRSSPrefix.sizeof) {
+			addLogEntry("Failed to query OpenBSD process RSS via sysctl: returned process information is too small for PID: " ~ to!string(pid));
+			return 0;
+		}
+		
+		auto processInfo = new ubyte[](processInfoLength);
+		if (sysctl(mib.ptr, cast(uint) mib.length, processInfo.ptr, &processInfoLength, null, 0) != 0) {
+			addLogEntry("Failed to query OpenBSD process RSS via sysctl for PID: " ~ to!string(pid));
+			return 0;
+		}
+		
+		if (processInfoLength < OpenBSDKinfoProcRSSPrefix.sizeof) {
+			addLogEntry("Failed to query OpenBSD process RSS via sysctl: incomplete process information returned for PID: " ~ to!string(pid));
+			return 0;
+		}
+		
+		auto processInfoPrefix = cast(OpenBSDKinfoProcRSSPrefix*) processInfo.ptr;
+		auto pageSize = sysconf(_SC_PAGESIZE);
+		if (pageSize <= 0) {
+			addLogEntry("Failed to determine system page size while calculating OpenBSD RSS");
+			return 0;
+		}
+		
+		// OpenBSD reports p_vm_rssize in pages.
+		return (cast(ulong) processInfoPrefix.p_vm_rssize * cast(ulong) pageSize) / 1024;
 	} else {
 		return 0;
 	}

@@ -6,7 +6,7 @@ import core.memory;
 import core.stdc.errno : ENOENT, EINTR, EBUSY, EXDEV, EAGAIN, EPERM, EACCES, EROFS;
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.sys.posix.signal;
-import core.sys.posix.unistd : write, _exit, STDERR_FILENO;
+import core.sys.posix.unistd : write, _exit, STDERR_FILENO, getpid;
 import core.thread;
 import core.time;
 import std.algorithm;
@@ -37,6 +37,81 @@ import monitor;
 import webhook;
 import intune;
 import socketio;
+
+// Native stack trace support for fatal signal diagnostics.
+// On OpenBSD this is provided by libexecinfo; on Linux this is provided by libc.
+version (OpenBSD) {
+	
+	pragma(lib, "execinfo");
+	extern(C) nothrow @nogc @system {
+		size_t backtrace(void** addrlist, size_t len);
+		int backtrace_symbols_fd(void** addrlist, size_t len, int fd);
+	}
+}
+
+version (linux) {
+	extern(C) nothrow @nogc @system {
+		int backtrace(void** addrlist, int len);
+		void backtrace_symbols_fd(void** addrlist, int len, int fd);
+	}
+}
+
+// Minimal OpenBSD amd64 signal context definitions used only by the fatal SIGSEGV
+// handler to report the interrupted instruction/stack context before re-raising
+// the signal for normal core-dump handling.
+version (OpenBSD) {
+	enum int OPENBSD_SA_SIGINFO = 0x0040;
+
+	struct OpenBSDSigContext {
+		long sc_rdi;
+		long sc_rsi;
+		long sc_rdx;
+		long sc_rcx;
+		long sc_r8;
+		long sc_r9;
+		long sc_r10;
+		long sc_r11;
+		long sc_r12;
+		long sc_r13;
+		long sc_r14;
+		long sc_r15;
+		long sc_rbp;
+		long sc_rbx;
+		long sc_rax;
+		long sc_gs;
+		long sc_fs;
+		long sc_es;
+		long sc_ds;
+		long sc_trapno;
+		long sc_err;
+		long sc_rip;
+		long sc_cs;
+		long sc_rflags;
+		long sc_rsp;
+		long sc_ss;
+		void* sc_fpstate;
+		int __sc_unused;
+		int sc_mask;
+		long sc_cookie;
+	}
+
+	struct Fault {
+		void* _addr;
+		int _trapno;
+	}
+
+	struct OpenBSDSigInfoFault {
+		int si_signo;
+		int si_code;
+		int si_errno;
+		union Data {
+			int[29] _pad;
+			Fault _fault;
+		}
+		Data _data;
+	}
+}
+
 
 // What other constant variables do we require?
 const int EXIT_RESYNC_REQUIRED = 126;
@@ -1969,13 +2044,48 @@ void checkForNoMountScenario() {
 
 // Setup a signal handler for catching SIGINT, SIGTERM and SIGSEGV (CTRL-C and others) during application execution
 void setupSignalHandler() {
-	sigaction_t action;
+	sigaction_t action = sigaction_t.init;
 	action.sa_handler = &exitViaSignalHandler; // Direct function pointer assignment
 	sigemptyset(&action.sa_mask); // Initialize the signal set to empty
 	action.sa_flags = 0;
 	sigaction(SIGINT, &action, null);  // Interrupt from keyboard
 	sigaction(SIGTERM, &action, null); // Termination signal
-	sigaction(SIGSEGV, &action, null); // Invalid Memory Access signal
+
+	version (OpenBSD) {
+		// Use SA_SIGINFO for SIGSEGV on OpenBSD so the crash handler can print the
+		// original faulting address and interrupted RIP/RSP/RBP before re-raising.
+		sigaction_t fatalAction = sigaction_t.init;
+		fatalAction.sa_handler = cast(typeof(fatalAction.sa_handler)) &exitViaFatalSignalHandler;
+		sigemptyset(&fatalAction.sa_mask);
+		fatalAction.sa_flags = OPENBSD_SA_SIGINFO;
+		sigaction(SIGSEGV, &fatalAction, null); // Invalid Memory Access signal
+	} else {
+		sigaction(SIGSEGV, &action, null); // Invalid Memory Access signal
+	}
+}
+
+// Catch fatal signals using SA_SIGINFO where available so that the original
+// interrupted context is printed before the signal is re-raised for core handling.
+extern(C) nothrow @nogc @system void exitViaFatalSignalHandler(int signo, void* siginfo, void* context) {
+	enum segvMsg = "
+FATAL: Segmentation fault (SIGSEGV). The application encountered an internal error and will now exit in an unclean manner.
+";
+
+	// Update global exitHandlerTriggered flag so that objects that depend on this know we are shutting down
+	exitHandlerTriggered = true;
+	performFileSystemMonitoring = false;
+	terminationSignal = signo;
+
+	if (signo == SIGSEGV) {
+		requestedExitCode = 139;
+	} else {
+		requestedExitCode = 128 + signo;
+	}
+
+	write(STDERR_FILENO, segvMsg.ptr, segvMsg.length);
+	writeFatalSignalContextToStderr(signo, siginfo, context);
+	writeSignalStackTraceToStderr();
+	reraiseFatalSignal(signo, requestedExitCode);
 }
 
 // Catch SIGINT (CTRL-C), SIGTERM (kill) and SIGSEGV (invalid memory access), handle rapid repeat CTRL-C presses
@@ -2012,7 +2122,9 @@ FATAL: Segmentation fault (SIGSEGV). The application encountered an internal err
 	if (signo == SIGSEGV) {
 		requestedExitCode = 139;
 		write(STDERR_FILENO, segvMsg.ptr, segvMsg.length);
-		_exit(requestedExitCode);
+		writeFatalSignalContextToStderr(signo, null, null);
+		writeSignalStackTraceToStderr();
+		reraiseFatalSignal(signo, requestedExitCode);
 	}
 
 	if (shutdownInProgress) {
@@ -2027,6 +2139,169 @@ FATAL: Segmentation fault (SIGSEGV). The application encountered an internal err
 	if (fileTransferInProgress) {
 		write(STDERR_FILENO, inflightTransferMsg.ptr, inflightTransferMsg.length);
 	}
+}
+
+// Emit the original fatal signal context where the platform provides it.
+// This intentionally avoids D formatting/allocation and uses write() only.
+nothrow @nogc @system void writeFatalSignalContextToStderr(int signo, void* siginfo, void* context) {
+	enum contextHeader = "\nFatal signal context:\n";
+	enum contextUnavailable = "  interrupted context: unavailable\n";
+
+	write(STDERR_FILENO, contextHeader.ptr, contextHeader.length);
+	writeUnsignedDecimalToStderr("  signal: ", cast(ulong)signo);
+
+	if (siginfo !is null) {
+		version (OpenBSD) {
+			OpenBSDSigInfoFault* openbsdSigInfo = cast(OpenBSDSigInfoFault*)siginfo;
+			writeSignedDecimalToStderr("  si_code: ", openbsdSigInfo.si_code);
+			writeSignedDecimalToStderr("  si_errno: ", openbsdSigInfo.si_errno);
+			writeHexValueToStderr("  fault address (si_addr): ", cast(ulong)cast(size_t)openbsdSigInfo._data._fault._addr);
+			writeSignedDecimalToStderr("  trap number: ", openbsdSigInfo._data._fault._trapno);
+		} else {
+			writeHexValueToStderr("  siginfo pointer: ", cast(ulong)cast(size_t)siginfo);
+		}
+	} else {
+		enum siginfoUnavailable = "  siginfo: unavailable\n";
+		write(STDERR_FILENO, siginfoUnavailable.ptr, siginfoUnavailable.length);
+	}
+
+	if (context !is null) {
+		version (OpenBSD) {
+			OpenBSDSigContext* openbsdContext = cast(OpenBSDSigContext*)context;
+			writeHexValueToStderr("  interrupted RIP: ", cast(ulong)openbsdContext.sc_rip);
+			writeHexValueToStderr("  interrupted RSP: ", cast(ulong)openbsdContext.sc_rsp);
+			writeHexValueToStderr("  interrupted RBP: ", cast(ulong)openbsdContext.sc_rbp);
+			writeHexValueToStderr("  interrupted RAX: ", cast(ulong)openbsdContext.sc_rax);
+			writeHexValueToStderr("  interrupted RBX: ", cast(ulong)openbsdContext.sc_rbx);
+			writeHexValueToStderr("  interrupted RCX: ", cast(ulong)openbsdContext.sc_rcx);
+			writeHexValueToStderr("  interrupted RDX: ", cast(ulong)openbsdContext.sc_rdx);
+			writeHexValueToStderr("  trap error: ", cast(ulong)openbsdContext.sc_err);
+			writeHexValueToStderr("  rflags: ", cast(ulong)openbsdContext.sc_rflags);
+		} else {
+			writeHexValueToStderr("  context pointer: ", cast(ulong)cast(size_t)context);
+		}
+	} else {
+		write(STDERR_FILENO, contextUnavailable.ptr, contextUnavailable.length);
+	}
+}
+
+nothrow @nogc @system void writeUnsignedDecimalToStderr(const(char)[] label, ulong value) {
+	char[32] buffer;
+	size_t pos = buffer.length;
+
+	buffer[--pos] = '\n';
+
+	do {
+		buffer[--pos] = cast(char)('0' + (value % 10));
+		value /= 10;
+	} while (value != 0);
+
+	write(STDERR_FILENO, label.ptr, label.length);
+	write(STDERR_FILENO, buffer.ptr + pos, buffer.length - pos);
+}
+
+nothrow @nogc @system void writeSignedDecimalToStderr(const(char)[] label, long value) {
+	if (value < 0) {
+		enum minus = "-";
+		write(STDERR_FILENO, label.ptr, label.length);
+		write(STDERR_FILENO, minus.ptr, minus.length);
+		writeUnsignedDecimalRawToStderr(cast(ulong)(-value));
+	} else {
+		writeUnsignedDecimalToStderr(label, cast(ulong)value);
+	}
+}
+
+nothrow @nogc @system void writeUnsignedDecimalRawToStderr(ulong value) {
+	char[32] buffer;
+	size_t pos = buffer.length;
+
+	buffer[--pos] = '\n';
+
+	do {
+		buffer[--pos] = cast(char)('0' + (value % 10));
+		value /= 10;
+	} while (value != 0);
+
+	write(STDERR_FILENO, buffer.ptr + pos, buffer.length - pos);
+}
+
+nothrow @nogc @system void writeHexValueToStderr(const(char)[] label, ulong value) {
+	enum hexDigits = "0123456789abcdef";
+	char[2 + (ulong.sizeof * 2) + 1] buffer;
+	size_t pos = 0;
+	uint shift = cast(uint)((ulong.sizeof * 8) - 4);
+	bool started = false;
+
+	buffer[pos++] = '0';
+	buffer[pos++] = 'x';
+
+	while (true) {
+		ubyte nibble = cast(ubyte)((value >> shift) & 0x0f);
+		if (nibble != 0 || started || shift == 0) {
+			buffer[pos++] = hexDigits[nibble];
+			started = true;
+		}
+
+		if (shift == 0) {
+			break;
+		}
+
+		shift -= 4;
+	}
+
+	buffer[pos++] = '\n';
+
+	write(STDERR_FILENO, label.ptr, label.length);
+	write(STDERR_FILENO, buffer.ptr, pos);
+}
+
+// Emit a best-effort native stack trace from a fatal signal handler.
+// Keep this function async-signal-oriented: no D allocation, no formatting, no logging framework.
+extern(C) nothrow @nogc @system void writeSignalStackTraceToStderr() {
+	enum stackTraceHeader = "\nNative stack trace for fatal signal:\n";
+	enum stackTraceUnavailable = "Native stack trace unavailable on this platform/build.\n";
+	enum stackTraceEmpty = "Native stack trace returned no frames.\n";
+	enum stackTraceFooter = "End native stack trace. Re-raising SIGSEGV to preserve core dump/default crash handling.\n";
+
+	write(STDERR_FILENO, stackTraceHeader.ptr, stackTraceHeader.length);
+
+	version (OpenBSD) {
+		void*[128] addrlist;
+		size_t frames = backtrace(addrlist.ptr, addrlist.length);
+		if (frames > 0) {
+			backtrace_symbols_fd(addrlist.ptr, frames, STDERR_FILENO);
+		} else {
+			write(STDERR_FILENO, stackTraceEmpty.ptr, stackTraceEmpty.length);
+		}
+	} else version (linux) {
+		void*[128] addrlist;
+		int frames = backtrace(addrlist.ptr, cast(int)addrlist.length);
+		if (frames > 0) {
+			backtrace_symbols_fd(addrlist.ptr, frames, STDERR_FILENO);
+		} else {
+			write(STDERR_FILENO, stackTraceEmpty.ptr, stackTraceEmpty.length);
+		}
+	} else {
+		write(STDERR_FILENO, stackTraceUnavailable.ptr, stackTraceUnavailable.length);
+	}
+
+	write(STDERR_FILENO, stackTraceFooter.ptr, stackTraceFooter.length);
+}
+
+// Restore default handling for the fatal signal and re-raise it so the OS can produce
+// the usual crash artefacts, such as a core file, after our diagnostic output.
+extern(C) nothrow @nogc @system void reraiseFatalSignal(int signo, int exitCode) {
+	sigaction_t defaultAction;
+	sigemptyset(&defaultAction.sa_mask);
+	defaultAction.sa_handler = SIG_DFL;
+	defaultAction.sa_flags = 0;
+
+	if (sigaction(signo, &defaultAction, null) == 0) {
+		kill(getpid(), signo);
+	}
+
+	// If restoring or re-raising fails for any reason, still terminate with the expected code.
+	_exit(exitCode);
 }
 
 bool shutdownRequested() {
