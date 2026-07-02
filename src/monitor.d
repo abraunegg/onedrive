@@ -31,8 +31,13 @@ import clientSideFiltering;
 // Relevant inotify events
 version(FreeBSD) {
 	 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE;
+	 private immutable bool triggerFileCreateAsChanged = true;
+} else version(OpenBSD) {
+	 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
+	 private immutable bool triggerFileCreateAsChanged = true;
 } else {
 	 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
+	 private immutable bool triggerFileCreateAsChanged = false;
 }
 
 class MonitorException: ErrnoException {
@@ -1175,6 +1180,17 @@ final class Monitor {
 							}
 							addRecursive(path);
 							if (useCallbacks) actionHolder.append(ActionType.createDir, path);
+						} else if (triggerFileCreateAsChanged) {
+							if (debugLogging) {addLogEntry("event IN_CREATE and not IN_ISDIR: " ~ path, ["debug"]);}
+							// Some BSD inotify compatibility layers may not emit IN_CLOSE_WRITE.
+							// Treat file creation as a changed file so monitor mode scans/uploads it.
+							auto cookieToPath1 = cookieToPath.dup();
+							foreach (cookie, path1; cookieToPath1) {
+								if (path1 == path) {
+									cookieToPath.remove(cookie);
+								}
+							}
+							if (useCallbacks) actionHolder.append(ActionType.changed, path);
 						}
 					} else if (event.mask & IN_DELETE_SELF) {
 						if (debugLogging) {addLogEntry("event IN_DELETE_SELF: " ~ path, ["debug"]);}

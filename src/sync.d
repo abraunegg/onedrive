@@ -1770,7 +1770,9 @@ class SyncEngine {
 		}
 				
 		// What is this item's id
-		thisItemId = onedriveJSONItem["id"].str;
+		if (hasId(onedriveJSONItem)) {
+			thisItemId = onedriveJSONItem["id"].str;
+		}
 		
 		// Is this a deleted item - only calculate this once
 		itemIsDeletedOnline = isItemDeleted(onedriveJSONItem);
@@ -1783,7 +1785,9 @@ class SyncEngine {
 			itemHasParentReferenceId = hasParentReferenceId(onedriveJSONItem);
 			itemIdMatchesDefaultRootId = (thisItemId == appConfig.defaultRootId);
 			itemNameExplicitMatchRoot = (onedriveJSONItem["name"].str == "root");
-			objectParentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+			if (hasParentReferenceDriveId(onedriveJSONItem)) {
+				objectParentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+			}
 			if (itemHasParentReferenceId) {
 				objectParentId = onedriveJSONItem["parentReference"]["id"].str;
 			}
@@ -2059,9 +2063,17 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
+		// This item details
+		string thisItemId;
+		string thisItemDriveId;
+		
 		// Use the JSON elements rather can computing a DB struct via makeItem()
-		string thisItemId = onedriveJSONItem["id"].str;
-		string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+		if (hasId(onedriveJSONItem)) {
+			thisItemId = onedriveJSONItem["id"].str;
+		}
+		if (hasParentReferenceDriveId(onedriveJSONItem)) {
+			thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+		}
 			
 		// Check if the item has been seen before
 		Item existingDatabaseItem;
@@ -2096,7 +2108,7 @@ class SyncEngine {
 						addLogEntry("Deferring local deletion from raw /delta delete tombstone until next authoritative monitor cleanup pass", ["verbose"]);
 					}
 					if (debugLogging) {
-						addLogEntry("Deferred deleted JSON item: " ~ to!string(onedriveJSONItem), ["debug"]);
+						addLogEntry("Deferred deleted JSON item: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 					}
 				} else {
 					// Is the item to delete locally actually in sync with OneDrive currently?
@@ -2107,7 +2119,7 @@ class SyncEngine {
 					string localPathToDelete = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
 					if (isItemSynced(existingDatabaseItem, localPathToDelete, itemSource)) {
 						// Flag to delete
-						if (debugLogging) {addLogEntry("Flagging to delete item locally due to online deletion event: " ~ to!string(onedriveJSONItem), ["debug"]);}
+						if (debugLogging) {addLogEntry("Flagging to delete item locally due to online deletion event: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);}
 						// Use the DB entries returned - add the driveId, itemId and parentId values  to the array
 						idsToDelete ~= [existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId];
 					} else {
@@ -2133,7 +2145,7 @@ class SyncEngine {
 						} else {
 							// Hash is the same, we can assume the isItemSynced() returning false was due to some sort of timestamp issue
 							// Flag to delete rather than create a backup of the local file
-							if (debugLogging) {addLogEntry("Flagging to delete item locally due to online deletion event: " ~ to!string(onedriveJSONItem), ["debug"]);}
+							if (debugLogging) {addLogEntry("Flagging to delete item locally due to online deletion event: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);}
 							// Use the DB entries returned - add the driveId, itemId and parentId values  to the array
 							idsToDelete ~= [existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId];
 						}
@@ -2141,7 +2153,7 @@ class SyncEngine {
 				}
 			} else {
 				// Flag to ignore
-				if (debugLogging) {addLogEntry("Flagging item to skip: " ~ to!string(onedriveJSONItem), ["debug"]);}
+				if (debugLogging) {addLogEntry("Flagging item to skip: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);}
 				skippedItems.insert(thisItemId);
 			}
 		}
@@ -2185,7 +2197,7 @@ class SyncEngine {
 			if (debugLogging) {
 				addLogEntry(debugLogBreakType1, ["debug"]);
 				addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of JSON Item Batch " ~ to!string(batchGroup) ~ " of " ~ to!string(batchCount), ["debug"]);
-				addLogEntry("Raw JSON OneDrive Item (Batched Item): " ~ to!string(onedriveJSONItem), ["debug"]);
+				addLogEntry("Raw JSON OneDrive Item (Batched Item): " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 			}
 			
 			// Configure required items from the JSON elements
@@ -6828,7 +6840,7 @@ class SyncEngine {
 		
 		// Log what we received to analyse
 		if (debugLogging) {
-			addLogEntry("createLocalPathStructure input onedriveJSONItem: " ~ to!string(onedriveJSONItem), ["debug"]);
+			addLogEntry("createLocalPathStructure input onedriveJSONItem: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 			addLogEntry("createLocalPathStructure input newLocalParentalPath: " ~ newLocalParentalPath, ["debug"]);
 		}
 		
@@ -11106,7 +11118,7 @@ class SyncEngine {
 		if (!dryRun) {
 			// We are not in a dry run scenario
 			if (debugLogging) {
-				addLogEntry("onedriveJSONItem to delete: " ~ to!string(onedriveJSONItem), ["debug"]);
+				addLogEntry("onedriveJSONItem to delete: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 				// what item are we trying to delete?
 				addLogEntry("Attempting to delete this single item id: " ~ itemToDelete.id ~ " from drive: " ~ itemToDelete.driveId, ["debug"]);
 			}
@@ -15026,7 +15038,7 @@ class SyncEngine {
 		// Creating|Updating a DB Tie
 		if (debugLogging) {
 			addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder (Actual 'Shared With Me' Folder Name): " ~ onedriveJSONItem["name"].str, ["debug"]);
-			addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem), ["debug"]);
+			addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 		}
 
 		// New DB Tie Item to detail the 'root' of the Shared Folder
@@ -16018,41 +16030,64 @@ class SyncEngine {
 		SysTime functionStartTime;
 		string logKey;
 		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+
 		// Only set this if we are generating performance processing times
-		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+		bool displayProcessingTime = appConfig.getValueBool("display_processing_time") && debugLogging;
+		if (displayProcessingTime) {
 			functionStartTime = Clock.currTime();
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
-		
-		// Validate UTF-8 before serialisation
-		if (!validateUTF8JSON(onedriveJSONItem)) {
-			return "JSON Validation Failed: JSON data from OneDrive API contains invalid UTF-8 characters";
+
+		// Ensure processing-time logging still happens even if sanitisation fails
+		scope(exit) {
+			if (displayProcessingTime) {
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
 		}
-		
-		// Redact PII in JSON before serialisation
-		redactPII(onedriveJSONItem);
-		
-		// Eventual output variable
-		string sanitisedJSONString;
-				
-		// Try and serialise the JSON into a string
+
 		try {
+			// Validate UTF-8 before serialisation
+			if (!validateUTF8JSON(onedriveJSONItem)) {
+				return "JSON Validation Failed: JSON data from OneDrive API contains invalid UTF-8 characters";
+			}
+
+			// Redact PII in JSON before serialisation
+			redactPII(onedriveJSONItem);
+
+			// Try and serialise the JSON into a string
 			auto app = appender!string();
 			toJSON(app, onedriveJSONItem);
-			sanitisedJSONString = app.data;
-		} catch (Exception e) {
-			sanitisedJSONString = "JSON Serialisation Failed: " ~ e.msg;
+
+			// Return sanitised JSON string for logging output
+			return app.data;
+
+		} catch (Throwable t) {
+			// This function is used for diagnostic logging only.
+			// It must never terminate the sync process, even if std.json throws Error-derived failures.
+			string itemId = "";
+			string itemType = "unknown";
+
+			try {
+				if (("id" in onedriveJSONItem) != null) {
+					itemId = onedriveJSONItem["id"].str;
+				}
+
+				if (("deleted" in onedriveJSONItem) != null) {
+					itemType = "deleted";
+				} else if (("folder" in onedriveJSONItem) != null) {
+					itemType = "folder";
+				} else if (("file" in onedriveJSONItem) != null) {
+					itemType = "file";
+				}
+			} catch (Throwable) {
+				// Do not allow fallback diagnostic extraction to throw either
+			}
+
+			return "JSON Sanitisation Failed: itemType=" ~ itemType ~
+				   "; itemId=" ~ itemId ~
+				   "; error=" ~ t.classinfo.name ~ ": " ~ t.msg;
 		}
-		
-		// Display function processing time if configured to do so
-		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-			// Combine module name & running Function
-			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
-		}
-		
-		// Return sanitised JSON string for logging output
-		return sanitisedJSONString;
 	}
 	
 	// Recursively redact PII and sensitive elements from JSONValue
