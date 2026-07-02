@@ -1203,6 +1203,7 @@ int main(string[] cliArgs) {
 			MonoTime lastCheckTime = MonoTime.currTime();
 			MonoTime lastGitHubCheckTime = MonoTime.currTime();
 			SysTime lastMonitorGcCleanup = Clock.currTime();
+			bool onlineSignalPending = false;
 			
 			monitorLoop: while (performFileSystemMonitoring) {
 				if (shutdownRequested()) {
@@ -1478,6 +1479,12 @@ int main(string[] cliArgs) {
 							}
 						}
 						
+						// If an online notification was deferred behind local worker activity,
+						// do not wait for the remaining monitor interval once we are back here.
+						if (onlineSignalPending) {
+							sleepTime = Duration.zero;
+						}
+
 						// ALWAYS wait for FS worker, but only track webhook/websocket if NOT '--upload-only'
 						// res == 0 means the wait expired naturally; res > 0 means the filesystem
 						// monitor worker observed inotify activity; res == -1 means worker failure.
@@ -1492,11 +1499,30 @@ int main(string[] cliArgs) {
 							break;
 						}
 
+						// If local monitor activity won the receive race, perform one non-blocking
+						// check for a queued WebSocket/Webhook signal and latch it for later.
+						if (!appConfig.getValueBool("upload_only") && (res > 0) && !onlineSignal) {
+							auto queuedOnlineSignal = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
+							if (queuedOnlineSignal) {
+								onlineSignal = true;
+							}
+						}
+						if (!appConfig.getValueBool("upload_only") && (res > 0) && onlineSignal) {
+							onlineSignalPending = true;
+							onlineSignal = false;
+							if (debugLogging) {addLogEntry("Queued WebSocket|Webhook notification for processing once worker is idle", ["debug"]);}
+						} else if (!appConfig.getValueBool("upload_only") && (res == 0) && onlineSignalPending) {
+							onlineSignalPending = false;
+							onlineSignal = true;
+							if (debugLogging) {addLogEntry("Processing deferred WebSocket|Webhook notification now worker is idle", ["debug"]);}
+						}
+
 						// Debug logging of worker status
 						if (debugLogging) {
 							addLogEntry("worker status = " ~ to!string(res), ["debug"]);
 							if (!appConfig.getValueBool("upload_only")) {
 								addLogEntry("WebSocket|Webhook Notification Received = " ~ to!string(onlineSignal), ["debug"]);
+								addLogEntry("WebSocket|Webhook Notification Pending = " ~ to!string(onlineSignalPending), ["debug"]);
 							}
 						}
 						
