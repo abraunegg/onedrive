@@ -1746,6 +1746,7 @@ class SyncEngine {
 		string objectParentDriveId;
 		string objectParentId;
 		MonoTime jsonProcessingStartTime;
+		string thisItemName;
 		
 		// Debugging the processing start of the JSON item
 		if (debugLogging) {
@@ -1774,6 +1775,11 @@ class SyncEngine {
 			thisItemId = onedriveJSONItem["id"].str;
 		}
 		
+		// What is this item's name
+		if (hasName(onedriveJSONItem)) {
+			thisItemName = onedriveJSONItem["name"].str;
+		}
+		
 		// Is this a deleted item - only calculate this once
 		itemIsDeletedOnline = isItemDeleted(onedriveJSONItem);
 		if (!itemIsDeletedOnline) {
@@ -1784,7 +1790,7 @@ class SyncEngine {
 			itemIsRoot = isItemRoot(onedriveJSONItem);
 			itemHasParentReferenceId = hasParentReferenceId(onedriveJSONItem);
 			itemIdMatchesDefaultRootId = (thisItemId == appConfig.defaultRootId);
-			itemNameExplicitMatchRoot = (onedriveJSONItem["name"].str == "root");
+			itemNameExplicitMatchRoot = (thisItemName == "root");
 			if (hasParentReferenceDriveId(onedriveJSONItem)) {
 				objectParentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 			}
@@ -1797,7 +1803,7 @@ class SyncEngine {
 			// Debug output of change evaluation items
 			if (debugLogging) {
 				addLogEntry("defaultRootId                                        = " ~ appConfig.defaultRootId, ["debug"]);
-				addLogEntry("thisItemName                                         = " ~ onedriveJSONItem["name"].str, ["debug"]);
+				addLogEntry("thisItemName                                         = " ~ thisItemName, ["debug"]);
 				addLogEntry("thisItemId                                           = " ~ thisItemId, ["debug"]);
 				addLogEntry("thisItemId == defaultRootId                          = " ~ to!string(itemIdMatchesDefaultRootId), ["debug"]);
 				addLogEntry("isItemRoot(onedriveJSONItem)                         = " ~ to!string(itemIsRoot), ["debug"]);
@@ -1829,7 +1835,6 @@ class SyncEngine {
 			processRootAndDeletedJSONItems(onedriveJSONItem, objectParentDriveId, handleItemAsRootObject, itemIsDeletedOnline, itemHasParentReferenceId);
 		} else {
 			// Do we need to update this RAW JSON from OneDrive?
-			
 			bool sharedFolderRenameCheck = false;
 			
 			// What account type is this?
@@ -1864,16 +1869,16 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("DB Item response for remoteDBItem: " ~ to!string(remoteDBItem), ["debug"]);}
 				
 					// Must compare remoteDBItem.name with remoteItem.name
-					if (remoteDBItem.name != onedriveJSONItem["name"].str) {
+					if (remoteDBItem.name != thisItemName) {
 						// Update JSON Item
-						string actualOnlineName = onedriveJSONItem["name"].str;
+						string actualOnlineName = thisItemName;
 						if (debugLogging) {
 							addLogEntry("Updating source JSON 'name' to that which is the actual local directory", ["debug"]);
-							addLogEntry("onedriveJSONItem['name'] was:         " ~ onedriveJSONItem["name"].str, ["debug"]);
+							addLogEntry("onedriveJSONItem['name'] was:         " ~ thisItemName, ["debug"]);
 							addLogEntry("Updating onedriveJSONItem['name'] to: " ~ remoteDBItem.name, ["debug"]);
 						}
 						onedriveJSONItem["name"] = remoteDBItem.name;
-						if (debugLogging) {addLogEntry("onedriveJSONItem['name'] now:         " ~ onedriveJSONItem["name"].str, ["debug"]);}
+						if (debugLogging) {addLogEntry("onedriveJSONItem['name'] now:         " ~ thisItemName, ["debug"]);}
 						// Add the original name to the JSON
 						onedriveJSONItem["actualOnlineName"] = actualOnlineName;
 					}
@@ -1962,7 +1967,7 @@ class SyncEngine {
 			//	}
 			// 
 			// The only way we can block this download is looking at the 'name' component
-			if (onedriveJSONItem["name"].str == "OneNote_RecycleBin") {
+			if (thisItemName == "OneNote_RecycleBin") {
 				// Log that this will be skipped as this this is a Microsoft OneNote item and unsupported
 				if (verboseLogging) {addLogEntry("Skipping path - The Microsoft OneNote Notebook Recycle Bin '" ~ generatePathFromJSONData(onedriveJSONItem) ~ "' is not supported by this client", ["verbose"]);}
 				discardDeltaJSONItem = true;
@@ -1997,7 +2002,7 @@ class SyncEngine {
 				// What account type is this?
 				if (appConfig.accountType == "personal") {
 					
-					string existingDriveIdEntry = onedriveJSONItem["parentReference"]["driveId"].str;
+					string existingDriveIdEntry = objectParentDriveId;
 					string newDriveIdEntry;
 					
 					// Perform the required length test
@@ -2200,12 +2205,20 @@ class SyncEngine {
 				addLogEntry("Raw JSON OneDrive Item (Batched Item): " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 			}
 			
-			// Configure required items from the JSON elements
+			// Add validation of provided JSON Item before direct read of JSON data
+			if (!hasId(onedriveJSONItem) || !hasName(onedriveJSONItem) || !hasParentReferenceDriveId(onedriveJSONItem) || !hasParentReferenceId(onedriveJSONItem)) {
+				// Log that there is an issue with this 'onedriveJSONItem'
+				addLogEntry("WARNING: Skipping malformed OneDrive JSON item before batch processing: " ~ sanitiseJSONItem(onedriveJSONItem));
+				// This 'onedriveJSONItem' has an issue, skip it and continue to the next element
+				continue;
+			}
+			
+			// Configure required items from the JSON elements in the given JSONItem
 			string thisItemId = onedriveJSONItem["id"].str;
+			string thisItemName = onedriveJSONItem["name"].str;
 			string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 			string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
-			string thisItemName = onedriveJSONItem["name"].str;
-			
+						
 			// Create an empty item struct for an existing DB item
 			Item existingDatabaseItem;
 			
@@ -3988,6 +4001,14 @@ class SyncEngine {
 		SysTime downloadTransferStartTime = downloadWorkflowStartTime;
 		SysTime downloadTransferEndTime = downloadWorkflowStartTime;
 		
+		// Add validation of provided JSON Item before direct read of JSON data
+		if (!hasId(onedriveJSONItem) || !hasName(onedriveJSONItem) || !hasParentReferenceDriveId(onedriveJSONItem) || !hasParentReferenceId(onedriveJSONItem)) {
+			// Log that there is an issue with this 'onedriveJSONItem'
+			addLogEntry("WARNING: Skipping malformed OneDrive JSON item before attempting download: " ~ sanitiseJSONItem(onedriveJSONItem));
+			// This 'onedriveJSONItem' has an issue, skip it and return
+			return;
+		}
+				
 		// Download item specifics
 		string downloadItemId = onedriveJSONItem["id"].str;
 		string downloadItemName = onedriveJSONItem["name"].str;
@@ -4111,7 +4132,9 @@ class SyncEngine {
 						
 						// OneDrive Business Shared Files - update the driveId where to get the file from
 						if (isItemRemote(onedriveJSONItem)) {
-							downloadDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
+							if (hasRemoteParentDriveId(onedriveJSONItem)) {
+								downloadDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
+							}
 						}
 						
 						// Perform the download with any applicable set offset
@@ -4172,29 +4195,45 @@ class SyncEngine {
 						string lastModifiedTimestamp;
 						if (isItemRemote(onedriveJSONItem)) {
 							// remote file item
-							lastModifiedTimestamp = strip(onedriveJSONItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
-							// is lastModifiedTimestamp valid?
-							if (isValidUTCDateTime(lastModifiedTimestamp)) {
-								// string is a valid timestamp
-								itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
+							if (hasRemoteFileSystemInfoLastModifiedDateTime(onedriveJSONItem)) {
+								// JSON has correct timestamp data
+								lastModifiedTimestamp = strip(onedriveJSONItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+								// is lastModifiedTimestamp valid?
+								if (isValidUTCDateTime(lastModifiedTimestamp)) {
+									// string is a valid timestamp
+									itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
+								} else {
+									// invalid timestamp from JSON file
+									addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
+									// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
+									itemModifiedTime = Clock.currTime(UTC());
+								}
 							} else {
-								// invalid timestamp from JSON file
-								addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
 								// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
 								itemModifiedTime = Clock.currTime(UTC());
+								// JSON data missing, missing timestamp from JSON file
+								addLogEntry("WARNING: Missing timestamp provided by the Microsoft OneDrive API, using current UTC time: " ~ to!string(itemModifiedTime));
 							}
 						} else {
-							// not a remote item
-							lastModifiedTimestamp = strip(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
-							// is lastModifiedTimestamp valid?
-							if (isValidUTCDateTime(lastModifiedTimestamp)) {
-								// string is a valid timestamp
-								itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
+							// not a remote file item
+							if (hasFileSystemInfoLastModifiedDateTime(onedriveJSONItem)) {
+								// JSON has correct timestamp data
+								lastModifiedTimestamp = strip(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+								// is lastModifiedTimestamp valid?
+								if (isValidUTCDateTime(lastModifiedTimestamp)) {
+									// string is a valid timestamp
+									itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
+								} else {
+									// invalid timestamp from JSON file
+									addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
+									// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
+									itemModifiedTime = Clock.currTime(UTC());
+								}
 							} else {
-								// invalid timestamp from JSON file
-								addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
 								// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
 								itemModifiedTime = Clock.currTime(UTC());
+								// JSON data missing, missing timestamp from JSON file
+								addLogEntry("WARNING: Missing timestamp provided by the Microsoft OneDrive API, using current UTC time: " ~ to!string(itemModifiedTime));
 							}
 						}
 						
@@ -6248,6 +6287,14 @@ class SyncEngine {
 		// - sync_list
 		// - skip_size
 		// Return a true|false response
+		
+		// Add validation of provided JSON Item before direct read of JSON data
+		if (!hasId(onedriveJSONItem) || !hasName(onedriveJSONItem) || !hasParentReferenceDriveId(onedriveJSONItem) || !hasParentReferenceId(onedriveJSONItem)) {
+			// Log that there is an issue with this 'onedriveJSONItem'
+			addLogEntry("WARNING: Excluding malformed OneDrive JSON item from client-side filtering: " ~ sanitiseJSONItem(onedriveJSONItem));
+			// This 'onedriveJSONItem' has an issue, skip it and continue to the next element
+			return true;
+		}
 		
 		// Use the JSON elements rather than computing a DB struct via makeItem()
 		string thisItemId = onedriveJSONItem["id"].str;

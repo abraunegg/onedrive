@@ -1663,7 +1663,11 @@ bool hasParentReferenceDriveId(JSONValue item) {
 }
 
 bool hasParentReferenceId(JSONValue item) {
-	return ("id" in item["parentReference"]) != null;
+	if (hasParentReference(item)) {
+		return ("id" in item["parentReference"]) != null;
+	} else {
+		return false;
+	}
 }
 
 bool hasParentReferencePath(JSONValue item) {
@@ -1701,6 +1705,26 @@ bool hasRemoteParentDriveId(const ref JSONValue item) {
 bool hasRemoteItemId(const ref JSONValue item) {
     return ("remoteItem" in item) &&
            ("id" in item["remoteItem"]);
+}
+
+// Check if ["fileSystemInfo"]["lastModifiedDateTime"] exists and is a string
+bool hasFileSystemInfoLastModifiedDateTime(const ref JSONValue item) {
+	return (item.type == JSONType.object) &&
+	       (("fileSystemInfo" in item) != null) &&
+	       (item["fileSystemInfo"].type == JSONType.object) &&
+	       (("lastModifiedDateTime" in item["fileSystemInfo"]) != null) &&
+	       (item["fileSystemInfo"]["lastModifiedDateTime"].type == JSONType.string);
+}
+
+// Check if ["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"] exists and is a string
+bool hasRemoteFileSystemInfoLastModifiedDateTime(const ref JSONValue item) {
+	return (item.type == JSONType.object) &&
+	       (("remoteItem" in item) != null) &&
+	       (item["remoteItem"].type == JSONType.object) &&
+	       (("fileSystemInfo" in item["remoteItem"]) != null) &&
+	       (item["remoteItem"]["fileSystemInfo"].type == JSONType.object) &&
+	       (("lastModifiedDateTime" in item["remoteItem"]["fileSystemInfo"]) != null) &&
+	       (item["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].type == JSONType.string);
 }
 
 bool isItemFile(const ref JSONValue item) {
