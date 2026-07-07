@@ -1609,7 +1609,7 @@ class OneDriveApi {
 		auto odataSafe = path.replace("'", "''");
 		auto encoded   = encodeComponent(odataSafe);
 		string url;
-		url = "https://graph.microsoft.com/v1.0/drives/" ~ driveId ~ "/root/search(q='" ~ encoded ~ "')";
+		url = driveByIdUrl ~ driveId ~ "/root/search(q='" ~ encoded ~ "')";
 		return get(url);
 	}
 	
