@@ -14126,41 +14126,54 @@ class SyncEngine {
 			string sessionLocalFilePath = sessionFileData["localPath"].str;
 			if (debugLogging) {addLogEntry("SESSION-RESUME: sessionLocalFilePath: " ~ sessionLocalFilePath, ["debug"]);}
 			
-			// Does the file exist?
-			if (!exists(sessionLocalFilePath)) {
-				if (verboseLogging) {addLogEntry("The local file to upload does not exist locally anymore", ["verbose"]);}
-				
-				// Display function processing time if configured to do so
-				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-					// Combine module name & running Function
-					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
-				}
-				
-				// return session file is invalid
-				return false;
-			}
-			
-			// Can we read the file?
-			if (!readLocalFile(sessionLocalFilePath)) {
-				// filesystem error already returned if unable to read
-				
-				// Display function processing time if configured to do so
-				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-					// Combine module name & running Function
-					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
-				}
-				
-				// return session file is invalid
-				return false;
-			}
-			
-			// Can we stat the file?
-			// This catches dangling symbolic links and local source races before
-			// the upload session is queued for parallel resume processing.
+			// Validate the local source path in one protected block.
+			// A dangling symlink can throw from std.file.exists() before it returns false.
 			try {
+			
+				// Does the file exist?
+				if (!exists(sessionLocalFilePath)) {
+					addLogEntry("The local file to upload does not exist locally anymore: " ~ sessionLocalFilePath, ["verbose"]);
+					
+					// Display function processing time if configured to do so
+					if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+						// Combine module name & running Function
+						displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+					}
+					
+					// return session file is invalid
+					return false;
+				}
+				
+				// Can we read the file?
+				if (!readLocalFile(sessionLocalFilePath)) {
+					// filesystem error already returned if unable to read
+					
+					// Display function processing time if configured to do so
+					if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+						// Combine module name & running Function
+						displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+					}
+					
+					// return session file is invalid
+					return false;
+				}
+			
+				// Can we stat the file?
+				// This catches dangling symbolic links and local source races before
+				// the upload session is queued for parallel resume processing.
 				getSize(sessionLocalFilePath);
 			} catch (FileException exception) {
-				if (isSymlink(sessionLocalFilePath)) {
+				
+				bool localPathIsSymlink = false;
+
+				try {
+					localPathIsSymlink = isSymlink(sessionLocalFilePath);
+				} catch (FileException) {
+					localPathIsSymlink = false;
+				}
+
+				// Advise user of resume failure
+				if (localPathIsSymlink) {
 					if (verboseLogging) {
 						addLogEntry("The local file to upload is now an invalid symbolic link, upload session cannot be resumed: " ~ sessionLocalFilePath, ["verbose"]);
 					}
@@ -14170,18 +14183,21 @@ class SyncEngine {
 					}
 				}
 
+				// Debug logging as to the failure
 				if (debugLogging) {
-					addLogEntry("SESSION-RESUME: localPath stat failed: " ~ exception.msg, ["debug"]);
+					addLogEntry("SESSION-RESUME: localPath validation failed: " ~ sessionLocalFilePath, ["debug"]);
+					addLogEntry("SESSION-RESUME: FileException: " ~ exception.msg, ["debug"]);
 				}
 
 				// Display function processing time if configured to do so
 				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-					// Combine module name & running Function
 					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 				}
 
 				// return session file is invalid
 				return false;
+				
+				
 			}
 		} else {
 			if (debugLogging) {addLogEntry("SESSION-RESUME: No localPath data in: " ~ sessionFilePath, ["debug"]);}
@@ -14629,7 +14645,15 @@ class SyncEngine {
 			try {
 				thisFileSizeLocal = getSize(localPathToResume);
 			} catch (FileException exception) {
-				if (isSymlink(localPathToResume)) {
+				bool localPathIsSymlink = false;
+
+				try {
+					localPathIsSymlink = isSymlink(localPathToResume);
+				} catch (FileException) {
+					localPathIsSymlink = false;
+				}
+
+				if (localPathIsSymlink) {
 					if (verboseLogging) {
 						addLogEntry("Skipping upload session resume because the local source is now an invalid symbolic link: " ~ localPathToResume, ["verbose"]);
 					}
