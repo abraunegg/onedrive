@@ -14154,6 +14154,35 @@ class SyncEngine {
 				return false;
 			}
 			
+			// Can we stat the file?
+			// This catches dangling symbolic links and local source races before
+			// the upload session is queued for parallel resume processing.
+			try {
+				getSize(sessionLocalFilePath);
+			} catch (FileException exception) {
+				if (isSymlink(sessionLocalFilePath)) {
+					if (verboseLogging) {
+						addLogEntry("The local file to upload is now an invalid symbolic link, upload session cannot be resumed: " ~ sessionLocalFilePath, ["verbose"]);
+					}
+				} else {
+					if (verboseLogging) {
+						addLogEntry("The local file to upload cannot be accessed anymore, upload session cannot be resumed: " ~ sessionLocalFilePath, ["verbose"]);
+					}
+				}
+
+				if (debugLogging) {
+					addLogEntry("SESSION-RESUME: localPath stat failed: " ~ exception.msg, ["debug"]);
+				}
+
+				// Display function processing time if configured to do so
+				if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+					// Combine module name & running Function
+					displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+				}
+
+				// return session file is invalid
+				return false;
+			}
 		} else {
 			if (debugLogging) {addLogEntry("SESSION-RESUME: No localPath data in: " ~ sessionFilePath, ["debug"]);}
 			
@@ -14590,13 +14619,45 @@ class SyncEngine {
 			JSONValue uploadResponse;
 			OneDriveApi uploadFileOneDriveApiInstance;
 			
+			// Pull out data from this JSON element
+			string threadUploadSessionFilePath = jsonItemToResume["sessionFilePath"].str;
+			string localPathToResume = jsonItemToResume["localPath"].str;
+			long thisFileSizeLocal;
+
+			// The local source may have disappeared or become a dangling symlink
+			// after validation but before this parallel worker starts.
+			try {
+				thisFileSizeLocal = getSize(localPathToResume);
+			} catch (FileException exception) {
+				if (isSymlink(localPathToResume)) {
+					if (verboseLogging) {
+						addLogEntry("Skipping upload session resume because the local source is now an invalid symbolic link: " ~ localPathToResume, ["verbose"]);
+					}
+				} else {
+					if (verboseLogging) {
+						addLogEntry("Skipping upload session resume because the local source is no longer accessible: " ~ localPathToResume, ["verbose"]);
+					}
+				}
+
+				if (debugLogging) {
+					addLogEntry("SESSION-RESUME: getSize failed for localPath: " ~ localPathToResume, ["debug"]);
+					addLogEntry("SESSION-RESUME: FileException: " ~ exception.msg, ["debug"]);
+				}
+
+				// The saved upload session can no longer be resumed because the
+				// original local source is gone/unreadable. Remove stale session data.
+				if (exists(threadUploadSessionFilePath)) {
+					if (!dryRun) {
+						safeRemove(threadUploadSessionFilePath);
+					}
+				}
+
+				continue;
+			}
+			
 			// Create a new API instance
 			uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
 			uploadFileOneDriveApiInstance.initialise();
-			
-			// Pull out data from this JSON element
-			string threadUploadSessionFilePath = jsonItemToResume["sessionFilePath"].str;
-			long thisFileSizeLocal = getSize(jsonItemToResume["localPath"].str);
 			
 			// Try to resume the session upload using the provided data
 			try {
