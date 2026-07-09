@@ -9,6 +9,7 @@ accrightslen
 adamdruppe
 ADand
 addrepo
+addrlist
 Adevice
 adminconsent
 adr
@@ -93,6 +94,7 @@ confdir
 constness
 controllen
 cpath
+cpticks
 crt
 Cstrip
 ctl
@@ -134,6 +136,7 @@ drwxrwxr
 dryrun
 DTime
 Dynu
+eflag
 EIOv
 eis
 ele
@@ -146,9 +149,12 @@ epel
 epfd
 errnos
 eselect
+estcpu
 estr
 eventfd
 evt
+execinfo
+exitsig
 extattr
 fasynchronous
 fbc
@@ -165,6 +171,8 @@ FFFD
 fhandler
 flto
 fno
+forw
+fpstate
 fracsec
 fstack
 FState
@@ -194,6 +202,7 @@ GVariant
 hdrs
 hideonindex
 hnsecs
+holdcnt
 hostport
 hotmail
 howto
@@ -221,6 +230,7 @@ iovlen
 ipresolve
 isv
 itemdb
+iticks
 itimerspec
 jobc
 journalctl
@@ -258,6 +268,7 @@ libdruntime
 libedit
 libexec
 libexecdir
+libexecinfo
 libgcc
 libgdk
 libgio
@@ -335,6 +346,8 @@ nev
 nevent
 newfd
 newfile
+newlen
+newp
 nexisting
 nfds
 nfor
@@ -361,6 +374,8 @@ nvia
 objectsx
 odata
 ofonedrive
+oldlenp
+oldp
 onbinarymessage
 onedrive
 onenote
@@ -378,6 +393,7 @@ pamac
 parentid
 passoff
 pastebin
+pctcpu
 permessage
 pfa
 PFN
@@ -421,8 +437,12 @@ ralen
 raspberrypi
 raspi
 raspios
+rbp
 rbtree
+rcx
+rdi
 rdo
+rdx
 readdata
 readln
 readret
@@ -438,6 +458,7 @@ restorecon
 retryable
 retu
 revents
+rflags
 rgid
 rko
 rlc
@@ -452,8 +473,10 @@ rpmuncompress
 Rproj
 rrodrigueznt
 rsnapshot
+rsp
 rssize
 rsv
+rtime
 rtud
 ruid
 rul
@@ -466,6 +489,7 @@ safebackup
 sargs
 sbindir
 scgi
+schedflags
 scl
 sdlang
 Searchmonkey
@@ -484,10 +508,12 @@ sharepoint
 shortnames
 sidx
 sigaction
+sigacts
 sigcatch
 sigchldhandler
 sigemptyset
 sigignore
+siginfo
 siglist
 sigmask
 signo
@@ -496,6 +522,7 @@ sigset
 skilion
 skinparam
 slist
+slptime
 Sockaddrs
 socketio
 somevar
@@ -517,6 +544,7 @@ svuid
 swapfile
 swapon
 swp
+swtime
 symcode
 syncable
 syncdir
@@ -540,8 +568,11 @@ timerfd
 tkx
 tlsv
 tpgid
+traceflag
 tracep
+trapno
 trashinfo
+tsess
 tsid
 Tting
 tval
@@ -562,6 +593,8 @@ usermod
 userns
 userpass
 usl
+usrpri
+uticks
 valgrind
 verifypeer
 vmspace
@@ -574,6 +607,7 @@ websockets
 webtemplate
 weburl
 Werror
+wmesg
 wpath
 writefln
 wrt
@@ -586,6 +620,7 @@ xdg
 xlaunch
 xof
 xored
+xstat
 XXYYZZ
 yann
 yourapp
