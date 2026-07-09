@@ -13954,6 +13954,71 @@ class SyncEngine {
 		}
 	}
 		
+
+	// Cancel a Microsoft Graph upload session recorded in a local session_upload.* file
+	void cancelUploadSessionIfPresent(string sessionFilePath) {
+		JSONValue sessionFileData;
+		OneDriveApi cancelUploadSessionApiInstance;
+
+		try {
+			// Does the local session file still exist?
+			if (!exists(sessionFilePath)) {
+				return;
+			}
+
+			// Does the local session file have any content?
+			if (getSize(sessionFilePath) == 0) {
+				return;
+			}
+
+			// Read the upload session metadata
+			sessionFileData = readText(sessionFilePath).parseJSON();
+
+			// Ensure that we have a JSON object with an uploadUrl
+			if (sessionFileData.type() != JSONType.object) {
+				if (debugLogging) {addLogEntry("SESSION-RESUME: Cannot cancel upload session - invalid JSON object in: " ~ sessionFilePath, ["debug"]);}
+				return;
+			}
+
+			if (!("uploadUrl" in sessionFileData)) {
+				if (debugLogging) {addLogEntry("SESSION-RESUME: Cannot cancel upload session - no uploadUrl data in: " ~ sessionFilePath, ["debug"]);}
+				return;
+			}
+
+			if (verboseLogging) {
+				addLogEntry("Cancelling invalid Microsoft OneDrive upload session: " ~ sessionFilePath, ["verbose"]);
+			}
+
+			// Create a new OneDrive API instance
+			cancelUploadSessionApiInstance = new OneDriveApi(appConfig);
+			cancelUploadSessionApiInstance.initialise();
+			scope(exit) {
+				if (cancelUploadSessionApiInstance !is null) {
+					cancelUploadSessionApiInstance.releaseCurlEngine();
+					cancelUploadSessionApiInstance = null;
+				}
+			}
+
+			// Cancel the upload session using the saved Microsoft Graph uploadUrl
+			cancelUploadSessionApiInstance.cancelUploadSession(sessionFileData["uploadUrl"].str);
+
+		} catch (OneDriveException exception) {
+			// Best-effort cancellation only. The local session file is already invalid,
+			// so do not allow a failed/expired cancellation request to abort cleanup.
+			if ((exception.httpStatusCode == 404) || (exception.httpStatusCode == 410)) {
+				if (debugLogging) {addLogEntry("SESSION-RESUME: Upload session already unavailable while cancelling: " ~ sessionFilePath, ["debug"]);}
+			} else {
+				if (debugLogging) {addLogEntry("SESSION-RESUME: Failed to cancel upload session: " ~ exception.msg, ["debug"]);}
+			}
+		} catch (JSONException exception) {
+			if (debugLogging) {addLogEntry("SESSION-RESUME: Cannot cancel upload session - invalid JSON data in: " ~ sessionFilePath, ["debug"]);}
+		} catch (FileException exception) {
+			if (debugLogging) {addLogEntry("SESSION-RESUME: Cannot cancel upload session - file access failed for: " ~ sessionFilePath ~ " - " ~ exception.msg, ["debug"]);}
+		} catch (Exception exception) {
+			if (debugLogging) {addLogEntry("SESSION-RESUME: Cannot cancel upload session: " ~ exception.msg, ["debug"]);}
+		}
+	}
+
 	// Process interrupted 'session_upload' files
 	void processInterruptedSessionUploads() {
 		// Function Start Time
@@ -13976,6 +14041,13 @@ class SyncEngine {
 				// Remove upload_session file as it is invalid
 				// upload_session file contains an error - cant resume this session
 				if (verboseLogging) {addLogEntry("Restore file upload session failed - cleaning up resumable session data file: " ~ sessionFilePath, ["verbose"]);}
+				
+				// Explicitly cancel the Microsoft Graph upload session before removing
+				// the local session metadata. OneDrive Personal can otherwise expose
+				// an aborted session as a zero-byte remote placeholder.
+				if (!dryRun) {
+					cancelUploadSessionIfPresent(sessionFilePath);
+				}
 				
 				// cleanup session path
 				if (exists(sessionFilePath)) {
@@ -14196,8 +14268,6 @@ class SyncEngine {
 
 				// return session file is invalid
 				return false;
-				
-				
 			}
 		} else {
 			if (debugLogging) {addLogEntry("SESSION-RESUME: No localPath data in: " ~ sessionFilePath, ["debug"]);}

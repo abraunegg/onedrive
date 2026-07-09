@@ -1691,6 +1691,15 @@ class OneDriveApi {
 		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize, startUploadStreamHash, finishUploadStreamHash);
 	}
 	
+	// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#cancel-the-upload-session
+	void cancelUploadSession(string uploadUrl) {
+		bool validateJSONResponse = false;
+		oneDriveErrorHandlerWrapper((CurlResponse response) {
+			connect(HTTP.Method.del, uploadUrl, true, response);
+			return curlEngine.execute();
+		}, validateJSONResponse, __FUNCTION__, __LINE__);
+	}
+	
 	// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#resuming-an-in-progress-upload
 	JSONValue requestUploadStatus(string uploadUrl) {
 		return get(uploadUrl, true);
