@@ -58,6 +58,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             f'sync_dir = "{sync_dir}"',
             'enable_logging = "true"',
             f'log_dir = "{app_log_dir}"',
+            'skip_symlinks = "false"',
         ]
         if self.RATE_LIMIT:
             lines.append(f'rate_limit = "{self.RATE_LIMIT}"')
@@ -349,6 +350,37 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             write_text_file(output, "\n".join(resumable_files) + "\n")
         else:
             write_text_file(output, "")
+
+    def _write_resumable_state_dump(self, output: Path, resumable_files: list[str]) -> None:
+        lines: list[str] = []
+        for session_file in resumable_files:
+            path = Path(session_file)
+            lines.append(f"===== {path} =====")
+            try:
+                lines.append(path.read_text(encoding="utf-8", errors="replace"))
+            except OSError as exc:
+                lines.append(f"<unable to read resumable state file: {exc}>")
+            lines.append("")
+        write_text_file(output, "\n".join(lines) + ("\n" if lines else ""))
+
+    def _write_symlink_metadata(self, output: Path, symlink_path: Path) -> None:
+        try:
+            target = os.readlink(symlink_path)
+        except OSError as exc:
+            target = f"<readlink failed: {exc}>"
+        write_text_file(
+            output,
+            "\n".join(
+                [
+                    f"path={symlink_path}",
+                    f"is_symlink={symlink_path.is_symlink()}",
+                    f"exists={symlink_path.exists()}",
+                    f"lexists={os.path.lexists(symlink_path)}",
+                    f"readlink={target}",
+                ]
+            )
+            + "\n",
+        )
 
     def _run_upload_resume_scenario(
         self,
@@ -1025,6 +1057,334 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         return self._scenario_pass(scenario_id, description, artifacts, details)
 
+    def _run_upload_resume_dangling_symlink_scenario(
+        self,
+        context: E2EContext,
+        root_name: str,
+        sync_root: Path,
+        verify_root: Path,
+        scenario_work_dir: Path,
+        scenario_log_dir: Path,
+        scenario_state_dir: Path,
+    ) -> ScenarioResult:
+        scenario_id = "RT-0003"
+        description = "resumable upload with local source replaced by dangling symlink"
+
+        conf_dir = scenario_work_dir / "conf"
+        verify_conf_dir = scenario_work_dir / "verify-conf"
+
+        app_log_dir = scenario_log_dir / "app-logs"
+        verify_app_log_dir = scenario_log_dir / "verify-app-logs"
+
+        app_log_file = self._phase_app_log_file(app_log_dir)
+        verify_app_log_file = self._phase_app_log_file(verify_app_log_dir)
+
+        reset_directory(conf_dir)
+        reset_directory(verify_conf_dir)
+        context.bootstrap_config_dir(conf_dir)
+        context.bootstrap_config_dir(verify_conf_dir)
+
+        self._write_config(conf_dir / "config", sync_root, app_log_dir)
+        self._write_config(verify_conf_dir / "config", verify_root, verify_app_log_dir)
+
+        relative_path = f"{root_name}/{scenario_id}/session-large-becomes-dangling-symlink.bin"
+        control_relative_path = f"{root_name}/{scenario_id}/control-after-broken-session.txt"
+        local_file = sync_root / relative_path
+        control_file = sync_root / control_relative_path
+        self._create_large_file(local_file, self.LARGE_FILE_SIZE)
+
+        phase1_stdout = scenario_log_dir / "phase1_stdout.log"
+        phase1_stderr = scenario_log_dir / "phase1_stderr.log"
+        phase2_stdout = scenario_log_dir / "phase2_stdout.log"
+        phase2_stderr = scenario_log_dir / "phase2_stderr.log"
+        verify_stdout = scenario_log_dir / "verify_stdout.log"
+        verify_stderr = scenario_log_dir / "verify_stderr.log"
+
+        local_tree_before = scenario_state_dir / "local_tree_before_phase1.txt"
+        local_tree_after_phase1 = scenario_state_dir / "local_tree_after_phase1.txt"
+        local_tree_before_phase2 = scenario_state_dir / "local_tree_before_phase2.txt"
+        local_tree_after_phase2 = scenario_state_dir / "local_tree_after_phase2.txt"
+        remote_manifest_file = scenario_state_dir / "remote_verify_manifest.txt"
+        resumable_state_file = scenario_state_dir / "phase1_resumable_state_files.txt"
+        resumable_state_dump_file = scenario_state_dir / "phase1_resumable_state_dump.txt"
+        symlink_metadata_file = scenario_state_dir / "dangling_symlink_metadata.txt"
+        metadata_file = scenario_state_dir / "metadata.txt"
+
+        self._snapshot_tree(sync_root, local_tree_before)
+
+        upload_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(conf_dir),
+        ]
+
+        (
+            phase1_returncode,
+            phase1_stdout_text,
+            phase1_stderr_text,
+            threshold_reached,
+            observed_max_percent,
+        ) = self._interrupt_process_at_transfer_threshold(
+            context,
+            f"{scenario_id} phase 1",
+            upload_command,
+            phase1_stdout,
+            phase1_stderr,
+            app_log_file,
+            "session-large-becomes-dangling-symlink.bin",
+            self.INTERRUPT_THRESHOLD_PERCENT,
+            self.TRANSFER_WAIT_TIMEOUT,
+            self.PROCESS_EXIT_TIMEOUT,
+        )
+
+        self._snapshot_tree(sync_root, local_tree_after_phase1)
+
+        phase1_app_log_text = self._read_text_if_exists(app_log_file)
+        combined_phase1_output = phase1_stdout_text + "\n" + phase1_stderr_text + "\n" + phase1_app_log_text
+
+        phase1_completed_transfer = self._target_transfer_completed_in_phase1(
+            combined_phase1_output,
+            "session-large-becomes-dangling-symlink.bin",
+            "upload",
+        )
+
+        resumable_state_files = self._find_resumable_state_files(
+            conf_dir,
+            [
+                "session_upload*",
+                "session_upload.*",
+            ],
+        )
+        self._write_resumable_state_listing(resumable_state_file, resumable_state_files)
+        self._write_resumable_state_dump(resumable_state_dump_file, resumable_state_files)
+
+        # Reproduce the #3770-style failure mode: the interrupted upload session
+        # still points at the original local path, but that path is now a broken
+        # symlink by the time upload-session recovery runs.
+        if local_file.exists() or local_file.is_symlink():
+            local_file.unlink()
+        local_file.symlink_to("missing-target-after-interruption.bin")
+        write_text_file(control_file, "control file created after the interrupted upload source became a dangling symlink\n")
+
+        self._write_symlink_metadata(symlink_metadata_file, local_file)
+        self._snapshot_tree(sync_root, local_tree_before_phase2)
+
+        phase2_result = self._run_and_capture(
+            context,
+            f"{scenario_id} phase 2",
+            upload_command,
+            phase2_stdout,
+            phase2_stderr,
+        )
+
+        phase2_stdout_text = self._read_text_if_exists(phase2_stdout)
+        phase2_stderr_text = self._read_text_if_exists(phase2_stderr)
+        phase2_app_log_text = self._read_text_if_exists(app_log_file)
+        combined_phase2_output = phase2_stdout_text + "\n" + phase2_stderr_text + "\n" + phase2_app_log_text
+
+        self._snapshot_tree(sync_root, local_tree_after_phase2)
+
+        verify_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--download-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(verify_conf_dir),
+        ]
+
+        verify_result = self._run_and_capture(
+            context,
+            f"{scenario_id} verify",
+            verify_command,
+            verify_stdout,
+            verify_stderr,
+        )
+
+        remote_manifest = build_manifest(verify_root)
+        write_manifest(remote_manifest_file, remote_manifest)
+
+        interrupted_as_expected, crash_marker_seen = self._phase1_interruption_acceptable(
+            combined_phase1_output,
+            phase1_returncode,
+        )
+
+        artifacts = [
+            str(phase1_stdout),
+            str(phase1_stderr),
+            str(phase2_stdout),
+            str(phase2_stderr),
+            str(verify_stdout),
+            str(verify_stderr),
+            str(local_tree_before),
+            str(local_tree_after_phase1),
+            str(local_tree_before_phase2),
+            str(local_tree_after_phase2),
+            str(remote_manifest_file),
+            str(resumable_state_file),
+            str(resumable_state_dump_file),
+            str(symlink_metadata_file),
+            str(metadata_file),
+        ]
+        self._append_if_exists(artifacts, app_log_dir)
+        self._append_if_exists(artifacts, verify_app_log_dir)
+
+        details = {
+            "scenario_id": scenario_id,
+            "phase1_returncode": phase1_returncode,
+            "phase2_returncode": phase2_result.returncode,
+            "verify_returncode": verify_result.returncode,
+            "relative_path": relative_path,
+            "control_relative_path": control_relative_path,
+            "large_size": self.LARGE_FILE_SIZE,
+            "interrupt_threshold_percent": self.INTERRUPT_THRESHOLD_PERCENT,
+            "threshold_reached": threshold_reached,
+            "observed_max_percent": observed_max_percent,
+            "phase1_transfer_completed": phase1_completed_transfer,
+            "phase1_resumable_state_files": resumable_state_files,
+            "phase1_crash_marker_seen": crash_marker_seen,
+            "phase1_interrupted_as_expected": interrupted_as_expected,
+            "phase2_file_exception_seen": "std.file.FileException" in combined_phase2_output,
+            "phase2_no_such_file_seen": "No such file or directory" in combined_phase2_output,
+            "phase2_dangling_symlink_path_seen": str(local_file) in combined_phase2_output,
+            "rate_limit": self.RATE_LIMIT or "disabled",
+            "force_xfer_abort": self.FORCE_XFER_ABORT,
+            "conf_dir": str(conf_dir),
+            "app_log_file": str(app_log_file),
+            "dangling_symlink_path": str(local_file),
+            "dangling_symlink_target": "missing-target-after-interruption.bin",
+        }
+
+        write_text_file(
+            metadata_file,
+            "\n".join(
+                [
+                    f"scenario_id={scenario_id}",
+                    f"phase1_returncode={phase1_returncode}",
+                    f"phase2_returncode={phase2_result.returncode}",
+                    f"verify_returncode={verify_result.returncode}",
+                    f"relative_path={relative_path}",
+                    f"control_relative_path={control_relative_path}",
+                    f"large_size={self.LARGE_FILE_SIZE}",
+                    f"interrupt_threshold_percent={self.INTERRUPT_THRESHOLD_PERCENT}",
+                    f"threshold_reached={threshold_reached}",
+                    f"observed_max_percent={observed_max_percent}",
+                    f"phase1_transfer_completed={phase1_completed_transfer}",
+                    f"phase1_resumable_state_files={len(resumable_state_files)}",
+                    f"phase1_crash_marker_seen={crash_marker_seen}",
+                    f"phase1_interrupted_as_expected={interrupted_as_expected}",
+                    f"phase2_file_exception_seen={details['phase2_file_exception_seen']}",
+                    f"phase2_no_such_file_seen={details['phase2_no_such_file_seen']}",
+                    f"phase2_dangling_symlink_path_seen={details['phase2_dangling_symlink_path_seen']}",
+                    f"rate_limit={self.RATE_LIMIT or 'disabled'}",
+                    f"force_xfer_abort={self.FORCE_XFER_ABORT}",
+                    f"conf_dir={conf_dir}",
+                    f"app_log_file={app_log_file}",
+                    f"dangling_symlink_path={local_file}",
+                    "dangling_symlink_target=missing-target-after-interruption.bin",
+                ]
+            )
+            + "\n",
+        )
+
+        if not threshold_reached:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Interrupted upload phase never reached {self.INTERRUPT_THRESHOLD_PERCENT}% transfer progress before shutdown; observed maximum was {observed_max_percent:.2f}%",
+                artifacts,
+                details,
+            )
+
+        if phase1_completed_transfer:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Interrupted upload phase completed the target file transfer before SIGINT landed, so no resumable upload state was guaranteed",
+                artifacts,
+                details,
+            )
+
+        if not interrupted_as_expected:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Interrupted upload phase did not terminate as expected after threshold was reached; return code was {phase1_returncode}",
+                artifacts,
+                details,
+            )
+
+        if not resumable_state_files:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Interrupted upload phase did not leave resumable upload session state on disk",
+                artifacts,
+                details,
+            )
+
+        if phase2_result.returncode != 0:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Resumable upload recovery with dangling symlink source failed with status {phase2_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        upload_resume_markers = [
+            "There are interrupted session uploads that need to be resumed",
+            "Attempting to restore file upload session using this session data file",
+            "Attempting to restore file upload session",
+        ]
+        if not self._contains_any_marker(combined_phase2_output, upload_resume_markers):
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Subsequent upload run did not show evidence of resumable upload recovery before handling the dangling symlink source",
+                artifacts,
+                details,
+            )
+
+        if verify_result.returncode != 0:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Remote verification failed with status {verify_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        if control_relative_path not in remote_manifest:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Control file was not uploaded after dangling symlink session recovery handling",
+                artifacts,
+                details,
+            )
+
+        if relative_path in remote_manifest:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Dangling symlink upload-session source was unexpectedly synchronised as a remote file",
+                artifacts,
+                details,
+            )
+
+        return self._scenario_pass(scenario_id, description, artifacts, details)
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -1080,6 +1440,31 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     download_work_dir,
                     download_log_dir,
                     download_state_dir,
+                )
+            )
+
+        upload_symlink_sync_root = case_work_dir / "upload-symlink-syncroot"
+        upload_symlink_verify_root = case_work_dir / "upload-symlink-verifyroot"
+        upload_symlink_work_dir = case_work_dir / "rt0003-upload-dangling-symlink"
+        upload_symlink_log_dir = case_log_dir / "rt0003-upload-dangling-symlink"
+        upload_symlink_state_dir = state_dir / "rt0003-upload-dangling-symlink"
+
+        reset_directory(upload_symlink_sync_root)
+        reset_directory(upload_symlink_verify_root)
+        reset_directory(upload_symlink_work_dir)
+        reset_directory(upload_symlink_log_dir)
+        reset_directory(upload_symlink_state_dir)
+
+        if context.should_run_scenario(self.case_id, "RT-0003"):
+            results.append(
+                self._run_upload_resume_dangling_symlink_scenario(
+                    context,
+                    root_name,
+                    upload_symlink_sync_root,
+                    upload_symlink_verify_root,
+                    upload_symlink_work_dir,
+                    upload_symlink_log_dir,
+                    upload_symlink_state_dir,
                 )
             )
 
