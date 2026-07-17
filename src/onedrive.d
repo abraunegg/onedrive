@@ -1609,7 +1609,7 @@ class OneDriveApi {
 		auto odataSafe = path.replace("'", "''");
 		auto encoded   = encodeComponent(odataSafe);
 		string url;
-		url = "https://graph.microsoft.com/v1.0/drives/" ~ driveId ~ "/root/search(q='" ~ encoded ~ "')";
+		url = driveByIdUrl ~ driveId ~ "/root/search(q='" ~ encoded ~ "')";
 		return get(url);
 	}
 	
@@ -1689,6 +1689,15 @@ class OneDriveApi {
 		bool startUploadStreamHash = (offset == 0);
 		bool finishUploadStreamHash = ((offset + offsetSize) == fileSize);
 		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize, startUploadStreamHash, finishUploadStreamHash);
+	}
+	
+	// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#cancel-the-upload-session
+	void cancelUploadSession(string uploadUrl) {
+		bool validateJSONResponse = false;
+		oneDriveErrorHandlerWrapper((CurlResponse response) {
+			connect(HTTP.Method.del, uploadUrl, true, response);
+			return curlEngine.execute();
+		}, validateJSONResponse, __FUNCTION__, __LINE__);
 	}
 	
 	// https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0#resuming-an-in-progress-upload
