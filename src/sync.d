@@ -1227,6 +1227,8 @@ class SyncEngine {
 		JSONValue deltaChanges;
 		long responseBundleCount;
 		long jsonItemsReceived = 0;
+		bool preserveEstablishedDeltaLink = false;
+		string establishedDeltaLinkBeforeFullScan = null;
 		
 		// Reset jsonItemsToProcess & processedCount
 		jsonItemsToProcess = [];
@@ -1321,8 +1323,25 @@ class SyncEngine {
 			
 			// Do we need to perform a Full Scan True Up? Is 'appConfig.fullScanTrueUpRequired' set to 'true'?
 			if (appConfig.fullScanTrueUpRequired) {
+				// A tokenless /delta response is a snapshot of the current live state. It does not
+				// contain the deletion history represented by an established incremental deltaLink.
+				// Preserve that checkpoint so the next incremental pass still receives every change
+				// that occurred before or during this full-scan true-up.
+				establishedDeltaLinkBeforeFullScan = getDeltaLinkFromCache(deltaLinkInfo, driveIdToQuery);
+				if (establishedDeltaLinkBeforeFullScan.empty) {
+					establishedDeltaLinkBeforeFullScan = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
+				}
+				preserveEstablishedDeltaLink = !establishedDeltaLinkBeforeFullScan.empty;
+				
 				addLogEntry("Performing a full scan of online data to ensure consistent local state");
-				if (debugLogging) {addLogEntry("Setting currentDeltaLink = null", ["debug"]);}
+				if (debugLogging) {
+					if (preserveEstablishedDeltaLink) {
+						addLogEntry("Preserving the established incremental deltaLink across this tokenless full scan", ["debug"]);
+					} else {
+						addLogEntry("No established incremental deltaLink exists; the tokenless full-scan checkpoint may be used to initialise delta tracking", ["debug"]);
+					}
+					addLogEntry("Setting currentDeltaLink = null", ["debug"]);
+				}
 				currentDeltaLink = null;
 			} else {
 				// Try and get the current Delta Link from the internal cache, this saves a DB I/O call
@@ -1460,10 +1479,17 @@ class SyncEngine {
 						}
 					}
 					
-					// Update deltaLinkCache
-					deltaLinkCache.driveId = driveIdToQuery;
-					deltaLinkCache.itemId = itemIdToQuery;
-					deltaLinkCache.latestDeltaLink = currentDeltaLink;
+					// A scheduled tokenless full scan must not replace an established incremental
+					// checkpoint. The snapshot omits historical deletion tombstones, so advancing to
+					// its checkpoint can permanently skip changes that occurred around the scan.
+					if (preserveEstablishedDeltaLink) {
+						if (debugLogging) {addLogEntry("Not staging the tokenless full-scan deltaLink; the established incremental checkpoint remains authoritative", ["debug"]);}
+					} else {
+						// Update deltaLinkCache
+						deltaLinkCache.driveId = driveIdToQuery;
+						deltaLinkCache.itemId = itemIdToQuery;
+						deltaLinkCache.latestDeltaLink = currentDeltaLink;
+					}
 				}
 				
 				// We have a valid deltaChanges JSON array. This means we have at least 200+ JSON items to process.
