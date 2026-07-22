@@ -96,7 +96,11 @@ class SyncEngine {
 	// These are the 'parent path' id's that are being excluded, so if the parent id is in here, the child needs to be skipped as well
 	RedBlackTree!string skippedItems = redBlackTree!string();
 	
-	// Array consisting of 'item.driveId', 'item.id' and 'item.parentId' values to delete after all the online changes have been downloaded
+	// Per-pass deletion identity list consisting of 'item.driveId', 'item.id' and
+	// 'item.parentId'. This includes online tombstones and successful local-origin
+	// deletes completed while an already-fetched response is waiting to be applied.
+	// Deletion wins for the active reconciliation pass: stale live JSON for an
+	// item in this list, or beneath a directory in this list, must not recreate it.
 	string[3][] idsToDelete;
 	// Array of JSON items which are files or directories that are not 'root', skipped or to be deleted, that need to be processed
 	JSONValue[] jsonItemsToProcess;
@@ -212,6 +216,10 @@ class SyncEngine {
 	bool cleanupDataPass = false;
 	// Create the specific task pool to process items in parallel
 	TaskPool processPool;
+
+	// Optional monitor callback used to process local events after an online
+	// response is fetched but before its live JSON is applied.
+	void delegate() processPendingLocalEventsCallback;
 	
 	// Shared Folder Flags for 'sync_list' processing
 	bool sharedFolderDeltaGeneration = false;
@@ -879,6 +887,31 @@ class SyncEngine {
 			&& !generatedSimulatedDeltaResponse;
 	}
 	
+	// Add an item identity to the active-pass deletion list without duplicates.
+	private void flagItemForDeletionThisPass(string driveId, string itemId, string parentId) {
+		foreach (entry; idsToDelete) {
+			if ((entry[0] == driveId) && (entry[1] == itemId)) return;
+		}
+		idsToDelete ~= [driveId, itemId, parentId];
+	}
+
+	private bool itemIsFlaggedForDeletionThisPass(string driveId, string itemId) {
+		if (itemId.empty) return false;
+		foreach (entry; idsToDelete) {
+			if ((entry[0] == driveId) && (entry[1] == itemId)) return true;
+		}
+		return false;
+	}
+
+	// Process local events that arrived while the online request was in flight.
+	// At these boundaries the fetched live JSON has not yet modified the local tree.
+	private void processPendingLocalEventsBeforeOnlineApply(string boundary) {
+		if (processPendingLocalEventsCallback is null) return;
+		if (!appConfig.getValueBool("monitor") || appConfig.getValueBool("download_only")) return;
+		if (debugLogging) addLogEntry("Processing pending local filesystem events " ~ boundary, ["debug"]);
+		processPendingLocalEventsCallback();
+	}
+
 	// Perform a sync of the OneDrive Account
 	// - Query /delta
 	//		- If singleDirectoryScope or nationalCloudDeployment is used we need to generate a /delta like response
@@ -886,7 +919,11 @@ class SyncEngine {
 	// - Process any items to add (download data to local)
 	// - Detail any files that we failed to download
 	// - Process any deletes (remove local data)
-	void syncOneDriveAccountToLocalDisk() {
+	void syncOneDriveAccountToLocalDisk(void delegate() processPendingLocalEvents = null) {
+		auto previousPendingLocalEventsCallback = processPendingLocalEventsCallback;
+		processPendingLocalEventsCallback = processPendingLocalEvents;
+		scope(exit) processPendingLocalEventsCallback = previousPendingLocalEventsCallback;
+
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -1412,6 +1449,10 @@ class SyncEngine {
 					}
 				}
 				
+				// Process events that accumulated during this network request before
+				// classifying or applying its live JSON.
+				processPendingLocalEventsBeforeOnlineApply("after fetching an online delta response bundle");
+
 				long nrChanges = deltaChanges["value"].array.length;
 				int changeCount = 0;
 				
@@ -1663,6 +1704,10 @@ class SyncEngine {
 			addLogEntry("Number of JSON items submitted for further processing is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
 		}
 		
+		// Close the final fetch-to-apply race window. No live item from this
+		// response has been applied locally yet.
+		processPendingLocalEventsBeforeOnlineApply("before applying fetched online JSON items");
+
 		// Are there items to process?
 		if (jsonItemsToProcess.length > 0) {
 			// Lets deal with the JSON items in a batch process
@@ -2135,7 +2180,7 @@ class SyncEngine {
 						// Flag to delete
 						if (debugLogging) {addLogEntry("Flagging to delete item locally due to online deletion event: " ~ to!string(onedriveJSONItem), ["debug"]);}
 						// Use the DB entries returned - add the driveId, itemId and parentId values  to the array
-						idsToDelete ~= [existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId];
+						flagItemForDeletionThisPass(existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId);
 					} else {
 						// Local item is not in sync with the online item, but the online item has been deleted, and we are flagging to delete the local item
 						// We need to determine the trigger for isItemSynced() returning false before we determine if we should make utilise safeBackup()
@@ -2161,7 +2206,7 @@ class SyncEngine {
 							// Flag to delete rather than create a backup of the local file
 							if (debugLogging) {addLogEntry("Flagging to delete item locally due to online deletion event: " ~ to!string(onedriveJSONItem), ["debug"]);}
 							// Use the DB entries returned - add the driveId, itemId and parentId values  to the array
-							idsToDelete ~= [existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId];
+							flagItemForDeletionThisPass(existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId);
 						}
 					}
 				}
@@ -2240,6 +2285,21 @@ class SyncEngine {
 			// Issue #3336 - Convert driveId to lowercase before any test
 			if (appConfig.accountType == "personal") {
 				thisItemDriveId = transformToLowerCase(thisItemDriveId);
+			}
+
+			// Deletion wins for this pass. A response can contain a live item that
+			// predates either a later tombstone or a local delete completed while the
+			// response was in flight. Do not apply that stale live representation.
+			if (itemIsFlaggedForDeletionThisPass(thisItemDriveId, thisItemId)
+				|| itemIsFlaggedForDeletionThisPass(thisItemDriveId, thisItemParentId)
+				|| (thisItemParentId in skippedItems)) {
+				if (debugLogging) {
+					addLogEntry("Skipping live JSON because deletion has precedence in the active pass: "
+						~ to!string(onedriveJSONItem), ["debug"]);
+				}
+				if (!isItemFile(onedriveJSONItem)) skippedItems.insert(thisItemId);
+				processedCount++;
+				continue;
 			}
 			
 			// Check the database for an existing entry for this JSON item
@@ -2442,7 +2502,7 @@ class SyncEngine {
 							// flag to delete local file as it now is no longer in sync with OneDrive
 							if (verboseLogging) {addLogEntry("Flagging to delete item locally as this is now an unwanted item (parental exclusion) and the item currently exists in the local database: ", ["verbose"]);}
 							// Use the configured values - add the driveId, itemId and parentId values to the array
-							idsToDelete ~= [thisItemDriveId, thisItemId, thisItemParentId];
+							flagItemForDeletionThisPass(thisItemDriveId, thisItemId, thisItemParentId);
 						}
 					}	
 				}
@@ -2663,7 +2723,7 @@ class SyncEngine {
 								// flag to delete
 								if (verboseLogging) {addLogEntry("Flagging to delete item locally as this is now an unwanted item (sync_list exclusion) and the item currently exists in the local database: ", ["verbose"]);}
 								// Use the configured values - add the driveId, itemId and parentId values to the array
-								idsToDelete ~= [thisItemDriveId, thisItemId, thisItemParentId];
+								flagItemForDeletionThisPass(thisItemDriveId, thisItemId, thisItemParentId);
 							}
 						}
 					}
@@ -5508,7 +5568,7 @@ class SyncEngine {
 						}
 						
 						// Use the configured values - add the driveId, itemId and parentId values to the array
-						idsToDelete ~= [outOfSyncItem.driveId, outOfSyncItem.id, outOfSyncItem.parentId];
+						flagItemForDeletionThisPass(outOfSyncItem.driveId, outOfSyncItem.id, outOfSyncItem.parentId);
 						// delete items in idsToDelete
 						if (idsToDelete.length > 0) processDeleteItems();
 					}
@@ -11071,6 +11131,9 @@ class SyncEngine {
 
 					// Delete the reference in the local database - use the original input, but only after a successful remote delete
 					if (onlineDeleteCompleted) {
+						// Record the successful local-origin remote delete before removing
+						// the DB row. Any already-fetched live JSON for this identity is stale.
+						flagItemForDeletionThisPass(itemToDelete.driveId, itemToDelete.id, itemToDelete.parentId);
 						itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
 					} else {
 						addLogEntry("WARNING: Retaining local database entry because remote delete did not complete: " ~ path);

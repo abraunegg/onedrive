@@ -970,58 +970,8 @@ final class Monitor {
 		return true;
 	}
 
-	private void drainPendingEventsOnly(ref pollfd fds) {
-		size_t drainedEvents = 0;
-
-		while (true) {
-			bool hasNotification = false;
-			int sleep_counter = 0;
-
-			// Preserve the existing short batching window, but do not resolve paths,
-			// update watches, evaluate filters, or invoke callbacks. This path is
-			// used when callers explicitly want queued local events cancelled.
-			while (sleep_counter < 5) {
-				int ret = poll(&fds, 1, 0);
-				if (ret == -1) throw new MonitorException("poll failed");
-				else if (ret == 0) break;
-
-				hasNotification = true;
-				size_t length = read(worker.fd, buffer.ptr, buffer.length);
-				if (length == -1) throw new MonitorException("read failed");
-
-				int i = 0;
-				while (i < length) {
-					inotify_event *event = cast(inotify_event*) &buffer[i];
-
-					if (event.mask & IN_IGNORED) {
-						string ignoredPath;
-						unregisterWatchDescriptor(event.wd, ignoredPath);
-					} else if (event.mask & IN_Q_OVERFLOW) {
-						monitorStateDirty = true;
-						clearTransientEventState();
-						throw new MonitorException("inotify queue overflow: some events may be lost");
-					}
-
-					drainedEvents++;
-					i += inotify_event.sizeof + event.len;
-				}
-
-				if (poll(&fds, 1, 0) == 0) {
-					sleep_counter += 1;
-					Thread.sleep(dur!"seconds"(1));
-				}
-			}
-
-			if (!hasNotification) break;
-		}
-
-		if ((drainedEvents > 0) && debugLogging) {
-			addLogEntry("Drained " ~ drainedEvents.to!string ~ " stale local filesystem monitor event(s) without processing", ["debug"]);
-		}
-	}
-
-	// Update
-	void update(bool useCallbacks = true, bool processDeletesWhenDraining = false) {
+	// Update and dispatch every queued event. There is no discard-only mode.
+	void update() {
 		if(!initialised)
 			return;
 	
@@ -1030,11 +980,6 @@ final class Monitor {
 			events: POLLIN
 		};
 
-		if (!useCallbacks && !processDeletesWhenDraining) {
-			clearTransientEventState();
-			drainPendingEventsOnly(fds);
-			return;
-		}
 
 		while (true) {
 			bool hasNotification = false;
@@ -1152,15 +1097,15 @@ final class Monitor {
 							// recursive watch tree for the same directory hierarchy.
 							if (event.mask & IN_ISDIR) rebaseWatchTree(*from, path);
 							cookieToPath.remove(event.cookie);
-							if (useCallbacks) actionHolder.append(ActionType.moved, *from, path);
+							actionHolder.append(ActionType.moved, *from, path);
 							movedNotDeleted.remove(*from); // Clear moved status
 						} else {
 							// Handle item moved in from outside the watched tree.
 							if (event.mask & IN_ISDIR) {
 								addRecursive(path);
-								if (useCallbacks) actionHolder.append(ActionType.createDir, path);
+								actionHolder.append(ActionType.createDir, path);
 							} else {
-								if (useCallbacks) actionHolder.append(ActionType.changed, path);
+								actionHolder.append(ActionType.changed, path);
 							}
 						}
 					} else if (event.mask & IN_CREATE) {
@@ -1174,12 +1119,12 @@ final class Monitor {
 								}
 							}
 							addRecursive(path);
-							if (useCallbacks) actionHolder.append(ActionType.createDir, path);
+							actionHolder.append(ActionType.createDir, path);
 						}
 					} else if (event.mask & IN_DELETE_SELF) {
 						if (debugLogging) {addLogEntry("event IN_DELETE_SELF: " ~ path, ["debug"]);}
 						removeWatchTree(path);
-						if (useCallbacks || processDeletesWhenDraining) actionHolder.append(ActionType.deleted, path);
+						actionHolder.append(ActionType.deleted, path);
 					} else if (event.mask & IN_MOVE_SELF) {
 						// Do not remove the watch here. Directory moves inside the watched tree
 						// are reconciled via the matching parent IN_MOVED_FROM/IN_MOVED_TO
@@ -1191,7 +1136,7 @@ final class Monitor {
 						} else {
 							if (debugLogging) {addLogEntry("event IN_DELETE: " ~ path, ["debug"]);}
 							if (event.mask & IN_ISDIR) removeWatchTree(path);
-							if (useCallbacks || processDeletesWhenDraining) actionHolder.append(ActionType.deleted, path);
+							actionHolder.append(ActionType.deleted, path);
 						}
 					} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
 						if (debugLogging) {addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);}
@@ -1202,7 +1147,7 @@ final class Monitor {
 								cookieToPath.remove(cookie);
 							}
 						}
-						if (useCallbacks) actionHolder.append(ActionType.changed, path);
+						actionHolder.append(ActionType.changed, path);
 					} else {
 						if (debugLogging) {addLogEntry("Ignoring unhandled inotify event for path: " ~ path ~ ", mask=" ~ event.mask.to!string, ["debug"]);}
 					}
@@ -1225,7 +1170,7 @@ final class Monitor {
 			auto cookieToPathCopy = cookieToPath.dup;
 			foreach (cookie, path; cookieToPathCopy) {
 				if (debugLogging) {addLogEntry("Deleting cookie|watch (post loop): " ~ path, ["debug"]);}
-				if (useCallbacks || processDeletesWhenDraining) onDelete(path);
+				onDelete(path);
 				removeWatchTree(path);
 				cookieToPath.remove(cookie);
 				movedNotDeleted.remove(path);

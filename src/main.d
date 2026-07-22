@@ -3,7 +3,7 @@ module main;
 
 // What does this module require to function?
 import core.memory;
-import core.stdc.errno : ENOENT, EINTR, EBUSY, EXDEV, EAGAIN, EPERM, EACCES, EROFS;
+import core.stdc.errno : EINTR, EBUSY, EXDEV, EAGAIN, EPERM, EACCES, EROFS;
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.sys.posix.signal;
 import core.sys.posix.unistd : write, _exit, STDERR_FILENO;
@@ -1217,7 +1217,7 @@ int main(string[] cliArgs) {
 				// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
 				if (!appConfig.getValueBool("download_only")) {
 					// Process any inotify events queued before this loop iteration
-					processInotifyEvents(true);
+					processInotifyEvents();
 				}
 				
 				// WebSocket and Webhook Notification Handling
@@ -1358,10 +1358,10 @@ int main(string[] cliArgs) {
 							performStandardSyncProcess(localPath, filesystemMonitor);
 						}
 						
-						// Handle any local filesystem events that occurred while the sync was running.
-						// Remote-generated and genuine concurrent local events are both processed at
-						// each reconciliation boundary; database/hash checks suppress harmless echoes.
-						processInotifyEvents(true);
+						// Handle every local filesystem event queued while the sync was running.
+						// Event-origin and reconciliation safeguards are handled by the sync engine;
+						// the monitor layer must not consume queued events selectively.
+						processInotifyEvents();
 						
 						// Detail the outcome of the sync process
 						displaySyncOutcome();
@@ -1661,7 +1661,7 @@ void oneDriveOnlineCallback() {
 	// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
 	if (!appConfig.getValueBool("download_only")) {
 		// Handle inotify events queued before online reconciliation
-		processInotifyEvents(true);
+		processInotifyEvents();
 	}
 
 	// Sync any online change down to the local disk.
@@ -1673,7 +1673,7 @@ void oneDriveOnlineCallback() {
 			appConfig.monitorSyncTriggeredByApiSignal = false;
 		}
 
-		syncEngineInstance.syncOneDriveAccountToLocalDisk();
+		syncEngineInstance.syncOneDriveAccountToLocalDisk(delegate() { processInotifyEvents(); });
 
 		if (syncEngineInstance.authoritativeCleanupPassUsedInLastSync) {
 			syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
@@ -1681,11 +1681,9 @@ void oneDriveOnlineCallback() {
 	}
 	if (appConfig.getValueBool("monitor")) {
 		// Process every queued inotify event after online -> local reconciliation.
-		// The database and local filesystem have already been updated by the remote
-		// reconciliation, so self-generated events are naturally filtered by the
-		// existing database/hash checks. Genuine concurrent local events must not be
-		// consumed and discarded here.
-		processInotifyEvents(true);
+		// Online-originated events still require explicit origin and deletion-precedence
+		// handling; the monitor layer must not discard events based on presumed origin.
+		processInotifyEvents();
 	}
 }
 
@@ -1695,14 +1693,14 @@ void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = 
 	syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 	if (appConfig.getValueBool("monitor")) {
 		// Handle any inotify events whilst the DB was being scanned
-		processInotifyEvents(true);
+		processInotifyEvents();
 	}
 	
 	// Scan the configured 'sync_dir' for new data to upload
 	syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 	if (appConfig.getValueBool("monitor")) {
 		// Handle any new inotify events whilst the local filesystem was being scanned
-		processInotifyEvents(true);
+		processInotifyEvents();
 	}
 }
 
@@ -1726,23 +1724,23 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any inotify events whilst the DB was being scanned
-			processInotifyEvents(true);
+			processInotifyEvents();
 		}
 		
 		// Scan the configured 'sync_dir' for new data to upload to OneDrive
 		syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any new inotify events whilst the local filesystem was being scanned
-			processInotifyEvents(true);
+			processInotifyEvents();
 		}
 		
 		// Download data from OneDrive last
-		syncEngineInstance.syncOneDriveAccountToLocalDisk();
+		syncEngineInstance.syncOneDriveAccountToLocalDisk(delegate() { processInotifyEvents(); });
 		if (appConfig.getValueBool("monitor")) {
-			// Process all queued inotify events. Events caused by the completed remote
-			// reconciliation are filtered by current database/hash state; concurrent
-			// local activity must remain actionable.
-			processInotifyEvents(true);
+			// Process all queued inotify events. Concurrent local activity must remain
+			// actionable; online-originated events are handled by the active-pass
+			// deletion-precedence protection where applicable.
+			processInotifyEvents();
 		}
 		
 		// At this point, we have done a sync from:
@@ -1758,19 +1756,19 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 	} else {
 		// Normal sync process
 		// Download data from OneDrive first
-		syncEngineInstance.syncOneDriveAccountToLocalDisk();
+		syncEngineInstance.syncOneDriveAccountToLocalDisk(delegate() { processInotifyEvents(); });
 		if (appConfig.getValueBool("monitor")) {
-			// Process all queued inotify events. Events caused by the completed remote
-			// reconciliation are filtered by current database/hash state; concurrent
-			// local activity must remain actionable.
-			processInotifyEvents(true);
+			// Process all queued inotify events. Concurrent local activity must remain
+			// actionable; online-originated events are handled by the active-pass
+			// deletion-precedence protection where applicable.
+			processInotifyEvents();
 		}
 		
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any inotify events whilst the DB was being scanned
-			processInotifyEvents(true);
+			processInotifyEvents();
 		}
 			
 		// Is --download-only NOT configured?
@@ -1780,7 +1778,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 			if (appConfig.getValueBool("monitor")) {
 				// Handle any new inotify events whilst the local filesystem was being scanned
-				processInotifyEvents(true);
+				processInotifyEvents();
 			}
 			
 			// If we are not doing a 'force_children_scan' perform a true-up
@@ -1794,12 +1792,11 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 					}
 					// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'
 					// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
-					syncEngineInstance.syncOneDriveAccountToLocalDisk();
+					syncEngineInstance.syncOneDriveAccountToLocalDisk(delegate() { processInotifyEvents(); });
 					if (appConfig.getValueBool("monitor")) {
-						// Process all queued inotify events after the final online true-up.
-						// Never consume concurrent local changes merely because remote work
-						// also generated filesystem notifications.
-						processInotifyEvents(true);
+						// Process every queued inotify event after the final online true-up.
+						// Event-origin and reconciliation safeguards are handled by the sync engine.
+						processInotifyEvents();
 					}
 				} else {
 					// exitHandlerTriggered triggered
@@ -1823,34 +1820,22 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 	}
 }
 
-// Process any inotify events
-void processInotifyEvents(bool updateFlag, bool processDeletesWhenDraining = false) {
+// Process and dispatch every queued inotify event. There is intentionally no
+// cancellation or selective-drain mode because consuming an event without
+// dispatching it can lose genuine local activity.
+void processInotifyEvents() {
 	if ((filesystemMonitor is null) || (!filesystemMonitor.initialised)) {
 		return;
 	}
 
-	// Attempt to process or cancel inotify events
-	// filesystemMonitor.update will throw this, thus needs to be caught
-	//   monitor.MonitorException@src/monitor.d(549): inotify queue overflow: some events may be lost (Interrupted system call)
 	try {
-		// Process any inotify events or cancel events based on flag value
-		// True = process
-		// False = cancel
-		filesystemMonitor.update(updateFlag, processDeletesWhenDraining);
+		filesystemMonitor.update();
 	} catch (MonitorException exception) {
 		// Catch any exceptions thrown by inotify / monitor engine
 		addLogEntry("ERROR: The following inotify error was generated: " ~ exception.msg);
 	} catch (FileException exception) {
-		// A local path can legitimately disappear while queued inotify events are
-		// being cancelled / drained, especially under monitor stress testing.
-		// Treat ENOENT during event cancellation as non-fatal.
-		if ((!updateFlag) && (exception.errno == ENOENT)) {
-			if (debugLogging) {
-				addLogEntry("Ignoring stale inotify cancellation event for path that no longer exists: " ~ exception.msg, ["debug"]);
-			}
-			return;
-		}
-		// Log error message
+		// Preserve the existing full-processing behaviour: filesystem errors are
+		// reported rather than silently converting them into discarded events.
 		addLogEntry("ERROR: The following filesystem error was generated while processing inotify events: " ~ exception.msg);
 	}
 }
