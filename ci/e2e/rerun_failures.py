@@ -30,8 +30,11 @@ def _extract_failed_plan(results: dict) -> tuple[list[str], dict[str, list[str]]
         if not case_id or case_id == "0000":
             continue
 
-        failed_cases.append(case_id)
         details = case.get("details") or {}
+        if details.get("non_rerunnable") is True:
+            continue
+
+        failed_cases.append(case_id)
 
         failed_scenario_ids = details.get("failed_scenario_ids")
         if isinstance(failed_scenario_ids, list):
