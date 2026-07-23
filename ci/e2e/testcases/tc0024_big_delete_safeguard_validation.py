@@ -66,8 +66,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         context.bootstrap_config_dir(conf_local)
         context.bootstrap_config_dir(conf_verify)
 
-        root_name = f"ZZ_E2E_TC0024_{context.run_id}_{os.getpid()}"
-        parent_dir_name = f"{root_name}/random_1K_files"
+        parent_dir_name = "random_1K_files"
         initial_threshold = 1000
         classify_threshold = 5
         sibling_dir_count = 10
@@ -143,8 +142,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--verbose",
             "--resync",
             "--resync-auth",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_local),
         ]
@@ -174,8 +171,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_local),
         ]
@@ -233,8 +228,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_local),
         ]
@@ -259,8 +252,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--download-only",
             "--resync",
             "--resync-auth",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_verify),
         ]
@@ -288,8 +279,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--sync",
             "--verbose",
             "--force",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_local),
         ]
@@ -309,8 +298,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "--download-only",
             "--resync",
             "--resync-auth",
-            "--single-directory",
-            root_name,
             "--confdir",
             str(conf_verify),
         ]
@@ -392,7 +379,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                     f"verify_confdir={conf_verify}",
                     f"initial_threshold={initial_threshold}",
                     f"classify_as_big_delete={classify_threshold}",
-                    f"root_name={root_name}",
                     f"parent_dir_name={parent_dir_name}",
                     f"sibling_dir_count={sibling_dir_count}",
                     f"files_per_dir={files_per_dir}",
@@ -411,7 +397,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                     f"verify_attempts={verify_attempts}",
                     f"max_verify_attempts={max_verify_attempts}",
                     f"verify_retry_sleep_seconds={verify_retry_sleep_seconds}",
-                    f"verify_scope={root_name}",
                     f"residual_deleted_paths_count={len(residual_deleted_paths)}",
                     f"residual_deleted_paths_file={residual_deleted_paths_file}",
                 ]
@@ -447,8 +432,6 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
             "verify_returncode": verify_result.returncode,
             "verify_attempts": verify_attempts,
             "residual_deleted_paths_count": len(residual_deleted_paths),
-            "root_name": root_name,
-            "verify_scope": root_name,
         }
 
         for label, rc in [
