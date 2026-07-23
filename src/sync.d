@@ -1208,6 +1208,11 @@ class SyncEngine {
 		}
 	}
 	
+	// Does this JSON response contain the expected Microsoft Graph collection array?
+	bool hasValidValueArray(JSONValue jsonResponse) {
+		return (jsonResponse.type() == JSONType.object) && (("value" in jsonResponse) != null) && (jsonResponse["value"].type() == JSONType.array);
+	}
+
 	// Query OneDrive API for /delta changes and iterate through items online
 	void fetchOneDriveDeltaAPIResponse(string driveIdToQuery = null, string itemIdToQuery = null, string sharedFolderName = null, string sharedFolderLogicalPath = null) {
 		// Function Start Time
@@ -1377,10 +1382,10 @@ class SyncEngine {
 				// getDeltaChangesByItemId has the re-try logic for transient errors
 				deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink, getDeltaDataOneDriveApiInstance);
 				
-				// If the initial deltaChanges response is an invalid JSON object, keep trying until we get a valid response ..
-				if (deltaChanges.type() != JSONType.object) {
-					// While the response is not a JSON Object or the Exit Handler has not been triggered
-					while (deltaChanges.type() != JSONType.object) {
+				// If the initial deltaChanges response does not contain a valid collection array, keep trying until we get a valid response.
+				if (!hasValidValueArray(deltaChanges)) {
+					// While the response does not contain a valid collection array or the Exit Handler has not been triggered
+					while (!hasValidValueArray(deltaChanges)) {
 						// Check if exitHandlerTriggered is true
 						if (exitHandlerTriggered) {
 							// break out of the 'while (true)' loop
@@ -1388,11 +1393,17 @@ class SyncEngine {
 						}
 					
 						// Handle the invalid JSON response and retry
-						if (debugLogging) {addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);}
+						if (debugLogging) {addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned a JSON response without a valid value array", ["debug"]);}
 						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink, getDeltaDataOneDriveApiInstance);
 					}
 				}
 				
+				// The exit handler may have interrupted the retry loop while the response was still invalid.
+				if (!hasValidValueArray(deltaChanges)) {
+					if (debugLogging) {addLogEntry("Skipping invalid /delta response because it does not contain a valid value array", ["debug"]);}
+					break;
+				}
+
 				long nrChanges = deltaChanges["value"].array.length;
 				int changeCount = 0;
 				
@@ -1589,8 +1600,8 @@ class SyncEngine {
 			// This then allows the application to look for any remaining 'N' values, and delete these as no longer needed locally
 			deltaChanges = generateDeltaResponse(pathToQuery);
 			
-			// deltaChanges must be a valid JSON object / array of data
-			if (deltaChanges.type() == JSONType.object) {
+			// deltaChanges must be a valid JSON object containing a value array
+			if (hasValidValueArray(deltaChanges)) {
 				// How many changes were returned?
 				long nrChanges = deltaChanges["value"].array.length;
 				int changeCount = 0;
@@ -2695,7 +2706,7 @@ class SyncEngine {
 			// Check if this is excluded by a user set maximum filesize to download
 			if (!unwanted) {
 				if (isItemFile(onedriveJSONItem)) {
-					if (fileSizeLimit != 0) {
+					if ((fileSizeLimit != 0) && (hasFileSize(onedriveJSONItem))) {
 						if (onedriveJSONItem["size"].integer >= fileSizeLimit) {
 							if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);}
 							unwanted = true;
@@ -2888,8 +2899,10 @@ class SyncEngine {
 						// Compute the path online
 						string newItemPath = computePathFromJSON(onedriveJSONItem);
 					
-						// This file needs to be deleted online
-						deleteJSONItem(onedriveJSONItem, newItemPath);
+						// This file needs to be deleted online only when its path could be safely computed.
+						if (!newItemPath.empty) {
+							deleteJSONItem(onedriveJSONItem, newItemPath);
+						}
 					}
 				} else {
 					// There are elements to download
@@ -3402,10 +3415,16 @@ class SyncEngine {
 		// Detail what we are doing
 		if (debugLogging) {addLogEntry("We have been requested to create 'root' and 'Shared Folder' DB Tie Records in a consistent manner" , ["debug"]);}
 
+		// Use a safe display value when the shortcut JSON does not contain a name.
+		string sharedFolderDisplayName = "<unknown>";
+		if ((onedriveJSONItem.type() == JSONType.object) && (hasName(onedriveJSONItem))) {
+			sharedFolderDisplayName = onedriveJSONItem["name"].str;
+		}
+
 		// If relocation details were not explicitly passed in, derive them from the shortcut JSON itself.
 		if ((relocatedFolderDriveId.empty) || (relocatedFolderParentId.empty)) {
 			if (isItemRemote(onedriveJSONItem)) {
-				if (hasParentReferenceId(onedriveJSONItem)) {
+				if ((hasParentReferenceDriveId(onedriveJSONItem)) && (hasParentReferenceId(onedriveJSONItem))) {
 					if (onedriveJSONItem["parentReference"]["driveId"].str == appConfig.defaultDriveId) {
 						if (onedriveJSONItem["parentReference"]["id"].str != appConfig.defaultRootId) {
 							relocatedFolderDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
@@ -3483,7 +3502,7 @@ class SyncEngine {
 			if ((exception.httpStatusCode == 403) || (exception.httpStatusCode == 404)) {
 				// The API call returned a 404 error response
 				if (debugLogging) {addLogEntry("onlineParentData = onlineParentOneDriveApiInstance.getPathDetailsById(parentDriveId, parentObjectId); generated a 404 - shared folder path does not exist online", ["debug"]);}
-				string errorMessage = format("WARNING: The OneDrive Shared Folder link target '%s' cannot be found online using the provided online data.", onedriveJSONItem["name"].str);
+				string errorMessage = format("WARNING: The OneDrive Shared Folder link target '%s' cannot be found online using the provided online data.", sharedFolderDisplayName);
 				// detail what this 404 error response means
 				addLogEntry();
 				addLogEntry(errorMessage);
@@ -3521,6 +3540,20 @@ class SyncEngine {
 			}
 		}
 		
+		// Validate the online parent response before reading required fields from it.
+		if ((onlineParentData.type() != JSONType.object) || (!hasId(onlineParentData)) || (!hasParentReferenceDriveId(onlineParentData))) {
+			addLogEntry("WARNING: Unable to create Shared Folder database records because the Microsoft OneDrive API returned a malformed parent response: " ~ sanitiseJSONItem(onlineParentData));
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			onlineParentOneDriveApiInstance.releaseCurlEngine();
+			onlineParentOneDriveApiInstance = null;
+
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			return;
+		}
+
 		// Create a 'root' DB Tie Record for a Shared Folder from the parent folder JSON data
 		// - This maps the Shared Folder 'driveId' with the parent folder where the shared folder exists, so we can call the parent folder to query for changes to this Shared Folder
 		createDatabaseRootTieRecordForOnlineSharedFolder(onlineParentData, relocatedFolderDriveId, relocatedFolderParentId);
@@ -3531,7 +3564,9 @@ class SyncEngine {
 		// Make an item from the online JSON data
 		sharedFolderDatabaseTie = makeItem(onlineParentData);
 		// Ensure we use our online name, as we may have renamed the folder in our location
-		sharedFolderDatabaseTie.name = onedriveJSONItem["name"].str; // use this as the name .. this is the name of the folder online in our OneDrive account, not the online parent name
+		if (hasName(onedriveJSONItem)) {
+			sharedFolderDatabaseTie.name = onedriveJSONItem["name"].str; // use this as the name .. this is the name of the folder online in our OneDrive account, not the online parent name
+		}
 		
 		// Is sharedFolderDatabaseTie.driveId empty?
 		if (sharedFolderDatabaseTie.driveId.empty) {
@@ -3555,7 +3590,7 @@ class SyncEngine {
 		// If a user has added the 'whole' SharePoint Document Library, then the DB Shared Folder Tie Record
 		// and the previously inserted 'root' DB Tie Record are the SAME database object (same driveId + id).
 		// That means this upsert must preserve any relocated shared-folder metadata already stored.
-		if ((isItemRoot(onlineParentData)) && (onlineParentData["parentReference"]["driveType"].str == "documentLibrary")) {
+		if ((isItemRoot(onlineParentData)) && (("driveType" in onlineParentData["parentReference"]) != null) && (onlineParentData["parentReference"]["driveType"].str == "documentLibrary")) {
 			// Yes this is a DocumentLibrary 'root' object
 			if (debugLogging) {
 				addLogEntry("Updating Shared Folder DB Tie record entry with correct values as this is a 'root' object as it is a SharePoint Library Root Object" , ["debug"]);
@@ -3834,6 +3869,12 @@ class SyncEngine {
 	
 	// Compute path from JSON
 	string computePathFromJSON(JSONValue onedriveJSONItem){
+		// Validate the required JSON fields before direct access.
+		if ((onedriveJSONItem.type() != JSONType.object) || (!hasName(onedriveJSONItem)) || (!hasParentReferenceDriveId(onedriveJSONItem)) || (!hasParentReferenceId(onedriveJSONItem))) {
+			addLogEntry("WARNING: Unable to compute path from malformed OneDrive JSON item: " ~ sanitiseJSONItem(onedriveJSONItem));
+			return null;
+		}
+
 		// Data from JSON file
 		string downloadItemName = onedriveJSONItem["name"].str;
 		string downloadDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
@@ -3906,7 +3947,10 @@ class SyncEngine {
 			
 			// Track attempted uploads. The 'chunks' are JSON entries, so we need to extract the path from the JSON elements
 			foreach (onedriveJSONItem; chunk) {
-				filesDownloaded ~= computePathFromJSON(onedriveJSONItem);
+				string downloadedFilePath = computePathFromJSON(onedriveJSONItem);
+				if (!downloadedFilePath.empty) {
+					filesDownloaded ~= downloadedFilePath;
+				}
 			}
 		}
 		
@@ -3924,7 +3968,7 @@ class SyncEngine {
 			// Find files that were meant to be downloaded, but were not tracked as downloaded
 			foreach (onedriveJSONItem; fileJSONItemsToDownload) {
 				string file = computePathFromJSON(onedriveJSONItem);
-				if (file !in downloadedSet) {
+				if ((!file.empty) && (file !in downloadedSet)) {
 					fileDownloadFailures ~= file;
 				}
 			}
@@ -6356,18 +6400,22 @@ class SyncEngine {
 							if (debugLogging) {addLogEntry("Updated 'complexPathToCheck' to '"~ complexPathToCheck ~"' for 'skip_dir' validation to determine if this directory should be excluded.", ["debug"]);}
 						} else {
 							if (debugLogging) {addLogEntry("Parent details not in database - unable to compute complex path to check using database data", ["debug"]);}
-							// use onedriveJSONItem["parentReference"]["path"].str
-							string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
-							
-							// Check for ':' and split if present
-							auto splitIndex = selfBuiltPath.indexOf(":");
-							if (splitIndex != -1) {
-								// Keep only the part after ':'
-								selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
+							if (("path" in onedriveJSONItem["parentReference"]) != null) {
+								// use onedriveJSONItem["parentReference"]["path"].str
+								string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
+
+								// Check for ':' and split if present
+								auto splitIndex = selfBuiltPath.indexOf(":");
+								if (splitIndex != -1) {
+									// Keep only the part after ':'
+									selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
+								}
+
+								// set complexPathToCheck to selfBuiltPath and be compatible with computeItemPath() output
+								complexPathToCheck = "." ~ selfBuiltPath;
+							} else if (debugLogging) {
+								addLogEntry("Unable to compute complex skip_dir path because parentReference.path is missing", ["debug"]);
 							}
-							
-							// set complexPathToCheck to selfBuiltPath and be compatible with computeItemPath() output
-							complexPathToCheck = "." ~ selfBuiltPath;
 						}
 						
 						// were we able to compute a complexPathToCheck ?
@@ -6445,7 +6493,7 @@ class SyncEngine {
 						if (debugLogging) {addLogEntry("Updated 'pathToCheck' to '"~ pathToCheck ~"' for 'skip_dir' validation to determine if this file should be excluded.", ["debug"]);}
 					} else {
 						// Parent is not in the database .. compute manually
-						if (hasParentReference(onedriveJSONItem)) {
+						if ((hasParentReference(onedriveJSONItem)) && (("path" in onedriveJSONItem["parentReference"]) != null)) {
 							// use onedriveJSONItem["parentReference"]["path"].str
 							string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str;
 							if (debugLogging) {addLogEntry("Initial file based selfBuiltPath = " ~ selfBuiltPath, ["debug"]);}
@@ -6807,7 +6855,7 @@ class SyncEngine {
 		// Check if this is excluded by a user set maximum filesize to download
 		if (!clientSideRuleExcludesPath) {
 			if (isItemFile(onedriveJSONItem)) {
-				if (fileSizeLimit != 0) {
+				if ((fileSizeLimit != 0) && (hasFileSize(onedriveJSONItem))) {
 					if (onedriveJSONItem["size"].integer >= fileSizeLimit) {
 						if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);}
 						clientSideRuleExcludesPath = true;
@@ -6892,7 +6940,9 @@ class SyncEngine {
 		}
 		
 		// Configure these variables based on the JSON input
-		thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+		if ((onedriveJSONItem.type() == JSONType.object) && (hasParentReferenceDriveId(onedriveJSONItem))) {
+			thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+		}
 		
 		// OneDrive Personal JSON responses are in-consistent with not having 'id' available
 		if (hasParentReferenceId(onedriveJSONItem)) {
@@ -6917,11 +6967,11 @@ class SyncEngine {
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
 				
-				// There needs to be a valid JSON to process
-				if (onlinePathData.type() == JSONType.object) {
+				// There needs to be a valid JSON response with the fields required below.
+				if ((onlinePathData.type() == JSONType.object) && (hasParentReferenceDriveId(onlinePathData)) && ((hasParentReferenceId(onlinePathData)) || (hasId(onlinePathData)))) {
 					// Does this JSON match the root name of a shared folder we may be trying to match?
 					if (sharedFolderDeltaGeneration) {
-						if (currentSharedFolderName == onlinePathData["name"].str) {
+						if ((hasName(onlinePathData)) && (currentSharedFolderName == onlinePathData["name"].str)) {
 							if (debugLogging) {addLogEntry("createLocalPathStructure parent matches the current shared folder name, creating applicable shared folder database records", ["debug"]);}
 							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 							createRequiredSharedFolderDatabaseRecords(onlinePathData);
@@ -7259,7 +7309,7 @@ class SyncEngine {
 				
 				// Evaluate the returned JSON uploadResponse
 				// If there was an error uploading the file, uploadResponse should be empty and invalid
-				if (uploadResponse.type() != JSONType.object) {
+				if ((uploadResponse.type() != JSONType.object) || (!hasETag(uploadResponse))) {
 					uploadFailed = true;
 					skippedExceptionError = true;
 				}
@@ -9110,6 +9160,14 @@ class SyncEngine {
 					onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
 					if (debugLogging) {addLogEntry("Online Parent Path Query Response: " ~ to!string(onlinePathData), ["debug"]);}
 					
+					// Validate the parent response before reading its parentReference fields.
+					if ((onlinePathData.type() != JSONType.object) || (!hasParentReferenceDriveId(onlinePathData)) || (!hasParentReferenceId(onlinePathData))) {
+						addLogEntry("ERROR: Unable to create the remote directory because the parent path response is missing required parentReference fields");
+						createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
+						createDirectoryOnlineOneDriveApiInstance = null;
+						return;
+					}
+
 					// Make the parentItem from the online data
 					parentItem = makeItem(onlinePathData);
 					
@@ -9215,6 +9273,14 @@ class SyncEngine {
 				onlinePathData = createDirectoryOnlineOneDriveApiInstance.searchDriveForPath(queryItem.driveId, baseName(thisNewPathToCreate));
 				if (debugLogging) {addLogEntry("onlinePathData: " ~to!string(onlinePathData), ["debug"]);}
 				
+				// The drive search response must contain the expected collection array.
+				if (!hasValidValueArray(onlinePathData)) {
+					addLogEntry("ERROR: Unable to search for the remote directory because Microsoft OneDrive returned a response without a valid value array");
+					createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
+					createDirectoryOnlineOneDriveApiInstance = null;
+					return;
+				}
+
 				// Process the response from searching the drive
 				long responseCount = count(onlinePathData["value"].array);
 				if (responseCount > 0) {
@@ -9223,8 +9289,8 @@ class SyncEngine {
 					JSONValue foundDirectoryJSONItem;
 					// Items were returned .. but is one of these what we are looking for?
 					foreach (childJSON; onlinePathData["value"].array) {
-						// Is this item not a file?
-						if (!isFileItem(childJSON)) {
+						// Is this item not a file and does it contain the name required for matching?
+						if ((childJSON.type() == JSONType.object) && (!isFileItem(childJSON)) && (hasName(childJSON))) {
 							Item thisChildItem = makeItem(childJSON);
 							// Direct Match Check
 							if ((queryItem.id == thisChildItem.parentId) && (baseName(thisNewPathToCreate) == thisChildItem.name)) {
@@ -9587,10 +9653,16 @@ class SyncEngine {
 			// Query this remote object for its children
 			topLevelChildren = raceConditionResolutionOneDriveApiInstance.listChildren(requiredDriveId, requiredParentItemId, nextLink);
 			
+			// The child listing must contain the expected collection array.
+			if (!hasValidValueArray(topLevelChildren)) {
+				if (debugLogging) {addLogEntry("Unable to resolve online creation race condition because the response does not contain a valid value array", ["debug"]);}
+				break;
+			}
+
 			// Process each child that has been returned
 			foreach (child; topLevelChildren["value"].array) {
-				// We are specifically seeking a 'folder' object
-				if (isItemFolder(child)) {
+				// We are specifically seeking a 'folder' object with a usable name
+				if ((child.type() == JSONType.object) && (isItemFolder(child)) && (hasName(child))) {
 					// Is this the child folder we are looking for, and is a POSIX match?
 					// We know that Microsoft OneDrive is not POSIX aware, thus there cannot be 2 folders of the same name with different case sensitivity
 					if (child["name"].str == searchFolder) {
@@ -10410,8 +10482,8 @@ class SyncEngine {
 			// As no upload failure, calculate transfer metrics in a consistent manner
 			displayTransferMetrics(fileToUpload, thisFileSize, uploadTransferStartTime, uploadTransferEndTime, uploadStartTime, Clock.currTime());
 			
-			// OK as the upload did not fail, we need to save the response from OneDrive, but it has to be a valid JSON response
-			if (uploadResponse.type() == JSONType.object) {
+			// OK as the upload did not fail, we need to save the response from OneDrive, but it has to contain the required upload fields
+			if ((uploadResponse.type() == JSONType.object) && (hasId(uploadResponse)) && (hasETag(uploadResponse))) {
 				// check if the path still exists locally before we try to set the file times online - as short lived files, whilst we uploaded it - it may not exist locally already
 				if (exists(fileToUpload)) {
 					// Are we in a --dry-run scenario
@@ -10490,8 +10562,9 @@ class SyncEngine {
 					addLogEntry("File disappeared locally after upload: " ~ fileToUpload);
 				}
 			} else {
-				// Log that an invalid JSON object was returned
-				if (debugLogging) {addLogEntry("uploadFileOneDriveApiInstance.simpleUpload or session.upload call returned an invalid JSON Object from the OneDrive API", ["debug"]);}
+				// Log that an invalid or incomplete JSON object was returned
+				uploadFailed = true;
+				if (debugLogging) {addLogEntry("uploadFileOneDriveApiInstance.simpleUpload or session.upload call returned a JSON response without the required id and eTag fields", ["debug"]);}
 			}
 		}
 
@@ -12054,6 +12127,12 @@ class SyncEngine {
 				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 			}
 			
+			// The child listing must contain the expected collection array.
+			if (!hasValidValueArray(topLevelChildren)) {
+				if (debugLogging) {addLogEntry("Unable to continue generated /delta traversal because the response does not contain a valid value array", ["debug"]);}
+				break;
+			}
+
 			// Process top level children
 			if (!remotePathObject) {
 				// Main account root folder
@@ -12230,8 +12309,8 @@ class SyncEngine {
 				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
 			}
 			
-			// Was a valid JSON response for 'thisLevelChildren' provided?
-			if (thisLevelChildren.type() == JSONType.object) {
+			// Was a valid JSON collection response for 'thisLevelChildren' provided?
+			if (hasValidValueArray(thisLevelChildren)) {
 				// process this level children
 				if (!childParentPath.empty) {
 					// We dont use childParentPath to log, as this poses an information leak risk.
@@ -12518,6 +12597,10 @@ class SyncEngine {
 						}
 						// Query this remote object for its children
 						topLevelChildren = queryOneDriveForSpecificPath.listChildren(parentDetails.driveId, parentDetails.id, nextLink);
+						if (!hasValidValueArray(topLevelChildren)) {
+							if (debugLogging) {addLogEntry("Unable to query remote path because the child response does not contain a valid value array", ["debug"]);}
+							break;
+						}
 						// Process each child
 						foreach (child; topLevelChildren["value"].array) {
 							// Is this child a folder?
@@ -13210,7 +13293,7 @@ class SyncEngine {
 			}
 			
 			// is siteQuery a valid JSON object & contain data we can use?
-			if ((siteQuery.type() == JSONType.object) && ("value" in siteQuery)) {
+			if (hasValidValueArray(siteQuery)) {
 				// valid JSON object
 				if (debugLogging) {addLogEntry("O365 Query Response: " ~ to!string(siteQuery), ["debug"]);}
 				
@@ -13241,7 +13324,7 @@ class SyncEngine {
 								}
 								
 								// is siteDriveQuery a valid JSON object & contain data we can use?
-								if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
+								if (hasValidValueArray(siteDriveQuery)) {
 									// valid JSON object
 									foreach (driveResult; siteDriveQuery["value"].array) {
 										// Display results
@@ -13429,12 +13512,12 @@ class SyncEngine {
 			// getDeltaChangesByItemId has the re-try logic for transient errors
 			deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink, getDeltaDataOneDriveApiInstance);
 			
-			// If the initial deltaChanges response is an invalid JSON object, keep trying until we get a valid response ..
-			if (deltaChanges.type() != JSONType.object) {
-				// While the response is not a JSON Object or the Exit Handler has not been triggered
-				while (deltaChanges.type() != JSONType.object) {
+			// If the initial deltaChanges response does not contain a valid collection array, keep trying until we get a valid response.
+			if (!hasValidValueArray(deltaChanges)) {
+				// While the response does not contain a valid collection array
+				while (!hasValidValueArray(deltaChanges)) {
 					// Handle the invalid JSON response and retry
-					if (debugLogging) {addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);}
+					if (debugLogging) {addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned a JSON response without a valid value array", ["debug"]);}
 					deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink, getDeltaDataOneDriveApiInstance);
 				}
 			}
@@ -15091,8 +15174,8 @@ class SyncEngine {
 				}
 			}
 			
-			// 'thisLevelChildren' must be a valid JSON response to progress any further
-			if (thisLevelChildren.type() == JSONType.object) {
+			// 'thisLevelChildren' must be a valid JSON collection response to progress any further
+			if (hasValidValueArray(thisLevelChildren)) {
 				// Process thisLevelChildren response
 				foreach (child; thisLevelChildren["value"].array) {
 					// Only looking at files
@@ -15464,7 +15547,7 @@ class SyncEngine {
 			return;
 		}
 		
-		if (sharedWithMeItems.type() == JSONType.object) {
+		if (hasValidValueArray(sharedWithMeItems)) {
 		
 			if (count(sharedWithMeItems["value"].array) > 0) {
 				// No shared items
@@ -15577,8 +15660,8 @@ class SyncEngine {
 			return;
 		}
 		
-		// Valid JSON response
-		if (sharedWithMeItems.type() == JSONType.object) {
+		// Valid JSON collection response
+		if (hasValidValueArray(sharedWithMeItems)) {
 		
 			// Get the configuredBusinessSharedFilesDirectoryName DB item
 			// We need this as we need to 'fake' create all the folders for the shared files
@@ -16342,8 +16425,8 @@ class SyncEngine {
 		try {
 			JSONValue endpointResponse = queryWebsocketURLApiInstance.obtainWebSocketNotificationURL();
 			
-			// Was a valid JSON response provided?
-			if (endpointResponse.type() == JSONType.object) {
+			// Was a valid JSON response with the required endpoint fields provided?
+			if ((endpointResponse.type() == JSONType.object) && (("notificationUrl" in endpointResponse) != null) && (("expirationDateTime" in endpointResponse) != null)) {
 				
 				// Log response
 				if (debugLogging) {addLogEntry("Response for a Socket.IO Subscription Endpoint: " ~ to!string(endpointResponse), ["debug"]);}
