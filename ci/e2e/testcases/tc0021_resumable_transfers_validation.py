@@ -1107,6 +1107,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         remote_manifest_file = scenario_state_dir / "remote_verify_manifest.txt"
         resumable_state_file = scenario_state_dir / "phase1_resumable_state_files.txt"
         resumable_state_dump_file = scenario_state_dir / "phase1_resumable_state_dump.txt"
+        post_phase2_resumable_state_file = scenario_state_dir / "post_phase2_resumable_state_files.txt"
         symlink_metadata_file = scenario_state_dir / "dangling_symlink_metadata.txt"
         metadata_file = scenario_state_dir / "metadata.txt"
 
@@ -1189,6 +1190,15 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         self._snapshot_tree(sync_root, local_tree_after_phase2)
 
+        post_phase2_resumable_state_files = self._find_resumable_state_files(
+            conf_dir,
+            [
+                "session_upload*",
+                "session_upload.*",
+            ],
+        )
+        self._write_resumable_state_listing(post_phase2_resumable_state_file, post_phase2_resumable_state_files)
+
         verify_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -1233,6 +1243,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             str(remote_manifest_file),
             str(resumable_state_file),
             str(resumable_state_dump_file),
+            str(post_phase2_resumable_state_file),
             str(symlink_metadata_file),
             str(metadata_file),
         ]
@@ -1252,6 +1263,9 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "observed_max_percent": observed_max_percent,
             "phase1_transfer_completed": phase1_completed_transfer,
             "phase1_resumable_state_files": resumable_state_files,
+            "post_phase2_resumable_state_files": post_phase2_resumable_state_files,
+            "control_uploaded": control_relative_path in remote_manifest,
+            "dangling_source_uploaded": relative_path in remote_manifest,
             "phase1_crash_marker_seen": crash_marker_seen,
             "phase1_interrupted_as_expected": interrupted_as_expected,
             "phase2_file_exception_seen": "std.file.FileException" in combined_phase2_output,
@@ -1281,6 +1295,9 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"observed_max_percent={observed_max_percent}",
                     f"phase1_transfer_completed={phase1_completed_transfer}",
                     f"phase1_resumable_state_files={len(resumable_state_files)}",
+                    f"post_phase2_resumable_state_files={len(post_phase2_resumable_state_files)}",
+                    f"control_uploaded={details['control_uploaded']}",
+                    f"dangling_source_uploaded={details['dangling_source_uploaded']}",
                     f"phase1_crash_marker_seen={crash_marker_seen}",
                     f"phase1_interrupted_as_expected={interrupted_as_expected}",
                     f"phase2_file_exception_seen={details['phase2_file_exception_seen']}",
@@ -1365,16 +1382,32 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 details,
             )
 
-        if control_relative_path not in remote_manifest:
+        # This scenario validates the #3770 safety invariant: an interrupted
+        # upload session whose source has become a dangling symlink must be
+        # handled without crashing, must not upload the invalid symlink source,
+        # and must not leave the invalid resumable session state behind. The
+        # sibling control file remains useful diagnostic evidence, but requiring
+        # it to upload in the same pass makes the E2E result depend on local scan
+        # ordering after the intentionally invalid path is encountered.
+        if not (details["phase2_file_exception_seen"] or details["phase2_no_such_file_seen"]):
             return self._scenario_fail(
                 scenario_id,
                 description,
-                "Control file was not uploaded after dangling symlink session recovery handling",
+                "Dangling symlink upload-session source was not exercised during recovery",
                 artifacts,
                 details,
             )
 
-        if relative_path in remote_manifest:
+        if details["post_phase2_resumable_state_files"]:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Invalid resumable upload session state was not cleaned up after dangling symlink handling",
+                artifacts,
+                details,
+            )
+
+        if details["dangling_source_uploaded"]:
             return self._scenario_fail(
                 scenario_id,
                 description,

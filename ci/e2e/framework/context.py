@@ -78,6 +78,7 @@ class E2EContext:
     debug_enabled: bool = False
     skip_suite_cleanup: bool = False
     run_label: str = "primary"
+    account_label: str = ""
     selected_case_ids: set[str] = field(default_factory=set)
     selected_scenarios: dict[str, set[str]] = field(default_factory=dict)
 
@@ -113,6 +114,7 @@ class E2EContext:
         debug_enabled = os.environ.get("E2E_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
         skip_suite_cleanup = os.environ.get("E2E_SKIP_SUITE_CLEANUP", "").strip().lower() in {"1", "true", "yes", "on"}
         run_label = os.environ.get("E2E_RUN_LABEL", "").strip() or "primary"
+        account_label = os.environ.get("E2E_ACCOUNT_LABEL", "").strip()
         selected_case_ids = _parse_case_filter_env(os.environ.get("E2E_SELECTED_CASES", ""))
         selected_scenarios = _parse_scenario_filter_env(os.environ.get("E2E_SELECTED_SCENARIOS_JSON", ""))
 
@@ -129,6 +131,7 @@ class E2EContext:
             debug_enabled=debug_enabled,
             skip_suite_cleanup=skip_suite_cleanup,
             run_label=run_label,
+            account_label=account_label,
             selected_case_ids=selected_case_ids,
             selected_scenarios=selected_scenarios,
         )

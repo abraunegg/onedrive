@@ -89,6 +89,7 @@ class TestCase0055UploadOnlyRemoveSourceFolders(E2ETestCase):
             "top_dir_relative": top_dir_relative,
             "file_one_relative": file_one_relative,
             "file_two_relative": file_two_relative,
+            "verify_scope": root_name,
         }
 
         upload_command = [
@@ -124,6 +125,8 @@ class TestCase0055UploadOnlyRemoveSourceFolders(E2ETestCase):
             "--sync",
             "--verbose",
             "--download-only",
+            "--single-directory",
+            root_name,
             "--resync",
             "--resync-auth",
             "--syncdir",
