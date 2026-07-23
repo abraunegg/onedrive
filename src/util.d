@@ -64,8 +64,8 @@ version (OpenBSD) {
 }
 
 struct DesktopHints {
-    bool gnome;
-    bool kde;
+	bool gnome;
+	bool kde;
 }
 
 shared static this() {
@@ -84,7 +84,7 @@ enum FsErrorSeverity {
 // If the path already ends with "-<deviceName>-safeBackup-####", the counter is incremented
 // instead of appending another "-<deviceName>-safeBackup-".
 void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, out string renamedPath) {
-    // Ensure this is currently null
+	// Ensure this is currently null
 	renamedPath = null;
 	bool isDirectory = false;
 	
@@ -117,66 +117,66 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 	}
 	
 	// Has the user configured to IGNORE local data protection rules?
-    if (bypassDataPreservation) {
-        addLogEntry("WARNING: Local Data Protection has been disabled - not renaming local file. You may experience data loss on this file: " ~ to!string(path), ["info", "notify"]);
-        return;
-    }
+	if (bypassDataPreservation) {
+		addLogEntry("WARNING: Local Data Protection has been disabled - not renaming local file. You may experience data loss on this file: " ~ to!string(path), ["info", "notify"]);
+		return;
+	}
 	
 	// Convert once for convenience
-    const string spath = to!string(path);
-    const string ext   = extension(spath);
+	const string spath = to!string(path);
+	const string ext   = extension(spath);
 
-    // Compute stem without extension (handles no-extension case too)
-    const size_t stemLen = spath.length >= ext.length ? spath.length - ext.length : spath.length;
-    string stem = spath[0 .. stemLen];
+	// Compute stem without extension (handles no-extension case too)
+	const size_t stemLen = spath.length >= ext.length ? spath.length - ext.length : spath.length;
+	string stem = spath[0 .. stemLen];
 
-    // Tag used for our safe backups
-    string tag = "-" ~ deviceName ~ "-safeBackup-";
+	// Tag used for our safe backups
+	string tag = "-" ~ deviceName ~ "-safeBackup-";
 
-    // Detect if already a tagged safeBackup on THIS device; if so, bump the 4-digit counter
-    int startN = 1;
-    string baseStem = stem;
+	// Detect if already a tagged safeBackup on THIS device; if so, bump the 4-digit counter
+	int startN = 1;
+	string baseStem = stem;
 
-    if (stem.length >= tag.length + 4) {
-        // Slice out last 4 chars and the tag position
-        auto last4   = stem[$ - 4 .. $];
-        auto tagSpan = stem[$ - (tag.length + 4) .. $ - 4];
+	if (stem.length >= tag.length + 4) {
+		// Slice out last 4 chars and the tag position
+		auto last4   = stem[$ - 4 .. $];
+		auto tagSpan = stem[$ - (tag.length + 4) .. $ - 4];
 
-        bool fourDigits = true;
-        foreach (c; last4) {
-            if (!c.isDigit) { fourDigits = false; break; }
-        }
+		bool fourDigits = true;
+		foreach (c; last4) {
+			if (!c.isDigit) { fourDigits = false; break; }
+		}
 
-        if (fourDigits && tagSpan == tag) {
-            // Already a backup from this device — bump the counter
-            startN   = to!int(last4) + 1;
-            baseStem = stem[0 .. $ - (tag.length + 4)];
-        }
-    }
+		if (fourDigits && tagSpan == tag) {
+			// Already a backup from this device — bump the counter
+			startN   = to!int(last4) + 1;
+			baseStem = stem[0 .. $ - (tag.length + 4)];
+		}
+	}
 
-    // Find the first available name, capped at 1000 attempts
-    int n = startN;
-    string candidate;
+	// Find the first available name, capped at 1000 attempts
+	int n = startN;
+	string candidate;
 
-    while (n <= 1000) {
-        candidate = baseStem ~ tag ~ format("%04d", n) ~ ext;
-        if (!exists(candidate)) break;
-        ++n;
-    }
+	while (n <= 1000) {
+		candidate = baseStem ~ tag ~ format("%04d", n) ~ ext;
+		if (!exists(candidate)) break;
+		++n;
+	}
 
-    // If we exhausted our attempts, fail out
-    if (n > 1000) {
-        addLogEntry("Failed to backup " ~ spath ~ ": Unique file name could not be found after 1000 attempts", ["error"]);
-        return;
-    }
+	// If we exhausted our attempts, fail out
+	if (n > 1000) {
+		addLogEntry("Failed to backup " ~ spath ~ ": Unique file name could not be found after 1000 attempts", ["error"]);
+		return;
+	}
 
-    // Log intent
-    if (verboseLogging) {
-        addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ spath ~ " -> " ~ candidate, ["verbose"]);
-    }
+	// Log intent
+	if (verboseLogging) {
+		addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ spath ~ " -> " ~ candidate, ["verbose"]);
+	}
 
-    // Perform (or simulate) the rename
-    if (!dryRun) {
+	// Perform (or simulate) the rename
+	if (!dryRun) {
 		// Not a --dry-run scenario - attempt the file rename to create a safe backup
 		// Use safeRename()
 		if (safeRename(spath, candidate, dryRun)) {
@@ -185,11 +185,11 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 			// Failed to rename using safeRename()
 			addLogEntry("Renaming of local file failed for " ~ spath ~ " -> " ~ candidate, ["error"]);
 		}
-    } else {
-        if (debugLogging) {
-            addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ spath ~ " -> " ~ candidate, ["debug"]);
-        }
-    }
+	} else {
+		if (debugLogging) {
+			addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ spath ~ " -> " ~ candidate, ["debug"]);
+		}
+	}
 }
 
 // Rename the given item, and only performs the function if not in a --dry-run scenario
@@ -289,257 +289,257 @@ void safeRemove(const(char)[] path) {
 // Returns the quickXorHash base64 string of a file, or an empty string on failure
 string computeQuickXorHash(string path) {
 
-    QuickXor qxor;
-    File file;
-    bool fileOpened = false;
+	QuickXor qxor;
+	File file;
+	bool fileOpened = false;
 
-    scope(exit) {
-        if (fileOpened) {
-            file.close();
-        }
-    }
+	scope(exit) {
+		if (fileOpened) {
+			file.close();
+		}
+	}
 
-    try {
-        // Open file for reading
-        file = File(path, "rb");
-        fileOpened = true;
+	try {
+		// Open file for reading
+		file = File(path, "rb");
+		fileOpened = true;
 
-        // Single stat call for BOTH size and preferred block size
-        ulong fs = 0;
-        size_t blockSize = 4096; // sensible default
+		// Single stat call for BOTH size and preferred block size
+		ulong fs = 0;
+		size_t blockSize = 4096; // sensible default
 
-        try {
-            auto de = DirEntry(path);
-            auto st = de.statBuf; // POSIX stat struct inferred
+		try {
+			auto de = DirEntry(path);
+			auto st = de.statBuf; // POSIX stat struct inferred
 
-            if (st.st_size > 0)
-                fs = cast(ulong) st.st_size;
+			if (st.st_size > 0)
+				fs = cast(ulong) st.st_size;
 
-            if (st.st_blksize > 0)
-                blockSize = cast(size_t) st.st_blksize;
-        } catch (Exception e) {
-            // Best-effort only; keep defaults if stat fails
-            addLogEntry("Unexpected error while stat'ing file for hash sizing: " ~ path ~ " - " ~ e.msg);
-        }
+			if (st.st_blksize > 0)
+				blockSize = cast(size_t) st.st_blksize;
+		} catch (Exception e) {
+			// Best-effort only; keep defaults if stat fails
+			addLogEntry("Unexpected error while stat'ing file for hash sizing: " ~ path ~ " - " ~ e.msg);
+		}
 
-        // Choose factor based on file size
-        size_t factor;
-        if (fs == 0) {
-            factor = 256;                                  // unknown size -> moderate buffer
-        } else if (fs < 1_048_576UL) {                     // < 1 MiB
-            factor = 16;                                   // small buffer
-        } else if (fs < 1_073_741_824UL) {                 // < 1 GiB
-            factor = 256;                                  // medium buffer
-        } else {                                           // >= 1 GiB
-            factor = 512;                                  // larger buffer
-        }
+		// Choose factor based on file size
+		size_t factor;
+		if (fs == 0) {
+			factor = 256;                                  // unknown size -> moderate buffer
+		} else if (fs < 1_048_576UL) {                     // < 1 MiB
+			factor = 16;                                   // small buffer
+		} else if (fs < 1_073_741_824UL) {                 // < 1 GiB
+			factor = 256;                                  // medium buffer
+		} else {                                           // >= 1 GiB
+			factor = 512;                                  // larger buffer
+		}
 
-        // Compute bufSize and clamp to [64 KiB, 8 MiB]
-        size_t bufSize = blockSize * factor;
+		// Compute bufSize and clamp to [64 KiB, 8 MiB]
+		size_t bufSize = blockSize * factor;
 
-        if (bufSize < 64 * 1024)
-            bufSize = 64 * 1024;
-        if (bufSize > 8 * 1024 * 1024)
-            bufSize = 8 * 1024 * 1024;
+		if (bufSize < 64 * 1024)
+			bufSize = 64 * 1024;
+		if (bufSize > 8 * 1024 * 1024)
+			bufSize = 8 * 1024 * 1024;
 
-        // Allocate outside GC to avoid scanning big buffers
-        auto raw = cast(ubyte*) malloc(bufSize);
-        if (raw is null) {
-            addLogEntry("Failed to compute QuickXor Hash for file: " ~ path ~ " - out of memory allocating buffer");
-            return "";
-        }
-        scope(exit) free(raw);
+		// Allocate outside GC to avoid scanning big buffers
+		auto raw = cast(ubyte*) malloc(bufSize);
+		if (raw is null) {
+			addLogEntry("Failed to compute QuickXor Hash for file: " ~ path ~ " - out of memory allocating buffer");
+			return "";
+		}
+		scope(exit) free(raw);
 
-        ubyte[] buf = raw[0 .. bufSize];
+		ubyte[] buf = raw[0 .. bufSize];
 
-        // Large sequential reads, minimal syscall overhead
-        for (;;) {
-            auto chunk = file.rawRead(buf);   // returns slice of bytes read
-            if (chunk.length == 0) break;     // EOF
-            qxor.put(chunk);
-        }
+		// Large sequential reads, minimal syscall overhead
+		for (;;) {
+			auto chunk = file.rawRead(buf);   // returns slice of bytes read
+			if (chunk.length == 0) break;     // EOF
+			qxor.put(chunk);
+		}
 
-    } catch (ErrnoException e) {
-        addLogEntry("Failed to compute QuickXor Hash for file: " ~ path ~ " - " ~ e.msg);
-        return "";
-    } catch (Exception e) {
-        addLogEntry("Unexpected error while computing QuickXor Hash for file: " ~ path ~ " - " ~ e.msg);
-        return "";
-    }
+	} catch (ErrnoException e) {
+		addLogEntry("Failed to compute QuickXor Hash for file: " ~ path ~ " - " ~ e.msg);
+		return "";
+	} catch (Exception e) {
+		addLogEntry("Unexpected error while computing QuickXor Hash for file: " ~ path ~ " - " ~ e.msg);
+		return "";
+	}
 
-    auto hashResult = qxor.finish();
+	auto hashResult = qxor.finish();
 	return Base64.encode(hashResult).idup;
 }
 
 // Returns the SHA256 hash hex string of a file, or an empty string on failure
 string computeSHA256Hash(string path) {
 
-    SHA256 sha256;
-    File file;
-    bool fileOpened = false;
+	SHA256 sha256;
+	File file;
+	bool fileOpened = false;
 
-    scope(exit) {
-        if (fileOpened) {
-            file.close();
-        }
-    }
+	scope(exit) {
+		if (fileOpened) {
+			file.close();
+		}
+	}
 
-    try {
-        // Open file for reading
-        file = File(path, "rb");
-        fileOpened = true;
+	try {
+		// Open file for reading
+		file = File(path, "rb");
+		fileOpened = true;
 
-        // Single stat call for BOTH size and preferred block size
-        ulong fs = 0;
-        size_t blockSize = 4096; // sensible default
+		// Single stat call for BOTH size and preferred block size
+		ulong fs = 0;
+		size_t blockSize = 4096; // sensible default
 
-        try {
-            auto de = DirEntry(path);
-            auto st = de.statBuf; // POSIX stat struct inferred
+		try {
+			auto de = DirEntry(path);
+			auto st = de.statBuf; // POSIX stat struct inferred
 
-            if (st.st_size > 0)
-                fs = cast(ulong) st.st_size;
+			if (st.st_size > 0)
+				fs = cast(ulong) st.st_size;
 
-            if (st.st_blksize > 0)
-                blockSize = cast(size_t) st.st_blksize;
-        } catch (Exception e) {
-            // Best-effort only; keep defaults if stat fails
-            addLogEntry("Unexpected error while stat'ing file for hash sizing: " ~ path ~ " - " ~ e.msg);
-        }
+			if (st.st_blksize > 0)
+				blockSize = cast(size_t) st.st_blksize;
+		} catch (Exception e) {
+			// Best-effort only; keep defaults if stat fails
+			addLogEntry("Unexpected error while stat'ing file for hash sizing: " ~ path ~ " - " ~ e.msg);
+		}
 
-        // Choose factor based on file size
-        size_t factor;
-        if (fs == 0) {
-            factor = 256;                                  // unknown size -> moderate buffer
-        } else if (fs < 1_048_576UL) {                     // < 1 MiB
-            factor = 16;                                   // small buffer
-        } else if (fs < 1_073_741_824UL) {                 // < 1 GiB
-            factor = 256;                                  // medium buffer
-        } else {                                           // >= 1 GiB
-            factor = 512;                                  // larger buffer
-        }
+		// Choose factor based on file size
+		size_t factor;
+		if (fs == 0) {
+			factor = 256;                                  // unknown size -> moderate buffer
+		} else if (fs < 1_048_576UL) {                     // < 1 MiB
+			factor = 16;                                   // small buffer
+		} else if (fs < 1_073_741_824UL) {                 // < 1 GiB
+			factor = 256;                                  // medium buffer
+		} else {                                           // >= 1 GiB
+			factor = 512;                                  // larger buffer
+		}
 
-        // Compute bufSize and clamp to [64 KiB, 8 MiB]
-        size_t bufSize = blockSize * factor;
+		// Compute bufSize and clamp to [64 KiB, 8 MiB]
+		size_t bufSize = blockSize * factor;
 
-        if (bufSize < 64 * 1024)
-            bufSize = 64 * 1024;
-        if (bufSize > 8 * 1024 * 1024)
-            bufSize = 8 * 1024 * 1024;
+		if (bufSize < 64 * 1024)
+			bufSize = 64 * 1024;
+		if (bufSize > 8 * 1024 * 1024)
+			bufSize = 8 * 1024 * 1024;
 
-        // Allocate outside GC to avoid scanning big buffers
-        auto raw = cast(ubyte*) malloc(bufSize);
-        if (raw is null) {
-            addLogEntry("Failed to compute SHA256 Hash for file: " ~ path ~ " - out of memory allocating buffer");
-            return "";
-        }
-        scope(exit) free(raw);
+		// Allocate outside GC to avoid scanning big buffers
+		auto raw = cast(ubyte*) malloc(bufSize);
+		if (raw is null) {
+			addLogEntry("Failed to compute SHA256 Hash for file: " ~ path ~ " - out of memory allocating buffer");
+			return "";
+		}
+		scope(exit) free(raw);
 
-        ubyte[] buf = raw[0 .. bufSize];
+		ubyte[] buf = raw[0 .. bufSize];
 
-        // Large sequential reads, minimal syscall overhead
-        for (;;) {
-            auto chunk = file.rawRead(buf);   // returns slice of bytes read
-            if (chunk.length == 0) break;     // EOF
-            sha256.put(chunk);
-        }
+		// Large sequential reads, minimal syscall overhead
+		for (;;) {
+			auto chunk = file.rawRead(buf);   // returns slice of bytes read
+			if (chunk.length == 0) break;     // EOF
+			sha256.put(chunk);
+		}
 
-    } catch (ErrnoException e) {
-        addLogEntry("Failed to compute SHA256 Hash for file: " ~ path ~ " - " ~ e.msg);
-        return "";
-    } catch (Exception e) {
-        addLogEntry("Unexpected error while computing SHA256 Hash for file: " ~ path ~ " - " ~ e.msg);
-        return "";
-    }
+	} catch (ErrnoException e) {
+		addLogEntry("Failed to compute SHA256 Hash for file: " ~ path ~ " - " ~ e.msg);
+		return "";
+	} catch (Exception e) {
+		addLogEntry("Unexpected error while computing SHA256 Hash for file: " ~ path ~ " - " ~ e.msg);
+		return "";
+	}
 
-    auto hashResult = sha256.finish();
+	auto hashResult = sha256.finish();
 	return toHexString(hashResult).idup;
 }
 
 struct QuickXorStreamHasher {
-    private QuickXor qxor;
-    private bool started;
+	private QuickXor qxor;
+	private bool started;
 
-    void start() nothrow @safe {
-        qxor.start();
-        started = true;
-    }
+	void start() nothrow @safe {
+		qxor.start();
+		started = true;
+	}
 
-    void update(scope const(ubyte)[] chunk) nothrow @safe {
-        if (!started) start();
-        qxor.put(chunk);
-    }
+	void update(scope const(ubyte)[] chunk) nothrow @safe {
+		if (!started) start();
+		qxor.put(chunk);
+	}
 
-    // Returns base64-encoded quickXorHash (Graph format)
-    string finishB64() {
-        auto hashResult = qxor.finish();         // ubyte[20]
-        return Base64.encode(hashResult).idup;   // allocates
-    }
+	// Returns base64-encoded quickXorHash (Graph format)
+	string finishB64() {
+		auto hashResult = qxor.finish();         // ubyte[20]
+		return Base64.encode(hashResult).idup;   // allocates
+	}
 }
 
 struct SHA256StreamHasher {
-    private SHA256 sha256;
-    private bool started;
+	private SHA256 sha256;
+	private bool started;
 
-    void start() nothrow @safe {
-        sha256.start();   // supported by std.digest digests
-        started = true;
-    }
+	void start() nothrow @safe {
+		sha256.start();   // supported by std.digest digests
+		started = true;
+	}
 
-    void update(scope const(ubyte)[] chunk) nothrow @safe {
-        if (!started) start();
-        sha256.put(chunk);
-    }
+	void update(scope const(ubyte)[] chunk) nothrow @safe {
+		if (!started) start();
+		sha256.put(chunk);
+	}
 
-    // Returns lower-case hex string of SHA-256 digest
-    string finishHex() {
-        auto hashResult = sha256.finish();      // ubyte[32]
-        return toHexString(hashResult).idup;    // allocates
-    }
+	// Returns lower-case hex string of SHA-256 digest
+	string finishHex() {
+		auto hashResult = sha256.finish();      // ubyte[32]
+		return toHexString(hashResult).idup;    // allocates
+	}
 }
 
 // Converts wildcards (*, ?) to regex
 // The changes here need to be 100% regression tested before full release
 Regex!char wild2regex(const(char)[] pattern) {
-    string str;
-    str.reserve(pattern.length + 2);
-    str ~= "^";
-    foreach (c; pattern) {
-        switch (c) {
-        case '*':
-            str ~= ".*";  // Changed to match any character. Was:      str ~= "[^/]*";
-            break;
-        case '.':
-            str ~= "\\.";
-            break;
-        case '?':
-            str ~= ".";  // Changed to match any single character. Was:    str ~= "[^/]";
-            break;
-        case '|':
-            str ~= "$|^";
-            break;
-        case '+':
-            str ~= "\\+";
-            break;
-        case ' ':
-            str ~= "\\s";  // Changed to match exactly one whitespace. Was:   str ~= "\\s+";
-            break;  
-        case '/':
-            str ~= "\\/";
-            break;
-        case '(':
-            str ~= "\\(";
-            break;
-        case ')':
-            str ~= "\\)";
-            break;
-        default:
-            str ~= c;
-            break;
-        }
-    }
-    str ~= "$";
-    return regex(str, "i");
+	string str;
+	str.reserve(pattern.length + 2);
+	str ~= "^";
+	foreach (c; pattern) {
+		switch (c) {
+		case '*':
+			str ~= ".*";  // Changed to match any character. Was:      str ~= "[^/]*";
+			break;
+		case '.':
+			str ~= "\\.";
+			break;
+		case '?':
+			str ~= ".";  // Changed to match any single character. Was:    str ~= "[^/]";
+			break;
+		case '|':
+			str ~= "$|^";
+			break;
+		case '+':
+			str ~= "\\+";
+			break;
+		case ' ':
+			str ~= "\\s";  // Changed to match exactly one whitespace. Was:   str ~= "\\s+";
+			break;  
+		case '/':
+			str ~= "\\/";
+			break;
+		case '(':
+			str ~= "\\(";
+			break;
+		case ')':
+			str ~= "\\)";
+			break;
+		default:
+			str ~= c;
+			break;
+		}
+	}
+	str ~= "$";
+	return regex(str, "i");
 }
 
 // Test Internet access to Microsoft OneDrive using a simple HTTP HEAD request
@@ -617,38 +617,38 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 
 // Retry Internet access test to Microsoft OneDrive
 bool retryInternetConnectivityTest(ApplicationConfig appConfig) {
-    int retryAttempts = 0;
-    int backoffInterval = 1; // initial backoff interval in seconds
-    int maxBackoffInterval = 3600; // maximum backoff interval in seconds
-    int maxRetryCount = 100; // max retry attempts, reduced for practicality
-    bool isOnline = false;
+	int retryAttempts = 0;
+	int backoffInterval = 1; // initial backoff interval in seconds
+	int maxBackoffInterval = 3600; // maximum backoff interval in seconds
+	int maxRetryCount = 100; // max retry attempts, reduced for practicality
+	bool isOnline = false;
 
-    while (retryAttempts < maxRetryCount && !isOnline) {
-        if (backoffInterval < maxBackoffInterval) {
-            backoffInterval = min(backoffInterval * 2, maxBackoffInterval); // exponential increase
-        }
+	while (retryAttempts < maxRetryCount && !isOnline) {
+		if (backoffInterval < maxBackoffInterval) {
+			backoffInterval = min(backoffInterval * 2, maxBackoffInterval); // exponential increase
+		}
 
-        if (debugLogging) {
+		if (debugLogging) {
 			addLogEntry("  Retry Attempt:      " ~ to!string(retryAttempts + 1), ["debug"]);
 			addLogEntry("  Retry In (seconds): " ~ to!string(backoffInterval), ["debug"]);
 		}
 
-        Thread.sleep(dur!"seconds"(backoffInterval));
-        isOnline = testInternetReachability(appConfig); // assuming this function is defined elsewhere
+		Thread.sleep(dur!"seconds"(backoffInterval));
+		isOnline = testInternetReachability(appConfig); // assuming this function is defined elsewhere
 
-        if (isOnline) {
-            addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
-        }
+		if (isOnline) {
+			addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
+		}
 
-        retryAttempts++;
-    }
+		retryAttempts++;
+	}
 
-    if (!isOnline) {
-        addLogEntry("ERROR: Was unable to reconnect to the Microsoft OneDrive service after " ~ to!string(maxRetryCount) ~ " attempts!");
-    }
+	if (!isOnline) {
+		addLogEntry("ERROR: Was unable to reconnect to the Microsoft OneDrive service after " ~ to!string(maxRetryCount) ~ " attempts!");
+	}
 	
 	// Return state
-    return isOnline;
+	return isOnline;
 }
 
 // Can we read the local file - as a permissions issue or file corruption will cause a failure
@@ -658,7 +658,7 @@ bool readLocalFile(string path) {
 	// Set this function name
 	string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
 
-    // What is the file size
+	// What is the file size
 	if (getSize(path) != 0) {
 		try {
 			// Attempt to read up to the first 1 byte of the file
@@ -684,20 +684,20 @@ bool readLocalFile(string path) {
 
 // Calls globMatch for each string in pattern separated by '|'
 bool multiGlobMatch(const(char)[] path, const(char)[] pattern) {
-    if (path.length == 0 || pattern.length == 0) {
-        return false;
-    }
+	if (path.length == 0 || pattern.length == 0) {
+		return false;
+	}
 
-    if (!pattern.canFind('|')) {
-        return globMatch!(std.path.CaseSensitive.yes)(path, pattern);
-    }
+	if (!pattern.canFind('|')) {
+		return globMatch!(std.path.CaseSensitive.yes)(path, pattern);
+	}
 
-    foreach (glob; pattern.split('|')) {
-        if (globMatch!(std.path.CaseSensitive.yes)(path, glob)) {
-            return true;
-        }
-    }
-    return false;
+	foreach (glob; pattern.split('|')) {
+		if (globMatch!(std.path.CaseSensitive.yes)(path, glob)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 // Check if the provided item name is a reserved Microsoft / Windows device name
@@ -785,15 +785,15 @@ bool isValidName(string path) {
 
 // Does the path contain any bad whitespace characters
 bool containsBadWhiteSpace(string path) {
-    // Check for null or empty string
-    if (path.length == 0) {
-        return false;
-    }
+	// Check for null or empty string
+	if (path.length == 0) {
+		return false;
+	}
 
-    // Check for root item
-    if (path == ".") {
-        return false;
-    }
+	// Check for root item
+	if (path == ".") {
+		return false;
+	}
 	
 	// https://github.com/abraunegg/onedrive/issues/35
 	// Issue #35 presented an interesting issue where the filename contained a newline item
@@ -803,22 +803,22 @@ bool containsBadWhiteSpace(string path) {
 	// The '$'\n'' is translated to %0A which causes the OneDrive query to fail
 	// Check for the presence of '%0A' via regex
 
-    string itemName = encodeComponent(baseName(path));
-    // Check for encoded newline character
-    return itemName.indexOf("%0A") != -1;
+	string itemName = encodeComponent(baseName(path));
+	// Check for encoded newline character
+	return itemName.indexOf("%0A") != -1;
 }
 
 // Does the path contain any ASCII HTML Codes
 bool containsASCIIHTMLCodes(string path) {
 	// Check for null or empty string
-    if (path.length == 0) {
-        return false;
-    }
+	if (path.length == 0) {
+		return false;
+	}
 
-    // Check for root item
-    if (path == ".") {
-        return false;
-    }
+	// Check for root item
+	if (path == ".") {
+		return false;
+	}
 
 	// https://github.com/abraunegg/onedrive/issues/151
 	// If a filename contains ASCII HTML codes, it generates an error when attempting to upload this to Microsoft OneDrive
@@ -836,27 +836,27 @@ bool containsASCIIHTMLCodes(string path) {
 
 // Does the path contain any ASCII Control Codes
 bool containsASCIIControlCodes(string path) {
-    // Check for null or empty string
-    if (path.length == 0) {
-        return false;
-    }
+	// Check for null or empty string
+	if (path.length == 0) {
+		return false;
+	}
 
-    // Check for root item
-    if (path == ".") {
-        return false;
-    }
+	// Check for root item
+	if (path == ".") {
+		return false;
+	}
 
-    // https://github.com/abraunegg/onedrive/discussions/2553#discussioncomment-7995254
+	// https://github.com/abraunegg/onedrive/discussions/2553#discussioncomment-7995254
 	//  Define a ctRegex pattern for ASCII control codes and specific non-ASCII control characters
-    //  This pattern includes the ASCII control range and common non-ASCII control characters
-    //  Adjust the pattern as needed to include specific characters of concern
+	//  This pattern includes the ASCII control range and common non-ASCII control characters
+	//  Adjust the pattern as needed to include specific characters of concern
 	auto controlCodePattern = ctRegex!(`[\x00-\x1F\x7F]|\p{Cc}`); // Blocks ƒ†¯~‰ (#2553) , allows α (#2598)
 
-    // Use match to search for ASCII control codes in the path
-    auto matchResult = match(path, controlCodePattern);
+	// Use match to search for ASCII control codes in the path
+	auto matchResult = match(path, controlCodePattern);
 
-    // Return true if matchResult is not empty (indicating a control code was found)
-    return !matchResult.empty;
+	// Return true if matchResult is not empty (indicating a control code was found)
+	return !matchResult.empty;
 }
 
 // Is the string a valid UTF-8 timestamp string?
@@ -916,39 +916,39 @@ bool isValidUTF8(string input) {
 
 // Is the path a valid UTF-16 encoded path?
 bool isValidUTF16(string path) {
-    // Check for null or empty string
-    if (path.length == 0) {
-        return true;
-    }
+	// Check for null or empty string
+	if (path.length == 0) {
+		return true;
+	}
 
-    // Check for root item
-    if (path == ".") {
-        return true;
-    }
+	// Check for root item
+	if (path == ".") {
+		return true;
+	}
 
-    auto wpath = toUTF16(path); // Convert to UTF-16 encoding
-    auto it = wpath.byCodeUnit;
+	auto wpath = toUTF16(path); // Convert to UTF-16 encoding
+	auto it = wpath.byCodeUnit;
 
-    while (!it.empty) {
-        ushort current = it.front;
-        
-        // Check for valid single unit
-        if (current <= 0xD7FF || (current >= 0xE000 && current <= 0xFFFF)) {
-            it.popFront();
-        }
-        // Check for valid surrogate pair
-        else if (current >= 0xD800 && current <= 0xDBFF) {
-            it.popFront();
-            if (it.empty || it.front < 0xDC00 || it.front > 0xDFFF) {
-                return false; // Invalid surrogate pair
-            }
-            it.popFront();
-        } else {
-            return false; // Invalid code unit
-        }
-    }
+	while (!it.empty) {
+		ushort current = it.front;
+		
+		// Check for valid single unit
+		if (current <= 0xD7FF || (current >= 0xE000 && current <= 0xFFFF)) {
+			it.popFront();
+		}
+		// Check for valid surrogate pair
+		else if (current >= 0xD800 && current <= 0xDBFF) {
+			it.popFront();
+			if (it.empty || it.front < 0xDC00 || it.front > 0xDFFF) {
+				return false; // Invalid surrogate pair
+			}
+			it.popFront();
+		} else {
+			return false; // Invalid code unit
+		}
+	}
 
-    return true;
+	return true;
 }
 
 // Parse a Microsoft Graph UTC timestamp into SysTime without using SysTime.fromISOExtString()
@@ -1102,19 +1102,19 @@ bool isGraphUtcTimestampShape(const(char)[] s) {
 
 // Does the path contain any HTML URL encoded items (e.g., '%20' for space)
 bool containsURLEncodedItems(string path) {
-    // Check for null or empty string
-    if (path.length == 0) {
-        return false;
-    }
+	// Check for null or empty string
+	if (path.length == 0) {
+		return false;
+	}
 
-    // Pattern for percent encoding: % followed by two hexadecimal digits
-    auto urlEncodedPattern = ctRegex!(`%[0-9a-fA-F]{2}`);
+	// Pattern for percent encoding: % followed by two hexadecimal digits
+	auto urlEncodedPattern = ctRegex!(`%[0-9a-fA-F]{2}`);
 
-    // Search for URL encoded items in the string
-    auto matchResult = match(path, urlEncodedPattern);
+	// Search for URL encoded items in the string
+	auto matchResult = match(path, urlEncodedPattern);
 
-    // Return true if URL encoded items are found
-    return !matchResult.empty;
+	// Return true if URL encoded items are found
+	return !matchResult.empty;
 }
 
 // Parse and display error message received from OneDrive
@@ -1404,7 +1404,7 @@ void displayGeneralErrorMessage(Exception e, string callingFunction=__FUNCTION__
 
 // Get the function name that is being called to assist with identifying where an error is being generated
 string getFunctionName(alias func)() {
-    return __traits(identifier, __traits(parent, func)) ~ "()\n";
+	return __traits(identifier, __traits(parent, func)) ~ "()\n";
 }
 
 JSONValue fetchOnlineURLContent(string url) {
@@ -1437,7 +1437,7 @@ JSONValue fetchOnlineURLContent(string url) {
 	// Parse Content
 	onlineContent = parseJSON(to!string(content));
 	// Return onlineResponse
-    return onlineContent;
+	return onlineContent;
 }
 
 // Get the latest release version from GitHub
@@ -1450,11 +1450,11 @@ JSONValue getLatestReleaseDetails() {
 	// Query GitHub for the 'latest' release details
 	try {	
 		githubLatest = fetchOnlineURLContent("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
-    } catch (CurlException e) {
-        if (debugLogging) {addLogEntry("CurlException: Unable to query GitHub for latest release - " ~ e.msg, ["debug"]);}
-    } catch (JSONException e) {
-        if (debugLogging) {addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);}
-    }
+	} catch (CurlException e) {
+		if (debugLogging) {addLogEntry("CurlException: Unable to query GitHub for latest release - " ~ e.msg, ["debug"]);}
+	} catch (JSONException e) {
+		if (debugLogging) {addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);}
+	}
 	
 	// githubLatest has to be a valid JSON object
 	if (githubLatest.type() == JSONType.object){
@@ -1506,12 +1506,12 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 	try {
 		githubDetails = fetchOnlineURLContent("https://api.github.com/repos/abraunegg/onedrive/releases");
 	} catch (CurlException e) {
-        if (debugLogging) {addLogEntry("CurlException: Unable to query GitHub for release details - " ~ e.msg, ["debug"]);}
-        return parseJSON(`{"Error": "CurlException", "message": "` ~ e.msg ~ `"}`);
-    } catch (JSONException e) {
-        if (debugLogging) {addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);}
-        return parseJSON(`{"Error": "JSONException", "message": "` ~ e.msg ~ `"}`);
-    }
+		if (debugLogging) {addLogEntry("CurlException: Unable to query GitHub for release details - " ~ e.msg, ["debug"]);}
+		return parseJSON(`{"Error": "CurlException", "message": "` ~ e.msg ~ `"}`);
+	} catch (JSONException e) {
+		if (debugLogging) {addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);}
+		return parseJSON(`{"Error": "JSONException", "message": "` ~ e.msg ~ `"}`);
+	}
 	
 	// githubDetails has to be a valid JSON array
 	if (githubDetails.type() == JSONType.array){
@@ -1627,255 +1627,297 @@ void checkApplicationVersion() {
 }
 
 bool hasId(JSONValue item) {
-	return ("id" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("id" in item) != null) &&
+		   (item["id"].type == JSONType.string);
 }
 
 bool hasMimeType(const ref JSONValue item) {
-	return ("mimeType" in item["file"]) != null;
+	return (item.type == JSONType.object) &&
+		   (("file" in item) != null) &&
+		   (item["file"].type == JSONType.object) &&
+		   (("mimeType" in item["file"]) != null) &&
+		   (item["file"]["mimeType"].type == JSONType.string);
 }
 
 bool hasQuota(JSONValue item) {
-	return ("quota" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("quota" in item) != null) &&
+		   (item["quota"].type == JSONType.object);
 }
 
 bool hasQuotaState(JSONValue item) {
-	return ("state" in item["quota"]) != null;
+	return hasQuota(item) &&
+		   (("state" in item["quota"]) != null) &&
+		   (item["quota"]["state"].type == JSONType.string);
 }
 
 bool isItemDeleted(JSONValue item) {
-	return ("deleted" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("deleted" in item) != null) &&
+		   (item["deleted"].type == JSONType.object);
 }
 
 bool isItemRoot(JSONValue item) {
-	return ("root" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("root" in item) != null) &&
+		   (item["root"].type == JSONType.object);
 }
 
 bool hasParentReference(const ref JSONValue item) {
-	return ("parentReference" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("parentReference" in item) != null) &&
+		   (item["parentReference"].type == JSONType.object);
 }
 
 bool hasParentReferenceDriveId(JSONValue item) {
-	if (hasParentReference(item)) {
-		return ("driveId" in item["parentReference"]) != null;
-	} else {
-		return false;
-	}
+	return hasParentReference(item) &&
+		   (("driveId" in item["parentReference"]) != null) &&
+		   (item["parentReference"]["driveId"].type == JSONType.string);
 }
 
 bool hasParentReferenceId(JSONValue item) {
-	if (hasParentReference(item)) {
-		return ("id" in item["parentReference"]) != null;
-	} else {
-		return false;
-	}
+	return hasParentReference(item) &&
+		   (("id" in item["parentReference"]) != null) &&
+		   (item["parentReference"]["id"].type == JSONType.string);
 }
 
 bool hasParentReferencePath(JSONValue item) {
-	return ("path" in item["parentReference"]) != null;
+	return hasParentReference(item) &&
+		   (("path" in item["parentReference"]) != null) &&
+		   (item["parentReference"]["path"].type == JSONType.string);
 }
 
 bool isFolderItem(const ref JSONValue item) {
-	return ("folder" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("folder" in item) != null) &&
+		   (item["folder"].type == JSONType.object);
 }
 
 bool isRemoteFolderItem(const ref JSONValue item) {
-	if (isItemRemote(item)) {
-		return ("folder" in item["remoteItem"]) != null;
-	} else {
-		return false;
-	}
+	return isItemRemote(item) &&
+		   (("folder" in item["remoteItem"]) != null) &&
+		   (item["remoteItem"]["folder"].type == JSONType.object);
 }
 
 bool isFileItem(const ref JSONValue item) {
-	return ("file" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("file" in item) != null) &&
+		   (item["file"].type == JSONType.object);
 }
 
 bool isItemRemote(const ref JSONValue item) {
-	return ("remoteItem" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("remoteItem" in item) != null) &&
+		   (item["remoteItem"].type == JSONType.object);
 }
 
-// Check if ["remoteItem"]["parentReference"]["driveId"] exists
+// Check if ["remoteItem"]["parentReference"]["driveId"] exists and is a string
 bool hasRemoteParentDriveId(const ref JSONValue item) {
-    return ("remoteItem" in item) &&
-           ("parentReference" in item["remoteItem"]) &&
-           ("driveId" in item["remoteItem"]["parentReference"]);
+	return isItemRemote(item) &&
+		   (("parentReference" in item["remoteItem"]) != null) &&
+		   (item["remoteItem"]["parentReference"].type == JSONType.object) &&
+		   (("driveId" in item["remoteItem"]["parentReference"]) != null) &&
+		   (item["remoteItem"]["parentReference"]["driveId"].type == JSONType.string);
 }
 
-// Check if ["remoteItem"]["id"] exists
+// Check if ["remoteItem"]["id"] exists and is a string
 bool hasRemoteItemId(const ref JSONValue item) {
-    return ("remoteItem" in item) &&
-           ("id" in item["remoteItem"]);
+	return isItemRemote(item) &&
+		   (("id" in item["remoteItem"]) != null) &&
+		   (item["remoteItem"]["id"].type == JSONType.string);
 }
 
 // Check if ["fileSystemInfo"]["lastModifiedDateTime"] exists and is a string
 bool hasFileSystemInfoLastModifiedDateTime(const ref JSONValue item) {
 	return (item.type == JSONType.object) &&
-	       (("fileSystemInfo" in item) != null) &&
-	       (item["fileSystemInfo"].type == JSONType.object) &&
-	       (("lastModifiedDateTime" in item["fileSystemInfo"]) != null) &&
-	       (item["fileSystemInfo"]["lastModifiedDateTime"].type == JSONType.string);
+		   (("fileSystemInfo" in item) != null) &&
+		   (item["fileSystemInfo"].type == JSONType.object) &&
+		   (("lastModifiedDateTime" in item["fileSystemInfo"]) != null) &&
+		   (item["fileSystemInfo"]["lastModifiedDateTime"].type == JSONType.string);
 }
 
 // Check if ["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"] exists and is a string
 bool hasRemoteFileSystemInfoLastModifiedDateTime(const ref JSONValue item) {
 	return (item.type == JSONType.object) &&
-	       (("remoteItem" in item) != null) &&
-	       (item["remoteItem"].type == JSONType.object) &&
-	       (("fileSystemInfo" in item["remoteItem"]) != null) &&
-	       (item["remoteItem"]["fileSystemInfo"].type == JSONType.object) &&
-	       (("lastModifiedDateTime" in item["remoteItem"]["fileSystemInfo"]) != null) &&
-	       (item["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].type == JSONType.string);
+		   (("remoteItem" in item) != null) &&
+		   (item["remoteItem"].type == JSONType.object) &&
+		   (("fileSystemInfo" in item["remoteItem"]) != null) &&
+		   (item["remoteItem"]["fileSystemInfo"].type == JSONType.object) &&
+		   (("lastModifiedDateTime" in item["remoteItem"]["fileSystemInfo"]) != null) &&
+		   (item["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].type == JSONType.string);
 }
 
 bool isItemFile(const ref JSONValue item) {
-	return ("file" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("file" in item) != null) &&
+		   (item["file"].type == JSONType.object);
 }
 
 bool isItemFolder(const ref JSONValue item) {
-	return ("folder" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("folder" in item) != null) &&
+		   (item["folder"].type == JSONType.object);
 }
 
 bool hasFileSize(const ref JSONValue item) {
-	return ("size" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("size" in item) != null) &&
+		   (item["size"].type == JSONType.integer);
 }
 
 // Function to determine if the final component of the provided path is a .file or .folder
 bool isDotFile(const(string) path) {
-    // Check for null or empty path
-    if (path is null || path.length == 0) {
-        return false;
-    }
+	// Check for null or empty path
+	if (path is null || path.length == 0) {
+		return false;
+	}
 
-    // Special case for root
-    if (path == ".") {
-        return false;
-    }
+	// Special case for root
+	if (path == ".") {
+		return false;
+	}
 
-    // Extract the last component of the path
-    auto paths = pathSplitter(buildNormalizedPath(path));
-    
-    // Optimised way to fetch the last component
-    string lastComponent = paths.empty ? "" : paths.back;
+	// Extract the last component of the path
+	auto paths = pathSplitter(buildNormalizedPath(path));
+	
+	// Optimised way to fetch the last component
+	string lastComponent = paths.empty ? "" : paths.back;
 
-    // Check if the last component starts with a dot
-    return startsWith(lastComponent, ".");
+	// Check if the last component starts with a dot
+	return startsWith(lastComponent, ".");
 }
 
 bool isMalware(const ref JSONValue item) {
-	return ("malware" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("malware" in item) != null) &&
+		   (item["malware"].type == JSONType.object);
 }
 
 bool isOneNotePackageFolder(const ref JSONValue item) {
-    if ("package" in item) {
-        auto pkg = item["package"];
-        if ("type" in pkg && pkg["type"].type == JSONType.string) {
-            return pkg["type"].str == "oneNote";
-        }
-    }
-    return false;
+	return (item.type == JSONType.object) &&
+		   (("package" in item) != null) &&
+		   (item["package"].type == JSONType.object) &&
+		   (("type" in item["package"]) != null) &&
+		   (item["package"]["type"].type == JSONType.string) &&
+		   (item["package"]["type"].str == "oneNote");
 }
 
 bool hasHashes(const ref JSONValue item) {
-	return ("hashes" in item["file"]) != null;
+	return isFileItem(item) &&
+		   (("hashes" in item["file"]) != null) &&
+		   (item["file"]["hashes"].type == JSONType.object);
 }
 
 bool hasZeroHashes(const ref JSONValue item) {
-    // Check if "hashes" exists under "file" and is empty
-    if ("hashes" in item["file"]) {
-        auto hashes = item["file"]["hashes"];
-        if (hashes.type == JSONType.object && hashes.object.keys.length == 0) {
-            return true;
-        }
-    }
-    return false;
+	return hasHashes(item) &&
+		   (item["file"]["hashes"].object.keys.length == 0);
 }
 
 bool hasQuickXorHash(const ref JSONValue item) {
-	return ("quickXorHash" in item["file"]["hashes"]) != null;
+	return hasHashes(item) &&
+		   (("quickXorHash" in item["file"]["hashes"]) != null) &&
+		   (item["file"]["hashes"]["quickXorHash"].type == JSONType.string);
 }
 
 bool hasSHA256Hash(const ref JSONValue item) {
-	return ("sha256Hash" in item["file"]["hashes"]) != null;
+	return hasHashes(item) &&
+		   (("sha256Hash" in item["file"]["hashes"]) != null) &&
+		   (item["file"]["hashes"]["sha256Hash"].type == JSONType.string);
 }
 
 bool isMicrosoftOneNoteMimeType1(const ref JSONValue item) {
-	return (item["file"]["mimeType"].str) == "application/msonenote";
+	return hasMimeType(item) &&
+		   (item["file"]["mimeType"].str == "application/msonenote");
 }
 
 bool isMicrosoftOneNoteMimeType2(const ref JSONValue item) {
-	return (item["file"]["mimeType"].str) == "application/octet-stream";
+	return hasMimeType(item) &&
+		   (item["file"]["mimeType"].str == "application/octet-stream");
 }
 
 bool isMicrosoftOneNoteFileExtensionType1(const ref JSONValue item) {
-    return item["name"].str.endsWith(".one");
+	return hasName(item) &&
+		   item["name"].str.endsWith(".one");
 }
 
 bool isMicrosoftOneNoteFileExtensionType2(const ref JSONValue item) {
-    return item["name"].str.endsWith(".onetoc2");
+	return hasName(item) &&
+		   item["name"].str.endsWith(".onetoc2");
 }
 
 bool hasUploadURL(const ref JSONValue item) {
-	return ("uploadUrl" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("uploadUrl" in item) != null) &&
+		   (item["uploadUrl"].type == JSONType.string);
 }
 
 bool hasNextExpectedRanges(const ref JSONValue item) {
-	return ("nextExpectedRanges" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("nextExpectedRanges" in item) != null) &&
+		   (item["nextExpectedRanges"].type == JSONType.array) &&
+		   (item["nextExpectedRanges"].array.length > 0) &&
+		   (item["nextExpectedRanges"].array[0].type == JSONType.string);
 }
 
 bool hasLocalPath(const ref JSONValue item) {
-	return ("localPath" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("localPath" in item) != null) &&
+		   (item["localPath"].type == JSONType.string);
 }
 
 bool hasETag(const ref JSONValue item) {
-	return ("eTag" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("eTag" in item) != null) &&
+		   (item["eTag"].type == JSONType.string);
 }
 
 bool hasSharedElement(const ref JSONValue item) {
-	return ("shared" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("shared" in item) != null) &&
+		   (item["shared"].type == JSONType.object);
 }
 
 bool hasName(const ref JSONValue item) {
-	return ("name" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("name" in item) != null) &&
+		   (item["name"].type == JSONType.string);
 }
 
 bool hasCreatedBy(const ref JSONValue item) {
-	return ("createdBy" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("createdBy" in item) != null) &&
+		   (item["createdBy"].type == JSONType.object);
 }
 
 bool hasCreatedByUser(const ref JSONValue item) {
-	return ("user" in item["createdBy"]) != null;
+	return hasCreatedBy(item) &&
+		   (("user" in item["createdBy"]) != null) &&
+		   (item["createdBy"]["user"].type == JSONType.object);
 }
 
 bool hasCreatedByUserDisplayName(const ref JSONValue item) {
-	if (hasCreatedBy(item)) {
-		if (hasCreatedByUser(item)) {
-			return ("displayName" in item["createdBy"]["user"]) != null;
-		} else {
-			return false;
-		}
-	} else {
-		return false;
-	}
+	return hasCreatedByUser(item) &&
+		   (("displayName" in item["createdBy"]["user"]) != null) &&
+		   (item["createdBy"]["user"]["displayName"].type == JSONType.string);
 }
 
 bool hasLastModifiedBy(const ref JSONValue item) {
-	return ("lastModifiedBy" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("lastModifiedBy" in item) != null) &&
+		   (item["lastModifiedBy"].type == JSONType.object);
 }
 
 bool hasLastModifiedByUser(const ref JSONValue item) {
-	return ("user" in item["lastModifiedBy"]) != null;
+	return hasLastModifiedBy(item) &&
+		   (("user" in item["lastModifiedBy"]) != null) &&
+		   (item["lastModifiedBy"]["user"].type == JSONType.object);
 }
 
 bool hasLastModifiedByUserDisplayName(const ref JSONValue item) {
-	if (hasLastModifiedBy(item)) {
-		if (hasLastModifiedByUser(item)) {
-			return ("displayName" in item["lastModifiedBy"]["user"]) != null;
-		} else {
-			return false;
-		}
-	} else {
-		return false;
-	}
+	return hasLastModifiedByUser(item) &&
+		   (("displayName" in item["lastModifiedBy"]["user"]) != null) &&
+		   (item["lastModifiedBy"]["user"]["displayName"].type == JSONType.string);
 }
 
 // Check Intune JSON response for 'accessToken'
@@ -1895,31 +1937,45 @@ bool hasExpiresOn(const ref JSONValue item) {
 
 // Resumable Download checks
 bool hasDriveId(const ref JSONValue item) {
-	return ("driveId" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("driveId" in item) != null) &&
+		   (item["driveId"].type == JSONType.string);
 }
 
 bool hasItemId(const ref JSONValue item) {
-	return ("itemId" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("itemId" in item) != null) &&
+		   (item["itemId"].type == JSONType.string);
 }
 
 bool hasDownloadFilename(const ref JSONValue item) {
-	return ("downloadFilename" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("downloadFilename" in item) != null) &&
+		   (item["downloadFilename"].type == JSONType.string);
 }
 
 bool hasResumeOffset(const ref JSONValue item) {
-	return ("resumeOffset" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("resumeOffset" in item) != null) &&
+		   (item["resumeOffset"].type == JSONType.string);
 }
 
 bool hasOnlineHash(const ref JSONValue item) {
-	return ("onlineHash" in item) != null;
+	return (item.type == JSONType.object) &&
+		   (("onlineHash" in item) != null) &&
+		   (item["onlineHash"].type == JSONType.object);
 }
 
 bool hasQuickXorHashResume(const ref JSONValue item) {
-	return ("quickXorHash" in item["onlineHash"]) != null;
+	return hasOnlineHash(item) &&
+		   (("quickXorHash" in item["onlineHash"]) != null) &&
+		   (item["onlineHash"]["quickXorHash"].type == JSONType.string);
 }
 
 bool hasSHA256HashResume(const ref JSONValue item) {
-	return ("sha256Hash" in item["onlineHash"]) != null;
+	return hasOnlineHash(item) &&
+		   (("sha256Hash" in item["onlineHash"]) != null) &&
+		   (item["onlineHash"]["sha256Hash"].type == JSONType.string);
 }
 
 // Test if a path is the equivalent of root '.'
@@ -1930,48 +1986,48 @@ bool isRootEquivalent(string inputPath) {
 
 // Convert bytes to GB
 string byteToGibiByte(ulong bytes) {
-    if (bytes == 0) {
-        return "0.00"; // or handle the zero case as needed
-    }
+	if (bytes == 0) {
+		return "0.00"; // or handle the zero case as needed
+	}
 
-    double gib = bytes / 1073741824.0; // 1024^3 for direct conversion
-    return format("%.2f", gib); // Format to ensure two decimal places
+	double gib = bytes / 1073741824.0; // 1024^3 for direct conversion
+	return format("%.2f", gib); // Format to ensure two decimal places
 }
 
 // Test if entrypoint.sh exists on the root filesystem
 bool entrypointExists(string basePath = "/") {
-    try {
-        // Build the path to the entrypoint.sh file
-        string entrypointPath = buildNormalizedPath(buildPath(basePath, "entrypoint.sh"));
+	try {
+		// Build the path to the entrypoint.sh file
+		string entrypointPath = buildNormalizedPath(buildPath(basePath, "entrypoint.sh"));
 
-        // Check if the path exists and return the result
-        return exists(entrypointPath);
-    } catch (Exception e) {
-        // Handle any exceptions (e.g., permission issues, invalid path)
-        addLogEntry("An error occurred: " ~ e.msg);
-        return false;
-    }
+		// Check if the path exists and return the result
+		return exists(entrypointPath);
+	} catch (Exception e) {
+		// Handle any exceptions (e.g., permission issues, invalid path)
+		addLogEntry("An error occurred: " ~ e.msg);
+		return false;
+	}
 }
 
 // Generate a random alphanumeric string with specified length
 string generateAlphanumericString(size_t length = 16) {
-    // Ensure length is not zero
-    if (length == 0) {
-        throw new Exception("Length must be greater than 0");
-    }
+	// Ensure length is not zero
+	if (length == 0) {
+		throw new Exception("Length must be greater than 0");
+	}
 
-    auto asciiLetters = to!(dchar[])(letters);
-    auto asciiDigits = to!(dchar[])(digits);
-    dchar[] randomString;
-    randomString.length = length;
+	auto asciiLetters = to!(dchar[])(letters);
+	auto asciiDigits = to!(dchar[])(digits);
+	dchar[] randomString;
+	randomString.length = length;
 
-    // Create a random number generator
-    auto rndGen = Random(unpredictableSeed);
+	// Create a random number generator
+	auto rndGen = Random(unpredictableSeed);
 
-    // Fill the string with random alphanumeric characters
-    fill(randomString[], randomCover(chain(asciiLetters, asciiDigits), rndGen));
+	// Fill the string with random alphanumeric characters
+	fill(randomString[], randomCover(chain(asciiLetters, asciiDigits), rndGen));
 
-    return to!string(randomString);
+	return to!string(randomString);
 }
 
 // Display internal memory stats and RSS details
@@ -2034,59 +2090,59 @@ void displayMemoryUsageDetails() {
 
 // Return the username of the UID running the 'onedrive' process
 string getUserName() {
-    // Retrieve the UID of the current user
-    auto uid = getuid();
+	// Retrieve the UID of the current user
+	auto uid = getuid();
 
-    // Retrieve password file entry for the user
-    auto pw = getpwuid(uid);
+	// Retrieve password file entry for the user
+	auto pw = getpwuid(uid);
 	
 	// If user info is not found (e.g. no /etc/passwd entry), fallback to environment
-    if (pw is null) {
-        if (debugLogging) {
-            addLogEntry("Unable to retrieve user info for UID: " ~ to!string(uid), ["debug"]);
-            addLogEntry("Falling back to environment variable USER or returning 'unknown'", ["debug"]);
-        }
+	if (pw is null) {
+		if (debugLogging) {
+			addLogEntry("Unable to retrieve user info for UID: " ~ to!string(uid), ["debug"]);
+			addLogEntry("Falling back to environment variable USER or returning 'unknown'", ["debug"]);
+		}
 
-        // Try environment variable
-        string userEnv = environment.get("USER", "unknown");
-        return userEnv.length > 0 ? userEnv : "unknown";
-    }
+		// Try environment variable
+		string userEnv = environment.get("USER", "unknown");
+		return userEnv.length > 0 ? userEnv : "unknown";
+	}
 	
 	// If pw is valid, we can safely access pw.pw_name
-    string userName = to!string(fromStringz(pw.pw_name));
+	string userName = to!string(fromStringz(pw.pw_name));
 
-    // Log User identifiers from process
+	// Log User identifiers from process
 	if (debugLogging) {
 		addLogEntry("Process ID: " ~ to!string(pw), ["debug"]);
 		addLogEntry("User UID:   " ~ to!string(pw.pw_uid), ["debug"]);
 		addLogEntry("User GID:   " ~ to!string(pw.pw_gid), ["debug"]);
 	}
 
-    // Check if username is valid
-    if (!userName.empty) {
-        if (debugLogging) {addLogEntry("User Name:  " ~ userName, ["debug"]);}
-        return userName;
-    } else {
-        // Log and return unknown user
-        if (debugLogging) {addLogEntry("User Name:  unknown", ["debug"]);}
-        return "unknown";
-    }
+	// Check if username is valid
+	if (!userName.empty) {
+		if (debugLogging) {addLogEntry("User Name:  " ~ userName, ["debug"]);}
+		return userName;
+	} else {
+		// Log and return unknown user
+		if (debugLogging) {addLogEntry("User Name:  unknown", ["debug"]);}
+		return "unknown";
+	}
 }
 
 // Get resource limit in POSIX portable manner (soft limit max open files)
 ulong getSoftOpenFilesLimit() {
-    rlimit lim;
-    if (getrlimit(RLIMIT_NOFILE, &lim) == 0)
-        return cast(ulong) lim.rlim_cur; // soft limit
-    return 0;
+	rlimit lim;
+	if (getrlimit(RLIMIT_NOFILE, &lim) == 0)
+		return cast(ulong) lim.rlim_cur; // soft limit
+	return 0;
 }
 
 // Get resource limit in POSIX portable manner (hard limit max open files)
 ulong getHardOpenFilesLimit() {
-    rlimit lim;
-    if (getrlimit(RLIMIT_NOFILE, &lim) == 0)
-        return cast(ulong) lim.rlim_max; // hard limit
-    return 0; // or throw / handle error
+	rlimit lim;
+	if (getrlimit(RLIMIT_NOFILE, &lim) == 0)
+		return cast(ulong) lim.rlim_max; // hard limit
+	return 0; // or throw / handle error
 }
 
 // Calculate the ETA for when a 'large file' will be completed (upload & download operations)
@@ -2132,7 +2188,7 @@ int calc_eta(size_t counter, size_t iterations, long start_time) {
 	}
 	
 	// Return the ETA or duration
-    if (counter != iterations) {
+	if (counter != iterations) {
 		auto eta_sec = avg_time_per_iteration * segments_remaining;
 		// ETA Debug
 		if (debugLogging) {
@@ -2144,7 +2200,7 @@ int calc_eta(size_t counter, size_t iterations, long start_time) {
 	} else {
 		// Return the average time per iteration for the last iteration
 		return cast(int) ceil(avg_time_per_iteration); 
-    }
+	}
 }
 
 // Use the ETA value and return a formatted string in a consistent manner
@@ -2494,25 +2550,25 @@ string getCurlVersionString() {
 
 // Function to return the decoded curl version as a string
 string getCurlVersionNumeric() {
-    // Get curl version info using curl_version_info
-    auto curlVersionDetails = curl_version_info(CURLVERSION_NOW);
+	// Get curl version info using curl_version_info
+	auto curlVersionDetails = curl_version_info(CURLVERSION_NOW);
 
-    // Extract the major, minor, and patch numbers from version_num
-    uint versionNum = curlVersionDetails.version_num;
-    
-    // The version number is in the format 0xXXYYZZ
-    uint major = (versionNum >> 16) & 0xFF; // Extract XX (major version)
-    uint minor = (versionNum >> 8) & 0xFF;  // Extract YY (minor version)
-    uint patch = versionNum & 0xFF;         // Extract ZZ (patch version)
+	// Extract the major, minor, and patch numbers from version_num
+	uint versionNum = curlVersionDetails.version_num;
+	
+	// The version number is in the format 0xXXYYZZ
+	uint major = (versionNum >> 16) & 0xFF; // Extract XX (major version)
+	uint minor = (versionNum >> 8) & 0xFF;  // Extract YY (minor version)
+	uint patch = versionNum & 0xFF;         // Extract ZZ (patch version)
 
-    // Return the version in the format "major.minor.patch"
-    return major.to!string ~ "." ~ minor.to!string ~ "." ~ patch.to!string;
+	// Return the version in the format "major.minor.patch"
+	return major.to!string ~ "." ~ minor.to!string ~ "." ~ patch.to!string;
 }
 
 // Test the curl version against known curl versions with HTTP/2 issues
 bool isBadCurlVersion(string curlVersion) {
-    // List of known curl versions with HTTP/2 issues
-    string[] supportedVersions = [
+	// List of known curl versions with HTTP/2 issues
+	string[] supportedVersions = [
 		"7.68.0", // Ubuntu 20.x
 		"7.74.0", // Debian 11
 		"7.81.0", // Ubuntu 22.x
@@ -2524,10 +2580,10 @@ bool isBadCurlVersion(string curlVersion) {
 		"8.13.0",  // Has a SSL Certificate read issue fixed by 8.14.1
 		"8.13.1",  // Has a SSL Certificate read issue fixed by 8.14.1
 		"8.14.0",  // Has a SSL Certificate read issue fixed by 8.14.1
-    ];
-    
-    // Check if the current version matches one of the supported versions
-    return canFind(supportedVersions, curlVersion);
+	];
+	
+	// Check if the current version matches one of the supported versions
+	return canFind(supportedVersions, curlVersion);
 }
 
 // Is the operation a transient error?
@@ -2570,8 +2626,8 @@ private bool safeGetTimes(string path, out SysTime accessTime, out SysTime modTi
 // Some errnos are 'expected' in the wild (permissions, RO mounts, immutable files)
 // What is this errno
 private bool isExpectedPermissionStyleErrno(int err) {
-    // Return true of this is an expected error due to permission issues
-    return err == EPERM || err == EACCES || err == EROFS;
+	// Return true of this is an expected error due to permission issues
+	return err == EPERM || err == EACCES || err == EROFS;
 }
 
 // Helper function to determine path mismatch against UID|GID and process effective UID
@@ -2800,12 +2856,12 @@ void displayFunctionProcessingTime(string functionName, SysTime functionStartTim
 // Return true if `dir` exists and has no entries.
 // Symlinks are treated as non-removable.
 bool isDirEmpty(string dir) {
-    if (!exists(dir) || !isDir(dir) || isSymlink(dir)) return false;
-    foreach (_; dirEntries(dir, SpanMode.shallow)) {
-        // Found at least one entry
-        return false;
-    }
-    return true;
+	if (!exists(dir) || !isDir(dir) || isSymlink(dir)) return false;
+	foreach (_; dirEntries(dir, SpanMode.shallow)) {
+		// Found at least one entry
+		return false;
+	}
+	return true;
 }
 
 // Escape a string for literal use inside a regex
@@ -2822,5 +2878,5 @@ string regexEscape(string s) {
 
 // Update lastLocalWrite to denote we just performed a local-originated write
 void markLocalWrite() {
-    lastLocalWrite = MonoTime.currTime();
+	lastLocalWrite = MonoTime.currTime();
 }
