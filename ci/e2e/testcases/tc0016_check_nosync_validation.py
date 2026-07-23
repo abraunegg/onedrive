@@ -30,15 +30,15 @@ class TestCase0016CheckNosyncValidation(E2ETestCase):
         context.bootstrap_config_dir(confdir); self._write_config(confdir / "config")
         context.bootstrap_config_dir(verify_conf); write_onedrive_config(verify_conf / "config", "# verify\nbypass_data_preservation = \"true\"\n")
         stdout_file = case_log_dir / "check_nosync_stdout.log"; stderr_file = case_log_dir / "check_nosync_stderr.log"; verify_stdout = case_log_dir / "verify_stdout.log"; verify_stderr = case_log_dir / "verify_stderr.log"; remote_manifest_file = state_dir / "remote_verify_manifest.txt"; metadata_file = state_dir / "metadata.txt"
-        command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(confdir)]
+        command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(confdir)]
         result = run_command(command, cwd=context.repo_root)
         write_text_file(stdout_file, result.stdout); write_text_file(stderr_file, result.stderr)
-        verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
+        verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); remote_manifest = build_manifest(verify_root); write_manifest(remote_manifest_file, remote_manifest)
-        write_text_file(metadata_file, f"root_name={root_name}\nreturncode={result.returncode}\nverify_returncode={verify_result.returncode}\n")
+        write_text_file(metadata_file, f"root_name={root_name}\nreturncode={result.returncode}\nverify_returncode={verify_result.returncode}\nverify_scope={root_name}\n")
         artifacts = [str(stdout_file), str(stderr_file), str(verify_stdout), str(verify_stderr), str(remote_manifest_file), str(metadata_file)]
-        details = {"returncode": result.returncode, "verify_returncode": verify_result.returncode, "root_name": root_name}
+        details = {"returncode": result.returncode, "verify_returncode": verify_result.returncode, "root_name": root_name, "verify_scope": root_name}
         if result.returncode != 0: return self.fail_result(self.case_id, self.name, f"check_nosync validation failed with status {result.returncode}", artifacts, details)
         if verify_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if f"{root_name}/Allowed/ok.txt" not in remote_manifest: return self.fail_result(self.case_id, self.name, "Allowed content missing after check_nosync processing", artifacts, details)

@@ -118,6 +118,8 @@ class TestCase0026ReservedDeviceNameValidation(E2ETestCase):
             "--verbose",
             "--resync",
             "--resync-auth",
+            "--single-directory",
+            root_name,
             "--confdir",
             str(confdir),
         ]
@@ -134,6 +136,8 @@ class TestCase0026ReservedDeviceNameValidation(E2ETestCase):
             "--display-running-config",
             "--sync",
             "--verbose",
+            "--single-directory",
+            root_name,
             "--confdir",
             str(confdir),
         ]
@@ -153,6 +157,8 @@ class TestCase0026ReservedDeviceNameValidation(E2ETestCase):
             "--download-only",
             "--resync",
             "--resync-auth",
+            "--single-directory",
+            root_name,
             "--confdir",
             str(verify_conf),
         ]
@@ -186,6 +192,7 @@ class TestCase0026ReservedDeviceNameValidation(E2ETestCase):
                     f"initial_returncode={initial_result.returncode}",
                     f"second_returncode={second_result.returncode}",
                     f"verify_returncode={verify_result.returncode}",
+                    f"verify_scope={root_name}",
                     f"valid_files={valid_files!r}",
                     f"invalid_files={invalid_files!r}",
                 ]
@@ -208,6 +215,7 @@ class TestCase0026ReservedDeviceNameValidation(E2ETestCase):
             "second_returncode": second_result.returncode,
             "verify_returncode": verify_result.returncode,
             "root_name": root_name,
+            "verify_scope": root_name,
         }
 
         for label, rc in [

@@ -50,6 +50,20 @@ def _failed_cases(results: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     }
 
 
+def _is_non_rerunnable_failure(case: dict[str, Any]) -> bool:
+    details = case.get("details") or {}
+    return _case_key(case.get("id")) == "0000" or details.get("non_rerunnable") is True
+
+
+def _failure_reasons(cases: dict[str, dict[str, Any]]) -> list[str]:
+    reasons: list[str] = []
+    for case_id, case in sorted(cases.items()):
+        reason = str(case.get("reason") or "").strip()
+        if reason:
+            reasons.append(f"{case_id}: {reason}")
+    return reasons
+
+
 def _write_gate(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=False) + "\n", encoding="utf-8")
@@ -98,6 +112,32 @@ def main() -> int:
         _write_gate(gate_path, payload)
         print(payload["reason"])
         return 0
+
+    non_rerunnable_failures = {
+        case_id: case
+        for case_id, case in primary_failures.items()
+        if _is_non_rerunnable_failure(case)
+    }
+    if non_rerunnable_failures:
+        reason_lines = _failure_reasons(non_rerunnable_failures)
+        payload = {
+            "conclusion": "failure",
+            "recovered_by_debug_rerun": False,
+            "reason": "Primary E2E run failed during a non-rerunnable harness stage",
+            "primary_results": str(primary_path),
+            "debug_results": str(debug_path),
+            "effective_results": str(primary_path),
+            "primary_failed_case_ids": sorted(primary_failures),
+            "debug_failed_case_ids": [],
+            "unrecovered_case_ids": sorted(primary_failures),
+            "non_rerunnable_case_ids": sorted(non_rerunnable_failures),
+            "non_rerunnable_reasons": reason_lines,
+        }
+        _write_gate(gate_path, payload)
+        print(payload["reason"])
+        for line in reason_lines:
+            print(line)
+        return 1
 
     if debug is None:
         payload = {

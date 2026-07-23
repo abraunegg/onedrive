@@ -132,6 +132,8 @@ class TestCase0062TransferMetricsValidation(E2ETestCase):
             "--verbose",
             "--resync",
             "--resync-auth",
+            "--single-directory",
+            root_name,
             "--syncdir",
             str(upload_root),
             "--confdir",
@@ -150,6 +152,8 @@ class TestCase0062TransferMetricsValidation(E2ETestCase):
             "--download-only",
             "--resync",
             "--resync-auth",
+            "--single-directory",
+            root_name,
             "--syncdir",
             str(download_root),
             "--confdir",
@@ -196,6 +200,7 @@ class TestCase0062TransferMetricsValidation(E2ETestCase):
 
         details = {
             "root_name": root_name,
+            "verify_scope": root_name,
             "file_name": file_name,
             "expected_size_bytes": self.TEST_FILE_SIZE_BYTES,
             "upload_returncode": upload_result.returncode,
@@ -211,6 +216,7 @@ class TestCase0062TransferMetricsValidation(E2ETestCase):
             "\n".join(
                 [
                     f"root_name={root_name}",
+                    f"verify_scope={root_name}",
                     f"file_name={file_name}",
                     f"expected_size_bytes={self.TEST_FILE_SIZE_BYTES}",
                     f"upload_command={command_to_string(upload_command)}",
