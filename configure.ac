@@ -330,6 +330,22 @@ esac
 
 AC_SUBST([dynamic_linker_LIBS])
 
+dnl
+dnl Native Stack Trace Support
+
+# OpenBSD provides backtrace() and backtrace_symbols_fd() in libexecinfo.
+# Other supported platforms do not require this additional library here.
+case "$(uname -s)" in
+    OpenBSD)
+        execinfo_LIBS="-lexecinfo"
+        ;;
+    *)
+        execinfo_LIBS=""
+        ;;
+esac
+
+AC_SUBST([execinfo_LIBS])
+
 
 dnl
 dnl Completion support
