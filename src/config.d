@@ -348,7 +348,14 @@ class ApplicationConfig {
 		
 		// Number of concurrent threads
 		longValues["threads"] = defaultConcurrentThreads; // Default is 8, user can increase to max of 16 or decrease
-		
+
+		// Streaming flush threshold: during /delta enumeration, process & clear the accumulated
+		// jsonItemsToProcess once it reaches this many items (at a bundle boundary) to keep peak
+		// memory ~O(threshold) instead of O(drive). Higher = fewer flushes (less checkpoint/GC
+		// overhead, faster) but more peak RAM; lower = tighter RAM at the cost of more flushes.
+		// 0 disables streaming (accumulate the whole drive, original upstream behaviour).
+		longValues["stream_flush_threshold"] = 5000;
+
 		// Do we wish to upload only?
 		boolValues["upload_only"] = false;
 		// Do we need to check for the .nomount file on the mount point?

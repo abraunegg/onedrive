@@ -104,7 +104,9 @@ class SyncEngine {
 	// Streaming flush threshold: when jsonItemsToProcess reaches this many items during /delta
 	// enumeration, process & clear it (at a bundle boundary) to keep peak memory ~O(threshold)
 	// instead of O(drive) and avoid the O(n^2) GC re-mark that stalled large first syncs.
-	enum size_t streamFlushThreshold = 5000;
+	// Runtime-tunable via the 'stream_flush_threshold' config option (0 disables streaming).
+	// Cached once at enumeration start so it cannot change mid-run.
+	size_t streamFlushThreshold = 5000;
 	// Array of JSON items which are files that are not 'root', skipped or to be deleted, that need to be downloaded
 	JSONValue[] fileJSONItemsToDownload;
 	// Array of paths that failed to download
@@ -1236,7 +1238,10 @@ class SyncEngine {
 		// Reset jsonItemsToProcess & processedCount
 		jsonItemsToProcess = [];
 		processedCount = 0;
-		
+
+		// Cache the streaming flush threshold once for this enumeration (0 = streaming disabled)
+		streamFlushThreshold = cast(size_t) max(0, appConfig.getValueLong("stream_flush_threshold"));
+
 		// Reset generatedSimulatedDeltaResponse
 		addLogEntry("Reset generatedSimulatedDeltaResponse as 'false'", ["debug"]);
 		generatedSimulatedDeltaResponse = false;
@@ -1498,7 +1503,8 @@ class SyncEngine {
 				// Streaming: once this bundle pushed the accumulator past the threshold, process and
 				// clear it now. Done at a bundle boundary so API parent-before-child ordering is never
 				// broken; keeps peak memory bounded instead of growing to the size of the whole drive.
-				if (jsonItemsToProcess.length >= streamFlushThreshold) {
+				// A threshold of 0 disables streaming (accumulate the whole drive, as upstream does).
+				if ((streamFlushThreshold > 0) && (jsonItemsToProcess.length >= streamFlushThreshold)) {
 					flushAccumulatedJSONItems();
 				}
 
