@@ -24,10 +24,10 @@ PKG_PROG_PKG_CONFIG
 AC_SUBST([PACKAGE_DATE])
 
 dnl Determine D compiler
-dnl we check for dmd, dmd2, and ldc2 in this order
-dnl furthermore, we set DC_TYPE to either dmd or ldc and export this into the
-dnl Makefile so that we can adjust command line arguments
-AC_CHECK_PROGS([DC], [dmd ldmd2 ldc2 gdmd gdc], NOT_FOUND)
+dnl Check for supported D compilers in preference order. OpenBSD installs
+dnl GCC's D frontend as egdc, so keep it as the final GDC fallback.
+dnl Furthermore, set DC_TYPE and export compiler-specific flags into Makefile.
+AC_CHECK_PROGS([DC], [dmd ldmd2 ldc2 gdmd gdc egdc], NOT_FOUND)
 DC_TYPE=
 case $(basename $DC) in
         *ldc2*) DC_TYPE=ldc ;;
@@ -46,39 +46,39 @@ $2
 EOF
     # leading 0 are ignored: 01 == 1, this also
     # converts empty strings into 0: 1..2 == 1.0.2
-    a0=$(expr $a0 + 0)
-    a1=$(expr $a1 + 0)
-    a2=$(expr $a2 + 0)
-    b0=$(expr $b0 + 0)
-    b1=$(expr $b1 + 0)
-    b2=$(expr $b2 + 0)
+    a0=$(expr "${a0:-0}" + 0)
+    a1=$(expr "${a1:-0}" + 0)
+    a2=$(expr "${a2:-0}" + 0)
+    b0=$(expr "${b0:-0}" + 0)
+    b1=$(expr "${b1:-0}" + 0)
+    b2=$(expr "${b2:-0}" + 0)
     #echo "$1 parsed to a=$a0 b=$a1 c=$a2 rest=$aa"
     #echo "$2 parsed to a=$b0 b=$b1 c=$b2 rest=$bb"
-    if test $a0 -lt $b0 
+    if test "$a0" -lt "$b0" 
     then
       return 2
-    elif test $a0 -gt $b0 
+    elif test "$a0" -gt "$b0" 
     then
       return 1
     else
-      if test $a1 -lt $b1
+      if test "$a1" -lt "$b1"
       then
         return 2
-      elif test $a1 -gt $b1
+      elif test "$a1" -gt "$b1"
       then
         return 1
       else
-        if test $a2 -lt $b2
+        if test "$a2" -lt "$b2"
 	then
 	  return 2
-	elif test $a2 -gt $b2
+	elif test "$a2" -gt "$b2"
 	then
 	  return 1
 	else
-	  if test $aa '<' $bb
+	  if test "$aa" '<' "$bb"
 	  then
 	    return 2
-	  elif test $aa '>' $bb
+	  elif test "$aa" '>' "$bb"
 	  then
 	    return 1
           else
@@ -110,13 +110,16 @@ case $(basename $DC) in
 		MINVERSION=1.20.1
 		;;
 	*gdmd*|*gdc*)
-		# Both gdmd and gdc print the same version information
+		# gdmd, gdc and OpenBSD's egdc use GCC-style version information
 		VERSION=`${DC} --version | head -n1`
 		# Some examples of output:
 		# gdc (Gentoo 14.2.1_p20250301 p8) 14.2.1 20250301
 		# gcc (GCC) 14.2.1 20250207 # Arch
 		# gdc (GCC) 14.2.1 20250110 (Red Hat 14.2.1-7)
 		# gdc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
+		# egdc (GCC) 15.2.0
+		VERSION=${VERSION#gdmd }
+		VERSION=${VERSION#egdc }
 		VERSION=${VERSION#gdc }
 		# VERSION=(...) VER DATE ...
 		VERSION=${VERSION#*) }

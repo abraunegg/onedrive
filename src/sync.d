@@ -11458,7 +11458,7 @@ class SyncEngine {
 
 		if (exists(path)) {
 			if (isDir(path)) {
-				fakeResponse["folder"] = JSONValue("");
+				fakeResponse["folder"] = parseJSON("{}");
 			} else {
 				string quickXorHash = computeQuickXorHash(path);
 				fakeResponse["file"] = JSONValue([
@@ -11467,7 +11467,7 @@ class SyncEngine {
 			}
 		} else {
 			// Assume directory if path does not exist
-			fakeResponse["folder"] = JSONValue("");
+			fakeResponse["folder"] = parseJSON("{}");
 		}
 
 		if (debugLogging) {addLogEntry("Generated Fake OneDrive Response: " ~ to!string(fakeResponse), ["debug"]);}
