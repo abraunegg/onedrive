@@ -204,6 +204,11 @@
 ## Number of threads to use for upload/download.
 #threads = "8"
 
+## Number of items to accumulate during /delta enumeration before processing and
+## clearing them, to bound peak memory usage on very large accounts. 0 disables
+## streaming (accumulate the entire /delta response before processing).
+#stream_flush_threshold = "5000"
+
 ## File transfer ordering between client and OneDrive.
 #transfer_order = "default"
 

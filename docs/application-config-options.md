@@ -1097,6 +1097,20 @@ _**Config Example:**_ `space_reservation = "100"`
 
 _**CLI Option Use:**_ `--space-reservation '100'`
 
+### stream_flush_threshold
+_**Description:**_ This configuration option controls how many items are accumulated during native `/delta` enumeration before they are processed and cleared. Processing at each bundle boundary once this threshold is reached keeps peak memory usage bounded to approximately the threshold size, rather than growing to the size of the entire drive. This is relevant for very large accounts where accumulating the whole `/delta` response before processing would otherwise exhaust available memory.
+
+_**Value Type:**_ Integer
+
+_**Default Value:**_ 5000
+
+_**Config Example:**_ `stream_flush_threshold = "5000"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+> [!NOTE]
+> A value of `0` disables streaming and restores the previous behaviour of accumulating the entire `/delta` response before processing. Increasing this value raises peak memory usage with no material throughput benefit; decreasing it lowers peak memory usage at the cost of more frequent database checkpoints.
+
 ### sync_business_shared_items
 _**Description:**_ This configuration option controls whether OneDrive Business | Office 365 Shared Folders, when added as a 'shortcut' to your 'My Files', will be synced to your local system.
 
