@@ -265,7 +265,7 @@ For GUI notifications the following is also necessary:
 sudo zypper install libnotify-devel
 ```
 
-### Dependencies: OpenBSD 7.7
+#### OpenBSD 7.7
 
 ```text
 pkg_add bash gmake autoconf automake libinotify git sqlite3 curl dmd
@@ -287,14 +287,14 @@ pkg_add libnotify
 > [!NOTE]
 > Install the required OpenBSD packages as 'root' unless you have installed 'sudo'
 
-### Dependencies: OpenBSD 7.8
+#### OpenBSD 7.8
 
 > [!IMPORTANT]
 > Building the client with the D compilers supplied by the official OpenBSD 7.8 package repository is not supported.
 >
 > On `amd64`, OpenBSD 7.8 does not provide DMD or LDC packages, and its GDC package is version 11.2.0, which is older than the minimum supported GDC version of 15.
 
-### Dependencies: OpenBSD 7.9
+#### OpenBSD 7.9
 
 ```text
 pkg_add bash gmake autoconf automake libinotify git sqlite3 curl gdc
