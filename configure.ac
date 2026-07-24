@@ -318,10 +318,15 @@ AC_SUBST([bsd_inotify_LIBS])
 dnl
 dnl Dynamic Linker Support
 
-# Conditionally set dynamic_linker_LIBS based on the platform
+# Conditionally set dynamic_linker_LIBS based on the platform and compiler.
 case "$(uname -s)" in
     Linux)
         dynamic_linker_LIBS="-ldl"
+        ;;
+    OpenBSD)
+        AS_IF([test "x$DC_TYPE" = "xgdc"],
+            [dynamic_linker_LIBS="-lexecinfo"],
+            [dynamic_linker_LIBS=""])
         ;;
     *)
         dynamic_linker_LIBS=""
@@ -329,22 +334,6 @@ case "$(uname -s)" in
 esac
 
 AC_SUBST([dynamic_linker_LIBS])
-
-dnl
-dnl Native Stack Trace Support
-
-# OpenBSD provides backtrace() and backtrace_symbols_fd() in libexecinfo.
-# Other supported platforms do not require this additional library here.
-case "$(uname -s)" in
-    OpenBSD)
-        execinfo_LIBS="-lexecinfo"
-        ;;
-    *)
-        execinfo_LIBS=""
-        ;;
-esac
-
-AC_SUBST([execinfo_LIBS])
 
 
 dnl

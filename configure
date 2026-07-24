@@ -2693,10 +2693,17 @@ esac
 
 
 
-# Conditionally set dynamic_linker_LIBS based on the platform
+# Conditionally set dynamic_linker_LIBS based on the platform and compiler.
 case "$(uname -s)" in
     Linux)
         dynamic_linker_LIBS="-ldl"
+        ;;
+    OpenBSD)
+        if test "x$DC_TYPE" = "xgdc"; then :
+  dynamic_linker_LIBS="-lexecinfo"
+else
+  dynamic_linker_LIBS=""
+fi
         ;;
     *)
         dynamic_linker_LIBS=""
