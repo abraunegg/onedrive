@@ -4,7 +4,7 @@ module syncEngine;
 // What does this module require to function?
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.stdc.errno : ENOENT, ENOTDIR;
-import core.memory : GC;   // streamfix: explicit GC.collect() at each flush boundary (heap is already small there)
+import core.memory : GC;   // explicit GC.collect() at each flush boundary (heap is already small there)
 import core.thread;
 import core.time;
 import std.algorithm;
@@ -2809,7 +2809,7 @@ class SyncEngine {
 	
 	// Stream-process the currently-accumulated jsonItemsToProcess through the existing 500-item
 	// chunked processor, then clear it. Safe to call repeatedly DURING /delta enumeration: the
-	// OneDrive API delivers parents before children, and each batch upserts items into
+	// OneDrive API delivers parents before children, and each batch inserts/updates items in
 	// items.sqlite3 before the next batch's children are looked up, so moving the chunk boundary
 	// earlier (streaming) preserves ordering while bounding peak memory to ~O(batch) instead of
 	// O(drive). This removes the O(n^2) GC re-mark that stalled large first syncs.
