@@ -1662,6 +1662,11 @@ To enable these specific notifications, add the following to your 'config' file:
 notify_file_actions = "true"
 ```
 
+When running in `--monitor` mode, a GUI notification is also sent each time the client successfully starts monitoring your local filesystem. To disable *only* this notification while keeping all other notifications enabled, add the following to your 'config' file:
+```
+notify_monitor_start = "false"
+```
+
 To disable *all* GUI notifications, add the following to your 'config' file:
 ```
 disable_notifications = "true"

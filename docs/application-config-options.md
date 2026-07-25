@@ -48,6 +48,7 @@ Before reading this document, please ensure you are running application version 
   - [monitor_log_frequency](#monitor_log_frequency)
   - [no_remote_delete](#no_remote_delete)
   - [notify_file_actions](#notify_file_actions)
+  - [notify_monitor_start](#notify_monitor_start)
   - [operation_timeout](#operation_timeout)
   - [permanent_delete](#permanent_delete)
   - [rate_limit](#rate_limit)
@@ -768,6 +769,18 @@ _**Value Type:**_ Boolean
 _**Default Value:**_ False
 
 _**Config Example:**_ `notify_file_actions = "true"`
+
+> [!NOTE]
+> GUI Notification Support must be compiled in first, otherwise this option will have zero effect and will not be used.
+
+### notify_monitor_start
+_**Description:**_ This configuration option controls whether the client will send a GUI notification confirming that '--monitor' mode has successfully started and is now monitoring your local filesystem. Disabling this option does not affect any other GUI notifications.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ True
+
+_**Config Example:**_ `notify_monitor_start = "false"`
 
 > [!NOTE]
 > GUI Notification Support must be compiled in first, otherwise this option will have zero effect and will not be used.
