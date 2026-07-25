@@ -868,15 +868,28 @@ final class ItemDatabase {
 		assert(!result.empty, "The DB result must not be empty");
 		assert(result.front.length == 20, "The DB result must have 20 columns");
 		
+		// Make one owned copy of the DB row before extracting fields.
+		// On OpenBSD, avoid repeatedly evaluating result.front[] while
+		// also parsing timestamp fields during high-churn monitor activity.
+		auto dbRow = result.front;
+
 		// Check the DB record timestamp entry. Rather than assert(), use forceExit() and exit in a more graceful manner
 		// - empty values
 		// - 2024-11-23T01:16:14\x80Z
 		// - ��Ϣc (#3014)
 		// - ����� (#2876)
 		// - non timestamp formatted strings such as 'CurlEngine curlEngin' (#2813)
-		if (!isValidUTCDateTime(result.front[7].dup)) {
+		string dbMtime = dbRow[7].dup;
+		SysTime parsedDbMtime;
+
+		if (!parseUTCDateTime(dbMtime, parsedDbMtime)) {
 			addLogEntry();
 			addLogEntry("FATAL: The DB record mtime entry is not a valid ISO timestamp entry. Please attempt a --resync to fix the local database.");
+			addLogEntry("FATAL: Invalid DB mtime value: " ~ dbMtime);
+			addLogEntry("FATAL: DB item driveId: " ~ dbRow[0].idup);
+			addLogEntry("FATAL: DB item id: " ~ dbRow[1].idup);
+			addLogEntry("FATAL: DB item name: " ~ dbRow[2].idup);
+			addLogEntry("FATAL: DB item parentId: " ~ dbRow[8].idup);
 			addLogEntry();
 			// Must force exit here, allow logging to be done
 			forceExit();
@@ -904,26 +917,26 @@ final class ItemDatabase {
 			// column 18: relocDriveId
 			// column 19: relocParentId
 				
-			driveId: result.front[0].dup,
-			id: result.front[1].dup,
-			name: result.front[2].dup,
-			remoteName: result.front[3].dup,
+			driveId: dbRow[0].dup,
+			id: dbRow[1].dup,
+			name: dbRow[2].dup,
+			remoteName: dbRow[3].dup,
 			// Column 4 is type - not set here
-			eTag: result.front[5].dup,
-			cTag: result.front[6].dup,
-			mtime: SysTime.fromISOExtString(result.front[7].dup),
-			parentId: result.front[8].dup,
-			quickXorHash: result.front[9].dup,
-			sha256Hash: result.front[10].dup,
-			remoteDriveId: result.front[11].dup,
-			remoteParentId: result.front[12].dup,
-			remoteId: result.front[13].dup,
+			eTag: dbRow[5].dup,
+			cTag: dbRow[6].dup,
+			mtime: parsedDbMtime,
+			parentId: dbRow[8].dup,
+			quickXorHash: dbRow[9].dup,
+			sha256Hash: dbRow[10].dup,
+			remoteDriveId: dbRow[11].dup,
+			remoteParentId: dbRow[12].dup,
+			remoteId: dbRow[13].dup,
 			// Column 14 is remoteType - not set here
 			// Column 15 is deltaLink - not set here
-			syncStatus: result.front[16].dup,
-			size: result.front[17].dup,
-			relocDriveId: result.front[18].dup,
-			relocParentId: result.front[19].dup
+			syncStatus: dbRow[16].dup,
+			size: dbRow[17].dup,
+			relocDriveId: dbRow[18].dup,
+			relocParentId: dbRow[19].dup,
 		};
 		
 		// Configure item.type

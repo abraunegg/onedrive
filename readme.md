@@ -11,7 +11,7 @@
 
 A fully featured, free, and actively maintained Microsoft OneDrive client that seamlessly supports OneDrive Personal, OneDrive for Business, Microsoft 365 (formerly Office 365), and SharePoint document libraries.
 
-Designed for maximum flexibility and reliability, this powerful and highly configurable client works across all major Linux distributions and FreeBSD. It can also be deployed in containerised environments using Docker or Podman. Supporting both one-way and two-way synchronisation modes, the client provides secure and efficient file syncing with Microsoft OneDrive services — tailored to suit both desktop and server environments.
+Designed for maximum flexibility and reliability, this powerful and highly configurable client works across all major Linux distributions, FreeBSD and OpenBSD. It can also be deployed in containerised environments using Docker or Podman. Supporting both one-way and two-way synchronisation modes, the client provides secure and efficient file syncing with Microsoft OneDrive services — tailored to suit both desktop and server environments.
 
 
 ## Project Background
@@ -21,7 +21,7 @@ The original [skilion repository](https://github.com/skilion/onedrive) was forma
 
 Under the terms of the GNU General Public License (GPL), forking and continuing development of open source software is fully permitted — provided that derivative works retain the same license. This client complies with the original GPLv3 licensing, ensuring the same freedoms granted by the original project remain intact.
 
-Since forking in early 2018, this client has evolved into a clean re-imagining of the original codebase, resolving long-standing bugs and adding extensive new functionality to better support both personal and enterprise use cases to interact with Microsoft OneDrive from Linux and FreeBSD platforms.
+Since forking in early 2018, this client has evolved into a clean re-imagining of the original codebase, resolving long-standing bugs and adding extensive new functionality to better support both personal and enterprise use cases to interact with Microsoft OneDrive from Linux, FreeBSD and OpenBSD platforms.
 
 
 ## Features
