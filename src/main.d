@@ -38,7 +38,8 @@ import intune;
 import socketio;
 
 // Native stack trace support for fatal signal diagnostics.
-// On OpenBSD this is provided by libexecinfo; on Linux this is provided by libc.
+// On OpenBSD this is provided by libexecinfo; on Linux this is provided by glibc.
+// musl does not provide these interfaces, so Alpine builds use the fallback path.
 version (OpenBSD) {
 	
 	pragma(lib, "execinfo");
@@ -49,9 +50,11 @@ version (OpenBSD) {
 }
 
 version (linux) {
-	extern(C) nothrow @nogc @system {
-		int backtrace(void** addrlist, int len);
-		void backtrace_symbols_fd(void** addrlist, int len, int fd);
+	version (CRuntime_Glibc) {
+		extern(C) nothrow @nogc @system {
+			int backtrace(void** addrlist, int len);
+			void backtrace_symbols_fd(void** addrlist, int len, int fd);
+		}
 	}
 }
 
@@ -2310,12 +2313,16 @@ extern(C) nothrow @nogc @system void writeSignalStackTraceToStderr() {
 			write(STDERR_FILENO, stackTraceEmpty.ptr, stackTraceEmpty.length);
 		}
 	} else version (linux) {
-		void*[128] addrlist;
-		int frames = backtrace(addrlist.ptr, cast(int)addrlist.length);
-		if (frames > 0) {
-			backtrace_symbols_fd(addrlist.ptr, frames, STDERR_FILENO);
+		version (CRuntime_Glibc) {
+			void*[128] addrlist;
+			int frames = backtrace(addrlist.ptr, cast(int)addrlist.length);
+			if (frames > 0) {
+				backtrace_symbols_fd(addrlist.ptr, frames, STDERR_FILENO);
+			} else {
+				write(STDERR_FILENO, stackTraceEmpty.ptr, stackTraceEmpty.length);
+			}
 		} else {
-			write(STDERR_FILENO, stackTraceEmpty.ptr, stackTraceEmpty.length);
+			write(STDERR_FILENO, stackTraceUnavailable.ptr, stackTraceUnavailable.length);
 		}
 	} else {
 		write(STDERR_FILENO, stackTraceUnavailable.ptr, stackTraceUnavailable.length);
