@@ -86,6 +86,15 @@ struct DatabaseItemsToDeleteOnline {
 	string localFilePath;
 }
 
+// A local file which differs from the last known online version, but has now
+// been deleted online. The preservation action is deferred until the complete
+// /delta response has been classified so that a deleted ancestor directory is
+// known before the local filesystem is modified.
+struct DeferredOnlineDeleteBackup {
+	Item dbItem;
+	string localFilePath;
+}
+
 class SyncEngine {
 	// Class Variables
 	ApplicationConfig appConfig;
@@ -141,6 +150,9 @@ class SyncEngine {
 	string[] pathsToCreateOnline;
 	// Array of items from the database that have been deleted locally, that needs to be deleted online
 	DatabaseItemsToDeleteOnline[] databaseItemsToDeleteOnline;
+	// Files requiring local data preservation because an online tombstone was received.
+	// These are actioned only after the entire /delta response has been classified.
+	DeferredOnlineDeleteBackup[] deferredOnlineDeleteBackups;
 	// Array of parentId's that have been skipped via 'sync_list'
 	string[] syncListSkippedParentIds;
 	// Array of Microsoft OneNote Notebook Package ID's
@@ -903,6 +915,109 @@ class SyncEngine {
 		return false;
 	}
 
+	// Return true when a file queued for preservation is beneath a directory
+	// which is also being deleted in the active reconciliation pass.
+	private bool findDeletedAncestorDirectoryThisPass(Item item, out string deletedAncestorPath) {
+		deletedAncestorPath = null;
+		string parentId = item.parentId;
+
+		while (!parentId.empty) {
+			if (itemIsFlaggedForDeletionThisPass(item.driveId, parentId)) {
+				Item parentItem;
+				if (itemDB.selectById(item.driveId, parentId, parentItem) && (parentItem.type == ItemType.dir)) {
+					deletedAncestorPath = computeItemPath(parentItem.driveId, parentItem.id);
+					return true;
+				}
+			}
+
+			Item parentItem;
+			if (!itemDB.selectById(item.driveId, parentId, parentItem)) break;
+			parentId = parentItem.parentId;
+		}
+
+		return false;
+	}
+
+	// Preserve a file outside sync_dir when one of its ancestor directories was
+	// deleted online. Keeping the backup inside that directory would either cause
+	// monitor mode to recreate the remote directory or cause the authoritative
+	// local directory deletion to remove the backup.
+	private void preserveDeletedFileOutsideSyncDir(string localPath, string deletedAncestorPath) {
+		string syncRoot = buildNormalizedPath(appConfig.runtimeSyncDirectory);
+		string preservationRoot = buildNormalizedPath(buildPath(dirName(syncRoot), baseName(syncRoot) ~ "-safeBackup"));
+		string relativePath = buildNormalizedPath(localPath);
+		if (relativePath.startsWith("./")) relativePath = relativePath[2 .. $];
+
+		string relativeParent = dirName(relativePath);
+		string targetDirectory = buildNormalizedPath(buildPath(preservationRoot, relativeParent));
+		string sourceName = baseName(relativePath);
+		string ext = extension(sourceName);
+		size_t stemLength = sourceName.length >= ext.length ? sourceName.length - ext.length : sourceName.length;
+		string sourceStem = sourceName[0 .. stemLength];
+		string targetPath;
+
+		foreach (backupNumber; 1 .. 1001) {
+			targetPath = buildNormalizedPath(buildPath(targetDirectory,
+				sourceStem ~ "-" ~ deviceName ~ "-safeBackup-" ~ format("%04d", backupNumber) ~ ext));
+			if (!exists(targetPath)) break;
+			targetPath = null;
+		}
+
+		if (targetPath.empty) {
+			throw new SyncException("Unable to create a unique external safeBackup path for: " ~ localPath);
+		}
+
+		if (verboseLogging) {
+			addLogEntry("The local file differs from the online-deleted item and its ancestor directory is also deleted. "
+				~ "Preserving the file outside sync_dir to prevent remote directory recreation. "
+				~ "Deleted ancestor: " ~ deletedAncestorPath ~ "; backup: "
+				~ localPath ~ " -> " ~ targetPath, ["verbose"]);
+		}
+
+		if (dryRun) {
+			if (debugLogging) {
+				addLogEntry("DRY-RUN: Skipping external safeBackup copy: " ~ localPath ~ " -> " ~ targetPath, ["debug"]);
+			}
+			return;
+		}
+
+		try {
+			if (!exists(targetDirectory)) mkdirRecurse(targetDirectory);
+			copy(localPath, targetPath, Yes.preserveAttributes);
+		} catch (FileException e) {
+			displayFileSystemErrorMessage(e.msg, "preserveDeletedFileOutsideSyncDir", localPath);
+			throw new SyncException("Unable to preserve online-deleted local file outside sync_dir: " ~ localPath);
+		}
+	}
+
+	// Perform deferred local data preservation only after the complete /delta
+	// response is known and pending genuine local events have been processed.
+	private void processDeferredOnlineDeleteBackups() {
+		foreach (deferredBackup; deferredOnlineDeleteBackups) {
+			if (!exists(deferredBackup.localFilePath)) continue;
+
+			string deletedAncestorPath;
+			if (findDeletedAncestorDirectoryThisPass(deferredBackup.dbItem, deletedAncestorPath)) {
+				if (!bypassDataPreservation) {
+					preserveDeletedFileOutsideSyncDir(deferredBackup.localFilePath, deletedAncestorPath);
+				} else {
+					addLogEntry("WARNING: Local Data Protection has been disabled - not preserving local file deleted online beneath a deleted directory: "
+						~ deferredBackup.localFilePath, ["info", "notify"]);
+				}
+			} else {
+				string renamedPath;
+				safeBackup(deferredBackup.localFilePath, dryRun, bypassDataPreservation, renamedPath);
+
+				if (!dryRun && !bypassDataPreservation && renamedPath.empty) {
+					throw new SyncException("Unable to preserve local file before applying online deletion: "
+						~ deferredBackup.localFilePath);
+				}
+			}
+		}
+
+		deferredOnlineDeleteBackups = [];
+	}
+
 	// Process local events that arrived while the online request was in flight.
 	// At these boundaries the fetched live JSON has not yet modified the local tree.
 	private void processPendingLocalEventsBeforeOnlineApply(string boundary) {
@@ -1140,6 +1255,7 @@ class SyncEngine {
 		interruptedDownloadFiles = [];
 		pathsToCreateOnline = [];
 		databaseItemsToDeleteOnline = [];
+		deferredOnlineDeleteBackups = [];
 		pathsRetained = [];
 		
 		// Log completion of cleanup
@@ -1716,8 +1832,16 @@ class SyncEngine {
 		}
 		
 		// Close the final fetch-to-apply race window. No live item from this
-		// response has been applied locally yet.
+		// response has been applied locally yet. This must run before deferred
+		// safeBackup processing so client-generated preservation events cannot be
+		// replayed as user-originated uploads within this reconciliation pass.
 		processPendingLocalEventsBeforeOnlineApply("before applying fetched online JSON items");
+
+		// The full response has now been classified and all pre-existing local
+		// events have been handled. It is now safe to perform any required local
+		// data preservation without allowing those internal filesystem mutations
+		// to recreate an online-deleted ancestor directory.
+		processDeferredOnlineDeleteBackups();
 
 		// Are there items to process?
 		if (jsonItemsToProcess.length > 0) {
@@ -2221,14 +2345,11 @@ class SyncEngine {
 
 						// Test the existing database item hash against the hash on the local disk - as this is what we know was in-sync with online prior to online deletion event
 						if (!testFileHash(localPathToDelete, existingDatabaseItem)) {
-							// Current file on disk is different by hash / content
-							// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
-							// In case the renamed path is needed
-							string renamedPath;
-							safeBackup(localPathToDelete, dryRun, bypassDataPreservation, renamedPath);
-
-							// Purge the old record from the database as this still exists. The safeBackup() generated file now will be 'new' on the local filesystem
-							itemDB.deleteById(existingDatabaseItem.driveId, existingDatabaseItem.id);
+							// Current file on disk is different by hash / content.
+							// Do not mutate the filesystem while the /delta response is still being classified.
+							// Queue the preservation action and keep the DB record until the normal deletion phase.
+							deferredOnlineDeleteBackups ~= DeferredOnlineDeleteBackup(existingDatabaseItem, localPathToDelete);
+							flagItemForDeletionThisPass(existingDatabaseItem.driveId, existingDatabaseItem.id, existingDatabaseItem.parentId);
 						} else {
 							// Hash is the same, we can assume the isItemSynced() returning false was due to some sort of timestamp issue
 							// Flag to delete rather than create a backup of the local file

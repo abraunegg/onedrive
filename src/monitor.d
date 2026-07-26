@@ -28,16 +28,18 @@ import util;
 import log;
 import clientSideFiltering;
 
-// Relevant inotify events
+// Linux, FreeBSD 14.3+, and OpenBSD 7.7+ expose the complete set of inotify events required by monitor mode, 
+// so one common event mask is used across all supported platforms.
+private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
+
+// FreeBSD and OpenBSD may not emit a separate close-write event for newly created files. 
+// Treat the create event as a change so the file is queued for processing and is not missed by monitor mode.
 version(FreeBSD) {
-	 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
-	 private immutable bool triggerFileCreateAsChanged = true;
+	private immutable bool triggerFileCreateAsChanged = true;
 } else version(OpenBSD) {
-	 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
-	 private immutable bool triggerFileCreateAsChanged = true;
+	private immutable bool triggerFileCreateAsChanged = true;
 } else {
-	 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
-	 private immutable bool triggerFileCreateAsChanged = false;
+	private immutable bool triggerFileCreateAsChanged = false;
 }
 
 class MonitorException: ErrnoException {
