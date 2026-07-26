@@ -8,6 +8,7 @@ import sys
 import traceback
 from pathlib import Path
 
+from framework.auth_preflight import run_auth_preflight
 from framework.context import E2EContext
 from framework.database_capture import capture_onedrive_databases
 from framework.result import TestResult
@@ -97,6 +98,7 @@ def _build_metadata(context: E2EContext, selected_case_ids: list[str], executed_
         "target": context.e2e_target,
         "run_id": context.run_id,
         "run_label": context.run_label,
+        "account_label": context.account_label,
         "debug_enabled": context.debug_enabled,
         "suite_cleanup_enabled": False,
         "selected_case_ids": selected_case_ids,
@@ -124,6 +126,21 @@ def main() -> int:
     selected_case_ids = sorted(context.selected_case_ids)
     cases_to_run = [testcase for testcase in build_test_suite() if _should_run_case(context, testcase.case_id)]
     executed_case_ids = [testcase.case_id for testcase in cases_to_run]
+
+    suite_metadata = _build_metadata(context, selected_case_ids, executed_case_ids)
+
+    auth_preflight_result = run_auth_preflight(context)
+    if auth_preflight_result.status != "pass":
+        context.log(f"Auth preflight FAILED: {auth_preflight_result.reason}")
+        results = {
+            **suite_metadata,
+            "cases": [result_to_actions_case(auth_preflight_result)],
+        }
+        results_file = context.out_dir / "results.json"
+        write_text_file(results_file, json.dumps(results, indent=2, sort_keys=False))
+        return 1
+
+    context.log("Auth preflight completed successfully")
 
     context.log(
         f"Initialising Personal Shared Folder E2E framework for target='{context.e2e_target}', "
@@ -175,7 +192,7 @@ def main() -> int:
             cases.append(result_to_actions_case(failure_result))
 
     results = {
-        **_build_metadata(context, selected_case_ids, executed_case_ids),
+        **suite_metadata,
         "cases": cases,
     }
     results_file = context.out_dir / "results.json"
