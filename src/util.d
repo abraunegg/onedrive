@@ -2223,7 +2223,7 @@ void forceExit() {
 	// Setup signal handling for the exit scope
 	setupExitScopeSignalHandler();
 	// Force Exit
-	exit(EXIT_FAILURE);
+	_exit(EXIT_FAILURE);
 }
 
 // Get the current PID of the application
