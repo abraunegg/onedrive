@@ -5511,25 +5511,25 @@ class SyncEngine {
 		string computedRecycleBinInfoPath = appConfig.recycleBinInfoPath ~ fileNameOnly ~ ".trashinfo";
 		bool isPathFile = isFile(computedFullLocalPath);
 		
-		// The 'destination' needs to be unique, but if there is a 'collision' the RecycleBin paths need to be updated to be:
-		// - file1.data (1)
-		// - file1.data (1).trashinfo
+		// The destination must be unique. If a collision occurs, insert the counter before the existing extension:
+		// - file1.2.data / file1.2.data.trashinfo
+		// - directoryName.2 / directoryName.2.trashinfo
 		if (exists(computedRecycleBinFilePath)) {
 			// There is an existing file with the same name already in the 'Recycle Bin'
-			// - Testing has show that this counter MUST start at 2 to be compatible with FreeDesktop.org Trash Specification ....
+			// - Testing has shown that this counter MUST start at 2 to be compatible with FreeDesktop.org Trash Specification ....
 			int n = 2;
 			
-			// We need to split this out
+			// Split the filename into its base name and extension
 			string nameOnly = stripExtension(fileNameOnly); // "file1"
-			string extension = extension(fileNameOnly);     // ".data"
+			string extension = extension(fileNameOnly);     // ".data" or empty
 			
-			// We need to test for this: nameOnly.n.extension
-			while (exists(format(appConfig.recycleBinFilePath ~ nameOnly ~ ".%d." ~ extension, n))) {
+			// extension() already includes the leading dot, so do not add another one
+			while (exists(format(appConfig.recycleBinFilePath ~ nameOnly ~ ".%d" ~ extension, n))) {
 				n++;
 			}
 			
 			// Generate newFileNameOnly
-			string newFileNameOnly = format(nameOnly ~ ".%d." ~ extension, n);
+			string newFileNameOnly = format(nameOnly ~ ".%d" ~ extension, n);
 			
 			// UPDATE:
 			// - computedRecycleBinFilePath
