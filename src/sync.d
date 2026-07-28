@@ -87,9 +87,10 @@ struct DatabaseItemsToDeleteOnline {
 }
 
 // A local file which differs from the last known online version, but has now
-// been deleted online. The preservation action is deferred until the complete
+// been deleted online. The preservation decision is deferred until the complete
 // /delta response has been classified so that a deleted ancestor directory is
-// known before the local filesystem is modified.
+// known before the local filesystem is modified. When local Recycle Bin handling
+// is enabled, the original item is left untouched for normal deletion processing.
 struct DeferredOnlineDeleteBackup {
 	Item dbItem;
 	string localFilePath;
@@ -150,7 +151,7 @@ class SyncEngine {
 	string[] pathsToCreateOnline;
 	// Array of items from the database that have been deleted locally, that needs to be deleted online
 	DatabaseItemsToDeleteOnline[] databaseItemsToDeleteOnline;
-	// Files requiring local data preservation because an online tombstone was received.
+	// Files requiring a deferred preservation decision because an online tombstone was received.
 	// These are actioned only after the entire /delta response has been classified.
 	DeferredOnlineDeleteBackup[] deferredOnlineDeleteBackups;
 	// Array of parentId's that have been skipped via 'sync_list'
@@ -992,7 +993,24 @@ class SyncEngine {
 
 	// Perform deferred local data preservation only after the complete /delta
 	// response is known and pending genuine local events have been processed.
+	// When local Recycle Bin handling is enabled, leave the original item untouched
+	// so processDeleteItems() can move the file or its deleted ancestor intact.
 	private void processDeferredOnlineDeleteBackups() {
+		if (appConfig.getValueBool("use_recycle_bin")) {
+			foreach (deferredBackup; deferredOnlineDeleteBackups) {
+				if (!exists(deferredBackup.localFilePath)) continue;
+
+				if (debugLogging) {
+					addLogEntry("Skipping deferred safeBackup because local Recycle Bin handling is enabled. "
+						~ "Leaving the online-deleted local item unchanged for normal deletion processing: "
+						~ deferredBackup.localFilePath, ["debug"]);
+				}
+			}
+
+			deferredOnlineDeleteBackups = [];
+			return;
+		}
+
 		foreach (deferredBackup; deferredOnlineDeleteBackups) {
 			if (!exists(deferredBackup.localFilePath)) continue;
 
