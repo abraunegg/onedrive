@@ -264,9 +264,23 @@ struct ActionHolder {
 		size_t[] pendingTargets;
 		switch (type) {
 			case ActionType.changed:
-				if (src in srcMap && actions[srcMap[src]].type == ActionType.changed) {
-					// skip duplicate operations
-					return;
+				if (src in srcMap) {
+					size_t pendingTarget = srcMap[src];
+					switch (actions[pendingTarget].type) {
+						case ActionType.changed:
+							// Skip duplicate change operations for the same path.
+							return;
+						case ActionType.deleted:
+							// A delete followed by a change for the same path means the path is
+							// present again before this event batch is processed. Suppress the
+							// stale delete and process the final local state as a change.
+							if (debugLogging) {addLogEntry("Coalescing same-path delete followed by change; suppressing stale delete: " ~ src, ["debug"]);}
+							actions[pendingTarget].skipped = true;
+							srcMap.remove(src);
+							break;
+						default:
+							break;
+					}
 				}
 				break;
 			case ActionType.createDir:
