@@ -1319,8 +1319,16 @@ final class Monitor {
 							pendingChanges.append(LocalChangeType.changed, path);
 						}
 					} else {
-						addLogEntry("inotify event unhandled: " ~ path);
-						assert(0);
+						// An unexpected event-mask combination must not terminate the
+						// monitor. Log the complete event context and continue draining
+						// the remaining queued events.
+						addLogEntry(
+							"inotify event unhandled: path=" ~ path ~
+							", wd=" ~ event.wd.to!string ~
+							", mask=" ~ event.mask.to!string ~
+							", cookie=" ~ event.cookie.to!string,
+							["debug"]
+						);
 					}
 
 					skip:
