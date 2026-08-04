@@ -334,6 +334,22 @@ struct LocalChangeAccumulator {
 							break;
 					}
 				}
+
+				// If a parent directory delete arrives after child deletes, collapse
+				// those child observations into the parent delete. Linux commonly
+				// reports recursive deletion as child deletes followed by the parent.
+				// Retaining only the parent preserves the intended recursive operation.
+				foreach (ref change; changes) {
+					if (change.skipped) continue;
+					if (
+						change.type == LocalChangeType.deleted &&
+						isSameOrChildPath(src, change.src) &&
+						normaliseMonitorPath(src) != normaliseMonitorPath(change.src)
+					) {
+						change.skipped = true;
+						srcMap.remove(change.src);
+					}
+				}
 				break;
 			case LocalChangeType.moved:
 				for (size_t i = 0; i < changes.length; i++) {
