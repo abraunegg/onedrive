@@ -51,8 +51,6 @@ __gshared string deviceName;
 __gshared bool exitHandlerTriggered = false;
 // Global flag to indicate file transfers are occurring
 __gshared bool fileTransferInProgress = false;
-// Global variable for when we last uploaded something or made an online change from a local inotify event
-__gshared MonoTime lastLocalWrite;
 
 // util module variable
 ulong previousRSS;
@@ -2422,9 +2420,4 @@ string regexEscape(string s) {
 		b.put(c);
 	}
 	return b.data;
-}
-
-// Update lastLocalWrite to denote we just performed a local-originated write
-void markLocalWrite() {
-    lastLocalWrite = MonoTime.currTime();
 }
