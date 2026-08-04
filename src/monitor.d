@@ -1362,7 +1362,7 @@ final class Monitor {
 			}
 
 			// Assume that the items moved outside the watched directory have been deleted
-			foreach (cookie, path; cookieToPath) {
+			foreach (cookie, path; cookieToPath.dup) {
 				unmatchedMoveFromCount++;
 				if (isExpectedMoveSource(path)) {
 					if (debugLogging) {addLogEntry("Discarding unmatched expected move source without creating a local-delete observation: " ~ path, ["debug"]);}
@@ -1376,6 +1376,5 @@ final class Monitor {
 			// Debug Log that all inotify events are flushed
 			if (debugLogging) {addLogEntry("inotify events flushed", ["debug"]);}
 		}
-	}
-  
+	}  
 }
