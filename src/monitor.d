@@ -56,13 +56,16 @@ class MonitorBackgroundWorker {
 	int fd;
 	Pipe p;
 	bool isAlive;
+	bool workerExited;
 
 	this() {
 		isAlive = true;
+		workerExited = false;
 		p = pipe();
 	}
 
 	shared void initialise() {
+		workerExited = false;
 		fd = inotify_init();
 		if (fd < 0) throw new MonitorException("inotify_init failed");
 	}
@@ -120,42 +123,79 @@ class MonitorBackgroundWorker {
 		// On failure, send -1 to caller
 		int res;
 
-		// wait for the caller to be ready
-		receiveOnly!int();
+		// Mark the worker as exited regardless of which shutdown/error path is used.
+		scope(exit) {
+			workerExited = true;
+		}
+
+		// Wait for the caller to be ready.
+		receiveOnly!bool();
 
 		while (isAlive) {
 			fd_set fds;
-			FD_ZERO (&fds);
+			FD_ZERO(&fds);
 			FD_SET(fd, &fds);
-			// Listen for messages from the caller
-			FD_SET((cast()p).readEnd.fileno, &fds);
-			
-			res = select(FD_SETSIZE, &fds, null, null, null);
 
-			if(res == -1) {
-				if(errno() == EINTR) {
-					// Received an interrupt signal but no events are available
-					// directly watch again
-				} else {
-					// Error occurred, tell caller to terminate.
-					callerTid.send(-1);
-					break;
+			// Listen for shutdown or interrupt wake-ups from the control pipe.
+			int controlPipeFd = (cast()p).readEnd.fileno;
+			FD_SET(controlPipeFd, &fds);
+
+			// select() only needs to scan up to the highest descriptor plus one.
+			int maxFd = max(fd, controlPipeFd) + 1;
+			res = select(maxFd, &fds, null, null, null);
+
+			if (res == -1) {
+				if (errno() == EINTR) {
+					// Interrupted by a signal; re-arm the wait.
+					continue;
 				}
-			} else {
-				// Wake up caller
+
+				// Error occurred, tell the caller to terminate.
+				callerTid.send(-1);
+				break;
+			}
+
+			// Control-pipe readiness is not filesystem activity. It is used to
+			// unblock select() during interrupt or shutdown, so drain it without
+			// reporting a local-monitor wake-up to main.d.
+			if (FD_ISSET(controlPipeFd, &fds)) {
+				try {
+					(cast()p).readEnd.readln();
+				} catch (Exception) {
+					// Ignore control-pipe drain errors during shutdown.
+				}
+
+				if (!isAlive) break;
+				continue;
+			}
+
+			// Only inotify descriptor readiness should wake the caller for local
+			// filesystem processing.
+			if (FD_ISSET(fd, &fds)) {
 				callerTid.send(1);
 
-				// wait for the caller to be ready
-				if (isAlive)
+				// Wait for the caller to acknowledge whether monitoring should continue.
+				if (isAlive) {
 					isAlive = receiveOnly!bool();
+				}
+
+				continue;
 			}
 		}
 	}
 
+	shared bool hasExited() {
+		return workerExited;
+	}
+
 	shared void interrupt() {
 		isAlive = false;
-		(cast()p).writeEnd.writeln("done");
-		(cast()p).writeEnd.flush();
+		try {
+			(cast()p).writeEnd.writeln("done");
+			(cast()p).writeEnd.flush();
+		} catch (Exception) {
+			// The control pipe may already be closed during shutdown.
+		}
 	}
 
 	shared void shutdown() {
@@ -163,9 +203,15 @@ class MonitorBackgroundWorker {
 		if (fd > 0) {
 			close(fd);
 			fd = 0;
+		}
+
+		try {
 			(cast()p).close();
+		} catch (Exception) {
+			// The control pipe may already be closed or partially initialised.
 		}
 	}
+
 }
 
 void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid) {
@@ -409,9 +455,17 @@ final class Monitor {
 		inotifyMutex = new Mutex(); // Define a Mutex for thread-safe access
 	}
 	
-	// The destructor should only clean up resources owned directly by this instance
+	// The destructor should only clean up resources owned directly by this instance.
+	// shutdown() is responsible for stopping the worker before this object is destroyed.
 	~this() {
-		object.destroy(worker);
+		if (worker !is null) {
+			try {
+				worker.shutdown();
+			} catch (Exception) {
+				// Destructors must not throw during process teardown.
+			}
+			worker = null;
+		}
 	}
 	
 	// Initialise the monitor class
@@ -450,19 +504,42 @@ final class Monitor {
 
 	// Shutdown the monitor class
 	void shutdown() {
-		if(!initialised)
+		if (!initialised) {
 			return;
+		}
 		initialised = false;
 
-		// Interrupt the worker to allow removal of inotify watch descriptors
-		worker.interrupt();
+		// Interrupt the worker so select() wakes if it is waiting on inotify.
+		if (worker !is null) {
+			worker.interrupt();
+		}
 
-		// Remove all the inotify watch descriptors
+		// Remove all inotify watch descriptors before closing the inotify descriptor.
 		removeAll();
 
-		// Notify the worker that the monitor has been shutdown
-		worker.interrupt();
-		send(false);
+		// If the worker has already reported an inotify wake-up, it may be waiting
+		// for main.d to acknowledge whether monitoring should continue. Unblock that
+		// receive without assuming the worker is still alive.
+		try {
+			send(false);
+		} catch (Exception) {
+			// The worker may already have exited during shutdown.
+		}
+
+		if (worker !is null) {
+			worker.interrupt();
+
+			// Do not allow Monitor destruction to race with the worker thread still
+			// running inside MonitorBackgroundWorker.watch().
+			foreach (_; 0 .. 100) {
+				if (worker.hasExited()) {
+					break;
+				}
+				Thread.sleep(dur!"msecs"(20));
+			}
+
+			worker.shutdown();
+		}
 
 		inotifyMutex.lock();
 		try {
@@ -1243,7 +1320,6 @@ final class Monitor {
 						break;
 				}
 			}
-
 
 			// Assume that the items moved outside the watched directory have been deleted
 			foreach (cookie, path; cookieToPath) {
