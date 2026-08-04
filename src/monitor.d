@@ -738,8 +738,20 @@ final class Monitor {
 
 		inotifyMutex.lock();
 		try {
-			assert(wd in wdToDirName);
-			dirname = wdToDirName[wd];
+			auto existingPath = wd in wdToDirName;
+			if (existingPath is null) {
+				// The watch may already have been removed by IN_IGNORED, shutdown,
+				// or another cleanup path. Treat repeated removal as a no-op rather
+				// than asserting or raising RangeError on direct map access.
+				if (debugLogging) {
+					addLogEntry(
+						"inotify watch descriptor already removed from internal map: wd=" ~ wd.to!string,
+						["debug"]
+					);
+				}
+				return;
+			}
+			dirname = *existingPath;
 			ret = worker.removeInotifyWatch(wd);
 			removeErrno = (ret < 0) ? errno() : 0;
 
