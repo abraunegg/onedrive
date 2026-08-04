@@ -80,41 +80,40 @@ public:
 		currentNotifUrl = appConfig.websocketNotificationUrl;
 		
 		// Reset cooperative flags
-		pleaseStop = false;
+		atomicStore(pleaseStop, false);
 		atomicStore(workerExited, false);
 		
-		// Set Flag
-		started = true;
-		
-		// Spawn worker thread
+		// Spawn worker thread before marking this instance as started. This avoids
+		// stop() waiting forever if spawn throws before a worker can set workerExited.
 		workerTid = spawn(&run, cast(shared) this);
+		started = true;
 	}
 
 	void stop() {
+		// Ask the worker to stop cooperatively. This flag is read by the worker
+		// across threads, so keep all access atomic.
+		atomicStore(pleaseStop, true);
+
 		if (!started) return;
 
-		// Ask the worker to stop cooperatively
-		pleaseStop = true;
 		logSocketIOOutput("Flagged to stop WebSocket monitoring of Microsoft Graph API changes.");
-		// Wait up to ~6 seconds for the worker to finish cleanup.
-		// No mailbox usage here to avoid nested receiveTimeout on FreeBSD.
-		enum int totalWaitMs = 6000;
+
+		// The shutdown owner must not destroy this instance, appConfig, or libcurl
+		// resources while the Socket.IO worker can still touch them. Do not use a
+		// short timeout here; the worker's retry/backoff sleeps are interruptible
+		// and active curl operations use bounded timeouts.
 		enum int stepMs = 100;
+		enum int logEveryMs = 10000;
 		int waited = 0;
-		
-		while (!atomicLoad(workerExited) && waited < totalWaitMs) {
+		while (!atomicLoad(workerExited)) {
 			Thread.sleep(dur!"msecs"(stepMs));
 			waited += stepMs;
+			if ((waited % logEveryMs) == 0) {
+				logSocketIOOutput("Waiting for Socket.IO worker to exit cleanly (" ~ to!string(waited / 1000) ~ "s)");
+			}
 		}
-		
-		// Mark not started only after we know we've requested stop
-		started = false;
 
-		if (!atomicLoad(workerExited)) {
-			// We asked nicely but didn’t get an ack within the window; continue shutdown anyway.
-			// Keeps behaviour safe; avoids hanging the main shutdown path
-			logSocketIOOutput("Worker stop acknowledgement not received within timeout; continuing shutdown.");
-		}
+		started = false;
 	}
 
 	Duration getNextExpirationCheckDuration() {
@@ -135,6 +134,33 @@ public:
 	}
 
 private:
+	static bool stopRequested(OneDriveSocketIo self) {
+		return atomicLoad(self.pleaseStop);
+	}
+
+	static bool interruptibleSleep(OneDriveSocketIo self, long totalMs, int stepMs = 100) {
+		long sleptMs = 0;
+		while (sleptMs < totalMs) {
+			if (stopRequested(self)) {
+				return false;
+			}
+
+			int thisStepMs = stepMs;
+			if ((totalMs - sleptMs) < thisStepMs) {
+				thisStepMs = cast(int)(totalMs - sleptMs);
+			}
+
+			Thread.sleep(dur!"msecs"(thisStepMs));
+			sleptMs += thisStepMs;
+		}
+
+		return !stopRequested(self);
+	}
+
+	static bool interruptibleBackoffSleep(OneDriveSocketIo self, int seconds) {
+		return interruptibleSleep(self, cast(long)seconds * 1000);
+	}
+
 	// Main function that listens and sends events
 	static void run(shared OneDriveSocketIo _this) {
 		logSocketIOOutput("run() entered");
@@ -154,7 +180,7 @@ private:
 			logSocketIOOutput("run() exiting");
 		}
 
-		while (!self.pleaseStop) {
+		while (!stopRequested(self)) {
 			// Catch network exceptions at the socketio-loop level and treat them as recoverable
 			try {
 				// If we're offline (or OneDrive service not reachable), don't bother trying yet
@@ -163,7 +189,7 @@ private:
 				if (!online) {
 					logSocketIOOutput("Network or OneDrive service not reachable; delaying reconnect");
 					logSocketIOOutput("Backoff " ~ to!string(backoffSeconds) ~ "s before retry");
-					Thread.sleep(dur!"seconds"(backoffSeconds));
+					if (!interruptibleBackoffSleep(self, backoffSeconds)) return;
 					if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 					continue;
 				} else {
@@ -173,7 +199,7 @@ private:
 					if (notif.length == 0) {
 						logSocketIOOutput("No notificationUrl available; will retry");
 						logSocketIOOutput("Backoff " ~ to!string(backoffSeconds) ~ "s before retry");
-						Thread.sleep(dur!"seconds"(backoffSeconds));
+						if (!interruptibleBackoffSleep(self, backoffSeconds)) return;
 						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
 					}
@@ -195,7 +221,7 @@ private:
 					if (rc != 0) {
 						logSocketIOOutput("self.ws.connect failed; will retry");
 						collectException(self.ws.close(1002, "connect-failed"));
-						Thread.sleep(dur!"seconds"(backoffSeconds));
+						if (!interruptibleBackoffSleep(self, backoffSeconds)) return;
 						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
 					}
@@ -204,7 +230,7 @@ private:
 					if (!awaitEngineOpen(self.ws, self)) {
 						logSocketIOOutput("Socket.IO open handshake failed; will retry");
 						collectException(self.ws.close(1002, "handshake-failed"));
-						Thread.sleep(dur!"seconds"(backoffSeconds));
+						if (!interruptibleBackoffSleep(self, backoffSeconds)) return;
 						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
 					}
@@ -214,7 +240,7 @@ private:
 					if (self.ws.sendText("40") != 0) {
 						logSocketIOOutput("Failed to send 40 (open namespace); will retry");
 						collectException(self.ws.close(1002, "ns40-failed"));
-						Thread.sleep(dur!"seconds"(backoffSeconds));
+						if (!interruptibleBackoffSleep(self, backoffSeconds)) return;
 						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
 					} else {
@@ -226,7 +252,7 @@ private:
 					if (self.ws.sendText("40/notifications") != 0) {
 						logSocketIOOutput("Failed to send 40 for '/notifications' namespace; will retry");
 						collectException(self.ws.close(1002, "ns40-failed"));
-						Thread.sleep(dur!"seconds"(backoffSeconds));
+						if (!interruptibleBackoffSleep(self, backoffSeconds)) return;
 						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
 					} else {
@@ -246,7 +272,7 @@ private:
 					// Listen for Socket.IO Events
 					for (;;) {
 						// Stop request
-						if (self.pleaseStop) {
+						if (stopRequested(self)) {
 							logSocketIOOutput("Stop requested; shutting down run() loop");
 							collectException(self.ws.close(1000, "stop-requested"));
 							collectException(self.ws.cleanupCurlHandle());
@@ -342,7 +368,7 @@ private:
 						// Receive message
 						auto msg = self.ws.recvText();
 						if (msg.length == 0) {
-							Thread.sleep(dur!"msecs"(20));
+							if (!interruptibleSleep(self, 20, 20)) return;
 							continue;
 						}
 
@@ -395,21 +421,21 @@ private:
 					logSocketIOOutput("Retrying WebSocket Connection");
 					collectException(self.ws.close(1001, "reconnect"));
 					logSocketIOOutput("Backoff " ~ to!string(backoffSeconds) ~ "s before retry");
-					Thread.sleep(dur!"seconds"(backoffSeconds));
+					if (!interruptibleBackoffSleep(self, backoffSeconds)) return;
 					if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 				}
 			} catch (CurlException e) {
 				// Caught a CurlException
 				addLogEntry("Network error during socketio loop: " ~ e.msg ~ " (will retry)");
-				Thread.sleep(dur!"seconds"(5));
+				if (!interruptibleSleep(self, 5000)) return;
 			} catch (SocketException e) {
 				// Caught a SocketException
 				addLogEntry("Socket error during socketio loop: " ~ e.msg ~ " (will retry)");
-				Thread.sleep(dur!"seconds"(5));
+				if (!interruptibleSleep(self, 5000)) return;
 			} catch (Exception e) {
 				// Caught some other error
 				addLogEntry("Unexpected error during socketio loop: " ~ e.toString());
-				Thread.sleep(dur!"seconds"(5));
+				if (!interruptibleSleep(self, 5000)) return;
 			}
 		}
 	}
@@ -469,7 +495,7 @@ private:
 
 			auto msg = ws.recvText();
 			if (msg.length == 0) {
-				Thread.sleep(dur!"msecs"(25));
+				if (!interruptibleSleep(self, 25, 25)) return false;
 				continue;
 			}
 
