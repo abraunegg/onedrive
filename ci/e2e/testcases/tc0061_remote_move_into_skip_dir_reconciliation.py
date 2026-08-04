@@ -33,16 +33,10 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         )
 
     def _build_mutator_monitor_config_text(self, sync_dir: Path, app_log_dir: Path) -> str:
-        return self._build_config_text(
-            sync_dir,
-            app_log_dir,
-            extra_config_lines=[
-                # This testcase uses the mutator as the remote-side synced endpoint.
-                # Keep WebSocket disabled so the online move is driven by local
-                # inotify move detection rather than remote notification timing.
-                'disable_websocket_support = "true"',
-            ],
-        )
+        # This testcase uses the mutator as the remote-side synced endpoint.
+        # The shared monitor config keeps WebSocket disabled so the online move is
+        # driven by local inotify move detection rather than remote notification timing.
+        return self._build_config_text(sync_dir, app_log_dir)
 
     def _build_unfiltered_config_text(self, sync_dir: Path) -> str:
         return (

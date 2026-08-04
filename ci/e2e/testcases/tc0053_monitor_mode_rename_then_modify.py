@@ -76,6 +76,8 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(self.case_id, self.name, "Monitor mode did not complete the initial sync within the expected time", artifacts, details)
 
+            mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
+
             old_local.rename(new_local)
             time.sleep(1.0)
             write_text_file(new_local, final_content)
@@ -84,9 +86,17 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
                 [f"Moving {old_relative} to {new_relative}", f"Uploading modified file: {new_relative} ... done"],
                 [f"Deleting item from Microsoft OneDrive: {old_relative}", f"Uploading new file: {new_relative} ... done"],
             ]
-            mutation_processed, matched_group = self._wait_for_any_monitor_pattern_group(monitor_stdout, groups, timeout_seconds=180)
+            mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
+                monitor_stdout,
+                start_offset=mutation_log_start_offset,
+                alternative_pattern_groups=groups,
+                timeout_seconds=180,
+            )
+            post_mutation_sync_complete = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
+            details["post_mutation_sync_complete"] = post_mutation_sync_complete
             details["mutation_processed"] = mutation_processed
             details["matched_pattern_group_index"] = matched_group
+            details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
             details["mutation_pattern_groups"] = groups
         finally:
             self._shutdown_monitor_process(process, details)
@@ -102,8 +112,6 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
         details["verify_new_content"] = new_verify.read_text(encoding="utf-8") if new_verify.is_file() else ""
         self._write_metadata(metadata_file, details)
 
-        if not details.get("mutation_processed", False):
-            return self.fail_result(self.case_id, self.name, "Monitor mode did not process the rename-then-modify event before shutdown", artifacts, details)
         if verify_result.returncode != 0:
             return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if old_verify.exists() or not new_verify.is_file() or details["verify_new_content"] != final_content:

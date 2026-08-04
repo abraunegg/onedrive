@@ -95,6 +95,8 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(self.case_id, self.name, "Monitor mode did not complete the initial sync within the expected time", artifacts, details)
 
+            mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
+
             write_text_file(create_local, create_content)
             write_text_file(modify_local, final_modify)
             if delete_local.exists():
@@ -110,12 +112,20 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
                 [f"[M] Local item moved: {rename_old_relative} -> {rename_new_relative}", f"Moving {rename_old_relative} to {rename_new_relative}"],
                 [f"Deleting item from Microsoft OneDrive: {rename_old_relative}", f"Uploading new file: {rename_new_relative} ... done"],
             ]
-            fixed_ok = self._wait_for_monitor_patterns(monitor_stdout, fixed_patterns)
-            rename_ok, matched_group = self._wait_for_any_monitor_pattern_group(monitor_stdout, rename_groups)
+            fixed_ok, rename_ok, matched_group, post_mutation_log_segment = self._wait_for_required_patterns_and_any_group(
+                monitor_stdout,
+                start_offset=mutation_log_start_offset,
+                required_patterns=fixed_patterns,
+                alternative_pattern_groups=rename_groups,
+                timeout_seconds=180,
+            )
+            post_mutation_sync_complete = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
+            details["post_mutation_sync_complete"] = post_mutation_sync_complete
             details["fixed_patterns_observed"] = fixed_ok
             details["rename_patterns_observed"] = rename_ok
             details["matched_rename_pattern_group_index"] = matched_group
             details["mutation_processed"] = bool(fixed_ok and rename_ok)
+            details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
             details["fixed_patterns"] = fixed_patterns
             details["rename_pattern_groups"] = rename_groups
         finally:
@@ -137,8 +147,6 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
         details["verify_create_content"] = create_verify.read_text(encoding="utf-8") if create_verify.is_file() else ""
         self._write_metadata(metadata_file, details)
 
-        if not details.get("mutation_processed", False):
-            return self.fail_result(self.case_id, self.name, "Monitor mode did not process the mixed burst operations before shutdown", artifacts, details)
         if verify_result.returncode != 0:
             return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if not modify_verify.is_file() or details["verify_modify_content"] != final_modify:

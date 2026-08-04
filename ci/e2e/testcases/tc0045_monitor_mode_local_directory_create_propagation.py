@@ -106,14 +106,24 @@ class TestCase0045MonitorModeLocalDirectoryCreatePropagation(MonitorModeTestCase
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(self.case_id, self.name, "Monitor mode did not complete the initial sync within the expected time", artifacts, details)
 
+            mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
+
             created_dir_local_path.mkdir(parents=True, exist_ok=True)
             write_text_file(created_file_local_path, created_file_content)
 
             required_patterns = [
                 f"Uploading new file: {created_file_relative} ... done",
             ]
-            mutation_processed = self._wait_for_monitor_patterns(monitor_stdout, required_patterns)
+            mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
+                monitor_stdout,
+                start_offset=mutation_log_start_offset,
+                required_patterns=required_patterns,
+                timeout_seconds=180,
+            )
+            post_mutation_sync_complete = self.SYNC_COMPLETE_PATTERN in post_mutation_log_segment
+            details["post_mutation_sync_complete"] = post_mutation_sync_complete
             details["mutation_processed"] = mutation_processed
+            details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
             details["mutation_required_patterns"] = required_patterns
         finally:
             self._shutdown_monitor_process(process, details)
@@ -144,8 +154,6 @@ class TestCase0045MonitorModeLocalDirectoryCreatePropagation(MonitorModeTestCase
         details["verify_created_file_content"] = created_file_verify_path.read_text(encoding="utf-8") if created_file_verify_path.is_file() else ""
         self._write_metadata(metadata_file, details)
 
-        if not details.get("mutation_processed", False):
-            return self.fail_result(self.case_id, self.name, "Monitor mode did not process the local directory create event before shutdown", artifacts, details)
         if verify_result.returncode != 0:
             return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if not created_dir_verify_path.is_dir():

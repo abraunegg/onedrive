@@ -22,16 +22,10 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
     SYNC_COMPLETE_PATTERN = "Sync with Microsoft OneDrive is complete"
 
     def _build_monitor_config_text(self, sync_dir: Path, app_log_dir: Path) -> str:
-        return self._build_config_text(
-            sync_dir,
-            app_log_dir,
-            extra_config_lines=[
-                # This testcase is specifically validating local inotify IN_MOVED_* handling.
-                # Keep WebSocket disabled so remote notification timing does not mask or race
-                # the local monitor event path under test.
-                'disable_websocket_support = "true"',
-            ],
-        )
+        # This testcase is specifically validating local inotify IN_MOVED_* handling.
+        # The shared monitor config keeps WebSocket disabled and fullscan fallback off
+        # so remote notification timing does not mask or race the local event path.
+        return self._build_config_text(sync_dir, app_log_dir)
 
     def _build_verify_config_text(self, sync_dir: Path) -> str:
         return (
@@ -222,10 +216,8 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
                     details,
                 )
 
-            initial_stdout = self._read_stdout(monitor_stdout)
-            mutation_log_start_offset = len(initial_stdout)
-            details["mutation_log_start_offset"] = mutation_log_start_offset
-            details["initial_sync_complete_count_before_moves"] = initial_stdout.count(self.SYNC_COMPLETE_PATTERN)
+            mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
+            details["initial_sync_complete_count_before_moves"] = details.get("initial_sync_complete_count_before_mutation", 0)
 
             context.log(f"Test Case {self.case_id}: moving in-sync local file: {file_source_relative} -> {file_destination_relative}")
             file_destination_path.parent.mkdir(parents=True, exist_ok=True)

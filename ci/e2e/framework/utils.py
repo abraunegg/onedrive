@@ -27,6 +27,7 @@ STARTUP_RETRY_SLEEP_SECONDS = 3.0
 STARTUP_DISCOVERY_FUNCTION_MARKERS = (
     "Calling Function:    syncEngine.getDefaultRootDetails()",
     "Calling Function:    syncEngine.getDefaultDriveDetails()",
+    "Calling Function:    syncEngine.fetchRealOnlineDriveIdentifier()",
 )
 STARTUP_TRANSIENT_HTTP_MARKERS = (
     "HTTP request returned status code 403 (Forbidden)",

@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -454,6 +455,58 @@ class TestCase0002SyncListValidation(E2ETestCase):
         diffs = self._validate_scenario(scenario, fixture_events)
         return diffs, artifacts, metadata
 
+    def _is_retryable_cleanup_seed_failure(self, stdout: str, stderr: str) -> bool:
+        content = f"{stdout}\n{stderr}"
+        retryable_markers = (
+            "HTTP request returned status code 408",
+            "HTTP request returned status code 429",
+            "HTTP request returned status code 500",
+            "HTTP request returned status code 502",
+            "HTTP request returned status code 503",
+            "HTTP request returned status code 504",
+            "Failed items to upload",
+            "Parent path is not in the database or online",
+            "Unable to upload this file",
+            "std.json.JSONException",
+        )
+        return any(marker in content for marker in retryable_markers)
+
+    def _run_cleanup_seed_command_with_retry(
+        self,
+        context: E2EContext,
+        command: list[str],
+        *,
+        max_attempts: int = 2,
+        retry_sleep_seconds: float = 3.0,
+    ) -> tuple[object, int, list[str], str, str]:
+        attempts = 0
+        retry_reasons: list[str] = []
+        stdout_segments: list[str] = []
+        stderr_segments: list[str] = []
+        last_result = None
+
+        for attempt in range(1, max_attempts + 1):
+            attempts = attempt
+            result = run_command(command, cwd=context.repo_root)
+            last_result = result
+            stdout_segments.append(f"\n===== cleanup seed attempt {attempt} stdout =====\n{result.stdout}")
+            stderr_segments.append(f"\n===== cleanup seed attempt {attempt} stderr =====\n{result.stderr}")
+
+            if result.returncode == 0:
+                break
+
+            if attempt >= max_attempts or not self._is_retryable_cleanup_seed_failure(result.stdout, result.stderr):
+                break
+
+            retry_reasons.append(f"attempt {attempt} returned {result.returncode}; retryable seed failure marker observed")
+            context.log(
+                f"Scenario cleanup seed returned {result.returncode}; retrying attempt {attempt + 1}/{max_attempts}"
+            )
+            time.sleep(retry_sleep_seconds)
+
+        assert last_result is not None
+        return last_result, attempts, retry_reasons, "".join(stdout_segments).lstrip("\n"), "".join(stderr_segments).lstrip("\n")
+
     def _run_cleanup_regression_scenario(
         self,
         context: E2EContext,
@@ -500,13 +553,21 @@ class TestCase0002SyncListValidation(E2ETestCase):
             sync_list_path.unlink()
 
         phase1_command = self._build_sync_command(context, sync_root, config_dir)
-        phase1_result = run_command(phase1_command, cwd=context.repo_root)
-        write_text_file(phase1_stdout, phase1_result.stdout)
-        write_text_file(phase1_stderr, phase1_result.stderr)
+        (
+            phase1_result,
+            phase1_attempts,
+            phase1_retry_reasons,
+            phase1_stdout_text,
+            phase1_stderr_text,
+        ) = self._run_cleanup_seed_command_with_retry(context, phase1_command)
+        write_text_file(phase1_stdout, phase1_stdout_text)
+        write_text_file(phase1_stderr, phase1_stderr_text)
         metadata.extend(
             [
                 f"phase1_command={command_to_string(phase1_command)}",
                 f"phase1_returncode={phase1_result.returncode}",
+                f"phase1_attempts={phase1_attempts}",
+                f"phase1_retry_reasons={phase1_retry_reasons!r}",
             ]
         )
 
