@@ -287,9 +287,6 @@ class OneDriveApi {
 					// application_id == default
 					// The default application registration uses the common native-client redirect URI.
 					// Do not tenant-substitute this URI when azure_tenant_id is configured.
-					if (debugLogging) {
-						addLogEntry("Global Azure AD Endpoint using default application_id, redirectUrl remains aligned to common nativeclient redirect URI", ["debug"]);
-					}
 					redirectUrl = appConfig.globalAuthEndpoint ~ "/common/oauth2/nativeclient";
 				} else {
 					// custom application_id
@@ -448,7 +445,7 @@ class OneDriveApi {
 			} else {
 				// Try and read the value from the appConfig if it is set, rather than trying to read the value from disk
 				if (!appConfig.refreshToken.empty) {
-					if (debugLogging) {addLogEntry("Read token from appConfig", ["debug"]);}
+					if (debugLogging) {addLogEntry("Read token from appConfig memory space", ["debug"]);}
 					refreshToken = strip(appConfig.refreshToken);
 					authorised = true;
 				} else {
@@ -457,7 +454,7 @@ class OneDriveApi {
 						refreshToken = strip(readText(appConfig.refreshTokenFilePath));
 						// is the refresh_token empty?
 						if (refreshToken.empty) {
-							addLogEntry("RefreshToken exists but is empty: " ~ appConfig.refreshTokenFilePath);
+							addLogEntry("RefreshToken file exists but is empty: " ~ appConfig.refreshTokenFilePath);
 							authorised = authorise();
 						} else {
 							// Existing token not empty

@@ -1439,7 +1439,7 @@ int main(string[] cliArgs) {
 						if (debugLogging) {
 							addLogEntry("worker status = " ~ to!string(res), ["debug"]);
 							if (!appConfig.getValueBool("upload_only")) {
-								addLogEntry("notificationReceived = " ~ to!string(onlineSignal), ["debug"]);
+								addLogEntry("WebSocket|Webhook Notification Received = " ~ to!string(onlineSignal), ["debug"]);
 							}
 						}
 						
