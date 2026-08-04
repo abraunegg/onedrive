@@ -352,7 +352,7 @@ final class ItemDatabase {
 		";
 		deleteOrphanItemStmt = "
 			DELETE FROM item
-			WHERE driveId = ?1 AND parentId = ?9 AND name = ?3
+			WHERE driveId = ?1 AND parentId = ?2 AND name = ?3
 		";
 		selectItemByIdStmt = "
 			SELECT *
