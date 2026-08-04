@@ -211,7 +211,6 @@ class MonitorBackgroundWorker {
 			// The control pipe may already be closed or partially initialised.
 		}
 	}
-
 }
 
 void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid) {
@@ -434,8 +433,10 @@ final class Monitor {
 	
 	// Configure Private Class Variables
 	shared(MonitorBackgroundWorker) worker;
-	// map every inotify watch descriptor to its directory
+	// map every inotify watch descriptor to its normalised directory path
 	private string[int] wdToDirName;
+	// reverse map used to keep watch registration idempotent
+	private int[string] dirNameToWd;
 	// map the inotify cookies of move_from events to their path
 	private string[int] cookieToPath;
 	// buffer to receive the inotify events
@@ -560,6 +561,71 @@ final class Monitor {
 		inotifyMutex.lock();
 		try {
 			wdToDirName = null;
+			dirNameToWd = null;
+		} finally {
+			inotifyMutex.unlock();
+		}
+	}
+
+	private string watchPathToEventPrefix(string watchPath) {
+		return (watchPath == ".") ? "" : watchPath ~ "/";
+	}
+
+	private bool isWatchRegistered(string dirname) {
+		string key = normaliseWatchPath(dirname);
+
+		inotifyMutex.lock();
+		try {
+			return (key in dirNameToWd) !is null;
+		} finally {
+			inotifyMutex.unlock();
+		}
+	}
+
+	private void registerWatchDescriptor(int wd, string dirname) {
+		string key = normaliseWatchPath(dirname);
+
+		inotifyMutex.lock();
+		try {
+			// If this watch descriptor was already associated with another path,
+			// remove the old reverse entry before recording the new canonical path.
+			auto previousPath = wd in wdToDirName;
+			if (previousPath !is null) {
+				dirNameToWd.remove(*previousPath);
+			}
+
+			// If the directory path was already associated with another descriptor,
+			// drop that stale descriptor mapping. The reverse map is the source of
+			// truth for idempotent path registration.
+			auto previousWd = key in dirNameToWd;
+			if ((previousWd !is null) && (*previousWd != wd)) {
+				wdToDirName.remove(*previousWd);
+			}
+
+			wdToDirName[wd] = key;
+			dirNameToWd[key] = wd;
+		} finally {
+			inotifyMutex.unlock();
+		}
+	}
+
+	private bool unregisterWatchDescriptor(int wd, out string dirname) {
+		dirname = null;
+
+		inotifyMutex.lock();
+		try {
+			auto existingPath = wd in wdToDirName;
+			if (existingPath is null) return false;
+
+			dirname = *existingPath;
+			wdToDirName.remove(wd);
+
+			auto existingWd = dirname in dirNameToWd;
+			if ((existingWd !is null) && (*existingWd == wd)) {
+				dirNameToWd.remove(dirname);
+			}
+
+			return true;
 		} finally {
 			inotifyMutex.unlock();
 		}
@@ -646,24 +712,31 @@ final class Monitor {
 					return;
 				}
 			}
+
+			// Only directories need inotify watches. File changes are reported by
+			// the watch on the parent directory. Avoid file-level watches because
+			// they cannot be maintained safely under rapid create/delete churn.
+			if (!isDir(dirname)) {
+				return;
+			}
+
+			// Avoid duplicate watch descriptors for the same directory when the
+			// same path is seen as ./path, path, or path/.
+			if (isWatchRegistered(dirname)) {
+				if (debugLogging) {addLogEntry("Skipping duplicate inotify watch registration for: " ~ dirname, ["debug"]);}
+				return;
+			}
 			
 			// passed all potential exclusions
-			// add inotify watch for this path / directory / file
+			// add inotify watch for this directory
 			if (debugLogging) {addLogEntry("Calling worker.addInotifyWatch() for this dirname: " ~ dirname, ["debug"]);}
 			int wd = worker.addInotifyWatch(dirname);
 			if (wd > 0) {
-				inotifyMutex.lock();
-				try {
-					wdToDirName[wd] = buildNormalizedPath(dirname) ~ "/";
-				} finally {
-					inotifyMutex.unlock();
-				}
+				registerWatchDescriptor(wd, dirname);
 			}
 			
-			// if this is a directory, recursively add this path
-			if (isDir(dirname)) {
-				traverseDirectory(dirname);
-			}
+			// recursively add child directories
+			traverseDirectory(dirname);
 		// Catch any FileException error which is generated
 		} catch (std.file.FileException e) {
 			// Standard filesystem error
@@ -764,6 +837,10 @@ final class Monitor {
 			}
 
 			wdToDirName.remove(wd);
+			auto existingWd = dirname in dirNameToWd;
+			if ((existingWd !is null) && (*existingWd == wd)) {
+				dirNameToWd.remove(dirname);
+			}
 		} finally {
 			inotifyMutex.unlock();
 		}
@@ -779,7 +856,6 @@ final class Monitor {
 		string[] matchingPaths;
 		int[] matchingWds;
 		string watchRoot = normaliseWatchPath(path.idup);
-
 
 		inotifyMutex.lock();
 		try {
@@ -804,6 +880,10 @@ final class Monitor {
 			inotifyMutex.lock();
 			try {
 				wdToDirName.remove(wd);
+				auto existingWd = matchingPaths[idx] in dirNameToWd;
+				if ((existingWd !is null) && (*existingWd == wd)) {
+					dirNameToWd.remove(matchingPaths[idx]);
+				}
 			} finally {
 				inotifyMutex.unlock();
 			}
@@ -831,7 +911,7 @@ final class Monitor {
 				return false;
 			}
 
-			path = *dirname;
+			path = watchPathToEventPrefix(*dirname);
 		} finally {
 			inotifyMutex.unlock();
 		}
@@ -1184,13 +1264,9 @@ final class Monitor {
 					// skip events that need to be ignored
 					if (event.mask & IN_IGNORED) {
 						ignoredEventCount++;
-						// forget the directory associated to the watch descriptor
-						inotifyMutex.lock();
-						try {
-							wdToDirName.remove(event.wd);
-						} finally {
-							inotifyMutex.unlock();
-						}
+						// Forget both directions of the watch bookkeeping entry.
+						string ignoredPath;
+						unregisterWatchDescriptor(event.wd, ignoredPath);
 						goto skip;
 					} else if (event.mask & IN_Q_OVERFLOW) {
 						throw new MonitorException("inotify queue overflow: some events may be lost");
