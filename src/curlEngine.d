@@ -286,6 +286,31 @@ class CurlResponse {
 	}
 }
 
+// When a request body is supplied to libcurl via a read callback, libcurl requires a seek
+// callback in order to rewind that body if the request has to be sent again - for example when
+// the server drops the connection after the body has already been sent. Without a seek callback
+// the body cannot be replayed, and libcurl fails the transfer with CURLE_SEND_FAIL_REWIND (65).
+//
+// That failure is not transient. Every subsequent attempt fails immediately having transferred
+// zero bytes, so a single file can prevent synchronisation from ever completing.
+// https://github.com/abraunegg/onedrive/issues/3789
+// https://curl.se/libcurl/c/CURLOPT_SEEKFUNCTION.html
+extern (C) int curlUploadSeekCallback(void* userData, long offset, int origin) nothrow {
+	// Only SEEK_SET is required by libcurl in order to rewind a request body
+	if (origin != CurlSeekPos.set) {
+		return CurlSeek.cantseek;
+	}
+
+	// Retrieve the CurlEngine instance that was supplied via CurlOption.seekdata
+	CurlEngine curlEngineInstance = cast(CurlEngine) userData;
+	if (curlEngineInstance is null) {
+		return CurlSeek.cantseek;
+	}
+
+	// Reposition the upload so that the request body can be sent again
+	return curlEngineInstance.repositionUploadFile(offset);
+}
+
 class CurlEngine {
 
 	HTTP http;
@@ -297,6 +322,16 @@ class CurlEngine {
 	SysTime releaseTimestamp;
 	ulong maxIdleTime;
 	private long resumeFromOffset = -1;
+	// Position within the file at which the current request body begins. This is zero for a
+	// whole-file upload, and the fragment offset when uploading part of a file.
+	// https://github.com/abraunegg/onedrive/issues/3789
+	private long uploadBodyBaseOffset = 0;
+	// An in-memory request body, as used by post() and patch(), together with how much of it has
+	// been sent. Retaining these allows the body to be replayed if libcurl has to send the
+	// request again.
+	// https://github.com/abraunegg/onedrive/issues/3789
+	private const(char)[] requestBodyData;
+	private size_t requestBodyOffset = 0;
 	private bool uploadStreamHashActive = false;
 	private QuickXorStreamHasher uploadQuickXorStreamHasher;
 	private ulong uploadStreamHashBytes = 0;
@@ -478,15 +513,32 @@ class CurlEngine {
 		setResponseHolder(null);
 		addRequestHeader("Content-Type", contentType);
 		if (sendData) {
+			// Retain the request body and track how much of it has been sent, rather than
+			// consuming the data as it is sent. If libcurl has to send the request again, for
+			// example when the connection is dropped after the body has already been sent, the
+			// body must still be available in order to be replayed.
+			// https://github.com/abraunegg/onedrive/issues/3789
+			requestBodyData = sendData;
+			requestBodyOffset = 0;
+
 			http.contentLength = sendData.length;
 			http.onSend = (void[] buf) {
 				import std.algorithm: min;
-				size_t minLen = min(buf.length, sendData.length);
+				size_t remaining = requestBodyData.length - requestBodyOffset;
+				size_t minLen = min(buf.length, remaining);
 				if (minLen == 0) return 0;
-				buf[0 .. minLen] = cast(void[]) sendData[0 .. minLen];
-				sendData = sendData[minLen .. $];
+				buf[0 .. minLen] = cast(void[]) requestBodyData[requestBodyOffset .. requestBodyOffset + minLen];
+				requestBodyOffset += minLen;
 				return minLen;
 			};
+
+			// Allow libcurl to rewind this request body should the request need to be sent
+			// again. Without this the transfer fails with CURLE_SEND_FAIL_REWIND, which affects
+			// token acquisition as well as data requests.
+			// https://github.com/abraunegg/onedrive/issues/3789
+			http.handle.set(CurlOption.seekdata, cast(void*) this);
+			http.handle.set(CurlOption.seekfunction, cast(void*) &curlUploadSeekCallback);
+
 			response.postBody = sendData;
 		}
 	}
@@ -498,10 +550,22 @@ class CurlEngine {
 
 		if (contentRange.empty) {
 			offsetSize = uploadFile.size();
+			// The request body is the whole file, so it begins at the start of the file
+			uploadBodyBaseOffset = 0;
 		} else {
 			addRequestHeader("Content-Range", contentRange);
 			uploadFile.seek(offset);
+			// The request body is a fragment, so it begins at the fragment offset rather than
+			// at the start of the file. This is needed to rewind the body correctly.
+			uploadBodyBaseOffset = to!long(offset);
 		}
+
+		// Allow libcurl to rewind the request body should the request need to be sent again,
+		// for example if the server drops the connection after the body has been sent. Without
+		// this the transfer fails with CURLE_SEND_FAIL_REWIND and cannot recover.
+		// https://github.com/abraunegg/onedrive/issues/3789
+		http.handle.set(CurlOption.seekdata, cast(void*) this);
+		http.handle.set(CurlOption.seekfunction, cast(void*) &curlUploadSeekCallback);
 
 		// Setup progress bar to display
 		http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
@@ -518,6 +582,60 @@ class CurlEngine {
 			return bytesRead.length;
 		};
 		http.contentLength = offsetSize;
+	}
+
+	// Reposition the file being uploaded so that libcurl is able to replay the request body.
+	// Returns a CurlSeek value indicating whether the reposition was possible.
+	// https://github.com/abraunegg/onedrive/issues/3789
+	private int repositionUploadFile(long offset) nothrow {
+		try {
+			// An in-memory request body, as used by post() and patch(). This covers token
+			// acquisition, which is otherwise unable to recover from a dropped connection.
+			if (!uploadFile.isOpen()) {
+				if (requestBodyData is null) {
+					// There is no request body that can be replayed
+					return CurlSeek.cantseek;
+				}
+				if ((offset < 0) || (offset > cast(long) requestBodyData.length)) {
+					// The requested position is not within the request body
+					return CurlSeek.cantseek;
+				}
+				requestBodyOffset = cast(size_t) offset;
+				return CurlSeek.ok;
+			}
+
+			// The offset supplied by libcurl is relative to the start of the request body. When
+			// uploading a fragment the body does not begin at the start of the file, so the
+			// offset of that fragment must be included.
+			uploadFile.seek(uploadBodyBaseOffset + offset);
+
+			// The data being replayed has already been passed through the streamed hasher once,
+			// and hashing it a second time would generate a hash that does not match the file
+			// that was actually uploaded.
+			if (uploadStreamHashActive) {
+				if (uploadBodyBaseOffset == 0) {
+					// The request body is the whole file, so the streamed hash covers only the
+					// data being replayed and can simply be restarted.
+					uploadQuickXorStreamHasher.start();
+					uploadStreamHashBytes = 0;
+				} else {
+					// The request body is one fragment of a larger file, and the streamed hash
+					// also covers the fragments that were sent before it. Those contributions
+					// cannot be removed from the hash, so the streamed hash can no longer be
+					// relied upon. Discard it, so that the upload is validated by other means
+					// rather than a false integrity failure being reported for a file that was
+					// uploaded correctly.
+					uploadStreamHashActive = false;
+					uploadStreamHashBytes = 0;
+				}
+			}
+
+			return CurlSeek.ok;
+		} catch (Exception exception) {
+			// The file could not be repositioned. Report this to libcurl rather than allowing
+			// incorrect data to be sent.
+			return CurlSeek.cantseek;
+		}
 	}
 
 	void beginUploadStreamHash() {
@@ -670,6 +788,18 @@ class CurlEngine {
 		
 		// set the response to null
 		response = null;
+
+		// Remove the seek callback and the reference to this instance that was provided to
+		// libcurl. This instance is returned to the curl engine pool and reused, so the
+		// callback must not be left referring to an upload that has been completed.
+		// https://github.com/abraunegg/onedrive/issues/3789
+		if (!http.isStopped) {
+			http.handle.set(CurlOption.seekfunction, cast(void*) null);
+			http.handle.set(CurlOption.seekdata, cast(void*) null);
+		}
+		uploadBodyBaseOffset = 0;
+		requestBodyData = null;
+		requestBodyOffset = 0;
 
 		// close file if open
 		if (uploadFile.isOpen()){
