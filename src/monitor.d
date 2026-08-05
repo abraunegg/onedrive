@@ -280,6 +280,18 @@ private bool isSameOrChildWatchPath(string parent, string candidate) {
 	return (normalisedCandidate == normalisedParent) || startsWith(normalisedCandidate, normalisedParent ~ "/");
 }
 
+private string rebaseWatchPath(string fromRoot, string toRoot, string candidate) {
+	string normalisedFromRoot = normaliseWatchPath(fromRoot);
+	string normalisedToRoot = normaliseWatchPath(toRoot);
+	string normalisedCandidate = normaliseWatchPath(candidate);
+
+	if (normalisedCandidate == normalisedFromRoot) {
+		return normalisedToRoot;
+	}
+
+	return normalisedToRoot ~ normalisedCandidate[normalisedFromRoot.length .. $];
+}
+
 private string rebasePath(string fromRoot, string toRoot, string candidate) {
 	string normalisedFromRoot = normaliseMonitorPath(fromRoot);
 	string normalisedCandidate = normaliseMonitorPath(candidate);
@@ -902,6 +914,51 @@ final class Monitor {
 		}
 	}
 
+	// A directory moved within the monitored tree retains its kernel watch
+	// descriptors. Rebase the stored paths instead of adding duplicate watches
+	// for the destination hierarchy.
+	private void rebaseWatchTree(string fromRoot, string toRoot) {
+		string oldRoot = normaliseWatchPath(fromRoot);
+		string newRoot = normaliseWatchPath(toRoot);
+		string[int] copy;
+		uint rebasedCount = 0;
+
+		inotifyMutex.lock();
+		try {
+			copy = wdToDirName.dup;
+
+			foreach (wd, dirname; copy) {
+				if (!isSameOrChildWatchPath(oldRoot, dirname)) continue;
+
+				string rebasedPath = rebaseWatchPath(oldRoot, newRoot, dirname);
+
+				auto existingWd = rebasedPath in dirNameToWd;
+				if ((existingWd !is null) && (*existingWd != wd)) {
+					// A conflicting reverse entry should not normally exist after
+					// idempotent registration. Prefer the descriptor belonging to
+					// the subtree currently being rebased and discard stale map state.
+					wdToDirName.remove(*existingWd);
+				}
+
+				dirNameToWd.remove(dirname);
+				wdToDirName[wd] = rebasedPath;
+				dirNameToWd[rebasedPath] = wd;
+				rebasedCount++;
+			}
+		} finally {
+			inotifyMutex.unlock();
+		}
+
+		if ((rebasedCount > 0) && debugLogging) {
+			addLogEntry(
+				"Rebased " ~ rebasedCount.to!string ~
+				" inotify watch descriptor(s) from " ~ oldRoot ~
+				" to " ~ newRoot,
+				["debug"]
+			);
+		}
+	}
+
 	// Return the file path from an inotify event
 	private bool getPath(const(inotify_event)* event, out string path) {
 		path = null;
@@ -1334,10 +1391,17 @@ final class Monitor {
 						}
 					} else if (event.mask & IN_MOVED_TO) {
 						if (debugLogging) {addLogEntry("event IN_MOVED_TO: " ~ path, ["debug"]);}
-						if (event.mask & IN_ISDIR) addRecursive(path);
 						auto from = event.cookie in cookieToPath;
 						if (from) {
 							string sourcePath = *from;
+
+							// A watched directory moved within the sync tree keeps its
+							// underlying kernel watch descriptors. Rebase the stored
+							// paths before recording or consuming the move.
+							if (event.mask & IN_ISDIR) {
+								rebaseWatchTree(sourcePath, path);
+							}
+
 							cookieToPath.remove(event.cookie);
 							if (!consumeExpectedMove(sourcePath, path)) {
 								pendingChanges.append(LocalChangeType.moved, sourcePath, path);
@@ -1347,6 +1411,10 @@ final class Monitor {
 							// Handle an item moved in from outside. An online-to-local move can
 							// also appear destination-only if the source event was filtered or
 							// unavailable on the platform.
+							if (event.mask & IN_ISDIR) {
+								addRecursive(path);
+							}
+
 							if (consumeExpectedMoveDestination(path)) {
 								// Exact client-generated move echo consumed.
 							} else if (event.mask & IN_ISDIR) {
