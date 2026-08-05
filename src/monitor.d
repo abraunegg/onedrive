@@ -798,24 +798,27 @@ final class Monitor {
 			inotifyMutex.unlock();
 		}
 
-		// Loop through the watch descriptors and remove
+		// Loop through the watch descriptors and remove. During shutdown or high churn,
+		// inotify may already have invalidated a watch and emitted IN_IGNORED. Treat
+		// those already-removed watches as cleanup success so shutdown cannot be
+		// interrupted by stale watch descriptors.
 		foreach (wd, path; copy) {
-			remove(wd);
+			// removeAll() is used during full monitor teardown / shutdown. In that
+			// scenario it is useful to keep the existing verbose teardown logging.
+			remove(wd, true);
 		}
 	}
 
-	private void remove(int wd) {
+	// Remove a watch descriptor.
+	private void remove(int wd, bool verboseRemovalLog = false) {
 		string dirname;
 		int ret;
-		int removeErrno;
+		int savedErrno;
 
 		inotifyMutex.lock();
 		try {
 			auto existingPath = wd in wdToDirName;
 			if (existingPath is null) {
-				// The watch may already have been removed by IN_IGNORED, shutdown,
-				// or another cleanup path. Treat repeated removal as a no-op rather
-				// than asserting or raising RangeError on direct map access.
 				if (debugLogging) {
 					addLogEntry(
 						"inotify watch descriptor already removed from internal map: wd=" ~ wd.to!string,
@@ -825,73 +828,77 @@ final class Monitor {
 				return;
 			}
 			dirname = *existingPath;
-			ret = worker.removeInotifyWatch(wd);
-			removeErrno = (ret < 0) ? errno() : 0;
-
-			// With IN_IGNORED enabled on every supported platform, the kernel may
-			// already have invalidated a watch before explicit cleanup reaches it.
-			// Treat EINVAL as an idempotent "already removed" result, but retain
-			// fatal handling for all other removal failures.
-			if ((ret < 0) && (removeErrno != EINVAL)) {
-				throw new MonitorException("inotify_rm_watch failed");
-			}
-
-			wdToDirName.remove(wd);
-			auto existingWd = dirname in dirNameToWd;
-			if ((existingWd !is null) && (*existingWd == wd)) {
-				dirNameToWd.remove(dirname);
-			}
 		} finally {
 			inotifyMutex.unlock();
 		}
 
-		if ((ret < 0) && (removeErrno == EINVAL) && debugLogging) {
-			addLogEntry("inotify watch was already absent during cleanup: " ~ dirname, ["debug"]);
+		// Do not hold the bookkeeping mutex across the kernel call.
+		ret = worker.removeInotifyWatch(wd);
+		savedErrno = (ret < 0) ? errno() : 0;
+
+		if (ret < 0) {
+			// EINVAL indicates that the watch descriptor is no longer valid. This can
+			// occur legitimately if the watched directory was deleted/moved or the
+			// kernel already removed the watch before explicit cleanup. Remove our
+			// bookkeeping entry and continue.
+			if (savedErrno == EINVAL) {
+				if (debugLogging) {
+					addLogEntry(
+						"Ignoring already-invalid inotify watch during removal: wd=" ~ wd.to!string ~ ", path=" ~ dirname,
+						["debug"]
+					);
+				}
+			} else {
+				throw new MonitorException("inotify_rm_watch failed");
+			}
 		}
-		if (verboseLogging) {addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ dirname, ["verbose"]);}
+
+		string removedPath;
+		unregisterWatchDescriptor(wd, removedPath);
+
+		// Runtime directory delete/move cleanup can remove many watches at once.
+		// Keep that normal runtime cleanup out of verbose output, but retain it at
+		// debug level. Full teardown / shutdown passes verboseRemovalLog=true.
+		if (verboseRemovalLog && verboseLogging) {
+			addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ dirname, ["verbose"]);
+		} else if (debugLogging) {
+			addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ dirname, ["debug"]);
+		}
 	}
 
-	// Remove all watch descriptors associated with the given path tree.
+	// Remove the watch descriptors associated with the given path and all child paths.
 	private void remove(const(char)[] path) {
-		string[] matchingPaths;
+		removeWatchTree(path.idup);
+	}
+
+	private void removeWatchTree(string path) {
 		int[] matchingWds;
-		string watchRoot = normaliseWatchPath(path.idup);
+		string key = normaliseWatchPath(path);
 
 		inotifyMutex.lock();
 		try {
 			foreach (wd, dirname; wdToDirName) {
-				if (isSameOrChildWatchPath(watchRoot, dirname)) {
+				if (isSameOrChildWatchPath(key, dirname)) {
 					matchingWds ~= wd;
-					matchingPaths ~= dirname;
 				}
 			}
 		} finally {
 			inotifyMutex.unlock();
 		}
 
-		foreach (idx, wd; matchingWds) {
-			int ret = worker.removeInotifyWatch(wd);
-			int removeErrno = (ret < 0) ? errno() : 0;
+		foreach (wd; matchingWds) {
+			// Normal runtime recursive cleanup should not produce verbose output for
+			// every child watch descriptor. Individual removals remain visible at
+			// debug level through remove().
+			remove(wd, false);
+		}
 
-			if ((ret < 0) && (removeErrno != EINVAL)) {
-				throw new MonitorException("inotify_rm_watch failed");
-			}
-
-			inotifyMutex.lock();
-			try {
-				wdToDirName.remove(wd);
-				auto existingWd = matchingPaths[idx] in dirNameToWd;
-				if ((existingWd !is null) && (*existingWd == wd)) {
-					dirNameToWd.remove(matchingPaths[idx]);
-				}
-			} finally {
-				inotifyMutex.unlock();
-			}
-
-			if ((ret < 0) && (removeErrno == EINVAL) && debugLogging) {
-				addLogEntry("inotify watch was already absent during subtree cleanup: " ~ matchingPaths[idx], ["debug"]);
-			}
-			if (verboseLogging) {addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ matchingPaths[idx], ["verbose"]);}
+		if ((matchingWds.length > 0) && debugLogging) {
+			addLogEntry(
+				"Removed " ~ matchingWds.length.to!string ~
+				" inotify watch descriptor(s) for directory tree: " ~ key,
+				["debug"]
+			);
 		}
 	}
 
