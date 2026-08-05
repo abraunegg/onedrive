@@ -1934,9 +1934,27 @@ class SyncEngine {
 				} else {
 					if (verboseLogging) {addLogEntry("Processing OneDrive JSON item batch [" ~ to!string(batchesProcessed) ~ "/" ~ to!string(batchCount) ~ "] to ensure consistent local state", ["verbose"]);}
 				}
+					
+				// Process this batch of JSON items within a single database transaction.
+				//
+				// Each item processed here would otherwise be written as its own transaction, and
+				// as 'synchronous' is set to FULL, that requires a flush to physical media per
+				// item. Batching these changes is safe because this phase performs no network
+				// activity, is processed sequentially, and the data written is reconstructible -
+				// the delta link is not advanced until any required transfers have completed, so
+				// an incomplete batch is simply re-obtained on the next run.
+				// https://github.com/abraunegg/onedrive/issues/3788
+				itemDB.beginTransaction();
+
+				// If processing this batch throws, discard the partial batch rather than leaving
+				// the transaction open
+				scope(failure) itemDB.rollbackTransaction();
 
 				// Process the batch
 				processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount);
+
+				// Commit this batch of changes to the database
+				itemDB.commitTransaction();
 
 				// To finish off the JSON processing items, this is needed to reflect this in the log
 				if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
@@ -12471,12 +12489,30 @@ class SyncEngine {
 
 		Item[] drivePathChildren = getChildren(searchItem.driveId, searchItem.id);
 		if (count(drivePathChildren) > 0) {
+			// Flag the entire set of children within a single transaction. Each item flagged here
+			// would otherwise be committed individually, and as 'synchronous' is FULL that
+			// requires a flush to physical media per item. For a shared folder containing many
+			// thousands of items this dominates the time taken to generate the /delta response.
+			//
+			// This is safe for the same reasons as the batched processing of received items: no
+			// network activity is performed here, the loop is sequential, and the change is
+			// reconstructible, as this only flags existing records as requiring re-validation.
+			// https://github.com/abraunegg/onedrive/issues/3788
+			itemDB.beginTransaction();
+
+			// If flagging these items throws, discard the partial set rather than leaving the
+			// transaction open
+			scope(failure) itemDB.rollbackTransaction();
+
 			// Children to process and flag as out-of-sync
 			foreach (drivePathChild; drivePathChildren) {
 				// Flag any object in the database as out-of-sync for this driveId & and object id
 				if (debugLogging) {addLogEntry("Downgrading item as out-of-sync: " ~ drivePathChild.id, ["debug"]);}
 				itemDB.downgradeSyncStatusFlag(drivePathChild.driveId, drivePathChild.id);
 			}
+
+			// Commit the flagged items to the database
+			itemDB.commitTransaction();
 		}
 		// Clear DB response array
 		drivePathChildren = [];
