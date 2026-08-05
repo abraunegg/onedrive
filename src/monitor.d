@@ -959,6 +959,44 @@ final class Monitor {
 		}
 	}
 
+	private void pruneStaleWatches() {
+		int[] staleWds;
+		string[int] copy;
+
+		inotifyMutex.lock();
+		try {
+			copy = wdToDirName.dup;
+		} finally {
+			inotifyMutex.unlock();
+		}
+
+		foreach (wd, dirname; copy) {
+			if (dirname == ".") continue;
+
+			try {
+				if (!exists(dirname) || !isDir(dirname)) {
+					staleWds ~= wd;
+				}
+			} catch (FileException) {
+				staleWds ~= wd;
+			}
+		}
+
+		foreach (wd; staleWds) {
+			// Stale watch pruning is normal runtime housekeeping; keep verbose output
+			// quiet and expose individual removals only at debug level.
+			remove(wd, false);
+		}
+
+		if ((staleWds.length > 0) && debugLogging) {
+			addLogEntry(
+				"Pruned " ~ staleWds.length.to!string ~
+				" stale inotify watch descriptor(s)",
+				["debug"]
+			);
+		}
+	}
+
 	// Return the file path from an inotify event
 	private bool getPath(const(inotify_event)* event, out string path) {
 		path = null;
@@ -1532,6 +1570,11 @@ final class Monitor {
 				}
 				cookieToPath.remove(cookie);
 			}
+
+			// Any lost delete/move events can leave stale watch entries behind. Prune
+			// against the current filesystem before the monitor loop goes idle again.
+			pruneStaleWatches();
+
 			// Debug Log that all inotify events are flushed
 			if (debugLogging) {addLogEntry("inotify events flushed", ["debug"]);}
 		}
