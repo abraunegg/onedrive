@@ -1485,6 +1485,17 @@ final class Monitor {
 								pendingChanges.append(LocalChangeType.changed, path);
 							}
 						}
+					} else if (event.mask & IN_DELETE_SELF) {
+						if (debugLogging) {addLogEntry("event IN_DELETE_SELF: " ~ path, ["debug"]);}
+						removeWatchTree(path);
+						if (!consumeExpectedRemovalObservation(path)) {
+							pendingChanges.append(LocalChangeType.deleted, path);
+						}
+					} else if (event.mask & IN_MOVE_SELF) {
+						// Do not remove the watch here. Directory moves inside the watched tree
+						// are reconciled via the matching parent IN_MOVED_FROM/IN_MOVED_TO
+						// cookie pair, where the watch tree is rebased to the new path.
+						if (debugLogging) {addLogEntry("event IN_MOVE_SELF: " ~ path, ["debug"]);}
 					} else if (event.mask & IN_DELETE) {
 						if (consumeExpectedRemovalObservation(path)) {
 							// Online-to-local removal echo consumed.
