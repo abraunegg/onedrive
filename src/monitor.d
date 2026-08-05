@@ -449,6 +449,8 @@ final class Monitor {
 	private string[int] wdToDirName;
 	// reverse map used to keep watch registration idempotent
 	private int[string] dirNameToWd;
+	// flag set when the monitor stream reports lost events
+	private bool monitorStateDirty = false;
 	// map the inotify cookies of move_from events to their path
 	private string[int] cookieToPath;
 	// buffer to receive the inotify events
@@ -574,6 +576,9 @@ final class Monitor {
 		try {
 			wdToDirName = null;
 			dirNameToWd = null;
+			cookieToPath = null;
+			movedNotDeleted = null;
+			pendingChanges = LocalChangeAccumulator.init;
 		} finally {
 			inotifyMutex.unlock();
 		}
@@ -641,6 +646,24 @@ final class Monitor {
 		} finally {
 			inotifyMutex.unlock();
 		}
+	}
+
+	private void clearTransientEventState() {
+		cookieToPath = null;
+		movedNotDeleted = null;
+
+		// PR #3756 destroyed the old ActionHolder here. Test 5 replaced that
+		// command accumulator with LocalChangeAccumulator, so discard the
+		// incomplete observation batch using the equivalent Test 5 state.
+		pendingChanges = LocalChangeAccumulator.init;
+	}
+
+	bool isMonitorStateDirty() {
+		return monitorStateDirty;
+	}
+
+	void clearMonitorStateDirty() {
+		monitorStateDirty = false;
 	}
 
 	// Recursively add this path to be monitored
@@ -1371,6 +1394,8 @@ final class Monitor {
 						unregisterWatchDescriptor(event.wd, ignoredPath);
 						goto skip;
 					} else if (event.mask & IN_Q_OVERFLOW) {
+						monitorStateDirty = true;
+						clearTransientEventState();
 						throw new MonitorException("inotify queue overflow: some events may be lost");
 					}
 
