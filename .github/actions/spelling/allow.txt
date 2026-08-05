@@ -69,6 +69,7 @@ buildroot
 bytecompile
 bytesleft
 cancelfd
+cantseek
 CApath
 cattr
 cbf
@@ -496,6 +497,8 @@ schedflags
 scl
 sdlang
 Searchmonkey
+seekdata
+seekfunction
 segsz
 segv
 semanage
