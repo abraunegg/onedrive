@@ -1501,6 +1501,18 @@ final class Monitor {
 								pendingChanges.append(LocalChangeType.createDir, path);
 							}
 						} else {
+							// Some BSD inotify compatibility layers may not emit
+							// IN_CLOSE_WRITE. When IN_CREATE is the actionable file event,
+							// clear any matching stale move cookie exactly as PR #3765 does.
+							if (triggerFileCreateAsChanged) {
+								auto cookieToPath1 = cookieToPath.dup();
+								foreach (cookie, path1; cookieToPath1) {
+									if (path1 == path) {
+										cookieToPath.remove(cookie);
+									}
+								}
+							}
+
 							// Consume exact online-to-local arrivals first. On FreeBSD and
 							// OpenBSD, a genuine local file write may be represented only by
 							// IN_CREATE, with no subsequent IN_CLOSE_WRITE event.
