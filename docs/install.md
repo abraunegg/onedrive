@@ -265,6 +265,58 @@ For GUI notifications the following is also necessary:
 sudo zypper install libnotify-devel
 ```
 
+#### OpenBSD 7.7
+
+```text
+pkg_add bash gmake autoconf automake libinotify git sqlite3 curl dmd
+```
+> [!NOTE]
+> If asked to chose package for autoconf, select `autoconf-2.72p0`
+> 
+> If asked to chose package for automake, select `automake-1.16.5p0`
+
+For Bash completion support, also install:
+```text
+pkg_add bash-completion
+```
+
+For GUI notifications, also install:
+```text
+pkg_add libnotify
+```
+> [!NOTE]
+> Install the required OpenBSD packages as 'root' unless you have installed 'sudo'
+
+#### OpenBSD 7.8
+
+> [!IMPORTANT]
+> Building the client with the D compilers supplied by the official OpenBSD 7.8 package repository is not supported.
+>
+> On `amd64`, OpenBSD 7.8 does not provide DMD or LDC packages, and its GDC package is version 11.2.0, which is older than the minimum supported GDC version of 15.
+
+#### OpenBSD 7.9
+
+```text
+pkg_add bash gmake autoconf automake libinotify git sqlite3 curl gdc
+```
+> [!NOTE]
+> If asked to chose package for autoconf, select `autoconf-2.72p0`
+> 
+> If asked to chose package for automake, select `automake-1.16.5p0`
+
+For Bash completion support, also install:
+```text
+pkg_add bash-completion
+```
+
+For GUI notifications, also install:
+```text
+pkg_add libnotify
+```
+> [!NOTE]
+> Install the required OpenBSD packages as 'root' unless you have installed 'sudo'
+
+
 #### Raspbian - ARMHF and ARM64
 > [!CAUTION]
 > The minimum LDC compiler version required to compile this application is 1.20.1, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
@@ -340,7 +392,7 @@ The overall process is as follows:
 
 ### Building the Application Using Default configure Settings
 
-#### Building on Linux using DMD, LDC or GDC
+#### Building the application on Linux using DMD, LDC or GDC
 You must first **activate** the compiler environment before building. For example:
 ```text
 source ~/dlang/dmd-2.091.1/activate
@@ -374,7 +426,7 @@ deactivate
 > ```
 
 
-#### Building on FreeBSD using gmake
+#### Building the application on FreeBSD using gmake
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
@@ -384,6 +436,64 @@ gmake install
 ```
 > [!NOTE]
 > Build and install the application as 'root' unless you have installed 'sudo'
+
+
+#### Building the application on OpenBSD using gmake
+> [!NOTE]
+> Install packages and perform the final system-wide installation as `root`. The configure and compilation steps should normally be run as a non-root build user.
+
+#### Configure the shared library search path for libinotify
+The `libinotify` package installs its shared library in `/usr/local/lib/inotify`, which is not one of the default shared-library directories processed at boot.
+
+Add the following setting to `/etc/rc.conf.local`:
+```text
+shlib_dirs="/usr/local/lib/inotify"
+```
+
+If `shlib_dirs` is already defined, append `/usr/local/lib/inotify` to the existing space-separated list instead of defining the variable a second time.
+
+This setting causes OpenBSD's normal boot process to add the directory to the shared-library hints automatically. To apply the change immediately without rebooting, run the following once as `root`:
+```text
+ldconfig -m /usr/local/lib/inotify
+```
+
+You can inspect the active shared-library hints with:
+```text
+ldconfig -r | grep '/usr/local/lib/inotify'
+```
+
+#### Configure login.conf for non-root compilation
+OpenBSD applies resource limits through login classes. A D compiler may hit the login class data-size limit even when the system still has free memory.
+
+Before changing `/etc/login.conf`, confirm that the failure is caused by a resource limit and identify the login class assigned to the build user. Adjust only that class rather than changing the global `default` class unless a system-wide change is intentional.
+
+The following values were used successfully while preparing this documentation:
+```text
+:datasize-cur=8192M:\
+:datasize-max=infinity:\
+```
+
+Add or update those capabilities within the existing entry for the build user's login class. The values above are tested examples, not mandatory values for every OpenBSD system; use the smallest limits that allow the compiler to complete.
+
+After editing `/etc/login.conf`, rebuild the capability database as `root`:
+```text
+cap_mkdb /etc/login.conf
+```
+
+Then log out and log back in before checking the effective limits with:
+```text
+ulimit -a
+```
+
+#### Compiling the application on OpenBSD using gmake
+OpenBSD's base shell is `ksh`, while this project's configure script must be run with the installed Bash shell.
+```
+git clone https://github.com/abraunegg/onedrive.git
+cd onedrive
+bash ./configure
+gmake clean; gmake;
+gmake install
+```
 
 #### Building on ARM | Raspberry Pi
 > [!CAUTION]
