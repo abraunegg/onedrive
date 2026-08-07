@@ -5299,12 +5299,12 @@ class SyncEngine {
 			string extension = extension(fileNameOnly);     // ".data"
 			
 			// We need to test for this: nameOnly.n.extension
-			while (exists(format(appConfig.recycleBinFilePath ~ nameOnly ~ ".%d." ~ extension, n))) {
+			while (exists(format(appConfig.recycleBinFilePath ~ nameOnly ~ ".%d" ~ extension, n))) {
 				n++;
 			}
 			
 			// Generate newFileNameOnly
-			string newFileNameOnly = format(nameOnly ~ ".%d." ~ extension, n);
+			string newFileNameOnly = format(nameOnly ~ ".%d" ~ extension, n);
 			
 			// UPDATE:
 			// - computedRecycleBinFilePath
