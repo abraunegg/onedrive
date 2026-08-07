@@ -108,8 +108,8 @@ distclean: clean
 	rm -f Makefile contrib/pacman/PKGBUILD contrib/spec/onedrive.spec onedrive.1 $(system_unit_files) $(user_unit_files)
 
 onedrive: $(SOURCES)
-	if git rev-parse --is-inside-work-tree >/dev/null 2>&1 ; then \
-		git describe --tags --always > version ; \
+	if [ -d .git ] || [ -f .git ]; then \
+		git describe --tags > version ; \
 	else \
 		echo $(version) > version ; \
 	fi
