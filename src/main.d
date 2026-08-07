@@ -116,7 +116,9 @@ version (OpenBSD) {
 
 
 // What other constant variables do we require?
-const int EXIT_RESYNC_REQUIRED = 126;
+// A mandatory --resync is an application configuration/state condition.
+// Use the traditional EX_CONFIG status value so callers can distinguish it from a generic failure.
+const int EXIT_RESYNC_REQUIRED = 78;
 
 // Class objects
 ApplicationConfig appConfig;
@@ -635,6 +637,7 @@ int main(string[] cliArgs) {
 				// Application configuration has changed however --resync not issued, fail fast
 				addLogEntry();
 				addLogEntry("An application configuration change has been detected where a --resync is required", ["info", "notify"]);
+				addLogEntry("Re-run the client with '--resync' appended to your normal '--sync' or '--monitor' command.");
 				addLogEntry();
 				return EXIT_RESYNC_REQUIRED;
 			} else {
@@ -949,6 +952,7 @@ int main(string[] cliArgs) {
 				// Not an empty database
 				addLogEntry();
 				addLogEntry("An application cache state issue has been detected where a --resync is required", ["info", "notify"]);
+				addLogEntry("Re-run the client with '--resync' appended to your normal '--sync' or '--monitor' command.");
 				addLogEntry();
 				return EXIT_RESYNC_REQUIRED;
 			}
