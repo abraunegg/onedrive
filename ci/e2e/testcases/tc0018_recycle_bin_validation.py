@@ -13,7 +13,7 @@ from framework.utils import command_to_string, reset_directory, run_command, wri
 class TestCase0018RecycleBinValidation(E2ETestCase):
     case_id = "0018"
     name = "recycle bin validation"
-    description = "Validate that online deletions are moved into a FreeDesktop-compliant recycle bin when enabled"
+    description = "Validate online deletion Recycle Bin handling, including collision filename formatting"
 
     def _write_runtime_base_config(self, config_path: Path, sync_dir: Path) -> None:
         write_onedrive_config(
@@ -40,6 +40,18 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             f'sync_dir = "{sync_dir}"\n',
         )
 
+    def _seed_recycle_entry(self, recycle_bin_root: Path, filename: str) -> None:
+        write_text_file(
+            recycle_bin_root / "files" / filename,
+            f"pre-existing recycle bin payload for {filename}\n",
+        )
+        write_text_file(
+            recycle_bin_root / "info" / f"{filename}.trashinfo",
+            "[Trash Info]\n"
+            f"Path=/pre-existing/{filename}\n"
+            "DeletionDate=2000-01-01T00:00:00\n",
+        )
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -51,25 +63,60 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         state_dir = layout.state_dir
 
         sync_root = case_work_dir / "syncroot"
+        mutator_root = case_work_dir / "mutatorroot"
         verify_root = case_work_dir / "verifyroot"
         recycle_bin_root = case_work_dir / "RecycleBin"
 
         conf_runtime = case_work_dir / "conf-runtime"
+        conf_mutator = case_work_dir / "conf-mutator"
         conf_verify = case_work_dir / "conf-verify"
 
         root_name = f"ZZ_E2E_TC0018_{context.run_id}_{os.getpid()}"
 
         reset_directory(sync_root)
+        reset_directory(mutator_root)
         reset_directory(verify_root)
         reset_directory(recycle_bin_root)
 
-        # Create initial local content to seed remotely
-        write_text_file(sync_root / root_name / "Keep" / "keep.txt", "keep\n")
-        write_text_file(sync_root / root_name / "OldData" / "old.txt", "old\n")
+        # Pre-populate selected Recycle Bin names so the cleanup phase exercises
+        # collision numbering at .2, .3 and .4. The extensionless entry verifies
+        # that collision numbering does not introduce a trailing dot.
+        seeded_recycle_filenames = [
+            "collision2.data",
+            "collision3.data",
+            "collision3.2.data",
+            "collision4.data",
+            "collision4.2.data",
+            "collision4.3.data",
+            "extensionless",
+        ]
+        for filename in seeded_recycle_filenames:
+            self._seed_recycle_entry(recycle_bin_root, filename)
 
-        # Shared runtime config for seed -> remove -> cleanup
+        deleted_filenames = [
+            "no-collision.data",
+            "collision2.data",
+            "collision3.data",
+            "collision4.data",
+            "extensionless",
+        ]
+
+        # Create initial local content to seed remotely. retain.txt keeps OldData
+        # present online while the individual target files are deleted remotely,
+        # ensuring the Recycle Bin code processes file paths rather than moving
+        # the parent directory as one item.
+        write_text_file(sync_root / root_name / "Keep" / "keep.txt", "keep\n")
+        write_text_file(sync_root / root_name / "OldData" / "retain.txt", "retain\n")
+        for filename in deleted_filenames:
+            write_text_file(sync_root / root_name / "OldData" / filename, f"delete {filename}\n")
+
+        # Shared runtime config for seed -> cleanup
         context.bootstrap_config_dir(conf_runtime)
         self._write_runtime_base_config(conf_runtime / "config", sync_root)
+
+        # A second client view is used to create genuine remote file deletions.
+        context.bootstrap_config_dir(conf_mutator)
+        self._write_verify_config(conf_mutator / "config", mutator_root)
 
         # Fresh verify config for clean remote validation
         context.bootstrap_config_dir(conf_verify)
@@ -77,8 +124,10 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
 
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"
-        remove_stdout = case_log_dir / "remove_stdout.log"
-        remove_stderr = case_log_dir / "remove_stderr.log"
+        mutator_pull_stdout = case_log_dir / "mutator_pull_stdout.log"
+        mutator_pull_stderr = case_log_dir / "mutator_pull_stderr.log"
+        mutator_delete_stdout = case_log_dir / "mutator_delete_stdout.log"
+        mutator_delete_stderr = case_log_dir / "mutator_delete_stderr.log"
         cleanup_stdout = case_log_dir / "cleanup_stdout.log"
         cleanup_stderr = case_log_dir / "cleanup_stderr.log"
         verify_stdout = case_log_dir / "verify_stdout.log"
@@ -107,21 +156,49 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         write_text_file(seed_stdout, seed_result.stdout)
         write_text_file(seed_stderr, seed_result.stderr)
 
-        remove_command = [
+        mutator_pull_command = [
             context.onedrive_bin,
             "--display-running-config",
+            "--sync",
+            "--download-only",
             "--verbose",
-            "--remove-directory",
-            f"{root_name}/OldData",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
             "--confdir",
-            str(conf_runtime),
+            str(conf_mutator),
         ]
-        context.log(f"Executing Test Case {self.case_id} remove: {command_to_string(remove_command)}")
-        remove_result = run_command(remove_command, cwd=context.repo_root)
-        write_text_file(remove_stdout, remove_result.stdout)
-        write_text_file(remove_stderr, remove_result.stderr)
+        context.log(f"Executing Test Case {self.case_id} mutator pull: {command_to_string(mutator_pull_command)}")
+        mutator_pull_result = run_command(mutator_pull_command, cwd=context.repo_root)
+        write_text_file(mutator_pull_stdout, mutator_pull_result.stdout)
+        write_text_file(mutator_pull_stderr, mutator_pull_result.stderr)
 
-        # Rewrite the same runtime config so cleanup reuses the same DB / delta state
+        missing_mutator_targets: list[str] = []
+        for filename in deleted_filenames:
+            target = mutator_root / root_name / "OldData" / filename
+            if target.is_file():
+                target.unlink()
+            else:
+                missing_mutator_targets.append(filename)
+
+        mutator_delete_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_mutator),
+        ]
+        context.log(f"Executing Test Case {self.case_id} mutator delete: {command_to_string(mutator_delete_command)}")
+        mutator_delete_result = run_command(mutator_delete_command, cwd=context.repo_root)
+        write_text_file(mutator_delete_stdout, mutator_delete_result.stdout)
+        write_text_file(mutator_delete_stderr, mutator_delete_result.stderr)
+
+        # Rewrite the same runtime config so cleanup reuses the seed client's DB
+        # and delta state when it receives the remote file deletions.
         self._write_runtime_cleanup_config(conf_runtime / "config", sync_root, recycle_bin_root)
 
         cleanup_command = [
@@ -167,6 +244,19 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         write_manifest(remote_manifest_file, remote_manifest)
         write_manifest(local_manifest_file, local_manifest)
 
+        expected_recycled_filenames = [
+            "no-collision.data",
+            "collision2.2.data",
+            "collision3.3.data",
+            "collision4.4.data",
+            "extensionless.2",
+        ]
+        malformed_collision_entries = [
+            entry
+            for entry in recycle_manifest
+            if "..data" in Path(entry).name
+        ]
+
         write_text_file(
             metadata_file,
             "\n".join(
@@ -174,14 +264,21 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
                     f"case_id={self.case_id}",
                     f"root_name={root_name}",
                     f"sync_root={sync_root}",
+                    f"mutator_root={mutator_root}",
                     f"verify_root={verify_root}",
                     f"recycle_bin_root={recycle_bin_root}",
                     f"runtime_confdir={conf_runtime}",
+                    f"mutator_confdir={conf_mutator}",
                     f"verify_confdir={conf_verify}",
                     f"seed_returncode={seed_result.returncode}",
-                    f"remove_returncode={remove_result.returncode}",
+                    f"mutator_pull_returncode={mutator_pull_result.returncode}",
+                    f"mutator_delete_returncode={mutator_delete_result.returncode}",
                     f"cleanup_returncode={cleanup_result.returncode}",
                     f"verify_returncode={verify_result.returncode}",
+                    f"missing_mutator_targets={missing_mutator_targets!r}",
+                    f"seeded_recycle_filenames={seeded_recycle_filenames!r}",
+                    f"expected_recycled_filenames={expected_recycled_filenames!r}",
+                    f"malformed_collision_entries={malformed_collision_entries!r}",
                 ]
             )
             + "\n",
@@ -190,8 +287,10 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         artifacts = [
             str(seed_stdout),
             str(seed_stderr),
-            str(remove_stdout),
-            str(remove_stderr),
+            str(mutator_pull_stdout),
+            str(mutator_pull_stderr),
+            str(mutator_delete_stdout),
+            str(mutator_delete_stderr),
             str(cleanup_stdout),
             str(cleanup_stderr),
             str(verify_stdout),
@@ -203,9 +302,12 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         ]
         details = {
             "seed_returncode": seed_result.returncode,
-            "remove_returncode": remove_result.returncode,
+            "mutator_pull_returncode": mutator_pull_result.returncode,
+            "mutator_delete_returncode": mutator_delete_result.returncode,
             "cleanup_returncode": cleanup_result.returncode,
             "verify_returncode": verify_result.returncode,
+            "missing_mutator_targets": missing_mutator_targets,
+            "malformed_collision_entries": malformed_collision_entries,
             "root_name": root_name,
         }
 
@@ -218,11 +320,29 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
                 details,
             )
 
-        if remove_result.returncode != 0:
+        if mutator_pull_result.returncode != 0:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Online directory removal failed with status {remove_result.returncode}",
+                f"Remote mutation preload failed with status {mutator_pull_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        if missing_mutator_targets:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote mutation preload did not contain expected delete targets: {missing_mutator_targets}",
+                artifacts,
+                details,
+            )
+
+        if mutator_delete_result.returncode != 0:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote file deletion propagation failed with status {mutator_delete_result.returncode}",
                 artifacts,
                 details,
             )
@@ -245,15 +365,6 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
                 details,
             )
 
-        if (sync_root / root_name / "OldData").exists():
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "OldData still exists locally after online deletion cleanup",
-                artifacts,
-                details,
-            )
-
         if not (sync_root / root_name / "Keep" / "keep.txt").is_file():
             return self.fail_result(
                 self.case_id,
@@ -263,41 +374,92 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
                 details,
             )
 
-        recycle_has_file = any(path.endswith("old.txt") for path in recycle_manifest)
-        recycle_has_info = any(path.endswith(".trashinfo") for path in recycle_manifest)
-
-        if not recycle_has_file:
+        if not (sync_root / root_name / "OldData" / "retain.txt").is_file():
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Deleted content was not moved into the configured recycle bin",
+                "OldData retain file is missing locally after recycle bin processing",
                 artifacts,
                 details,
             )
 
-        if not recycle_has_info:
+        remaining_local_targets = [
+            filename
+            for filename in deleted_filenames
+            if (sync_root / root_name / "OldData" / filename).exists()
+        ]
+        if remaining_local_targets:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Recycle bin metadata .trashinfo file was not created",
+                f"Online-deleted files still exist locally after Recycle Bin cleanup: {remaining_local_targets}",
                 artifacts,
                 details,
             )
 
-        if f"{root_name}/Keep/keep.txt" not in remote_manifest:
+        if malformed_collision_entries:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Keep file is missing online after recycle bin processing",
+                f"Recycle Bin collision filenames contain an unexpected double dot: {malformed_collision_entries}",
                 artifacts,
                 details,
             )
 
-        if any(entry == f"{root_name}/OldData" or entry.startswith(f"{root_name}/OldData/") for entry in remote_manifest):
+        missing_seeded_entries: list[str] = []
+        for filename in seeded_recycle_filenames:
+            for expected_entry in (f"files/{filename}", f"info/{filename}.trashinfo"):
+                if expected_entry not in recycle_manifest:
+                    missing_seeded_entries.append(expected_entry)
+        if missing_seeded_entries:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "OldData still exists online after explicit online removal",
+                f"Pre-existing Recycle Bin collision entries were not preserved: {missing_seeded_entries}",
+                artifacts,
+                details,
+            )
+
+        missing_recycled_entries: list[str] = []
+        for filename in expected_recycled_filenames:
+            for expected_entry in (f"files/{filename}", f"info/{filename}.trashinfo"):
+                if expected_entry not in recycle_manifest:
+                    missing_recycled_entries.append(expected_entry)
+        if missing_recycled_entries:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Expected Recycle Bin collision outputs are missing: {missing_recycled_entries}",
+                artifacts,
+                details,
+            )
+
+        expected_remote_retained = [
+            f"{root_name}/Keep/keep.txt",
+            f"{root_name}/OldData/retain.txt",
+        ]
+        missing_remote_retained = [
+            path for path in expected_remote_retained if path not in remote_manifest
+        ]
+        if missing_remote_retained:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Expected retained files are missing online after recycle bin processing: {missing_remote_retained}",
+                artifacts,
+                details,
+            )
+
+        remote_deleted_targets = [
+            f"{root_name}/OldData/{filename}"
+            for filename in deleted_filenames
+            if f"{root_name}/OldData/{filename}" in remote_manifest
+        ]
+        if remote_deleted_targets:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Files intended for online deletion still exist remotely: {remote_deleted_targets}",
                 artifacts,
                 details,
             )
