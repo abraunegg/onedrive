@@ -2720,7 +2720,9 @@ class OneDriveApi {
 							// initialization error ... prevent a run-away process if we have zero disk space
 							ulong localActualFreeSpace = getAvailableDiskSpace(".");
 							if (localActualFreeSpace == 0) {
-								throw new OneDriveError("Zero disk space detected");
+								addLogEntry("ERROR: Zero disk space detected");
+								// Must force exit here, allow logging to be done
+								forceExit();
 							}
 						} else {
 							// Unknown curl error
