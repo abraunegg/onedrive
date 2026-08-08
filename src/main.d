@@ -1129,10 +1129,10 @@ int main(string[] cliArgs) {
 							addLogEntry("Attempting to enable WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 							
 							// Obtain the WebSocket Notification URL from the API endpoint
-							syncEngineInstance.obtainWebSocketNotificationURL();
+							bool websocketNotificationUrlObtained = syncEngineInstance.obtainWebSocketNotificationURL();
 							
 							// Were we able to correctly obtain the endpoint response and build the socket.io WS endpoint
-							if (appConfig.websocketNotificationUrlAvailable) {
+							if (websocketNotificationUrlObtained) {
 								// Notification URL is available
 								if (oneDriveSocketIo is null) {
 									oneDriveSocketIo = new OneDriveSocketIo(thisTid, appConfig);
@@ -1140,9 +1140,7 @@ int main(string[] cliArgs) {
 								}
 								addLogEntry("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 							} else {
-								addLogEntry("ERROR: Unable to configure WebSocket support to monitor Microsoft Graph API changes in near real-time.");
-								if (debugLogging) {addLogEntry("Setting 'disable_websocket_support' to 'true' to force WebSockets to be disabled.", ["debug"]);}
-								appConfig.setValueBool("disable_websocket_support" , true);
+								addLogEntry("WARNING: Unable to configure WebSocket support to monitor Microsoft Graph API changes in near real-time. The client will retry while monitor mode remains active.");
 							}
 						} else {
 							// WebSocket Support has been disabled
@@ -1221,6 +1219,8 @@ int main(string[] cliArgs) {
 			// Immutables
 			immutable auto checkOnlineInterval = dur!"seconds"(appConfig.getValueLong("monitor_interval"));
 			immutable auto githubCheckInterval = dur!"seconds"(86400);
+			immutable auto websocketRetryInterval = dur!"seconds"(60);
+			immutable auto websocketRenewEarly = dur!"seconds"(120);
 			immutable ulong fullScanFrequency = appConfig.getValueLong("monitor_fullscan_frequency");
 			immutable ulong logOutputSuppressionInterval = appConfig.getValueLong("monitor_log_frequency");
 			immutable bool webhookEnabled = appConfig.getValueBool("webhook_enabled");
@@ -1233,6 +1233,10 @@ int main(string[] cliArgs) {
 			ulong monitorLogOutputLoopCount = 0;
 			MonoTime lastCheckTime = MonoTime.currTime();
 			MonoTime lastGitHubCheckTime = MonoTime.currTime();
+			// Startup WebSocket URL acquisition, when enabled, occurs immediately before
+			// entering the monitor loop. Rate-limit any subsequent acquisition attempt so
+			// frequent local filesystem activity cannot hammer the Graph endpoint.
+			MonoTime lastWebSocketAcquisitionAttempt = MonoTime.currTime();
 			SysTime lastMonitorGcCleanup = Clock.currTime();
 			
 			while (performFileSystemMonitoring) {
@@ -1270,19 +1274,45 @@ int main(string[] cliArgs) {
 						if (appConfig.curlSupportsWebSockets) {
 							// Did the user configure to disable 'websocket' support?
 							if (!appConfig.getValueBool("disable_websocket_support")) {
-								// Do we need to renew the notification URL?
-								auto renewEarly = dur!"seconds"(120);
+								// WebSocket notification URL acquisition is recoverable. This covers both
+								// an initial startup failure (no URL available yet) and renewal of an
+								// existing endpoint shortly before expiry.
+								auto acquisitionNow = MonoTime.currTime();
+								bool websocketAcquisitionRequired = !appConfig.websocketNotificationUrlAvailable;
+								bool websocketRenewalRequired = false;
+								
 								if (appConfig.websocketNotificationUrlAvailable && appConfig.websocketUrlExpiry.length) {
-									auto expiry = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
-									auto now    = Clock.currTime(UTC());
-									if (expiry - now <= renewEarly) {
-										try {
-											// Obtain the WebSocket Notification URL from the API endpoint
-											syncEngineInstance.obtainWebSocketNotificationURL();
-											if (debugLogging) addLogEntry("Refreshed WebSocket notification URL prior to expiry", ["debug"]);
-										} catch (Exception e) {
-											if (debugLogging) addLogEntry("Failed to refresh WebSocket notification URL: " ~ e.msg, ["debug"]);
+									try {
+										auto expiry = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
+										auto now = Clock.currTime(UTC());
+										websocketRenewalRequired = (expiry - now <= websocketRenewEarly);
+									} catch (Exception e) {
+										// Existing expiry state is malformed; attempt to replace it through the
+										// normal, rate-limited acquisition path rather than terminating monitor mode.
+										websocketRenewalRequired = true;
+										if (debugLogging) addLogEntry("Unable to parse current WebSocket notification URL expiry: " ~ e.msg, ["debug"]);
+									}
+								}
+								
+								if ((websocketAcquisitionRequired || websocketRenewalRequired) &&
+									(acquisitionNow - lastWebSocketAcquisitionAttempt >= websocketRetryInterval)) {
+									if (websocketAcquisitionRequired) {
+										addLogEntry("Retrying WebSocket notification URL acquisition.");
+									}
+									
+									lastWebSocketAcquisitionAttempt = acquisitionNow;
+									bool websocketNotificationUrlObtained = syncEngineInstance.obtainWebSocketNotificationURL();
+									
+									if (websocketNotificationUrlObtained) {
+										if (oneDriveSocketIo is null) {
+											oneDriveSocketIo = new OneDriveSocketIo(thisTid, appConfig);
+											oneDriveSocketIo.start();
+											addLogEntry("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
+										} else if (debugLogging) {
+											addLogEntry("Refreshed WebSocket notification URL prior to expiry", ["debug"]);
 										}
+									} else if (debugLogging) {
+										addLogEntry("WebSocket notification URL acquisition failed; retaining existing state and retrying later", ["debug"]);
 									}
 								}
 							}
@@ -1474,7 +1504,11 @@ int main(string[] cliArgs) {
 					auto sleepTime = nextCheckTime - currentTime;
 					if (debugLogging) {addLogEntry("Sleep for " ~ to!string(sleepTime), ["debug"]);}
 					
-					if (filesystemMonitor.initialised || webhookEnabled || oneDriveSocketIo !is null) {
+					bool websocketSupportActiveOrRetryable = !appConfig.getValueBool("upload_only") &&
+						!webhookEnabled && appConfig.curlSupportsWebSockets &&
+						!appConfig.getValueBool("disable_websocket_support");
+					
+					if (filesystemMonitor.initialised || webhookEnabled || oneDriveSocketIo !is null || websocketSupportActiveOrRetryable) {
 
 						if (filesystemMonitor.initialised) {
 							// If local monitor is on and is waiting (previous event was not from webhook)
@@ -1501,8 +1535,33 @@ int main(string[] cliArgs) {
 								Duration nextWebhookCheckDuration = oneDriveWebhook.getNextExpirationCheckDuration();
 								if (nextWebhookCheckDuration < sleepTime) sleepTime = nextWebhookCheckDuration;
 								notificationReceived = false;
-							} else if (oneDriveSocketIo !is null && !appConfig.getValueBool("disable_websocket_support") && appConfig.curlSupportsWebSockets) {
-								Duration nextWebsocketCheckDuration = oneDriveSocketIo.getNextExpirationCheckDuration();
+							} else if (websocketSupportActiveOrRetryable) {
+								Duration nextWebsocketCheckDuration;
+								if (oneDriveSocketIo !is null) {
+									nextWebsocketCheckDuration = oneDriveSocketIo.getNextExpirationCheckDuration();
+									
+									// If a renewal attempt has failed while the existing connection remains
+									// usable, wake at the retry cadence rather than waiting until expiry.
+									if (appConfig.websocketNotificationUrlAvailable && appConfig.websocketUrlExpiry.length) {
+										try {
+											auto expiry = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
+											if (expiry - Clock.currTime(UTC()) <= websocketRenewEarly) {
+												auto elapsedSinceAcquisitionAttempt = MonoTime.currTime() - lastWebSocketAcquisitionAttempt;
+												auto retryWait = (elapsedSinceAcquisitionAttempt < websocketRetryInterval) ?
+													(websocketRetryInterval - elapsedSinceAcquisitionAttempt) : Duration.zero;
+												if (retryWait < nextWebsocketCheckDuration) nextWebsocketCheckDuration = retryWait;
+											}
+										} catch (Exception exception) {
+											// Malformed expiry is handled by the acquisition path at the top of the loop.
+										}
+									}
+								} else {
+									// No worker exists yet because initial URL acquisition failed. Wake the
+									// monitor loop when the retry interval elapses even in --download-only mode.
+									auto elapsedSinceAcquisitionAttempt = MonoTime.currTime() - lastWebSocketAcquisitionAttempt;
+									nextWebsocketCheckDuration = (elapsedSinceAcquisitionAttempt < websocketRetryInterval) ?
+										(websocketRetryInterval - elapsedSinceAcquisitionAttempt) : Duration.zero;
+								}
 								if (nextWebsocketCheckDuration < sleepTime) sleepTime = nextWebsocketCheckDuration;
 							}
 						}
