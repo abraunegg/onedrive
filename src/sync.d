@@ -16402,7 +16402,12 @@ class SyncEngine {
 	}
 	
 	// Obtain the Websocket Notification URL
-	void obtainWebSocketNotificationURL() {
+	//
+	// Return true only when a complete, valid replacement endpoint has been
+	// obtained and committed to the runtime configuration. A failed request or
+	// malformed response must leave any existing working endpoint untouched so
+	// that callers can safely retry later.
+	bool obtainWebSocketNotificationURL() {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -16414,7 +16419,7 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 		
-		string websocketURL;
+		bool websocketNotificationUrlObtained = false;
 		
 		// Create a new API Instance for this thread and initialise it
 		OneDriveApi queryWebsocketURLApiInstance;
@@ -16427,35 +16432,44 @@ class SyncEngine {
 			
 			// Was a valid JSON response with the required endpoint fields provided?
 			if ((endpointResponse.type() == JSONType.object) && (("notificationUrl" in endpointResponse) != null) && (("expirationDateTime" in endpointResponse) != null)) {
-				
-				// Log response
-				if (debugLogging) {addLogEntry("Response for a Socket.IO Subscription Endpoint: " ~ to!string(endpointResponse), ["debug"]);}
-				
-				// Store the JSON in the configuration for reuse
-				appConfig.websocketEndpointResponse = to!string(endpointResponse);
-				
-				// Extract and store the Notification URL from the response we received (no transformation)
-				websocketURL = endpointResponse["notificationUrl"].str;
-				
-				// Extract and store the expiry
-				appConfig.websocketUrlExpiry = endpointResponse["expirationDateTime"].str;
-				SysTime expiryUTC = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
-				SysTime expiryLocal = expiryUTC.toLocalTime();
-				
-				// Do we have a valid Notification URL ?
-				if (!websocketURL.empty) {
-					// Store the websocket notification URL
-					appConfig.websocketNotificationUrl = websocketURL;
-					// Set flag
-					appConfig.websocketNotificationUrlAvailable = true;
-				
-					// Log WebSocket specifics
-					if (debugLogging) {
-						addLogEntry("WebSocket Notification URL: " ~ websocketURL, ["debug"]);
-						addLogEntry("WebSocket Expiry (UTC):     " ~ to!string(expiryUTC), ["debug"]);
-						addLogEntry("WebSocket Expiry (Local):   " ~ to!string(expiryLocal), ["debug"]);
+				// Validate the complete replacement response before changing any existing
+				// WebSocket state. This ensures a failed renewal cannot partially replace
+				// a working endpoint, expiry or response payload.
+				try {
+					string websocketURL = endpointResponse["notificationUrl"].str;
+					string websocketExpiry = endpointResponse["expirationDateTime"].str;
+					
+					if (!websocketURL.empty && !websocketExpiry.empty) {
+						SysTime expiryUTC = SysTime.fromISOExtString(websocketExpiry);
+						SysTime expiryLocal = expiryUTC.toLocalTime();
+						
+						// Log response only after all required fields have been validated
+						if (debugLogging) {addLogEntry("Response for a Socket.IO Subscription Endpoint: " ~ to!string(endpointResponse), ["debug"]);}
+						
+						// Commit the new endpoint only after the complete replacement response
+						// has been validated.
+						appConfig.websocketEndpointResponse = to!string(endpointResponse);
+						appConfig.websocketUrlExpiry = websocketExpiry;
+						// Publish the URL after its associated metadata so the Socket.IO worker
+						// cannot observe a new endpoint paired with the previous expiry.
+						appConfig.websocketNotificationUrl = websocketURL;
+						appConfig.websocketNotificationUrlAvailable = true;
+						websocketNotificationUrlObtained = true;
+						
+						// Log WebSocket specifics
+						if (debugLogging) {
+							addLogEntry("WebSocket Notification URL: " ~ websocketURL, ["debug"]);
+							addLogEntry("WebSocket Expiry (UTC):     " ~ to!string(expiryUTC), ["debug"]);
+							addLogEntry("WebSocket Expiry (Local):   " ~ to!string(expiryLocal), ["debug"]);
+						}
+					} else {
+						if (debugLogging) {addLogEntry("Socket.IO Subscription Endpoint response did not contain a usable notification URL and expiry", ["debug"]);}
 					}
-				}	
+				} catch (Exception exception) {
+					if (debugLogging) {addLogEntry("Socket.IO Subscription Endpoint response could not be validated: " ~ exception.msg, ["debug"]);}
+				}
+			} else {
+				if (debugLogging) {addLogEntry("Socket.IO Subscription Endpoint response did not contain the required notificationUrl and expirationDateTime fields", ["debug"]);}
 			}
 			
 		} catch (OneDriveException exception) {
@@ -16474,8 +16488,10 @@ class SyncEngine {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
+		
+		return websocketNotificationUrlObtained;
 	}
-	
+
 	// Download a single file via --download-file <path/to/file>
 	void downloadSingleFile(string pathToQuery) {
 		// Function Start Time
