@@ -185,13 +185,44 @@ class OneDriveApi {
 		}
 	}
 
+	// Configure the active CurlEngine using the current application settings
+	private void initialiseCurlEngine() {
+		curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"), appConfig.getValueLong("max_curl_idle"), keepAlive);
+	}
+
+	// Discard the current CurlEngine and replace it with a newly constructed instance
+	private void replaceCurlEngine() {
+		if (curlEngine !is null) {
+			if (debugLogging) {addLogEntry("Discarding CurlEngine instance ID: " ~ curlEngine.internalThreadId, ["debug"]);}
+
+			// Detach the shared response object before destroying the engine.
+			// OneDriveApi retains the response so the existing retry delegate can reuse it.
+			curlEngine.cleanup();
+			object.destroy(curlEngine);
+			curlEngine = null;
+		}
+
+		// Deliberately bypass the CurlEngine pool: recovery from a CA read failure
+		// requires a completely new libcurl handle.
+		curlEngine = new CurlEngine;
+		initialiseCurlEngine();
+
+		if (debugLogging) {addLogEntry("Replacement CurlEngine instance ID: " ~ curlEngine.internalThreadId, ["debug"]);}
+	}
+
+	// Identify libcurl error 77 wording used by supported libcurl versions
+	private bool isCurlCACertificateReadError(string errorMessage) {
+		return canFind(errorMessage, "Problem with the SSL CA cert (path? access rights?)") ||
+			canFind(errorMessage, "Problem with reading the SSL CA cert (path? access rights?)");
+	}
+
 	// Initialise the OneDrive API class
 	bool initialise(bool keepAlive=true) {
 		// Initialise the curl engine
 		this.keepAlive = keepAlive;
 		if (curlEngine is null) {
 			curlEngine = getCurlInstance();
-			curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"), appConfig.getValueLong("max_curl_idle"), keepAlive);
+			initialiseCurlEngine();
 
 			// WebSocket capability available in OS cURL version
 			if (!appConfig.websocketSupportCheckDone) {
@@ -2676,21 +2707,13 @@ class OneDriveApi {
 					}
 				} else {
 					// Some other 'libcurl' error was returned
-					if (canFind(errorMessage, "Problem with the SSL CA cert (path? access rights?) on handle")) {
-						// error setting certificate verify locations:
-						//  CAfile: /etc/pki/tls/certs/ca-bundle.crt
-						//	CApath: none
-						//
-						// Tell the Curl Engine to bypass SSL check - essentially SSL is passing back a bad value due to 'stdio' compile time option
-						// Further reading:
-						//  https://github.com/curl/curl/issues/6090
-						//  https://github.com/openssl/openssl/issues/7536
-						//  https://stackoverflow.com/questions/45829588/brew-install-fails-curl77-error-setting-certificate-verify
-						//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
-
-						string sslCertReadErrorMessage = "System SSL CA certificates are missing or unreadable by libcurl – please ensure the correct CA bundle is installed and is accessible.";
-						addLogEntry("ERROR: " ~ sslCertReadErrorMessage);
-						throw new OneDriveError(sslCertReadErrorMessage);
+					if (isCurlCACertificateReadError(errorMessage)) {
+						// CURLE_SSL_CACERT_BADFILE (77) is a local CA certificate read failure.
+						// Retain the original libcurl diagnostic, discard the affected handle,
+						// and let the existing retry/backoff path retry with a new CurlEngine.
+						addLogEntry("WARNING: libcurl was unable to read the SSL CA certificate bundle; discarding the affected CurlEngine and retrying the request.");
+						addLogEntry("libcurl error: " ~ errorMessage);
+						replaceCurlEngine();
 					} else {
 						// Was this a curl initialization error?
 						if (canFind(errorMessage, "Failed initialization on handle")) {
