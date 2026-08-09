@@ -13659,7 +13659,7 @@ class SyncEngine {
 		bool unrepresentableOnline = false;
 		// Item variables
 		Item oldItem, newItem, parentItem;
-
+		
 		// This not a Client Side Filtering check, nor a Microsoft Check, but is a sanity check that the path provided is UTF encoded correctly
 		// Check the std.encoding of the path against: Unicode 5.0, ASCII, ISO-8859-1, ISO-8859-2, WINDOWS-1250, WINDOWS-1251, WINDOWS-1252
 		if (!unwanted) {
@@ -13820,14 +13820,29 @@ class SyncEngine {
 			}
 		} else if (unrepresentableOnline) {
 			// The item has not been moved out of scope, it has been renamed to something that
-			// cannot exist online. Leave the existing online copy and its database entry alone
-			// so the data stays protected until the local name is corrected. The local file is
-			// picked up again by a normal scan once it has a name that can be represented.
+			// cannot exist online. Preserve the existing online copy: it holds data that is
+			// still present locally, and nothing can restore it once removed because the local
+			// name remains unusable.
 			addLogEntry("Skipping move - the new name cannot be used on Microsoft OneDrive. The existing online copy has been left unchanged: " ~ oldPath, ["info", "notify"]);
+			
+			// Stop tracking the old path locally. Nothing exists there any more, and leaving
+			// the record in place would make the next local scan read the old path as a local
+			// deletion and remove the online copy after all, simply one pass later.
+			if (itemDB.selectByPath(oldPath, appConfig.defaultDriveId, oldItem)) {
+				// A directory carries its children with it. Those records describe paths that
+				// have also gone, so they would be read as local deletions in the same way.
+				if (oldItem.type != ItemType.file) {
+					foreach (Item unrepresentableChild; getChildren(oldItem.driveId, oldItem.id)) {
+						itemDB.deleteById(unrepresentableChild.driveId, unrepresentableChild.id);
+					}
+				}
+				itemDB.deleteById(oldItem.driveId, oldItem.id);
+				if (debugLogging) {addLogEntry("uploadMoveItem: removed the local database record for " ~ oldPath ~ " whilst preserving the online copy", ["debug"]);}
+			}
 		} else {
 			// Moved item is unwanted
 			addLogEntry("Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive");
-
+			
 			// Load the database record for the old path before attempting to remove it online.
 			// 'oldItem' is only populated by the successful move path above, so without this the
 			// delete is issued with a default constructed Item and cannot identify anything.
