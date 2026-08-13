@@ -4192,6 +4192,7 @@ class SyncEngine {
 							if (debugLogging) {
 								addLogEntry("downloadResponse is null", ["debug"]);
 							}
+							downloadFailed = true;
 						}
 						
 						// OneDrive API Instance Cleanup - Shutdown API and free curl object.
@@ -4203,6 +4204,11 @@ class SyncEngine {
 					} catch (OneDriveException exception) {
 						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset); generated a OneDriveException", ["debug"]);}
 						
+						// Any propagated API exception means that the requested online version was
+						// not downloaded. A pre-existing final path, if present, is still the last
+						// successfully applied local version and must not be validated as this one.
+						downloadFailed = true;
+
 						// HTTP request returned status code 403
 						if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
 							// We attempted to download a file, that was shared with us, but this was shared with us as read-only and no download permission
@@ -4226,9 +4232,9 @@ class SyncEngine {
 						downloadFailed = true;
 					}
 				
-					// If we get to this point, something was downloaded .. does it match what we expected?
-					// Does it still exist?
-					if (exists(newItemPath)) {
+					// Validate only when the requested online version was downloaded. A failed
+					// transfer may deliberately leave an older final file untouched.
+					if (!downloadFailed && exists(newItemPath)) {
 						// When downloading some files from SharePoint, the OneDrive API reports one file size, 
 						// but the SharePoint HTTP Server sends a totally different byte count for the same file
 						// we have implemented --disable-download-validation to disable these checks
@@ -4442,7 +4448,7 @@ class SyncEngine {
 								}
 							}
 						}	// end of (!disableDownloadValidation)
-					} else {
+					} else if (!downloadFailed) {
 					
 						// Was exitHandlerTriggered flagged
 						if (!exitHandlerTriggered) {
@@ -4519,9 +4525,9 @@ class SyncEngine {
 						fileDownloadFailures ~= newItemPath; // Add newItemPath if it's not already present
 					}
 					
-					// Since the file download failed:
-					// - The file should not exist locally
-					// - The download identifiers should not exist in the local database
+					// Since the requested online version was not downloaded, remove the
+					// database identity only when there is no final local file. If an older
+					// successfully applied file remains, preserve both it and its DB baseline.
 					if (!exists(newItemPath)) {
 						// The local path does not exist
 						if (itemDB.idInLocalDatabase(downloadDriveId, downloadItemId)) {

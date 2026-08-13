@@ -577,7 +577,7 @@ class CurlEngine {
 		return response;
 	}
 
-	CurlResponse download(string originalFilename, string downloadFilename) {
+	CurlResponse download(string downloadFilename, bool delegate(int) shouldAcceptResponseBody = null) {
 		setResponseHolder(null);
 		
 		// Open the file in append mode if resuming, else write mode
@@ -607,28 +607,39 @@ class CurlEngine {
 		QuickXorStreamHasher quickXorStreamHasher;
 		ulong streamedHashBytes = 0;
 		
+		// Only persist response bodies that the caller considers valid download
+		// responses. This prevents HTTP error bodies from contaminating a valid
+		// resumable partial file before the higher-level retry/error handler runs.
+		bool acceptResponseBody = true;
+		if (shouldAcceptResponseBody !is null) {
+			http.onReceiveStatusLine = (HTTP.StatusLine statusLine) {
+				acceptResponseBody = shouldAcceptResponseBody(statusLine.code);
+			};
+		}
+
 		// Receive data
 		http.onReceive = (ubyte[] data) {
-			if (enableStreamedHash) {
-				quickXorStreamHasher.update(data);
-				streamedHashBytes += data.length;
+			if (acceptResponseBody) {
+				if (enableStreamedHash) {
+					quickXorStreamHasher.update(data);
+					streamedHashBytes += data.length;
+				}
+				file.rawWrite(data);
 			}
-			file.rawWrite(data);
 			return data.length;
 		};
 		
 		// Perform HTTP Operation
 		http.perform();
 		
-		// close open file - avoids problems with renaming on GCS Buckets and other semi-POSIX systems
+		// close open file before returning control to the caller
 		if (file.isOpen()){
 			file.close();
 		}
-		
-		// Rename downloaded file
-		rename(downloadFilename, originalFilename);
 
-		// Update response and return response
+		// Update response and return response. Promotion of the temporary download
+		// into the final destination is deliberately owned by the API layer after
+		// HTTP response validation has completed.
 		response.update(&http);
 		if (enableStreamedHash) {
 			response.streamedQuickXorHash = quickXorStreamHasher.finishB64();
