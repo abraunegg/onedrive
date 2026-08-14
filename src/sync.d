@@ -7264,30 +7264,36 @@ class SyncEngine {
 						Item includedDirectoryItem = makeItem(onedriveJSONItem);
 
 						// Parent is in DB .. is this a 'new' object or an 'existing' object?
-						// Issue #3501 - If an online name change is done, the item needs to be 'renamed' via applyPotentiallyChangedItem() later
-						// Only save to the database at this point, if this JSON 'id' is not already in the database to allow applyPotentiallyChangedItem() to operate as expected
+						// Issue #3501 - If an online name change or move is done, the item needs to be
+						// handled via applyPotentiallyChangedItem() later. Preserve the existing DB
+						// record and local filesystem state here so that the previously applied path
+						// remains available for comparison with the new online path.
 						Item tempDBItem;
-						itemDB.selectById(onedriveJSONItem["parentReference"]["driveId"].str, onedriveJSONItem["id"].str, tempDBItem);
+						bool includedDirectoryAlreadyKnown = itemDB.selectById(thisItemDriveId, thisItemId, tempDBItem);
 
-						if (!exists(newItemPath)) {
+						if (includedDirectoryAlreadyKnown) {
+							// Existing item: do not create newItemPath and do not overwrite the DB
+							// record. If this is an online rename or move, the destination path is
+							// expected not to exist yet. Normal JSON processing must retain the old
+							// parent/name so applyPotentiallyChangedItem() can perform the local rename.
 							if (debugLogging) {
-								addLogEntry("Included directory from sync_list is not present locally; creating local directory before database insertion: " ~ newItemPath, ["debug"]);
+								addLogEntry("Included directory from sync_list already exists in the database; preserving existing local and database state for later change detection: " ~ newItemPath, ["debug"]);
+							}
+						} else if (!exists(newItemPath)) {
+							// Genuinely new included directory: create the local directory and its
+							// corresponding database record together.
+							if (debugLogging) {
+								addLogEntry("New included directory from sync_list is not present locally; creating local directory and database record: " ~ newItemPath, ["debug"]);
 							}
 							handleLocalDirectoryCreation(includedDirectoryItem, newItemPath, onedriveJSONItem);
-						} else if (tempDBItem.driveId.empty) {
-							// No valid DB response was returned, so this is a new item.
-							// Save this JSON now.
+						} else {
+							// The path already exists locally but this online item ID is not yet in
+							// the database, for example during a resync. Record it without recreating
+							// the local directory.
 							if (debugLogging) {
 								addLogEntry("Included directory from sync_list already exists locally but is not present in the database; saving database record: " ~ newItemPath, ["debug"]);
 							}
 							saveItem(onedriveJSONItem);
-						} else {
-							// Valid DB response was returned, so this is an existing item.
-							// Do not overwrite the existing DB record here, as applyPotentiallyChangedItem()
-							// must still be able to process potential online rename/name changes later.
-							if (debugLogging) {
-								addLogEntry("Included directory from sync_list already exists locally and in the database; preserving existing database record for later change detection: " ~ newItemPath, ["debug"]);
-							}
 						}
 					}
 				}
