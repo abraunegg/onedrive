@@ -4525,19 +4525,23 @@ class SyncEngine {
 
 						// Perform the download with any applicable set offset. The Curl layer
 						// writes to '<path>.partial' and atomically renames it only after a
-						// successful transfer. Mark completion only after downloadById()
-						// returns so terminal failures do not publish a final-path effect.
+						// successful transfer. Mark completion only when downloadById()
+						// returns a non-null response, proving that the temporary file was
+						// promoted into the final path.
 						downloadTransferStartTime = Clock.currTime();
 						auto downloadResponse = downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset);
 						downloadTransferEndTime = Clock.currTime();
-						downloadTransferCompleted = true;
 						if (downloadResponse !is null) {
+							// A non-null response means downloadFile() validated the HTTP response and
+							// promoted '<path>.partial' into the final destination.
+							downloadTransferCompleted = true;
 							hasDownloadedStreamedQuickXorHash = downloadResponse.hasStreamedQuickXorHash;
 							downloadedStreamedQuickXorHash = downloadResponse.streamedQuickXorHash;
 						} else {
 							if (debugLogging) {
 								addLogEntry("downloadResponse is null", ["debug"]);
 							}
+							downloadFailed = true;
 						}
 
 						// OneDrive API Instance Cleanup - Shutdown API and free curl object.
@@ -4548,10 +4552,10 @@ class SyncEngine {
 						downloadFileOneDriveApiInstance = null;
 					} catch (OneDriveException exception) {
 						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset); generated a OneDriveException", ["debug"]);}
-
-						// The transfer did not complete. Preserve any previously applied final
-						// file and its database baseline, and skip validation against the
-						// unavailable newer online version.
+						
+						// Any propagated API exception means that the requested online version was
+						// not downloaded. A pre-existing final path, if present, is still the last
+						// successfully applied local version and must not be validated as this one.
 						downloadFailed = true;
 
 						// HTTP request returned status code 403
@@ -4576,12 +4580,11 @@ class SyncEngine {
 						if (verboseLogging) {addLogEntry("Download failed (local file system error): " ~ newItemPath, ["verbose"]);}
 						downloadFailed = true;
 					}
-
-					// Validate only after the transfer completed. If the transfer threw,
-					// newItemPath may still contain the previously applied version and must
-					// not be compared with metadata for the unavailable newer version.
+				
+					// Validate only when the requested online version was downloaded. A failed
+					// transfer may deliberately leave an older final file untouched.
 					if (!downloadFailed && exists(newItemPath)) {
-						// When downloading some files from SharePoint, the OneDrive API reports one file size,
+						// When downloading some files from SharePoint, the OneDrive API reports one file size, 
 						// but the SharePoint HTTP Server sends a totally different byte count for the same file
 						// we have implemented --disable-download-validation to disable these checks
 
@@ -4795,7 +4798,6 @@ class SyncEngine {
 							}
 						}	// end of (!disableDownloadValidation)
 					} else if (!downloadFailed) {
-
 						// Was exitHandlerTriggered flagged
 						if (!exitHandlerTriggered) {
 							// File does not exist locally ... so the download failed
@@ -4870,10 +4872,10 @@ class SyncEngine {
 					if (!canFind(fileDownloadFailures, newItemPath)) {
 						fileDownloadFailures ~= newItemPath; // Add newItemPath if it's not already present
 					}
-
-					// Since the file download failed:
-					// - The file should not exist locally
-					// - The download identifiers should not exist in the local database
+					
+					// Since the requested online version was not downloaded, remove the
+					// database identity only when there is no final local file. If an older
+					// successfully applied file remains, preserve both it and its DB baseline.
 					if (!exists(newItemPath)) {
 						// The local path does not exist
 						if (itemDB.idInLocalDatabase(downloadDriveId, downloadItemId)) {

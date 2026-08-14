@@ -1826,8 +1826,6 @@ class OneDriveApi {
 		// - onlineHash
 		// - driveId
 		// - itemId
-
-
 		// Create the required local parental path structure if this does not exist
 		string parentalPath = dirName(saveToPath);
 
@@ -2206,6 +2204,11 @@ class OneDriveApi {
 		CurlResponse downloadResponse = null;
 
 		oneDriveErrorHandlerWrapper((CurlResponse response) {
+			// A retry starts a new transfer attempt. Do not allow a CurlResponse from a
+			// previous failed attempt to be mistaken for completion if this attempt is
+			// interrupted before curlEngine.download() returns.
+			downloadResponse = null;
+
 			if (debugLogging) {
 				addLogEntry("downloadFile() wrapper response.hasStreamedQuickXorHash before download = " ~ to!string(response.hasStreamedQuickXorHash), ["debug"]);
 				addLogEntry("downloadFile() wrapper response.streamedQuickXorHash before download = " ~ response.streamedQuickXorHash, ["debug"]);
@@ -2434,12 +2437,36 @@ class OneDriveApi {
 			// CurlResponse, preserving metadata such as streamed hashes.
 			curlEngine.setResponseHolder(response);
 
-			// Capture the result of the download action
-			auto result = curlEngine.download(originalFilename, downloadFilename);
+			// Capture the result of the download action. CurlEngine writes only to the
+			// temporary path; the final path is promoted after the wrapper has validated
+			// the HTTP response. Rejected response bodies are discarded so they cannot
+			// contaminate a resumable partial before a transient retry.
+			auto result = curlEngine.download(
+				downloadFilename,
+				(int httpStatusCode) => isSuccessfulDownloadResponseCode(httpStatusCode)
+			);
 			if (result !is null) {
 				if (debugLogging) {
 					addLogEntry("downloadFile() result.hasStreamedQuickXorHash = " ~ to!string(result.hasStreamedQuickXorHash), ["debug"]);
 					addLogEntry("downloadFile() result.streamedQuickXorHash = " ~ result.streamedQuickXorHash, ["debug"]);
+				}
+
+				// A rejected HTTP response may still report received bytes through the
+				// progress callback even though CurlEngine deliberately discarded its body.
+				// Reconcile resumable state with the actual partial-file size before the
+				// wrapper performs any transient retry/backoff.
+				if (!isSuccessfulDownloadResponseCode(result.statusLine.code)) {
+					long actualPartialSize = 0;
+					if (exists(downloadFilename)) {
+						actualPartialSize = cast(long) getSize(downloadFilename);
+					}
+
+					resumeDownloadData["resumeOffset"] = JSONValue(to!string(actualPartialSize));
+					if ((fileSize >= thresholdFileSize) && (actualPartialSize > 0)) {
+						saveResumeDownloadFile(threadResumeDownloadFilePath, resumeDownloadData);
+					} else {
+						safeRemove(threadResumeDownloadFilePath);
+					}
 				}
 			}
 			if (debugLogging) {
@@ -2448,15 +2475,40 @@ class OneDriveApi {
 			}
 			downloadResponse = result;
 
-			// Safe remove 'threadResumeDownloadFilePath' as if we get to this point, the file has been downloaded successfully
-			safeRemove(threadResumeDownloadFilePath);
-
-			// Reset this curlEngine offset value now that the file has been downloaded successfully
-			curlEngine.resetDownloadResumeOffset();
-
-			// Return the applicable result
+			// Return the applicable result. HTTP status validation and any configured
+			// retry are performed by oneDriveErrorHandlerWrapper().
 			return result;
 		}, validateJSONResponse, callingFunction, lineno);
+
+		// A controlled force_xfer_abort returns without a completed CurlResponse.
+		// Keep the partial only when resumable state was actually persisted.
+		if (downloadResponse is null) {
+			curlEngine.resetDownloadResumeOffset();
+			if (!exists(threadResumeDownloadFilePath)) {
+				safeRemove(downloadFilename);
+			}
+			return null;
+		}
+
+		// Generic API response handling accepts selected redirect responses, but a
+		// file download is complete only when the final response is content-bearing
+		// success (2xx, or the existing HTTP/2 compatibility code 0). A final redirect
+		// must never promote an empty or redirect-response partial into place.
+		if (!isSuccessfulDownloadResponseCode(downloadResponse.statusLine.code)) {
+			if (downloadResponse.statusLine.reason.length == 0) {
+				downloadResponse.statusLine.reason = getMicrosoftGraphStatusMessage(downloadResponse.statusLine.code);
+			}
+			throw new OneDriveException(downloadResponse.statusLine.code, downloadResponse.statusLine.reason, downloadResponse);
+		}
+
+		// The wrapper has now accepted the transport and HTTP response. Promote the
+		// completed temporary file atomically into the requested destination only at
+		// this point, never before HTTP status validation.
+		rename(downloadFilename, originalFilename);
+
+		// Successful promotion completes resumable-download state for this transfer.
+		safeRemove(threadResumeDownloadFilePath);
+		curlEngine.resetDownloadResumeOffset();
 
 		// Return the CurlResponse captured from the successful download attempt.
 		if (downloadResponse !is null) {
@@ -2928,6 +2980,13 @@ class OneDriveApi {
 
 		// Return the result
 		return result;
+	}
+	
+	// A download may promote its temporary file only for a response that can
+	// actually carry the requested file content. Redirect responses are handled by
+	// std.net.curl and must not contribute bodies to the local download artifact.
+	private bool isSuccessfulDownloadResponseCode(int httpResponseCode) {
+		return ((httpResponseCode >= 200 && httpResponseCode < 300) || httpResponseCode == 0);
 	}
 
 	// Check the HTTP Response code and determine if a OneDriveException should be thrown
