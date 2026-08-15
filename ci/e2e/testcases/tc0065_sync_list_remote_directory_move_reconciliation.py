@@ -1190,8 +1190,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             write_text_file(mutator_root / files_first_modified_relative, files_first_modified_content)
 
             modify_patterns = [
-                f"Uploading modified file: {whole_modified_relative} ... done",
-                f"Uploading modified file: {files_first_modified_relative} ... done",
+                f"Uploading modified file: ./{whole_modified_relative} ... done",
+                f"Uploading modified file: ./{files_first_modified_relative} ... done",
             ]
             modify_processed, modify_segment = self._wait_for_stdout_growth_patterns(
                 phase_files["phase3_mutator_monitor"][0],
@@ -1255,11 +1255,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             )
             shutil.rmtree(mutator_root / whole_destination)
             whole_delete_groups = [
-                [f"Deleting item from Microsoft OneDrive: {whole_destination}"],
-                [f"Deleting item from Microsoft OneDrive: {whole_destination}/file0.txt"],
-                [f"Deleting item from Microsoft OneDrive: {whole_destination}/file1.txt"],
-                [f"Deleting item from Microsoft OneDrive: {whole_destination}/Nested"],
-                [f"Deleting item from Microsoft OneDrive: {whole_destination}/Nested/child.txt"],
+                [f"Deleting item from Microsoft OneDrive: ./{whole_destination}"],
+                [f"Deleting item from Microsoft OneDrive: ./{whole_destination}/file0.txt"],
+                [f"Deleting item from Microsoft OneDrive: ./{whole_destination}/file1.txt"],
+                [f"Deleting item from Microsoft OneDrive: ./{whole_destination}/Nested"],
+                [f"Deleting item from Microsoft OneDrive: ./{whole_destination}/Nested/child.txt"],
             ]
             whole_delete_processed, whole_delete_group, whole_delete_segment = (
                 self._wait_for_any_stdout_growth_pattern_group(
@@ -1292,7 +1292,7 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 child_processed, child_segment = self._wait_for_stdout_growth_patterns(
                     phase_files["phase3_mutator_monitor"][0],
                     start_offset=child_delete_start,
-                    required_patterns=[f"Deleting item from Microsoft OneDrive: {child_relative}"],
+                    required_patterns=[f"Deleting item from Microsoft OneDrive: ./{child_relative}"],
                     timeout_seconds=180,
                 )
                 files_first_file_results[child_relative] = child_processed
@@ -1312,8 +1312,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             )
             shutil.rmtree(mutator_root / nested_relative)
             nested_delete_groups = [
-                [f"Deleting item from Microsoft OneDrive: {nested_relative}"],
-                [f"Deleting item from Microsoft OneDrive: {nested_relative}/child.txt"],
+                [f"Deleting item from Microsoft OneDrive: ./{nested_relative}"],
+                [f"Deleting item from Microsoft OneDrive: ./{nested_relative}/child.txt"],
             ]
             nested_delete_processed, nested_delete_group, nested_delete_segment = (
                 self._wait_for_any_stdout_growth_pattern_group(
@@ -1374,7 +1374,7 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             )
             files_first_parent.rmdir()
             parent_delete_pattern = [
-                f"Deleting item from Microsoft OneDrive: {files_first_destination}"
+                f"Deleting item from Microsoft OneDrive: ./{files_first_destination}"
             ]
             parent_delete_processed, parent_delete_segment = self._wait_for_stdout_growth_patterns(
                 phase_files["phase3_mutator_monitor"][0],
