@@ -112,7 +112,6 @@ class OneDriveApi {
 	immutable string defaultSiteSearchUrlAPIEndpoint = "/v1.0/sites?search";
 	immutable string defaultSiteDriveUrlAPIEndpoint = "/v1.0/sites/";
 	immutable string defaultSubscriptionUrlAPIEndpoint = "/v1.0/subscriptions";
-	immutable string defaultWebsocketEndpointAPIEndpoint = "/v1.0/me/drive/root/subscriptions/socketIo";
 	immutable string defaultSearchQueryUrlAPIEndpoint = "/v1.0/search/query";
 
 	// Class variables
@@ -131,8 +130,6 @@ class OneDriveApi {
 	string subscriptionUrl = "";
 	string tenantId = "";
 	string authScope = "";
-	string websocketEndpoint = "";
-	string websocketEndpointAPIEndpoint = defaultWebsocketEndpointAPIEndpoint;
 	string searchQueryUrl = "";
 	const(char)[] refreshToken = "";
 	bool dryRun = false;
@@ -160,10 +157,7 @@ class OneDriveApi {
 
 		// Subscriptions
 		subscriptionUrl = appConfig.globalGraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
-
-		// WebSocket Endpoint - sets the default: /v1.0/me/drive/root/subscriptions/socketIo
-		websocketEndpoint = appConfig.globalGraphEndpoint ~ websocketEndpointAPIEndpoint;
-
+		
 		// Search Queries
 		searchQueryUrl = appConfig.globalGraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 	}
@@ -277,9 +271,7 @@ class OneDriveApi {
 			driveUrl = driveByIdUrl ~ appConfig.getValueString("drive_id");
 			itemByIdUrl = driveUrl ~ "/items";
 			itemByPathUrl = driveUrl ~ "/root:/";
-
-			// Need to update 'websocketEndpointAPIEndpoint' to /v1.0/drives/{driveId}/root/subscriptions/socketIo
-			websocketEndpointAPIEndpoint = "/v1.0/drives/" ~ appConfig.getValueString("drive_id") ~ "/root/subscriptions/socketIo";
+			
 		}
 
 		// Configure the authentication scope
@@ -324,9 +316,7 @@ class OneDriveApi {
 					// Preserve existing behaviour for custom application registrations.
 					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				}
-
-				// WebSocket Endpoint
-				websocketEndpoint = appConfig.globalGraphEndpoint ~ websocketEndpointAPIEndpoint;
+				
 				break;
 			case "USL4":
 				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD for US Government Endpoints");
@@ -354,8 +344,6 @@ class OneDriveApi {
 				siteDriveUrl = appConfig.usl4GraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
 				// Subscriptions
 				subscriptionUrl = appConfig.usl4GraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
-				// WebSocket Endpoint
-				websocketEndpoint = appConfig.usl4GraphEndpoint ~ websocketEndpointAPIEndpoint;
 				// Search Queries
 				searchQueryUrl = appConfig.usl4GraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 				break;
@@ -385,8 +373,6 @@ class OneDriveApi {
 				siteDriveUrl = appConfig.usl5GraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
 				// Subscriptions
 				subscriptionUrl = appConfig.usl5GraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
-				// WebSocket Endpoint
-				websocketEndpoint = appConfig.usl5GraphEndpoint ~ websocketEndpointAPIEndpoint;
 				// Search Queries
 				searchQueryUrl = appConfig.usl5GraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 				break;
@@ -416,8 +402,6 @@ class OneDriveApi {
 				siteDriveUrl = appConfig.deGraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
 				// Subscriptions
 				subscriptionUrl = appConfig.deGraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
-				// WebSocket Endpoint
-				websocketEndpoint = appConfig.deGraphEndpoint ~ websocketEndpointAPIEndpoint;
 				// Search Queries
 				searchQueryUrl = appConfig.deGraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 				break;
@@ -447,8 +431,6 @@ class OneDriveApi {
 				siteDriveUrl = appConfig.cnGraphEndpoint ~ defaultSiteDriveUrlAPIEndpoint;
 				// Subscriptions
 				subscriptionUrl = appConfig.cnGraphEndpoint ~ defaultSubscriptionUrlAPIEndpoint;
-				// WebSocket Endpoint
-				websocketEndpoint = appConfig.cnGraphEndpoint ~ websocketEndpointAPIEndpoint;
 				// Search Queries
 				searchQueryUrl = appConfig.cnGraphEndpoint ~ defaultSearchQueryUrlAPIEndpoint;
 				break;
@@ -536,8 +518,6 @@ class OneDriveApi {
 			// SharePoint Queries
 			addLogEntry("Configured siteSearchUrl:     " ~ siteSearchUrl, ["debug"]);
 			addLogEntry("Configured siteDriveUrl:      " ~ siteDriveUrl, ["debug"]);
-			// Websocket
-			addLogEntry("Configured websocketEndpoint: " ~ websocketEndpoint, ["debug"]);
 			// Search Queries
 			addLogEntry("Configured searchQueryUrl:    " ~ searchQueryUrl, ["debug"]);
 		}
@@ -1812,6 +1792,8 @@ class OneDriveApi {
 
 	// Obtain the Websocket Notification URL
 	JSONValue obtainWebSocketNotificationURL() {
+		// Build the endpoint from the tenant-aware Drive URL and the resolved account Drive ID
+		string websocketEndpoint = driveByIdUrl ~ appConfig.defaultDriveId ~ "/root/subscriptions/socketIo";
 		if (debugLogging) {addLogEntry("Request a Socket.IO Subscription Endpoint: " ~ websocketEndpoint, ["debug"]);}
 		return get(websocketEndpoint);
 	}
