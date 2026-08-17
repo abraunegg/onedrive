@@ -1625,8 +1625,16 @@ int main(string[] cliArgs) {
 						int res = 0;
 						bool onlineSignal = false;
 						bool shutdownDetectedDuringWait = false;
+						bool monitorMessageProducerActive = filesystemMonitor.initialised || webhookEnabled || oneDriveSocketIo !is null;
 
-						shutdownDetectedDuringWait = waitForMonitorEventsInterruptibly(sleepTime, appConfig.getValueBool("upload_only"), res, onlineSignal);
+						if (monitorMessageProducerActive) {
+							shutdownDetectedDuringWait = waitForMonitorEventsInterruptibly(sleepTime, appConfig.getValueBool("upload_only"), res, onlineSignal);
+						} else {
+							// A WebSocket retry can shorten the monitor sleep even when no message-producing
+							// worker exists. In that state, use a normal interruptible sleep rather than
+							// std.concurrency.receiveTimeout(), which requires an active thread relationship.
+							shutdownDetectedDuringWait = sleepInterruptibly(sleepTime, "monitor WebSocket retry sleep");
+						}
 						if (shutdownDetectedDuringWait) {
 							performFileSystemMonitoring = false;
 							addShutdownTelemetry("monitor wait exited early due to shutdown request");
