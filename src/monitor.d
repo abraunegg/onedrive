@@ -86,16 +86,110 @@ class MonitorBackgroundWorker {
 	bool isAlive;
 	bool workerExited;
 
+	// The kernel queue for an inotify instance is bounded by fs.inotify.max_queued_events,
+	// 16384 by default, and it is filled by the kernel whether or not anything is reading.
+	// Draining it only when the caller is ready therefore makes event loss a function of how
+	// long the caller is busy. This worker drains it as soon as it is readable and buffers the
+	// result in user space, where the bound is ours to choose and the memory is pageable
+	// rather than a pinned kernel allocation.
+	//
+	// Events are buffered exactly as the kernel delivered them. A read() always returns a whole
+	// number of events - the kernel never splits one across a read boundary - so each chunk is
+	// self-contained and the consumer walks it with the same pointer arithmetic as before.
+	// Copying the block once, rather than decoding each event into an owned structure, keeps
+	// this to one allocation per read() instead of one per event.
+	private ubyte[][] eventQueue;
+	private shared(Mutex) queueMutex;
+	private size_t queuedBytes;
+	private bool queueOverflowed;
+
+	// Bound the buffer by bytes rather than event count: inotify events are variable length, so
+	// a count gives no predictable ceiling on memory.
+	private enum size_t queueByteLimit = 64 * 1024 * 1024;
+
+	// The kernel never returns a partial event, so a larger read buffer only reduces the
+	// syscall count.
+	private enum size_t readBufferSize = 256 * 1024;
+
 	this() {
 		isAlive = true;
 		workerExited = false;
 		p = pipe();
+		queueMutex = cast(shared)new Mutex();
 	}
 
 	shared void initialise() {
 		workerExited = false;
-		fd = inotify_init();
-		if (fd < 0) throw new MonitorException("inotify_init failed");
+		// IN_NONBLOCK so the drain loop can read until EAGAIN rather than blocking once the
+		// kernel queue has been emptied.
+		fd = inotify_init1(IN_NONBLOCK);
+		if (fd < 0) throw new MonitorException("inotify_init1 failed");
+	}
+
+	// Buffer one block exactly as the kernel delivered it.
+	private shared void enqueueChunk(ubyte[] chunk) {
+		if (chunk.length == 0) return;
+		auto self = cast(MonitorBackgroundWorker) this;
+		auto m = cast(Mutex) queueMutex;
+		m.lock();
+		scope(exit) m.unlock();
+
+		// Already latched - keep discarding until the consumer has taken the overflow.
+		if (self.queueOverflowed) return;
+
+		if (self.queuedBytes + chunk.length > queueByteLimit) {
+			// Recovery from here is a full local rescan, so the events already held are
+			// worthless. Release them rather than sitting at the ceiling.
+			self.queueOverflowed = true;
+			self.eventQueue = null;
+			self.queuedBytes = 0;
+			return;
+		}
+
+		self.eventQueue ~= chunk;
+		self.queuedBytes += chunk.length;
+	}
+
+	// Hand the whole buffer over in one move, so the consumer never holds the lock whilst
+	// walking events.
+	shared ubyte[][] takeEvents(out bool overflowed) {
+		auto self = cast(MonitorBackgroundWorker) this;
+		auto m = cast(Mutex) queueMutex;
+		m.lock();
+		scope(exit) m.unlock();
+
+		overflowed = self.queueOverflowed;
+		ubyte[][] taken = self.eventQueue;
+		self.eventQueue = null;
+		self.queuedBytes = 0;
+		self.queueOverflowed = false;
+		return taken;
+	}
+
+	shared bool hasQueuedEvents() {
+		auto self = cast(MonitorBackgroundWorker) this;
+		auto m = cast(Mutex) queueMutex;
+		m.lock();
+		scope(exit) m.unlock();
+		return (self.eventQueue.length > 0) || self.queueOverflowed;
+	}
+
+	// Read until the kernel queue is empty. Returns false only on a genuine read error.
+	private shared bool drainInotifyDescriptor(void[] readBuffer) {
+		while (true) {
+			ptrdiff_t length = read(fd, readBuffer.ptr, readBuffer.length);
+
+			if (length < 0) {
+				// EAGAIN / EWOULDBLOCK simply means the kernel queue is now empty, which is
+				// the expected exit from this loop on a non-blocking descriptor.
+				if ((errno() == EAGAIN) || (errno() == EWOULDBLOCK) || (errno() == EINTR)) return true;
+				return false;
+			}
+
+			if (length == 0) return true;
+
+			enqueueChunk((cast(ubyte*) readBuffer.ptr)[0 .. cast(size_t) length].dup);
+		}
 	}
 
 	// Add this path to be monitored
@@ -159,7 +253,26 @@ class MonitorBackgroundWorker {
 		// Wait for the caller to be ready.
 		receiveOnly!bool();
 
+		// Reused across iterations; the kernel never returns a partial event, so this only
+		// governs how many events come back per read().
+		void[] readBuffer = new void[readBufferSize];
+
+		// True whilst the caller has been told there is work and has not yet re-armed.
+		bool notifyPending = false;
+
 		while (isAlive) {
+			// Announce buffered work BEFORE deciding whether to block.
+			//
+			// This ordering matters. The descriptor is drained into user space below, so it
+			// goes empty and select() has nothing to report even when events are still held
+			// here awaiting collection. Announcing only after select() returns would leave a
+			// batch that arrived whilst the caller was busy unannounced: the caller re-arms,
+			// notifyPending clears, and the next iteration blocks on an empty descriptor.
+			if (!notifyPending && hasQueuedEvents()) {
+				callerTid.send(1);
+				notifyPending = true;
+			}
+
 			fd_set fds;
 			FD_ZERO(&fds);
 			FD_SET(fd, &fds);
@@ -168,9 +281,22 @@ class MonitorBackgroundWorker {
 			int controlPipeFd = (cast()p).readEnd.fileno;
 			FD_SET(controlPipeFd, &fds);
 
+			// Whilst a notification is outstanding the caller may re-arm at any moment, so
+			// poll rather than block indefinitely; otherwise the re-arm would not be noticed
+			// until the next filesystem event arrived. With nothing outstanding and nothing
+			// buffered there is genuinely nothing to do until the descriptor becomes
+			// readable, so blocking is correct.
+			timeval tv;
+			timeval* tvp = null;
+			if (notifyPending) {
+				tv.tv_sec = 0;
+				tv.tv_usec = 100_000;
+				tvp = &tv;
+			}
+
 			// select() only needs to scan up to the highest descriptor plus one.
 			int maxFd = max(fd, controlPipeFd) + 1;
-			res = select(maxFd, &fds, null, null, null);
+			res = select(maxFd, &fds, null, null, tvp);
 
 			if (res == -1) {
 				if (errno() == EINTR) {
@@ -197,17 +323,24 @@ class MonitorBackgroundWorker {
 				continue;
 			}
 
-			// Only inotify descriptor readiness should wake the caller for local
-			// filesystem processing.
-			if (FD_ISSET(fd, &fds)) {
-				callerTid.send(1);
-
-				// Wait for the caller to acknowledge whether monitoring should continue.
-				if (isAlive) {
-					isAlive = receiveOnly!bool();
+			// Drain the kernel queue into user space immediately, whether or not the caller
+			// is ready to process anything yet. This is the point of the exercise: the
+			// bounded kernel queue stops being the thing that decides whether events survive.
+			if ((res > 0) && FD_ISSET(fd, &fds)) {
+				if (!drainInotifyDescriptor(readBuffer)) {
+					callerTid.send(-1);
+					break;
 				}
+			}
 
-				continue;
+			// Has the caller re-armed? Checked without blocking so that draining continues
+			// whilst the caller is busy. Anything still buffered is announced at the top of
+			// the next iteration, which is why that check must come first.
+			if (notifyPending) {
+				bool rearmed = receiveTimeout(dur!"msecs"(0), (bool alive) {
+					isAlive = alive;
+				});
+				if (rearmed) notifyPending = false;
 			}
 		}
 	}
@@ -481,8 +614,6 @@ final class Monitor {
 	private bool monitorStateDirty = false;
 	// map the inotify cookies of move_from events to their path
 	private string[int] cookieToPath;
-	// buffer to receive the inotify events
-	private void[] buffer;
 	
 	// Mutex to support thread safe access of inotify watch descriptors
 	private Mutex inotifyMutex;
@@ -536,7 +667,6 @@ final class Monitor {
 			verbose = true;
 		}
 		
-		if (!buffer) buffer = new void[4096];
 		worker = cast(shared) new MonitorBackgroundWorker;
 		worker.initialise();
 
@@ -1352,28 +1482,36 @@ final class Monitor {
 		if(!initialised)
 			return;
 	
-		pollfd fds = {
-			fd: worker.fd,
-			events: POLLIN
-		};
+		// The descriptor is drained by the background worker, not here. Collect whatever it
+		// has buffered; each element is one block exactly as the kernel returned it.
+		bool queueOverflowed = false;
+		ubyte[][] collectedChunks = worker.takeEvents(queueOverflowed);
+
+		if (queueOverflowed) {
+			// The user-space buffer hit its ceiling, so events have been discarded and which
+			// ones is not knowable. Flag the monitor state as unreliable and let the caller
+			// recover, exactly as an IN_Q_OVERFLOW is handled below.
+			monitorStateDirty = true;
+			clearTransientEventState();
+			throw new MonitorException("local event buffer overflow: some events may be lost");
+		}
 
 		while (true) {
 			bool hasNotification = false;
 			int sleep_counter = 0;
 			// Batch events up to 5 seconds
 			while (sleep_counter < 5) {
-				int ret = poll(&fds, 1, 0);
-				if (ret == -1) throw new MonitorException("poll failed");
-				else if (ret == 0) break; // no events available
+				if (collectedChunks.length == 0) break; // no events available
 				hasNotification = true;
-				size_t length = read(worker.fd, buffer.ptr, buffer.length);
-				if (length == -1) throw new MonitorException("read failed");
+				ubyte[] chunk = collectedChunks[0];
+				collectedChunks = collectedChunks[1 .. $];
+				size_t length = chunk.length;
 				readBatchCount++;
 				bytesRead += length;
 
 				int i = 0;
 				while (i < length) {
-					inotify_event *event = cast(inotify_event*) &buffer[i];
+					inotify_event *event = cast(inotify_event*) &chunk[i];
 					rawEventCount++;
 					if (event.mask & IN_MOVED_FROM) movedFromEventCount++;
 					if (event.mask & IN_MOVED_TO) movedToEventCount++;
@@ -1739,10 +1877,22 @@ final class Monitor {
 					i += inotify_event.sizeof + event.len;
 				}
 
-				// Sleep for one second to prevent missing fast-changing events.
-				if (poll(&fds, 1, 0) == 0) {
-					sleep_counter += 1;
-					Thread.sleep(dur!"seconds"(1));
+				// Sleep for one second to prevent missing fast-changing events. The worker
+				// keeps draining the descriptor throughout this pause, so anything arriving
+				// during it is buffered in user space rather than left in the kernel queue.
+				if (collectedChunks.length == 0) {
+					if (!worker.hasQueuedEvents()) {
+						sleep_counter += 1;
+						Thread.sleep(dur!"seconds"(1));
+					}
+
+					bool moreOverflowed = false;
+					collectedChunks ~= worker.takeEvents(moreOverflowed);
+					if (moreOverflowed) {
+						monitorStateDirty = true;
+						clearTransientEventState();
+						throw new MonitorException("local event buffer overflow: some events may be lost");
+					}
 				}
 			}
 			if (!hasNotification) break;
