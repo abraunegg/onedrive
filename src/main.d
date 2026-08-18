@@ -3,7 +3,6 @@ module main;
 
 // What does this module require to function?
 import core.memory;
-import core.stdc.errno : ENOENT, EINTR, EBUSY, EXDEV, EAGAIN, EPERM, EACCES, EROFS;
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.sys.posix.signal;
 import core.sys.posix.unistd : write, _exit, STDERR_FILENO, getpid;
@@ -1103,9 +1102,6 @@ int main(string[] cliArgs) {
 			// Update the flag given we are running with --monitor
 			performFileSystemMonitoring = true;
 			
-			// Set initial variable for when we last uploaded something or made an online change from a local inotify event
-			lastLocalWrite = MonoTime.currTime() - dur!"hours"(24);
-			
 			// Is Display Manager Integration enabled?
 			if (appConfig.getValueBool("display_manager_integration")) {
 				// Attempt to configure the desktop integration whilst the client is running in --monitor mode
@@ -1180,76 +1176,29 @@ int main(string[] cliArgs) {
 			// Configure the monitor class
 			filesystemMonitor = new Monitor(appConfig, selectiveSync);
 			
-			// Delegated function for when inotify detects a new local directory has been created
-			filesystemMonitor.onDirCreated = delegate(string path) {
-				// Handle .folder creation if skip_dotfiles is enabled
-				if ((appConfig.getValueBool("skip_dotfiles")) && (isDotFile(path))) {
-					if (verboseLogging) {addLogEntry("[M] Skipping watching local path - .folder found & --skip-dot-files enabled: " ~ path, ["verbose"]);}
-				} else {
-					if (verboseLogging) {addLogEntry("[M] Local directory created: " ~ path, ["verbose"]);}
-					try {
-						syncEngineInstance.scanLocalFilesystemPathForNewData(path);
-						markLocalWrite();
-					} catch (CurlException e) {
-						if (verboseLogging) {addLogEntry("Offline, cannot create remote dir: " ~ path, ["verbose"]);}
-					} catch (Exception e) {
-						addLogEntry("Cannot create remote directory: " ~ e.msg, ["info", "notify"]);
-					}
-				}
-			};
-			
-			// Delegated function for when inotify detects a local file has been changed
-			filesystemMonitor.onFileChanged = delegate(string[] changedLocalFilesToUploadToOneDrive) {
-				// Handle a potentially locally changed file
-				// Logging for this event moved to handleLocalFileTrigger() due to threading and false triggers from scanLocalFilesystemPathForNewData() above
-				syncEngineInstance.handleLocalFileTrigger(changedLocalFilesToUploadToOneDrive);
-				markLocalWrite();
-				if (verboseLogging) {addLogEntry("[M] Total number of local file(s) added or changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length), ["verbose"]);}
-			};
-
-			// Delegated function for when inotify detects a delete event
-			filesystemMonitor.onDelete = delegate(string path) {
-				if (verboseLogging) {addLogEntry("[M] Local item deleted: " ~ path, ["verbose"]);}
-				try {
-					// The path has been deleted .. we cannot use isDir or isFile to advise what was deleted. This is the best we can Do
-					addLogEntry("The operating system sent a deletion notification. Trying to delete this item as requested: " ~ path);
-					// perform the delete action
-					syncEngineInstance.deleteByPath(path);
-					markLocalWrite();
-				} catch (CurlException e) {
-					if (verboseLogging) {addLogEntry("Offline, cannot delete item: " ~ path, ["verbose"]);}
-				} catch (SyncException e) {
-					if (e.msg == "The item to delete is not in the local database") {
-						if (verboseLogging) {addLogEntry("Item cannot be deleted from Microsoft OneDrive because it was not found in the local database", ["verbose"]);}
-					} else {
-						addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
-					}
-				} catch (FileException e) {
-					// Path is gone locally, log and continue.
-					addLogEntry("ERROR: The local file system returned an error with the following message: " ~ e.msg, ["verbose"]);
-				} catch (Exception e) {
-					addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
-				}
-			};
-			
-			// Delegated function for when inotify detects a move event
-			filesystemMonitor.onMove = delegate(string from, string to) {
-				if (verboseLogging) {addLogEntry("[M] Local item moved: " ~ from ~ " -> " ~ to, ["verbose"]);}
-				try {
-					// Handle .folder -> folder if skip_dotfiles is enabled
-					if ((appConfig.getValueBool("skip_dotfiles")) && (isDotFile(from))) {
-						// .folder -> folder handling - has to be handled as a new folder
-						syncEngineInstance.scanLocalFilesystemPathForNewData(to);
-					} else {
-						syncEngineInstance.uploadMoveItem(from, to);
-					}
-					markLocalWrite();
-				} catch (CurlException e) {
-					if (verboseLogging) {addLogEntry("Offline, cannot move item !", ["verbose"]);}
-				} catch (Exception e) {
-					addLogEntry("Cannot move item: " ~ e.msg, ["info", "notify"]);
-				}
-			};
+			if (!appConfig.getValueBool("download_only")) {
+				// Connect the sync engine to the monitor observation boundary. The monitor remains
+				// the sole owner of inotify state; SyncEngine can only request a capture/query or
+				// declare exact filesystem echoes generated by online-to-local operations.
+				syncEngineInstance.capturePendingLocalChanges = delegate(string source) {
+					if (filesystemMonitor !is null && filesystemMonitor.initialised) captureInotifyEvents(source);
+				};
+				syncEngineInstance.hasPendingLocalDeparture = delegate(string path) {
+					return filesystemMonitor !is null && filesystemMonitor.initialised && filesystemMonitor.hasPendingDeparture(path);
+				};
+				syncEngineInstance.recordExpectedLocalDirectoryCreate = delegate(string path) {
+					if (filesystemMonitor !is null && filesystemMonitor.initialised) filesystemMonitor.recordExpectedDirectoryCreate(path);
+				};
+				syncEngineInstance.recordExpectedLocalMove = delegate(string from, string to) {
+					if (filesystemMonitor !is null && filesystemMonitor.initialised) filesystemMonitor.recordExpectedMove(from, to);
+				};
+				syncEngineInstance.recordExpectedLocalFileArrival = delegate(string path) {
+					if (filesystemMonitor !is null && filesystemMonitor.initialised) filesystemMonitor.recordExpectedFileArrival(path);
+				};
+				syncEngineInstance.recordExpectedLocalRemoval = delegate(string path) {
+					if (filesystemMonitor !is null && filesystemMonitor.initialised) filesystemMonitor.recordExpectedRemoval(path);
+				};
+			}
 			
 			// Initialise the local filesystem monitor class using inotify to monitor for local filesystem changes
 			// If we are in a --download-only method of operation, we do not enable local filesystem monitoring
@@ -1290,7 +1239,7 @@ int main(string[] cliArgs) {
 			MonoTime lastWebSocketAcquisitionAttempt = MonoTime.currTime();
 			SysTime lastMonitorGcCleanup = Clock.currTime();
 			
-			monitorLoop: while (performFileSystemMonitoring) {
+			while (performFileSystemMonitoring) {
 				if (shutdownRequested()) {
 					addShutdownTelemetry("monitor loop detected shutdown request before processing new work");
 					performFileSystemMonitoring = false;
@@ -1301,8 +1250,8 @@ int main(string[] cliArgs) {
 			
 				// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
 				if (!appConfig.getValueBool("download_only")) {
-					// Process any inotify events queued before this loop iteration
-					processInotifyEvents(true);
+					// Process any inotify events
+					captureAndApplyInotifyEvents("monitor_loop.pre_notification_check");
 				}
 				
 				// WebSocket and Webhook Notification Handling
@@ -1469,10 +1418,8 @@ int main(string[] cliArgs) {
 							performStandardSyncProcess(localPath, filesystemMonitor);
 						}
 						
-						// Handle any local filesystem events that occurred while the sync was running.
-						// Remote -> local generated events are drained inside the standard sync path
-						// immediately after online reconciliation, and inside oneDriveOnlineCallback().
-						processInotifyEvents(true);
+						// Handle any new inotify events
+						captureAndApplyInotifyEvents("monitor_loop.post_sync_process");
 						
 						// Detail the outcome of the sync process
 						displaySyncOutcome();
@@ -1620,9 +1567,7 @@ int main(string[] cliArgs) {
 						}
 						
 						// ALWAYS wait for FS worker, but only track webhook/websocket if NOT '--upload-only'
-						// res == 0 means the wait expired naturally; res > 0 means the filesystem
-						// monitor worker observed inotify activity; res == -1 means worker failure.
-						int res = 0;
+						int res = 1;
 						bool onlineSignal = false;
 						bool shutdownDetectedDuringWait = false;
 						bool monitorMessageProducerActive = filesystemMonitor.initialised || webhookEnabled || oneDriveSocketIo !is null;
@@ -1649,19 +1594,6 @@ int main(string[] cliArgs) {
 							}
 						}
 						
-						// Worker failure remains outside '--upload-only' filter
-						if (res == -1) {
-							addLogEntry("ERROR: Monitor worker failed.");
-							monitorFailures = true;
-							performFileSystemMonitoring = false;
-							break monitorLoop;
-						}
-						
-						// A positive worker status indicates local filesystem monitor activity.
-						// Do not consume inotify events inside the wait block. Let this iteration
-						// complete and process queued local filesystem events at the top of the 
-						// next monitor loop.
-						
 						// Empirical evidence shows that Microsoft often sends multiple
 						// notifications for one single change, so we need a loop to exhaust
 						// all signals that were queued up by the webhook. The notifications
@@ -1677,17 +1609,10 @@ int main(string[] cliArgs) {
 								if (more) {
 									signalCount++;
 								} else {
-									// Always process online notifications from WebSocket/Webhook handlers.
-									// These signals do not contain item-level change detail, so the delta endpoint
-									// remains the source of truth for determining whether the notification reflects
-									// a genuine remote change, a local echo, or multiple coalesced changes.
-									// Do not drop the signal here; doing so can delay or miss required online
-									// reconciliation until the next regular monitor interval.
-							
 									// Get the signal timestamp - this is as close as possible to when this was received
 									SysTime signalTimeStamp = Clock.currTime();
 									signalTimeStamp.fracSecs = Duration.zero;
-							
+									
 									// Log what signal we received
 									if (webhookEnabled) {
 										string webhookLogEntry = format("Received %s signal(s) from Webhook handler (%s)", to!string(signalCount), to!string(signalTimeStamp));
@@ -1696,12 +1621,19 @@ int main(string[] cliArgs) {
 										string websocketLogEntry = format("Received %s signal(s) from WebSocket handler (%s)", to!string(signalCount), to!string(signalTimeStamp));
 										addLogEntry(websocketLogEntry);
 									}
-							
+									
 									// Perform online callback action
 									oneDriveOnlineCallback();
 									break;
 								}
 							}
+						}
+
+						// Worker failure remains outside '--upload-only' filter
+						if (res == -1) {
+							addLogEntry("ERROR: Monitor worker failed.");
+							monitorFailures = true;
+							performFileSystemMonitoring = false;
 						}
 					} else {
 						// no hooks available, nothing to check
@@ -1781,30 +1713,31 @@ void printMissingOperationalSwitchesError() {
 
 // Function used for WebSocket or Webhook callbacks to perform specific activities
 void oneDriveOnlineCallback() {
+	// Identify which online notification mechanism invoked this callback for debug correlation
+	string onlineCallbackSource = appConfig.getValueBool("webhook_enabled") ? "webhook_callback" : "websocket_callback";
+
 	// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
 	if (!appConfig.getValueBool("download_only")) {
-		// Handle inotify events queued before online reconciliation
-		processInotifyEvents(true);
+		// Handle inotify events
+		captureAndApplyInotifyEvents(onlineCallbackSource ~ ".pre_online_sync");
 	}
 
-	// Sync any online change down to the local disk.
-	// If we are doing --upload-only however, we need to ignore online changes.
+	// Sync any online change down to the local disk
+	// If we are doing --upload-only however .. we need to 'ignore' online change
 	if (!appConfig.getValueBool("upload_only")) {
-		// We are not doing an --upload-only scenario; sync online change --> local.
+		// We are not doing an --upload-only scenario .. sync online change --> local
 		appConfig.monitorSyncTriggeredByApiSignal = true;
 		scope(exit) {
 			appConfig.monitorSyncTriggeredByApiSignal = false;
 		}
-
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
-
 		if (syncEngineInstance.authoritativeCleanupPassUsedInLastSync) {
 			syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		}
 	}
 	if (appConfig.getValueBool("monitor")) {
-		// Drain inotify events generated by online -> local reconciliation.
-		processInotifyEvents(false, true);
+		// Handle inotify events
+		completeRemoteApplyInotifyEvents(onlineCallbackSource ~ ".post_online_sync");
 	}
 }
 
@@ -1814,14 +1747,14 @@ void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = 
 	syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 	if (appConfig.getValueBool("monitor")) {
 		// Handle any inotify events whilst the DB was being scanned
-		processInotifyEvents(true);
+		captureAndApplyInotifyEvents("upload_only.post_database_scan");
 	}
 	
 	// Scan the configured 'sync_dir' for new data to upload
 	syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 	if (appConfig.getValueBool("monitor")) {
 		// Handle any new inotify events whilst the local filesystem was being scanned
-		processInotifyEvents(true);
+		captureAndApplyInotifyEvents("upload_only.post_local_scan");
 	}
 }
 
@@ -1845,21 +1778,21 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any inotify events whilst the DB was being scanned
-			processInotifyEvents(true);
+			captureAndApplyInotifyEvents("standard_sync.local_first.post_database_scan");
 		}
 		
 		// Scan the configured 'sync_dir' for new data to upload to OneDrive
 		syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any new inotify events whilst the local filesystem was being scanned
-			processInotifyEvents(true);
+			captureAndApplyInotifyEvents("standard_sync.local_first.post_local_scan");
 		}
 		
 		// Download data from OneDrive last
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
 		if (appConfig.getValueBool("monitor")) {
-			// Cancel out any inotify events from downloading data
-			processInotifyEvents(false, true);
+			// Reconcile client-generated echoes and genuine local activity that occurred during online processing
+			completeRemoteApplyInotifyEvents("standard_sync.local_first.post_online_sync");
 		}
 		
 		// At this point, we have done a sync from:
@@ -1877,15 +1810,15 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		// Download data from OneDrive first
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
 		if (appConfig.getValueBool("monitor")) {
-			// Cancel out any inotify events from downloading data
-			processInotifyEvents(false, true);
+			// Reconcile client-generated echoes and genuine local activity that occurred during online processing
+			completeRemoteApplyInotifyEvents("standard_sync.remote_first.post_online_sync");
 		}
 		
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any inotify events whilst the DB was being scanned
-			processInotifyEvents(true);
+			captureAndApplyInotifyEvents("standard_sync.remote_first.post_database_scan");
 		}
 			
 		// Is --download-only NOT configured?
@@ -1895,7 +1828,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 			if (appConfig.getValueBool("monitor")) {
 				// Handle any new inotify events whilst the local filesystem was being scanned
-				processInotifyEvents(true);
+				captureAndApplyInotifyEvents("standard_sync.remote_first.post_local_scan");
 			}
 			
 			// If we are not doing a 'force_children_scan' perform a true-up
@@ -1911,8 +1844,8 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 					// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
 					syncEngineInstance.syncOneDriveAccountToLocalDisk();
 					if (appConfig.getValueBool("monitor")) {
-						// Cancel out any inotify events from downloading data
-						processInotifyEvents(false, true);
+						// Reconcile client-generated echoes and genuine local activity that occurred during online processing
+						completeRemoteApplyInotifyEvents("standard_sync.remote_first.post_true_up");
 					}
 				} else {
 					// exitHandlerTriggered triggered
@@ -1936,36 +1869,139 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 	}
 }
 
-// Process any inotify events
-void processInotifyEvents(bool updateFlag, bool processDeletesWhenDraining = false) {
-	if ((filesystemMonitor is null) || (!filesystemMonitor.initialised)) {
-		return;
+// Capture raw inotify events into Monitor's pending observation batch.
+// This function never performs a remote operation.
+void captureInotifyEvents(string invocationSource) {
+	if (filesystemMonitor is null || !filesystemMonitor.initialised) return;
+
+	// Publish any online-to-local filesystem effects accumulated by SyncEngine,
+	// including effects produced by parallel file-download workers, before the
+	// corresponding inotify queue is read.
+	syncEngineInstance.publishExpectedLocalEffects();
+
+	SysTime functionStartTime;
+	string logKey;
+	string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+	if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+		functionStartTime = Clock.currTime();
+		logKey = generateAlphanumericString();
+		displayFunctionProcessingStart(thisFunctionName, logKey);
 	}
 
-	// Attempt to process or cancel inotify events
-	// filesystemMonitor.update will throw this, thus needs to be caught
-	//   monitor.MonitorException@src/monitor.d(549): inotify queue overflow: some events may be lost (Interrupted system call)
-	try {
-		// Process any inotify events or cancel events based on flag value
-		// True = process
-		// False = cancel
-		filesystemMonitor.update(updateFlag, processDeletesWhenDraining);
-	} catch (MonitorException exception) {
-		// Catch any exceptions thrown by inotify / monitor engine
-		addLogEntry("ERROR: The following inotify error was generated: " ~ exception.msg);
-	} catch (FileException exception) {
-		// A local path can legitimately disappear while queued inotify events are
-		// being cancelled / drained, especially under monitor stress testing.
-		// Treat ENOENT during event cancellation as non-fatal.
-		if ((!updateFlag) && (exception.errno == ENOENT)) {
-			if (debugLogging) {
-				addLogEntry("Ignoring stale inotify cancellation event for path that no longer exists: " ~ exception.msg, ["debug"]);
-			}
-			return;
-		}
-		// Log error message
-		addLogEntry("ERROR: The following filesystem error was generated while processing inotify events: " ~ exception.msg);
+	if (debugLogging) {
+		addLogEntry("captureInotifyEvents context: source=" ~ invocationSource ~ ", logKey=" ~ (logKey.empty ? "not-set" : logKey), ["debug"]);
 	}
+
+	try {
+		filesystemMonitor.capture(invocationSource, logKey);
+	} catch (MonitorException e) {
+		addLogEntry("ERROR: The following inotify error was generated: " ~ e.msg);
+	}
+
+	if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+		displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+	}
+}
+
+// Apply the current observation batch after revalidating each operation through SyncEngine.
+void applyPendingLocalChanges(string invocationSource) {
+	LocalChange[] pendingChanges = filesystemMonitor.takePendingChanges();
+	if (debugLogging) {
+		addLogEntry("Applying pending local observations: source=" ~ invocationSource ~ ", count=" ~ to!string(pendingChanges.length), ["debug"]);
+	}
+
+	string[] changedLocalFilesToUploadToOneDrive;
+	foreach (change; pendingChanges) {
+		switch (change.type) {
+			case LocalChangeType.changed:
+				if (exists(change.src) && isFile(change.src)) {
+					changedLocalFilesToUploadToOneDrive ~= change.src;
+				} else if (debugLogging) {
+					addLogEntry("Skipping stale local file-change observation because the path no longer exists as a file: " ~ change.src, ["debug"]);
+				}
+				break;
+
+			case LocalChangeType.createDir:
+				if ((appConfig.getValueBool("skip_dotfiles")) && (isDotFile(change.src))) {
+					if (verboseLogging) {addLogEntry("[M] Skipping watching local path - .folder found & --skip-dot-files enabled: " ~ change.src, ["verbose"]);}
+				} else if (exists(change.src) && isDir(change.src)) {
+					if (verboseLogging) {addLogEntry("[M] Local directory created: " ~ change.src, ["verbose"]);}
+					try {
+						syncEngineInstance.scanLocalFilesystemPathForNewData(change.src);
+					} catch (CurlException e) {
+						if (verboseLogging) {addLogEntry("Offline, cannot create remote dir: " ~ change.src, ["verbose"]);}
+					} catch (Exception e) {
+						addLogEntry("Cannot create remote directory: " ~ e.msg, ["info", "notify"]);
+					}
+				} else if (debugLogging) {
+					addLogEntry("Skipping stale local directory-create observation because the path no longer exists as a directory: " ~ change.src, ["debug"]);
+				}
+				break;
+
+			case LocalChangeType.deleted:
+				if (exists(change.src)) {
+					if (debugLogging) {addLogEntry("Skipping stale local delete observation because the path exists again: " ~ change.src, ["debug"]);}
+					break;
+				}
+				if (verboseLogging) {addLogEntry("[M] Local item deleted: " ~ change.src, ["verbose"]);}
+				try {
+					addLogEntry("The operating system sent a deletion notification. Trying to delete this item as requested: " ~ change.src);
+					syncEngineInstance.deleteByPath(change.src);
+				} catch (CurlException e) {
+					if (verboseLogging) {addLogEntry("Offline, cannot delete item: " ~ change.src, ["verbose"]);}
+				} catch (SyncException e) {
+					if (e.msg == "The item to delete is not in the local database") {
+						if (verboseLogging) {addLogEntry("Item cannot be deleted from Microsoft OneDrive because it was not found in the local database", ["verbose"]);}
+					} else {
+						addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
+					}
+				} catch (FileException e) {
+					addLogEntry("ERROR: The local file system returned an error with the following message: " ~ e.msg, ["verbose"]);
+				} catch (Exception e) {
+					addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
+				}
+				break;
+
+			case LocalChangeType.moved:
+				if (!exists(change.dst)) {
+					if (debugLogging) {addLogEntry("Skipping stale local move observation because the destination no longer exists: " ~ change.src ~ " -> " ~ change.dst, ["debug"]);}
+					break;
+				}
+				if (verboseLogging) {addLogEntry("[M] Local item moved: " ~ change.src ~ " -> " ~ change.dst, ["verbose"]);}
+				try {
+					if ((appConfig.getValueBool("skip_dotfiles")) && (isDotFile(change.src))) {
+						syncEngineInstance.scanLocalFilesystemPathForNewData(change.dst);
+					} else {
+						syncEngineInstance.uploadMoveItem(change.src, change.dst);
+					}
+				} catch (CurlException e) {
+					if (verboseLogging) {addLogEntry("Offline, cannot move item !", ["verbose"]);}
+				} catch (Exception e) {
+					addLogEntry("Cannot move item: " ~ e.msg, ["info", "notify"]);
+				}
+				break;
+
+			default:
+				break;
+		}
+	}
+
+	if (!changedLocalFilesToUploadToOneDrive.empty) {
+		syncEngineInstance.handleLocalFileTrigger(changedLocalFilesToUploadToOneDrive);
+		if (verboseLogging) {addLogEntry("[M] Total number of local file(s) added or changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length), ["verbose"]);}
+	}
+}
+
+void captureAndApplyInotifyEvents(string invocationSource) {
+	captureInotifyEvents(invocationSource);
+	filesystemMonitor.clearExpectedEvents(invocationSource);
+	applyPendingLocalChanges(invocationSource);
+}
+
+// Complete an online-to-local application cycle using the same observation
+// semantics as every other monitor trigger. There is no queue-wide discard mode.
+void completeRemoteApplyInotifyEvents(string invocationSource) {
+	captureAndApplyInotifyEvents(invocationSource);
 }
 
 // Display the sync outcome
@@ -2484,9 +2520,13 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 		// Perform cleanup and shutdown of various services and resources
 		try {
 			// Log who called this function
-			if (debugLogging && loggingStillInitialised() && loggingActive()) {addLogEntry("performSynchronisedExitProcess called by: " ~ caller, ["debug"]);}
+			if (debugLogging && loggingStillInitialised() && loggingActive()) {
+				addLogEntry("performSynchronisedExitProcess called by: " ~ caller, ["debug"]);
+			}
+
 			addShutdownTelemetry("performSynchronisedExitProcess entered by scope: " ~ caller);
 			addShutdownTelemetry("planned final exit code: " ~ to!string(requestedExitCode) ~ ", termination signal: " ~ to!string(terminationSignal));
+
 			// Remove Desktop integration
 			if (performFileSystemMonitoring && appConfig !is null) {
 				// Was desktop integration enabled?
@@ -2498,20 +2538,28 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			
 			// Shutdown the OneDrive Webhook instance
 			shutdownOneDriveWebhook();
+
 			// Shutdown the OneDrive WebSocket instance
 			shutdownOneDriveSocketIo();
+
 			// Shutdown any local filesystem monitoring
 			shutdownFilesystemMonitor();
+
 			// Shutdown the sync engine
 			shutdownSyncEngine();
+
 			// Release all CurlEngine instances
 			releaseAllCurlInstances();
+
 			// Shutdown the client side filtering objects
 			shutdownSelectiveSync();
+
 			// Shutdown the database
 			shutdownDatabase();
+
 			// Shutdown the application configuration objects - nothing should be active now
 			shutdownAppConfig();
+
 			// Shutdown application logging
 			shutdownApplicationLogging();
 		} catch (Exception e) {

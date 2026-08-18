@@ -28,16 +28,21 @@ import util;
 import log;
 import clientSideFiltering;
 
-// Relevant inotify events
-version(FreeBSD) {
-	 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE;
-	 private immutable bool triggerFileCreateAsChanged = true;
-} else version(OpenBSD) {
-	 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
-	 private immutable bool triggerFileCreateAsChanged = true;
+// Relevant inotify events. All currently supported/tested platforms provide
+// these markers through their inotify implementation.
+private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
+
+// FreeBSD and OpenBSD inotify compatibility layers may emit IN_CREATE without
+// a later IN_CLOSE_WRITE when a newly written file is closed. Treat that file
+// creation as the actionable change on those platforms. Linux continues to use
+// IN_CLOSE_WRITE as the write-completion signal so partially written files are
+// not processed prematurely.
+version (FreeBSD) {
+	private immutable bool triggerFileCreateAsChanged = true;
+} else version (OpenBSD) {
+	private immutable bool triggerFileCreateAsChanged = true;
 } else {
-	 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
-	 private immutable bool triggerFileCreateAsChanged = false;
+	private immutable bool triggerFileCreateAsChanged = false;
 }
 
 class MonitorException: ErrnoException {
@@ -123,7 +128,7 @@ class MonitorBackgroundWorker {
 			workerExited = true;
 		}
 
-		// wait for the caller to be ready
+		// Wait for the caller to be ready.
 		receiveOnly!bool();
 
 		while (isAlive) {
@@ -131,28 +136,28 @@ class MonitorBackgroundWorker {
 			FD_ZERO(&fds);
 			FD_SET(fd, &fds);
 
-			// Listen for shutdown / interrupt wakeups from the control pipe.
+			// Listen for shutdown or interrupt wake-ups from the control pipe.
 			int controlPipeFd = (cast()p).readEnd.fileno;
 			FD_SET(controlPipeFd, &fds);
 
-			// select() only needs to scan up to the highest fd + 1.
+			// select() only needs to scan up to the highest descriptor plus one.
 			int maxFd = max(fd, controlPipeFd) + 1;
 			res = select(maxFd, &fds, null, null, null);
 
 			if (res == -1) {
 				if (errno() == EINTR) {
-					// Interrupted by signal; re-arm the wait.
+					// Interrupted by a signal; re-arm the wait.
 					continue;
 				}
 
-				// Error occurred, tell caller to terminate.
+				// Error occurred, tell the caller to terminate.
 				callerTid.send(-1);
 				break;
 			}
 
 			// Control-pipe readiness is not filesystem activity. It is used to
-			// unblock select() during interrupt/shutdown, so drain it and do not
-			// report a local monitor wake-up to main.d.
+			// unblock select() during interrupt or shutdown, so drain it without
+			// reporting a local-monitor wake-up to main.d.
 			if (FD_ISSET(controlPipeFd, &fds)) {
 				try {
 					(cast()p).readEnd.readln();
@@ -164,14 +169,15 @@ class MonitorBackgroundWorker {
 				continue;
 			}
 
-			// Only inotify fd readiness should wake the caller for local
+			// Only inotify descriptor readiness should wake the caller for local
 			// filesystem processing.
 			if (FD_ISSET(fd, &fds)) {
 				callerTid.send(1);
 
-				// wait for the caller to be ready
-				if (isAlive)
+				// Wait for the caller to acknowledge whether monitoring should continue.
+				if (isAlive) {
 					isAlive = receiveOnly!bool();
+				}
 
 				continue;
 			}
@@ -205,7 +211,6 @@ class MonitorBackgroundWorker {
 			// The control pipe may already be closed or partially initialised.
 		}
 	}
-
 }
 
 void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid) {
@@ -217,75 +222,123 @@ void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid) {
 	}
 }
 
-enum ActionType {
+enum LocalChangeType {
 	moved,
-	deleted, 
+	deleted,
 	changed,
 	createDir
 }
 
-struct Action {
-	ActionType type;
+struct LocalChange {
+	LocalChangeType type;
 	bool skipped;
 	string src;
 	string dst;
 }
 
-struct ActionHolder {
-	Action[] actions;
+private string normaliseMonitorPath(string path) {
+	if (path.empty || path == ".") return path;
+
+	// Monitor paths are already relative to the configured sync_dir. Preserve
+	// that hot path without normalising or allocating another string.
+	if (!isAbsolute(path)) {
+		return startsWith(path, "./") ? path : "./" ~ path;
+	}
+
+	// A small number of SyncEngine paths (for example Business Shared Files)
+	// are absolute. Convert only those to the representation used by Monitor.
+	string normalised = buildNormalizedPath(relativePath(path, getcwd()));
+	if (normalised == ".") return normalised;
+	return startsWith(normalised, "./") ? normalised : "./" ~ normalised;
+}
+
+private bool isSameOrChildPath(string parent, string candidate) {
+	string normalisedParent = normaliseMonitorPath(parent);
+	string normalisedCandidate = normaliseMonitorPath(candidate);
+
+	return (normalisedCandidate == normalisedParent) || startsWith(normalisedCandidate, normalisedParent ~ "/");
+}
+
+// Watch descriptors are stored with a trailing slash, while paths generated
+// from events may be relative to the root watch ("./path") and may not have a
+// trailing slash. Convert both representations to one canonical form before
+// comparing a watch tree root with its descendants.
+private string normaliseWatchPath(string path) {
+	string normalisedPath = normaliseMonitorPath(path);
+
+	while ((normalisedPath.length > 1) && normalisedPath.endsWith("/")) {
+		normalisedPath = normalisedPath[0 .. $ - 1];
+	}
+
+	return normalisedPath;
+}
+
+private bool isSameOrChildWatchPath(string parent, string candidate) {
+	string normalisedParent = normaliseWatchPath(parent);
+	string normalisedCandidate = normaliseWatchPath(candidate);
+
+	return (normalisedCandidate == normalisedParent) || startsWith(normalisedCandidate, normalisedParent ~ "/");
+}
+
+private string rebaseWatchPath(string fromRoot, string toRoot, string candidate) {
+	string normalisedFromRoot = normaliseWatchPath(fromRoot);
+	string normalisedToRoot = normaliseWatchPath(toRoot);
+	string normalisedCandidate = normaliseWatchPath(candidate);
+
+	if (normalisedCandidate == normalisedFromRoot) {
+		return normalisedToRoot;
+	}
+
+	return normalisedToRoot ~ normalisedCandidate[normalisedFromRoot.length .. $];
+}
+
+private string rebasePath(string fromRoot, string toRoot, string candidate) {
+	string normalisedFromRoot = normaliseMonitorPath(fromRoot);
+	string normalisedCandidate = normaliseMonitorPath(candidate);
+	string normalisedToRoot = normaliseMonitorPath(toRoot);
+
+	if (normalisedCandidate == normalisedFromRoot) {
+		return normalisedToRoot;
+	}
+
+	return normalisedToRoot ~ normalisedCandidate[normalisedFromRoot.length .. $];
+}
+
+// Coalesces raw filesystem observations into a pending local-change batch.
+// It deliberately does not execute any synchronisation operation.
+struct LocalChangeAccumulator {
+	LocalChange[] changes;
 	size_t[string] srcMap;
 
-	private string normaliseMonitorPath(string path) {
-		if (path.empty) return path;
-		return (path[0] == '.') ? path : "./" ~ path;
-	}
+	void append(LocalChangeType type, string src, string dst = null) {
+		src = normaliseMonitorPath(src);
+		if (!dst.empty) dst = normaliseMonitorPath(dst);
 
-	private bool isSameOrChildPath(string parent, string candidate) {
-		string normalisedParent = normaliseMonitorPath(parent);
-		string normalisedCandidate = normaliseMonitorPath(candidate);
-
-		return (normalisedCandidate == normalisedParent) || startsWith(normalisedCandidate, normalisedParent ~ "/");
-	}
-
-	private string rebasePath(string fromRoot, string toRoot, string candidate) {
-		string normalisedFromRoot = normaliseMonitorPath(fromRoot);
-		string normalisedCandidate = normaliseMonitorPath(candidate);
-
-		if (normalisedCandidate == normalisedFromRoot) {
-			return toRoot;
-		}
-
-		return toRoot ~ normalisedCandidate[normalisedFromRoot.length .. $];
-	}
-
-	void append(ActionType type, string src, string dst=null) {
 		size_t[] pendingTargets;
 		switch (type) {
-			case ActionType.changed:
-				if (src in srcMap && actions[srcMap[src]].type == ActionType.changed) {
-					// skip duplicate operations
+			case LocalChangeType.changed:
+				if (src in srcMap && changes[srcMap[src]].type == LocalChangeType.changed) {
+					// Skip duplicate change observations.
 					return;
 				}
 				break;
-			case ActionType.createDir:
+			case LocalChangeType.createDir:
 				break;
-			case ActionType.deleted:
-				foreach (action; actions) {
-					if (action.skipped) continue;
-					if (action.type == ActionType.moved && isSameOrChildPath(action.src, src)) {
-						// A delete for an item underneath a pending move is an inotify artefact of the move.
-						// The parent move will update Microsoft OneDrive without deleting child items.
+			case LocalChangeType.deleted:
+				foreach (change; changes) {
+					if (change.skipped) continue;
+					if (change.type == LocalChangeType.moved && isSameOrChildPath(change.src, src)) {
+						// A delete beneath a pending move is an inotify artefact of the move.
 						return;
 					}
 				}
 
 				if (src in srcMap) {
 					size_t pendingTarget = srcMap[src];
-					// Skip operations require reading local file that is gone
-					switch (actions[pendingTarget].type) {
-						case ActionType.changed:
-						case ActionType.createDir:
-							actions[srcMap[src]].skipped = true;
+					switch (changes[pendingTarget].type) {
+						case LocalChangeType.changed:
+						case LocalChangeType.createDir:
+							changes[pendingTarget].skipped = true;
 							srcMap.remove(src);
 							break;
 						default:
@@ -293,41 +346,42 @@ struct ActionHolder {
 					}
 				}
 
-				// If a parent directory delete arrives after child deletes, collapse the
-				// child delete actions into the parent delete. Linux commonly reports
-				// rm -rf as file deletes followed by the directory delete. Processing
-				// only the parent preserves the intended recursive delete operation and
-				// avoids leaving empty remote directories behind if child deletes were
-				// observed first.
-				foreach (ref action; actions) {
-					if (action.skipped) continue;
-					if (action.type == ActionType.deleted && isSameOrChildPath(src, action.src) && normaliseMonitorPath(src) != normaliseMonitorPath(action.src)) {
-						action.skipped = true;
-						srcMap.remove(action.src);
+				// If a parent directory delete arrives after child deletes, collapse
+				// those child observations into the parent delete. Linux commonly
+				// reports recursive deletion as child deletes followed by the parent.
+				// Retaining only the parent preserves the intended recursive operation.
+				foreach (ref change; changes) {
+					if (change.skipped) continue;
+					if (
+						change.type == LocalChangeType.deleted &&
+						isSameOrChildPath(src, change.src) &&
+						normaliseMonitorPath(src) != normaliseMonitorPath(change.src)
+					) {
+						change.skipped = true;
+						srcMap.remove(change.src);
 					}
 				}
 				break;
-			case ActionType.moved:
-				for(int i = 0; i < actions.length; i++) {
-					// Only match for latest operation
-					if (actions[i].src in srcMap) {
-						switch (actions[i].type) {
-							case ActionType.changed:
-							case ActionType.createDir:
-								if (isSameOrChildPath(src, actions[i].src)) {
-									// Hold operations requiring local reads until after the target is moved online.
+			case LocalChangeType.moved:
+				for (size_t i = 0; i < changes.length; i++) {
+					if (changes[i].skipped) continue;
+					if (changes[i].src in srcMap) {
+						switch (changes[i].type) {
+							case LocalChangeType.changed:
+							case LocalChangeType.createDir:
+								if (isSameOrChildPath(src, changes[i].src)) {
+									// Hold operations requiring local reads until after the move.
 									pendingTargets ~= i;
-									actions[i].skipped = true;
-									srcMap.remove(actions[i].src);
-									actions[i].src = rebasePath(src, dst, actions[i].src);
+									changes[i].skipped = true;
+									srcMap.remove(changes[i].src);
+									changes[i].src = rebasePath(src, dst, changes[i].src);
 								}
 								break;
-							case ActionType.deleted:
-								if (isSameOrChildPath(src, actions[i].src)) {
-									// Suppress delete notifications for children of a moved directory.
-									// These are artefacts of the local move and must not become remote deletes.
-									actions[i].skipped = true;
-									srcMap.remove(actions[i].src);
+							case LocalChangeType.deleted:
+								if (isSameOrChildPath(src, changes[i].src)) {
+									// Suppress child deletes caused by the parent move.
+									changes[i].skipped = true;
+									srcMap.remove(changes[i].src);
 								}
 								break;
 							default:
@@ -339,14 +393,37 @@ struct ActionHolder {
 			default:
 				break;
 		}
-		actions ~= Action(type, false, src, dst);
-		srcMap[src] = actions.length - 1;
-		
+
+		changes ~= LocalChange(type, false, src, dst);
+		srcMap[src] = changes.length - 1;
+
 		foreach (pendingTarget; pendingTargets) {
-			actions ~= actions[pendingTarget];
-			actions[$-1].skipped = false;
-			srcMap[actions[$-1].src] = actions.length - 1;
+			changes ~= changes[pendingTarget];
+			changes[$ - 1].skipped = false;
+			srcMap[changes[$ - 1].src] = changes.length - 1;
 		}
+	}
+
+	bool hasPendingDeparture(string path) {
+		string target = normaliseMonitorPath(path);
+		foreach (change; changes) {
+			if (change.skipped) continue;
+			if ((change.type == LocalChangeType.moved || change.type == LocalChangeType.deleted) &&
+				isSameOrChildPath(change.src, target)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	LocalChange[] take() {
+		LocalChange[] result;
+		foreach (change; changes) {
+			if (!change.skipped) result ~= change;
+		}
+		changes = [];
+		srcMap = null;
+		return result;
 	}
 }
 
@@ -382,17 +459,25 @@ final class Monitor {
 	// Mutex to support thread safe access of inotify watch descriptors
 	private Mutex inotifyMutex;
 
-	// Configure function delegates
-	void delegate(string path) onDirCreated;
-	void delegate(string[] path) onFileChanged;
-	void delegate(string path) onDelete;
-	void delegate(string from, string to) onMove;
-	
 	// List of paths that were moved, not deleted
-	bool[string] movedNotDeleted;
+	private bool[string] movedNotDeleted;
 
-	// An array of actions
-	ActionHolder actionHolder;
+	// Pending local observations. These are captured by Monitor and reconciled by main.d.
+	private LocalChangeAccumulator pendingChanges;
+
+	// Exact filesystem echoes expected from online-to-local operations performed by SyncEngine.
+	// All of this state is owned by the main thread; the background worker only wakes the main thread.
+	//
+	// Counts/queues are deliberate. Parallel downloads can apply the same path more
+	// than once before the next capture. A set-like associative array collapses those
+	// registrations and allows the second client-generated move to escape as local
+	// intent. Preserve one consumable expectation per filesystem operation.
+	private size_t[string] expectedDirectoryCreates;
+	private string[][string] expectedMoveDestinationsBySource;
+	private string[][string] expectedMoveSourcesByDestination;
+	private size_t[string] expectedFileArrivals;
+	private bool[string] expectedRemovalRoots;
+	private bool[string] observedRemovalRoots;
 	
 	// Configure the class variable to consume the application configuration including selective sync
 	this(ApplicationConfig appConfig, ClientSideFiltering selectiveSync) {
@@ -423,7 +508,6 @@ final class Monitor {
 			verbose = true;
 		}
 		
-		assert(onDirCreated && onFileChanged && onDelete && onMove);
 		if (!buffer) buffer = new void[4096];
 		worker = cast(shared) new MonitorBackgroundWorker;
 		worker.initialise();
@@ -451,8 +535,9 @@ final class Monitor {
 
 	// Shutdown the monitor class
 	void shutdown() {
-		if(!initialised)
+		if (!initialised) {
 			return;
+		}
 		initialised = false;
 
 		// Interrupt the worker so select() wakes if it is waiting on inotify.
@@ -460,12 +545,12 @@ final class Monitor {
 			worker.interrupt();
 		}
 
-		// Remove all the inotify watch descriptors before closing the fd.
+		// Remove all inotify watch descriptors before closing the inotify descriptor.
 		removeAll();
 
-		// Notify the worker that the monitor has been shutdown. This unblocks the
-		// worker if it has already sent a wake-up and is waiting for the main thread
-		// to acknowledge whether monitoring should continue.
+		// If the worker has already reported an inotify wake-up, it may be waiting
+		// for main.d to acknowledge whether monitoring should continue. Unblock that
+		// receive without assuming the worker is still alive.
 		try {
 			send(false);
 		} catch (Exception) {
@@ -493,49 +578,14 @@ final class Monitor {
 			dirNameToWd = null;
 			cookieToPath = null;
 			movedNotDeleted = null;
+			pendingChanges = LocalChangeAccumulator.init;
 		} finally {
 			inotifyMutex.unlock();
 		}
 	}
 
-
-	// Return a stable monitor bookkeeping key for a path.
-	// All internal watch maps use this form so that these variants are treated
-	// as the same directory: ./path, path, path/.
-	private string normaliseWatchPath(string path) {
-		if (path.empty) return ".";
-
-		string normalisedPath = buildNormalizedPath(path);
-
-		if (normalisedPath.empty || normalisedPath == "./") return ".";
-		if (normalisedPath.startsWith("./")) normalisedPath = normalisedPath[2 .. $];
-
-		while ((normalisedPath.length > 1) && normalisedPath.endsWith("/")) {
-			normalisedPath = normalisedPath[0 .. $-1];
-		}
-
-		if (normalisedPath.empty) return ".";
-		return normalisedPath;
-	}
-
 	private string watchPathToEventPrefix(string watchPath) {
 		return (watchPath == ".") ? "" : watchPath ~ "/";
-	}
-
-	private bool isSameOrChildWatchPath(string parent, string candidate) {
-		string parentPath = normaliseWatchPath(parent);
-		string candidatePath = normaliseWatchPath(candidate);
-
-		return (candidatePath == parentPath) || startsWith(candidatePath, parentPath ~ "/");
-	}
-
-	private string rebaseWatchPath(string fromRoot, string toRoot, string candidate) {
-		string normalisedFromRoot = normaliseWatchPath(fromRoot);
-		string normalisedToRoot = normaliseWatchPath(toRoot);
-		string normalisedCandidate = normaliseWatchPath(candidate);
-
-		if (normalisedCandidate == normalisedFromRoot) return normalisedToRoot;
-		return normalisedToRoot ~ normalisedCandidate[normalisedFromRoot.length .. $];
 	}
 
 	private bool isWatchRegistered(string dirname) {
@@ -562,8 +612,8 @@ final class Monitor {
 			}
 
 			// If the directory path was already associated with another descriptor,
-			// drop that stale descriptor mapping. The path-level reverse map is the
-			// source of truth for idempotency.
+			// drop that stale descriptor mapping. The reverse map is the source of
+			// truth for idempotent path registration.
 			auto previousWd = key in dirNameToWd;
 			if ((previousWd !is null) && (*previousWd != wd)) {
 				wdToDirName.remove(*previousWd);
@@ -601,7 +651,11 @@ final class Monitor {
 	private void clearTransientEventState() {
 		cookieToPath = null;
 		movedNotDeleted = null;
-		object.destroy(actionHolder);
+
+		// PR #3756 destroyed the old ActionHolder here. Test 5 replaced that
+		// command accumulator with LocalChangeAccumulator, so discard the
+		// incomplete observation batch using the equivalent Test 5 state.
+		pendingChanges = LocalChangeAccumulator.init;
 	}
 
 	bool isMonitorStateDirty() {
@@ -611,7 +665,6 @@ final class Monitor {
 	void clearMonitorStateDirty() {
 		monitorStateDirty = false;
 	}
-
 
 	// Recursively add this path to be monitored
 	private void addRecursive(string dirname) {
@@ -694,7 +747,7 @@ final class Monitor {
 					return;
 				}
 			}
-			
+
 			// Only directories need inotify watches. File changes are reported by
 			// the watch on the parent directory. Avoid file-level watches because
 			// they cannot be maintained safely under rapid create/delete churn.
@@ -708,7 +761,7 @@ final class Monitor {
 				if (debugLogging) {addLogEntry("Skipping duplicate inotify watch registration for: " ~ dirname, ["debug"]);}
 				return;
 			}
-
+			
 			// passed all potential exclusions
 			// add inotify watch for this directory
 			if (debugLogging) {addLogEntry("Calling worker.addInotifyWatch() for this dirname: " ~ dirname, ["debug"]);}
@@ -769,7 +822,7 @@ final class Monitor {
 		}
 	}
 
-	// Remove all watch descriptors
+	// Remove a watch descriptor
 	private void removeAll() {
 		string[int] copy;
 
@@ -791,7 +844,7 @@ final class Monitor {
 		}
 	}
 
-	// Remove a watch descriptor
+	// Remove a watch descriptor.
 	private void remove(int wd, bool verboseRemovalLog = false) {
 		string dirname;
 		int ret;
@@ -801,7 +854,12 @@ final class Monitor {
 		try {
 			auto existingPath = wd in wdToDirName;
 			if (existingPath is null) {
-				if (debugLogging) {addLogEntry("inotify watch descriptor already removed from internal map: wd=" ~ wd.to!string, ["debug"]);}
+				if (debugLogging) {
+					addLogEntry(
+						"inotify watch descriptor already removed from internal map: wd=" ~ wd.to!string,
+						["debug"]
+					);
+				}
 				return;
 			}
 			dirname = *existingPath;
@@ -809,8 +867,9 @@ final class Monitor {
 			inotifyMutex.unlock();
 		}
 
+		// Do not hold the bookkeeping mutex across the kernel call.
 		ret = worker.removeInotifyWatch(wd);
-		savedErrno = errno();
+		savedErrno = (ret < 0) ? errno() : 0;
 
 		if (ret < 0) {
 			// EINVAL indicates that the watch descriptor is no longer valid. This can
@@ -818,7 +877,12 @@ final class Monitor {
 			// kernel already removed the watch before explicit cleanup. Remove our
 			// bookkeeping entry and continue.
 			if (savedErrno == EINVAL) {
-				if (debugLogging) {addLogEntry("Ignoring already-invalid inotify watch during removal: wd=" ~ wd.to!string ~ ", path=" ~ dirname, ["debug"]);}
+				if (debugLogging) {
+					addLogEntry(
+						"Ignoring already-invalid inotify watch during removal: wd=" ~ wd.to!string ~ ", path=" ~ dirname,
+						["debug"]
+					);
+				}
 			} else {
 				throw new MonitorException("inotify_rm_watch failed");
 			}
@@ -827,11 +891,9 @@ final class Monitor {
 		string removedPath;
 		unregisterWatchDescriptor(wd, removedPath);
 
-		// Runtime directory delete/move cleanup can remove many watches at once,
-		// especially on FreeBSD where the backend may not silently invalidate child
-		// watches before our explicit recursive cleanup runs. Keep that normal
-		// runtime cleanup out of verbose output, but retain it for debug diagnostics.
-		// Full teardown / shutdown still passes verboseRemovalLog=true.
+		// Runtime directory delete/move cleanup can remove many watches at once.
+		// Keep that normal runtime cleanup out of verbose output, but retain it at
+		// debug level. Full teardown / shutdown passes verboseRemovalLog=true.
 		if (verboseRemovalLog && verboseLogging) {
 			addLogEntry("Stopped monitoring directory (inotify watch removed): " ~ dirname, ["verbose"]);
 		} else if (debugLogging) {
@@ -861,16 +923,23 @@ final class Monitor {
 
 		foreach (wd; matchingWds) {
 			// Normal runtime recursive cleanup should not produce verbose output for
-			// every child watch descriptor. The individual removals remain visible at
-			// debug level via remove().
+			// every child watch descriptor. Individual removals remain visible at
+			// debug level through remove().
 			remove(wd, false);
 		}
 
 		if ((matchingWds.length > 0) && debugLogging) {
-			addLogEntry("Removed " ~ matchingWds.length.to!string ~ " inotify watch descriptor(s) for directory tree: " ~ key, ["debug"]);
+			addLogEntry(
+				"Removed " ~ matchingWds.length.to!string ~
+				" inotify watch descriptor(s) for directory tree: " ~ key,
+				["debug"]
+			);
 		}
 	}
 
+	// A directory moved within the monitored tree retains its kernel watch
+	// descriptors. Rebase the stored paths instead of adding duplicate watches
+	// for the destination hierarchy.
 	private void rebaseWatchTree(string fromRoot, string toRoot) {
 		string oldRoot = normaliseWatchPath(fromRoot);
 		string newRoot = normaliseWatchPath(toRoot);
@@ -888,9 +957,9 @@ final class Monitor {
 
 				auto existingWd = rebasedPath in dirNameToWd;
 				if ((existingWd !is null) && (*existingWd != wd)) {
-					// This should not normally happen after idempotent registration, but if a
-					// previous buggy run produced duplicate path state, prefer the watch that
-					// is already being rebased and drop the stale reverse entry.
+					// A conflicting reverse entry should not normally exist after
+					// idempotent registration. Prefer the descriptor belonging to
+					// the subtree currently being rebased and discard stale map state.
 					wdToDirName.remove(*existingWd);
 				}
 
@@ -904,7 +973,12 @@ final class Monitor {
 		}
 
 		if ((rebasedCount > 0) && debugLogging) {
-			addLogEntry("Rebased " ~ rebasedCount.to!string ~ " inotify watch descriptor(s) from " ~ oldRoot ~ " to " ~ newRoot, ["debug"]);
+			addLogEntry(
+				"Rebased " ~ rebasedCount.to!string ~
+				" inotify watch descriptor(s) from " ~ oldRoot ~
+				" to " ~ newRoot,
+				["debug"]
+			);
 		}
 	}
 
@@ -938,7 +1012,11 @@ final class Monitor {
 		}
 
 		if ((staleWds.length > 0) && debugLogging) {
-			addLogEntry("Pruned " ~ staleWds.length.to!string ~ " stale inotify watch descriptor(s)", ["debug"]);
+			addLogEntry(
+				"Pruned " ~ staleWds.length.to!string ~
+				" stale inotify watch descriptor(s)",
+				["debug"]
+			);
 		}
 	}
 
@@ -963,70 +1041,279 @@ final class Monitor {
 			inotifyMutex.unlock();
 		}
 
-		if (event.len > 0) {
-			path ~= fromStringz(event.name.ptr);
-		} else if (path.empty) {
-			path = ".";
-		} else if (path.endsWith("/")) {
-			path = path[0 .. $-1];
-		}
-
+		if (event.len > 0) path ~= fromStringz(event.name.ptr);
 		if (debugLogging) {addLogEntry("inotify path event for: " ~ path, ["debug"]);}
 		return true;
 	}
 
-	private void drainPendingEventsOnly(ref pollfd fds) {
-		size_t drainedEvents = 0;
-
-		while (true) {
-			bool hasNotification = false;
-			int sleep_counter = 0;
-
-			// Preserve the existing short batching window, but do not resolve paths,
-			// update watches, evaluate filters, or invoke callbacks. This path is
-			// used when callers explicitly want queued local events cancelled.
-			while (sleep_counter < 5) {
-				int ret = poll(&fds, 1, 0);
-				if (ret == -1) throw new MonitorException("poll failed");
-				else if (ret == 0) break;
-
-				hasNotification = true;
-				size_t length = read(worker.fd, buffer.ptr, buffer.length);
-				if (length == -1) throw new MonitorException("read failed");
-
-				int i = 0;
-				while (i < length) {
-					inotify_event *event = cast(inotify_event*) &buffer[i];
-
-					if (event.mask & IN_IGNORED) {
-						string ignoredPath;
-						unregisterWatchDescriptor(event.wd, ignoredPath);
-					} else if (event.mask & IN_Q_OVERFLOW) {
-						monitorStateDirty = true;
-						clearTransientEventState();
-						throw new MonitorException("inotify queue overflow: some events may be lost");
-					}
-
-					drainedEvents++;
-					i += inotify_event.sizeof + event.len;
-				}
-
-				if (poll(&fds, 1, 0) == 0) {
-					sleep_counter += 1;
-					Thread.sleep(dur!"seconds"(1));
-				}
-			}
-
-			if (!hasNotification) break;
-		}
-
-		if ((drainedEvents > 0) && debugLogging) {
-			addLogEntry("Drained " ~ drainedEvents.to!string ~ " stale local filesystem monitor event(s) without processing", ["debug"]);
+	private void incrementExpectedCount(ref size_t[string] counts, string key) {
+		auto currentCount = key in counts;
+		if (currentCount) {
+			(*currentCount)++;
+		} else {
+			counts[key] = 1;
 		}
 	}
 
-	// Update
-	void update(bool useCallbacks = true, bool processDeletesWhenDraining = false) {
+	private bool consumeExpectedCount(ref size_t[string] counts, string key) {
+		auto currentCount = key in counts;
+		if (!currentCount) return false;
+
+		if (*currentCount <= 1) {
+			counts.remove(key);
+		} else {
+			(*currentCount)--;
+		}
+		return true;
+	}
+
+	private void removeStringAt(ref string[] values, size_t index) {
+		if (values.length <= 1) {
+			values = [];
+		} else if (index == 0) {
+			values = values[1 .. $];
+		} else if (index == values.length - 1) {
+			values = values[0 .. $ - 1];
+		} else {
+			values = values[0 .. index] ~ values[index + 1 .. $];
+		}
+	}
+
+	// Remove exactly one expected move instance from both indexes.
+	private bool consumeExpectedMovePair(string normalisedFrom, string normalisedTo) {
+		auto destinations = normalisedFrom in expectedMoveDestinationsBySource;
+		if (!destinations) return false;
+
+		bool destinationFound = false;
+		size_t destinationIndex;
+		foreach (index, destination; *destinations) {
+			if (destination == normalisedTo) {
+				destinationFound = true;
+				destinationIndex = index;
+				break;
+			}
+		}
+		if (!destinationFound) return false;
+
+		string[] remainingDestinations = *destinations;
+		removeStringAt(remainingDestinations, destinationIndex);
+		if (remainingDestinations.empty) {
+			expectedMoveDestinationsBySource.remove(normalisedFrom);
+		} else {
+			expectedMoveDestinationsBySource[normalisedFrom] = remainingDestinations;
+		}
+
+		auto sources = normalisedTo in expectedMoveSourcesByDestination;
+		if (sources) {
+			bool sourceFound = false;
+			size_t sourceIndex;
+			foreach (index, source; *sources) {
+				if (source == normalisedFrom) {
+					sourceFound = true;
+					sourceIndex = index;
+					break;
+				}
+			}
+
+			if (sourceFound) {
+				string[] remainingSources = *sources;
+				removeStringAt(remainingSources, sourceIndex);
+				if (remainingSources.empty) {
+					expectedMoveSourcesByDestination.remove(normalisedTo);
+				} else {
+					expectedMoveSourcesByDestination[normalisedTo] = remainingSources;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	// Record an exact directory-create echo expected from an online-to-local operation.
+	void recordExpectedDirectoryCreate(string path) {
+		string normalisedPath = normaliseMonitorPath(path);
+		incrementExpectedCount(expectedDirectoryCreates, normalisedPath);
+		if (debugLogging) {addLogEntry("MONITOR EXPECTED_ECHO register createDir path=" ~ normalisedPath ~ ", pending=" ~ to!string(expectedDirectoryCreates[normalisedPath]), ["debug"]);}
+	}
+
+	// Record an exact move echo expected from an online-to-local operation.
+	void recordExpectedMove(string fromPath, string toPath) {
+		string normalisedFrom = normaliseMonitorPath(fromPath);
+		string normalisedTo = normaliseMonitorPath(toPath);
+		expectedMoveDestinationsBySource[normalisedFrom] ~= normalisedTo;
+		expectedMoveSourcesByDestination[normalisedTo] ~= normalisedFrom;
+		if (debugLogging) {addLogEntry("MONITOR EXPECTED_ECHO register move from=" ~ normalisedFrom ~ ", to=" ~ normalisedTo ~ ", pending=" ~ to!string(expectedMoveDestinationsBySource[normalisedFrom].length), ["debug"]);}
+	}
+
+	// Record the final path of a successfully downloaded file. This is a fallback
+	// for inotify implementations where the filtered '.partial' source event is
+	// unavailable and the final file therefore appears as an unpaired arrival.
+	void recordExpectedFileArrival(string path) {
+		string normalisedPath = normaliseMonitorPath(path);
+		incrementExpectedCount(expectedFileArrivals, normalisedPath);
+		if (debugLogging) {addLogEntry("MONITOR EXPECTED_ECHO register fileArrival path=" ~ normalisedPath ~ ", pending=" ~ to!string(expectedFileArrivals[normalisedPath]), ["debug"]);}
+	}
+
+	// Record a path/subtree departure expected from an online-to-local deletion or recycle-bin move.
+	void recordExpectedRemoval(string path) {
+		string normalisedPath = normaliseMonitorPath(path);
+		expectedRemovalRoots[normalisedPath] = true;
+		if (debugLogging) {addLogEntry("MONITOR EXPECTED_ECHO register removal root=" ~ normalisedPath, ["debug"]);}
+	}
+
+	private bool consumeExpectedDirectoryCreate(string path) {
+		if (expectedDirectoryCreates.length == 0) return false;
+		string normalisedPath = normaliseMonitorPath(path);
+		if (consumeExpectedCount(expectedDirectoryCreates, normalisedPath)) {
+			if (debugLogging) {addLogEntry("MONITOR EXPECTED_ECHO consume createDir path=" ~ normalisedPath, ["debug"]);}
+			return true;
+		}
+		return false;
+	}
+
+	private bool consumeExpectedMoveDestination(string destination) {
+		if (expectedMoveSourcesByDestination.length == 0) return false;
+		string normalisedDestination = normaliseMonitorPath(destination);
+		auto sources = normalisedDestination in expectedMoveSourcesByDestination;
+		if (sources && !(*sources).empty) {
+			string normalisedSource = (*sources)[0];
+			if (!consumeExpectedMovePair(normalisedSource, normalisedDestination)) return false;
+			consumeExpectedCount(expectedFileArrivals, normalisedDestination);
+			if (debugLogging) {addLogEntry("MONITOR EXPECTED_ECHO consume destination-only move from=" ~ normalisedSource ~ ", to=" ~ normalisedDestination, ["debug"]);}
+			return true;
+		}
+		return false;
+	}
+
+	private bool consumeExpectedMove(string from, string to) {
+		if (expectedMoveDestinationsBySource.length == 0) return false;
+		string normalisedFrom = normaliseMonitorPath(from);
+		string normalisedTo = normaliseMonitorPath(to);
+		if (consumeExpectedMovePair(normalisedFrom, normalisedTo)) {
+			consumeExpectedCount(expectedFileArrivals, normalisedTo);
+			if (debugLogging) {addLogEntry("MONITOR EXPECTED_ECHO consume move from=" ~ normalisedFrom ~ ", to=" ~ normalisedTo, ["debug"]);}
+			return true;
+		}
+		return false;
+	}
+
+	private bool consumeExpectedFileArrival(string path) {
+		if (expectedFileArrivals.length == 0) return false;
+		string normalisedPath = normaliseMonitorPath(path);
+		if (!(normalisedPath in expectedFileArrivals)) return false;
+
+		// If the source event was filtered or unavailable, consume the associated
+		// move and arrival together. Otherwise consume only the remaining arrival.
+		if (!consumeExpectedMoveDestination(normalisedPath)) {
+			consumeExpectedCount(expectedFileArrivals, normalisedPath);
+		}
+		if (debugLogging) {addLogEntry("MONITOR EXPECTED_ECHO consume fileArrival path=" ~ normalisedPath, ["debug"]);}
+		return true;
+	}
+
+	private bool isExpectedMoveSource(string path) {
+		if (expectedMoveDestinationsBySource.length == 0) return false;
+		return (normaliseMonitorPath(path) in expectedMoveDestinationsBySource) !is null;
+	}
+
+	private bool isExpectedMoveDestination(string path) {
+		if (expectedMoveSourcesByDestination.length == 0) return false;
+		return (normaliseMonitorPath(path) in expectedMoveSourcesByDestination) !is null;
+	}
+
+	private bool consumeExpectedRemovalObservation(string path) {
+		if (expectedRemovalRoots.length == 0) return false;
+		string currentPath = normaliseMonitorPath(path);
+		bool matched = false;
+
+		while (!currentPath.empty && currentPath != ".") {
+			if (currentPath in expectedRemovalRoots) {
+				observedRemovalRoots[currentPath] = true;
+				matched = true;
+				if (debugLogging) {addLogEntry("MONITOR EXPECTED_ECHO consume removal path=" ~ normaliseMonitorPath(path) ~ ", root=" ~ currentPath, ["debug"]);}
+			}
+			string parentPath = normaliseMonitorPath(dirName(currentPath));
+			if (parentPath == currentPath) break;
+			currentPath = parentPath;
+		}
+		return matched;
+	}
+
+	// Return whether a captured local move/delete means this path should not be restored yet.
+	bool hasPendingDeparture(string path) {
+		if (pendingChanges.hasPendingDeparture(path)) return true;
+		string normalisedPath = normaliseMonitorPath(path);
+		foreach (pendingPath; cookieToPath.byValue) {
+			if (isSameOrChildPath(pendingPath, normalisedPath)) return true;
+		}
+		return false;
+	}
+
+	// Transfer the current observation batch to the coordinator.
+	LocalChange[] takePendingChanges() {
+		return pendingChanges.take();
+	}
+
+	// A completed post-online capture is the lifecycle boundary for expected echoes.
+	void clearExpectedEvents(string invocationSource = "unspecified") {
+		if (debugLogging) {
+			foreach (path, count; expectedDirectoryCreates) {
+				addLogEntry("MONITOR EXPECTED_ECHO unmatched createDir path=" ~ path ~ ", count=" ~ to!string(count) ~ ", source=" ~ invocationSource, ["debug"]);
+			}
+			foreach (from, destinations; expectedMoveDestinationsBySource) {
+				foreach (to; destinations) {
+					addLogEntry("MONITOR EXPECTED_ECHO unmatched move from=" ~ from ~ ", to=" ~ to ~ ", source=" ~ invocationSource, ["debug"]);
+				}
+			}
+			foreach (path, count; expectedFileArrivals) {
+				addLogEntry("MONITOR EXPECTED_ECHO unmatched fileArrival path=" ~ path ~ ", count=" ~ to!string(count) ~ ", source=" ~ invocationSource, ["debug"]);
+			}
+			foreach (root; expectedRemovalRoots.byKey) {
+				if (!(root in observedRemovalRoots)) {
+					addLogEntry("MONITOR EXPECTED_ECHO unmatched removal root=" ~ root ~ ", source=" ~ invocationSource, ["debug"]);
+				}
+			}
+		}
+		expectedDirectoryCreates = null;
+		expectedMoveDestinationsBySource = null;
+		expectedMoveSourcesByDestination = null;
+		expectedFileArrivals = null;
+		expectedRemovalRoots = null;
+		observedRemovalRoots = null;
+	}
+
+	// Capture and coalesce inotify observations. No remote operation is executed here.
+	void capture(string invocationSource = "unspecified", string parentLogKey = "") {
+		// Observation-only counters for this invocation
+		size_t readBatchCount = 0;
+		size_t eventBatchCount = 0;
+		size_t bytesRead = 0;
+		size_t rawEventCount = 0;
+		size_t ignoredEventCount = 0;
+		size_t filteredEventCount = 0;
+		size_t movedFromEventCount = 0;
+		size_t movedToEventCount = 0;
+		size_t createEventCount = 0;
+		size_t deleteEventCount = 0;
+		size_t closeWriteEventCount = 0;
+		size_t suppressedMoveDeleteCount = 0;
+		size_t queuedActionCount = 0;
+		size_t skippedActionCount = 0;
+		size_t executableMoveActionCount = 0;
+		size_t executableDeleteActionCount = 0;
+		size_t executableCreateDirActionCount = 0;
+		size_t executableChangedActionCount = 0;
+		size_t unmatchedMoveFromCount = 0;
+
+		// Always emit the summary when leaving this function in debug mode, including exception paths
+		scope(exit) {
+			if (debugLogging) {
+				addLogEntry("inotify processing summary context: source=" ~ invocationSource ~ ", mode=observation_capture, parentLogKey=" ~ (parentLogKey.empty ? "not-set" : parentLogKey), ["debug"]);
+				addLogEntry("inotify processing summary events: readBatches=" ~ to!string(readBatchCount) ~ ", eventBatches=" ~ to!string(eventBatchCount) ~ ", bytesRead=" ~ to!string(bytesRead) ~ ", rawEvents=" ~ to!string(rawEventCount) ~ ", ignoredEvents=" ~ to!string(ignoredEventCount) ~ ", filteredEvents=" ~ to!string(filteredEventCount) ~ ", movedFrom=" ~ to!string(movedFromEventCount) ~ ", movedTo=" ~ to!string(movedToEventCount) ~ ", create=" ~ to!string(createEventCount) ~ ", delete=" ~ to!string(deleteEventCount) ~ ", closeWrite=" ~ to!string(closeWriteEventCount) ~ ", suppressedMoveDeletes=" ~ to!string(suppressedMoveDeleteCount), ["debug"]);
+				addLogEntry("inotify processing summary observations: queued=" ~ to!string(queuedActionCount) ~ ", skipped=" ~ to!string(skippedActionCount) ~ ", executableMoved=" ~ to!string(executableMoveActionCount) ~ ", executableDeleted=" ~ to!string(executableDeleteActionCount) ~ ", executableCreateDir=" ~ to!string(executableCreateDirActionCount) ~ ", executableChanged=" ~ to!string(executableChangedActionCount) ~ ", unmatchedMoveFrom=" ~ to!string(unmatchedMoveFromCount), ["debug"]);
+			}
+		}
+
 		if(!initialised)
 			return;
 	
@@ -1034,12 +1321,6 @@ final class Monitor {
 			fd: worker.fd,
 			events: POLLIN
 		};
-
-		if (!useCallbacks && !processDeletesWhenDraining) {
-			clearTransientEventState();
-			drainPendingEventsOnly(fds);
-			return;
-		}
 
 		while (true) {
 			bool hasNotification = false;
@@ -1052,12 +1333,22 @@ final class Monitor {
 				hasNotification = true;
 				size_t length = read(worker.fd, buffer.ptr, buffer.length);
 				if (length == -1) throw new MonitorException("read failed");
+				readBatchCount++;
+				bytesRead += length;
 
 				int i = 0;
 				while (i < length) {
 					inotify_event *event = cast(inotify_event*) &buffer[i];
+					rawEventCount++;
+					if (event.mask & IN_MOVED_FROM) movedFromEventCount++;
+					if (event.mask & IN_MOVED_TO) movedToEventCount++;
+					if (event.mask & IN_CREATE) createEventCount++;
+					if (event.mask & IN_DELETE) deleteEventCount++;
+					if (event.mask & IN_CLOSE_WRITE) closeWriteEventCount++;
 					string path;
 					string evalPath;
+					bool expectedMoveSourceEvent = false;
+					bool expectedMoveDestinationEvent = false;
 					
 					// inotify event debug
 					if (debugLogging) {
@@ -1097,8 +1388,8 @@ final class Monitor {
 					
 					// skip events that need to be ignored
 					if (event.mask & IN_IGNORED) {
-						// The backend has invalidated this watch descriptor. Keep both
-						// descriptor->path and path->descriptor maps in sync.
+						ignoredEventCount++;
+						// Forget both directions of the watch bookkeeping entry.
 						string ignoredPath;
 						unregisterWatchDescriptor(event.wd, ignoredPath);
 						goto skip;
@@ -1112,6 +1403,11 @@ final class Monitor {
 					if (!getPath(event, path)) {
 						goto skip;
 					}
+					// A client download is written to a filtered '.partial' path and then
+					// renamed into place. Preserve an exact expected move source long enough
+					// to pair it with the destination event instead of filtering it out.
+					expectedMoveSourceEvent = ((event.mask & IN_MOVED_FROM) != 0) && isExpectedMoveSource(path);
+					expectedMoveDestinationEvent = ((event.mask & IN_MOVED_TO) != 0) && isExpectedMoveDestination(path);
 					// configure the skip_dir & skip skip_file comparison item
 					evalPath = path.strip('.');
 					
@@ -1124,48 +1420,70 @@ final class Monitor {
 					if (event.mask & IN_ISDIR) {
 						// The event in question contains IN_ISDIR event mask, thus highly likely this is an event on a directory
 						// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
-						if (selectiveSync.isDirNameExcluded(evalPath)) {
+						if (!(expectedMoveSourceEvent || expectedMoveDestinationEvent) && selectiveSync.isDirNameExcluded(evalPath)) {
 							// The path to evaluate matches a path that the user has configured to skip
+							filteredEventCount++;
 							goto skip;
 						}
 					} else {
 						// The event in question missing the IN_ISDIR event mask, thus highly likely this is an event on a file
 						// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
-						if (selectiveSync.isFileNameExcluded(evalPath)) {
-							// The path to evaluate matches a file that the user has configured to skip
+						if (!(expectedMoveSourceEvent || expectedMoveDestinationEvent) && selectiveSync.isFileNameExcluded(evalPath)) {
+							// The path to evaluate matches a path that the user has configured to skip
+							filteredEventCount++;
 							goto skip;
 						}
 					}
 					
 					// is the path, excluded via sync_list
-					if (selectiveSync.isPathExcludedViaSyncList(path)) {
+					if (!(expectedMoveSourceEvent || expectedMoveDestinationEvent) && selectiveSync.isPathExcludedViaSyncList(path)) {
 						// The path to evaluate matches a directory or file that the user has configured not to include in the sync
+						filteredEventCount++;
 						goto skip;
 					}
 					
 					// handle the inotify events
 					if (event.mask & IN_MOVED_FROM) {
 						if (debugLogging) {addLogEntry("event IN_MOVED_FROM: " ~ path, ["debug"]);}
-						cookieToPath[event.cookie] = path;
-						movedNotDeleted[path] = true; // Mark as moved, not deleted
+						if (consumeExpectedRemovalObservation(path)) {
+							// Online-to-local deletion/recycle-bin move. Do not turn it into local intent.
+							if (event.mask & IN_ISDIR) remove(path);
+						} else {
+							cookieToPath[event.cookie] = path;
+							movedNotDeleted[path] = true; // Mark as moved, not deleted
+						}
 					} else if (event.mask & IN_MOVED_TO) {
 						if (debugLogging) {addLogEntry("event IN_MOVED_TO: " ~ path, ["debug"]);}
 						auto from = event.cookie in cookieToPath;
 						if (from) {
-							// A watched directory moved inside the sync tree keeps its underlying
-							// watch descriptors. Rebase the stored paths instead of adding another
-							// recursive watch tree for the same directory hierarchy.
-							if (event.mask & IN_ISDIR) rebaseWatchTree(*from, path);
+							string sourcePath = *from;
+
+							// A watched directory moved within the sync tree keeps its
+							// underlying kernel watch descriptors. Rebase the stored
+							// paths before recording or consuming the move.
+							if (event.mask & IN_ISDIR) {
+								rebaseWatchTree(sourcePath, path);
+							}
+
 							cookieToPath.remove(event.cookie);
-							if (useCallbacks) actionHolder.append(ActionType.moved, *from, path);
-							movedNotDeleted.remove(*from); // Clear moved status
+							if (!consumeExpectedMove(sourcePath, path)) {
+								pendingChanges.append(LocalChangeType.moved, sourcePath, path);
+							}
+							movedNotDeleted.remove(sourcePath); // Clear moved status
 						} else {
-							// Handle item moved in from outside the watched tree.
+							// Handle an item moved in from outside. An online-to-local move can
+							// also appear destination-only if the source event was filtered or
+							// unavailable on the platform.
 							if (event.mask & IN_ISDIR) {
 								addRecursive(path);
-								if (useCallbacks) actionHolder.append(ActionType.createDir, path);
-							} else {
-								if (useCallbacks) actionHolder.append(ActionType.changed, path);
+							}
+
+							if (consumeExpectedMoveDestination(path)) {
+								// Exact client-generated move echo consumed.
+							} else if (event.mask & IN_ISDIR) {
+								pendingChanges.append(LocalChangeType.createDir, path);
+							} else if (!consumeExpectedFileArrival(path)) {
+								pendingChanges.append(LocalChangeType.changed, path);
 							}
 						}
 					} else if (event.mask & IN_CREATE) {
@@ -1179,35 +1497,51 @@ final class Monitor {
 								}
 							}
 							addRecursive(path);
-							if (useCallbacks) actionHolder.append(ActionType.createDir, path);
-						} else if (triggerFileCreateAsChanged) {
-							if (debugLogging) {addLogEntry("event IN_CREATE and not IN_ISDIR: " ~ path, ["debug"]);}
-							// Some BSD inotify compatibility layers may not emit IN_CLOSE_WRITE.
-							// Treat file creation as a changed file so monitor mode scans/uploads it.
-							auto cookieToPath1 = cookieToPath.dup();
-							foreach (cookie, path1; cookieToPath1) {
-								if (path1 == path) {
-									cookieToPath.remove(cookie);
+							if (!consumeExpectedDirectoryCreate(path)) {
+								pendingChanges.append(LocalChangeType.createDir, path);
+							}
+						} else {
+							// Some BSD inotify compatibility layers may not emit
+							// IN_CLOSE_WRITE. When IN_CREATE is the actionable file event,
+							// clear any matching stale move cookie exactly as PR #3765 does.
+							if (triggerFileCreateAsChanged) {
+								auto cookieToPath1 = cookieToPath.dup();
+								foreach (cookie, path1; cookieToPath1) {
+									if (path1 == path) {
+										cookieToPath.remove(cookie);
+									}
 								}
 							}
-							if (useCallbacks) actionHolder.append(ActionType.changed, path);
+
+							// Consume exact online-to-local arrivals first. On FreeBSD and
+							// OpenBSD, a genuine local file write may be represented only by
+							// IN_CREATE, with no subsequent IN_CLOSE_WRITE event.
+							bool expectedFileArrival = consumeExpectedFileArrival(path);
+							if (!expectedFileArrival && triggerFileCreateAsChanged) {
+								if (debugLogging) {addLogEntry("Treating file IN_CREATE as an actionable local change on this platform: " ~ path, ["debug"]);}
+								pendingChanges.append(LocalChangeType.changed, path);
+							}
 						}
 					} else if (event.mask & IN_DELETE_SELF) {
 						if (debugLogging) {addLogEntry("event IN_DELETE_SELF: " ~ path, ["debug"]);}
 						removeWatchTree(path);
-						if (useCallbacks || processDeletesWhenDraining) actionHolder.append(ActionType.deleted, path);
+						if (!consumeExpectedRemovalObservation(path)) {
+							pendingChanges.append(LocalChangeType.deleted, path);
+						}
 					} else if (event.mask & IN_MOVE_SELF) {
 						// Do not remove the watch here. Directory moves inside the watched tree
 						// are reconciled via the matching parent IN_MOVED_FROM/IN_MOVED_TO
 						// cookie pair, where the watch tree is rebased to the new path.
 						if (debugLogging) {addLogEntry("event IN_MOVE_SELF: " ~ path, ["debug"]);}
 					} else if (event.mask & IN_DELETE) {
-						if (path in movedNotDeleted) {
+						if (consumeExpectedRemovalObservation(path)) {
+							// Online-to-local removal echo consumed.
+						} else if (path in movedNotDeleted) {
+							suppressedMoveDeleteCount++;
 							movedNotDeleted.remove(path); // Ignore delete for moved files
 						} else {
 							if (debugLogging) {addLogEntry("event IN_DELETE: " ~ path, ["debug"]);}
-							if (event.mask & IN_ISDIR) removeWatchTree(path);
-							if (useCallbacks || processDeletesWhenDraining) actionHolder.append(ActionType.deleted, path);
+							pendingChanges.append(LocalChangeType.deleted, path);
 						}
 					} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
 						if (debugLogging) {addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);}
@@ -1218,9 +1552,20 @@ final class Monitor {
 								cookieToPath.remove(cookie);
 							}
 						}
-						if (useCallbacks) actionHolder.append(ActionType.changed, path);
+						if (!consumeExpectedFileArrival(path)) {
+							pendingChanges.append(LocalChangeType.changed, path);
+						}
 					} else {
-						if (debugLogging) {addLogEntry("Ignoring unhandled inotify event for path: " ~ path ~ ", mask=" ~ event.mask.to!string, ["debug"]);}
+						// An unexpected event-mask combination must not terminate the
+						// monitor. Log the complete event context and continue draining
+						// the remaining queued events.
+						addLogEntry(
+							"inotify event unhandled: path=" ~ path ~
+							", wd=" ~ event.wd.to!string ~
+							", mask=" ~ event.mask.to!string ~
+							", cookie=" ~ event.cookie.to!string,
+							["debug"]
+						);
 					}
 
 					skip:
@@ -1234,17 +1579,44 @@ final class Monitor {
 				}
 			}
 			if (!hasNotification) break;
-			processChanges();
+			eventBatchCount++;
 
-			// Assume that the items moved outside the watched directory have been deleted.
-			// Iterate over a copy because cookieToPath is mutated during cleanup.
-			auto cookieToPathCopy = cookieToPath.dup;
-			foreach (cookie, path; cookieToPathCopy) {
-				if (debugLogging) {addLogEntry("Deleting cookie|watch (post loop): " ~ path, ["debug"]);}
-				if (useCallbacks || processDeletesWhenDraining) onDelete(path);
-				removeWatchTree(path);
+			// Record the current pending observation state for diagnostics
+			foreach (action; pendingChanges.changes) {
+				queuedActionCount++;
+				if (action.skipped) {
+					skippedActionCount++;
+					continue;
+				}
+				switch (action.type) {
+					case LocalChangeType.moved:
+						executableMoveActionCount++;
+						break;
+					case LocalChangeType.deleted:
+						executableDeleteActionCount++;
+						break;
+					case LocalChangeType.createDir:
+						executableCreateDirActionCount++;
+						break;
+					case LocalChangeType.changed:
+						executableChangedActionCount++;
+						break;
+					default:
+						break;
+				}
+			}
+
+			// Assume that the items moved outside the watched directory have been deleted
+			foreach (cookie, path; cookieToPath.dup) {
+				unmatchedMoveFromCount++;
+				if (isExpectedMoveSource(path)) {
+					if (debugLogging) {addLogEntry("Discarding unmatched expected move source without creating a local-delete observation: " ~ path, ["debug"]);}
+				} else {
+					if (debugLogging) {addLogEntry("Deleting cookie|watch (post loop): " ~ path, ["debug"]);}
+					pendingChanges.append(LocalChangeType.deleted, path);
+					remove(path);
+				}
 				cookieToPath.remove(cookie);
-				movedNotDeleted.remove(path);
 			}
 
 			// Any lost delete/move events can leave stale watch entries behind. Prune
@@ -1254,35 +1626,5 @@ final class Monitor {
 			// Debug Log that all inotify events are flushed
 			if (debugLogging) {addLogEntry("inotify events flushed", ["debug"]);}
 		}
-	}
-  
-	private void processChanges() {
-		string[] changes;
-
-		foreach(action; actionHolder.actions) {
-			if (action.skipped)
-				continue;
-			switch (action.type) {
-				case ActionType.changed:
-					changes ~= action.src;
-					break;
-				case ActionType.deleted:
-					onDelete(action.src);
-					break;
-				case ActionType.createDir:
-					onDirCreated(action.src);
-					break;
-				case ActionType.moved:
-					onMove(action.src, action.dst);
-					break;
-				default:
-					break;
-			}
-		}
-		if (!changes.empty) {
-			onFileChanged(changes);
-		}
-
-		object.destroy(actionHolder);
-	}
+	}  
 }
