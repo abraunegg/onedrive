@@ -78,6 +78,7 @@ from testcases.tc0062_transfer_metrics_validation import TestCase0062TransferMet
 from testcases.tc0063_local_parent_rename_during_download import TestCase0063LocalParentRenameDuringDownload
 from testcases.tc0064_mirror_local_state_remote_cleanup import TestCase0064MirrorLocalStateRemoteCleanup
 from testcases.tc0065_sync_list_remote_directory_move_reconciliation import TestCase0065SyncListRemoteDirectoryMoveReconciliation
+from testcases.tc0066_monitor_mode_rename_to_invalid_name import TestCase0066MonitorModeRenameToInvalidName
 
 
 def build_test_suite() -> list:
@@ -147,6 +148,7 @@ def build_test_suite() -> list:
         TestCase0063LocalParentRenameDuringDownload(),
         TestCase0064MirrorLocalStateRemoteCleanup(),
         TestCase0065SyncListRemoteDirectoryMoveReconciliation(),
+        TestCase0066MonitorModeRenameToInvalidName(),
     ]
 
 
