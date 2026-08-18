@@ -107,6 +107,7 @@ class OneDriveApi {
 	// API Endpoint Constants
 	immutable string defaultDriveUrlAPIEndpoint = "/v1.0/me/drive";
 	immutable string defaultDriveByIdUrlAPIEndpoint = "/v1.0/drives/";
+	immutable string defaultBetaDriveByIdUrlAPIEndpoint = "/beta/drives/";
 	immutable string defaultItemByIdUrlAPIEndpoint = "/v1.0/me/drive/items/";
 	immutable string defaultItemByPathUrlAPIEndpoint = "/v1.0/me/drive/root:/";
 	immutable string defaultSiteSearchUrlAPIEndpoint = "/v1.0/sites?search";
@@ -123,6 +124,7 @@ class OneDriveApi {
 	string tokenUrl = "";
 	string driveUrl = "";
 	string driveByIdUrl = "";
+	string betaDriveByIdUrl = "";
 	string itemByIdUrl = "";
 	string itemByPathUrl = "";
 	string siteSearchUrl = "";
@@ -146,6 +148,7 @@ class OneDriveApi {
 		// Drive Queries
 		driveUrl = appConfig.globalGraphEndpoint ~ defaultDriveUrlAPIEndpoint;
 		driveByIdUrl = appConfig.globalGraphEndpoint ~ defaultDriveByIdUrlAPIEndpoint;
+		betaDriveByIdUrl = appConfig.globalGraphEndpoint ~ defaultBetaDriveByIdUrlAPIEndpoint;
 
 		// Item Queries
 		itemByIdUrl = appConfig.globalGraphEndpoint ~ defaultItemByIdUrlAPIEndpoint;
@@ -336,6 +339,7 @@ class OneDriveApi {
 				// Drive Queries
 				driveUrl = appConfig.usl4GraphEndpoint ~ defaultDriveUrlAPIEndpoint;
 				driveByIdUrl = appConfig.usl4GraphEndpoint ~ defaultDriveByIdUrlAPIEndpoint;
+				betaDriveByIdUrl = appConfig.usl4GraphEndpoint ~ defaultBetaDriveByIdUrlAPIEndpoint;
 				// Item Queries
 				itemByIdUrl = appConfig.usl4GraphEndpoint ~ defaultItemByIdUrlAPIEndpoint;
 				itemByPathUrl = appConfig.usl4GraphEndpoint ~ defaultItemByPathUrlAPIEndpoint;
@@ -365,6 +369,7 @@ class OneDriveApi {
 				// Drive Queries
 				driveUrl = appConfig.usl5GraphEndpoint ~ defaultDriveUrlAPIEndpoint;
 				driveByIdUrl = appConfig.usl5GraphEndpoint ~ defaultDriveByIdUrlAPIEndpoint;
+				betaDriveByIdUrl = appConfig.usl5GraphEndpoint ~ defaultBetaDriveByIdUrlAPIEndpoint;
 				// Item Queries
 				itemByIdUrl = appConfig.usl5GraphEndpoint ~ defaultItemByIdUrlAPIEndpoint;
 				itemByPathUrl = appConfig.usl5GraphEndpoint ~ defaultItemByPathUrlAPIEndpoint;
@@ -394,6 +399,7 @@ class OneDriveApi {
 				// Drive Queries
 				driveUrl = appConfig.deGraphEndpoint ~ defaultDriveUrlAPIEndpoint;
 				driveByIdUrl = appConfig.deGraphEndpoint ~ defaultDriveByIdUrlAPIEndpoint;
+				betaDriveByIdUrl = appConfig.deGraphEndpoint ~ defaultBetaDriveByIdUrlAPIEndpoint;
 				// Item Queries
 				itemByIdUrl = appConfig.deGraphEndpoint ~ defaultItemByIdUrlAPIEndpoint;
 				itemByPathUrl = appConfig.deGraphEndpoint ~ defaultItemByPathUrlAPIEndpoint;
@@ -423,6 +429,7 @@ class OneDriveApi {
 				// Drive Queries
 				driveUrl = appConfig.cnGraphEndpoint ~ defaultDriveUrlAPIEndpoint;
 				driveByIdUrl = appConfig.cnGraphEndpoint ~ defaultDriveByIdUrlAPIEndpoint;
+				betaDriveByIdUrl = appConfig.cnGraphEndpoint ~ defaultBetaDriveByIdUrlAPIEndpoint;
 				// Item Queries
 				itemByIdUrl = appConfig.cnGraphEndpoint ~ defaultItemByIdUrlAPIEndpoint;
 				itemByPathUrl = appConfig.cnGraphEndpoint ~ defaultItemByPathUrlAPIEndpoint;
@@ -1108,7 +1115,7 @@ class OneDriveApi {
 			url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
 		}
 		// Add select clause
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package,malware";
 		return get(url);
 	}
 
@@ -1117,7 +1124,7 @@ class OneDriveApi {
 	JSONValue getPathDetailsById(string driveId, string id) {
 		string url;
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,webUrl,lastModifiedDateTime,package";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,webUrl,lastModifiedDateTime,package,malware";
 		return get(url);
 	}
 
@@ -1193,7 +1200,8 @@ class OneDriveApi {
 							JSONValue("file"),
 							JSONValue("folder"),
 							JSONValue("fileSystemInfo"),
-							JSONValue("parentReference")
+							JSONValue("parentReference"),
+							JSONValue("malware")
 						])
 					])
 				])
@@ -1442,7 +1450,8 @@ class OneDriveApi {
 			"webUrl",
 			"createdDateTime",
 			"lastModifiedDateTime",
-			"parentReference"
+			"parentReference",
+			"malware"
 		];
 
 		foreach (fieldName; directFields) {
@@ -1546,7 +1555,7 @@ class OneDriveApi {
 		// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/concepts/addressing-driveitems?view=odsp-graph-online
 		// Required format: /drives/{drive-id}/root:/{item-path}:
 		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path) ~ ":";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package,malware";
 		return get(url);
 	}
 
@@ -1576,7 +1585,7 @@ class OneDriveApi {
 		if (deltaLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
 			// Reduce what we ask for in the response - which reduces the data transferred back to us, and reduces what is held in memory during initial JSON processing
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package,malware";
 		} else {
 			url = deltaLink;
 		}
@@ -1606,7 +1615,7 @@ class OneDriveApi {
 		// configure URL to query
 		if (nextLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/children";
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package,malware";
 		} else {
 			url = nextLink;
 		}
@@ -1799,7 +1808,7 @@ class OneDriveApi {
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
-	CurlResponse downloadById(const(char)[] driveId, const(char)[] itemId, string saveToPath, long fileSize, JSONValue onlineHash, long resumeOffset = 0, bool deferFinalRename = false) {
+	CurlResponse downloadById(const(char)[] driveId, const(char)[] itemId, string saveToPath, long fileSize, JSONValue onlineHash, long resumeOffset = 0, bool deferFinalRename = false, bool malwareDetected = false) {
 		// Set this function name
 		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
 
@@ -1832,11 +1841,18 @@ class OneDriveApi {
 			displayFileSystemErrorMessage(exception.msg, thisFunctionName, parentalPath);
 		}
 
-		// Create the URL to download the file
-		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ itemId ~ "/content?AVOverride=1";
+		// Keep ordinary files on the stable content endpoint. Microsoft Graph's
+		// malware override is opt-in and only applies to a known malware item.
+		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ itemId ~ "/content";
+		string[string] requestHeaders;
+		if (malwareDetected && appConfig.getValueBool("download_flagged_files")) {
+			url = betaDriveByIdUrl ~ driveId ~ "/items/" ~ itemId ~ "/contentStream";
+			requestHeaders["Prefer"] = "forceInfectedDownload";
+			if (debugLogging) {addLogEntry("Downloading malware-flagged file using Microsoft Graph beta contentStream with Prefer: forceInfectedDownload", ["debug"]);}
+		}
 
 		// Download file using the URL created above
-		CurlResponse downloadResponse = downloadFile(driveId, itemId, url, saveToPath, fileSize, onlineHash, resumeOffset, deferFinalRename);
+		CurlResponse downloadResponse = downloadFile(driveId, itemId, url, saveToPath, fileSize, onlineHash, resumeOffset, deferFinalRename, requestHeaders);
 		if (downloadResponse !is null) {
 			if (debugLogging) {
 				addLogEntry("downloadById() downloadResponse.hasStreamedQuickXorHash = " ~ to!string(downloadResponse.hasStreamedQuickXorHash), ["debug"]);
@@ -2127,7 +2143,7 @@ class OneDriveApi {
 	}
 
 	// Download a file based on the URL request
-	private CurlResponse downloadFile(const(char)[] driveId, const(char)[] itemId, const(char)[] url, string filename, long fileSize, JSONValue onlineHash, long resumeOffset = 0, bool deferFinalRename = false, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+	private CurlResponse downloadFile(const(char)[] driveId, const(char)[] itemId, const(char)[] url, string filename, long fileSize, JSONValue onlineHash, long resumeOffset = 0, bool deferFinalRename = false, string[string] requestHeaders=null, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
 
@@ -2198,7 +2214,7 @@ class OneDriveApi {
 				addLogEntry("downloadFile() wrapper response.hasStreamedQuickXorHash before download = " ~ to!string(response.hasStreamedQuickXorHash), ["debug"]);
 				addLogEntry("downloadFile() wrapper response.streamedQuickXorHash before download = " ~ response.streamedQuickXorHash, ["debug"]);
 			}
-			connect(HTTP.Method.get, url, false, response);
+			connect(HTTP.Method.get, url, false, response, requestHeaders);
 
 			if (fileSize >= thresholdFileSize) {
 				// ------------------------------------------------------------------

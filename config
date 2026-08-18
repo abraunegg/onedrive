@@ -7,6 +7,9 @@
 ## This is the config option for application id that used to identify itself to Microsoft OneDrive. 
 #application_id = "d50ca740-c83f-4d1b-b616-12c519384f0c"
 
+## Allow downloading files reported as malware by Microsoft OneDrive. This should only be enabled when the downloaded content is known to be safe.
+#download_flagged_files = "false"
+
 ## This is the config option to change the Microsoft Azure Authentication Endpoint that the client uses to conform with data and security requirements that requires data to reside within the geographic borders of that country.
 #azure_ad_endpoint = ""
 
