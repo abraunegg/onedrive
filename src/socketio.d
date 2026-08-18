@@ -34,7 +34,6 @@ final class OneDriveSocketIo {
 	private Duration renewEarly = dur!"seconds"(120);
 	private string engineSid;
 	private bool expiryWarned = false;
-	private bool renewRequested = false;
 	private string currentNotifUrl;
 
 	// Worker / state
@@ -274,9 +273,8 @@ private:
 
 					// Connected successfully → reset backoff
 					backoffSeconds = 1;
-					// Reset per-connection flags so renew logic and ns-open tracking work after reconnection
-					self.expiryWarned   = false;
-					self.renewRequested = false;
+					// Reset per-connection flags so expiry warning and ns-open tracking work after reconnection
+					self.expiryWarned = false;
 					self.namespaceOpened = false;
 
 					// Track last server ping received to detect a dead connection
@@ -302,21 +300,6 @@ private:
 								if (remain <= dur!"minutes"(5)) {
 									self.expiryWarned = true; // emit only once
 									logSocketIOOutput("subscription nearing expiry; renewal required soon");
-								}
-							}
-						}
-
-						// Renewal window check (emit once; 2 minutes before)
-						if (!self.renewRequested && self.appConfig.websocketUrlExpiry.length > 0) {
-							SysTime expiry;
-							auto e = collectException(expiry = SysTime.fromISOExtString(self.appConfig.websocketUrlExpiry));
-							if (e is null) {
-								auto remain = expiry - Clock.currTime(UTC());
-								if (remain <= dur!"minutes"(2)) {
-									self.renewRequested = true;
-									logSocketIOOutput("Subscription nearing expiry; requesting renewal from main() monitor loop");
-									send(self.parentTid, "SOCKETIO_RENEWAL_REQUEST");
-									send(self.parentTid, "SOCKETIO_RENEWAL_CONTEXT:" ~ "id=" ~ self.appConfig.websocketEndpointResponse ~ " url=" ~ self.appConfig.websocketNotificationUrl);
 								}
 							}
 						}
