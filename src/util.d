@@ -51,8 +51,6 @@ __gshared string deviceName;
 __gshared bool exitHandlerTriggered = false;
 // Global flag to indicate file transfers are occurring
 __gshared bool fileTransferInProgress = false;
-// Global variable for when we last uploaded something or made an online change from a local inotify event
-__gshared MonoTime lastLocalWrite;
 
 // util module variable
 ulong previousRSS;
@@ -523,7 +521,7 @@ Regex!char wild2regex(const(char)[] pattern) {
 			break;
 		case ' ':
 			str ~= "\\s";  // Changed to match exactly one whitespace. Was:   str ~= "\\s+";
-			break;  
+			break;
 		case '/':
 			str ~= "\\/";
 			break;
@@ -1780,7 +1778,7 @@ bool isDotFile(const(string) path) {
 
 	// Extract the last component of the path
 	auto paths = pathSplitter(buildNormalizedPath(path));
-	
+
 	// Optimised way to fetch the last component
 	string lastComponent = paths.empty ? "" : paths.back;
 
@@ -2387,7 +2385,7 @@ ulong getRSSOpenBSD(pid_t pid) {
 	if (pid <= 0) {
 		return 0;
 	}
-	
+
 	version (OpenBSD) {
 		enum CTL_KERN = 1;
 		enum KERN_PROC = 66;
@@ -2396,7 +2394,7 @@ ulong getRSSOpenBSD(pid_t pid) {
 		enum KI_MAXCOMLEN = 24;
 		enum KI_WMESGLEN = 8;
 		enum KI_MAXLOGNAME = 32;
-		
+
 		// DRuntime does not expose OpenBSD's sys/sysctl.h kinfo_proc binding.
 		// Define only the stable kinfo_proc prefix required to reach p_vm_rssize.
 		extern(C) struct OpenBSDKinfoProcRSSPrefix {
@@ -2458,7 +2456,7 @@ ulong getRSSOpenBSD(pid_t pid) {
 			char[KI_MAXLOGNAME] p_login;
 			int p_vm_rssize;
 		}
-		
+
 		int[6] mib = [
 			CTL_KERN,
 			KERN_PROC,
@@ -2467,36 +2465,36 @@ ulong getRSSOpenBSD(pid_t pid) {
 			cast(int) OpenBSDKinfoProcRSSPrefix.sizeof,
 			1
 		];
-		
+
 		size_t processInfoLength;
 		if (sysctl(mib.ptr, cast(uint) mib.length, null, &processInfoLength, null, 0) != 0) {
 			addLogEntry("Failed to determine OpenBSD process RSS buffer size via sysctl for PID: " ~ to!string(pid));
 			return 0;
 		}
-		
+
 		if (processInfoLength < OpenBSDKinfoProcRSSPrefix.sizeof) {
 			addLogEntry("Failed to query OpenBSD process RSS via sysctl: returned process information is too small for PID: " ~ to!string(pid));
 			return 0;
 		}
-		
+
 		auto processInfo = new ubyte[](processInfoLength);
 		if (sysctl(mib.ptr, cast(uint) mib.length, processInfo.ptr, &processInfoLength, null, 0) != 0) {
 			addLogEntry("Failed to query OpenBSD process RSS via sysctl for PID: " ~ to!string(pid));
 			return 0;
 		}
-		
+
 		if (processInfoLength < OpenBSDKinfoProcRSSPrefix.sizeof) {
 			addLogEntry("Failed to query OpenBSD process RSS via sysctl: incomplete process information returned for PID: " ~ to!string(pid));
 			return 0;
 		}
-		
+
 		auto processInfoPrefix = cast(OpenBSDKinfoProcRSSPrefix*) processInfo.ptr;
 		auto pageSize = sysconf(_SC_PAGESIZE);
 		if (pageSize <= 0) {
 			addLogEntry("Failed to determine system page size while calculating OpenBSD RSS");
 			return 0;
 		}
-		
+
 		// OpenBSD reports p_vm_rssize in pages.
 		return (cast(ulong) processInfoPrefix.p_vm_rssize * cast(ulong) pageSize) / 1024;
 	} else {
@@ -2555,7 +2553,7 @@ string getCurlVersionNumeric() {
 
 	// Extract the major, minor, and patch numbers from version_num
 	uint versionNum = curlVersionDetails.version_num;
-	
+
 	// The version number is in the format 0xXXYYZZ
 	uint major = (versionNum >> 16) & 0xFF; // Extract XX (major version)
 	uint minor = (versionNum >> 8) & 0xFF;  // Extract YY (minor version)
@@ -2581,7 +2579,7 @@ bool isBadCurlVersion(string curlVersion) {
 		"8.13.1",  // Has a SSL Certificate read issue fixed by 8.14.1
 		"8.14.0",  // Has a SSL Certificate read issue fixed by 8.14.1
 	];
-	
+
 	// Check if the current version matches one of the supported versions
 	return canFind(supportedVersions, curlVersion);
 }
@@ -2874,9 +2872,4 @@ string regexEscape(string s) {
 		b.put(c);
 	}
 	return b.data;
-}
-
-// Update lastLocalWrite to denote we just performed a local-originated write
-void markLocalWrite() {
-	lastLocalWrite = MonoTime.currTime();
 }

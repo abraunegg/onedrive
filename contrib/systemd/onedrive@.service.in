@@ -24,8 +24,8 @@ User=%i
 Group=users
 Restart=on-failure
 RestartSec=3
-# Do not restart the service if a --resync is required which is done via a 126 exit code
-RestartPreventExitStatus=126
+# Do not restart the service if a --resync is required; the client exits with EX_CONFIG (78)
+RestartPreventExitStatus=78
 # Time to wait for the service to stop gracefully before forcefully terminating it
 TimeoutStopSec=90
 
