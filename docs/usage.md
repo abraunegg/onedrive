@@ -1334,6 +1334,20 @@ onedrive --display-sync-status
 
 This shows whether you are up-to-date without requiring a resynchronisation.
 
+#### Exit status when a --resync is required
+When the client determines that it cannot safely continue until a `--resync` is performed, it exits with status **78**. This is the traditional `EX_CONFIG` value and indicates that the client has detected an application configuration or persisted-state condition that requires operator action before normal synchronisation can continue.
+
+This status is intentionally distinct from the generic application failure status (`1`). It allows scripts and service managers to detect a mandatory resync condition without conflicting with shell-reserved exit statuses. The supplied systemd service files use exit status 78 in `RestartPreventExitStatus`, so systemd will not repeatedly restart the client when a resync is required.
+
+To resolve the condition, re-run the client with `--resync` appended to the normal synchronisation mode being used, for example:
+```text
+onedrive --sync --resync
+onedrive --monitor --resync
+```
+
+> [!IMPORTANT]
+> Versions prior to v2.5.12 used exit status **126** for this condition. Scripts, monitoring integrations, and service definitions that explicitly test for status 126 must be updated to test for status 78 instead.
+
 #### What happens when you use `--resync`
 
 When invoking `--resync`, the client displays one of the following prompts depending on the client version.

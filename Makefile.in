@@ -108,7 +108,7 @@ distclean: clean
 	rm -f Makefile contrib/pacman/PKGBUILD contrib/spec/onedrive.spec onedrive.1 $(system_unit_files) $(user_unit_files)
 
 onedrive: $(SOURCES)
-	if [ -f .git/HEAD ] ; then \
+	if [ -d .git ] || [ -f .git ]; then \
 		git describe --tags > version ; \
 	else \
 		echo $(version) > version ; \
