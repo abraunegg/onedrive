@@ -3435,7 +3435,23 @@ class SyncEngine {
 			// Test if this item is actually in-sync
 			// What is the source of this item data?
 			string itemSource = "remote";
-			if (isItemSynced(newDatabaseItem, newItemPath, itemSource)) {
+			bool localItemIsSynced = isItemSynced(newDatabaseItem, newItemPath, itemSource);
+
+			// When there is no trusted DB identity yet (for example during --resync),
+			// an equal whole-second timestamp must not bind different local content to
+			// the incoming online item. Confirm content only for this narrow case.
+			if (localItemIsSynced &&
+				((newDatabaseItem.type == ItemType.file) ||
+				 ((newDatabaseItem.type == ItemType.remote) && (newDatabaseItem.remoteType == ItemType.file))) &&
+				!itemDB.idInLocalDatabase(newDatabaseItem.driveId, newDatabaseItem.id) &&
+				!testFileHash(newItemPath, newDatabaseItem)) {
+				if (debugLogging) {
+					addLogEntry("Equal timestamp did not imply identical content for untracked local file; continuing conflict reconciliation", ["debug"]);
+				}
+				localItemIsSynced = false;
+			}
+
+			if (localItemIsSynced) {
 				// Issue #3115 - Personal Account Shared Folder
 				// What account type is this?
 				if (appConfig.accountType == "personal") {
@@ -6187,6 +6203,30 @@ class SyncEngine {
 				Item[] outOfSyncItems = itemDB.selectOutOfSyncItems(driveId);
 				foreach (outOfSyncItem; outOfSyncItems) {
 					if (!dryRun) {
+						// An item absent from a generated authoritative view is semantically the
+						// same online deletion represented by a raw /delta tombstone. For tracked
+						// files, compare the current bytes with the DB baseline before deleting.
+						bool outOfSyncItemIsFile = (outOfSyncItem.type == ItemType.file) ||
+							((outOfSyncItem.type == ItemType.remote) && (outOfSyncItem.remoteType == ItemType.file));
+						if (outOfSyncItemIsFile) {
+							string localPathToDelete = computeItemPath(outOfSyncItem.driveId, outOfSyncItem.id);
+							if (exists(localPathToDelete) && !testFileHash(localPathToDelete, outOfSyncItem)) {
+								if (verboseLogging) {
+									addLogEntry("The item no longer exists online but contains newer local data; preserving the local file as safeBackup while honouring the online deletion: " ~ localPathToDelete, ["verbose"]);
+								}
+
+								string renamedPath;
+								safeBackupAndNotifyExpectedLocalMove(localPathToDelete, dryRun, bypassDataPreservation, renamedPath);
+
+								// If preservation was required but failed, retain both the canonical file
+								// and DB baseline rather than allowing authoritative cleanup to erase it.
+								if (!bypassDataPreservation && renamedPath.empty) {
+									addLogEntry("ERROR: Unable to preserve locally modified file after authoritative online deletion; retaining canonical file and database state: " ~ localPathToDelete, ["error", "notify"]);
+									continue;
+								}
+							}
+						}
+
 						// clean up idsToDelete
 						idsToDelete.length = 0;
 						assumeSafeAppend(idsToDelete);
