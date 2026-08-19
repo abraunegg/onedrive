@@ -297,19 +297,19 @@ class SyncEngine {
 	}
 
 	// Replacement/conflict preservation must never remove the canonical pathname
-	// before its replacement is ready. Create the safeBackup as a copy and treat
-	// failure to preserve the local bytes as a hard stop for the replacement.
-	private bool safeBackupCopyForReplacement(const(char)[] path, bool bypassDataPreservation, out string backupPath) {
+	// before its replacement is ready. Preserve the existing local file and treat
+	// failure to preserve its bytes as a hard stop for the replacement.
+	private bool safeBackupPreserveForReplacement(const(char)[] path, bool bypassDataPreservation, out string backupPath, bool requireIndependentSnapshot = false) {
 		backupPath = null;
 
-		if (!dryRun && !bypassDataPreservation && findMatchingSafeBackup(path, backupPath)) {
+		if (!requireIndependentSnapshot && !dryRun && !bypassDataPreservation && findMatchingSafeBackup(path, backupPath)) {
 			if (verboseLogging) {
 				addLogEntry("Local data is already preserved by an identical safeBackup; reusing existing preservation: " ~ backupPath, ["verbose"]);
 			}
 			return true;
 		}
 
-		safeBackup(path, dryRun, bypassDataPreservation, backupPath, true);
+		safeBackup(path, dryRun, bypassDataPreservation, backupPath, true, !requireIndependentSnapshot);
 
 		if (dryRun || bypassDataPreservation) {
 			return true;
@@ -4134,7 +4134,7 @@ class SyncEngine {
 							if (verboseLogging) {addLogEntry("The destination is occupied with a different item, preserving the conflicting file before replacement...", ["verbose"]);}
 							// Preserve the conflicting destination without removing its canonical name.
 							string backupPath;
-							if (!safeBackupCopyForReplacement(changedItemPath, bypassDataPreservation, backupPath)) {
+							if (!safeBackupPreserveForReplacement(changedItemPath, bypassDataPreservation, backupPath)) {
 								return;
 							}
 						}
@@ -4143,7 +4143,7 @@ class SyncEngine {
 						if (verboseLogging) {addLogEntry("The destination is occupied by an existing un-synced file, preserving the conflicting file before replacement...", ["verbose"]);}
 						// Preserve the untracked destination without removing its canonical name.
 						string backupPath;
-						if (!safeBackupCopyForReplacement(changedItemPath, bypassDataPreservation, backupPath)) {
+						if (!safeBackupPreserveForReplacement(changedItemPath, bypassDataPreservation, backupPath)) {
 							return;
 						}
 					}
@@ -4981,14 +4981,14 @@ class SyncEngine {
 
 				if (!downloadFailed && preserveCanonicalAsSafeBackup) {
 					string backupPath;
-					if (!safeBackupCopyForReplacement(newItemPath, bypassDataPreservation, backupPath)) {
+					if (!safeBackupPreserveForReplacement(newItemPath, bypassDataPreservation, backupPath)) {
 						safeRemove(completedDownloadPath);
 						downloadFailed = true;
 					}
 				}
 
 				if (!downloadFailed) {
-					// Recheck the canonical path after any safeBackup copy. If its existence or
+					// Recheck the canonical path after any safeBackup preservation. If its existence or
 					// bytes changed while this commit was being prepared, local intent wins and
 					// the staged online replacement is discarded for a later reconciliation.
 					bool canonicalExistsBeforePromotion = exists(newItemPath);
@@ -8360,10 +8360,10 @@ class SyncEngine {
 					}
 					addLogEntry("Skipping uploading this item as a locally modified file, will upload as a new file (online file already exists and is newer): " ~ localFilePath);
 
-					// Online is newer. Preserve the local version as a safeBackup copy while
-					// keeping the canonical filename present, then upload the preserved copy.
+					// Online is newer. Preserve the local version as an independent safeBackup
+					// snapshot while keeping the canonical filename present, then upload it.
 					string backupPath;
-					if (!safeBackupCopyForReplacement(localFilePath, false, backupPath)) {
+					if (!safeBackupPreserveForReplacement(localFilePath, false, backupPath, true)) {
 						return uploadResponse;
 					}
 					uploadNewFile(backupPath);
@@ -10830,10 +10830,10 @@ class SyncEngine {
 										// Upload the locally modified file as-is, as it is newer
 										uploadChangedLocalFileToOneDrive([changedItemParentDriveId, changedItemId, fileToUpload]);
 									} else {
-										// Online is newer. Preserve the local version as a safeBackup copy while
-										// keeping the canonical filename present, then upload the preserved copy.
+										// Online is newer. Preserve the local version as an independent safeBackup
+										// snapshot while keeping the canonical filename present, then upload it.
 										string backupPath;
-										if (!safeBackupCopyForReplacement(fileToUpload, false, backupPath)) {
+										if (!safeBackupPreserveForReplacement(fileToUpload, false, backupPath, true)) {
 											return;
 										}
 										uploadNewFile(backupPath);
@@ -12539,6 +12539,17 @@ class SyncEngine {
 				} else {
 					// exitHandlerTriggered triggered
 					addLogEntry("Not " ~ operation ~ "ed: " ~ failedFile, ["info", "notify"]);
+				}
+
+				// A failed replacement download can deliberately retain the previous
+				// canonical local file. Its existing database row is the baseline needed
+				// to recognise that retained file correctly on the next reconciliation.
+				// Only purge failed-download identity when no canonical file remains.
+				if ((operation == "download") && exists(failedFile)) {
+					if (debugLogging) {
+						addLogEntry("Retaining database identity for failed download because the canonical local file remains present: " ~ failedFile, ["debug"]);
+					}
+					continue;
 				}
 
 				foreach (searchDriveId; onlineDriveDetails.keys) {

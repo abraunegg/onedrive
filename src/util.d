@@ -107,9 +107,6 @@ bool findMatchingSafeBackup(const(char)[] path, out string matchingBackupPath) {
 		}
 	}
 
-	string canonicalHash = computeQuickXorHash(spath);
-	if (canonicalHash.empty) return false;
-
 	ulong canonicalSize;
 	SysTime canonicalModifiedTime;
 	uint canonicalAttributes;
@@ -159,6 +156,13 @@ bool findMatchingSafeBackup(const(char)[] path, out string matchingBackupPath) {
 		return false;
 	}
 
+	// Avoid hashing the canonical file at all when there is no plausible
+	// same-device safeBackup to reuse. This is the common first-preservation path.
+	if (candidatePaths.empty) return false;
+
+	string canonicalHash = computeQuickXorHash(spath);
+	if (canonicalHash.empty) return false;
+
 	// The four-digit counter is zero-padded, so descending lexical order checks
 	// the most recently numbered backup first. This avoids hashing a long history
 	// of large backups on the common retry path.
@@ -179,7 +183,7 @@ bool findMatchingSafeBackup(const(char)[] path, out string matchingBackupPath) {
 // Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario.
 // If the path already ends with "-<deviceName>-safeBackup-####", the counter is incremented
 // instead of appending another "-<deviceName>-safeBackup-".
-void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, out string renamedPath, bool retainOriginalPath = false) {
+void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, out string renamedPath, bool retainOriginalPath = false, bool allowHardLinkPreservation = true) {
 	// Ensure this is currently null
 	renamedPath = null;
 	bool isDirectory = false;
@@ -250,9 +254,9 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 		}
 	}
 
-	// Find the first available name, capped at 1000 attempts. Copy-based
-	// preservation also reserves a filtered .partial staging name so a
-	// previous interrupted preservation cannot be mistaken for a valid backup.
+	// Find the first available name, capped at 1000 attempts. Replacement
+	// preservation reserves a filtered .partial staging name for the verified-copy
+	// fallback so an interrupted fallback cannot look like a valid safeBackup.
 	int n = startN;
 	string candidate;
 	string copyStagingPath;
@@ -272,20 +276,53 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 
 	// Log intent
 	if (verboseLogging) {
-		string preservationAction = retainOriginalPath ? "copying" : "renaming";
+		string preservationAction = retainOriginalPath ? "preserving" : "renaming";
 		addLogEntry("The local item is out-of-sync with OneDrive, " ~ preservationAction ~ " to preserve existing file and prevent local data loss: " ~ spath ~ " -> " ~ candidate, ["verbose"]);
 	}
 
-	// Perform (or simulate) the preservation operation. Most callers retain the
-	// historical rename behaviour. Conflict workflows that must keep the canonical
-	// pathname present can request a copy instead.
+	// Perform (or simulate) the preservation operation. The one deliberate
+	// remote-delete preservation path retains the historical rename behaviour.
+	// Replacement/conflict workflows keep the canonical pathname present.
 	if (!dryRun) {
 		if (retainOriginalPath) {
+			if (allowHardLinkPreservation) {
+				// Prefer a POSIX hard link when the canonical pathname is about to be
+				// atomically displaced. The safeBackup is created in the same directory as
+				// the canonical file, so this preserves the exact existing inode and its
+				// metadata without copying file data or requiring another file's worth of
+				// free space. If the filesystem refuses hard links, fall back to the
+				// verified independent-copy path below.
+				if (link(spath.toStringz, candidate.toStringz) == 0) {
+					renamedPath = candidate;
+					if (debugLogging) {
+						addLogEntry("Created local safeBackup using POSIX hard-link preservation: " ~ spath ~ " -> " ~ candidate, ["debug"]);
+					}
+					return;
+				}
+
+				// link() is atomic with respect to creation of the destination entry. If
+				// another actor created the selected name after our availability check, do
+				// not let the copy fallback overwrite it. A later reconciliation can select
+				// the next numbered safeBackup safely.
+				if (exists(candidate) || exists(copyStagingPath)) {
+					addLogEntry("Creating local safeBackup failed because the selected backup path became occupied: " ~ candidate, ["error"]);
+					return;
+				}
+
+				if (debugLogging) {
+					addLogEntry("POSIX hard-link preservation was unavailable; falling back to a verified safeBackup copy: " ~ spath ~ " -> " ~ candidate, ["debug"]);
+				}
+			} else if (debugLogging) {
+				// Upload-conflict preservation must be an independent snapshot. Leaving
+				// canonical and safeBackup hard-linked while one copy is uploaded (or while
+				// --upload-only keeps both paths) would allow later edits to mutate both.
+				addLogEntry("Creating an independent verified safeBackup copy because this preservation must remain stable while the canonical file remains active: " ~ spath, ["debug"]);
+			}
+
 			try {
-				// Keep the canonical file in place while creating the safeBackup copy.
+				// Keep the canonical file in place while creating the fallback copy.
 				// Write to a filtered staging name first so a process interruption can
 				// never leave incomplete bytes carrying a valid-looking safeBackup name.
-				// File timestamps and attributes are preserved by std.file.copy().
 				std.file.copy(spath, copyStagingPath, Yes.preserveAttributes);
 
 				// A source file can be edited while a large copy is in progress. Verify
@@ -299,7 +336,7 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 					return;
 				}
 
-				// Publish the verified backup name only after the copy is complete.
+				// Publish the verified backup name only after the fallback copy is complete.
 				if (safeRename(copyStagingPath, candidate, false)) {
 					renamedPath = candidate;
 				} else {
@@ -322,7 +359,7 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 		}
 	} else {
 		if (debugLogging) {
-			string dryRunAction = retainOriginalPath ? "copying" : "renaming";
+			string dryRunAction = retainOriginalPath ? "preserving" : "renaming";
 			addLogEntry("DRY-RUN: Skipping " ~ dryRunAction ~ " local file to preserve existing file and prevent data loss: " ~ spath ~ " -> " ~ candidate, ["debug"]);
 		}
 	}

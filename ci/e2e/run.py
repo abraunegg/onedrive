@@ -86,6 +86,9 @@ from testcases.tc0070_safebackup_new_file_upload_collision_validation import Tes
 from testcases.tc0071_safebackup_metadata_only_identity_validation import TestCase0071SafeBackupMetadataOnlyIdentityValidation
 from testcases.tc0072_safebackup_preservation_failure_aborts_replacement import TestCase0072SafeBackupPreservationFailureAbortsReplacement
 from testcases.tc0073_safebackup_existing_preservation_reuse_validation import TestCase0073SafeBackupExistingPreservationReuseValidation
+from testcases.tc0074_safebackup_clean_resync_no_conflict_validation import TestCase0074SafeBackupCleanResyncNoConflictValidation
+from testcases.tc0075_safebackup_remote_delete_local_modify_validation import TestCase0075SafeBackupRemoteDeleteLocalModifyValidation
+from testcases.tc0076_safebackup_resync_content_conflict_validation import TestCase0076SafeBackupResyncContentConflictValidation
 
 
 def build_test_suite() -> list:
@@ -163,6 +166,9 @@ def build_test_suite() -> list:
         TestCase0071SafeBackupMetadataOnlyIdentityValidation(),
         TestCase0072SafeBackupPreservationFailureAbortsReplacement(),
         TestCase0073SafeBackupExistingPreservationReuseValidation(),
+        TestCase0074SafeBackupCleanResyncNoConflictValidation(),
+        TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(),
+        TestCase0076SafeBackupResyncContentConflictValidation(),
     ]
 
 
