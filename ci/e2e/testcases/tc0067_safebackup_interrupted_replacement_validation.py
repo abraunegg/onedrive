@@ -186,6 +186,13 @@ class TestCase0067SafeBackupInterruptedReplacementValidation(SafeBackupCaseBase)
             self._write_metadata(metadata_file, details)
             return self.fail_result(reason=f"Remote update failed with status {update.returncode}", artifacts=artifacts, details=details)
 
+        # The same configured application log is used by the initial baseline download and
+        # the interrupted replacement phase. Clear it between phases so progress and the
+        # "Downloading file ... done" marker can only belong to the replacement transfer
+        # currently being observed. This mirrors the phase-isolated transfer observation
+        # used by TC0021 and avoids treating the baseline download as the replacement.
+        reset_directory(app_log_dir)
+
         interrupt_command = self._single_directory_command(context, root_name=root_name, config_dir=conf_local)
         rc, threshold_reached, observed_max, combined_interrupt = self._interrupt_active_download(
             context,

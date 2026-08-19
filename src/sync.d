@@ -3107,11 +3107,11 @@ class SyncEngine {
 					addLogEntry("Creating newDatabaseItem object using the provided JSON data", ["debug"]);
 				}
 
-				// During a native Full Scan True Up, syncStatus records whether an existing
-				// database item was observed in the authoritative online state. Mark the
-				// accepted item as seen before change, move or download handling because
-				// online presence is independent of whether later local work succeeds.
-				if (nativeFullScanTrueUpResponse && existingDBEntry) {
+				// During any authoritative current-state response that uses syncStatus as a
+				// mark-and-sweep presence flag, record an accepted existing item as seen
+				// before change, move or download handling. Online presence is independent
+				// of whether applying newer content locally later succeeds.
+				if ((nativeFullScanTrueUpResponse || generatedSimulatedDeltaResponse) && existingDBEntry) {
 					existingDatabaseItem.syncStatus = "Y";
 					itemDB.upsert(existingDatabaseItem);
 				}
@@ -6328,6 +6328,16 @@ class SyncEngine {
 
 		// Compute this dbItem path early as we we use this path often
 		localFilePath = buildNormalizedPath(computeItemPath(dbItem.driveId, dbItem.id));
+
+		// A newer online version for this exact path already failed to download or
+		// commit during the current remote-first cycle. The retained canonical file
+		// must not now be interpreted as a local change and uploaded over that newer
+		// online version. Leave both sides untouched and allow a later retry/resync
+		// to attempt the authoritative replacement again.
+		if (canFind(fileDownloadFailures, localFilePath)) {
+			if (debugLogging) {addLogEntry("Skipping local consistency action for path with a failed authoritative download in this sync cycle: " ~ localFilePath, ["debug"]);}
+			return;
+		}
 
 		// To improve logging output for this function, what is the 'logical path'?
 		string logOutputPath;
