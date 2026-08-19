@@ -4949,7 +4949,6 @@ class SyncEngine {
 					if (!canonicalFileExistedBeforeDownload) {
 						preserveCanonicalAsSafeBackup = true;
 					} else {
-						string canonicalHashAtCommit = computeQuickXorHash(newItemPath);
 						preserveCanonicalAsSafeBackup = canonicalHashBeforeDownload.empty || (canonicalHashAtCommit != canonicalHashBeforeDownload);
 					}
 
