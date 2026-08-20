@@ -1799,7 +1799,7 @@ class OneDriveApi {
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
-	CurlResponse downloadById(const(char)[] driveId, const(char)[] itemId, string saveToPath, long fileSize, JSONValue onlineHash, long resumeOffset = 0) {
+	CurlResponse downloadById(const(char)[] driveId, const(char)[] itemId, string saveToPath, long fileSize, JSONValue onlineHash, long resumeOffset = 0, bool deferFinalRename = false) {
 		// Set this function name
 		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
 
@@ -1836,7 +1836,7 @@ class OneDriveApi {
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ itemId ~ "/content?AVOverride=1";
 
 		// Download file using the URL created above
-		CurlResponse downloadResponse = downloadFile(driveId, itemId, url, saveToPath, fileSize, onlineHash, resumeOffset);
+		CurlResponse downloadResponse = downloadFile(driveId, itemId, url, saveToPath, fileSize, onlineHash, resumeOffset, deferFinalRename);
 		if (downloadResponse !is null) {
 			if (debugLogging) {
 				addLogEntry("downloadById() downloadResponse.hasStreamedQuickXorHash = " ~ to!string(downloadResponse.hasStreamedQuickXorHash), ["debug"]);
@@ -1844,22 +1844,25 @@ class OneDriveApi {
 			}
 		}
 
-		// Does downloaded file now exist locally?
+		// Does the completed download now exist locally? When final promotion is
+		// deferred, the accepted response body intentionally remains at .partial
+		// so the sync layer can validate and transactionally replace an existing file.
+		string completedDownloadPath = deferFinalRename ? saveToPath ~ ".partial" : saveToPath;
 		try {
-			if (exists(saveToPath)) {
+			if ((downloadResponse !is null) && exists(completedDownloadPath)) {
 				// Has the user disabled the setting of filesystem permissions?
 				if (!appConfig.getValueBool("disable_permission_set")) {
 					// File was downloaded successfully - configure the applicable permissions for the file
-					if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
-					saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
+					if (debugLogging) {addLogEntry("Setting file permissions for: " ~ completedDownloadPath, ["debug"]);}
+					completedDownloadPath.setAttributes(appConfig.returnRequiredFilePermissions());
 				} else {
 					// Use inherited permissions
-					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ saveToPath, ["debug"]);}
+					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ completedDownloadPath, ["debug"]);}
 				}
 			}
 		} catch (FileException exception) {
 			// display the error message
-			displayFileSystemErrorMessage(exception.msg, thisFunctionName, saveToPath);
+			displayFileSystemErrorMessage(exception.msg, thisFunctionName, completedDownloadPath);
 		}
 
 		// Return the CurlResponse from the completed download so callers can inspect
@@ -2124,7 +2127,7 @@ class OneDriveApi {
 	}
 
 	// Download a file based on the URL request
-	private CurlResponse downloadFile(const(char)[] driveId, const(char)[] itemId, const(char)[] url, string filename, long fileSize, JSONValue onlineHash, long resumeOffset = 0, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+	private CurlResponse downloadFile(const(char)[] driveId, const(char)[] itemId, const(char)[] url, string filename, long fileSize, JSONValue onlineHash, long resumeOffset = 0, bool deferFinalRename = false, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
 
@@ -2483,12 +2486,17 @@ class OneDriveApi {
 			throw new OneDriveException(downloadResponse.statusLine.code, downloadResponse.statusLine.reason, downloadResponse);
 		}
 
-		// The wrapper has now accepted the transport and HTTP response. Promote the
-		// completed temporary file atomically into the requested destination only at
-		// this point, never before HTTP status validation.
-		rename(downloadFilename, originalFilename);
+		// The wrapper has now accepted the transport and HTTP response. Normally the
+		// completed temporary file is promoted here. Replacement downloads can defer
+		// this final rename so the sync layer can validate the completed .partial while
+		// leaving the existing canonical file untouched.
+		if (!deferFinalRename) {
+			rename(downloadFilename, originalFilename);
+		}
 
-		// Successful promotion completes resumable-download state for this transfer.
+		// A successful complete transfer no longer needs resumable-download state.
+		// In deferred mode the completed .partial remains intentionally for the sync
+		// layer to validate and promote.
 		safeRemove(threadResumeDownloadFilePath);
 		curlEngine.resetDownloadResumeOffset();
 
