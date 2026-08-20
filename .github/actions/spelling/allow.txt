@@ -46,6 +46,7 @@ autoupdate
 avmkfdiitirnrenzljwc
 avx
 bak
+basenames
 baus
 BBBA
 BBD
@@ -358,6 +359,7 @@ nfor
 ngroups
 nintegrity
 niop
+nno
 noar
 noarch
 nobj
@@ -371,6 +373,7 @@ nph
 nrecords
 ntfs
 nto
+nunless
 nuntil
 nupgrade
 nupload

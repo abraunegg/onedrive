@@ -567,6 +567,28 @@ class CurlEngine {
 		http.handle.set(CurlOption.seekdata, cast(void*) this);
 		http.handle.set(CurlOption.seekfunction, cast(void*) &curlUploadSeekCallback);
 
+		// The streamed QuickXorHash is accumulated across an entire file as each fragment of a
+		// session upload is sent, and is only restarted for the fragment at offset zero. If this
+		// request is a re-send, for example because a transient error caused the fragment to be
+		// retried, then the data that is about to be read has already been passed through the
+		// hasher once, and the accumulated hash no longer represents the file being uploaded.
+		//
+		// The number of bytes hashed so far should always equal the offset of the fragment now
+		// being sent. Where it does not, the hash is out of step with the data being sent.
+		//
+		// Data already added to a streaming hash cannot be removed from it, so rather than
+		// reporting an integrity failure for a file that has in fact uploaded correctly, the
+		// streamed hash is discarded here. The upload is then validated using the existing
+		// fallback, which obtains the hash of the local file directly.
+		// https://github.com/abraunegg/onedrive/issues/3790
+		if (uploadStreamHashActive && (uploadStreamHashBytes != offset)) {
+			if (debugLogging) {
+				addLogEntry("Streamed QuickXorHash is not aligned with the data being sent (hashed " ~ to!string(uploadStreamHashBytes) ~ " bytes, sending from offset " ~ to!string(offset) ~ ") - discarding the streamed hash for this upload", ["debug"]);
+			}
+			uploadStreamHashActive = false;
+			uploadStreamHashBytes = 0;
+		}
+
 		// Setup progress bar to display
 		http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
 			return 0;
