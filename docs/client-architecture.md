@@ -194,17 +194,38 @@ By default, the client uses Microsoft Graph’s `/delta` to retrieve changes eff
 
 ## File conflict handling - default operational modes
 
-When using the default operational modes (`--sync` or `--monitor`) the client application is conforming to how the Microsoft Windows OneDrive client operates in terms of resolving conflicts for files.
+When using the default operational modes (`--sync` or `--monitor`) the client reconciles Microsoft OneDrive changes with the local filesystem while protecting unique local file content from being silently displaced.
 
-When using `--resync` this conflict resolution can differ slightly, as, when using `--resync` you are *deleting* the known application state, thus, the application has zero reference as to what was previously in sync with the local file system.
+The local database provides the last known in-sync baseline for a tracked file. When an online replacement is available, the client evaluates three states at the replacement commit boundary:
 
-Due to this factor, when using `--resync` the online source is always going to be considered accurate and the source-of-truth, regardless of the local file state, local file timestamp or local file hash. When a difference in local file hash is detected, the file will be renamed to prevent local data loss.
+* the current canonical local file
+* the last known in-sync database record, when one exists
+* the incoming authoritative online file
+
+A replacement-style `safeBackup` is required only when the canonical local file contains content that is different from both the incoming online file and the last known in-sync database baseline. If the local file still matches the database baseline, it has not been independently modified and can be replaced without a safeBackup. If the local content already matches the incoming online content, no safeBackup is required.
+
+When `--resync` is used, the previous database state is intentionally discarded. This means the client cannot use the old database baseline to decide whether a same-path local file contains unique data. The online state is authoritative, but **`--resync` itself does not create a safeBackup**. If the local file content already matches the online content, the database and metadata are rebuilt without creating a safeBackup or replacing identical bytes. If the local content differs from the online content, the local file is preserved before the authoritative online version is committed.
+
+### Transactional safeBackup preservation
+
+For normal replacement/conflict workflows, the client keeps the canonical pathname present until the replacement is ready:
+
+1. Download the online replacement to `<canonical>.partial`.
+2. Validate the HTTP result and downloaded content.
+3. Re-evaluate the canonical local file immediately before commit.
+4. If unique local content must be preserved, create a verified `safeBackup` **copy** while leaving the canonical file in place.
+5. Recheck that the canonical file did not change during preservation.
+6. Atomically promote the validated `.partial` file to the canonical pathname.
+
+If download, validation, preservation, or final promotion fails, the existing canonical file is retained. A required safeBackup failure prevents the replacement from being committed.
+
+The intentional exception is an online deletion where the tracked local file has independently changed since the last in-sync state. There is no online replacement in that workflow, so the modified local file is renamed to `safeBackup` and the online deletion is honoured.
 
 > [!IMPORTANT]
-> In v2.5.3 and above, when a local file is renamed due to conflict handling, this will be in the following format pattern to allow easier identification:
+> In v2.5.3 and above, preserved files use the following naming pattern:
 >
 >    **filename-hostname-safeBackup-number.file_extension**
-> 
+>
 > For example:
 > ```
 > -rw-------.  1 alex alex 53402 Sep 21 08:25 file5.data
@@ -212,10 +233,12 @@ Due to this factor, when using `--resync` the online source is always going to b
 > -rw-------.  1 alex alex 53422 Nov 13 18:19 file5-onedrive-client-dev-safeBackup-0002.data
 > ```
 >
-> In client versions v2.5.2 and below, the renamed file have the following naming convention:
+> If an existing same-device safeBackup already matches the current canonical file content and metadata, the client can reuse that preservation rather than creating another numbered duplicate.
+>
+> In client versions v2.5.2 and below, preserved conflict files used the older naming convention:
 >
 >    **filename-hostname-number.file_extension**
-> 
+>
 > resulting in backup filenames of the following format:
 > ```
 > -rw-------.  1 alex alex 53402 Sep 21 08:25 file5.data
@@ -223,26 +246,20 @@ Due to this factor, when using `--resync` the online source is always going to b
 > -rw-------.  1 alex alex 53435 Nov 14 05:24 file5-onedrive-client-dev-3.data
 > -rw-------.  1 alex alex 53419 Nov 14 05:22 file5-onedrive-client-dev.data
 > ```
->
 
 > [!CAUTION]
-> The creation of backup files when there is a conflict to avoid local data loss can be disabled.
-> 
-> To do this, utilise the configuration option **'bypass_data_preservation'** 
+> Conflict preservation can be disabled with **`bypass_data_preservation`**:
 > ```
 > bypass_data_preservation = "true"
 > ```
-> 
-> If enable this option, you may experience data loss on your local data as the existing local file will be over-written with data from OneDrive online. Use with extreme care and caution.
+> When enabled, the client does not create a safeBackup where preservation would normally be required. Local data may therefore be overwritten or removed during reconciliation. Use with extreme care and caution.
 
 > [!TIP]
-> If you wish to avoid having these backup files from being uploaded to your online OneDrive account, you can utilise the configuration option **'skip_file'** to skip these files from being uploaded.
->
-> For example:
+> If safeBackup files should remain local rather than being uploaded to Microsoft OneDrive, use `skip_file`, for example:
 > ```
 > skip_file = "~*|.~*|*.tmp|*.swp|*.partial|*-safeBackup-*"
 > ```
-> This example retails the application defaults for 'skip_file' and adds an entry to skip any 'safeBackup' generated file.
+> This retains the application defaults and adds an exclusion for generated safeBackup files.
 
 ### Default Operational Modes - Conflict Handling
 
@@ -263,8 +280,8 @@ Finished processing /delta JSON response from the OneDrive API
 Processing 1 applicable changes and items received from Microsoft OneDrive
 Processing OneDrive JSON item batch [1/1] to ensure consistent local state
 Number of items to download from OneDrive: 1
-The local file to replace (./1.txt) has been modified locally since the last download. Renaming it to avoid potential local data loss.
-The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ./1.txt -> ./1-onedrive-client-dev.txt
+The local file to replace (./1.txt) contains local data that must be preserved before replacement.
+The local item is out-of-sync with OneDrive, copying to preserve existing file and prevent local data loss: ./1.txt -> ./1-onedrive-client-dev-safeBackup-0001.txt
 Downloading file ./1.txt ... done
 Performing a database consistency and integrity check on locally stored data
 Processing DB entries for this Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
@@ -281,7 +298,7 @@ Scanning the local file system '~/OneDrive' for new data to upload
 ...
 New items to upload to OneDrive: 1
 Total New Data to Upload:        52 Bytes
-Uploading new file ./1-onedrive-client-dev.txt ... done.
+Uploading new file ./1-onedrive-client-dev-safeBackup-0001.txt ... done.
 Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process
 Fetching /delta response from the OneDrive API for Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
 Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 2
@@ -319,8 +336,9 @@ Local file time discrepancy detected: ./1.txt
 This local file has a different modified time 2024-Feb-19 19:32:55Z (UTC) when compared to remote modified time 2024-Feb-19 19:32:36Z (UTC)
 The local file has a different hash when compared to remote file hash
 Local item does not exist in local database - replacing with file from OneDrive - failed download?
-The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ./1.txt -> ./1-onedrive-client-dev.txt
 Number of items to download from OneDrive: 1
+The local file to replace (./1.txt) contains local data that must be preserved before replacement.
+The local item is out-of-sync with OneDrive, copying to preserve existing file and prevent local data loss: ./1.txt -> ./1-onedrive-client-dev-safeBackup-0001.txt
 Downloading file ./1.txt ... done
 Performing a database consistency and integrity check on locally stored data
 Processing DB entries for this Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
@@ -336,7 +354,7 @@ Scanning the local file system '~/OneDrive' for new data to upload
 ...
 New items to upload to OneDrive: 1
 Total New Data to Upload:        52 Bytes
-Uploading new file ./1-onedrive-client-dev.txt ... done.
+Uploading new file ./1-onedrive-client-dev-safeBackup-0001.txt ... done.
 Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process
 Fetching /delta response from the OneDrive API for Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
 Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 2
@@ -352,11 +370,11 @@ Waiting for all internal threads to complete before exiting application
 
 When using `--local-first` as your operational parameter the client application is now using your local filesystem data as the 'source-of-truth' as to what should be stored online.
 
-However - Microsoft OneDrive itself, has *zero* acknowledgement of this concept, thus, conflict handling needs to be aligned to how Microsoft OneDrive on other platforms operate, that is, rename the local offending file.
+However, Microsoft OneDrive has no concept of the client's `local_first` policy. When a locally modified file collides with a newer different online version, the client must preserve the local bytes before resolving the online conflict. Replacement-style preservation uses a verified safeBackup copy while keeping the canonical pathname present until the replacement is ready.
 
 Additionally, when using `--resync` you are *deleting* the known application state, thus, the application has zero reference as to what was previously in sync with the local file system.
 
-Due to this factor, when using `--resync` the online source is always going to be considered accurate and the source-of-truth, regardless of the local file state, file timestamp or file hash or use of `--local-first`.
+When `--resync` is also used, the previous local database baseline is discarded. The current online object is authoritative for same-path conflicts, including when `--local-first` is configured; however, identical local and online content is reconciled without creating a safeBackup.
 
 ### Local First Operational Modes - Conflict Handling
 
@@ -392,8 +410,8 @@ Processing 1.txt
 Local file time discrepancy detected: 1.txt
 The file content has changed locally and has a newer timestamp, thus needs to be uploaded to OneDrive
 Changed local items to upload to OneDrive: 1
-The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: 1.txt -> 1-onedrive-client-dev.txt
-Uploading new file 1-onedrive-client-dev.txt ... done.
+The local item is out-of-sync with OneDrive, copying to preserve existing file and prevent local data loss: 1.txt -> 1-onedrive-client-dev-safeBackup-0001.txt
+Uploading new file 1-onedrive-client-dev-safeBackup-0001.txt ... done.
 Scanning the local file system '~/OneDrive' for new data to upload
 ...
 Fetching /delta response from the OneDrive API for Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
@@ -444,8 +462,8 @@ Total New Data to Upload:        49 KB
 ...
 The file we are attempting to upload as a new file already exists on Microsoft OneDrive: ./1.txt
 Skipping uploading this item as a new file, will upload as a modified file (online file already exists): ./1.txt
-The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ./1.txt -> ./1-onedrive-client-dev.txt
-Uploading new file ./1-onedrive-client-dev.txt ... done.
+The local item is out-of-sync with OneDrive, copying to preserve existing file and prevent local data loss: ./1.txt -> ./1-onedrive-client-dev-safeBackup-0001.txt
+Uploading new file ./1-onedrive-client-dev-safeBackup-0001.txt ... done.
 Fetching /delta response from the OneDrive API for Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
 Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 15
 Finished processing /delta JSON response from the OneDrive API

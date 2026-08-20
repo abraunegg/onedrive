@@ -2,30 +2,33 @@
 start
 note left: Operational Mode 'onedrive --sync'
 :Query OneDrive /delta API for online changes;
-note left: This data is considered the 'source-of-truth'\nLocal data should be a 'replica' of this data
+note left: Online change data is authoritative\nfor the remote item being reconciled
 :Process received JSON data;
-if (JSON item is a file) then (yes)
-  if (Does the file exist locally) then (yes)
-    :Compute relevant file hashes;
-    :Check DB for file record;
-    if (DB record found) then (yes)
-      :Compare file hash with DB hash;
-      if (Is the hash different) then (yes)
-        :Log that the local file was modified locally since last sync;
-        :Renaming local file to avoid potential local data loss;
-        note left: Local data loss prevention\nRenamed file will be uploaded as new file
+if (JSON item is a changed file?) then (yes)
+  :Queue/download replacement to <canonical>.partial;
+  :Validate HTTP result, size and file hash;
+  if (Does canonical file exist locally?) then (yes)
+    :Read current canonical hash;
+    :Read last in-sync DB baseline when available;
+    if (Canonical matches incoming online content?) then (yes)
+      :No safeBackup required;
+    else (no)
+      if (Canonical matches last in-sync DB baseline?) then (yes)
+        :No independent local change;\nno safeBackup required;
       else (no)
+        :Create and verify safeBackup copy;
+        note left: Canonical pathname remains present\nuntil replacement commit
       endif
-    else (no)    
     endif
+    :Recheck canonical did not change during commit preparation;
   else (no)
   endif
-:Download file (as per online JSON item) as required;
+  :Atomically promote validated .partial to canonical pathname;
 else (no)
   :Other handling for directories | root objects | deleted items;
 endif
-:Performing a database consistency and\nintegrity check on locally stored data;
-:Scan file system for any new data to upload;
-note left: The file that was renamed will be uploaded here
+:Perform database consistency and integrity check;
+:Scan local filesystem for new data to upload;
+note left: A newly-created safeBackup may be uploaded here\nunless excluded by skip_file
 stop
 @enduml
