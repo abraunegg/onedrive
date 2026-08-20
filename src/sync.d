@@ -6208,7 +6208,13 @@ class SyncEngine {
 						// files, compare the current bytes with the DB baseline before deleting.
 						bool outOfSyncItemIsFile = (outOfSyncItem.type == ItemType.file) ||
 							((outOfSyncItem.type == ItemType.remote) && (outOfSyncItem.remoteType == ItemType.file));
-						if (outOfSyncItemIsFile) {
+						if (!bypassDataPreservation && outOfSyncItemIsFile) {
+							// A prior parent-directory deletion can remove this descendant DB row while
+							// the out-of-sync snapshot still contains it. Do not resolve a stale item.
+							if (!itemDB.idInLocalDatabase(outOfSyncItem.driveId, outOfSyncItem.id)) {
+								continue;
+							}
+
 							string localPathToDelete = computeItemPath(outOfSyncItem.driveId, outOfSyncItem.id);
 							if (exists(localPathToDelete) && !testFileHash(localPathToDelete, outOfSyncItem)) {
 								if (verboseLogging) {

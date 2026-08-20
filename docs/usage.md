@@ -1870,7 +1870,7 @@ filename-hostname-safeBackup-0001.ext
 The client increments the four-digit number when another preservation file is required. If an existing same-device `safeBackup` already preserves the same file content and metadata, the client may reuse that preservation rather than creating another numbered duplicate.
 
 #### How replacement-style safeBackup preservation works
-For normal replacement and conflict-resolution workflows, the client does **not** rename the canonical file away before the replacement is ready. The existing canonical pathname remains present while the replacement is downloaded to a `.partial` staging file and validated. If the current local bytes must be preserved, the client creates and verifies a `safeBackup` copy first, then commits the validated replacement to the original canonical pathname.
+For normal replacement and conflict-resolution workflows, the client does **not** rename the canonical file away before the replacement is ready. The existing canonical pathname remains present while the replacement is downloaded to a `.partial` staging file and validated. If the current local bytes must be preserved, the client first creates the required `safeBackup` preservation entry without removing the canonical pathname. Where appropriate, this can use a filesystem hard link to retain the existing local file object efficiently, with an independent verified copy used where required or where hard-link creation is unavailable. The validated replacement is then committed to the original canonical pathname.
 
 The expected successful state is therefore:
 ```text
@@ -1895,7 +1895,7 @@ If the local file still matches the last in-sync database version, it has not be
 
 This can occur after `--resync`, after loss/removal of the local state database, or when a synchronisation directory is shared with another OneDrive client or operating system. Because there is no trustworthy previous local database baseline, the client compares the local file content with the online file. If the hashes differ, the local file is preserved before the authoritative online version is applied.
 
-Importantly, **`--resync` itself does not create a safeBackup**. If the local file is already in sync and its content hash matches OneDrive, the client rebuilds its database/metadata state without creating a safeBackup and without replacing identical file content.
+Importantly, **`--resync` itself does not create a safeBackup**. If the local file is already in sync and its content hash matches OneDrive, the client rebuilds its database/metadata state without creating a safeBackup and without replacing identical file content. When rebuilding synchronisation state, file timestamp equality alone is not treated as proof that file content is identical; where content identity must be established, the file content hash is also compared.
 
 **3. A remote move or rename targets a locally occupied destination**
 
@@ -1929,7 +1929,7 @@ A `safeBackup` should not be created simply because:
 - a download fails before any replacement can be committed
 - a required preservation operation itself fails
 
-In these cases there is no unique local file content that needs to be displaced and preserved.
+In the content-identical cases above there is no unique local file content that needs to be preserved. Where a download or required preservation operation fails, the client instead refuses to commit the replacement and retains the existing canonical file.
 
 #### Can I turn this functionality off?
 
