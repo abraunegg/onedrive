@@ -155,7 +155,9 @@ _**Config Example:**_ `azure_tenant_id = "example.onmicrosoft.us"` or `azure_ten
 > This option is commonly used in Microsoft 365 Business, Enterprise, Education, Government, and other managed Microsoft Entra ID environments where authentication must be restricted to a specific tenant rather than using the multi-tenant `common` endpoint.
 
 ### bypass_data_preservation
-_**Description:**_ This config option allows the disabling of preserving local data by renaming the local file in the event of data conflict. If this is enabled, you will experience data loss on your local data as the local file will be over-written with data from OneDrive online. Use with care and caution.
+_**Description:**_ This config option disables `safeBackup` data preservation when the client detects that unique local file content would otherwise be displaced during conflict resolution or reconciliation. By default, replacement-style conflicts preserve the existing local content as a verified `safeBackup` copy before a validated replacement is committed. The online-deleted/local-modified conflict is the intentional exception where the local file is renamed to `safeBackup` while the online deletion is honoured.
+
+When this option is enabled, those preservation operations are bypassed. This can allow local content to be overwritten or removed without a recoverable `safeBackup`. Use with extreme care and caution.
 
 _**Value Type:**_ Boolean
 
