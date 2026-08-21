@@ -8,6 +8,7 @@ import sys
 import traceback
 from pathlib import Path
 
+from framework.auth_preflight import run_auth_preflight
 from framework.context import E2EContext
 from framework.database_capture import capture_onedrive_databases
 from framework.result import TestResult
@@ -76,6 +77,18 @@ from testcases.tc0061_remote_move_into_skip_dir_reconciliation import TestCase00
 from testcases.tc0062_transfer_metrics_validation import TestCase0062TransferMetricsValidation
 from testcases.tc0063_local_parent_rename_during_download import TestCase0063LocalParentRenameDuringDownload
 from testcases.tc0064_mirror_local_state_remote_cleanup import TestCase0064MirrorLocalStateRemoteCleanup
+from testcases.tc0065_sync_list_remote_directory_move_reconciliation import TestCase0065SyncListRemoteDirectoryMoveReconciliation
+from testcases.tc0066_safebackup_transactional_replacement_validation import TestCase0066SafeBackupTransactionalReplacementValidation
+from testcases.tc0067_safebackup_interrupted_replacement_validation import TestCase0067SafeBackupInterruptedReplacementValidation
+from testcases.tc0068_safebackup_upload_only_conflict_validation import TestCase0068SafeBackupUploadOnlyConflictValidation
+from testcases.tc0069_safebackup_remote_move_destination_collision_validation import TestCase0069SafeBackupRemoteMoveDestinationCollisionValidation
+from testcases.tc0070_safebackup_new_file_upload_collision_validation import TestCase0070SafeBackupNewFileUploadCollisionValidation
+from testcases.tc0071_safebackup_metadata_only_identity_validation import TestCase0071SafeBackupMetadataOnlyIdentityValidation
+from testcases.tc0072_safebackup_preservation_failure_aborts_replacement import TestCase0072SafeBackupPreservationFailureAbortsReplacement
+from testcases.tc0073_safebackup_existing_preservation_reuse_validation import TestCase0073SafeBackupExistingPreservationReuseValidation
+from testcases.tc0074_safebackup_clean_resync_no_conflict_validation import TestCase0074SafeBackupCleanResyncNoConflictValidation
+from testcases.tc0075_safebackup_remote_delete_local_modify_validation import TestCase0075SafeBackupRemoteDeleteLocalModifyValidation
+from testcases.tc0076_safebackup_resync_content_conflict_validation import TestCase0076SafeBackupResyncContentConflictValidation
 
 
 def build_test_suite() -> list:
@@ -144,6 +157,18 @@ def build_test_suite() -> list:
         TestCase0062TransferMetricsValidation(),
         TestCase0063LocalParentRenameDuringDownload(),
         TestCase0064MirrorLocalStateRemoteCleanup(),
+        TestCase0065SyncListRemoteDirectoryMoveReconciliation(),
+        TestCase0066SafeBackupTransactionalReplacementValidation(),
+        TestCase0067SafeBackupInterruptedReplacementValidation(),
+        TestCase0068SafeBackupUploadOnlyConflictValidation(),
+        TestCase0069SafeBackupRemoteMoveDestinationCollisionValidation(),
+        TestCase0070SafeBackupNewFileUploadCollisionValidation(),
+        TestCase0071SafeBackupMetadataOnlyIdentityValidation(),
+        TestCase0072SafeBackupPreservationFailureAbortsReplacement(),
+        TestCase0073SafeBackupExistingPreservationReuseValidation(),
+        TestCase0074SafeBackupCleanResyncNoConflictValidation(),
+        TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(),
+        TestCase0076SafeBackupResyncContentConflictValidation(),
     ]
 
 
@@ -222,6 +247,7 @@ def _build_metadata(context: E2EContext, selected_case_ids: list[str], executed_
         "target": context.e2e_target,
         "run_id": context.run_id,
         "run_label": context.run_label,
+        "account_label": context.account_label,
         "debug_enabled": context.debug_enabled,
         "skip_suite_cleanup": context.skip_suite_cleanup,
         "selected_case_ids": selected_case_ids,
@@ -249,6 +275,19 @@ def main() -> int:
     executed_case_ids = [testcase.case_id for testcase in cases_to_run]
 
     suite_metadata = _build_metadata(context, selected_case_ids, executed_case_ids)
+
+    auth_preflight_result = run_auth_preflight(context)
+    if auth_preflight_result.status != "pass":
+        context.log(f"Auth preflight FAILED: {auth_preflight_result.reason}")
+        results = {
+            **suite_metadata,
+            "cases": [result_to_actions_case(auth_preflight_result)],
+        }
+        results_file = context.out_dir / "results.json"
+        write_text_file(results_file, json.dumps(results, indent=2, sort_keys=False))
+        return 1
+
+    context.log("Auth preflight completed successfully")
 
     if not context.skip_suite_cleanup:
         context.bootstrap_suite_cleanup_config_dir()

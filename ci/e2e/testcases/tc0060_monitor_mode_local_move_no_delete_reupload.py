@@ -233,10 +233,10 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
             details["dir_destination_exists_after_local_move"] = dir_destination_path.is_dir()
 
             required_patterns = [
-                f"[M] Local item moved: {file_source_relative} -> {file_destination_relative}",
-                f"Moving {file_source_relative} to {file_destination_relative}",
-                f"[M] Local item moved: {dir_source_relative} -> {dir_destination_relative}",
-                f"Moving {dir_source_relative} to {dir_destination_relative}",
+                f"[M] Local item moved: ./{file_source_relative} -> ./{file_destination_relative}",
+                f"Moving ./{file_source_relative} to ./{file_destination_relative}",
+                f"[M] Local item moved: ./{dir_source_relative} -> ./{dir_destination_relative}",
+                f"Moving ./{dir_source_relative} to ./{dir_destination_relative}",
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,

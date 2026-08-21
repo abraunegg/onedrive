@@ -3,10 +3,9 @@ module main;
 
 // What does this module require to function?
 import core.memory;
-import core.stdc.errno : ENOENT, EINTR, EBUSY, EXDEV, EAGAIN, EPERM, EACCES, EROFS;
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.sys.posix.signal;
-import core.sys.posix.unistd : write, _exit, STDERR_FILENO;
+import core.sys.posix.unistd : write, _exit, STDERR_FILENO, getpid;
 import core.thread;
 import core.time;
 import std.algorithm;
@@ -38,8 +37,88 @@ import webhook;
 import intune;
 import socketio;
 
+// Native stack trace support for fatal signal diagnostics.
+// On OpenBSD this is provided by libexecinfo; on Linux this is provided by glibc.
+// musl does not provide these interfaces, so Alpine builds use the fallback path.
+version (OpenBSD) {
+	
+	pragma(lib, "execinfo");
+	extern(C) nothrow @nogc @system {
+		size_t backtrace(void** addrlist, size_t len);
+		int backtrace_symbols_fd(void** addrlist, size_t len, int fd);
+	}
+}
+
+version (linux) {
+	version (CRuntime_Glibc) {
+		extern(C) nothrow @nogc @system {
+			int backtrace(void** addrlist, int len);
+			void backtrace_symbols_fd(void** addrlist, int len, int fd);
+		}
+	}
+}
+
+// Minimal OpenBSD amd64 signal context definitions used only by the fatal SIGSEGV
+// handler to report the interrupted instruction/stack context before re-raising
+// the signal for normal core-dump handling.
+version (OpenBSD) {
+	enum int OPENBSD_SA_SIGINFO = 0x0040;
+
+	struct OpenBSDSigContext {
+		long sc_rdi;
+		long sc_rsi;
+		long sc_rdx;
+		long sc_rcx;
+		long sc_r8;
+		long sc_r9;
+		long sc_r10;
+		long sc_r11;
+		long sc_r12;
+		long sc_r13;
+		long sc_r14;
+		long sc_r15;
+		long sc_rbp;
+		long sc_rbx;
+		long sc_rax;
+		long sc_gs;
+		long sc_fs;
+		long sc_es;
+		long sc_ds;
+		long sc_trapno;
+		long sc_err;
+		long sc_rip;
+		long sc_cs;
+		long sc_rflags;
+		long sc_rsp;
+		long sc_ss;
+		void* sc_fpstate;
+		int __sc_unused;
+		int sc_mask;
+		long sc_cookie;
+	}
+
+	struct Fault {
+		void* _addr;
+		int _trapno;
+	}
+
+	struct OpenBSDSigInfoFault {
+		int si_signo;
+		int si_code;
+		int si_errno;
+		union Data {
+			int[29] _pad;
+			Fault _fault;
+		}
+		Data _data;
+	}
+}
+
+
 // What other constant variables do we require?
-const int EXIT_RESYNC_REQUIRED = 126;
+// A mandatory --resync is an application configuration/state condition.
+// Use the traditional EX_CONFIG status value so callers can distinguish it from a generic failure.
+const int EXIT_RESYNC_REQUIRED = 78;
 
 // Class objects
 ApplicationConfig appConfig;
@@ -558,6 +637,7 @@ int main(string[] cliArgs) {
 				// Application configuration has changed however --resync not issued, fail fast
 				addLogEntry();
 				addLogEntry("An application configuration change has been detected where a --resync is required", ["info", "notify"]);
+				addLogEntry("Re-run the client with '--resync' appended to your normal '--sync' or '--monitor' command.");
 				addLogEntry();
 				return EXIT_RESYNC_REQUIRED;
 			} else {
@@ -872,6 +952,7 @@ int main(string[] cliArgs) {
 				// Not an empty database
 				addLogEntry();
 				addLogEntry("An application cache state issue has been detected where a --resync is required", ["info", "notify"]);
+				addLogEntry("Re-run the client with '--resync' appended to your normal '--sync' or '--monitor' command.");
 				addLogEntry();
 				return EXIT_RESYNC_REQUIRED;
 			}
@@ -1021,9 +1102,6 @@ int main(string[] cliArgs) {
 			// Update the flag given we are running with --monitor
 			performFileSystemMonitoring = true;
 			
-			// Set initial variable for when we last uploaded something or made an online change from a local inotify event
-			lastLocalWrite = MonoTime.currTime() - dur!"hours"(24);
-			
 			// Is Display Manager Integration enabled?
 			if (appConfig.getValueBool("display_manager_integration")) {
 				// Attempt to configure the desktop integration whilst the client is running in --monitor mode
@@ -1051,10 +1129,10 @@ int main(string[] cliArgs) {
 							addLogEntry("Attempting to enable WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 							
 							// Obtain the WebSocket Notification URL from the API endpoint
-							syncEngineInstance.obtainWebSocketNotificationURL();
+							bool websocketNotificationUrlObtained = syncEngineInstance.obtainWebSocketNotificationURL();
 							
 							// Were we able to correctly obtain the endpoint response and build the socket.io WS endpoint
-							if (appConfig.websocketNotificationUrlAvailable) {
+							if (websocketNotificationUrlObtained) {
 								// Notification URL is available
 								if (oneDriveSocketIo is null) {
 									oneDriveSocketIo = new OneDriveSocketIo(thisTid, appConfig);
@@ -1062,9 +1140,7 @@ int main(string[] cliArgs) {
 								}
 								addLogEntry("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
 							} else {
-								addLogEntry("ERROR: Unable to configure WebSocket support to monitor Microsoft Graph API changes in near real-time.");
-								if (debugLogging) {addLogEntry("Setting 'disable_websocket_support' to 'true' to force WebSockets to be disabled.", ["debug"]);}
-								appConfig.setValueBool("disable_websocket_support" , true);
+								addLogEntry("WARNING: Unable to configure WebSocket support to monitor Microsoft Graph API changes in near real-time. The client will retry while monitor mode remains active.");
 							}
 						} else {
 							// WebSocket Support has been disabled
@@ -1100,76 +1176,29 @@ int main(string[] cliArgs) {
 			// Configure the monitor class
 			filesystemMonitor = new Monitor(appConfig, selectiveSync);
 			
-			// Delegated function for when inotify detects a new local directory has been created
-			filesystemMonitor.onDirCreated = delegate(string path) {
-				// Handle .folder creation if skip_dotfiles is enabled
-				if ((appConfig.getValueBool("skip_dotfiles")) && (isDotFile(path))) {
-					if (verboseLogging) {addLogEntry("[M] Skipping watching local path - .folder found & --skip-dot-files enabled: " ~ path, ["verbose"]);}
-				} else {
-					if (verboseLogging) {addLogEntry("[M] Local directory created: " ~ path, ["verbose"]);}
-					try {
-						syncEngineInstance.scanLocalFilesystemPathForNewData(path);
-						markLocalWrite();
-					} catch (CurlException e) {
-						if (verboseLogging) {addLogEntry("Offline, cannot create remote dir: " ~ path, ["verbose"]);}
-					} catch (Exception e) {
-						addLogEntry("Cannot create remote directory: " ~ e.msg, ["info", "notify"]);
-					}
-				}
-			};
-			
-			// Delegated function for when inotify detects a local file has been changed
-			filesystemMonitor.onFileChanged = delegate(string[] changedLocalFilesToUploadToOneDrive) {
-				// Handle a potentially locally changed file
-				// Logging for this event moved to handleLocalFileTrigger() due to threading and false triggers from scanLocalFilesystemPathForNewData() above
-				syncEngineInstance.handleLocalFileTrigger(changedLocalFilesToUploadToOneDrive);
-				markLocalWrite();
-				if (verboseLogging) {addLogEntry("[M] Total number of local file(s) added or changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length), ["verbose"]);}
-			};
-
-			// Delegated function for when inotify detects a delete event
-			filesystemMonitor.onDelete = delegate(string path) {
-				if (verboseLogging) {addLogEntry("[M] Local item deleted: " ~ path, ["verbose"]);}
-				try {
-					// The path has been deleted .. we cannot use isDir or isFile to advise what was deleted. This is the best we can Do
-					addLogEntry("The operating system sent a deletion notification. Trying to delete this item as requested: " ~ path);
-					// perform the delete action
-					syncEngineInstance.deleteByPath(path);
-					markLocalWrite();
-				} catch (CurlException e) {
-					if (verboseLogging) {addLogEntry("Offline, cannot delete item: " ~ path, ["verbose"]);}
-				} catch (SyncException e) {
-					if (e.msg == "The item to delete is not in the local database") {
-						if (verboseLogging) {addLogEntry("Item cannot be deleted from Microsoft OneDrive because it was not found in the local database", ["verbose"]);}
-					} else {
-						addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
-					}
-				} catch (FileException e) {
-					// Path is gone locally, log and continue.
-					addLogEntry("ERROR: The local file system returned an error with the following message: " ~ e.msg, ["verbose"]);
-				} catch (Exception e) {
-					addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
-				}
-			};
-			
-			// Delegated function for when inotify detects a move event
-			filesystemMonitor.onMove = delegate(string from, string to) {
-				if (verboseLogging) {addLogEntry("[M] Local item moved: " ~ from ~ " -> " ~ to, ["verbose"]);}
-				try {
-					// Handle .folder -> folder if skip_dotfiles is enabled
-					if ((appConfig.getValueBool("skip_dotfiles")) && (isDotFile(from))) {
-						// .folder -> folder handling - has to be handled as a new folder
-						syncEngineInstance.scanLocalFilesystemPathForNewData(to);
-					} else {
-						syncEngineInstance.uploadMoveItem(from, to);
-					}
-					markLocalWrite();
-				} catch (CurlException e) {
-					if (verboseLogging) {addLogEntry("Offline, cannot move item !", ["verbose"]);}
-				} catch (Exception e) {
-					addLogEntry("Cannot move item: " ~ e.msg, ["info", "notify"]);
-				}
-			};
+			if (!appConfig.getValueBool("download_only")) {
+				// Connect the sync engine to the monitor observation boundary. The monitor remains
+				// the sole owner of inotify state; SyncEngine can only request a capture/query or
+				// declare exact filesystem echoes generated by online-to-local operations.
+				syncEngineInstance.capturePendingLocalChanges = delegate(string source) {
+					if (filesystemMonitor !is null && filesystemMonitor.initialised) captureInotifyEvents(source);
+				};
+				syncEngineInstance.hasPendingLocalDeparture = delegate(string path) {
+					return filesystemMonitor !is null && filesystemMonitor.initialised && filesystemMonitor.hasPendingDeparture(path);
+				};
+				syncEngineInstance.recordExpectedLocalDirectoryCreate = delegate(string path) {
+					if (filesystemMonitor !is null && filesystemMonitor.initialised) filesystemMonitor.recordExpectedDirectoryCreate(path);
+				};
+				syncEngineInstance.recordExpectedLocalMove = delegate(string from, string to) {
+					if (filesystemMonitor !is null && filesystemMonitor.initialised) filesystemMonitor.recordExpectedMove(from, to);
+				};
+				syncEngineInstance.recordExpectedLocalFileArrival = delegate(string path) {
+					if (filesystemMonitor !is null && filesystemMonitor.initialised) filesystemMonitor.recordExpectedFileArrival(path);
+				};
+				syncEngineInstance.recordExpectedLocalRemoval = delegate(string path) {
+					if (filesystemMonitor !is null && filesystemMonitor.initialised) filesystemMonitor.recordExpectedRemoval(path);
+				};
+			}
 			
 			// Initialise the local filesystem monitor class using inotify to monitor for local filesystem changes
 			// If we are in a --download-only method of operation, we do not enable local filesystem monitoring
@@ -1190,6 +1219,8 @@ int main(string[] cliArgs) {
 			// Immutables
 			immutable auto checkOnlineInterval = dur!"seconds"(appConfig.getValueLong("monitor_interval"));
 			immutable auto githubCheckInterval = dur!"seconds"(86400);
+			immutable auto websocketRetryInterval = dur!"seconds"(60);
+			immutable auto websocketRenewEarly = dur!"seconds"(120);
 			immutable ulong fullScanFrequency = appConfig.getValueLong("monitor_fullscan_frequency");
 			immutable ulong logOutputSuppressionInterval = appConfig.getValueLong("monitor_log_frequency");
 			immutable bool webhookEnabled = appConfig.getValueBool("webhook_enabled");
@@ -1202,9 +1233,13 @@ int main(string[] cliArgs) {
 			ulong monitorLogOutputLoopCount = 0;
 			MonoTime lastCheckTime = MonoTime.currTime();
 			MonoTime lastGitHubCheckTime = MonoTime.currTime();
+			// Startup WebSocket URL acquisition, when enabled, occurs immediately before
+			// entering the monitor loop. Rate-limit any subsequent acquisition attempt so
+			// frequent local filesystem activity cannot hammer the Graph endpoint.
+			MonoTime lastWebSocketAcquisitionAttempt = MonoTime.currTime();
 			SysTime lastMonitorGcCleanup = Clock.currTime();
 			
-			monitorLoop: while (performFileSystemMonitoring) {
+			while (performFileSystemMonitoring) {
 				if (shutdownRequested()) {
 					addShutdownTelemetry("monitor loop detected shutdown request before processing new work");
 					performFileSystemMonitoring = false;
@@ -1215,8 +1250,8 @@ int main(string[] cliArgs) {
 			
 				// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
 				if (!appConfig.getValueBool("download_only")) {
-					// Process any inotify events queued before this loop iteration
-					processInotifyEvents(true);
+					// Process any inotify events
+					captureAndApplyInotifyEvents("monitor_loop.pre_notification_check");
 				}
 				
 				// WebSocket and Webhook Notification Handling
@@ -1239,19 +1274,45 @@ int main(string[] cliArgs) {
 						if (appConfig.curlSupportsWebSockets) {
 							// Did the user configure to disable 'websocket' support?
 							if (!appConfig.getValueBool("disable_websocket_support")) {
-								// Do we need to renew the notification URL?
-								auto renewEarly = dur!"seconds"(120);
+								// WebSocket notification URL acquisition is recoverable. This covers both
+								// an initial startup failure (no URL available yet) and renewal of an
+								// existing endpoint shortly before expiry.
+								auto acquisitionNow = MonoTime.currTime();
+								bool websocketAcquisitionRequired = !appConfig.websocketNotificationUrlAvailable;
+								bool websocketRenewalRequired = false;
+								
 								if (appConfig.websocketNotificationUrlAvailable && appConfig.websocketUrlExpiry.length) {
-									auto expiry = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
-									auto now    = Clock.currTime(UTC());
-									if (expiry - now <= renewEarly) {
-										try {
-											// Obtain the WebSocket Notification URL from the API endpoint
-											syncEngineInstance.obtainWebSocketNotificationURL();
-											if (debugLogging) addLogEntry("Refreshed WebSocket notification URL prior to expiry", ["debug"]);
-										} catch (Exception e) {
-											if (debugLogging) addLogEntry("Failed to refresh WebSocket notification URL: " ~ e.msg, ["debug"]);
+									try {
+										auto expiry = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
+										auto now = Clock.currTime(UTC());
+										websocketRenewalRequired = (expiry - now <= websocketRenewEarly);
+									} catch (Exception e) {
+										// Existing expiry state is malformed; attempt to replace it through the
+										// normal, rate-limited acquisition path rather than terminating monitor mode.
+										websocketRenewalRequired = true;
+										if (debugLogging) addLogEntry("Unable to parse current WebSocket notification URL expiry: " ~ e.msg, ["debug"]);
+									}
+								}
+								
+								if ((websocketAcquisitionRequired || websocketRenewalRequired) &&
+									(acquisitionNow - lastWebSocketAcquisitionAttempt >= websocketRetryInterval)) {
+									if (websocketAcquisitionRequired) {
+										addLogEntry("Retrying WebSocket notification URL acquisition.");
+									}
+									
+									lastWebSocketAcquisitionAttempt = acquisitionNow;
+									bool websocketNotificationUrlObtained = syncEngineInstance.obtainWebSocketNotificationURL();
+									
+									if (websocketNotificationUrlObtained) {
+										if (oneDriveSocketIo is null) {
+											oneDriveSocketIo = new OneDriveSocketIo(thisTid, appConfig);
+											oneDriveSocketIo.start();
+											addLogEntry("Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.");
+										} else if (debugLogging) {
+											addLogEntry("Refreshed WebSocket notification URL prior to expiry", ["debug"]);
 										}
+									} else if (debugLogging) {
+										addLogEntry("WebSocket notification URL acquisition failed; retaining existing state and retrying later", ["debug"]);
 									}
 								}
 							}
@@ -1357,10 +1418,8 @@ int main(string[] cliArgs) {
 							performStandardSyncProcess(localPath, filesystemMonitor);
 						}
 						
-						// Handle any local filesystem events that occurred while the sync was running.
-						// Remote -> local generated events are drained inside the standard sync path
-						// immediately after online reconciliation, and inside oneDriveOnlineCallback().
-						processInotifyEvents(true);
+						// Handle any new inotify events
+						captureAndApplyInotifyEvents("monitor_loop.post_sync_process");
 						
 						// Detail the outcome of the sync process
 						displaySyncOutcome();
@@ -1445,7 +1504,11 @@ int main(string[] cliArgs) {
 					auto sleepTime = nextCheckTime - currentTime;
 					if (debugLogging) {addLogEntry("Sleep for " ~ to!string(sleepTime), ["debug"]);}
 					
-					if (filesystemMonitor.initialised || webhookEnabled || oneDriveSocketIo !is null) {
+					bool websocketSupportActiveOrRetryable = !appConfig.getValueBool("upload_only") &&
+						!webhookEnabled && appConfig.curlSupportsWebSockets &&
+						!appConfig.getValueBool("disable_websocket_support");
+					
+					if (filesystemMonitor.initialised || webhookEnabled || oneDriveSocketIo !is null || websocketSupportActiveOrRetryable) {
 
 						if (filesystemMonitor.initialised) {
 							// If local monitor is on and is waiting (previous event was not from webhook)
@@ -1472,20 +1535,51 @@ int main(string[] cliArgs) {
 								Duration nextWebhookCheckDuration = oneDriveWebhook.getNextExpirationCheckDuration();
 								if (nextWebhookCheckDuration < sleepTime) sleepTime = nextWebhookCheckDuration;
 								notificationReceived = false;
-							} else if (oneDriveSocketIo !is null && !appConfig.getValueBool("disable_websocket_support") && appConfig.curlSupportsWebSockets) {
-								Duration nextWebsocketCheckDuration = oneDriveSocketIo.getNextExpirationCheckDuration();
+							} else if (websocketSupportActiveOrRetryable) {
+								Duration nextWebsocketCheckDuration;
+								if (oneDriveSocketIo !is null) {
+									nextWebsocketCheckDuration = oneDriveSocketIo.getNextExpirationCheckDuration();
+									
+									// If a renewal attempt has failed while the existing connection remains
+									// usable, wake at the retry cadence rather than waiting until expiry.
+									if (appConfig.websocketNotificationUrlAvailable && appConfig.websocketUrlExpiry.length) {
+										try {
+											auto expiry = SysTime.fromISOExtString(appConfig.websocketUrlExpiry);
+											if (expiry - Clock.currTime(UTC()) <= websocketRenewEarly) {
+												auto elapsedSinceAcquisitionAttempt = MonoTime.currTime() - lastWebSocketAcquisitionAttempt;
+												auto retryWait = (elapsedSinceAcquisitionAttempt < websocketRetryInterval) ?
+													(websocketRetryInterval - elapsedSinceAcquisitionAttempt) : Duration.zero;
+												if (retryWait < nextWebsocketCheckDuration) nextWebsocketCheckDuration = retryWait;
+											}
+										} catch (Exception exception) {
+											// Malformed expiry is handled by the acquisition path at the top of the loop.
+										}
+									}
+								} else {
+									// No worker exists yet because initial URL acquisition failed. Wake the
+									// monitor loop when the retry interval elapses even in --download-only mode.
+									auto elapsedSinceAcquisitionAttempt = MonoTime.currTime() - lastWebSocketAcquisitionAttempt;
+									nextWebsocketCheckDuration = (elapsedSinceAcquisitionAttempt < websocketRetryInterval) ?
+										(websocketRetryInterval - elapsedSinceAcquisitionAttempt) : Duration.zero;
+								}
 								if (nextWebsocketCheckDuration < sleepTime) sleepTime = nextWebsocketCheckDuration;
 							}
 						}
 						
 						// ALWAYS wait for FS worker, but only track webhook/websocket if NOT '--upload-only'
-						// res == 0 means the wait expired naturally; res > 0 means the filesystem
-						// monitor worker observed inotify activity; res == -1 means worker failure.
-						int res = 0;
+						int res = 1;
 						bool onlineSignal = false;
 						bool shutdownDetectedDuringWait = false;
+						bool monitorMessageProducerActive = filesystemMonitor.initialised || webhookEnabled || oneDriveSocketIo !is null;
 
-						shutdownDetectedDuringWait = waitForMonitorEventsInterruptibly(sleepTime, appConfig.getValueBool("upload_only"), res, onlineSignal);
+						if (monitorMessageProducerActive) {
+							shutdownDetectedDuringWait = waitForMonitorEventsInterruptibly(sleepTime, appConfig.getValueBool("upload_only"), res, onlineSignal);
+						} else {
+							// A WebSocket retry can shorten the monitor sleep even when no message-producing
+							// worker exists. In that state, use a normal interruptible sleep rather than
+							// std.concurrency.receiveTimeout(), which requires an active thread relationship.
+							shutdownDetectedDuringWait = sleepInterruptibly(sleepTime, "monitor WebSocket retry sleep");
+						}
 						if (shutdownDetectedDuringWait) {
 							performFileSystemMonitoring = false;
 							addShutdownTelemetry("monitor wait exited early due to shutdown request");
@@ -1499,19 +1593,6 @@ int main(string[] cliArgs) {
 								addLogEntry("WebSocket|Webhook Notification Received = " ~ to!string(onlineSignal), ["debug"]);
 							}
 						}
-						
-						// Worker failure remains outside '--upload-only' filter
-						if (res == -1) {
-							addLogEntry("ERROR: Monitor worker failed.");
-							monitorFailures = true;
-							performFileSystemMonitoring = false;
-							break monitorLoop;
-						}
-						
-						// A positive worker status indicates local filesystem monitor activity.
-						// Do not consume inotify events inside the wait block. Let this iteration
-						// complete and process queued local filesystem events at the top of the 
-						// next monitor loop.
 						
 						// Empirical evidence shows that Microsoft often sends multiple
 						// notifications for one single change, so we need a loop to exhaust
@@ -1528,17 +1609,10 @@ int main(string[] cliArgs) {
 								if (more) {
 									signalCount++;
 								} else {
-									// Always process online notifications from WebSocket/Webhook handlers.
-									// These signals do not contain item-level change detail, so the delta endpoint
-									// remains the source of truth for determining whether the notification reflects
-									// a genuine remote change, a local echo, or multiple coalesced changes.
-									// Do not drop the signal here; doing so can delay or miss required online
-									// reconciliation until the next regular monitor interval.
-							
 									// Get the signal timestamp - this is as close as possible to when this was received
 									SysTime signalTimeStamp = Clock.currTime();
 									signalTimeStamp.fracSecs = Duration.zero;
-							
+									
 									// Log what signal we received
 									if (webhookEnabled) {
 										string webhookLogEntry = format("Received %s signal(s) from Webhook handler (%s)", to!string(signalCount), to!string(signalTimeStamp));
@@ -1547,12 +1621,19 @@ int main(string[] cliArgs) {
 										string websocketLogEntry = format("Received %s signal(s) from WebSocket handler (%s)", to!string(signalCount), to!string(signalTimeStamp));
 										addLogEntry(websocketLogEntry);
 									}
-							
+									
 									// Perform online callback action
 									oneDriveOnlineCallback();
 									break;
 								}
 							}
+						}
+
+						// Worker failure remains outside '--upload-only' filter
+						if (res == -1) {
+							addLogEntry("ERROR: Monitor worker failed.");
+							monitorFailures = true;
+							performFileSystemMonitoring = false;
 						}
 					} else {
 						// no hooks available, nothing to check
@@ -1632,30 +1713,31 @@ void printMissingOperationalSwitchesError() {
 
 // Function used for WebSocket or Webhook callbacks to perform specific activities
 void oneDriveOnlineCallback() {
+	// Identify which online notification mechanism invoked this callback for debug correlation
+	string onlineCallbackSource = appConfig.getValueBool("webhook_enabled") ? "webhook_callback" : "websocket_callback";
+
 	// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
 	if (!appConfig.getValueBool("download_only")) {
-		// Handle inotify events queued before online reconciliation
-		processInotifyEvents(true);
+		// Handle inotify events
+		captureAndApplyInotifyEvents(onlineCallbackSource ~ ".pre_online_sync");
 	}
 
-	// Sync any online change down to the local disk.
-	// If we are doing --upload-only however, we need to ignore online changes.
+	// Sync any online change down to the local disk
+	// If we are doing --upload-only however .. we need to 'ignore' online change
 	if (!appConfig.getValueBool("upload_only")) {
-		// We are not doing an --upload-only scenario; sync online change --> local.
+		// We are not doing an --upload-only scenario .. sync online change --> local
 		appConfig.monitorSyncTriggeredByApiSignal = true;
 		scope(exit) {
 			appConfig.monitorSyncTriggeredByApiSignal = false;
 		}
-
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
-
 		if (syncEngineInstance.authoritativeCleanupPassUsedInLastSync) {
 			syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		}
 	}
 	if (appConfig.getValueBool("monitor")) {
-		// Drain inotify events generated by online -> local reconciliation.
-		processInotifyEvents(false, true);
+		// Handle inotify events
+		completeRemoteApplyInotifyEvents(onlineCallbackSource ~ ".post_online_sync");
 	}
 }
 
@@ -1665,14 +1747,14 @@ void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = 
 	syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 	if (appConfig.getValueBool("monitor")) {
 		// Handle any inotify events whilst the DB was being scanned
-		processInotifyEvents(true);
+		captureAndApplyInotifyEvents("upload_only.post_database_scan");
 	}
 	
 	// Scan the configured 'sync_dir' for new data to upload
 	syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 	if (appConfig.getValueBool("monitor")) {
 		// Handle any new inotify events whilst the local filesystem was being scanned
-		processInotifyEvents(true);
+		captureAndApplyInotifyEvents("upload_only.post_local_scan");
 	}
 }
 
@@ -1696,21 +1778,21 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any inotify events whilst the DB was being scanned
-			processInotifyEvents(true);
+			captureAndApplyInotifyEvents("standard_sync.local_first.post_database_scan");
 		}
 		
 		// Scan the configured 'sync_dir' for new data to upload to OneDrive
 		syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any new inotify events whilst the local filesystem was being scanned
-			processInotifyEvents(true);
+			captureAndApplyInotifyEvents("standard_sync.local_first.post_local_scan");
 		}
 		
 		// Download data from OneDrive last
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
 		if (appConfig.getValueBool("monitor")) {
-			// Cancel out any inotify events from downloading data
-			processInotifyEvents(false, true);
+			// Reconcile client-generated echoes and genuine local activity that occurred during online processing
+			completeRemoteApplyInotifyEvents("standard_sync.local_first.post_online_sync");
 		}
 		
 		// At this point, we have done a sync from:
@@ -1728,15 +1810,15 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		// Download data from OneDrive first
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
 		if (appConfig.getValueBool("monitor")) {
-			// Cancel out any inotify events from downloading data
-			processInotifyEvents(false, true);
+			// Reconcile client-generated echoes and genuine local activity that occurred during online processing
+			completeRemoteApplyInotifyEvents("standard_sync.remote_first.post_online_sync");
 		}
 		
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any inotify events whilst the DB was being scanned
-			processInotifyEvents(true);
+			captureAndApplyInotifyEvents("standard_sync.remote_first.post_database_scan");
 		}
 			
 		// Is --download-only NOT configured?
@@ -1746,7 +1828,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 			if (appConfig.getValueBool("monitor")) {
 				// Handle any new inotify events whilst the local filesystem was being scanned
-				processInotifyEvents(true);
+				captureAndApplyInotifyEvents("standard_sync.remote_first.post_local_scan");
 			}
 			
 			// If we are not doing a 'force_children_scan' perform a true-up
@@ -1762,8 +1844,8 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 					// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
 					syncEngineInstance.syncOneDriveAccountToLocalDisk();
 					if (appConfig.getValueBool("monitor")) {
-						// Cancel out any inotify events from downloading data
-						processInotifyEvents(false, true);
+						// Reconcile client-generated echoes and genuine local activity that occurred during online processing
+						completeRemoteApplyInotifyEvents("standard_sync.remote_first.post_true_up");
 					}
 				} else {
 					// exitHandlerTriggered triggered
@@ -1787,36 +1869,139 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 	}
 }
 
-// Process any inotify events
-void processInotifyEvents(bool updateFlag, bool processDeletesWhenDraining = false) {
-	if ((filesystemMonitor is null) || (!filesystemMonitor.initialised)) {
-		return;
+// Capture raw inotify events into Monitor's pending observation batch.
+// This function never performs a remote operation.
+void captureInotifyEvents(string invocationSource) {
+	if (filesystemMonitor is null || !filesystemMonitor.initialised) return;
+
+	// Publish any online-to-local filesystem effects accumulated by SyncEngine,
+	// including effects produced by parallel file-download workers, before the
+	// corresponding inotify queue is read.
+	syncEngineInstance.publishExpectedLocalEffects();
+
+	SysTime functionStartTime;
+	string logKey;
+	string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
+	if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+		functionStartTime = Clock.currTime();
+		logKey = generateAlphanumericString();
+		displayFunctionProcessingStart(thisFunctionName, logKey);
 	}
 
-	// Attempt to process or cancel inotify events
-	// filesystemMonitor.update will throw this, thus needs to be caught
-	//   monitor.MonitorException@src/monitor.d(549): inotify queue overflow: some events may be lost (Interrupted system call)
-	try {
-		// Process any inotify events or cancel events based on flag value
-		// True = process
-		// False = cancel
-		filesystemMonitor.update(updateFlag, processDeletesWhenDraining);
-	} catch (MonitorException exception) {
-		// Catch any exceptions thrown by inotify / monitor engine
-		addLogEntry("ERROR: The following inotify error was generated: " ~ exception.msg);
-	} catch (FileException exception) {
-		// A local path can legitimately disappear while queued inotify events are
-		// being cancelled / drained, especially under monitor stress testing.
-		// Treat ENOENT during event cancellation as non-fatal.
-		if ((!updateFlag) && (exception.errno == ENOENT)) {
-			if (debugLogging) {
-				addLogEntry("Ignoring stale inotify cancellation event for path that no longer exists: " ~ exception.msg, ["debug"]);
-			}
-			return;
-		}
-		// Log error message
-		addLogEntry("ERROR: The following filesystem error was generated while processing inotify events: " ~ exception.msg);
+	if (debugLogging) {
+		addLogEntry("captureInotifyEvents context: source=" ~ invocationSource ~ ", logKey=" ~ (logKey.empty ? "not-set" : logKey), ["debug"]);
 	}
+
+	try {
+		filesystemMonitor.capture(invocationSource, logKey);
+	} catch (MonitorException e) {
+		addLogEntry("ERROR: The following inotify error was generated: " ~ e.msg);
+	}
+
+	if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+		displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+	}
+}
+
+// Apply the current observation batch after revalidating each operation through SyncEngine.
+void applyPendingLocalChanges(string invocationSource) {
+	LocalChange[] pendingChanges = filesystemMonitor.takePendingChanges();
+	if (debugLogging) {
+		addLogEntry("Applying pending local observations: source=" ~ invocationSource ~ ", count=" ~ to!string(pendingChanges.length), ["debug"]);
+	}
+
+	string[] changedLocalFilesToUploadToOneDrive;
+	foreach (change; pendingChanges) {
+		switch (change.type) {
+			case LocalChangeType.changed:
+				if (exists(change.src) && isFile(change.src)) {
+					changedLocalFilesToUploadToOneDrive ~= change.src;
+				} else if (debugLogging) {
+					addLogEntry("Skipping stale local file-change observation because the path no longer exists as a file: " ~ change.src, ["debug"]);
+				}
+				break;
+
+			case LocalChangeType.createDir:
+				if ((appConfig.getValueBool("skip_dotfiles")) && (isDotFile(change.src))) {
+					if (verboseLogging) {addLogEntry("[M] Skipping watching local path - .folder found & --skip-dot-files enabled: " ~ change.src, ["verbose"]);}
+				} else if (exists(change.src) && isDir(change.src)) {
+					if (verboseLogging) {addLogEntry("[M] Local directory created: " ~ change.src, ["verbose"]);}
+					try {
+						syncEngineInstance.scanLocalFilesystemPathForNewData(change.src);
+					} catch (CurlException e) {
+						if (verboseLogging) {addLogEntry("Offline, cannot create remote dir: " ~ change.src, ["verbose"]);}
+					} catch (Exception e) {
+						addLogEntry("Cannot create remote directory: " ~ e.msg, ["info", "notify"]);
+					}
+				} else if (debugLogging) {
+					addLogEntry("Skipping stale local directory-create observation because the path no longer exists as a directory: " ~ change.src, ["debug"]);
+				}
+				break;
+
+			case LocalChangeType.deleted:
+				if (exists(change.src)) {
+					if (debugLogging) {addLogEntry("Skipping stale local delete observation because the path exists again: " ~ change.src, ["debug"]);}
+					break;
+				}
+				if (verboseLogging) {addLogEntry("[M] Local item deleted: " ~ change.src, ["verbose"]);}
+				try {
+					addLogEntry("The operating system sent a deletion notification. Trying to delete this item as requested: " ~ change.src);
+					syncEngineInstance.deleteByPath(change.src);
+				} catch (CurlException e) {
+					if (verboseLogging) {addLogEntry("Offline, cannot delete item: " ~ change.src, ["verbose"]);}
+				} catch (SyncException e) {
+					if (e.msg == "The item to delete is not in the local database") {
+						if (verboseLogging) {addLogEntry("Item cannot be deleted from Microsoft OneDrive because it was not found in the local database", ["verbose"]);}
+					} else {
+						addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
+					}
+				} catch (FileException e) {
+					addLogEntry("ERROR: The local file system returned an error with the following message: " ~ e.msg, ["verbose"]);
+				} catch (Exception e) {
+					addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
+				}
+				break;
+
+			case LocalChangeType.moved:
+				if (!exists(change.dst)) {
+					if (debugLogging) {addLogEntry("Skipping stale local move observation because the destination no longer exists: " ~ change.src ~ " -> " ~ change.dst, ["debug"]);}
+					break;
+				}
+				if (verboseLogging) {addLogEntry("[M] Local item moved: " ~ change.src ~ " -> " ~ change.dst, ["verbose"]);}
+				try {
+					if ((appConfig.getValueBool("skip_dotfiles")) && (isDotFile(change.src))) {
+						syncEngineInstance.scanLocalFilesystemPathForNewData(change.dst);
+					} else {
+						syncEngineInstance.uploadMoveItem(change.src, change.dst);
+					}
+				} catch (CurlException e) {
+					if (verboseLogging) {addLogEntry("Offline, cannot move item !", ["verbose"]);}
+				} catch (Exception e) {
+					addLogEntry("Cannot move item: " ~ e.msg, ["info", "notify"]);
+				}
+				break;
+
+			default:
+				break;
+		}
+	}
+
+	if (!changedLocalFilesToUploadToOneDrive.empty) {
+		syncEngineInstance.handleLocalFileTrigger(changedLocalFilesToUploadToOneDrive);
+		if (verboseLogging) {addLogEntry("[M] Total number of local file(s) added or changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length), ["verbose"]);}
+	}
+}
+
+void captureAndApplyInotifyEvents(string invocationSource) {
+	captureInotifyEvents(invocationSource);
+	filesystemMonitor.clearExpectedEvents(invocationSource);
+	applyPendingLocalChanges(invocationSource);
+}
+
+// Complete an online-to-local application cycle using the same observation
+// semantics as every other monitor trigger. There is no queue-wide discard mode.
+void completeRemoteApplyInotifyEvents(string invocationSource) {
+	captureAndApplyInotifyEvents(invocationSource);
 }
 
 // Display the sync outcome
@@ -1969,13 +2154,48 @@ void checkForNoMountScenario() {
 
 // Setup a signal handler for catching SIGINT, SIGTERM and SIGSEGV (CTRL-C and others) during application execution
 void setupSignalHandler() {
-	sigaction_t action;
+	sigaction_t action = sigaction_t.init;
 	action.sa_handler = &exitViaSignalHandler; // Direct function pointer assignment
 	sigemptyset(&action.sa_mask); // Initialize the signal set to empty
 	action.sa_flags = 0;
 	sigaction(SIGINT, &action, null);  // Interrupt from keyboard
 	sigaction(SIGTERM, &action, null); // Termination signal
-	sigaction(SIGSEGV, &action, null); // Invalid Memory Access signal
+
+	version (OpenBSD) {
+		// Use SA_SIGINFO for SIGSEGV on OpenBSD so the crash handler can print the
+		// original faulting address and interrupted RIP/RSP/RBP before re-raising.
+		sigaction_t fatalAction = sigaction_t.init;
+		fatalAction.sa_handler = cast(typeof(fatalAction.sa_handler)) &exitViaFatalSignalHandler;
+		sigemptyset(&fatalAction.sa_mask);
+		fatalAction.sa_flags = OPENBSD_SA_SIGINFO;
+		sigaction(SIGSEGV, &fatalAction, null); // Invalid Memory Access signal
+	} else {
+		sigaction(SIGSEGV, &action, null); // Invalid Memory Access signal
+	}
+}
+
+// Catch fatal signals using SA_SIGINFO where available so that the original
+// interrupted context is printed before the signal is re-raised for core handling.
+extern(C) nothrow @nogc @system void exitViaFatalSignalHandler(int signo, void* siginfo, void* context) {
+	enum segvMsg = "
+FATAL: Segmentation fault (SIGSEGV). The application encountered an internal error and will now exit in an unclean manner.
+";
+
+	// Update global exitHandlerTriggered flag so that objects that depend on this know we are shutting down
+	exitHandlerTriggered = true;
+	performFileSystemMonitoring = false;
+	terminationSignal = signo;
+
+	if (signo == SIGSEGV) {
+		requestedExitCode = 139;
+	} else {
+		requestedExitCode = 128 + signo;
+	}
+
+	write(STDERR_FILENO, segvMsg.ptr, segvMsg.length);
+	writeFatalSignalContextToStderr(signo, siginfo, context);
+	writeSignalStackTraceToStderr();
+	reraiseFatalSignal(signo, requestedExitCode);
 }
 
 // Catch SIGINT (CTRL-C), SIGTERM (kill) and SIGSEGV (invalid memory access), handle rapid repeat CTRL-C presses
@@ -2012,7 +2232,9 @@ FATAL: Segmentation fault (SIGSEGV). The application encountered an internal err
 	if (signo == SIGSEGV) {
 		requestedExitCode = 139;
 		write(STDERR_FILENO, segvMsg.ptr, segvMsg.length);
-		_exit(requestedExitCode);
+		writeFatalSignalContextToStderr(signo, null, null);
+		writeSignalStackTraceToStderr();
+		reraiseFatalSignal(signo, requestedExitCode);
 	}
 
 	if (shutdownInProgress) {
@@ -2027,6 +2249,173 @@ FATAL: Segmentation fault (SIGSEGV). The application encountered an internal err
 	if (fileTransferInProgress) {
 		write(STDERR_FILENO, inflightTransferMsg.ptr, inflightTransferMsg.length);
 	}
+}
+
+// Emit the original fatal signal context where the platform provides it.
+// This intentionally avoids D formatting/allocation and uses write() only.
+nothrow @nogc @system void writeFatalSignalContextToStderr(int signo, void* siginfo, void* context) {
+	enum contextHeader = "\nFatal signal context:\n";
+	enum contextUnavailable = "  interrupted context: unavailable\n";
+
+	write(STDERR_FILENO, contextHeader.ptr, contextHeader.length);
+	writeUnsignedDecimalToStderr("  signal: ", cast(ulong)signo);
+
+	if (siginfo !is null) {
+		version (OpenBSD) {
+			OpenBSDSigInfoFault* openbsdSigInfo = cast(OpenBSDSigInfoFault*)siginfo;
+			writeSignedDecimalToStderr("  si_code: ", openbsdSigInfo.si_code);
+			writeSignedDecimalToStderr("  si_errno: ", openbsdSigInfo.si_errno);
+			writeHexValueToStderr("  fault address (si_addr): ", cast(ulong)cast(size_t)openbsdSigInfo._data._fault._addr);
+			writeSignedDecimalToStderr("  trap number: ", openbsdSigInfo._data._fault._trapno);
+		} else {
+			writeHexValueToStderr("  siginfo pointer: ", cast(ulong)cast(size_t)siginfo);
+		}
+	} else {
+		enum siginfoUnavailable = "  siginfo: unavailable\n";
+		write(STDERR_FILENO, siginfoUnavailable.ptr, siginfoUnavailable.length);
+	}
+
+	if (context !is null) {
+		version (OpenBSD) {
+			OpenBSDSigContext* openbsdContext = cast(OpenBSDSigContext*)context;
+			writeHexValueToStderr("  interrupted RIP: ", cast(ulong)openbsdContext.sc_rip);
+			writeHexValueToStderr("  interrupted RSP: ", cast(ulong)openbsdContext.sc_rsp);
+			writeHexValueToStderr("  interrupted RBP: ", cast(ulong)openbsdContext.sc_rbp);
+			writeHexValueToStderr("  interrupted RAX: ", cast(ulong)openbsdContext.sc_rax);
+			writeHexValueToStderr("  interrupted RBX: ", cast(ulong)openbsdContext.sc_rbx);
+			writeHexValueToStderr("  interrupted RCX: ", cast(ulong)openbsdContext.sc_rcx);
+			writeHexValueToStderr("  interrupted RDX: ", cast(ulong)openbsdContext.sc_rdx);
+			writeHexValueToStderr("  trap error: ", cast(ulong)openbsdContext.sc_err);
+			writeHexValueToStderr("  rflags: ", cast(ulong)openbsdContext.sc_rflags);
+		} else {
+			writeHexValueToStderr("  context pointer: ", cast(ulong)cast(size_t)context);
+		}
+	} else {
+		write(STDERR_FILENO, contextUnavailable.ptr, contextUnavailable.length);
+	}
+}
+
+nothrow @nogc @system void writeUnsignedDecimalToStderr(const(char)[] label, ulong value) {
+	char[32] buffer;
+	size_t pos = buffer.length;
+
+	buffer[--pos] = '\n';
+
+	do {
+		buffer[--pos] = cast(char)('0' + (value % 10));
+		value /= 10;
+	} while (value != 0);
+
+	write(STDERR_FILENO, label.ptr, label.length);
+	write(STDERR_FILENO, buffer.ptr + pos, buffer.length - pos);
+}
+
+nothrow @nogc @system void writeSignedDecimalToStderr(const(char)[] label, long value) {
+	if (value < 0) {
+		enum minus = "-";
+		write(STDERR_FILENO, label.ptr, label.length);
+		write(STDERR_FILENO, minus.ptr, minus.length);
+		writeUnsignedDecimalRawToStderr(cast(ulong)(-value));
+	} else {
+		writeUnsignedDecimalToStderr(label, cast(ulong)value);
+	}
+}
+
+nothrow @nogc @system void writeUnsignedDecimalRawToStderr(ulong value) {
+	char[32] buffer;
+	size_t pos = buffer.length;
+
+	buffer[--pos] = '\n';
+
+	do {
+		buffer[--pos] = cast(char)('0' + (value % 10));
+		value /= 10;
+	} while (value != 0);
+
+	write(STDERR_FILENO, buffer.ptr + pos, buffer.length - pos);
+}
+
+nothrow @nogc @system void writeHexValueToStderr(const(char)[] label, ulong value) {
+	enum hexDigits = "0123456789abcdef";
+	char[2 + (ulong.sizeof * 2) + 1] buffer;
+	size_t pos = 0;
+	uint shift = cast(uint)((ulong.sizeof * 8) - 4);
+	bool started = false;
+
+	buffer[pos++] = '0';
+	buffer[pos++] = 'x';
+
+	while (true) {
+		ubyte nibble = cast(ubyte)((value >> shift) & 0x0f);
+		if (nibble != 0 || started || shift == 0) {
+			buffer[pos++] = hexDigits[nibble];
+			started = true;
+		}
+
+		if (shift == 0) {
+			break;
+		}
+
+		shift -= 4;
+	}
+
+	buffer[pos++] = '\n';
+
+	write(STDERR_FILENO, label.ptr, label.length);
+	write(STDERR_FILENO, buffer.ptr, pos);
+}
+
+// Emit a best-effort native stack trace from a fatal signal handler.
+// Keep this function async-signal-oriented: no D allocation, no formatting, no logging framework.
+extern(C) nothrow @nogc @system void writeSignalStackTraceToStderr() {
+	enum stackTraceHeader = "\nNative stack trace for fatal signal:\n";
+	enum stackTraceUnavailable = "Native stack trace unavailable on this platform/build.\n";
+	enum stackTraceEmpty = "Native stack trace returned no frames.\n";
+	enum stackTraceFooter = "End native stack trace. Re-raising SIGSEGV to preserve core dump/default crash handling.\n";
+
+	write(STDERR_FILENO, stackTraceHeader.ptr, stackTraceHeader.length);
+
+	version (OpenBSD) {
+		void*[128] addrlist;
+		size_t frames = backtrace(addrlist.ptr, addrlist.length);
+		if (frames > 0) {
+			backtrace_symbols_fd(addrlist.ptr, frames, STDERR_FILENO);
+		} else {
+			write(STDERR_FILENO, stackTraceEmpty.ptr, stackTraceEmpty.length);
+		}
+	} else version (linux) {
+		version (CRuntime_Glibc) {
+			void*[128] addrlist;
+			int frames = backtrace(addrlist.ptr, cast(int)addrlist.length);
+			if (frames > 0) {
+				backtrace_symbols_fd(addrlist.ptr, frames, STDERR_FILENO);
+			} else {
+				write(STDERR_FILENO, stackTraceEmpty.ptr, stackTraceEmpty.length);
+			}
+		} else {
+			write(STDERR_FILENO, stackTraceUnavailable.ptr, stackTraceUnavailable.length);
+		}
+	} else {
+		write(STDERR_FILENO, stackTraceUnavailable.ptr, stackTraceUnavailable.length);
+	}
+
+	write(STDERR_FILENO, stackTraceFooter.ptr, stackTraceFooter.length);
+}
+
+// Restore default handling for the fatal signal and re-raise it so the OS can produce
+// the usual crash artefacts, such as a core file, after our diagnostic output.
+extern(C) nothrow @nogc @system void reraiseFatalSignal(int signo, int exitCode) {
+	sigaction_t defaultAction;
+	sigemptyset(&defaultAction.sa_mask);
+	defaultAction.sa_handler = SIG_DFL;
+	defaultAction.sa_flags = 0;
+
+	if (sigaction(signo, &defaultAction, null) == 0) {
+		kill(getpid(), signo);
+	}
+
+	// If restoring or re-raising fails for any reason, still terminate with the expected code.
+	_exit(exitCode);
 }
 
 bool shutdownRequested() {
@@ -2131,9 +2520,13 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 		// Perform cleanup and shutdown of various services and resources
 		try {
 			// Log who called this function
-			if (debugLogging && loggingStillInitialised() && loggingActive()) {addLogEntry("performSynchronisedExitProcess called by: " ~ caller, ["debug"]);}
+			if (debugLogging && loggingStillInitialised() && loggingActive()) {
+				addLogEntry("performSynchronisedExitProcess called by: " ~ caller, ["debug"]);
+			}
+
 			addShutdownTelemetry("performSynchronisedExitProcess entered by scope: " ~ caller);
 			addShutdownTelemetry("planned final exit code: " ~ to!string(requestedExitCode) ~ ", termination signal: " ~ to!string(terminationSignal));
+
 			// Remove Desktop integration
 			if (performFileSystemMonitoring && appConfig !is null) {
 				// Was desktop integration enabled?
@@ -2145,20 +2538,28 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			
 			// Shutdown the OneDrive Webhook instance
 			shutdownOneDriveWebhook();
+
 			// Shutdown the OneDrive WebSocket instance
 			shutdownOneDriveSocketIo();
+
 			// Shutdown any local filesystem monitoring
 			shutdownFilesystemMonitor();
+
 			// Shutdown the sync engine
 			shutdownSyncEngine();
+
 			// Release all CurlEngine instances
 			releaseAllCurlInstances();
+
 			// Shutdown the client side filtering objects
 			shutdownSelectiveSync();
+
 			// Shutdown the database
 			shutdownDatabase();
+
 			// Shutdown the application configuration objects - nothing should be active now
 			shutdownAppConfig();
+
 			// Shutdown application logging
 			shutdownApplicationLogging();
 		} catch (Exception e) {
