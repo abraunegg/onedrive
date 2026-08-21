@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import sys
 from pathlib import Path
@@ -64,9 +65,28 @@ def _failure_reasons(cases: dict[str, dict[str, Any]]) -> list[str]:
     return reasons
 
 
-def _write_gate(path: Path, payload: dict[str, Any]) -> None:
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+
+
+def _build_effective_results(
+    primary: dict[str, Any],
+    debug_cases: dict[str, dict[str, Any]],
+    recovered_case_ids: set[str],
+) -> dict[str, Any]:
+    effective = copy.deepcopy(primary)
+    effective_cases: list[dict[str, Any]] = []
+
+    for primary_case in primary.get("cases", []) or []:
+        case_id = _case_key(primary_case.get("id"))
+        if case_id in recovered_case_ids:
+            effective_cases.append(copy.deepcopy(debug_cases[case_id]))
+        else:
+            effective_cases.append(copy.deepcopy(primary_case))
+
+    effective["cases"] = effective_cases
+    return effective
 
 
 def main() -> int:
@@ -92,7 +112,7 @@ def main() -> int:
             "debug_results": str(debug_path),
             "effective_results": None,
         }
-        _write_gate(gate_path, payload)
+        _write_json(gate_path, payload)
         print(payload["reason"])
         return 1
 
@@ -109,7 +129,7 @@ def main() -> int:
             "debug_failed_case_ids": [],
             "unrecovered_case_ids": [],
         }
-        _write_gate(gate_path, payload)
+        _write_json(gate_path, payload)
         print(payload["reason"])
         return 0
 
@@ -133,7 +153,7 @@ def main() -> int:
             "non_rerunnable_case_ids": sorted(non_rerunnable_failures),
             "non_rerunnable_reasons": reason_lines,
         }
-        _write_gate(gate_path, payload)
+        _write_json(gate_path, payload)
         print(payload["reason"])
         for line in reason_lines:
             print(line)
@@ -151,7 +171,7 @@ def main() -> int:
             "debug_failed_case_ids": [],
             "unrecovered_case_ids": sorted(primary_failures),
         }
-        _write_gate(gate_path, payload)
+        _write_json(gate_path, payload)
         print(payload["reason"])
         return 1
 
@@ -175,10 +195,15 @@ def main() -> int:
             "debug_failed_case_ids": sorted(debug_failures),
             "unrecovered_case_ids": unrecovered,
         }
-        _write_gate(gate_path, payload)
+        _write_json(gate_path, payload)
         print(payload["reason"])
         print("Unrecovered case ids:", ",".join(unrecovered))
         return 1
+
+    recovered_case_ids = set(primary_failures)
+    effective_path = gate_path.with_name("effective-results.json")
+    effective_results = _build_effective_results(primary, debug_cases, recovered_case_ids)
+    _write_json(effective_path, effective_results)
 
     payload = {
         "conclusion": "success",
@@ -186,12 +211,12 @@ def main() -> int:
         "reason": "Primary E2E run failed, but all failed cases passed during debug rerun",
         "primary_results": str(primary_path),
         "debug_results": str(debug_path),
-        "effective_results": str(debug_path),
+        "effective_results": str(effective_path),
         "primary_failed_case_ids": sorted(primary_failures),
         "debug_failed_case_ids": sorted(debug_failures),
         "unrecovered_case_ids": [],
     }
-    _write_gate(gate_path, payload)
+    _write_json(gate_path, payload)
     print(payload["reason"])
     print("Recovered case ids:", ",".join(sorted(primary_failures)))
     return 0

@@ -362,8 +362,8 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                 source_path.rename(destination_path)
 
                 per_file_required_patterns = [
-                    f"[M] Local item moved: {source_relative} -> {destination_relative}",
-                    f"Moving {source_relative} to {destination_relative}",
+                    f"[M] Local item moved: ./{source_relative} -> ./{destination_relative}",
+                    f"Moving ./{source_relative} to ./{destination_relative}",
                 ]
                 required_move_patterns.extend(per_file_required_patterns)
 

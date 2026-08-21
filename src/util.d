@@ -36,6 +36,7 @@ import std.socket;
 import std.stdio;
 import std.string;
 import std.traits;
+import std.typecons : Yes;
 import std.uri;
 import std.utf;
 
@@ -51,8 +52,6 @@ __gshared string deviceName;
 __gshared bool exitHandlerTriggered = false;
 // Global flag to indicate file transfers are occurring
 __gshared bool fileTransferInProgress = false;
-// Global variable for when we last uploaded something or made an online change from a local inotify event
-__gshared MonoTime lastLocalWrite;
 
 // util module variable
 ulong previousRSS;
@@ -80,10 +79,111 @@ enum FsErrorSeverity {
 	permission
 }
 
+// Find an already-published safeBackup from this device whose bytes still match
+// the supplied canonical file. Replacement workflows can reuse that preservation
+// rather than generating another numbered copy after a retry or later reconciliation.
+bool findMatchingSafeBackup(const(char)[] path, out string matchingBackupPath) {
+	matchingBackupPath = null;
+	if (!exists(path)) return false;
+
+	const string spath = to!string(path);
+	const string ext = extension(spath);
+	const size_t stemLen = spath.length >= ext.length ? spath.length - ext.length : spath.length;
+	string stem = spath[0 .. stemLen];
+	string tag = "-" ~ deviceName ~ "-safeBackup-";
+	string baseStem = stem;
+
+	// Mirror safeBackup() naming when the input is itself one of this device's
+	// safeBackup files, so we search the same numbered family.
+	if (stem.length >= tag.length + 4) {
+		auto last4 = stem[$ - 4 .. $];
+		auto tagSpan = stem[$ - (tag.length + 4) .. $ - 4];
+		bool fourDigits = true;
+		foreach (c; last4) {
+			if (!c.isDigit) { fourDigits = false; break; }
+		}
+		if (fourDigits && tagSpan == tag) {
+			baseStem = stem[0 .. $ - (tag.length + 4)];
+		}
+	}
+
+	ulong canonicalSize;
+	SysTime canonicalModifiedTime;
+	uint canonicalAttributes;
+	try {
+		canonicalSize = getSize(spath);
+		canonicalModifiedTime = timeLastModified(spath);
+		canonicalAttributes = getAttributes(spath);
+	} catch (FileException e) {
+		if (debugLogging) {
+			addLogEntry("Unable to inspect canonical file while checking existing safeBackup files for " ~ spath ~ ": " ~ e.msg, ["debug"]);
+		}
+		return false;
+	}
+
+	string parentPath = dirName(spath);
+	string expectedPrefix = baseName(baseStem) ~ tag;
+	string[] candidatePaths;
+	try {
+		foreach (entry; dirEntries(parentPath, SpanMode.shallow)) {
+			if (!entry.isFile) continue;
+			string entryName = baseName(entry.name);
+			if (!entryName.startsWith(expectedPrefix) || !entryName.endsWith(ext)) continue;
+
+			size_t suffixEnd = entryName.length - ext.length;
+			if (suffixEnd != expectedPrefix.length + 4) continue;
+			auto digits = entryName[expectedPrefix.length .. suffixEnd];
+			bool fourDigits = true;
+			foreach (c; digits) {
+				if (!c.isDigit) { fourDigits = false; break; }
+			}
+			if (!fourDigits) continue;
+
+			string candidatePath = entry.name;
+			// dirEntries() can return a path with a different textual prefix (for
+			// example "./file") than the input. Because this scan is restricted to
+			// one parent directory, matching basenames identify the same entry.
+			if (entryName == baseName(spath)) continue;
+			if (getSize(candidatePath) != canonicalSize) continue;
+			if (timeLastModified(candidatePath) != canonicalModifiedTime) continue;
+			if (getAttributes(candidatePath) != canonicalAttributes) continue;
+			candidatePaths ~= candidatePath;
+		}
+	} catch (FileException e) {
+		if (debugLogging) {
+			addLogEntry("Unable to inspect existing safeBackup files for " ~ spath ~ ": " ~ e.msg, ["debug"]);
+		}
+		return false;
+	}
+
+	// Avoid hashing the canonical file at all when there is no plausible
+	// same-device safeBackup to reuse. This is the common first-preservation path.
+	if (candidatePaths.empty) return false;
+
+	string canonicalHash = computeQuickXorHash(spath);
+	if (canonicalHash.empty) return false;
+
+	// The four-digit counter is zero-padded, so descending lexical order checks
+	// the most recently numbered backup first. This avoids hashing a long history
+	// of large backups on the common retry path.
+	sort!("a > b")(candidatePaths);
+	foreach (candidatePath; candidatePaths) {
+		if (computeQuickXorHash(candidatePath) != canonicalHash) continue;
+
+		// Recheck the source after hashing the candidate. If it changed during
+		// this comparison, do not reuse a stale preservation snapshot.
+		if (computeQuickXorHash(spath) != canonicalHash) return false;
+		matchingBackupPath = candidatePath;
+		return true;
+	}
+
+	return false;
+}
+
 // Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario.
 // If the path already ends with "-<deviceName>-safeBackup-####", the counter is incremented
 // instead of appending another "-<deviceName>-safeBackup-".
-void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, out string renamedPath) {
+void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, out string renamedPath, bool retainOriginalPath = false, bool allowHardLinkPreservation = true) {
 	// Ensure this is currently null
 	renamedPath = null;
 	bool isDirectory = false;
@@ -111,14 +211,14 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 	// Is the input path a folder|directory? These should never be renamed
 	if (isDirectory) {
 		if (verboseLogging) {
-			addLogEntry("Renaming request of local directory is being ignored: " ~ to!string(path), ["verbose"]);
+			addLogEntry("safeBackup request of local directory is being ignored: " ~ to!string(path), ["verbose"]);
 		}
 		return;
 	}
 	
 	// Has the user configured to IGNORE local data protection rules?
 	if (bypassDataPreservation) {
-		addLogEntry("WARNING: Local Data Protection has been disabled - not renaming local file. You may experience data loss on this file: " ~ to!string(path), ["info", "notify"]);
+		addLogEntry("WARNING: Local Data Protection has been disabled - not creating a safeBackup. You may experience data loss on this file: " ~ to!string(path), ["info", "notify"]);
 		return;
 	}
 	
@@ -154,13 +254,17 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 		}
 	}
 
-	// Find the first available name, capped at 1000 attempts
+	// Find the first available name, capped at 1000 attempts. Replacement
+	// preservation reserves a filtered .partial staging name for the verified-copy
+	// fallback so an interrupted fallback cannot look like a valid safeBackup.
 	int n = startN;
 	string candidate;
+	string copyStagingPath;
 
 	while (n <= 1000) {
 		candidate = baseStem ~ tag ~ format("%04d", n) ~ ext;
-		if (!exists(candidate)) break;
+		copyStagingPath = candidate ~ ".partial";
+		if (!exists(candidate) && (!retainOriginalPath || !exists(copyStagingPath))) break;
 		++n;
 	}
 
@@ -172,22 +276,91 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 
 	// Log intent
 	if (verboseLogging) {
-		addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ spath ~ " -> " ~ candidate, ["verbose"]);
+		string preservationAction = retainOriginalPath ? "preserving" : "renaming";
+		addLogEntry("The local item is out-of-sync with OneDrive, " ~ preservationAction ~ " to preserve existing file and prevent local data loss: " ~ spath ~ " -> " ~ candidate, ["verbose"]);
 	}
 
-	// Perform (or simulate) the rename
+	// Perform (or simulate) the preservation operation. The one deliberate
+	// remote-delete preservation path retains the historical rename behaviour.
+	// Replacement/conflict workflows keep the canonical pathname present.
 	if (!dryRun) {
-		// Not a --dry-run scenario - attempt the file rename to create a safe backup
-		// Use safeRename()
-		if (safeRename(spath, candidate, dryRun)) {
-			renamedPath = candidate;
+		if (retainOriginalPath) {
+			if (allowHardLinkPreservation) {
+				// Prefer a POSIX hard link when the canonical pathname is about to be
+				// atomically displaced. The safeBackup is created in the same directory as
+				// the canonical file, so this preserves the exact existing inode and its
+				// metadata without copying file data or requiring another file's worth of
+				// free space. If the filesystem refuses hard links, fall back to the
+				// verified independent-copy path below.
+				if (link(spath.toStringz, candidate.toStringz) == 0) {
+					renamedPath = candidate;
+					if (debugLogging) {
+						addLogEntry("Created local safeBackup using POSIX hard-link preservation: " ~ spath ~ " -> " ~ candidate, ["debug"]);
+					}
+					return;
+				}
+
+				// link() is atomic with respect to creation of the destination entry. If
+				// another actor created the selected name after our availability check, do
+				// not let the copy fallback overwrite it. A later reconciliation can select
+				// the next numbered safeBackup safely.
+				if (exists(candidate) || exists(copyStagingPath)) {
+					addLogEntry("Creating local safeBackup failed because the selected backup path became occupied: " ~ candidate, ["error"]);
+					return;
+				}
+
+				if (debugLogging) {
+					addLogEntry("POSIX hard-link preservation was unavailable; falling back to a verified safeBackup copy: " ~ spath ~ " -> " ~ candidate, ["debug"]);
+				}
+			} else if (debugLogging) {
+				// Upload-conflict preservation must be an independent snapshot. Leaving
+				// canonical and safeBackup hard-linked while one copy is uploaded (or while
+				// --upload-only keeps both paths) would allow later edits to mutate both.
+				addLogEntry("Creating an independent verified safeBackup copy because this preservation must remain stable while the canonical file remains active: " ~ spath, ["debug"]);
+			}
+
+			try {
+				// Keep the canonical file in place while creating the fallback copy.
+				// Write to a filtered staging name first so a process interruption can
+				// never leave incomplete bytes carrying a valid-looking safeBackup name.
+				std.file.copy(spath, copyStagingPath, Yes.preserveAttributes);
+
+				// A source file can be edited while a large copy is in progress. Verify
+				// that the completed staging copy still represents the current canonical
+				// bytes; otherwise abort preservation rather than publishing a torn backup.
+				string stagedHash = computeQuickXorHash(copyStagingPath);
+				string canonicalHash = computeQuickXorHash(spath);
+				if (stagedHash.empty || canonicalHash.empty || (stagedHash != canonicalHash)) {
+					safeRemove(copyStagingPath);
+					addLogEntry("Creating local safeBackup copy aborted because the canonical file changed while it was being preserved: " ~ spath, ["error", "notify"]);
+					return;
+				}
+
+				// Publish the verified backup name only after the fallback copy is complete.
+				if (safeRename(copyStagingPath, candidate, false)) {
+					renamedPath = candidate;
+				} else {
+					safeRemove(copyStagingPath);
+					addLogEntry("Publishing local safeBackup copy failed for " ~ spath ~ " -> " ~ candidate, ["error"]);
+				}
+			} catch (FileException e) {
+				// Never leave an incomplete staging artifact after a handled failure.
+				safeRemove(copyStagingPath);
+				displayFileSystemErrorMessage(e.msg, format("%s.%s", strip(__MODULE__), strip(getFunctionName!({}))), "sourcePath=" ~ spath ~ " backupPath=" ~ candidate);
+				addLogEntry("Creating local safeBackup copy failed for " ~ spath ~ " -> " ~ candidate, ["error"]);
+			}
 		} else {
-			// Failed to rename using safeRename()
-			addLogEntry("Renaming of local file failed for " ~ spath ~ " -> " ~ candidate, ["error"]);
+			// Historical behaviour: rename the local file to create the safe backup.
+			if (safeRename(spath, candidate, dryRun)) {
+				renamedPath = candidate;
+			} else {
+				addLogEntry("Renaming of local file failed for " ~ spath ~ " -> " ~ candidate, ["error"]);
+			}
 		}
 	} else {
 		if (debugLogging) {
-			addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ spath ~ " -> " ~ candidate, ["debug"]);
+			string dryRunAction = retainOriginalPath ? "preserving" : "renaming";
+			addLogEntry("DRY-RUN: Skipping " ~ dryRunAction ~ " local file to preserve existing file and prevent data loss: " ~ spath ~ " -> " ~ candidate, ["debug"]);
 		}
 	}
 }
@@ -523,7 +696,7 @@ Regex!char wild2regex(const(char)[] pattern) {
 			break;
 		case ' ':
 			str ~= "\\s";  // Changed to match exactly one whitespace. Was:   str ~= "\\s+";
-			break;  
+			break;
 		case '/':
 			str ~= "\\/";
 			break;
@@ -1780,7 +1953,7 @@ bool isDotFile(const(string) path) {
 
 	// Extract the last component of the path
 	auto paths = pathSplitter(buildNormalizedPath(path));
-	
+
 	// Optimised way to fetch the last component
 	string lastComponent = paths.empty ? "" : paths.back;
 
@@ -2387,7 +2560,7 @@ ulong getRSSOpenBSD(pid_t pid) {
 	if (pid <= 0) {
 		return 0;
 	}
-	
+
 	version (OpenBSD) {
 		enum CTL_KERN = 1;
 		enum KERN_PROC = 66;
@@ -2396,7 +2569,7 @@ ulong getRSSOpenBSD(pid_t pid) {
 		enum KI_MAXCOMLEN = 24;
 		enum KI_WMESGLEN = 8;
 		enum KI_MAXLOGNAME = 32;
-		
+
 		// DRuntime does not expose OpenBSD's sys/sysctl.h kinfo_proc binding.
 		// Define only the stable kinfo_proc prefix required to reach p_vm_rssize.
 		extern(C) struct OpenBSDKinfoProcRSSPrefix {
@@ -2458,7 +2631,7 @@ ulong getRSSOpenBSD(pid_t pid) {
 			char[KI_MAXLOGNAME] p_login;
 			int p_vm_rssize;
 		}
-		
+
 		int[6] mib = [
 			CTL_KERN,
 			KERN_PROC,
@@ -2467,36 +2640,36 @@ ulong getRSSOpenBSD(pid_t pid) {
 			cast(int) OpenBSDKinfoProcRSSPrefix.sizeof,
 			1
 		];
-		
+
 		size_t processInfoLength;
 		if (sysctl(mib.ptr, cast(uint) mib.length, null, &processInfoLength, null, 0) != 0) {
 			addLogEntry("Failed to determine OpenBSD process RSS buffer size via sysctl for PID: " ~ to!string(pid));
 			return 0;
 		}
-		
+
 		if (processInfoLength < OpenBSDKinfoProcRSSPrefix.sizeof) {
 			addLogEntry("Failed to query OpenBSD process RSS via sysctl: returned process information is too small for PID: " ~ to!string(pid));
 			return 0;
 		}
-		
+
 		auto processInfo = new ubyte[](processInfoLength);
 		if (sysctl(mib.ptr, cast(uint) mib.length, processInfo.ptr, &processInfoLength, null, 0) != 0) {
 			addLogEntry("Failed to query OpenBSD process RSS via sysctl for PID: " ~ to!string(pid));
 			return 0;
 		}
-		
+
 		if (processInfoLength < OpenBSDKinfoProcRSSPrefix.sizeof) {
 			addLogEntry("Failed to query OpenBSD process RSS via sysctl: incomplete process information returned for PID: " ~ to!string(pid));
 			return 0;
 		}
-		
+
 		auto processInfoPrefix = cast(OpenBSDKinfoProcRSSPrefix*) processInfo.ptr;
 		auto pageSize = sysconf(_SC_PAGESIZE);
 		if (pageSize <= 0) {
 			addLogEntry("Failed to determine system page size while calculating OpenBSD RSS");
 			return 0;
 		}
-		
+
 		// OpenBSD reports p_vm_rssize in pages.
 		return (cast(ulong) processInfoPrefix.p_vm_rssize * cast(ulong) pageSize) / 1024;
 	} else {
@@ -2555,7 +2728,7 @@ string getCurlVersionNumeric() {
 
 	// Extract the major, minor, and patch numbers from version_num
 	uint versionNum = curlVersionDetails.version_num;
-	
+
 	// The version number is in the format 0xXXYYZZ
 	uint major = (versionNum >> 16) & 0xFF; // Extract XX (major version)
 	uint minor = (versionNum >> 8) & 0xFF;  // Extract YY (minor version)
@@ -2581,7 +2754,7 @@ bool isBadCurlVersion(string curlVersion) {
 		"8.13.1",  // Has a SSL Certificate read issue fixed by 8.14.1
 		"8.14.0",  // Has a SSL Certificate read issue fixed by 8.14.1
 	];
-	
+
 	// Check if the current version matches one of the supported versions
 	return canFind(supportedVersions, curlVersion);
 }
@@ -2874,9 +3047,4 @@ string regexEscape(string s) {
 		b.put(c);
 	}
 	return b.data;
-}
-
-// Update lastLocalWrite to denote we just performed a local-originated write
-void markLocalWrite() {
-	lastLocalWrite = MonoTime.currTime();
 }
