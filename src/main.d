@@ -1205,7 +1205,9 @@ int main(string[] cliArgs) {
 			if (!appConfig.getValueBool("download_only")) {
 				// Not using --download-only
 				try {
-					addLogEntry("Initialising filesystem inotify monitoring ...", ["info", "notify"]);
+					// GUI notification of a successful monitor start can be disabled via 'notify_monitor_start'
+					string[] monitorStartLoggingOptions = appConfig.getValueBool("notify_monitor_start") ? ["info", "notify"] : ["info"];
+					addLogEntry("Initialising filesystem inotify monitoring ...", monitorStartLoggingOptions);
 					filesystemMonitor.initialise();
 					addLogEntry("Performing initial synchronisation to ensure consistent local state ...");
 				} catch (MonitorException e) {	
