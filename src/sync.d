@@ -1306,29 +1306,33 @@ class SyncEngine {
 		if (debugLogging) {addLogEntry("Cleaning up all internal arrays used when processing data", ["debug"]);}
 
 		// Multi Dimensional Arrays
-		idsToDelete.length = 0;
-		idsFaked.length = 0;
-		databaseItemsWhereContentHasChanged.length = 0;
+		// Set per-sync arrays to null so their backing allocations are no longer
+		// retained by this long-lived SyncEngine instance between monitor loops.
+		idsToDelete = null;
+		idsFaked = null;
+		databaseItemsWhereContentHasChanged = null;
 
 		// JSON Items Arrays
-		jsonItemsToProcess = [];
-		fileJSONItemsToDownload = [];
-		jsonItemsToResumeUpload = [];
-		jsonItemsToResumeDownload = [];
+		jsonItemsToProcess = null;
+		fileJSONItemsToDownload = null;
+		jsonItemsToResumeUpload = null;
+		jsonItemsToResumeDownload = null;
 
 		// String Arrays
-		fileDownloadFailures = [];
-		pathFakeDeletedArray = [];
-		pathsRenamed = [];
-		newLocalFilesToUploadToOneDrive = [];
-		fileUploadFailures = [];
-		posixViolationPaths = [];
-		businessSharedFoldersOnlineToSkip = [];
-		interruptedUploadsSessionFiles = [];
-		interruptedDownloadFiles = [];
-		pathsToCreateOnline = [];
-		databaseItemsToDeleteOnline = [];
-		pathsRetained = [];
+		fileDownloadFailures = null;
+		pathFakeDeletedArray = null;
+		pathsRenamed = null;
+		newLocalFilesToUploadToOneDrive = null;
+		fileUploadFailures = null;
+		posixViolationPaths = null;
+		businessSharedFoldersOnlineToSkip = null;
+		interruptedUploadsSessionFiles = null;
+		interruptedDownloadFiles = null;
+		pathsToCreateOnline = null;
+		databaseItemsToDeleteOnline = null;
+		pathsRetained = null;
+		syncListSkippedParentIds = null;
+		onenotePackageIdentifiers = null;
 
 		// Log completion of cleanup
 		if (debugLogging) {addLogEntry("Cleaning of internal arrays complete", ["debug"]);}
@@ -4637,12 +4641,6 @@ class SyncEngine {
 							downloadFailed = true;
 						}
 
-						// OneDrive API Instance Cleanup - Shutdown API and free curl object.
-						// Do not force GC collection here: downloadFileItem() runs once per file
-						// inside the parallel download worker pool, and forcing a full GC after
-						// every downloaded file causes repeated stop-the-world mark scans.
-						downloadFileOneDriveApiInstance.releaseCurlEngine();
-						downloadFileOneDriveApiInstance = null;
 					} catch (OneDriveException exception) {
 						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset, true); generated a OneDriveException", ["debug"]);}
 						
@@ -4672,6 +4670,15 @@ class SyncEngine {
 						displayFileSystemErrorMessage(e.msg, thisFunctionName, newItemPath, FsErrorSeverity.error);
 						if (verboseLogging) {addLogEntry("Download failed (local file system error): " ~ newItemPath, ["verbose"]);}
 						downloadFailed = true;
+					}
+
+					// OneDrive API Instance Cleanup - shutdown API and return the CurlEngine
+					// to the pool on both successful and handled-failure paths. Do not leave
+					// native HTTP ownership dependent on a later GC/finalizer cycle.
+					// Do not force GC here: this function runs once per downloaded file.
+					if (downloadFileOneDriveApiInstance !is null) {
+						downloadFileOneDriveApiInstance.releaseCurlEngine();
+						downloadFileOneDriveApiInstance = null;
 					}
 				
 					// Validate only when the requested online version was downloaded. A failed
@@ -7436,22 +7443,27 @@ class SyncEngine {
 						// Path is unwanted, flag to exclude
 						clientSideRuleExcludesPath = true;
 
-						// Has this itemId already been flagged as being skipped?
+						// Has this itemId already been flagged as being skipped during this sync?
 						if (!syncListSkippedParentIds.canFind(thisItemId)) {
+							bool skippedParentIdLogged = false;
+
 							if (isItemFolder(onedriveJSONItem)) {
 								// Detail we are skipping this JSON data from online
 								if (verboseLogging) {addLogEntry("Skipping path - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
-								// Add this folder id to the elements we have already detailed we are skipping, so we do no output this again
+								skippedParentIdLogged = true;
+							}
+
+							// Is this is a 'add shortcut to onedrive' link?
+							if (isItemRemote(onedriveJSONItem)) {
+								// Detail we are skipping this JSON data from online
+								if (verboseLogging) {addLogEntry("Skipping Shared Folder Link - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
+								skippedParentIdLogged = true;
+							}
+
+							// Track this identifier once so verbose output is not repeated.
+							if (skippedParentIdLogged) {
 								syncListSkippedParentIds ~= thisItemId;
 							}
-						}
-
-						// Is this is a 'add shortcut to onedrive' link?
-						if (isItemRemote(onedriveJSONItem)) {
-							// Detail we are skipping this JSON data from online
-							if (verboseLogging) {addLogEntry("Skipping Shared Folder Link - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
-							// Add this folder id to the elements we have already detailed we are skipping, so we do no output this again
-							syncListSkippedParentIds ~= thisItemId;
 						}
 					}
 				} else {
@@ -8388,6 +8400,8 @@ class SyncEngine {
 					} else {
 						displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
 					}
+					uploadFileOneDriveApiInstance.releaseCurlEngine();
+					uploadFileOneDriveApiInstance = null;
 					return uploadResponse;
 				}
 				SysTime onlineModifiedTime = currentOnlineItemData.mtime;
@@ -8410,6 +8424,8 @@ class SyncEngine {
 					// snapshot while keeping the canonical filename present, then upload it.
 					string backupPath;
 					if (!safeBackupPreserveForReplacement(localFilePath, false, backupPath, true)) {
+						uploadFileOneDriveApiInstance.releaseCurlEngine();
+						uploadFileOneDriveApiInstance = null;
 						return uploadResponse;
 					}
 					uploadNewFile(backupPath);
@@ -8426,6 +8442,8 @@ class SyncEngine {
 
 					// The original modified-file upload was intentionally not performed. Return
 					// its response after handling the newer-online conflict safely.
+					uploadFileOneDriveApiInstance.releaseCurlEngine();
+					uploadFileOneDriveApiInstance = null;
 					return uploadResponse;
 				}
 			}
@@ -8483,6 +8501,8 @@ class SyncEngine {
 					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
 						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
 						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
+						uploadFileOneDriveApiInstance.releaseCurlEngine();
+						uploadFileOneDriveApiInstance = null;
 						return uploadResponse;
 					}
 
@@ -8492,6 +8512,8 @@ class SyncEngine {
 						// The file is currently checked out or locked for editing by another user
 						// We cant upload this file at this time
 						addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
+						uploadFileOneDriveApiInstance.releaseCurlEngine();
+						uploadFileOneDriveApiInstance = null;
 						return uploadResponse;
 					} else {
 						// Handle all other HTTP status codes

@@ -173,6 +173,19 @@ private:
 		return interruptibleSleep(self, cast(long)seconds * 1000);
 	}
 
+	// Deterministically release the native libcurl handle before a WebSocket
+	// instance is replaced or the worker exits. Do not rely on a later GC cycle
+	// to run CurlWebSocket.~this() for native resource cleanup.
+	static void cleanupCurrentWebSocket(OneDriveSocketIo self, ushort closeCode, string reason) {
+		if (self.ws is null) return;
+
+		collectException(self.ws.close(closeCode, reason));
+		collectException(self.ws.cleanupCurlHandle());
+		logSocketIOOutput("Cleaned up an instance of a CurlWebSocket object via cleanupCurlHandle()");
+		object.destroy(self.ws);
+		self.ws = null;
+	}
+
 	// Main function that listens and sends events
 	static void run(shared OneDriveSocketIo _this) {
 		logSocketIOOutput("run() entered");
@@ -185,6 +198,9 @@ private:
 		bool online;
 		
 		scope(exit) {
+			// Ensure any final WebSocket instance is released by the worker that owns it.
+			cleanupCurrentWebSocket(self, 1000, "worker-exit");
+
 			// Signal that the worker is fully done (visible across threads)
 			atomicStore(self.workerExited, true);
 			
@@ -219,7 +235,9 @@ private:
 					self.currentNotifUrl = notif;
 					string wsUrl = toSocketIoWsUrl(notif);
 
-					// Fresh WS instance per attempt
+					// Fresh WS instance per attempt. Ensure a previous failed/retrying
+					// instance cannot retain its native libcurl handle.
+					cleanupCurrentWebSocket(self, 1001, "replace-stale");
 					self.ws = new CurlWebSocket();
 
 					// Use application configuration values
@@ -232,7 +250,7 @@ private:
 					auto rc = self.ws.connect(wsUrl);
 					if (rc != 0) {
 						logSocketIOOutput("self.ws.connect failed; will retry");
-						collectException(self.ws.close(1002, "connect-failed"));
+						cleanupCurrentWebSocket(self, 1002, "connect-failed");
 						if (!interruptibleBackoffSleep(self, backoffSeconds)) return;
 						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
@@ -241,7 +259,7 @@ private:
 					// Socket.IO handshake: wait for '0{json}'
 					if (!awaitEngineOpen(self.ws, self)) {
 						logSocketIOOutput("Socket.IO open handshake failed; will retry");
-						collectException(self.ws.close(1002, "handshake-failed"));
+						cleanupCurrentWebSocket(self, 1002, "handshake-failed");
 						if (!interruptibleBackoffSleep(self, backoffSeconds)) return;
 						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
@@ -251,7 +269,7 @@ private:
 					logSocketIOOutput("Sending Socket.IO connect (40) to default namespace");
 					if (self.ws.sendText("40") != 0) {
 						logSocketIOOutput("Failed to send 40 (open namespace); will retry");
-						collectException(self.ws.close(1002, "ns40-failed"));
+						cleanupCurrentWebSocket(self, 1002, "ns40-failed");
 						if (!interruptibleBackoffSleep(self, backoffSeconds)) return;
 						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
@@ -263,7 +281,7 @@ private:
 					logSocketIOOutput("Sending Socket.IO connect (40) to '/notifications' namespace");
 					if (self.ws.sendText("40/notifications") != 0) {
 						logSocketIOOutput("Failed to send 40 for '/notifications' namespace; will retry");
-						collectException(self.ws.close(1002, "ns40-failed"));
+						cleanupCurrentWebSocket(self, 1002, "ns40-failed");
 						if (!interruptibleBackoffSleep(self, backoffSeconds)) return;
 						if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
 						continue;
@@ -285,9 +303,7 @@ private:
 						// Stop request
 						if (stopRequested(self)) {
 							logSocketIOOutput("Stop requested; shutting down run() loop");
-							collectException(self.ws.close(1000, "stop-requested"));
-							collectException(self.ws.cleanupCurlHandle());
-							logSocketIOOutput("Cleaned up an instance of a CurlWebSocket object via cleanupCurlHandle()");
+							cleanupCurrentWebSocket(self, 1000, "stop-requested");
 							return;
 						}
 
@@ -317,9 +333,7 @@ private:
 							self.appConfig.websocketNotificationUrl != self.currentNotifUrl) {
 
 							logSocketIOOutput("Detected new notificationUrl; reconnecting");
-							collectException(self.ws.close(1000, "reconnect"));
-							collectException(self.ws.cleanupCurlHandle());
-							logSocketIOOutput("Cleaned up an instance of a CurlWebSocket object via cleanupCurlHandle()");
+							cleanupCurrentWebSocket(self, 1000, "reconnect");
 
 							// Establish a fresh connection and handshakes
 							self.currentNotifUrl = self.appConfig.websocketNotificationUrl;
@@ -426,7 +440,7 @@ private:
 
 					// Fell out of the inner loop → close and backoff, then retry
 					logSocketIOOutput("Retrying WebSocket Connection");
-					collectException(self.ws.close(1001, "reconnect"));
+					cleanupCurrentWebSocket(self, 1001, "reconnect");
 					logSocketIOOutput("Backoff " ~ to!string(backoffSeconds) ~ "s before retry");
 					if (!interruptibleBackoffSleep(self, backoffSeconds)) return;
 					if (backoffSeconds < maxBackoffSeconds) backoffSeconds *= 2;
@@ -434,14 +448,17 @@ private:
 			} catch (CurlException e) {
 				// Caught a CurlException
 				addLogEntry("Network error during socketio loop: " ~ e.msg ~ " (will retry)");
+				cleanupCurrentWebSocket(self, 1001, "exception");
 				if (!interruptibleSleep(self, 5000)) return;
 			} catch (SocketException e) {
 				// Caught a SocketException
 				addLogEntry("Socket error during socketio loop: " ~ e.msg ~ " (will retry)");
+				cleanupCurrentWebSocket(self, 1001, "exception");
 				if (!interruptibleSleep(self, 5000)) return;
 			} catch (Exception e) {
 				// Caught some other error
 				addLogEntry("Unexpected error during socketio loop: " ~ e.toString());
+				cleanupCurrentWebSocket(self, 1001, "exception");
 				if (!interruptibleSleep(self, 5000)) return;
 			}
 		}
