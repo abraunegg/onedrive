@@ -31,7 +31,7 @@ jobs:
         run: |
           dnf -y update
           dnf -y group install development-tools
-          dnf -y install python3 ldc libcurl-devel sqlite-devel dbus-devel jq
+          dnf -y install python3 ldc libcurl-devel sqlite-devel dbus-devel jq fuse3-devel
 
       - name: Build + local install prefix
         run: |
