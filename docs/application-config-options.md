@@ -29,6 +29,7 @@ Before reading this document, please ensure you are running application version 
   - [display_running_config](#display_running_config)
   - [display_transfer_metrics](#display_transfer_metrics)
   - [dns_timeout](#dns_timeout)
+  - [download_flagged_files](#download_flagged_files)
   - [download_only](#download_only)
   - [drive_id](#drive_id)
   - [dry_run](#dry_run)
@@ -152,6 +153,18 @@ _**Config Example:**_ `azure_tenant_id = "example.onmicrosoft.us"` or `azure_ten
 
 > [!NOTE]
 > This option is commonly used in Microsoft 365 Business, Enterprise, Education, Government, and other managed Microsoft Entra ID environments where authentication must be restricted to a specific tenant rather than using the multi-tenant `common` endpoint.
+
+### download_flagged_files
+_**Description:**_ This option allows the client to download files that Microsoft OneDrive has reported as malware. The client uses the Microsoft Graph beta `contentStream` endpoint with the `Prefer: forceInfectedDownload` request header only for items whose `malware` facet is present. Ordinary files continue to use the stable download endpoint.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `download_flagged_files = "false"` or `download_flagged_files = "true"`
+
+> [!IMPORTANT]
+> Due to Microsoft Graph API limitations, personal accounts are not applicable. Even for business accounts, if the tenant setting `DisallowInfectedFileDownload` is enabled, only tenant administrators or global administrators might download the file.
 
 ### bypass_data_preservation
 _**Description:**_ This config option disables `safeBackup` data preservation when the client detects that unique local file content would otherwise be displaced during conflict resolution or reconciliation. By default, replacement-style conflicts preserve the existing local content as a verified `safeBackup` copy before a validated replacement is committed. The online-deleted/local-modified conflict is the intentional exception where the local file is renamed to `safeBackup` while the online deletion is honoured.
