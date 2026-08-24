@@ -257,37 +257,61 @@ void displaySystemTimeValidationDetails(ApplicationConfig appConfig) {
 	addLogEntry();
 }
 
-private void logTimeAssessment(ApplicationConfig appConfig, TimeAssessment assessment, SystemTimeState stateBeforeUpdate, bool blockBeforeUpdate, bool displayMessages) {
+private void logTimeAssessment(ApplicationConfig appConfig, TimeAssessment assessment, SystemTimeState stateBeforeUpdate, SystemTimeState notificationStateBeforeUpdate, long effectiveSkewBeforeUpdate, bool blockBeforeUpdate, bool displayMessages) {
 	if (!displayMessages) return;
 
 	bool stateChanged = stateBeforeUpdate != appConfig.systemTimeState;
 	bool blockChanged = blockBeforeUpdate != appConfig.systemTimeSyncBlocked;
+	bool previousWarning = notificationStateBeforeUpdate == SystemTimeState.warning;
+	bool previousSevereWarning = previousWarning && effectiveSkewBeforeUpdate > TIME_SEVERE_WARNING_THRESHOLD_MS;
 
 	if (assessment.validObservation) {
 		if (assessment.state == SystemTimeState.ok) {
-			if (stateChanged || blockChanged) {
-				if (blockBeforeUpdate) {
-					addLogEntry();
-					addLogEntry("NOTICE: System clock validation has recovered", ["info", "notify"]);
-					addLogEntry("Microsoft service time and the local system clock are now within the acceptable range.");
-					addLogEntry("OneDrive synchronisation may resume.");
-					addLogEntry();
-				} else if (debugLogging) {
-					addLogEntry("System time validation result: TIME_OK; observed offset " ~ formatSignedSeconds(assessment.signedOffsetMilliseconds) ~ " seconds", ["debug"]);
-				}
+			if (blockBeforeUpdate) {
+				addLogEntry();
+				addLogEntry("NOTICE: System clock validation has recovered; OneDrive synchronisation will resume", ["info", "notify"]);
+				addLogEntry("Microsoft service time and the local system clock are now within the acceptable range.");
+				addLogEntry("OneDrive synchronisation may resume.");
+				addLogEntry();
+			} else if (previousWarning) {
+				addLogEntry();
+				addLogEntry("NOTICE: Local system clock drift has returned to the acceptable range", ["info", "notify"]);
+				addLogEntry("Microsoft service time and the local system clock are now within the acceptable range.");
+				addLogEntry("Observed clock difference: " ~ formatSignedSeconds(assessment.signedOffsetMilliseconds) ~ " seconds (local minus Microsoft)");
+				addLogEntry();
+			} else if ((stateChanged || blockChanged) && debugLogging) {
+				addLogEntry("System time validation result: TIME_OK; observed offset " ~ formatSignedSeconds(assessment.signedOffsetMilliseconds) ~ " seconds", ["debug"]);
 			}
 			return;
 		}
 
 		if (assessment.state == SystemTimeState.warning) {
-			// Emit the prominent warning on entry into warning state. Repeated monitor
-			// checks can report compact debug details without flooding normal logs.
-			if (stateChanged || stateBeforeUpdate == SystemTimeState.unknown || blockBeforeUpdate) {
+			bool warningEntered = !previousWarning;
+			bool warningEscalated = previousWarning && assessment.severeWarning && !previousSevereWarning;
+
+			// Notify on entry into warning state and when an existing warning crosses the
+			// severe-warning threshold. Repeated observations at the same severity are
+			// debug-only so long-running monitors do not flood the console or GUI.
+			if (blockBeforeUpdate && blockChanged) {
+				addLogEntry();
+				addLogEntry("NOTICE: System clock drift is below the blocking threshold; OneDrive synchronisation will resume", ["info", "notify"]);
+				addLogEntry("A system clock drift warning remains active, but timestamp-sensitive synchronisation is no longer blocked.");
+				addLogEntry("Observed clock difference: " ~ formatSignedSeconds(assessment.signedOffsetMilliseconds) ~ " seconds (local minus Microsoft)");
+				addLogEntry();
+			} else if (appConfig.systemTimeSyncBlocked) {
+				// A previously confirmed block is intentionally sticky. If a later
+				// potentially-blocking observation cannot be reconfirmed, the assessment
+				// may be represented as a severe warning but synchronisation must remain
+				// suspended until a valid observation actually clears the block.
+				if (debugLogging) {
+					addLogEntry("System time assessment is warning-level but the previously confirmed TIME_DRIFT_BLOCKING state remains latched", ["debug"]);
+				}
+			} else if (warningEntered || warningEscalated) {
 				addLogEntry();
 				if (assessment.severeWarning) {
-					addLogEntry("WARNING: Significant local system clock drift detected", ["info", "notify"]);
+					addLogEntry("WARNING: Significant local system clock drift detected; check system time synchronisation", ["info", "notify"]);
 				} else {
-					addLogEntry("WARNING: Local system clock drift detected", ["info", "notify"]);
+					addLogEntry("WARNING: Local system clock drift detected; check system time synchronisation", ["info", "notify"]);
 				}
 				addLogEntry("Local UTC estimate:        " ~ assessment.estimatedLocalTimeUtc.toISOExtString());
 				addLogEntry("Microsoft service UTC:    " ~ assessment.remoteServiceTimeUtc.toISOExtString());
@@ -304,9 +328,9 @@ private void logTimeAssessment(ApplicationConfig appConfig, TimeAssessment asses
 		}
 
 		if (assessment.state == SystemTimeState.blocking) {
-			if (stateChanged || blockChanged) {
+			if (!blockBeforeUpdate && (stateChanged || blockChanged)) {
 				addLogEntry();
-				addLogEntry("ERROR: Unsafe local system clock drift has been confirmed", ["info", "notify"]);
+				addLogEntry("ERROR: OneDrive synchronisation suspended because unsafe local system clock drift has been confirmed", ["info", "notify"]);
 				addLogEntry("Local UTC estimate:        " ~ assessment.estimatedLocalTimeUtc.toISOExtString());
 				addLogEntry("Microsoft service UTC:    " ~ assessment.remoteServiceTimeUtc.toISOExtString());
 				addLogEntry("Observed clock difference: " ~ formatSignedSeconds(assessment.signedOffsetMilliseconds) ~ " seconds (local minus Microsoft)");
@@ -337,6 +361,13 @@ TimeAssessment validateSystemTime(ApplicationConfig appConfig, MicrosoftServiceP
 	}
 
 	SystemTimeState stateBeforeUpdate = appConfig.systemTimeState;
+	// A clock discontinuity temporarily moves the runtime state to
+	// TIME_REVALIDATION_REQUIRED. Preserve the last meaningful time state for
+	// notification decisions so a warning recovery or escalation is not lost
+	// simply because revalidation occurred in between.
+	SystemTimeState notificationStateBeforeUpdate = stateBeforeUpdate == SystemTimeState.revalidationRequired ?
+		appConfig.previousSystemTimeState : stateBeforeUpdate;
+	long effectiveSkewBeforeUpdate = appConfig.systemTimeEffectiveSkewMilliseconds;
 	bool blockBeforeUpdate = appConfig.systemTimeSyncBlocked;
 
 	TimeAssessment assessment = assessMicrosoftServiceTime(initialProbe);
@@ -380,7 +411,7 @@ TimeAssessment validateSystemTime(ApplicationConfig appConfig, MicrosoftServiceP
 	}
 
 	updateRuntimeTimeState(appConfig, assessment, acceptedProbe);
-	logTimeAssessment(appConfig, assessment, stateBeforeUpdate, blockBeforeUpdate, displayMessages);
+	logTimeAssessment(appConfig, assessment, stateBeforeUpdate, notificationStateBeforeUpdate, effectiveSkewBeforeUpdate, blockBeforeUpdate, displayMessages);
 	return assessment;
 }
 
@@ -431,12 +462,13 @@ bool detectSystemClockDiscontinuity(ApplicationConfig appConfig, bool displayMes
 	appConfig.systemTimeRevalidationRequired = true;
 	appConfig.systemTimeStateReason = "local_clock_discontinuity_detected";
 
-	if (displayMessages && !wasAlreadyPending) {
-		addLogEntry();
-		addLogEntry("WARNING: The local system clock changed after the last successful Microsoft time validation", ["info", "notify"]);
-		addLogEntry("Detected wall-clock change: " ~ formatSignedSeconds(divergenceMilliseconds) ~ " seconds relative to monotonic elapsed time.");
-		addLogEntry("A fresh Microsoft service-time validation is required before further OneDrive synchronisation.");
-		addLogEntry();
+	// A wall-clock discontinuity only proves that the previous external time
+	// observation is stale; the clock may have just been corrected. Do not alarm
+	// the user or GUI until the fresh Microsoft service-time validation establishes
+	// whether the new clock is healthy, warning-level or blocking.
+	if (displayMessages && !wasAlreadyPending && debugLogging) {
+		addLogEntry("Local system clock changed after the last successful Microsoft time validation; forcing revalidation", ["debug"]);
+		addLogEntry("Detected wall-clock change: " ~ formatSignedSeconds(divergenceMilliseconds) ~ " seconds relative to monotonic elapsed time", ["debug"]);
 	}
 
 	return true;
