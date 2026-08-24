@@ -20,11 +20,38 @@ import std.ascii;
 import std.datetime;
 import std.exception;
 import core.sys.posix.unistd : geteuid, getuid;
+import core.time : MonoTime;
 import std.process : spawnProcess, wait;
 
 // What other modules that we have created do we need to import?
 import log;
 import util;
+
+// Runtime system-time validation state. This is deliberately held in the
+// application configuration object so that any subsystem which performs
+// timestamp-sensitive work can consume the same process-wide decision.
+enum SystemTimeState {
+	unknown,
+	ok,
+	warning,
+	blocking,
+	authorityUnavailable,
+	revalidationRequired,
+	disabled
+}
+
+string systemTimeStateToString(SystemTimeState state) {
+	switch (state) {
+		case SystemTimeState.unknown: return "TIME_UNKNOWN";
+		case SystemTimeState.ok: return "TIME_OK";
+		case SystemTimeState.warning: return "TIME_DRIFT_WARNING";
+		case SystemTimeState.blocking: return "TIME_DRIFT_BLOCKING";
+		case SystemTimeState.authorityUnavailable: return "TIME_AUTHORITY_UNAVAILABLE";
+		case SystemTimeState.revalidationRequired: return "TIME_REVALIDATION_REQUIRED";
+		case SystemTimeState.disabled: return "TIME_CHECK_DISABLED";
+		default: return "TIME_UNKNOWN";
+	}
+}
 
 class ApplicationConfig {
 	// Application default values - these do not change
@@ -148,6 +175,32 @@ class ApplicationConfig {
 	// API initialisation flags
 	bool apiWasInitialised = false;
 	bool syncEngineWasInitialised = false;
+
+	// Runtime system-time validation state.
+	//
+	// systemTimeState describes the most recent assessment. systemTimeSyncBlocked
+	// is intentionally sticky: once a blocking skew is confirmed, an unavailable
+	// time authority does not silently clear the safety gate. A subsequent valid
+	// Microsoft service-time observation must demonstrate that the clock is safe.
+	SystemTimeState systemTimeState = SystemTimeState.unknown;
+	SystemTimeState previousSystemTimeState = SystemTimeState.unknown;
+	bool systemTimeSyncBlocked = false;
+	bool systemTimeRevalidationRequired = false;
+	bool systemTimeBaselineValid = false;
+	bool systemTimeValidationAttemptRecorded = false;
+	bool systemTimeDisabledWarningDisplayed = false;
+	SysTime systemTimeLastCheckedUtc = SysTime.min;
+	SysTime systemTimeRemoteReferenceUtc = SysTime.min;
+	SysTime systemTimeLocalEstimateUtc = SysTime.min;
+	SysTime systemTimeBaselineRealtimeUtc = SysTime.min;
+	MonoTime systemTimeBaselineMonotonic;
+	MonoTime systemTimeLastValidationAttemptMonotonic;
+	long systemTimeObservedOffsetMilliseconds = 0;
+	long systemTimeEffectiveSkewMilliseconds = 0;
+	long systemTimeRoundTripMilliseconds = 0;
+	long systemTimeUncertaintyMilliseconds = 0;
+	string systemTimeAuthority = "";
+	string systemTimeStateReason = "not_checked";
 	
 	// Important Account Details
 	string accountType;
@@ -475,6 +528,10 @@ class ApplicationConfig {
 		// Disable GitHub Version check
 		boolValues["disable_version_check"] = false;
 
+		// Disable external Microsoft service-time validation. Network connectivity
+		// checks remain active; this only bypasses the clock safety subsystem.
+		boolValues["disable_time_check"] = false;
+
 		// Mirror the local state online
 		// Can only be used with --local-first
 		boolValues["mirror_local_state"] = false;
@@ -734,6 +791,38 @@ class ApplicationConfig {
 		return configurationInitialised;
 	}
 	
+	// Return the Microsoft identity endpoint that applies to the configured cloud.
+	// Keep service probing aligned with the same national-cloud selection used by
+	// the authentication/API layer rather than assuming the global endpoint.
+	string getConfiguredMicrosoftAuthEndpoint() {
+		switch (getValueString("azure_ad_endpoint")) {
+			case "USL4": return usl4AuthEndpoint;
+			case "USL5": return usl5AuthEndpoint;
+			case "DE": return deAuthEndpoint;
+			case "CN": return cnAuthEndpoint;
+			case "": return globalAuthEndpoint;
+			default: return globalAuthEndpoint;
+		}
+	}
+
+	// Timestamp-sensitive work is only permitted when there is no confirmed
+	// blocking skew and no detected wall-clock discontinuity waiting on a fresh
+	// external validation. TIME_AUTHORITY_UNAVAILABLE by itself is not proof that
+	// the local clock is wrong; however, it cannot clear an already-latched block.
+	bool systemTimeAllowsSync() {
+		// An explicit user override bypasses the clock safety gate only. Network
+		// reachability checks remain independent and continue to operate normally.
+		if (getValueBool("disable_time_check")) return true;
+
+		return !systemTimeSyncBlocked && !systemTimeRevalidationRequired &&
+			(systemTimeState != SystemTimeState.blocking) &&
+			(systemTimeState != SystemTimeState.revalidationRequired);
+	}
+
+	string getSystemTimeStateString() {
+		return systemTimeStateToString(systemTimeState);
+	}
+
 	// Create a backup of the 'config' file if it does not exist
 	void createBackupConfigFile() {
 		// Set this function name
@@ -1263,6 +1352,9 @@ class ApplicationConfig {
 				"disable-notifications",
 					"Do not use desktop notifications in monitor mode",
 					&boolValues["disable_notifications"],
+				"disable-time-check",
+					"Disable validation of the local system clock against Microsoft service time",
+					&boolValues["disable_time_check"],
 				"disable-download-validation",
 					"Disable download validation when downloading from OneDrive",
 					&boolValues["disable_download_validation"],
@@ -1705,6 +1797,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'monitor_fullscan_frequency'    = " ~ to!string(getValueLong("monitor_fullscan_frequency")));
 		addLogEntry("Config option 'monitor_authoritative_sync'    = " ~ getValueString("monitor_authoritative_sync"));
 		addLogEntry("Config option 'disable_websocket_support'     = " ~ to!string(getValueBool("disable_websocket_support")));
+		addLogEntry("Config option 'disable_time_check'            = " ~ to!string(getValueBool("disable_time_check")));
 		
 		// sync process and method
 		addLogEntry("Config option 'read_only_auth_scope'          = " ~ to!string(getValueBool("read_only_auth_scope")));
