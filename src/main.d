@@ -732,6 +732,7 @@ int main(string[] cliArgs) {
 				// A one-shot --sync has no useful recovery loop. Refuse to perform
 				// reconciliation with a clock that has been confirmed unsafe.
 				addLogEntry("ERROR: --sync cannot continue while system time is in a blocking state.");
+				addLogEntry("Correct the local system time or time synchronisation service, then retry the sync.");
 				return EXIT_FAILURE;
 			}
 
@@ -743,7 +744,9 @@ int main(string[] cliArgs) {
 			addLogEntry("System time will be revalidated every " ~ to!string(TIME_BLOCKED_RETRY_INTERVAL_SECONDS) ~ " seconds.");
 
 			while (!appConfig.systemTimeAllowsSync()) {
-				Thread.sleep(timeRecoveryRetryInterval);
+				if (sleepInterruptibly(timeRecoveryRetryInterval, "system time recovery retry sleep")) {
+					return EXIT_SUCCESS;
+				}
 				startupServiceProbe = probeMicrosoftService(appConfig);
 				online = startupServiceProbe.reachable;
 				validateSystemTime(appConfig, startupServiceProbe);
@@ -1526,7 +1529,11 @@ int main(string[] cliArgs) {
 							captureAndApplyInotifyEvents("monitor_loop.post_sync_process");
 
 							// Detail the outcome of the sync process
-							displaySyncOutcome();
+							if (appConfig.systemTimeAllowsSync()) {
+								displaySyncOutcome();
+							} else {
+								addLogEntry("Current synchronisation cycle was suspended because system time is not currently safe.");
+							}
 
 							// Cleanup sync process arrays
 							syncEngineInstance.cleanupArrays();
@@ -1723,8 +1730,11 @@ int main(string[] cliArgs) {
 						// delta endpoint to sync to latest. Therefore, only one sync run is
 						// good enough to catch up for multiple notifications.
 						
-						// Only process online notifications if NOT '--upload-only'
-						if (!appConfig.getValueBool("upload_only") && onlineSignal) {
+						// Only process online notifications if NOT '--upload-only' and the
+						// system-time safety gate is open. Signals received while blocked are
+						// intentionally ignored; the next successful scheduled sync will use
+						// the delta endpoint to reconcile any remote changes after recovery.
+						if (!appConfig.getValueBool("upload_only") && onlineSignal && appConfig.systemTimeAllowsSync()) {
 							int signalCount = 1;
 							while (true) {
 								auto more = receiveTimeout(dur!"seconds"(-1), (ulong _) {});

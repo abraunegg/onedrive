@@ -19,8 +19,7 @@ import util : MicrosoftServiceProbeResult, probeMicrosoftService;
 // configuration. HTTP Date is a coarse wall-clock reference, so the decision
 // logic applies an uncertainty allowance before comparing against them.
 enum long TIME_WARNING_THRESHOLD_MS = 15_000;
-enum long TIME_SEVERE_WARNING_THRESHOLD_MS = 120_000;
-enum long TIME_BLOCKING_THRESHOLD_MS = 300_000;
+enum long TIME_BLOCKING_THRESHOLD_MS = 120_000;
 enum long TIME_MAX_ACCEPTABLE_RTT_MS = 5_000;
 enum long TIME_HTTP_DATE_BASE_UNCERTAINTY_MS = 1_000;
 enum long TIME_MAX_WALL_MONOTONIC_DIVERGENCE_MS = 2_000;
@@ -105,12 +104,11 @@ TimeAssessment assessMicrosoftServiceTime(MicrosoftServiceProbeResult probe) {
 	assessment.validObservation = true;
 	assessment.reason = "valid_service_time_observation";
 
-	if (assessment.effectiveSkewMilliseconds >= TIME_BLOCKING_THRESHOLD_MS) {
+	if (assessment.effectiveSkewMilliseconds > TIME_BLOCKING_THRESHOLD_MS) {
 		assessment.state = SystemTimeState.blocking;
 		assessment.canClearExistingBlock = false;
 	} else if (assessment.effectiveSkewMilliseconds > TIME_WARNING_THRESHOLD_MS) {
 		assessment.state = SystemTimeState.warning;
-		assessment.severeWarning = assessment.effectiveSkewMilliseconds > TIME_SEVERE_WARNING_THRESHOLD_MS;
 		assessment.canClearExistingBlock = true;
 	} else {
 		assessment.state = SystemTimeState.ok;
@@ -249,8 +247,7 @@ void displaySystemTimeValidationDetails(ApplicationConfig appConfig) {
 	addLogEntry("System time sync blocking active             = " ~ to!string(appConfig.systemTimeSyncBlocked));
 	addLogEntry("System time revalidation required            = " ~ to!string(appConfig.systemTimeRevalidationRequired));
 	addLogEntry("Time warning threshold                       = > " ~ formatUnsignedSeconds(TIME_WARNING_THRESHOLD_MS) ~ " seconds");
-	addLogEntry("Time severe-warning threshold                = > " ~ formatUnsignedSeconds(TIME_SEVERE_WARNING_THRESHOLD_MS) ~ " seconds");
-	addLogEntry("Time blocking threshold                      = >= " ~ formatUnsignedSeconds(TIME_BLOCKING_THRESHOLD_MS) ~ " seconds (confirmed)");
+	addLogEntry("Time blocking threshold                      = > " ~ formatUnsignedSeconds(TIME_BLOCKING_THRESHOLD_MS) ~ " seconds (confirmed)");
 	addLogEntry("Maximum accepted time-probe RTT              = " ~ formatUnsignedSeconds(TIME_MAX_ACCEPTABLE_RTT_MS) ~ " seconds");
 	addLogEntry("Periodic time revalidation interval          = " ~ to!string(TIME_PERIODIC_REVALIDATION_INTERVAL_SECONDS) ~ " seconds");
 	addLogEntry("-----------------------------------------------------------------");
@@ -263,7 +260,7 @@ private void logTimeAssessment(ApplicationConfig appConfig, TimeAssessment asses
 	bool stateChanged = stateBeforeUpdate != appConfig.systemTimeState;
 	bool blockChanged = blockBeforeUpdate != appConfig.systemTimeSyncBlocked;
 	bool previousWarning = notificationStateBeforeUpdate == SystemTimeState.warning;
-	bool previousSevereWarning = previousWarning && effectiveSkewBeforeUpdate > TIME_SEVERE_WARNING_THRESHOLD_MS;
+	bool previousSevereWarning = previousWarning && effectiveSkewBeforeUpdate > TIME_BLOCKING_THRESHOLD_MS;
 
 	if (assessment.validObservation) {
 		if (assessment.state == SystemTimeState.ok) {
@@ -289,9 +286,9 @@ private void logTimeAssessment(ApplicationConfig appConfig, TimeAssessment asses
 			bool warningEntered = !previousWarning;
 			bool warningEscalated = previousWarning && assessment.severeWarning && !previousSevereWarning;
 
-			// Notify on entry into warning state and when an existing warning crosses the
-			// severe-warning threshold. Repeated observations at the same severity are
-			// debug-only so long-running monitors do not flood the console or GUI.
+			// Notify on entry into warning state and when an existing warning becomes an
+			// unconfirmed potentially-blocking observation. Repeated observations at the
+			// same severity are debug-only so long-running monitors do not flood the console or GUI.
 			if (blockBeforeUpdate && blockChanged) {
 				addLogEntry();
 				addLogEntry("NOTICE: System clock drift is below the blocking threshold; OneDrive synchronisation will resume", ["info", "notify"]);
@@ -314,7 +311,7 @@ private void logTimeAssessment(ApplicationConfig appConfig, TimeAssessment asses
 					addLogEntry("WARNING: Local system clock drift detected; check system time synchronisation", ["info", "notify"]);
 				}
 				addLogEntry("Local UTC estimate:        " ~ assessment.estimatedLocalTimeUtc.toISOExtString());
-				addLogEntry("Microsoft service UTC:    " ~ assessment.remoteServiceTimeUtc.toISOExtString());
+				addLogEntry("Microsoft service UTC:     " ~ assessment.remoteServiceTimeUtc.toISOExtString());
 				addLogEntry("Observed clock difference: " ~ formatSignedSeconds(assessment.signedOffsetMilliseconds) ~ " seconds (local minus Microsoft)");
 				addLogEntry("Round-trip time:           " ~ to!string(assessment.roundTripMilliseconds) ~ " ms");
 				addLogEntry("Estimated uncertainty:     +/-" ~ formatUnsignedSeconds(assessment.uncertaintyMilliseconds) ~ " seconds");
@@ -332,7 +329,7 @@ private void logTimeAssessment(ApplicationConfig appConfig, TimeAssessment asses
 				addLogEntry();
 				addLogEntry("ERROR: OneDrive synchronisation suspended because unsafe local system clock drift has been confirmed", ["info", "notify"]);
 				addLogEntry("Local UTC estimate:        " ~ assessment.estimatedLocalTimeUtc.toISOExtString());
-				addLogEntry("Microsoft service UTC:    " ~ assessment.remoteServiceTimeUtc.toISOExtString());
+				addLogEntry("Microsoft service UTC:     " ~ assessment.remoteServiceTimeUtc.toISOExtString());
 				addLogEntry("Observed clock difference: " ~ formatSignedSeconds(assessment.signedOffsetMilliseconds) ~ " seconds (local minus Microsoft)");
 				addLogEntry("Round-trip time:           " ~ to!string(assessment.roundTripMilliseconds) ~ " ms");
 				addLogEntry("Result:                    TIME_DRIFT_BLOCKING");

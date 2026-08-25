@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import signal
 import subprocess
 import time
@@ -362,15 +363,22 @@ class MonitorModeTestCaseBase(E2ETestCase):
         monitor_command: list[str],
         monitor_stdout: Path,
         monitor_stderr: Path,
+        *,
+        env: dict[str, str] | None = None,
     ) -> subprocess.Popen[str]:
         stdout_fp = monitor_stdout.open("w", encoding="utf-8")
         stderr_fp = monitor_stderr.open("w", encoding="utf-8")
+        process_env = None
+        if env:
+            process_env = dict(os.environ)
+            process_env.update(env)
         process = subprocess.Popen(
             monitor_command,
             cwd=str(context.repo_root),
             stdout=stdout_fp,
             stderr=stderr_fp,
             text=True,
+            env=process_env,
         )
         process._tc_stdout_fp = stdout_fp  # type: ignore[attr-defined]
         process._tc_stderr_fp = stderr_fp  # type: ignore[attr-defined]
@@ -413,6 +421,7 @@ class MonitorModeTestCaseBase(E2ETestCase):
         startup_timeout_seconds: int = 300,
         startup_retry_attempts: int = STARTUP_RETRY_ATTEMPTS,
         startup_retry_sleep_seconds: float = STARTUP_RETRY_SLEEP_SECONDS,
+        env: dict[str, str] | None = None,
     ) -> tuple[subprocess.Popen[str], bool]:
         last_process: subprocess.Popen[str] | None = None
 
@@ -422,7 +431,13 @@ class MonitorModeTestCaseBase(E2ETestCase):
             monitor_stdout.write_text("", encoding="utf-8")
             monitor_stderr.write_text("", encoding="utf-8")
 
-            process = self._launch_monitor_process_raw(context, monitor_command, monitor_stdout, monitor_stderr)
+            process = self._launch_monitor_process_raw(
+                context,
+                monitor_command,
+                monitor_stdout,
+                monitor_stderr,
+                env=env,
+            )
             status = self._wait_for_initial_sync_complete_or_transient_failure(
                 process,
                 monitor_stdout,
