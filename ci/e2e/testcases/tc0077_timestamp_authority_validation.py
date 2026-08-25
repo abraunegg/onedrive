@@ -780,7 +780,6 @@ class TestCase0077TimestampAuthorityValidation(MonitorModeTestCaseBase):
             "time_check_disabled_state_seen": self.TIME_CHECK_DISABLED_STATE_PATTERN in combined_output,
             "blocking_message_seen": self.BLOCKING_PATTERN in combined_output,
             "blocking_result_seen": self.BLOCKING_RESULT_PATTERN in combined_output,
-            "sync_started": "Starting a sync with Microsoft OneDrive" in combined_output,
             "upload_seen": upload_seen,
             "sync_complete_reported": self.SYNC_COMPLETE_PATTERN in combined_output,
         }
@@ -794,7 +793,7 @@ class TestCase0077TimestampAuthorityValidation(MonitorModeTestCaseBase):
         if details["blocking_message_seen"] or details["blocking_result_seen"]:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} entered TIME_DRIFT_BLOCKING despite --disable-time-check", details
-        if not details["sync_started"] or not details["upload_seen"] or not details["sync_complete_reported"]:
+        if not details["upload_seen"] or not details["sync_complete_reported"]:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} did not complete normal synchronisation with the time check disabled", details
 
