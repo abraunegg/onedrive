@@ -1336,6 +1336,82 @@ final class ItemDatabase {
 		}
 	}
 	
+	// Begin a database transaction, so that a batch of related changes is committed as a single
+	// unit of work rather than each individual change being committed on its own.
+	//
+	// Without an explicit transaction, SQLite operates in autocommit mode, meaning every write
+	// is its own transaction. As 'synchronous' is set to FULL, each of those transactions must
+	// be flushed to physical media before the next can proceed. On storage that honours flush
+	// semantics this is the dominant cost of processing a large /delta response.
+	// https://github.com/abraunegg/onedrive/issues/3788
+	void beginTransaction() {
+		synchronized(databaseLock) {
+			// SQLite does not support nesting transactions, so do not begin another if one is
+			// already in progress
+			if (db.inTransaction()) {
+				if (debugLogging) {addLogEntry("A database transaction is already in progress - not beginning another", ["debug"]);}
+				return;
+			}
+
+			try {
+				if (debugLogging) {addLogEntry("Beginning a database transaction", ["debug"]);}
+				db.exec("BEGIN TRANSACTION;");
+			} catch (SqliteException exception) {
+				// If the transaction cannot be started, the database remains in autocommit mode.
+				// Each change is then still written as it was previously, just less efficiently,
+				// so this is a degradation rather than a failure.
+				addLogEntry();
+				addLogEntry("ERROR: Unable to begin a database transaction: " ~ exception.msg);
+				addLogEntry();
+			}
+		}
+	}
+
+	// Commit the currently open database transaction, writing all of the changes made since the
+	// transaction was begun
+	// https://github.com/abraunegg/onedrive/issues/3788
+	void commitTransaction() {
+		synchronized(databaseLock) {
+			// If no transaction is open there is nothing to commit
+			if (!db.inTransaction()) {
+				if (debugLogging) {addLogEntry("No database transaction is in progress - there is nothing to commit", ["debug"]);}
+				return;
+			}
+
+			try {
+				if (debugLogging) {addLogEntry("Committing the database transaction", ["debug"]);}
+				db.exec("COMMIT;");
+			} catch (SqliteException exception) {
+				addLogEntry();
+				addLogEntry("ERROR: Unable to commit the database transaction: " ~ exception.msg);
+				addLogEntry();
+			}
+		}
+	}
+
+	// Roll back the currently open database transaction, discarding all of the changes made since
+	// the transaction was begun. Any discarded data is re-obtained the next time the relevant
+	// /delta response is requested, as the delta link is not advanced until processing completes.
+	// https://github.com/abraunegg/onedrive/issues/3788
+	void rollbackTransaction() {
+		synchronized(databaseLock) {
+			// If no transaction is open there is nothing to roll back
+			if (!db.inTransaction()) {
+				if (debugLogging) {addLogEntry("No database transaction is in progress - there is nothing to roll back", ["debug"]);}
+				return;
+			}
+
+			try {
+				if (debugLogging) {addLogEntry("Rolling back the database transaction", ["debug"]);}
+				db.exec("ROLLBACK;");
+			} catch (SqliteException exception) {
+				addLogEntry();
+				addLogEntry("ERROR: Unable to roll back the database transaction: " ~ exception.msg);
+				addLogEntry();
+			}
+		}
+	}
+
 	// Select distinct driveId items from database
 	string[] selectDistinctDriveIds() {
 		synchronized(databaseLock) {

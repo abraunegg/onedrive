@@ -174,8 +174,11 @@ class LogBuffer {
 				return false;
 			}
 
+			// Transfer ownership of this batch to the flush thread and drop the
+			// producer's reference to the old backing allocation. This avoids
+			// retaining a historical high-water logging buffer indefinitely.
 			messages = buffer;
-			buffer.length = 0;
+			buffer = null;
 		} finally {
 			bufferLock.unlock();
 		}
