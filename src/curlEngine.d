@@ -1000,9 +1000,11 @@ void releaseAllCurlInstances() {
 				if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine destroyed", ["debug"]);}
 			}
 		
-			// Clear the array after all instances have been handled
-			curlEnginePool.length = 0; // More explicit than curlEnginePool = [];
 		}
+
+		// Drop the pool backing allocation as well as its logical contents. The
+		// pool is rebuilt on demand during the next monitor loop.
+		curlEnginePool = null;
 	}
 	// Log that all curl engines have been released
 	if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine releaseAllCurlInstances() completed", ["debug"]);}

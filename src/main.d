@@ -1479,6 +1479,15 @@ int main(string[] cliArgs) {
 							// Perform GC actions
 							GC.collect();  // Perform Garbage Collection
 							GC.minimize(); // Return free memory to the operating system
+
+							// When memory telemetry is enabled, record the immediate post-cleanup
+							// state so the effect of the scheduled GC/minimize operation can be
+							// distinguished from normal allocator/RSS high-water behaviour.
+							if (displayMemoryUsage) {
+								addLogEntry("Memory usage after scheduled monitor-mode memory cleanup");
+								displayMemoryUsageDetails();
+							}
+
 							// Update time gate
 							lastMonitorGcCleanup = monitorGcCleanupTime;
 						}
