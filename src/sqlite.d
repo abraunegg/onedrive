@@ -62,6 +62,19 @@ struct Database {
 		return sqlite3_wal_checkpoint(pDb, null);
 	}
 
+	// Is a transaction currently open on this database connection?
+	// SQLite does not support nesting transactions, so this is used to avoid issuing a
+	// BEGIN when one is already in progress, or a COMMIT when there is nothing to commit.
+	// https://www.sqlite.org/c3ref/get_autocommit.html
+	bool inTransaction() {
+		// If there is no database handle, there cannot be a transaction in progress
+		if (pDb is null) {
+			return false;
+		}
+		// sqlite3_get_autocommit() returns zero whilst a transaction is open
+		return (sqlite3_get_autocommit(pDb) == 0);
+	}
+
 	// Dump open statements
 	void dump_open_statements() {
 		if (debugLogging) {addLogEntry("Dumping open SQL statements:", ["debug"]);}
