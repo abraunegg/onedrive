@@ -23,7 +23,8 @@ class TestCase0077TimestampAuthorityValidation(MonitorModeTestCaseBase):
     name = "timestamp authority safety gating"
     description = (
         "Validate confirmed unsafe system-time handling at --monitor startup, "
-        "during an active --monitor session, and at --sync startup"
+        "during an active --monitor session, at --sync startup, and when the "
+        "explicit --disable-time-check override is used"
     )
 
     CLOCK_SKEW_SECONDS = 180
@@ -42,6 +43,8 @@ class TestCase0077TimestampAuthorityValidation(MonitorModeTestCaseBase):
     SYNC_CORRECTION_GUIDANCE_PATTERN = (
         "Correct the local system time or time synchronisation service, then retry the sync."
     )
+    TIME_CHECK_DISABLED_WARNING_PATTERN = "WARNING: System time validation has been disabled by configuration"
+    TIME_CHECK_DISABLED_STATE_PATTERN = "TIME_CHECK_DISABLED"
 
     def _find_libfaketime_mt(self) -> Path | None:
         candidates = [
@@ -456,8 +459,12 @@ class TestCase0077TimestampAuthorityValidation(MonitorModeTestCaseBase):
             )
             details["blocking_evidence_seen"] = blocked_seen
             details["monitor_alive_while_blocked"] = process.poll() is None
-            details["blocked_file_upload_seen_at_block"] = (
-                f"Uploading new file: {blocked_relative} ... done" in blocked_segment
+            details["blocked_file_upload_seen_at_block"] = any(
+                pattern in blocked_segment
+                for pattern in (
+                    f"Uploading new file: {blocked_relative} ... done",
+                    f"Uploading new file: ./{blocked_relative} ... done",
+                )
             )
             details["sync_complete_seen_after_block"] = self.SYNC_COMPLETE_PATTERN in blocked_segment
 
@@ -472,7 +479,13 @@ class TestCase0077TimestampAuthorityValidation(MonitorModeTestCaseBase):
 
             time.sleep(3.0)
             blocked_segment = self._read_monitor_output_from_offsets(monitor_stdout, mutation_offset)
-            if f"Uploading new file: {blocked_relative} ... done" in blocked_segment:
+            if any(
+                pattern in blocked_segment
+                for pattern in (
+                    f"Uploading new file: {blocked_relative} ... done",
+                    f"Uploading new file: ./{blocked_relative} ... done",
+                )
+            ):
                 return False, f"{scenario_id} uploaded the queued file while remaining in blocking state", details
 
             blocked_verify_result, blocked_manifest = self._verify_remote_state(
@@ -504,17 +517,31 @@ class TestCase0077TimestampAuthorityValidation(MonitorModeTestCaseBase):
             self._set_faketime_offset(control_file, 0)
             write_text_file(sync_root / wake_relative, wake_content)
 
-            recovered, recovery_segment = self._wait_for_stdout_growth_patterns(
-                monitor_stdout,
-                start_offset=recovery_offset,
-                required_patterns=[
-                    self.RUNTIME_RECOVERED_PATTERN,
-                    f"Uploading new file: {blocked_relative} ... done",
-                    f"Uploading new file: {wake_relative} ... done",
-                ],
-                timeout_seconds=180,
+            recovery_notice_seen, recovery_uploads_seen, matched_upload_group, recovery_segment = (
+                self._wait_for_required_patterns_and_any_group(
+                    monitor_stdout,
+                    start_offset=recovery_offset,
+                    required_patterns=[self.RUNTIME_RECOVERED_PATTERN],
+                    alternative_pattern_groups=[
+                        [
+                            f"Uploading new file: {blocked_relative} ... done",
+                            f"Uploading new file: {wake_relative} ... done",
+                        ],
+                        [
+                            f"Uploading new file: ./{blocked_relative} ... done",
+                            f"Uploading new file: ./{wake_relative} ... done",
+                        ],
+                    ],
+                    timeout_seconds=180,
+                )
             )
+            recovered = recovery_notice_seen and recovery_uploads_seen
             details["recovery_evidence_seen"] = recovered
+            details["recovery_notice_seen"] = recovery_notice_seen
+            details["recovery_uploads_seen"] = recovery_uploads_seen
+            details["recovery_upload_path_format"] = (
+                "relative" if matched_upload_group == 0 else "dot-relative" if matched_upload_group == 1 else "not-matched"
+            )
             details["monitor_alive_after_recovery"] = process.poll() is None
             details["recovery_segment_length"] = len(recovery_segment)
 
@@ -653,6 +680,151 @@ class TestCase0077TimestampAuthorityValidation(MonitorModeTestCaseBase):
 
         return True, "bad startup time caused --sync to refuse synchronisation and exit non-zero", details
 
+    def _scenario_sync_time_check_disabled_allows_sync(
+        self,
+        context: E2EContext,
+        case_work_dir: Path,
+        case_log_dir: Path,
+        state_dir: Path,
+        library: Path,
+        artifacts: list[str],
+    ) -> tuple[bool, str, dict[str, object]]:
+        scenario_id = "TA-0004"
+        scenario_work_dir = case_work_dir / scenario_id
+        scenario_log_dir = case_log_dir / scenario_id
+        scenario_state_dir = state_dir / scenario_id
+        reset_directory(scenario_work_dir)
+        reset_directory(scenario_log_dir)
+        reset_directory(scenario_state_dir)
+
+        sync_root = scenario_work_dir / "syncroot"
+        final_verify_root = scenario_work_dir / "verify-final-root"
+        conf_main = scenario_work_dir / "conf-main"
+        conf_final_verify = scenario_work_dir / "conf-verify-final"
+        control_file = scenario_state_dir / "faketime.rc"
+        stdout_file = scenario_log_dir / "sync_stdout.log"
+        stderr_file = scenario_log_dir / "sync_stderr.log"
+        final_verify_stdout = scenario_log_dir / "final_verify_stdout.log"
+        final_verify_stderr = scenario_log_dir / "final_verify_stderr.log"
+        final_manifest_file = scenario_state_dir / "final_verify_manifest.txt"
+        metadata_file = scenario_state_dir / "metadata.txt"
+
+        reset_directory(sync_root)
+        context.bootstrap_config_dir(conf_main)
+        self._write_sync_config(conf_main, sync_root)
+
+        root_name = f"ZZ_E2E_TC0077_{scenario_id}_{context.run_id}_{os.getpid()}"
+        local_relative = f"{root_name}/must-upload-with-time-check-disabled.txt"
+        local_content = "TC0077 TA-0004 explicit --disable-time-check override permits this upload.\n"
+        write_text_file(sync_root / local_relative, local_content)
+
+        artifacts.extend(
+            [
+                str(stdout_file),
+                str(stderr_file),
+                str(final_verify_stdout),
+                str(final_verify_stderr),
+                str(final_manifest_file),
+                str(metadata_file),
+                str(control_file),
+            ]
+        )
+
+        self._set_faketime_offset(control_file, self.CLOCK_SKEW_SECONDS)
+        faketime_env = self._build_faketime_env(library, control_file)
+
+        command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--disable-time-check",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--syncdir",
+            str(sync_root),
+            "--confdir",
+            str(conf_main),
+        ]
+        context.log(
+            f"Executing Test Case {self.case_id} {scenario_id} --sync with time check disabled: "
+            f"{command_to_string(command)}"
+        )
+        try:
+            result = run_command(command, cwd=context.repo_root, env=faketime_env)
+        finally:
+            self._set_faketime_offset(control_file, 0)
+
+        write_text_file(stdout_file, result.stdout)
+        write_text_file(stderr_file, result.stderr)
+        combined_output = (result.stdout or "") + "\n" + (result.stderr or "")
+        upload_seen = any(
+            pattern in combined_output
+            for pattern in (
+                f"Uploading new file: {local_relative} ... done",
+                f"Uploading new file: ./{local_relative} ... done",
+            )
+        )
+
+        details: dict[str, object] = {
+            "scenario_id": scenario_id,
+            "scenario_name": "unsafe startup clock is explicitly ignored by --disable-time-check",
+            "root_name": root_name,
+            "local_relative": local_relative,
+            "clock_skew_seconds": self.CLOCK_SKEW_SECONDS,
+            "faketime_library": str(library),
+            "returncode": result.returncode,
+            "time_check_disabled_warning_seen": self.TIME_CHECK_DISABLED_WARNING_PATTERN in combined_output,
+            "time_check_disabled_state_seen": self.TIME_CHECK_DISABLED_STATE_PATTERN in combined_output,
+            "blocking_message_seen": self.BLOCKING_PATTERN in combined_output,
+            "blocking_result_seen": self.BLOCKING_RESULT_PATTERN in combined_output,
+            "sync_started": "Starting a sync with Microsoft OneDrive" in combined_output,
+            "upload_seen": upload_seen,
+            "sync_complete_reported": self.SYNC_COMPLETE_PATTERN in combined_output,
+        }
+
+        if result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} expected --sync to succeed with --disable-time-check, got {result.returncode}", details
+        if not details["time_check_disabled_warning_seen"] or not details["time_check_disabled_state_seen"]:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} did not report that system-time validation was disabled", details
+        if details["blocking_message_seen"] or details["blocking_result_seen"]:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} entered TIME_DRIFT_BLOCKING despite --disable-time-check", details
+        if not details["sync_started"] or not details["upload_seen"] or not details["sync_complete_reported"]:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} did not complete normal synchronisation with the time check disabled", details
+
+        final_verify_result, final_manifest = self._verify_remote_state(
+            context,
+            label=f"{scenario_id} final remote verification",
+            root_name=root_name,
+            verify_root=final_verify_root,
+            verify_conf=conf_final_verify,
+            stdout_file=final_verify_stdout,
+            stderr_file=final_verify_stderr,
+            manifest_file=final_manifest_file,
+        )
+        final_local_path = final_verify_root / local_relative
+        details["final_verify_returncode"] = final_verify_result.returncode
+        details["uploaded_file_present_remotely"] = local_relative in final_manifest
+        details["uploaded_file_content_matches"] = (
+            final_local_path.is_file() and final_local_path.read_text(encoding="utf-8") == local_content
+        )
+        self._write_metadata(metadata_file, details)
+
+        if final_verify_result.returncode != 0:
+            return False, f"{scenario_id} final remote verification failed with status {final_verify_result.returncode}", details
+        if local_relative not in final_manifest:
+            return False, f"{scenario_id} file was not present remotely after bypassed time validation", details
+        if not details["uploaded_file_content_matches"]:
+            return False, f"{scenario_id} uploaded file content did not match after verification", details
+
+        return True, "--disable-time-check explicitly bypassed unsafe-time gating and allowed synchronisation", details
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -687,6 +859,7 @@ class TestCase0077TimestampAuthorityValidation(MonitorModeTestCaseBase):
             ("TA-0001", self._scenario_startup_monitor_blocked_then_recovers),
             ("TA-0002", self._scenario_running_monitor_blocks_then_recovers),
             ("TA-0003", self._scenario_sync_startup_blocked_exits),
+            ("TA-0004", self._scenario_sync_time_check_disabled_allows_sync),
         ]
         scenarios = [
             (scenario_id, scenario_runner)
