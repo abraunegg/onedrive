@@ -4500,6 +4500,8 @@ class SyncEngine {
 		bool preserveCanonicalAsSafeBackup = false;
 		string canonicalHashBeforeDownload;
 		string completedDownloadPath;
+		SysTime itemModifiedTime;
+		string itemModifiedTimestamp;
 
 		// Create a JSONValue to store the online hash for resumable file checking
 		JSONValue onlineHash;
@@ -4526,6 +4528,22 @@ class SyncEngine {
 		// Calculate this items path
 		string newItemPath = computeItemPath(downloadDriveId, downloadParentId) ~ "/" ~ downloadItemName;
 		if (debugLogging) {addLogEntry("JSON Item calculated full path for download is: " ~ newItemPath, ["debug"]);}
+
+		// A downloaded live item must have a real Microsoft Graph filesystem timestamp.
+		// Do not download an item when its authoritative timestamp is unavailable because
+		// doing so would require manufacturing a local mtime and database baseline. Track
+		// this as a download failure so the sync result cannot silently report success.
+		if (!getFileSystemInfoLastModifiedDateTime(onedriveJSONItem, itemModifiedTime, itemModifiedTimestamp)) {
+			if (itemModifiedTimestamp.empty) {
+				addLogEntry("WARNING: Skipping download because Microsoft OneDrive did not provide fileSystemInfo.lastModifiedDateTime: " ~ downloadItemName ~ " (" ~ downloadItemId ~ ")");
+			} else {
+				addLogEntry("WARNING: Skipping download because Microsoft OneDrive provided an invalid fileSystemInfo.lastModifiedDateTime: " ~ downloadItemName ~ " (" ~ downloadItemId ~ "): " ~ itemModifiedTimestamp);
+			}
+			if (!canFind(fileDownloadFailures, newItemPath)) {
+				fileDownloadFailures ~= newItemPath;
+			}
+			return;
+		}
 		canonicalFileExistedBeforeDownload = exists(newItemPath);
 		if (canonicalFileExistedBeforeDownload && ignoreDataPreservationCheck) {
 			// SharePoint enrichment downloads intentionally replace the file just uploaded.
@@ -4706,53 +4724,9 @@ class SyncEngine {
 						// but the SharePoint HTTP Server sends a totally different byte count for the same file
 						// we have implemented --disable-download-validation to disable these checks
 
-						// Regardless of --disable-download-validation we still need to set the file timestamp correctly
-						// Get the mtime from the JSON data
-						SysTime itemModifiedTime;
-						string lastModifiedTimestamp;
-						if (isItemRemote(onedriveJSONItem)) {
-							// remote file item
-							if (hasRemoteFileSystemInfoLastModifiedDateTime(onedriveJSONItem)) {
-								// JSON has correct timestamp data
-								lastModifiedTimestamp = strip(onedriveJSONItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
-								// is lastModifiedTimestamp valid?
-								if (isValidUTCDateTime(lastModifiedTimestamp)) {
-									// string is a valid timestamp
-									itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
-								} else {
-									// invalid timestamp from JSON file
-									addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-									// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
-									itemModifiedTime = Clock.currTime(UTC());
-								}
-							} else {
-								// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
-								itemModifiedTime = Clock.currTime(UTC());
-								// JSON data missing, missing timestamp from JSON file
-								addLogEntry("WARNING: Missing timestamp provided by the Microsoft OneDrive API, using current UTC time: " ~ to!string(itemModifiedTime));
-							}
-						} else {
-							// not a remote file item
-							if (hasFileSystemInfoLastModifiedDateTime(onedriveJSONItem)) {
-								// JSON has correct timestamp data
-								lastModifiedTimestamp = strip(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
-								// is lastModifiedTimestamp valid?
-								if (isValidUTCDateTime(lastModifiedTimestamp)) {
-									// string is a valid timestamp
-									itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
-								} else {
-									// invalid timestamp from JSON file
-									addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-									// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
-									itemModifiedTime = Clock.currTime(UTC());
-								}
-							} else {
-								// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
-								itemModifiedTime = Clock.currTime(UTC());
-								// JSON data missing, missing timestamp from JSON file
-								addLogEntry("WARNING: Missing timestamp provided by the Microsoft OneDrive API, using current UTC time: " ~ to!string(itemModifiedTime));
-							}
-						}
+						// Regardless of --disable-download-validation we still need to set the file timestamp correctly.
+						// itemModifiedTime was validated before the transfer began so this operation never
+						// needs to manufacture a replacement timestamp.
 
 						// Did the user configure --disable-download-validation ?
 						if (!disableDownloadValidation) {
@@ -13785,23 +13759,18 @@ class SyncEngine {
 					}
 				}
 
-				// Configure the modification JSON item
+				// Configure the modification JSON item. A local move must use the actual
+				// filesystem timestamp of the moved item; never manufacture a new mtime.
 				SysTime mtime;
-				if (appConfig.getValueBool("monitor")) {
-					// Use the newPath modified timestamp
-					try {
-						mtime = timeLastModified(newPath).toUTC();
-					} catch (FileException exception) {
-						if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
-							addLogEntry("Moved local item disappeared before timestamp update: " ~ newPath);
-						} else {
-							displayFileSystemErrorMessage(exception.msg, thisFunctionName, newPath);
-						}
-						return;
+				try {
+					mtime = timeLastModified(newPath).toUTC();
+				} catch (FileException exception) {
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("Moved local item disappeared before timestamp update: " ~ newPath);
+					} else {
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, newPath);
 					}
-				} else {
-					// Use the current system time
-					mtime = Clock.currTime().toUTC();
+					return;
 				}
 
 				JSONValue data = [
@@ -16468,9 +16437,6 @@ class SyncEngine {
 					// Debug response output
 					if (debugLogging) {addLogEntry("getSharedWithMe Response Shared File JSON: " ~ sanitiseJSONItem(searchResult), ["debug"]);}
 
-					// Make a DB item from this JSON
-					Item sharedFileOriginalData = makeItem(searchResult);
-
 					// Variables for each item
 					string sharedByName;
 					string sharedByEmail;
@@ -16560,8 +16526,22 @@ class SyncEngine {
 					// The file to download JSON details
 					fileToDownload = searchResult;
 
-					// Get the latest online details
-					latestOnlineDetails = sharedWithMeOneDriveApiInstance.getPathDetailsById(sharedFileOriginalData.remoteDriveId, sharedFileOriginalData.remoteId);
+					// Get the latest online details using the identifiers already present in the
+					// Search response. Do not construct an Item from the Search result first because
+					// Search may legitimately omit fileSystemInfo; the full DriveItem query below is
+					// the authoritative source for the filesystem timestamp used by the sync engine.
+					latestOnlineDetails = sharedWithMeOneDriveApiInstance.getPathDetailsById(
+						searchResult["remoteItem"]["parentReference"]["driveId"].str,
+						searchResult["remoteItem"]["id"].str
+					);
+
+					SysTime authoritativeModifiedTime;
+					string authoritativeLastModifiedDateTime;
+					if (!getFileSystemInfoLastModifiedDateTime(latestOnlineDetails, authoritativeModifiedTime, authoritativeLastModifiedDateTime)) {
+						addLogEntry("WARNING: Skipping OneDrive Business shared file because its full DriveItem response does not contain a valid fileSystemInfo.lastModifiedDateTime: " ~ searchResult["name"].str);
+						continue;
+					}
+
 					Item tempOnlineRecord = makeItem(latestOnlineDetails);
 
 					// With the local folders created, now update 'fileToDownload' to download the file to our location:
@@ -16606,11 +16586,17 @@ class SyncEngine {
 					// Update 'size'
 					fileToDownload["size"] = to!int(tempOnlineRecord.size);
 					fileToDownload["remoteItem"]["size"] = to!int(tempOnlineRecord.size);
-					// Update 'lastModifiedDateTime'
-					fileToDownload["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
-					fileToDownload["fileSystemInfo"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
-					fileToDownload["remoteItem"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
-					fileToDownload["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
+					// Update 'lastModifiedDateTime' using the authoritative fileSystemInfo value
+					// returned by the full DriveItem query. Search responses may not contain a
+					// fileSystemInfo object at all, so create it here rather than fabricating one.
+					fileToDownload["lastModifiedDateTime"] = authoritativeLastModifiedDateTime;
+					fileToDownload["fileSystemInfo"] = JSONValue([
+						"lastModifiedDateTime": JSONValue(authoritativeLastModifiedDateTime)
+					]);
+					fileToDownload["remoteItem"]["lastModifiedDateTime"] = authoritativeLastModifiedDateTime;
+					fileToDownload["remoteItem"]["fileSystemInfo"] = JSONValue([
+						"lastModifiedDateTime": JSONValue(authoritativeLastModifiedDateTime)
+					]);
 
 					// Final JSON that will be used to download the file
 					if (debugLogging) {addLogEntry("Final fileToDownload: " ~ to!string(fileToDownload), ["debug"]);}
@@ -16807,10 +16793,10 @@ class SyncEngine {
 						}
 					}
 
-					// Configure the modification JSON item
-					SysTime mtime;
-					// Use the current system time
-					mtime = Clock.currTime().toUTC();
+					// Configure the modification JSON item using the existing online filesystem
+					// timestamp. This operation is an online move/rename and must not manufacture
+					// a new lastModifiedDateTime value from the local wall clock.
+					SysTime mtime = sourceItem.mtime;
 
 					JSONValue data = [
 						"name": JSONValue(baseName(destinationPath)),
