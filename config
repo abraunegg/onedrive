@@ -64,6 +64,10 @@
 ## This setting controls whether the application checks for newer versions of the client.
 #disable_version_check = "false"
 
+## Disable validation of the local system clock against Microsoft service time.
+## Microsoft service connectivity checks remain enabled. Disabling this safety check can allow timestamp-sensitive synchronisation to proceed with an incorrect local clock.
+#disable_time_check = "false"
+
 ## Disable Microsoft OneDrive WebSocket support and use polling based change detection instead.
 #disable_websocket_support = "false"
 
