@@ -2002,6 +2002,28 @@ bool hasRemoteFileSystemInfoLastModifiedDateTime(const ref JSONValue item) {
 		   (item["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].type == JSONType.string);
 }
 
+// Extract and validate the authoritative filesystem last-modified timestamp from a live
+// Microsoft Graph DriveItem. Remote items normally carry this value under remoteItem,
+// but Add Shortcut to My Files objects may only expose it on the outer DriveItem (#1533).
+//
+// IMPORTANT: this function never fabricates a timestamp. A missing or invalid timestamp
+// is reported to the caller so that the item can be rejected or deferred safely.
+bool getFileSystemInfoLastModifiedDateTime(const ref JSONValue item, out SysTime parsedTime, out string timestamp) {
+	timestamp = "";
+
+	if (isItemRemote(item) && hasRemoteFileSystemInfoLastModifiedDateTime(item)) {
+		timestamp = strip(item["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+	} else if (hasFileSystemInfoLastModifiedDateTime(item)) {
+		// Normal non-remote item, or #1533 fallback for a remote shortcut whose
+		// remoteItem does not contain fileSystemInfo.
+		timestamp = strip(item["fileSystemInfo"]["lastModifiedDateTime"].str);
+	} else {
+		return false;
+	}
+
+	return parseUTCDateTime(timestamp, parsedTime);
+}
+
 bool isItemFile(const ref JSONValue item) {
 	return (item.type == JSONType.object) &&
 		   (("file" in item) != null) &&
