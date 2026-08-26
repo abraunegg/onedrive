@@ -2409,6 +2409,8 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
       Disable download validation when downloading from OneDrive
   --disable-notifications
       Do not use desktop notifications in monitor mode
+  --disable-time-check
+      Disable validation of the local system clock against Microsoft service time
   --disable-upload-validation
       Disable upload validation when uploading to OneDrive
   --display-admin-consent-url
