@@ -76,6 +76,7 @@ SOURCES = \
 	src/config.d \
 	src/log.d \
 	src/util.d \
+	src/time.d \
 	src/qxor.d \
 	src/curlEngine.d \
 	src/onedrive.d \

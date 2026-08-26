@@ -12,6 +12,7 @@ import core.sys.posix.sys.resource;
 import core.sys.posix.sys.stat;
 import core.sys.posix.unistd;
 import core.thread;
+import core.time : Duration, MonoTime, dur;
 import etc.c.curl;
 import std.algorithm;
 import std.array;
@@ -715,10 +716,47 @@ Regex!char wild2regex(const(char)[] pattern) {
 	return regex(str, "i");
 }
 
-// Test Internet access to Microsoft OneDrive using a simple HTTP HEAD request
-bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging = true) {
+// Result of the lightweight Microsoft HTTPS service probe used for both
+// connectivity testing and process-visible system-time validation.
+struct MicrosoftServiceProbeResult {
+	bool reachable;
+	long httpStatusCode;
+	string serviceUrl;
+	string responseDateHeader;
+	SysTime requestStartUtc;
+	SysTime responseEndUtc;
+	MonoTime responseEndMonotonic;
+	Duration roundTripTime;
+	string failureReason;
+}
+
+// Return an HTTP response header without assuming how std.net.curl normalises
+// header-name casing.
+private string getHttpResponseHeaderCaseInsensitive(string[string] headers, string requestedHeader) {
+	foreach (headerName, headerValue; headers) {
+		if (icmp(headerName, requestedHeader) == 0) {
+			return headerValue;
+		}
+	}
+	return "";
+}
+
+// Probe the Microsoft identity endpoint using a minimal HTTPS HEAD request.
+//
+// This replaces the old boolean-only reachability observation with a structured
+// result. The same network request can therefore answer both questions:
+//   1. Can this process currently reach the applicable Microsoft cloud?
+//   2. If Microsoft supplied an HTTP Date header, how does service time compare
+//      with the wall clock visible to this process?
+MicrosoftServiceProbeResult probeMicrosoftService(ApplicationConfig appConfig, bool displayLogging = true) {
+	MicrosoftServiceProbeResult result;
+	result.serviceUrl = appConfig.getConfiguredMicrosoftAuthEndpoint();
+	result.requestStartUtc = SysTime.min;
+	result.responseEndUtc = SysTime.min;
+	result.failureReason = "not_attempted";
+
 	HTTP http = HTTP();
-	http.url = "https://login.microsoftonline.com";
+	http.url = result.serviceUrl;
 	
 	// Configure timeouts based on application configuration
 	http.dnsTimeout = dur!"seconds"(appConfig.getValueLong("dns_timeout"));
@@ -745,13 +783,17 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 	// Set HTTP method to HEAD for minimal data transfer
 	http.method = HTTP.Method.head;
 	
-	bool reachedService = false;
-	
 	// Exit scope to ensure cleanup http object
 	scope(exit) {
 		// Shut http down http object
 		http.shutdown();
 	}
+
+	// Capture both clocks immediately around the request. Realtime is required for
+	// comparison with Microsoft's wall-clock Date value; monotonic time is required
+	// for reliable RTT measurement even if the system clock is adjusted mid-request.
+	result.requestStartUtc = Clock.currTime(UTC());
+	auto requestStartMonotonic = MonoTime.currTime();
 
 	// Execute the request and handle exceptions
 	try {
@@ -760,36 +802,69 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 		}
 		http.perform();
 
+		// Capture timing immediately after the transfer completes, before logging or
+		// response processing introduces unrelated delay into the measurement.
+		result.responseEndMonotonic = MonoTime.currTime();
+		result.responseEndUtc = Clock.currTime(UTC());
+		result.roundTripTime = result.responseEndMonotonic - requestStartMonotonic;
+		result.httpStatusCode = http.statusLine.code;
+
+		// Capture Date for the time subsystem. Missing Date is not a network failure;
+		// it will be classified separately as TIME_AUTHORITY_UNAVAILABLE.
+		auto responseHeaders = http.responseHeaders();
+		result.responseDateHeader = getHttpResponseHeaderCaseInsensitive(responseHeaders, "date");
+
 		// Check response for HTTP status code - consider 2xx and 3xx as "reachable"
 		if (http.statusLine.code >= 200 && http.statusLine.code < 400) {
 			if (displayLogging) {
 				addLogEntry("Successfully reached the Microsoft OneDrive Service");
 			}
-			reachedService = true;
+			result.reachable = true;
+			result.failureReason = "";
 		} else {
 			addLogEntry("Failed to reach the Microsoft OneDrive Service. HTTP status code: " ~ to!string(http.statusLine.code));
-			reachedService = false;
+			result.reachable = false;
+			result.failureReason = "http_status_" ~ to!string(http.statusLine.code);
 		}
 	} catch (SocketException e) {
+		result.responseEndMonotonic = MonoTime.currTime();
+		result.responseEndUtc = Clock.currTime(UTC());
+		result.roundTripTime = result.responseEndMonotonic - requestStartMonotonic;
 		addLogEntry("Cannot connect to the Microsoft OneDrive Service - Socket Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-		reachedService = false;
+		result.reachable = false;
+		result.failureReason = "socket_exception";
 	} catch (CurlException e) {
+		result.responseEndMonotonic = MonoTime.currTime();
+		result.responseEndUtc = Clock.currTime(UTC());
+		result.roundTripTime = result.responseEndMonotonic - requestStartMonotonic;
 		addLogEntry("Cannot connect to the Microsoft OneDrive Service - Network Connection Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-		reachedService = false;
+		result.reachable = false;
+		result.failureReason = "curl_exception";
 	} catch (Exception e) {
+		result.responseEndMonotonic = MonoTime.currTime();
+		result.responseEndUtc = Clock.currTime(UTC());
+		result.roundTripTime = result.responseEndMonotonic - requestStartMonotonic;
 		addLogEntry("An unexpected error occurred: " ~ e.toString());
 		displayOneDriveErrorMessage(e.toString(), getFunctionName!({}));
-		reachedService = false;
+		result.reachable = false;
+		result.failureReason = "unexpected_exception";
 	}
 	
-	// Return state
-	return reachedService;
+	return result;
 }
 
-// Retry Internet access test to Microsoft OneDrive
-bool retryInternetConnectivityTest(ApplicationConfig appConfig) {
+// Backwards-compatible boolean reachability wrapper used by subsystems that do
+// not need the richer time observation.
+bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging = true) {
+	return probeMicrosoftService(appConfig, displayLogging).reachable;
+}
+
+// Retry Internet access test to Microsoft OneDrive and retain the final probe so
+// startup can consume its Date/timing data without immediately issuing another
+// request after connectivity is restored.
+bool retryInternetConnectivityTest(ApplicationConfig appConfig, out MicrosoftServiceProbeResult lastProbe) {
 	int retryAttempts = 0;
 	int backoffInterval = 1; // initial backoff interval in seconds
 	int maxBackoffInterval = 3600; // maximum backoff interval in seconds
@@ -807,7 +882,8 @@ bool retryInternetConnectivityTest(ApplicationConfig appConfig) {
 		}
 
 		Thread.sleep(dur!"seconds"(backoffInterval));
-		isOnline = testInternetReachability(appConfig); // assuming this function is defined elsewhere
+		lastProbe = probeMicrosoftService(appConfig);
+		isOnline = lastProbe.reachable;
 
 		if (isOnline) {
 			addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
@@ -820,8 +896,13 @@ bool retryInternetConnectivityTest(ApplicationConfig appConfig) {
 		addLogEntry("ERROR: Was unable to reconnect to the Microsoft OneDrive service after " ~ to!string(maxRetryCount) ~ " attempts!");
 	}
 	
-	// Return state
 	return isOnline;
+}
+
+// Preserve the original call signature for existing callers.
+bool retryInternetConnectivityTest(ApplicationConfig appConfig) {
+	MicrosoftServiceProbeResult ignoredProbe;
+	return retryInternetConnectivityTest(appConfig, ignoredProbe);
 }
 
 // Can we read the local file - as a permissions issue or file corruption will cause a failure

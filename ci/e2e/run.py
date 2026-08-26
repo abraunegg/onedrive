@@ -89,6 +89,7 @@ from testcases.tc0073_safebackup_existing_preservation_reuse_validation import T
 from testcases.tc0074_safebackup_clean_resync_no_conflict_validation import TestCase0074SafeBackupCleanResyncNoConflictValidation
 from testcases.tc0075_safebackup_remote_delete_local_modify_validation import TestCase0075SafeBackupRemoteDeleteLocalModifyValidation
 from testcases.tc0076_safebackup_resync_content_conflict_validation import TestCase0076SafeBackupResyncContentConflictValidation
+from testcases.tc0077_timestamp_authority_validation import TestCase0077TimestampAuthorityValidation
 
 
 def build_test_suite() -> list:
@@ -169,6 +170,7 @@ def build_test_suite() -> list:
         TestCase0074SafeBackupCleanResyncNoConflictValidation(),
         TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(),
         TestCase0076SafeBackupResyncContentConflictValidation(),
+        TestCase0077TimestampAuthorityValidation(),
     ]
 
 
