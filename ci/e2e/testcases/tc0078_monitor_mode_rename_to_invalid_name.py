@@ -10,7 +10,7 @@ from framework.result import TestResult
 from framework.utils import command_to_string, run_command, write_text_file
 
 
-class TestCase0077MonitorModeRenameToInvalidName(MonitorModeTestCaseBase):
+class TestCase0078MonitorModeRenameToInvalidName(MonitorModeTestCaseBase):
     """Rename an already-synced file to a name the Microsoft naming rules reject.
 
     tc0025 validates that files which are *created* with an invalid name are skipped, and
@@ -24,7 +24,7 @@ class TestCase0077MonitorModeRenameToInvalidName(MonitorModeTestCaseBase):
     subsequent scan can restore it if it is removed, because the local name remains invalid.
     """
 
-    case_id = "0077"
+    case_id = "0078"
     name = "monitor mode rename to invalid name"
     description = (
         "Rename a synced file to a name rejected by the Microsoft naming rules and validate "
@@ -38,7 +38,7 @@ class TestCase0077MonitorModeRenameToInvalidName(MonitorModeTestCaseBase):
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
-            case_dir_name="tc0077",
+            case_dir_name="tc0078",
             ensure_refresh_token=True,
         )
         case_work_dir = layout.work_dir
@@ -51,7 +51,7 @@ class TestCase0077MonitorModeRenameToInvalidName(MonitorModeTestCaseBase):
         conf_verify = case_work_dir / "conf-verify"
         app_log_dir = case_log_dir / "app-logs"
 
-        root_name = f"ZZ_E2E_TC0077_{context.run_id}_{os.getpid()}"
+        root_name = f"ZZ_E2E_TC0078_{context.run_id}_{os.getpid()}"
 
         # The invalid leaf name uses '<' and '>', which tc0025 already establishes are
         # rejected by the Microsoft naming rules.
@@ -75,7 +75,7 @@ class TestCase0077MonitorModeRenameToInvalidName(MonitorModeTestCaseBase):
         write_text_file(
             conf_verify / "config",
             (
-                "# tc0077 verify\n"
+                "# tc0078 verify\n"
                 f'sync_dir = "{verify_root}"\n'
                 'bypass_data_preservation = "true"\n'
             ),

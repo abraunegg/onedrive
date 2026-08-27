@@ -238,6 +238,10 @@ Disable download validation when downloading from OneDrive.
 Do not use desktop notifications in monitor mode.
 
 .TP
+\fB\-\-disable-time-check\fR
+Disable validation of the local system clock against Microsoft service time.
+
+.TP
 \fB\-\-disable-upload-validation\fR
 Disable upload validation when uploading to OneDrive.
 
