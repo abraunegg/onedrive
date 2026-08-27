@@ -65,63 +65,21 @@ Item makeDatabaseItem(JSONValue driveItem) {
 		// Set mtime to SysTime(0)
 		item.mtime = SysTime(0);
 	} else {
-		// Item is not in a deleted state
+		// Item is not in a deleted state. A live database item must only ever use a
+		// timestamp supplied by Microsoft Graph fileSystemInfo. Do not manufacture a
+		// replacement timestamp when the API omits or returns an invalid value.
 		string lastModifiedTimestamp;
-		// Resolve 'Key not found: fileSystemInfo' when then item is a remote item
-		// https://github.com/abraunegg/onedrive/issues/11
-		if (isItemRemote(driveItem)) {
-			// remoteItem is a OneDrive object that exists on a 'different' OneDrive drive id, when compared to account default
-			// Normally, the 'remoteItem' field will contain 'fileSystemInfo' however, if the user uses the 'Add Shortcut ..' option in OneDrive WebUI
-			// to create a 'link', this object, whilst remote, does not have 'fileSystemInfo' in the expected place, thus leading to a application crash
-			// See: https://github.com/abraunegg/onedrive/issues/1533
-			if ("fileSystemInfo" in driveItem["remoteItem"]) {
-				// 'fileSystemInfo' is in 'remoteItem' which will be the majority of cases
-				lastModifiedTimestamp = strip(driveItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
-				// is lastModifiedTimestamp valid?
-				if (isValidUTCDateTime(lastModifiedTimestamp)) {
-					// string is a valid timestamp
-					item.mtime = SysTime.fromISOExtString(lastModifiedTimestamp);
-				} else {
-					// invalid timestamp from JSON file
-					addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-					// Set mtime to Clock.currTime(UTC()) to ensure we have a valid UTC value
-					item.mtime = Clock.currTime(UTC());
-				}
+		if (!getFileSystemInfoLastModifiedDateTime(driveItem, item.mtime, lastModifiedTimestamp)) {
+			string itemId = ("id" in driveItem) && (driveItem["id"].type == JSONType.string) ? driveItem["id"].str : "<unknown>";
+			string itemName = ("name" in driveItem) && (driveItem["name"].type == JSONType.string) ? driveItem["name"].str : "<unknown>";
+
+			if (lastModifiedTimestamp.empty) {
+				addLogEntry("ERROR: Microsoft OneDrive API did not provide fileSystemInfo.lastModifiedDateTime for live item: " ~ itemName ~ " (" ~ itemId ~ ")");
 			} else {
-				// is a remote item, but 'fileSystemInfo' is missing from 'remoteItem'
-				lastModifiedTimestamp = strip(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
-				// is lastModifiedTimestamp valid?
-				if (isValidUTCDateTime(lastModifiedTimestamp)) {
-					// string is a valid timestamp
-					item.mtime = SysTime.fromISOExtString(lastModifiedTimestamp);
-				} else {
-					// invalid timestamp from JSON file
-					addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-					// Set mtime to Clock.currTime(UTC()) to ensure we have a valid UTC value
-					item.mtime = Clock.currTime(UTC());
-				}
+				addLogEntry("ERROR: Microsoft OneDrive API provided an invalid fileSystemInfo.lastModifiedDateTime for live item: " ~ itemName ~ " (" ~ itemId ~ "): " ~ lastModifiedTimestamp);
 			}
-		} else {
-			// Does fileSystemInfo exist at all ?
-			if ("fileSystemInfo" in driveItem) {
-				// fileSystemInfo exists
-				lastModifiedTimestamp = strip(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
-				// is lastModifiedTimestamp valid?
-				if (isValidUTCDateTime(lastModifiedTimestamp)) {
-					// string is a valid timestamp
-					item.mtime = SysTime.fromISOExtString(lastModifiedTimestamp);
-				} else {
-					// invalid timestamp from JSON file
-					addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-					// Set mtime to Clock.currTime(UTC()) to ensure we have a valid UTC value
-					item.mtime = Clock.currTime(UTC());
-				}
-			} else {
-				// no timestamp from JSON file
-				addLogEntry("WARNING: No timestamp provided by the Microsoft OneDrive API - using current system time for item!");
-				// Set mtime to Clock.currTime(UTC()) to ensure we have a valid UTC value
-				item.mtime = Clock.currTime(UTC());
-			}
+
+			throw new Exception("Unable to construct database item without a valid Microsoft OneDrive fileSystemInfo.lastModifiedDateTime");
 		}
 	}
 	
