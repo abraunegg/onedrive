@@ -1477,17 +1477,6 @@ class OneDriveApi {
 		if ("fileSystemInfo" in resource) {
 			sharedItem["fileSystemInfo"] = parseJSON(resource["fileSystemInfo"].toString());
 			remoteItem["fileSystemInfo"] = parseJSON(resource["fileSystemInfo"].toString());
-		} else {
-			JSONValue fallbackFSI = JSONValue([
-				"lastModifiedDateTime": JSONValue(
-					("lastModifiedDateTime" in resource)
-						? resource["lastModifiedDateTime"].str
-						: Clock.currTime(UTC()).toISOExtString()
-				)
-			]);
-
-			sharedItem["fileSystemInfo"] = parseJSON(fallbackFSI.toString());
-			remoteItem["fileSystemInfo"] = parseJSON(fallbackFSI.toString());
 		}
 
 		JSONValue sharedFacet = buildSearchSharedFacet(resource);
