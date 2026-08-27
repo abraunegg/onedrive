@@ -11274,8 +11274,15 @@ class SyncEngine {
 							string newFileETag = uploadResponse["eTag"].str;
 							// Attempt to update the online date time stamp based on our local data
 							if (appConfig.accountType == "personal") {
-								// Existing session-upload handling for Personal accounts.
-								uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
+								if (uploadIntegrityPassed) {
+										// Successful Personal session upload already preserved the authoritative
+										// local filesystem timestamp in fileSystemInfo.
+										// Save the completed upload response directly; no timestamp PATCH required.
+										saveItem(uploadResponse);
+									} else {
+										// Preserve existing Personal-account integrity-failure handling.
+										uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
+									}
 							} else {
 								// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 								// This means that the file which was uploaded, is potentially no longer the file we have locally
