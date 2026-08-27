@@ -31,7 +31,9 @@ jobs:
         run: |
           dnf -y update
           dnf -y group install development-tools
-          dnf -y install python3 ldc libcurl-devel sqlite-devel dbus-devel jq fuse3-devel
+          dnf -y install python3 ldc libcurl-devel sqlite-devel dbus-devel jq fuse3-devel libfaketime
+          rpm -q libfaketime
+          rpm -ql libfaketime | grep -F 'libfaketimeMT.so.1'
 
       - name: Build + local install prefix
         run: |

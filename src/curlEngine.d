@@ -11,6 +11,7 @@ import std.format;
 import std.json;
 import std.stdio;
 import std.range;
+import std.string : indexOf, toLower;
 import core.sys.posix.signal;
 // Required for WebSocket Support
 import core.stdc.stdlib : getenv;
@@ -69,6 +70,261 @@ private void* loadCurlLib() {
 
 private void* findSymbol(const(char)* name) {
 	return dlsym(_curlLib, name);
+}
+
+// OAuth field names and HTTP header names are ASCII. Use byte-oriented
+// case-insensitive matching so sanitisation remains safe even if a diagnostic
+// buffer contains data that is not valid UTF-8.
+private char asciiToLower(char value) {
+	if ((value >= 'A') && (value <= 'Z')) {
+		return cast(char)(value + ('a' - 'A'));
+	}
+	return value;
+}
+
+private size_t findAsciiCaseInsensitive(string input, string marker, size_t searchFrom = 0) {
+	if (marker.empty || (searchFrom > input.length) ||
+		(marker.length > (input.length - searchFrom))) {
+		return size_t.max;
+	}
+
+	for (size_t candidate = searchFrom;
+		candidate <= (input.length - marker.length); candidate++) {
+		bool matched = true;
+		foreach (size_t offset; 0 .. marker.length) {
+			if (asciiToLower(input[candidate + offset]) != asciiToLower(marker[offset])) {
+				matched = false;
+				break;
+			}
+		}
+		if (matched) return candidate;
+	}
+
+	return size_t.max;
+}
+
+// Replace the value of a HTTP header in debug output without altering the
+// request itself. Header names are matched case-insensitively in both normal
+// header blocks and libcurl HTTP/2/HTTP/3 diagnostic text.
+private string redactHeaderValue(string input, string headerName) {
+	immutable string redactedValue = "[REDACTED]";
+	string marker = headerName ~ ":";
+	size_t searchFrom = 0;
+
+	while (searchFrom < input.length) {
+		size_t headerStart = findAsciiCaseInsensitive(input, marker, searchFrom);
+		if (headerStart == size_t.max) break;
+		// libcurl may expose outgoing headers in more than one diagnostic form:
+		//   > Authorization: bearer ...
+		//   * [HTTP/2] [1] [authorization: bearer ...]
+		// Accept the normal line boundary as well as the bracketed HTTP/2/3 form.
+		bool validBoundary = (headerStart == 0) ||
+			(input[headerStart - 1] == '\n') || (input[headerStart - 1] == '\r') ||
+			(input[headerStart - 1] == '[') || (input[headerStart - 1] == '>') ||
+			(input[headerStart - 1] == ' ') || (input[headerStart - 1] == '\t');
+		if (!validBoundary) {
+			searchFrom = headerStart + marker.length;
+			continue;
+		}
+
+		size_t valueStart = headerStart + marker.length;
+		while ((valueStart < input.length) &&
+			((input[valueStart] == ' ') || (input[valueStart] == '\t'))) {
+			valueStart++;
+		}
+
+		size_t valueEnd = valueStart;
+		while ((valueEnd < input.length) &&
+			(input[valueEnd] != '\r') && (input[valueEnd] != '\n') &&
+			(input[valueEnd] != ']')) {
+			valueEnd++;
+		}
+
+		input = input[0 .. valueStart] ~ redactedValue ~ input[valueEnd .. $];
+		searchFrom = valueStart + redactedValue.length;
+	}
+
+	return input;
+}
+
+// Replace OAuth token values carried in application/x-www-form-urlencoded
+// request bodies or URL query strings. OAuth token values cannot contain a raw
+// '&', so the field boundary can be identified without decoding the payload.
+private string redactFormValue(string input, string fieldName) {
+	immutable string redactedValue = "[REDACTED]";
+	string marker = fieldName ~ "=";
+	size_t searchFrom = 0;
+
+	while (searchFrom < input.length) {
+		size_t fieldStart = findAsciiCaseInsensitive(input, marker, searchFrom);
+		if (fieldStart == size_t.max) break;
+		bool validBoundary = (fieldStart == 0) ||
+			(input[fieldStart - 1] == '&') || (input[fieldStart - 1] == '?') ||
+			(input[fieldStart - 1] == ' ') || (input[fieldStart - 1] == '\t') ||
+			(input[fieldStart - 1] == '\r') || (input[fieldStart - 1] == '\n');
+		if (!validBoundary) {
+			searchFrom = fieldStart + marker.length;
+			continue;
+		}
+
+		size_t valueStart = fieldStart + marker.length;
+		size_t valueEnd = valueStart;
+		while ((valueEnd < input.length) &&
+			(input[valueEnd] != '&') &&
+			(input[valueEnd] != ' ') && (input[valueEnd] != '\t') &&
+			(input[valueEnd] != '\r') && (input[valueEnd] != '\n')) {
+			valueEnd++;
+		}
+
+		input = input[0 .. valueStart] ~ redactedValue ~ input[valueEnd .. $];
+		searchFrom = valueStart + redactedValue.length;
+	}
+
+	return input;
+}
+
+// Replace OAuth token values returned as JSON strings. Token endpoint responses
+// are complete JSON documents when they reach CurlResponse, so redaction can be
+// performed on the debug copy without changing the response consumed by the
+// application.
+private string redactJsonStringValue(string input, string fieldName) {
+	immutable string redactedValue = "[REDACTED]";
+	string marker = "\"" ~ fieldName ~ "\"";
+	size_t searchFrom = 0;
+
+	while (searchFrom < input.length) {
+		size_t fieldStart = findAsciiCaseInsensitive(input, marker, searchFrom);
+		if (fieldStart == size_t.max) break;
+		size_t cursor = fieldStart + marker.length;
+
+		while ((cursor < input.length) &&
+			((input[cursor] == ' ') || (input[cursor] == '\t') ||
+			 (input[cursor] == '\r') || (input[cursor] == '\n'))) {
+			cursor++;
+		}
+
+		if ((cursor >= input.length) || (input[cursor] != ':')) {
+			searchFrom = fieldStart + marker.length;
+			continue;
+		}
+		cursor++;
+
+		while ((cursor < input.length) &&
+			((input[cursor] == ' ') || (input[cursor] == '\t') ||
+			 (input[cursor] == '\r') || (input[cursor] == '\n'))) {
+			cursor++;
+		}
+
+		if ((cursor >= input.length) || (input[cursor] != '"')) {
+			searchFrom = fieldStart + marker.length;
+			continue;
+		}
+
+		size_t valueStart = cursor + 1;
+		size_t valueEnd = valueStart;
+		bool escaped = false;
+		while (valueEnd < input.length) {
+			char current = input[valueEnd];
+			if ((current == '"') && !escaped) break;
+			if ((current == '\\') && !escaped) {
+				escaped = true;
+			} else {
+				escaped = false;
+			}
+			valueEnd++;
+		}
+
+		if (valueEnd >= input.length) break;
+
+		input = input[0 .. valueStart] ~ redactedValue ~ input[valueEnd .. $];
+		searchFrom = valueStart + redactedValue.length;
+	}
+
+	return input;
+}
+
+// Sanitise OAuth credentials before any HTTPS diagnostic data is written to a
+// log or to stderr. This operates only on a debug copy of the data; the actual
+// HTTP request/response remains untouched.
+private string redactOAuthSecrets(string input) {
+	if (input.empty) return input;
+
+	string output = input;
+	output = redactHeaderValue(output, "Authorization");
+	output = redactHeaderValue(output, "Proxy-Authorization");
+	output = redactFormValue(output, "access_token");
+	output = redactFormValue(output, "refresh_token");
+	output = redactJsonStringValue(output, "access_token");
+	output = redactJsonStringValue(output, "refresh_token");
+	return output;
+}
+
+unittest {
+	immutable accessToken = "ACCESS_TOKEN_SHOULD_NOT_APPEAR";
+	immutable refreshToken = "REFRESH_TOKEN_SHOULD_NOT_APPEAR";
+
+	string http1Headers =
+		"GET /v1.0/me/drive HTTP/1.1\r\n" ~
+		"Authorization: bearer " ~ accessToken ~ "\r\n" ~
+		"Accept: application/json\r\n";
+	string safeHttp1Headers = redactOAuthSecrets(http1Headers);
+	assert(safeHttp1Headers.indexOf(accessToken) < 0);
+	assert(safeHttp1Headers.indexOf("Authorization: [REDACTED]") >= 0);
+
+	string http2Trace =
+		"[HTTP/2] [1] [authorization: bearer " ~ accessToken ~ "]\n";
+	string safeHttp2Trace = redactOAuthSecrets(http2Trace);
+	assert(safeHttp2Trace.indexOf(accessToken) < 0);
+	assert(safeHttp2Trace.indexOf("[authorization: [REDACTED]]") >= 0);
+
+	string formBody =
+		"client_id=test&refresh_token=" ~ refreshToken ~
+		"&grant_type=refresh_token";
+	string safeFormBody = redactOAuthSecrets(formBody);
+	assert(safeFormBody.indexOf(refreshToken) < 0);
+	assert(safeFormBody.indexOf("refresh_token=[REDACTED]") >= 0);
+
+	string jsonBody =
+		"{\"token_type\":\"Bearer\",\"access_token\":\"" ~ accessToken ~
+		"\",\"refresh_token\":\"" ~ refreshToken ~ "\",\"expires_in\":3600}";
+	string safeJsonBody = redactOAuthSecrets(jsonBody);
+	assert(safeJsonBody.indexOf(accessToken) < 0);
+	assert(safeJsonBody.indexOf(refreshToken) < 0);
+	assert(safeJsonBody.indexOf("\"access_token\":\"[REDACTED]\"") >= 0);
+	assert(safeJsonBody.indexOf("\"refresh_token\":\"[REDACTED]\"") >= 0);
+}
+
+// libcurl's normal CURLOPT_VERBOSE handler writes directly to stderr and may
+// expose sensitive headers. Replace it with a callback that retains the same
+// connection/TLS/header diagnostics while sanitising OAuth credentials first.
+// The DATA_* and SSL_DATA_* callbacks are intentionally ignored: CURLOPT_VERBOSE
+// does not normally dump transfer bodies, and CurlResponse provides the
+// application-level body diagnostics after applying the same redaction.
+extern(C) int curlHTTPSDebugCallback(void* handle, int type, char* data, ulong size, void* userptr) nothrow {
+	try {
+		if ((data is null) || (size == 0)) return 0;
+
+		string debugData = data[0 .. cast(size_t) size].idup;
+		debugData = redactOAuthSecrets(debugData);
+
+		switch (cast(CurlCallbackInfo) type) {
+			case CurlCallbackInfo.text:
+				stderr.write("* ", debugData);
+				break;
+			case CurlCallbackInfo.header_out:
+				stderr.write("> ", debugData);
+				break;
+			case CurlCallbackInfo.header_in:
+				stderr.write("< ", debugData);
+				break;
+			default:
+				break;
+		}
+	} catch (Throwable) {
+		// Debug logging must never interfere with the HTTP operation.
+	}
+
+	return 0;
 }
 
 private bool probeCurlWsSymbols() {
@@ -184,7 +440,7 @@ class CurlResponse {
 				
 		// Output the response headers only if using debug mode + debugging https itself
 		if ((debugLogging) && (debugHTTPSResponse)) {
-			addLogEntry("HTTP Response Headers: " ~ to!string(this.responseHeaders), ["debug"]);
+			addLogEntry("HTTP Response Headers: " ~ redactOAuthSecrets(to!string(this.responseHeaders)), ["debug"]);
 			addLogEntry("HTTP Status Line: " ~ to!string(this.statusLine), ["debug"]);
 		}
 	}
@@ -219,7 +475,7 @@ class CurlResponse {
 		// Ensure response headers is not null and iterate over keys safely.
 		if (headers !is null) {
 			foreach (string header; headers.byKey()) {
-				if (header == "Authorization") {
+				if (header.toLower() == "authorization") {
 					continue;
 				}
 				// Use the 'in' operator to safely check if the key exists in the associative array.
@@ -261,7 +517,7 @@ class CurlResponse {
 		if (!responseHeaders.empty) {
 			str ~= parseResponseHeaders(responseHeaders);
 		}
-		return str;
+		return redactOAuthSecrets(str);
 	}
 
 	const string dumpResponse() {
@@ -272,7 +528,7 @@ class CurlResponse {
 		if (!content.empty) {
 			str ~= format("\n----\n%s\n----\n", content);
 		}
-		return str;
+		return redactOAuthSecrets(str);
 	}
 
 	override string toString() const {
@@ -430,7 +686,12 @@ class CurlEngine {
 		
 		// Specify how many redirects should be allowed
 		http.maxRedirects(maxRedirects);
-		// Debug HTTPS
+		// Debug HTTPS. libcurl's default verbose handler can expose sensitive
+		// request headers directly to stderr, so install our sanitising callback
+		// before enabling verbose output.
+		if (httpsDebug) {
+			http.handle.set(CurlOption.debugfunction, cast(void*) &curlHTTPSDebugCallback);
+		}
 		http.verbose = httpsDebug;
 		// Use the configured 'user_agent' value
 		http.setUserAgent = userAgent;
@@ -1000,9 +1261,11 @@ void releaseAllCurlInstances() {
 				if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine destroyed", ["debug"]);}
 			}
 		
-			// Clear the array after all instances have been handled
-			curlEnginePool.length = 0; // More explicit than curlEnginePool = [];
 		}
+
+		// Drop the pool backing allocation as well as its logical contents. The
+		// pool is rebuilt on demand during the next monitor loop.
+		curlEnginePool = null;
 	}
 	// Log that all curl engines have been released
 	if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine releaseAllCurlInstances() completed", ["debug"]);}

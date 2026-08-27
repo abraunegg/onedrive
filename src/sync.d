@@ -1306,29 +1306,33 @@ class SyncEngine {
 		if (debugLogging) {addLogEntry("Cleaning up all internal arrays used when processing data", ["debug"]);}
 
 		// Multi Dimensional Arrays
-		idsToDelete.length = 0;
-		idsFaked.length = 0;
-		databaseItemsWhereContentHasChanged.length = 0;
+		// Set per-sync arrays to null so their backing allocations are no longer
+		// retained by this long-lived SyncEngine instance between monitor loops.
+		idsToDelete = null;
+		idsFaked = null;
+		databaseItemsWhereContentHasChanged = null;
 
 		// JSON Items Arrays
-		jsonItemsToProcess = [];
-		fileJSONItemsToDownload = [];
-		jsonItemsToResumeUpload = [];
-		jsonItemsToResumeDownload = [];
+		jsonItemsToProcess = null;
+		fileJSONItemsToDownload = null;
+		jsonItemsToResumeUpload = null;
+		jsonItemsToResumeDownload = null;
 
 		// String Arrays
-		fileDownloadFailures = [];
-		pathFakeDeletedArray = [];
-		pathsRenamed = [];
-		newLocalFilesToUploadToOneDrive = [];
-		fileUploadFailures = [];
-		posixViolationPaths = [];
-		businessSharedFoldersOnlineToSkip = [];
-		interruptedUploadsSessionFiles = [];
-		interruptedDownloadFiles = [];
-		pathsToCreateOnline = [];
-		databaseItemsToDeleteOnline = [];
-		pathsRetained = [];
+		fileDownloadFailures = null;
+		pathFakeDeletedArray = null;
+		pathsRenamed = null;
+		newLocalFilesToUploadToOneDrive = null;
+		fileUploadFailures = null;
+		posixViolationPaths = null;
+		businessSharedFoldersOnlineToSkip = null;
+		interruptedUploadsSessionFiles = null;
+		interruptedDownloadFiles = null;
+		pathsToCreateOnline = null;
+		databaseItemsToDeleteOnline = null;
+		pathsRetained = null;
+		syncListSkippedParentIds = null;
+		onenotePackageIdentifiers = null;
 
 		// Log completion of cleanup
 		if (debugLogging) {addLogEntry("Cleaning of internal arrays complete", ["debug"]);}
@@ -1973,10 +1977,28 @@ class SyncEngine {
 					}
 				} else {
 					if (verboseLogging) {addLogEntry("Processing OneDrive JSON item batch [" ~ to!string(batchesProcessed) ~ "/" ~ to!string(batchCount) ~ "] to ensure consistent local state", ["verbose"]);}
-				}
+				}	
+					
+				// Process this batch of JSON items within a single database transaction.
+				//
+				// Each item processed here would otherwise be written as its own transaction, and
+				// as 'synchronous' is set to FULL, that requires a flush to physical media per
+				// item. Batching these changes is safe because this phase performs no network
+				// activity, is processed sequentially, and the data written is reconstructible -
+				// the delta link is not advanced until any required transfers have completed, so
+				// an incomplete batch is simply re-obtained on the next run.
+				// https://github.com/abraunegg/onedrive/issues/3788
+				itemDB.beginTransaction();
+
+				// If processing this batch throws, discard the partial batch rather than leaving
+				// the transaction open
+				scope(failure) itemDB.rollbackTransaction();
 
 				// Process the batch
 				processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount);
+
+				// Commit this batch of changes to the database
+				itemDB.commitTransaction();
 
 				// To finish off the JSON processing items, this is needed to reflect this in the log
 				if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
@@ -4478,6 +4500,8 @@ class SyncEngine {
 		bool preserveCanonicalAsSafeBackup = false;
 		string canonicalHashBeforeDownload;
 		string completedDownloadPath;
+		SysTime itemModifiedTime;
+		string itemModifiedTimestamp;
 
 		// Create a JSONValue to store the online hash for resumable file checking
 		JSONValue onlineHash;
@@ -4504,6 +4528,22 @@ class SyncEngine {
 		// Calculate this items path
 		string newItemPath = computeItemPath(downloadDriveId, downloadParentId) ~ "/" ~ downloadItemName;
 		if (debugLogging) {addLogEntry("JSON Item calculated full path for download is: " ~ newItemPath, ["debug"]);}
+
+		// A downloaded live item must have a real Microsoft Graph filesystem timestamp.
+		// Do not download an item when its authoritative timestamp is unavailable because
+		// doing so would require manufacturing a local mtime and database baseline. Track
+		// this as a download failure so the sync result cannot silently report success.
+		if (!getFileSystemInfoLastModifiedDateTime(onedriveJSONItem, itemModifiedTime, itemModifiedTimestamp)) {
+			if (itemModifiedTimestamp.empty) {
+				addLogEntry("WARNING: Skipping download because Microsoft OneDrive did not provide fileSystemInfo.lastModifiedDateTime: " ~ downloadItemName ~ " (" ~ downloadItemId ~ ")");
+			} else {
+				addLogEntry("WARNING: Skipping download because Microsoft OneDrive provided an invalid fileSystemInfo.lastModifiedDateTime: " ~ downloadItemName ~ " (" ~ downloadItemId ~ "): " ~ itemModifiedTimestamp);
+			}
+			if (!canFind(fileDownloadFailures, newItemPath)) {
+				fileDownloadFailures ~= newItemPath;
+			}
+			return;
+		}
 		canonicalFileExistedBeforeDownload = exists(newItemPath);
 		if (canonicalFileExistedBeforeDownload && ignoreDataPreservationCheck) {
 			// SharePoint enrichment downloads intentionally replace the file just uploaded.
@@ -4637,12 +4677,6 @@ class SyncEngine {
 							downloadFailed = true;
 						}
 
-						// OneDrive API Instance Cleanup - Shutdown API and free curl object.
-						// Do not force GC collection here: downloadFileItem() runs once per file
-						// inside the parallel download worker pool, and forcing a full GC after
-						// every downloaded file causes repeated stop-the-world mark scans.
-						downloadFileOneDriveApiInstance.releaseCurlEngine();
-						downloadFileOneDriveApiInstance = null;
 					} catch (OneDriveException exception) {
 						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset, true); generated a OneDriveException", ["debug"]);}
 						
@@ -4673,6 +4707,15 @@ class SyncEngine {
 						if (verboseLogging) {addLogEntry("Download failed (local file system error): " ~ newItemPath, ["verbose"]);}
 						downloadFailed = true;
 					}
+
+					// OneDrive API Instance Cleanup - shutdown API and return the CurlEngine
+					// to the pool on both successful and handled-failure paths. Do not leave
+					// native HTTP ownership dependent on a later GC/finalizer cycle.
+					// Do not force GC here: this function runs once per downloaded file.
+					if (downloadFileOneDriveApiInstance !is null) {
+						downloadFileOneDriveApiInstance.releaseCurlEngine();
+						downloadFileOneDriveApiInstance = null;
+					}
 				
 					// Validate only when the requested online version was downloaded. A failed
 					// transfer may deliberately leave an older final file untouched.
@@ -4681,53 +4724,9 @@ class SyncEngine {
 						// but the SharePoint HTTP Server sends a totally different byte count for the same file
 						// we have implemented --disable-download-validation to disable these checks
 
-						// Regardless of --disable-download-validation we still need to set the file timestamp correctly
-						// Get the mtime from the JSON data
-						SysTime itemModifiedTime;
-						string lastModifiedTimestamp;
-						if (isItemRemote(onedriveJSONItem)) {
-							// remote file item
-							if (hasRemoteFileSystemInfoLastModifiedDateTime(onedriveJSONItem)) {
-								// JSON has correct timestamp data
-								lastModifiedTimestamp = strip(onedriveJSONItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
-								// is lastModifiedTimestamp valid?
-								if (isValidUTCDateTime(lastModifiedTimestamp)) {
-									// string is a valid timestamp
-									itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
-								} else {
-									// invalid timestamp from JSON file
-									addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-									// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
-									itemModifiedTime = Clock.currTime(UTC());
-								}
-							} else {
-								// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
-								itemModifiedTime = Clock.currTime(UTC());
-								// JSON data missing, missing timestamp from JSON file
-								addLogEntry("WARNING: Missing timestamp provided by the Microsoft OneDrive API, using current UTC time: " ~ to!string(itemModifiedTime));
-							}
-						} else {
-							// not a remote file item
-							if (hasFileSystemInfoLastModifiedDateTime(onedriveJSONItem)) {
-								// JSON has correct timestamp data
-								lastModifiedTimestamp = strip(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
-								// is lastModifiedTimestamp valid?
-								if (isValidUTCDateTime(lastModifiedTimestamp)) {
-									// string is a valid timestamp
-									itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
-								} else {
-									// invalid timestamp from JSON file
-									addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-									// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
-									itemModifiedTime = Clock.currTime(UTC());
-								}
-							} else {
-								// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
-								itemModifiedTime = Clock.currTime(UTC());
-								// JSON data missing, missing timestamp from JSON file
-								addLogEntry("WARNING: Missing timestamp provided by the Microsoft OneDrive API, using current UTC time: " ~ to!string(itemModifiedTime));
-							}
-						}
+						// Regardless of --disable-download-validation we still need to set the file timestamp correctly.
+						// itemModifiedTime was validated before the transfer began so this operation never
+						// needs to manufacture a replacement timestamp.
 
 						// Did the user configure --disable-download-validation ?
 						if (!disableDownloadValidation) {
@@ -7436,22 +7435,27 @@ class SyncEngine {
 						// Path is unwanted, flag to exclude
 						clientSideRuleExcludesPath = true;
 
-						// Has this itemId already been flagged as being skipped?
+						// Has this itemId already been flagged as being skipped during this sync?
 						if (!syncListSkippedParentIds.canFind(thisItemId)) {
+							bool skippedParentIdLogged = false;
+
 							if (isItemFolder(onedriveJSONItem)) {
 								// Detail we are skipping this JSON data from online
 								if (verboseLogging) {addLogEntry("Skipping path - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
-								// Add this folder id to the elements we have already detailed we are skipping, so we do no output this again
+								skippedParentIdLogged = true;
+							}
+
+							// Is this is a 'add shortcut to onedrive' link?
+							if (isItemRemote(onedriveJSONItem)) {
+								// Detail we are skipping this JSON data from online
+								if (verboseLogging) {addLogEntry("Skipping Shared Folder Link - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
+								skippedParentIdLogged = true;
+							}
+
+							// Track this identifier once so verbose output is not repeated.
+							if (skippedParentIdLogged) {
 								syncListSkippedParentIds ~= thisItemId;
 							}
-						}
-
-						// Is this is a 'add shortcut to onedrive' link?
-						if (isItemRemote(onedriveJSONItem)) {
-							// Detail we are skipping this JSON data from online
-							if (verboseLogging) {addLogEntry("Skipping Shared Folder Link - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
-							// Add this folder id to the elements we have already detailed we are skipping, so we do no output this again
-							syncListSkippedParentIds ~= thisItemId;
 						}
 					}
 				} else {
@@ -8388,6 +8392,8 @@ class SyncEngine {
 					} else {
 						displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
 					}
+					uploadFileOneDriveApiInstance.releaseCurlEngine();
+					uploadFileOneDriveApiInstance = null;
 					return uploadResponse;
 				}
 				SysTime onlineModifiedTime = currentOnlineItemData.mtime;
@@ -8410,6 +8416,8 @@ class SyncEngine {
 					// snapshot while keeping the canonical filename present, then upload it.
 					string backupPath;
 					if (!safeBackupPreserveForReplacement(localFilePath, false, backupPath, true)) {
+						uploadFileOneDriveApiInstance.releaseCurlEngine();
+						uploadFileOneDriveApiInstance = null;
 						return uploadResponse;
 					}
 					uploadNewFile(backupPath);
@@ -8426,6 +8434,8 @@ class SyncEngine {
 
 					// The original modified-file upload was intentionally not performed. Return
 					// its response after handling the newer-online conflict safely.
+					uploadFileOneDriveApiInstance.releaseCurlEngine();
+					uploadFileOneDriveApiInstance = null;
 					return uploadResponse;
 				}
 			}
@@ -8483,6 +8493,8 @@ class SyncEngine {
 					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
 						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
 						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
+						uploadFileOneDriveApiInstance.releaseCurlEngine();
+						uploadFileOneDriveApiInstance = null;
 						return uploadResponse;
 					}
 
@@ -8492,6 +8504,8 @@ class SyncEngine {
 						// The file is currently checked out or locked for editing by another user
 						// We cant upload this file at this time
 						addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
+						uploadFileOneDriveApiInstance.releaseCurlEngine();
+						uploadFileOneDriveApiInstance = null;
 						return uploadResponse;
 					} else {
 						// Handle all other HTTP status codes
@@ -12736,12 +12750,30 @@ class SyncEngine {
 
 		Item[] drivePathChildren = getChildren(searchItem.driveId, searchItem.id);
 		if (count(drivePathChildren) > 0) {
+			// Flag the entire set of children within a single transaction. Each item flagged here
+			// would otherwise be committed individually, and as 'synchronous' is FULL that
+			// requires a flush to physical media per item. For a shared folder containing many
+			// thousands of items this dominates the time taken to generate the /delta response.
+			//
+			// This is safe for the same reasons as the batched processing of received items: no
+			// network activity is performed here, the loop is sequential, and the change is
+			// reconstructible, as this only flags existing records as requiring re-validation.
+			// https://github.com/abraunegg/onedrive/issues/3788
+			itemDB.beginTransaction();
+
+			// If flagging these items throws, discard the partial set rather than leaving the
+			// transaction open
+			scope(failure) itemDB.rollbackTransaction();
+
 			// Children to process and flag as out-of-sync
 			foreach (drivePathChild; drivePathChildren) {
 				// Flag any object in the database as out-of-sync for this driveId & and object id
 				if (debugLogging) {addLogEntry("Downgrading item as out-of-sync: " ~ drivePathChild.id, ["debug"]);}
 				itemDB.downgradeSyncStatusFlag(drivePathChild.driveId, drivePathChild.id);
 			}
+
+			// Commit the flagged items to the database
+			itemDB.commitTransaction();
 		}
 		// Clear DB response array
 		drivePathChildren = [];
@@ -13727,23 +13759,18 @@ class SyncEngine {
 					}
 				}
 
-				// Configure the modification JSON item
+				// Configure the modification JSON item. A local move must use the actual
+				// filesystem timestamp of the moved item; never manufacture a new mtime.
 				SysTime mtime;
-				if (appConfig.getValueBool("monitor")) {
-					// Use the newPath modified timestamp
-					try {
-						mtime = timeLastModified(newPath).toUTC();
-					} catch (FileException exception) {
-						if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
-							addLogEntry("Moved local item disappeared before timestamp update: " ~ newPath);
-						} else {
-							displayFileSystemErrorMessage(exception.msg, thisFunctionName, newPath);
-						}
-						return;
+				try {
+					mtime = timeLastModified(newPath).toUTC();
+				} catch (FileException exception) {
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("Moved local item disappeared before timestamp update: " ~ newPath);
+					} else {
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, newPath);
 					}
-				} else {
-					// Use the current system time
-					mtime = Clock.currTime().toUTC();
+					return;
 				}
 
 				JSONValue data = [
@@ -16410,9 +16437,6 @@ class SyncEngine {
 					// Debug response output
 					if (debugLogging) {addLogEntry("getSharedWithMe Response Shared File JSON: " ~ sanitiseJSONItem(searchResult), ["debug"]);}
 
-					// Make a DB item from this JSON
-					Item sharedFileOriginalData = makeItem(searchResult);
-
 					// Variables for each item
 					string sharedByName;
 					string sharedByEmail;
@@ -16502,8 +16526,22 @@ class SyncEngine {
 					// The file to download JSON details
 					fileToDownload = searchResult;
 
-					// Get the latest online details
-					latestOnlineDetails = sharedWithMeOneDriveApiInstance.getPathDetailsById(sharedFileOriginalData.remoteDriveId, sharedFileOriginalData.remoteId);
+					// Get the latest online details using the identifiers already present in the
+					// Search response. Do not construct an Item from the Search result first because
+					// Search may legitimately omit fileSystemInfo; the full DriveItem query below is
+					// the authoritative source for the filesystem timestamp used by the sync engine.
+					latestOnlineDetails = sharedWithMeOneDriveApiInstance.getPathDetailsById(
+						searchResult["remoteItem"]["parentReference"]["driveId"].str,
+						searchResult["remoteItem"]["id"].str
+					);
+
+					SysTime authoritativeModifiedTime;
+					string authoritativeLastModifiedDateTime;
+					if (!getFileSystemInfoLastModifiedDateTime(latestOnlineDetails, authoritativeModifiedTime, authoritativeLastModifiedDateTime)) {
+						addLogEntry("WARNING: Skipping OneDrive Business shared file because its full DriveItem response does not contain a valid fileSystemInfo.lastModifiedDateTime: " ~ searchResult["name"].str);
+						continue;
+					}
+
 					Item tempOnlineRecord = makeItem(latestOnlineDetails);
 
 					// With the local folders created, now update 'fileToDownload' to download the file to our location:
@@ -16548,11 +16586,17 @@ class SyncEngine {
 					// Update 'size'
 					fileToDownload["size"] = to!int(tempOnlineRecord.size);
 					fileToDownload["remoteItem"]["size"] = to!int(tempOnlineRecord.size);
-					// Update 'lastModifiedDateTime'
-					fileToDownload["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
-					fileToDownload["fileSystemInfo"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
-					fileToDownload["remoteItem"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
-					fileToDownload["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
+					// Update 'lastModifiedDateTime' using the authoritative fileSystemInfo value
+					// returned by the full DriveItem query. Search responses may not contain a
+					// fileSystemInfo object at all, so create it here rather than fabricating one.
+					fileToDownload["lastModifiedDateTime"] = authoritativeLastModifiedDateTime;
+					fileToDownload["fileSystemInfo"] = JSONValue([
+						"lastModifiedDateTime": JSONValue(authoritativeLastModifiedDateTime)
+					]);
+					fileToDownload["remoteItem"]["lastModifiedDateTime"] = authoritativeLastModifiedDateTime;
+					fileToDownload["remoteItem"]["fileSystemInfo"] = JSONValue([
+						"lastModifiedDateTime": JSONValue(authoritativeLastModifiedDateTime)
+					]);
 
 					// Final JSON that will be used to download the file
 					if (debugLogging) {addLogEntry("Final fileToDownload: " ~ to!string(fileToDownload), ["debug"]);}
@@ -16749,10 +16793,10 @@ class SyncEngine {
 						}
 					}
 
-					// Configure the modification JSON item
-					SysTime mtime;
-					// Use the current system time
-					mtime = Clock.currTime().toUTC();
+					// Configure the modification JSON item using the existing online filesystem
+					// timestamp. This operation is an online move/rename and must not manufacture
+					// a new lastModifiedDateTime value from the local wall clock.
+					SysTime mtime = sourceItem.mtime;
 
 					JSONValue data = [
 						"name": JSONValue(baseName(destinationPath)),

@@ -111,6 +111,7 @@ datasize
 dchar
 dcompiler
 debian
+debugfunction
 debuginfo
 dechunk
 Deepin
@@ -629,6 +630,7 @@ userinfo
 usermod
 userns
 userpass
+userptr
 usl
 usrpri
 uticks
