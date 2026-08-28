@@ -134,10 +134,22 @@ class TestCase0056MonitorModeCreateThenDeleteQuickly(MonitorModeTestCaseBase):
             if process.poll() is not None:
                 early_failure = f"Monitor process exited before shutdown with status {process.returncode} after transient create/delete workflow"
 
-            details["monitor_observed_new_file"] = f"[M] New local file added: {transient_relative}" in post_mutation_log_segment
-            details["monitor_observed_delete"] = f"[M] Local item deleted: {transient_relative}" in post_mutation_log_segment
-            details["monitor_observed_upload"] = f"Uploading new file: {transient_relative} ... done" in post_mutation_log_segment
-            details["monitor_observed_remote_delete"] = f"Deleting item from Microsoft OneDrive: {transient_relative}" in post_mutation_log_segment
+            details["monitor_observed_new_file"] = self._monitor_output_contains(
+                post_mutation_log_segment,
+                f"[M] New local file added: {transient_relative}",
+            )
+            details["monitor_observed_delete"] = self._monitor_output_contains(
+                post_mutation_log_segment,
+                f"[M] Local item deleted: {transient_relative}",
+            )
+            details["monitor_observed_upload"] = self._monitor_output_contains(
+                post_mutation_log_segment,
+                f"Uploading new file: {transient_relative} ... done",
+            )
+            details["monitor_observed_remote_delete"] = self._monitor_output_contains(
+                post_mutation_log_segment,
+                f"Deleting item from Microsoft OneDrive: {transient_relative}",
+            )
         finally:
             self._shutdown_monitor_process(process, details)
 

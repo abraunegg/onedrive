@@ -78,7 +78,7 @@ class TestCase0059WebSocketRemoteUploadNotification(MonitorModeTestCaseBase):
         deadline = time.time() + timeout_seconds
         while time.time() < deadline:
             content = self._read_monitor_log_text(stdout_file, stderr_file, app_log_dir)
-            if all(pattern in content for pattern in required_patterns):
+            if all(self._monitor_output_contains(content, pattern) for pattern in required_patterns):
                 return True
             time.sleep(poll_interval)
         return False
