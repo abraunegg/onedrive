@@ -189,9 +189,12 @@ class TestCase0054MonitorModeAtomicSaveEditorReplaceWorkflow(MonitorModeTestCase
             details["handoff_processed"] = handoff_processed
             details["handoff_log_segment_length"] = len(handoff_log_segment)
             details["handoff_required_patterns"] = handoff_required_patterns
-            details["handoff_temp_upload_seen"] = (
-                f"Uploading new file: {handoff_temp_relative}" in handoff_log_segment
-                or f"Uploading modified file: {handoff_temp_relative}" in handoff_log_segment
+            details["handoff_temp_upload_seen"] = any(
+                self._monitor_output_contains(handoff_log_segment, pattern)
+                for pattern in (
+                    f"Uploading new file: {handoff_temp_relative}",
+                    f"Uploading modified file: {handoff_temp_relative}",
+                )
             )
 
             if not handoff_processed:
