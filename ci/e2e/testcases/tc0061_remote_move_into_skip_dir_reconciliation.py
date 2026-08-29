@@ -94,7 +94,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         while time.time() < deadline:
             content = self._read_stdout(stdout_file)
             latest_segment = content[start_offset:]
-            if all(pattern in latest_segment for pattern in required_patterns):
+            if all(self._monitor_output_contains(latest_segment, pattern) for pattern in required_patterns):
                 return True, latest_segment
             time.sleep(poll_interval)
 
@@ -486,7 +486,8 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                     "skip_dir" in reconcile_combined and skipped_relative in reconcile_combined
                 ),
                 "archive_download_logged_in_reconcile": any(
-                    f"Downloading file: {moved_relative}" in reconcile_combined for moved_relative in moved_files
+                    self._monitor_output_contains(reconcile_combined, f"Downloading file: {moved_relative}")
+                    for moved_relative in moved_files
                 ),
             }
         )

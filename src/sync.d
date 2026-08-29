@@ -7991,12 +7991,13 @@ class SyncEngine {
 
 		// Do we have space available or is space available being restricted (so we make the blind assumption that there is space available)
 		JSONValue uploadResponse;
+		bool simpleUploadUsed = false;
 		if (spaceAvailableOnline) {
 			// Does this file exceed the maximum file size to upload to OneDrive?
 			if (thisFileSizeLocal <= maxUploadFileSize) {
 				// Attempt to upload the modified file
 				// Error handling is in performModifiedFileUpload(), and the JSON that is responded with - will either be null or a valid JSON object containing the upload result
-				uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal, uploadTransferStartTime, uploadTransferEndTime);
+				uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal, simpleUploadUsed, uploadTransferStartTime, uploadTransferEndTime);
 
 				// Evaluate the returned JSON uploadResponse
 				// If there was an error uploading the file, uploadResponse should be empty and invalid
@@ -8086,8 +8087,17 @@ class SyncEngine {
 				// Get the latest eTag, and use that
 				string etagFromUploadResponse = uploadResponse["eTag"].str;
 
-				// Attempt to update the online lastModifiedDateTime value based on our local timestamp data
-				if (appConfig.accountType == "personal") {
+				// For a successful simple upload, Microsoft assigns the resulting
+				// fileSystemInfo timestamp. Make that returned timestamp authoritative for
+				// the local object as well, consistently for every account type.
+				if (simpleUploadUsed && uploadIntegrityPassed) {
+					// Preserve existing --upload-only semantics: when operating upload-only,
+					// do not modify the local object after the upload completes.
+					if (!uploadOnly) {
+						Item onlineItem = makeItem(uploadResponse);
+						setLocalPathTimestamp(dryRun, localFilePath, onlineItem.mtime);
+					}
+				} else if (appConfig.accountType == "personal") {
 					// Personal Account Handling for Modified File Upload
 					//
 					// Did the upload integrity check pass or fail?
@@ -8270,7 +8280,7 @@ class SyncEngine {
 	}
 
 	// Perform the upload of a locally modified file to OneDrive
-	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal, out SysTime uploadTransferStartTime, out SysTime uploadTransferEndTime) {
+	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal, out bool simpleUploadUsed, out SysTime uploadTransferStartTime, out SysTime uploadTransferEndTime) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -8284,6 +8294,7 @@ class SyncEngine {
 
 		// Function variables
 		JSONValue uploadResponse;
+		simpleUploadUsed = false;
 		OneDriveApi uploadFileOneDriveApiInstance;
 		uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
 		uploadFileOneDriveApiInstance.initialise();
@@ -8445,6 +8456,7 @@ class SyncEngine {
 			// Additionally, all files where file size is < 4MB should be uploaded by simpleUploadReplace - everything else should use a session to upload the modified file
 			if ((thisFileSizeLocal == 0) || (useSimpleUpload)) {
 				// Must use Simple Upload to replace the file online
+				simpleUploadUsed = true;
 				try {
 					uploadTransferStartTime = Clock.currTime();
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUploadReplace(localFilePath, targetDriveId, targetItemId);
@@ -11014,6 +11026,10 @@ class SyncEngine {
 		// Assume that by default the upload fails
 		bool uploadFailed = true;
 
+		// Track whether this upload actually used the simple upload path so that
+		// successful post-upload timestamp reconciliation is account-type neutral.
+		bool simpleUploadUsed = false;
+
 		// OneDrive API Upload Response
 		JSONValue uploadResponse;
 
@@ -11057,6 +11073,7 @@ class SyncEngine {
 			// Additionally, only where file size is < 4MB should be uploaded by simpleUpload - everything else should use a session to upload
 
 			if ((thisFileSize == 0) || (useSimpleUpload)) {
+				simpleUploadUsed = true;
 				try {
 					// Initialise API for simple upload
 					uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
@@ -11224,61 +11241,83 @@ class SyncEngine {
 						// Check the integrity of the uploaded file, if the local file still exists
 						uploadIntegrityPassed = performUploadIntegrityValidationChecks(uploadResponse, fileToUpload, thisFileSize);
 
-						// Update the file modified time on OneDrive and save item details to database
-						// Update the item's metadata on OneDrive
-						SysTime mtime;
-						try {
-							mtime = timeLastModified(fileToUpload).toUTC();
-						} catch (FileException exception) {
-							if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
-								addLogEntry("File disappeared locally after upload: " ~ fileToUpload);
-							} else {
-								displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+						// A successful simple upload cannot carry the originating filesystem timestamp.
+						// Microsoft therefore assigns the resulting fileSystemInfo timestamp. For a
+						// successful simple upload, make that returned timestamp authoritative for
+						// the local object as well, consistently for every account type.
+						if (simpleUploadUsed && uploadIntegrityPassed) {
+							// Save the upload response exactly as returned by Microsoft.
+							saveItem(uploadResponse);
+
+							// Preserve existing --upload-only semantics: when operating upload-only,
+							// do not modify the local object after the upload completes.
+							if (!uploadOnly) {
+								Item onlineItem = makeItem(uploadResponse);
+								setLocalPathTimestamp(dryRun, fileToUpload, onlineItem.mtime);
 							}
-							// Return upload status
-							return uploadFailed;
-						}
-						mtime.fracSecs = Duration.zero;
-						string newFileId = uploadResponse["id"].str;
-						string newFileETag = uploadResponse["eTag"].str;
-						// Attempt to update the online date time stamp based on our local data
-						if (appConfig.accountType == "personal") {
-							// Business | SharePoint we used a session to upload the data, thus, local timestamps are given when the session is created
-							uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
 						} else {
-							// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
-							// This means that the file which was uploaded, is potentially no longer the file we have locally
-							// There are 2 ways to solve this:
-							//   1. Download the modified file immediately after upload as per v2.4.x (default)
-							//   2. Create a new online version of the file, which then contributes to the users 'quota'
-							if (!uploadIntegrityPassed) {
-								// upload integrity check failed
-								// We do not want to create a new online file version .. unless configured to do so
-								if (!appConfig.getValueBool("create_new_file_version")) {
-									// are we in an --upload-only scenario
-									if(!uploadOnly){
-										// Download the now online modified file
-										addLogEntry("WARNING: Microsoft OneDrive modified your uploaded file via its SharePoint 'enrichment' feature. To keep your local and online versions consistent, the altered file will now be downloaded.");
-										addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
-										// Download the file directly using the prior upload JSON response
-										downloadFileItem(uploadResponse, true);
+							// Session uploads and integrity-failure handling retain their existing logic.
+							SysTime mtime;
+							try {
+								mtime = timeLastModified(fileToUpload).toUTC();
+							} catch (FileException exception) {
+								if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+									addLogEntry("File disappeared locally after upload: " ~ fileToUpload);
+								} else {
+									displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+								}
+								// Return upload status
+								return uploadFailed;
+							}
+							mtime.fracSecs = Duration.zero;
+							string newFileId = uploadResponse["id"].str;
+							string newFileETag = uploadResponse["eTag"].str;
+							// Attempt to update the online date time stamp based on our local data
+							if (appConfig.accountType == "personal") {
+								if (uploadIntegrityPassed) {
+										// Successful Personal session upload already preserved the authoritative
+										// local filesystem timestamp in fileSystemInfo.
+										// Save the completed upload response directly; no timestamp PATCH required.
+										saveItem(uploadResponse);
 									} else {
-										// --upload-only being used
-										// we are not downloading a file, warn that file differences will exist
-										addLogEntry("WARNING: The file uploaded to Microsoft OneDrive has been modified through its SharePoint 'enrichment' process and no longer matches your local version.");
-										addLogEntry("WARNING: The online metadata will now be modified to match your local file which will create a new file version.");
-										addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
-										// Create a new online version of the file by updating the metadata - this ensures that the file we uploaded is the file online
+										// Preserve existing Personal-account integrity-failure handling.
+										uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
+									}
+							} else {
+								// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+								// This means that the file which was uploaded, is potentially no longer the file we have locally
+								// There are 2 ways to solve this:
+								//   1. Download the modified file immediately after upload as per v2.4.x (default)
+								//   2. Create a new online version of the file, which then contributes to the users 'quota'
+								if (!uploadIntegrityPassed) {
+									// upload integrity check failed
+									// We do not want to create a new online file version .. unless configured to do so
+									if (!appConfig.getValueBool("create_new_file_version")) {
+										// are we in an --upload-only scenario
+										if(!uploadOnly){
+											// Download the now online modified file
+											addLogEntry("WARNING: Microsoft OneDrive modified your uploaded file via its SharePoint 'enrichment' feature. To keep your local and online versions consistent, the altered file will now be downloaded.");
+											addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
+											// Download the file directly using the prior upload JSON response
+											downloadFileItem(uploadResponse, true);
+										} else {
+											// --upload-only being used
+											// we are not downloading a file, warn that file differences will exist
+											addLogEntry("WARNING: The file uploaded to Microsoft OneDrive has been modified through its SharePoint 'enrichment' process and no longer matches your local version.");
+											addLogEntry("WARNING: The online metadata will now be modified to match your local file which will create a new file version.");
+											addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
+											// Create a new online version of the file by updating the metadata - this ensures that the file we uploaded is the file online
+											uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
+										}
+									} else {
+										// Create a new online version of the file by updating the metadata, which negates the need to download the file
 										uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
 									}
 								} else {
-									// Create a new online version of the file by updating the metadata, which negates the need to download the file
-									uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
+									// integrity checks passed
+									// save the uploadResponse to the database
+									saveItem(uploadResponse);
 								}
-							} else {
-								// integrity checks passed
-								// save the uploadResponse to the database
-								saveItem(uploadResponse);
 							}
 						}
 					}
