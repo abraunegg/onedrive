@@ -274,8 +274,9 @@ class TestCase0077TimestampAuthorityValidation(MonitorModeTestCaseBase):
             details["blocking_evidence_seen"] = blocked_seen
             details["monitor_alive_while_blocked"] = process.poll() is None
             details["sync_started_while_blocked"] = "Starting a sync with Microsoft OneDrive" in blocked_segment
-            details["delayed_upload_seen_while_blocked"] = (
-                f"Uploading new file: {delayed_relative} ... done" in blocked_segment
+            details["delayed_upload_seen_while_blocked"] = self._monitor_output_contains(
+                blocked_segment,
+                f"Uploading new file: {delayed_relative} ... done",
             )
 
             if not blocked_seen:
