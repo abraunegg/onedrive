@@ -13717,6 +13717,17 @@ class SyncEngine {
 		addLogEntry("Moving " ~ oldPath ~ " to " ~ newPath);
 		// Is this move unwanted?
 		bool unwanted = false;
+		// Why is this move unwanted?
+		// There are two quite different reasons a move can be rejected, and they require
+		// opposite handling of the existing online copy:
+		// - the new path is filtered out of scope by the user's own configuration, in which
+		//   case the item is genuinely no longer wanted online
+		// - the new path cannot be represented online at all, in which case the item has not
+		//   left the sync scope. It is still inside 'sync_dir', it simply cannot be named
+		//   online. The online copy is then the only synced copy of data that still exists
+		//   locally, and removing it would discard that data with no way for a later scan to
+		//   restore it, because the local name remains invalid.
+		bool unrepresentableOnline = false;
 		// Item variables
 		Item oldItem, newItem, parentItem;
 
@@ -13727,6 +13738,7 @@ class SyncEngine {
 				// Path is not valid according to https://dlang.org/phobos/std_encoding.html
 				addLogEntry("Skipping item - invalid character encoding sequence: " ~ newPath, ["info", "notify"]);
 				unwanted = true;
+				unrepresentableOnline = true;
 			}
 		}
 
@@ -13748,7 +13760,11 @@ class SyncEngine {
 		// - Check path for HTML ASCII Codes
 		// - Check path for ASCII Control Codes
 		if (!unwanted) {
-			unwanted = checkPathAgainstMicrosoftNamingRestrictions(newPath);
+			if (checkPathAgainstMicrosoftNamingRestrictions(newPath)) {
+				// The new name cannot exist online. The item itself is still in scope.
+				unwanted = true;
+				unrepresentableOnline = true;
+			}
 		}
 
 		// 'newPath' has passed client side filtering validation
@@ -13868,10 +13884,39 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("uploadMoveItem: skipping saveItem() (no JSON payload returned or move not successful)", ["debug"]);}
 				}
 			}
+		} else if (unrepresentableOnline) {
+			// The item has not been moved out of scope, it has been renamed to something that
+			// cannot exist online. Preserve the existing online copy: it holds data that is
+			// still present locally, and nothing can restore it once removed because the local
+			// name remains unusable.
+			addLogEntry("Skipping move - the new name cannot be used on Microsoft OneDrive. The existing online copy has been left unchanged: " ~ oldPath, ["info", "notify"]);
+
+			// Stop tracking the old path locally. Nothing exists there any more, and leaving
+			// the record in place would make the next local scan read the old path as a local
+			// deletion and remove the online copy after all, simply one pass later.
+			if (itemDB.selectByPath(oldPath, appConfig.defaultDriveId, oldItem)) {
+				// A directory carries its children with it. Those records describe paths that
+				// have also gone, so they would be read as local deletions in the same way.
+				if (oldItem.type != ItemType.file) {
+					foreach (Item unrepresentableChild; getChildren(oldItem.driveId, oldItem.id)) {
+						itemDB.deleteById(unrepresentableChild.driveId, unrepresentableChild.id);
+					}
+				}
+				itemDB.deleteById(oldItem.driveId, oldItem.id);
+				if (debugLogging) {addLogEntry("uploadMoveItem: removed the local database record for " ~ oldPath ~ " whilst preserving the online copy", ["debug"]);}
+			}
 		} else {
 			// Moved item is unwanted
 			addLogEntry("Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive");
-			uploadDeletedItem(oldItem, oldPath);
+
+			// Load the database record for the old path before attempting to remove it online.
+			// 'oldItem' is only populated by the successful move path above, so without this the
+			// delete is issued with a default constructed Item and cannot identify anything.
+			if (!itemDB.selectByPath(oldPath, appConfig.defaultDriveId, oldItem)) {
+				if (debugLogging) {addLogEntry("uploadMoveItem: old path has no local database entry, nothing to remove online: " ~ oldPath, ["debug"]);}
+			} else {
+				uploadDeletedItem(oldItem, oldPath);
+			}
 		}
 
 		// Display function processing time if configured to do so
