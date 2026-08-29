@@ -286,6 +286,46 @@ class SyncEngine {
 		}
 	}
 
+	private void notifyExpectedLocalFileArrival(string path) {
+		if (recordExpectedLocalFileArrival is null) return;
+		expectedLocalEffectMutex.lock();
+		try {
+			queuedExpectedFileArrivals ~= path;
+		} finally {
+			expectedLocalEffectMutex.unlock();
+		}
+	}
+
+	// Replacement/conflict preservation must never remove the canonical pathname
+	// before its replacement is ready. Preserve the existing local file and treat
+	// failure to preserve its bytes as a hard stop for the replacement.
+	private bool safeBackupPreserveForReplacement(const(char)[] path, bool bypassDataPreservation, out string backupPath, bool requireIndependentSnapshot = false) {
+		backupPath = null;
+
+		if (!requireIndependentSnapshot && !dryRun && !bypassDataPreservation && findMatchingSafeBackup(path, backupPath)) {
+			if (verboseLogging) {
+				addLogEntry("Local data is already preserved by an identical safeBackup; reusing existing preservation: " ~ backupPath, ["verbose"]);
+			}
+			return true;
+		}
+
+		safeBackup(path, dryRun, bypassDataPreservation, backupPath, true, !requireIndependentSnapshot);
+
+		if (dryRun || bypassDataPreservation) {
+			return true;
+		}
+
+		if (backupPath.empty || !exists(backupPath)) {
+			addLogEntry("ERROR: Local data preservation failed; refusing to replace the canonical file: " ~ to!string(path), ["error", "notify"]);
+			return false;
+		}
+
+		// This backup was created by the operation above. Existing matching backups
+		// returned earlier do not generate a new filesystem arrival to suppress.
+		notifyExpectedLocalFileArrival(backupPath);
+		return true;
+	}
+
 	private void notifyExpectedLocalFileDownload(string path, bool removedAfterDownload) {
 		if ((recordExpectedLocalMove is null) &&
 			(recordExpectedLocalFileArrival is null) &&
@@ -1266,29 +1306,33 @@ class SyncEngine {
 		if (debugLogging) {addLogEntry("Cleaning up all internal arrays used when processing data", ["debug"]);}
 
 		// Multi Dimensional Arrays
-		idsToDelete.length = 0;
-		idsFaked.length = 0;
-		databaseItemsWhereContentHasChanged.length = 0;
+		// Set per-sync arrays to null so their backing allocations are no longer
+		// retained by this long-lived SyncEngine instance between monitor loops.
+		idsToDelete = null;
+		idsFaked = null;
+		databaseItemsWhereContentHasChanged = null;
 
 		// JSON Items Arrays
-		jsonItemsToProcess = [];
-		fileJSONItemsToDownload = [];
-		jsonItemsToResumeUpload = [];
-		jsonItemsToResumeDownload = [];
+		jsonItemsToProcess = null;
+		fileJSONItemsToDownload = null;
+		jsonItemsToResumeUpload = null;
+		jsonItemsToResumeDownload = null;
 
 		// String Arrays
-		fileDownloadFailures = [];
-		pathFakeDeletedArray = [];
-		pathsRenamed = [];
-		newLocalFilesToUploadToOneDrive = [];
-		fileUploadFailures = [];
-		posixViolationPaths = [];
-		businessSharedFoldersOnlineToSkip = [];
-		interruptedUploadsSessionFiles = [];
-		interruptedDownloadFiles = [];
-		pathsToCreateOnline = [];
-		databaseItemsToDeleteOnline = [];
-		pathsRetained = [];
+		fileDownloadFailures = null;
+		pathFakeDeletedArray = null;
+		pathsRenamed = null;
+		newLocalFilesToUploadToOneDrive = null;
+		fileUploadFailures = null;
+		posixViolationPaths = null;
+		businessSharedFoldersOnlineToSkip = null;
+		interruptedUploadsSessionFiles = null;
+		interruptedDownloadFiles = null;
+		pathsToCreateOnline = null;
+		databaseItemsToDeleteOnline = null;
+		pathsRetained = null;
+		syncListSkippedParentIds = null;
+		onenotePackageIdentifiers = null;
 
 		// Log completion of cleanup
 		if (debugLogging) {addLogEntry("Cleaning of internal arrays complete", ["debug"]);}
@@ -1933,10 +1977,28 @@ class SyncEngine {
 					}
 				} else {
 					if (verboseLogging) {addLogEntry("Processing OneDrive JSON item batch [" ~ to!string(batchesProcessed) ~ "/" ~ to!string(batchCount) ~ "] to ensure consistent local state", ["verbose"]);}
-				}
+				}	
+					
+				// Process this batch of JSON items within a single database transaction.
+				//
+				// Each item processed here would otherwise be written as its own transaction, and
+				// as 'synchronous' is set to FULL, that requires a flush to physical media per
+				// item. Batching these changes is safe because this phase performs no network
+				// activity, is processed sequentially, and the data written is reconstructible -
+				// the delta link is not advanced until any required transfers have completed, so
+				// an incomplete batch is simply re-obtained on the next run.
+				// https://github.com/abraunegg/onedrive/issues/3788
+				itemDB.beginTransaction();
+
+				// If processing this batch throws, discard the partial batch rather than leaving
+				// the transaction open
+				scope(failure) itemDB.rollbackTransaction();
 
 				// Process the batch
 				processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount);
+
+				// Commit this batch of changes to the database
+				itemDB.commitTransaction();
 
 				// To finish off the JSON processing items, this is needed to reflect this in the log
 				if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
@@ -2465,13 +2527,25 @@ class SyncEngine {
 
 						// Test the existing database item hash against the hash on the local disk - as this is what we know was in-sync with online prior to online deletion event
 						if (!testFileHash(localPathToDelete, existingDatabaseItem)) {
-							// Current file on disk is different by hash / content
-							// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
-							// In case the renamed path is needed
+							// Current file on disk is different by hash / content. The online item
+							// was deliberately deleted, so this is the one preservation workflow
+							// where the canonical path is intentionally removed: the changed local
+							// bytes survive under safeBackup while the online deletion is honoured.
+							if (verboseLogging) {addLogEntry("The item was deleted online but contains newer local data; preserving the local file as safeBackup while honouring the online deletion: " ~ localPathToDelete, ["verbose"]);}
 							string renamedPath;
 							safeBackupAndNotifyExpectedLocalMove(localPathToDelete, dryRun, bypassDataPreservation, renamedPath);
 
-							// Purge the old record from the database as this still exists. The safeBackup() generated file now will be 'new' on the local filesystem
+							// If preservation was required but failed, do not advance the DB state.
+							// Keeping both the canonical file and its existing DB baseline is safer
+							// than pretending the online deletion was successfully reconciled.
+							if (!dryRun && !bypassDataPreservation && renamedPath.empty) {
+								addLogEntry("ERROR: Unable to preserve locally modified file after online deletion; retaining canonical file and database state: " ~ localPathToDelete, ["error", "notify"]);
+								return;
+							}
+
+							// Purge the old record from the database. When preservation is enabled,
+							// the safeBackup file is now a new local item; with bypass enabled, the
+							// user explicitly accepted removal without preservation.
 							itemDB.deleteById(existingDatabaseItem.driveId, existingDatabaseItem.id);
 						} else {
 							// Hash is the same, we can assume the isItemSynced() returning false was due to some sort of timestamp issue
@@ -3055,11 +3129,11 @@ class SyncEngine {
 					addLogEntry("Creating newDatabaseItem object using the provided JSON data", ["debug"]);
 				}
 
-				// During a native Full Scan True Up, syncStatus records whether an existing
-				// database item was observed in the authoritative online state. Mark the
-				// accepted item as seen before change, move or download handling because
-				// online presence is independent of whether later local work succeeds.
-				if (nativeFullScanTrueUpResponse && existingDBEntry) {
+				// During any authoritative current-state response that uses syncStatus as a
+				// mark-and-sweep presence flag, record an accepted existing item as seen
+				// before change, move or download handling. Online presence is independent
+				// of whether applying newer content locally later succeeds.
+				if ((nativeFullScanTrueUpResponse || generatedSimulatedDeltaResponse) && existingDBEntry) {
 					existingDatabaseItem.syncStatus = "Y";
 					itemDB.upsert(existingDatabaseItem);
 				}
@@ -3383,7 +3457,23 @@ class SyncEngine {
 			// Test if this item is actually in-sync
 			// What is the source of this item data?
 			string itemSource = "remote";
-			if (isItemSynced(newDatabaseItem, newItemPath, itemSource)) {
+			bool localItemIsSynced = isItemSynced(newDatabaseItem, newItemPath, itemSource);
+
+			// When there is no trusted DB identity yet (for example during --resync),
+			// an equal whole-second timestamp must not bind different local content to
+			// the incoming online item. Confirm content only for this narrow case.
+			if (localItemIsSynced &&
+				((newDatabaseItem.type == ItemType.file) ||
+				 ((newDatabaseItem.type == ItemType.remote) && (newDatabaseItem.remoteType == ItemType.file))) &&
+				!itemDB.idInLocalDatabase(newDatabaseItem.driveId, newDatabaseItem.id) &&
+				!testFileHash(newItemPath, newDatabaseItem)) {
+				if (debugLogging) {
+					addLogEntry("Equal timestamp did not imply identical content for untracked local file; continuing conflict reconciliation", ["debug"]);
+				}
+				localItemIsSynced = false;
+			}
+
+			if (localItemIsSynced) {
 				// Issue #3115 - Personal Account Shared Folder
 				// What account type is this?
 				if (appConfig.accountType == "personal") {
@@ -3512,17 +3602,28 @@ class SyncEngine {
 						// file exists locally but is not in the sqlite database - maybe a failed download?
 						if (verboseLogging) {addLogEntry("Local item does not exist in local database - replacing with file from OneDrive - failed download?", ["verbose"]);}
 
-						// In a --resync scenario or if items.sqlite3 was deleted before startup we have zero way of knowing IF the local file is meant to be the right file
-						// To this pint we have passed the following checks:
-						// 1. Any client side filtering checks - this determined this is a file that is wanted
-						// 2. A file with the exact name exists locally
-						// 3. The local modified time > remote modified time
-						// 4. The id of the item from OneDrive is not in the database
+						// In a --resync scenario or if items.sqlite3 was deleted before startup,
+						// timestamps alone are not sufficient to decide that these are different files.
+						// If the content already matches the online item, reconcile metadata and DB
+						// state without creating a safeBackup or downloading identical bytes.
+						if (testFileHash(newItemPath, newDatabaseItem)) {
+							if (verboseLogging) {addLogEntry("Local file content matches OneDrive; reconciling timestamp and database state without replacement", ["verbose"]);}
+							setLocalPathTimestamp(dryRun, newItemPath, newDatabaseItem.mtime);
+							itemDB.upsert(newDatabaseItem);
+							if (appConfig.getValueBool("write_xattr_data")) {
+								writeXattrData(newItemPath, onedriveJSONItem);
+							}
 
-						// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
-						// In case the renamed path is needed
-						string renamedPath;
-						safeBackupAndNotifyExpectedLocalMove(newItemPath, dryRun, bypassDataPreservation, renamedPath);
+							// Display function processing time if configured to do so
+							if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+								displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+							}
+
+							return;
+						}
+
+						// Content differs. Do not rename the canonical file while merely queueing
+						// its replacement; downloadFileItem() preserves it only after validation.
 					}
 				} else {
 					// Is the remote newer?
@@ -3537,50 +3638,65 @@ class SyncEngine {
 						// Is this the exact same file?
 						// Test the file hash
 						if (!testFileHash(newItemPath, newDatabaseItem)) {
-							// File on disk is different by hash / content
-							// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
-							// In case the renamed path is needed
-							string renamedPath;
-							safeBackupAndNotifyExpectedLocalMove(newItemPath, dryRun, bypassDataPreservation, renamedPath);
+							// File on disk is different by hash / content. Preserve the canonical
+							// file transactionally inside downloadFileItem(), after the replacement
+							// has been completely downloaded and validated.
 						} else {
-							// File on disk is the same by hash / content, but is a different timestamp
-							// The file contents have not changed, but the modified timestamp has
+							// File on disk is the same by hash / content, but is a different timestamp.
+							// Reconcile metadata and database state only; identical bytes must never
+							// be turned into a safeBackup/replacement transaction.
 							if (verboseLogging) {addLogEntry("The last modified timestamp online has changed however the local file content has not changed", ["verbose"]);}
-							// Update the local timestamp, logging and error handling done within function
 							setLocalPathTimestamp(dryRun, newItemPath, newDatabaseItem.mtime);
+							itemDB.upsert(newDatabaseItem);
+							if (appConfig.getValueBool("write_xattr_data")) {
+								writeXattrData(newItemPath, onedriveJSONItem);
+							}
+
+							// Display function processing time if configured to do so
+							if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+								displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+							}
+
+							return;
 						}
 					}
 
-					// Are the timestamps equal?
+					// Are the timestamps equal? Timestamp equality alone cannot prove that
+					// two files contain the same data, especially after --resync or DB loss.
 					if (localModifiedTime == itemModifiedTime) {
-						// yes they are equal
-						if (debugLogging) {
-							addLogEntry("File timestamps are equal, no further action required", ["debug"]); // correct message as timestamps are equal
-							addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
+						if (testFileHash(newItemPath, newDatabaseItem)) {
+							if (debugLogging) {
+								addLogEntry("File timestamps and content are equal, no further action required", ["debug"]);
+								addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
+							}
+
+							// Add item to database
+							itemDB.upsert(newDatabaseItem);
+
+							// Did the user configure to save xattr data about this file?
+							if (appConfig.getValueBool("write_xattr_data")) {
+								writeXattrData(newItemPath, onedriveJSONItem);
+							}
+
+							// Display function processing time if configured to do so
+							if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+								displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+							}
+
+							return;
 						}
 
-						// Add item to database
-						itemDB.upsert(newDatabaseItem);
-
-						// Did the user configure to save xattr data about this file?
-						if (appConfig.getValueBool("write_xattr_data")) {
-							writeXattrData(newItemPath, onedriveJSONItem);
-						}
-
-						// Display function processing time if configured to do so
-						if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-							// Combine module name & running Function
-							displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
-						}
-
-						// everything all OK, DB updated
-						return;
+						// Same timestamp but different bytes: do not bind the local file to
+						// the online DB identity. Queue the validated replacement and preserve
+						// the local content transactionally at download commit.
+						if (verboseLogging) {addLogEntry("Local and OneDrive timestamps match but file content differs; preserving local content before applying the online file", ["verbose"]);}
 					}
 				}
 			}
 		}
 
-		// Path does not exist locally (should not exist locally if renamed file) - this will be a new file download or new folder creation
+		// A file path may already exist locally when its validated online replacement is queued.
+		// downloadFileItem() now owns any required preservation and replacement transaction.
 		// How to handle this Potentially New Local Item JSON ?
 		final switch (newDatabaseItem.type) {
 			case ItemType.file:
@@ -4053,19 +4169,21 @@ class SyncEngine {
 							if (verboseLogging) {addLogEntry("Destination is in sync and will be overwritten", ["verbose"]);}
 						} else {
 							// The destination item is different
-							if (verboseLogging) {addLogEntry("The destination is occupied with a different item, renaming the conflicting file...", ["verbose"]);}
-							// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
-							// In case the renamed path is needed
-							string renamedPath;
-							safeBackupAndNotifyExpectedLocalMove(changedItemPath, dryRun, bypassDataPreservation, renamedPath);
+							if (verboseLogging) {addLogEntry("The destination is occupied with a different item, preserving the conflicting file before replacement...", ["verbose"]);}
+							// Preserve the conflicting destination without removing its canonical name.
+							string backupPath;
+							if (!safeBackupPreserveForReplacement(changedItemPath, bypassDataPreservation, backupPath)) {
+								return;
+							}
 						}
 					} else {
 						// The to be overwritten item is not already in the itemdb, so it should saved to avoid data loss
-						if (verboseLogging) {addLogEntry("The destination is occupied by an existing un-synced file, renaming the conflicting file...", ["verbose"]);}
-						// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
-						// In case the renamed path is needed
-						string renamedPath;
-						safeBackupAndNotifyExpectedLocalMove(changedItemPath, dryRun, bypassDataPreservation, renamedPath);
+						if (verboseLogging) {addLogEntry("The destination is occupied by an existing un-synced file, preserving the conflicting file before replacement...", ["verbose"]);}
+						// Preserve the untracked destination without removing its canonical name.
+						string backupPath;
+						if (!safeBackupPreserveForReplacement(changedItemPath, bypassDataPreservation, backupPath)) {
+							return;
+						}
 					}
 				}
 
@@ -4378,6 +4496,12 @@ class SyncEngine {
 		long jsonFileSize = 0;
 		Item databaseItem;
 		bool fileFoundInDB = false;
+		bool canonicalFileExistedBeforeDownload = false;
+		bool preserveCanonicalAsSafeBackup = false;
+		string canonicalHashBeforeDownload;
+		string completedDownloadPath;
+		SysTime itemModifiedTime;
+		string itemModifiedTimestamp;
 
 		// Create a JSONValue to store the online hash for resumable file checking
 		JSONValue onlineHash;
@@ -4404,6 +4528,32 @@ class SyncEngine {
 		// Calculate this items path
 		string newItemPath = computeItemPath(downloadDriveId, downloadParentId) ~ "/" ~ downloadItemName;
 		if (debugLogging) {addLogEntry("JSON Item calculated full path for download is: " ~ newItemPath, ["debug"]);}
+
+		// A downloaded live item must have a real Microsoft Graph filesystem timestamp.
+		// Do not download an item when its authoritative timestamp is unavailable because
+		// doing so would require manufacturing a local mtime and database baseline. Track
+		// this as a download failure so the sync result cannot silently report success.
+		if (!getFileSystemInfoLastModifiedDateTime(onedriveJSONItem, itemModifiedTime, itemModifiedTimestamp)) {
+			if (itemModifiedTimestamp.empty) {
+				addLogEntry("WARNING: Skipping download because Microsoft OneDrive did not provide fileSystemInfo.lastModifiedDateTime: " ~ downloadItemName ~ " (" ~ downloadItemId ~ ")");
+			} else {
+				addLogEntry("WARNING: Skipping download because Microsoft OneDrive provided an invalid fileSystemInfo.lastModifiedDateTime: " ~ downloadItemName ~ " (" ~ downloadItemId ~ "): " ~ itemModifiedTimestamp);
+			}
+			if (!canFind(fileDownloadFailures, newItemPath)) {
+				fileDownloadFailures ~= newItemPath;
+			}
+			return;
+		}
+		canonicalFileExistedBeforeDownload = exists(newItemPath);
+		if (canonicalFileExistedBeforeDownload && ignoreDataPreservationCheck) {
+			// SharePoint enrichment downloads intentionally replace the file just uploaded.
+			// Capture its content now so a genuine user edit made during the replacement
+			// transfer is still detected and preserved at commit time.
+			canonicalHashBeforeDownload = computeQuickXorHash(newItemPath);
+		}
+		// All downloads remain staged until sync-layer validation and commit. This also
+		// protects a new-file download if a local file appears while transfer is in flight.
+		completedDownloadPath = newItemPath ~ ".partial";
 
 		// Is the item reported as Malware ?
 		if (isMalware(onedriveJSONItem)){
@@ -4455,32 +4605,18 @@ class SyncEngine {
 						]);
 			}
 
-			// Does the file already exist in the path locally?
-			if (exists(newItemPath)) {
-				// To accommodate forcing the download of a file, post upload to Microsoft OneDrive, we need to ignore the checking of hashes and making a safe backup
-				if (!ignoreDataPreservationCheck) {
-
-					// file exists locally already
-					foreach (driveId; onlineDriveDetails.keys) {
-						if (itemDB.selectByPath(newItemPath, driveId, databaseItem)) {
-							fileFoundInDB = true;
-							break;
-						}
-					}
-
-					// Log the DB details
-					if (debugLogging) {addLogEntry("File to download exists locally and this is the DB record: " ~ to!string(databaseItem), ["debug"]);}
-
-					// Does the DB (what we think is in sync) hash match the existing local file hash?
-					if (!testFileHash(newItemPath, databaseItem)) {
-						// local file is different to what we know to be true
-						addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
-						// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
-						// In case the renamed path is needed
-						string renamedPath;
-						safeBackupAndNotifyExpectedLocalMove(newItemPath, dryRun, bypassDataPreservation, renamedPath);
+			// Capture the current DB baseline for failure handling, but do not decide
+			// preservation yet. A long-running transfer can overlap a genuine local edit,
+			// so the safeBackup decision must be made again at the commit boundary.
+			if (canonicalFileExistedBeforeDownload && !ignoreDataPreservationCheck) {
+				foreach (driveId; onlineDriveDetails.keys) {
+					if (itemDB.selectByPath(newItemPath, driveId, databaseItem)) {
+						fileFoundInDB = true;
+						break;
 					}
 				}
+
+				if (debugLogging) {addLogEntry("File to download exists locally and this is the DB record: " ~ to!string(databaseItem), ["debug"]);}
 			}
 
 			// Is there enough free space locally to download the file
@@ -4523,18 +4659,15 @@ class SyncEngine {
 							}
 						}
 
-						// Perform the download with any applicable set offset. The Curl layer
-						// writes to '<path>.partial' and atomically renames it only after a
-						// successful transfer. Mark completion only when downloadById()
-						// returns a non-null response, proving that the temporary file was
-						// promoted into the final path.
+						// Perform the download with any applicable resume offset, always deferring
+						// Curl-layer promotion so the completed .partial is validated before any
+						// canonical pathname can be created or replaced.
 						downloadTransferStartTime = Clock.currTime();
-						auto downloadResponse = downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset);
+						auto downloadResponse = downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset, true);
 						downloadTransferEndTime = Clock.currTime();
 						if (downloadResponse !is null) {
-							// A non-null response means downloadFile() validated the HTTP response and
-							// promoted '<path>.partial' into the final destination.
-							downloadTransferCompleted = true;
+							// Every download remains at .partial until sync-layer validation and commit.
+							downloadTransferCompleted = false;
 							hasDownloadedStreamedQuickXorHash = downloadResponse.hasStreamedQuickXorHash;
 							downloadedStreamedQuickXorHash = downloadResponse.streamedQuickXorHash;
 						} else {
@@ -4544,14 +4677,8 @@ class SyncEngine {
 							downloadFailed = true;
 						}
 
-						// OneDrive API Instance Cleanup - Shutdown API and free curl object.
-						// Do not force GC collection here: downloadFileItem() runs once per file
-						// inside the parallel download worker pool, and forcing a full GC after
-						// every downloaded file causes repeated stop-the-world mark scans.
-						downloadFileOneDriveApiInstance.releaseCurlEngine();
-						downloadFileOneDriveApiInstance = null;
 					} catch (OneDriveException exception) {
-						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset); generated a OneDriveException", ["debug"]);}
+						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset, true); generated a OneDriveException", ["debug"]);}
 						
 						// Any propagated API exception means that the requested online version was
 						// not downloaded. A pre-existing final path, if present, is still the last
@@ -4580,61 +4707,26 @@ class SyncEngine {
 						if (verboseLogging) {addLogEntry("Download failed (local file system error): " ~ newItemPath, ["verbose"]);}
 						downloadFailed = true;
 					}
+
+					// OneDrive API Instance Cleanup - shutdown API and return the CurlEngine
+					// to the pool on both successful and handled-failure paths. Do not leave
+					// native HTTP ownership dependent on a later GC/finalizer cycle.
+					// Do not force GC here: this function runs once per downloaded file.
+					if (downloadFileOneDriveApiInstance !is null) {
+						downloadFileOneDriveApiInstance.releaseCurlEngine();
+						downloadFileOneDriveApiInstance = null;
+					}
 				
 					// Validate only when the requested online version was downloaded. A failed
 					// transfer may deliberately leave an older final file untouched.
-					if (!downloadFailed && exists(newItemPath)) {
+					if (!downloadFailed && exists(completedDownloadPath)) {
 						// When downloading some files from SharePoint, the OneDrive API reports one file size, 
 						// but the SharePoint HTTP Server sends a totally different byte count for the same file
 						// we have implemented --disable-download-validation to disable these checks
 
-						// Regardless of --disable-download-validation we still need to set the file timestamp correctly
-						// Get the mtime from the JSON data
-						SysTime itemModifiedTime;
-						string lastModifiedTimestamp;
-						if (isItemRemote(onedriveJSONItem)) {
-							// remote file item
-							if (hasRemoteFileSystemInfoLastModifiedDateTime(onedriveJSONItem)) {
-								// JSON has correct timestamp data
-								lastModifiedTimestamp = strip(onedriveJSONItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
-								// is lastModifiedTimestamp valid?
-								if (isValidUTCDateTime(lastModifiedTimestamp)) {
-									// string is a valid timestamp
-									itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
-								} else {
-									// invalid timestamp from JSON file
-									addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-									// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
-									itemModifiedTime = Clock.currTime(UTC());
-								}
-							} else {
-								// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
-								itemModifiedTime = Clock.currTime(UTC());
-								// JSON data missing, missing timestamp from JSON file
-								addLogEntry("WARNING: Missing timestamp provided by the Microsoft OneDrive API, using current UTC time: " ~ to!string(itemModifiedTime));
-							}
-						} else {
-							// not a remote file item
-							if (hasFileSystemInfoLastModifiedDateTime(onedriveJSONItem)) {
-								// JSON has correct timestamp data
-								lastModifiedTimestamp = strip(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
-								// is lastModifiedTimestamp valid?
-								if (isValidUTCDateTime(lastModifiedTimestamp)) {
-									// string is a valid timestamp
-									itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
-								} else {
-									// invalid timestamp from JSON file
-									addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-									// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
-									itemModifiedTime = Clock.currTime(UTC());
-								}
-							} else {
-								// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
-								itemModifiedTime = Clock.currTime(UTC());
-								// JSON data missing, missing timestamp from JSON file
-								addLogEntry("WARNING: Missing timestamp provided by the Microsoft OneDrive API, using current UTC time: " ~ to!string(itemModifiedTime));
-							}
-						}
+						// Regardless of --disable-download-validation we still need to set the file timestamp correctly.
+						// itemModifiedTime was validated before the transfer began so this operation never
+						// needs to manufacture a replacement timestamp.
 
 						// Did the user configure --disable-download-validation ?
 						if (!disableDownloadValidation) {
@@ -4642,7 +4734,7 @@ class SyncEngine {
 							// Does the file hash OneDrive reports match what we have locally?
 							string onlineFileHash;
 							string downloadedFileHash;
-							long downloadFileSize = getSize(newItemPath);
+							long downloadFileSize = getSize(completedDownloadPath);
 
 							if (!OneDriveFileXORHash.empty) {
 								onlineFileHash = OneDriveFileXORHash;
@@ -4656,12 +4748,12 @@ class SyncEngine {
 									if (debugLogging) {
 										addLogEntry("Must generate file hash", ["debug"]);
 									}
-									downloadedFileHash = computeQuickXorHash(newItemPath);
+									downloadedFileHash = computeQuickXorHash(completedDownloadPath);
 								}
 							} else {
 								onlineFileHash = OneDriveFileSHA256Hash;
 								// Fallback: Calculate the SHA256 Hash for this file
-								downloadedFileHash = computeSHA256Hash(newItemPath);
+								downloadedFileHash = computeSHA256Hash(completedDownloadPath);
 							}
 
 							if ((downloadFileSize == jsonFileSize) && (downloadedFileHash == onlineFileHash)) {
@@ -4669,7 +4761,7 @@ class SyncEngine {
 								if (debugLogging) {addLogEntry("Downloaded file matches reported size and reported file hash", ["debug"]);}
 
 								// Set the timestamp, logging and error handling done within function
-								setLocalPathTimestamp(dryRun, newItemPath, itemModifiedTime);
+								setLocalPathTimestamp(dryRun, completedDownloadPath, itemModifiedTime);
 							} else {
 								// QuickXorHash in this client incorporates the file length into the final digest, so a size mismatch would be expected to also produce a hash mismatch.
 								// However, QuickXorHash is not collision-resistant, so we treat the hash mismatch as the definitive integrity failure condition and log size mismatches
@@ -4741,13 +4833,13 @@ class SyncEngine {
 									// We do not want this local file to remain on the local file system as it failed the integrity checks
 									addLogEntry("Removing local file " ~ newItemPath ~ " due to failed integrity checks");
 									if (!dryRun) {
-										safeRemove(newItemPath);
+										safeRemove(completedDownloadPath);
 									}
 
 									// Was this item previously in-sync with the local system?
 									// We previously searched for the file in the DB, we need to use that record
-									if (fileFoundInDB) {
-										// Purge DB record so that the deleted local file does not cause an online deletion
+									if (fileFoundInDB && !exists(newItemPath)) {
+										// Purge DB record only when no canonical local file remains
 										// In a --dry-run scenario, this is being done against a DB copy
 										addLogEntry("Removing DB record due to failed integrity checks");
 										itemDB.deleteById(databaseItem.driveId, databaseItem.id);
@@ -4764,7 +4856,7 @@ class SyncEngine {
 
 							// Whilst the download integrity checks were disabled, we still have to set the correct timestamp on the file
 							// Set the timestamp, logging and error handling done within function
-							setLocalPathTimestamp(dryRun, newItemPath, itemModifiedTime);
+							setLocalPathTimestamp(dryRun, completedDownloadPath, itemModifiedTime);
 
 							// Azure Information Protection (AIP) protected files potentially have missing data and/or inconsistent data
 							if (appConfig.accountType != "personal") {
@@ -4772,8 +4864,8 @@ class SyncEngine {
 								// There is ZERO way to determine if this is an AIP protected file either from the JSON data
 
 								// Calculate the local file hash and get the local file size
-								string localFileHash = computeQuickXorHash(newItemPath);
-								long downloadFileSize = getSize(newItemPath);
+								string localFileHash = computeQuickXorHash(completedDownloadPath);
+								long downloadFileSize = getSize(completedDownloadPath);
 
 								if ((OneDriveFileXORHash != localFileHash) && (jsonFileSize != downloadFileSize)) {
 									// High potential to be an AIP protected file given the following scenario
@@ -4787,8 +4879,8 @@ class SyncEngine {
 										addLogEntry(aipLogMessage, ["debug"]);
 										addLogEntry(" - Online XOR   : " ~ to!string(OneDriveFileXORHash), ["debug"]);
 										addLogEntry(" - Online Size  : " ~ to!string(jsonFileSize), ["debug"]);
-										addLogEntry(" - Local XOR    : " ~ to!string(computeQuickXorHash(newItemPath)), ["debug"]);
-										addLogEntry(" - Local Size   : " ~ to!string(getSize(newItemPath)), ["debug"]);
+										addLogEntry(" - Local XOR    : " ~ to!string(computeQuickXorHash(completedDownloadPath)), ["debug"]);
+										addLogEntry(" - Local Size   : " ~ to!string(getSize(completedDownloadPath)), ["debug"]);
 									}
 
 									// Make the change in the JSON using local values
@@ -4810,8 +4902,8 @@ class SyncEngine {
 
 							// Was this item previously in-sync with the local system?
 							// We previously searched for the file in the DB, we need to use that record
-							if (fileFoundInDB) {
-								// Purge DB record so that the deleted local file does not cause an online deletion
+							if (fileFoundInDB && !exists(newItemPath)) {
+								// Purge DB record only when no canonical local file remains
 								// In a --dry-run scenario, this is being done against a DB copy
 								addLogEntry("Removing existing DB record due to failed file download.");
 								itemDB.deleteById(databaseItem.driveId, databaseItem.id);
@@ -4834,7 +4926,109 @@ class SyncEngine {
 				}
 			}
 
-			// File should have been downloaded
+			// The validated online bytes are still in <path>.partial. Commit them only
+			// after re-evaluating the canonical path at the last possible moment. This
+			// catches local edits (or a newly-created same-name file) made while the
+			// network transfer was in flight.
+			if (!downloadFailed && !dryRun) {
+				bool canonicalExistsAtCommit = exists(newItemPath);
+				string canonicalHashAtCommit;
+
+				// Snapshot the canonical bytes at the commit boundary. A second check
+				// immediately before promotion prevents an edit made while preservation
+				// is being prepared from being overwritten by the validated download.
+				if (canonicalExistsAtCommit) {
+					canonicalHashAtCommit = computeQuickXorHash(newItemPath);
+					if (canonicalHashAtCommit.empty) {
+						addLogEntry("ERROR: Unable to verify canonical file at download commit; refusing replacement: " ~ newItemPath, ["error", "notify"]);
+						safeRemove(completedDownloadPath);
+						downloadFailed = true;
+					}
+				}
+
+				// If this workflow started as a replacement but the canonical file has
+				// disappeared, a genuine local removal/move may have occurred during the
+				// download. Do not silently recreate it and erase that local intent.
+				if (canonicalFileExistedBeforeDownload && !canonicalExistsAtCommit) {
+					addLogEntry("WARNING: Canonical file changed or disappeared while replacement was downloading; discarding staged replacement: " ~ newItemPath, ["info", "notify"]);
+					safeRemove(completedDownloadPath);
+					downloadFailed = true;
+				}
+
+				if (!downloadFailed && canonicalExistsAtCommit && ignoreDataPreservationCheck) {
+					// The caller expects replacement of the file it just uploaded, so do not
+					// create a safeBackup for that known difference. However, if the canonical
+					// bytes changed again while this download was running, that is new local
+					// data and must be preserved. A file that appeared unexpectedly is treated
+					// the same way.
+					if (!canonicalFileExistedBeforeDownload) {
+						preserveCanonicalAsSafeBackup = true;
+					} else {
+						preserveCanonicalAsSafeBackup = canonicalHashBeforeDownload.empty || (canonicalHashAtCommit != canonicalHashBeforeDownload);
+					}
+
+					if (preserveCanonicalAsSafeBackup) {
+						addLogEntry("The canonical file changed while its post-upload replacement was downloading; preserving the new local data before replacement: " ~ newItemPath);
+					}
+				}
+
+				if (!downloadFailed && canonicalExistsAtCommit && !ignoreDataPreservationCheck) {
+					Item commitDatabaseItem;
+					bool commitFileFoundInDB = false;
+					foreach (driveId; onlineDriveDetails.keys) {
+						if (itemDB.selectByPath(newItemPath, driveId, commitDatabaseItem)) {
+							commitFileFoundInDB = true;
+							break;
+						}
+					}
+
+					Item incomingOnlineItem = makeItem(onedriveJSONItem);
+					bool localMatchesIncomingOnline = testFileHash(newItemPath, incomingOnlineItem);
+					bool localMatchesDatabaseBaseline = commitFileFoundInDB && testFileHash(newItemPath, commitDatabaseItem);
+
+					preserveCanonicalAsSafeBackup = !localMatchesIncomingOnline && !localMatchesDatabaseBaseline;
+					if (preserveCanonicalAsSafeBackup) {
+						addLogEntry("The local file to replace (" ~ newItemPath ~ ") contains local data that must be preserved before replacement.");
+					} else if (localMatchesIncomingOnline && debugLogging) {
+						addLogEntry("Canonical file content already matches the validated OneDrive replacement; no safeBackup is required", ["debug"]);
+					}
+				}
+
+				if (!downloadFailed && preserveCanonicalAsSafeBackup) {
+					string backupPath;
+					if (!safeBackupPreserveForReplacement(newItemPath, bypassDataPreservation, backupPath)) {
+						safeRemove(completedDownloadPath);
+						downloadFailed = true;
+					}
+				}
+
+				if (!downloadFailed) {
+					// Recheck the canonical path after any safeBackup preservation. If its existence or
+					// bytes changed while this commit was being prepared, local intent wins and
+					// the staged online replacement is discarded for a later reconciliation.
+					bool canonicalExistsBeforePromotion = exists(newItemPath);
+					bool canonicalChangedBeforePromotion = canonicalExistsBeforePromotion != canonicalExistsAtCommit;
+					if (!canonicalChangedBeforePromotion && canonicalExistsBeforePromotion) {
+						string canonicalHashBeforePromotion = computeQuickXorHash(newItemPath);
+						canonicalChangedBeforePromotion = canonicalHashBeforePromotion.empty || (canonicalHashBeforePromotion != canonicalHashAtCommit);
+					}
+
+					if (canonicalChangedBeforePromotion) {
+						addLogEntry("WARNING: Canonical file changed while the validated replacement was being committed; discarding staged replacement: " ~ newItemPath, ["info", "notify"]);
+						safeRemove(completedDownloadPath);
+						downloadFailed = true;
+					} else if (safeRename(completedDownloadPath, newItemPath, false)) {
+						downloadTransferCompleted = true;
+					} else {
+						addLogEntry("ERROR: Validated download could not be promoted; retaining any existing canonical file: " ~ newItemPath, ["error", "notify"]);
+						safeRemove(completedDownloadPath);
+						downloadFailed = true;
+					}
+				}
+			}
+
+			// File should have been downloaded and, for replacements, committed to
+			// the canonical path.
 			if (!downloadFailed) {
 				// Download did not fail
 				addLogEntry("Downloading file: " ~ newItemPath ~ " ... done", fileTransferNotifications());
@@ -4889,10 +5083,9 @@ class SyncEngine {
 			}
 		}
 
-		// Publish final-path effects only when Curl completed the transfer and
-		// atomically renamed '<path>.partial' into place. Terminal transfer
-		// failures remove only the partial artifact and leave any pre-existing
-		// final path untouched, so they produce no final-path effect to consume.
+		// Publish final-path effects only after the completed download has been
+		// promoted into the canonical path. For replacements this happens here in
+		// the sync layer only after validation and any required safeBackup succeeds.
 		if (!dryRun && downloadTransferCompleted) {
 			notifyExpectedLocalFileDownload(newItemPath, downloadFailed && !exists(newItemPath));
 		}
@@ -6009,6 +6202,36 @@ class SyncEngine {
 				Item[] outOfSyncItems = itemDB.selectOutOfSyncItems(driveId);
 				foreach (outOfSyncItem; outOfSyncItems) {
 					if (!dryRun) {
+						// An item absent from a generated authoritative view is semantically the
+						// same online deletion represented by a raw /delta tombstone. For tracked
+						// files, compare the current bytes with the DB baseline before deleting.
+						bool outOfSyncItemIsFile = (outOfSyncItem.type == ItemType.file) ||
+							((outOfSyncItem.type == ItemType.remote) && (outOfSyncItem.remoteType == ItemType.file));
+						if (!bypassDataPreservation && outOfSyncItemIsFile) {
+							// A prior parent-directory deletion can remove this descendant DB row while
+							// the out-of-sync snapshot still contains it. Do not resolve a stale item.
+							if (!itemDB.idInLocalDatabase(outOfSyncItem.driveId, outOfSyncItem.id)) {
+								continue;
+							}
+
+							string localPathToDelete = computeItemPath(outOfSyncItem.driveId, outOfSyncItem.id);
+							if (exists(localPathToDelete) && !testFileHash(localPathToDelete, outOfSyncItem)) {
+								if (verboseLogging) {
+									addLogEntry("The item no longer exists online but contains newer local data; preserving the local file as safeBackup while honouring the online deletion: " ~ localPathToDelete, ["verbose"]);
+								}
+
+								string renamedPath;
+								safeBackupAndNotifyExpectedLocalMove(localPathToDelete, dryRun, bypassDataPreservation, renamedPath);
+
+								// If preservation was required but failed, retain both the canonical file
+								// and DB baseline rather than allowing authoritative cleanup to erase it.
+								if (!bypassDataPreservation && renamedPath.empty) {
+									addLogEntry("ERROR: Unable to preserve locally modified file after authoritative online deletion; retaining canonical file and database state: " ~ localPathToDelete, ["error", "notify"]);
+									continue;
+								}
+							}
+						}
+
 						// clean up idsToDelete
 						idsToDelete.length = 0;
 						assumeSafeAppend(idsToDelete);
@@ -6150,6 +6373,16 @@ class SyncEngine {
 
 		// Compute this dbItem path early as we we use this path often
 		localFilePath = buildNormalizedPath(computeItemPath(dbItem.driveId, dbItem.id));
+
+		// A newer online version for this exact path already failed to download or
+		// commit during the current remote-first cycle. The retained canonical file
+		// must not now be interpreted as a local change and uploaded over that newer
+		// online version. Leave both sides untouched and allow a later retry/resync
+		// to attempt the authoritative replacement again.
+		if (canFind(fileDownloadFailures, localFilePath)) {
+			if (debugLogging) {addLogEntry("Skipping local consistency action for path with a failed authoritative download in this sync cycle: " ~ localFilePath, ["debug"]);}
+			return;
+		}
 
 		// To improve logging output for this function, what is the 'logical path'?
 		string logOutputPath;
@@ -7202,22 +7435,27 @@ class SyncEngine {
 						// Path is unwanted, flag to exclude
 						clientSideRuleExcludesPath = true;
 
-						// Has this itemId already been flagged as being skipped?
+						// Has this itemId already been flagged as being skipped during this sync?
 						if (!syncListSkippedParentIds.canFind(thisItemId)) {
+							bool skippedParentIdLogged = false;
+
 							if (isItemFolder(onedriveJSONItem)) {
 								// Detail we are skipping this JSON data from online
 								if (verboseLogging) {addLogEntry("Skipping path - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
-								// Add this folder id to the elements we have already detailed we are skipping, so we do no output this again
+								skippedParentIdLogged = true;
+							}
+
+							// Is this is a 'add shortcut to onedrive' link?
+							if (isItemRemote(onedriveJSONItem)) {
+								// Detail we are skipping this JSON data from online
+								if (verboseLogging) {addLogEntry("Skipping Shared Folder Link - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
+								skippedParentIdLogged = true;
+							}
+
+							// Track this identifier once so verbose output is not repeated.
+							if (skippedParentIdLogged) {
 								syncListSkippedParentIds ~= thisItemId;
 							}
-						}
-
-						// Is this is a 'add shortcut to onedrive' link?
-						if (isItemRemote(onedriveJSONItem)) {
-							// Detail we are skipping this JSON data from online
-							if (verboseLogging) {addLogEntry("Skipping Shared Folder Link - excluded by sync_list config: " ~ newItemPath, ["verbose"]);}
-							// Add this folder id to the elements we have already detailed we are skipping, so we do no output this again
-							syncListSkippedParentIds ~= thisItemId;
 						}
 					}
 				} else {
@@ -7753,12 +7991,13 @@ class SyncEngine {
 
 		// Do we have space available or is space available being restricted (so we make the blind assumption that there is space available)
 		JSONValue uploadResponse;
+		bool simpleUploadUsed = false;
 		if (spaceAvailableOnline) {
 			// Does this file exceed the maximum file size to upload to OneDrive?
 			if (thisFileSizeLocal <= maxUploadFileSize) {
 				// Attempt to upload the modified file
 				// Error handling is in performModifiedFileUpload(), and the JSON that is responded with - will either be null or a valid JSON object containing the upload result
-				uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal, uploadTransferStartTime, uploadTransferEndTime);
+				uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal, simpleUploadUsed, uploadTransferStartTime, uploadTransferEndTime);
 
 				// Evaluate the returned JSON uploadResponse
 				// If there was an error uploading the file, uploadResponse should be empty and invalid
@@ -7848,8 +8087,17 @@ class SyncEngine {
 				// Get the latest eTag, and use that
 				string etagFromUploadResponse = uploadResponse["eTag"].str;
 
-				// Attempt to update the online lastModifiedDateTime value based on our local timestamp data
-				if (appConfig.accountType == "personal") {
+				// For a successful simple upload, Microsoft assigns the resulting
+				// fileSystemInfo timestamp. Make that returned timestamp authoritative for
+				// the local object as well, consistently for every account type.
+				if (simpleUploadUsed && uploadIntegrityPassed) {
+					// Preserve existing --upload-only semantics: when operating upload-only,
+					// do not modify the local object after the upload completes.
+					if (!uploadOnly) {
+						Item onlineItem = makeItem(uploadResponse);
+						setLocalPathTimestamp(dryRun, localFilePath, onlineItem.mtime);
+					}
+				} else if (appConfig.accountType == "personal") {
 					// Personal Account Handling for Modified File Upload
 					//
 					// Did the upload integrity check pass or fail?
@@ -8032,7 +8280,7 @@ class SyncEngine {
 	}
 
 	// Perform the upload of a locally modified file to OneDrive
-	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal, out SysTime uploadTransferStartTime, out SysTime uploadTransferEndTime) {
+	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal, out bool simpleUploadUsed, out SysTime uploadTransferStartTime, out SysTime uploadTransferEndTime) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -8046,6 +8294,7 @@ class SyncEngine {
 
 		// Function variables
 		JSONValue uploadResponse;
+		simpleUploadUsed = false;
 		OneDriveApi uploadFileOneDriveApiInstance;
 		uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
 		uploadFileOneDriveApiInstance.initialise();
@@ -8154,6 +8403,8 @@ class SyncEngine {
 					} else {
 						displayFileSystemErrorMessage(exception.msg, thisFunctionName, localFilePath);
 					}
+					uploadFileOneDriveApiInstance.releaseCurlEngine();
+					uploadFileOneDriveApiInstance = null;
 					return uploadResponse;
 				}
 				SysTime onlineModifiedTime = currentOnlineItemData.mtime;
@@ -8172,19 +8423,30 @@ class SyncEngine {
 					}
 					addLogEntry("Skipping uploading this item as a locally modified file, will upload as a new file (online file already exists and is newer): " ~ localFilePath);
 
-					// Online is newer, rename local, then upload the renamed file
-					// We need to know the renamed path so we can upload it
-					string renamedPath;
-					// Rename the local path - we WANT this to occur regardless of bypassDataPreservation setting
-					safeBackupAndNotifyExpectedLocalMove(localFilePath, dryRun, false, renamedPath);
-					// Upload renamed local file as a new file
-					uploadNewFile(renamedPath);
+					// Online is newer. Preserve the local version as an independent safeBackup
+					// snapshot while keeping the canonical filename present, then upload it.
+					string backupPath;
+					if (!safeBackupPreserveForReplacement(localFilePath, false, backupPath, true)) {
+						uploadFileOneDriveApiInstance.releaseCurlEngine();
+						uploadFileOneDriveApiInstance = null;
+						return uploadResponse;
+					}
+					uploadNewFile(backupPath);
 
-					// Process the database entry removal for the original file. In a --dry-run scenario, this is being done against a DB copy.
-					// This is done so we can download the newer online file
-					itemDB.deleteById(targetDriveId, targetItemId);
+					// Keep the existing DB baseline tied to the canonical file until the newer
+					// online bytes have actually been committed locally. The local version is
+					// already preserved above, so this replacement may skip preserving that
+					// known difference while still detecting an edit made during the download.
+					if (!uploadOnly) {
+						downloadFileItem(currentOnlineJSONData, true);
+					} else if (verboseLogging) {
+						addLogEntry("Upload-only mode: retaining the original canonical file locally because the newer online file will not be downloaded", ["verbose"]);
+					}
 
-					// This file is now uploaded, return from here, but this will trigger a response that the upload failed (technically for the original filename it did, but we renamed it, then uploaded it
+					// The original modified-file upload was intentionally not performed. Return
+					// its response after handling the newer-online conflict safely.
+					uploadFileOneDriveApiInstance.releaseCurlEngine();
+					uploadFileOneDriveApiInstance = null;
 					return uploadResponse;
 				}
 			}
@@ -8194,6 +8456,7 @@ class SyncEngine {
 			// Additionally, all files where file size is < 4MB should be uploaded by simpleUploadReplace - everything else should use a session to upload the modified file
 			if ((thisFileSizeLocal == 0) || (useSimpleUpload)) {
 				// Must use Simple Upload to replace the file online
+				simpleUploadUsed = true;
 				try {
 					uploadTransferStartTime = Clock.currTime();
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUploadReplace(localFilePath, targetDriveId, targetItemId);
@@ -8242,6 +8505,8 @@ class SyncEngine {
 					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
 						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
 						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
+						uploadFileOneDriveApiInstance.releaseCurlEngine();
+						uploadFileOneDriveApiInstance = null;
 						return uploadResponse;
 					}
 
@@ -8251,6 +8516,8 @@ class SyncEngine {
 						// The file is currently checked out or locked for editing by another user
 						// We cant upload this file at this time
 						addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
+						uploadFileOneDriveApiInstance.releaseCurlEngine();
+						uploadFileOneDriveApiInstance = null;
 						return uploadResponse;
 					} else {
 						// Handle all other HTTP status codes
@@ -10635,16 +10902,29 @@ class SyncEngine {
 										// Upload the locally modified file as-is, as it is newer
 										uploadChangedLocalFileToOneDrive([changedItemParentDriveId, changedItemId, fileToUpload]);
 									} else {
-										// Online is newer, rename local, then upload the renamed file
-										// We need to know the renamed path so we can upload it
-										string renamedPath;
-										// Rename the local path - we WANT this to occur regardless of bypassDataPreservation setting
-										safeBackupAndNotifyExpectedLocalMove(fileToUpload, dryRun, false, renamedPath);
-										// Upload renamed local file as a new file
-										uploadNewFile(renamedPath);
-										// Process the database entry removal for the original file. In a --dry-run scenario, this is being done against a DB copy.
-										// This is done so we can download the newer online file
+										// Online is newer. Preserve the local version as an independent safeBackup
+										// snapshot while keeping the canonical filename present, then upload it.
+										string backupPath;
+										if (!safeBackupPreserveForReplacement(fileToUpload, false, backupPath, true)) {
+											return;
+										}
+										uploadNewFile(backupPath);
+
+										// This path saved the online item above only to establish its identity. Remove
+										// that temporary DB association before replacement so an interruption still
+										// leaves the canonical local file discoverable as an unmatched item on retry.
 										itemDB.deleteById(changedItemParentDriveId, changedItemId);
+
+										// The local bytes have already been preserved. Apply the authoritative online
+										// file now, while still preserving any new edit made during this download.
+										// Upload-only mode deliberately performs no download; the canonical local file
+										// therefore remains present and the missing DB association keeps the conflict
+										// visible for a future non-upload-only reconciliation.
+										if (!uploadOnly) {
+											downloadFileItem(fileDetailsFromOneDrive, true);
+										} else if (verboseLogging) {
+											addLogEntry("Upload-only mode: retaining the original canonical file locally because the newer online file will not be downloaded", ["verbose"]);
+										}
 									}
 								}
 							} catch (OneDriveException exception) {
@@ -10746,6 +11026,10 @@ class SyncEngine {
 		// Assume that by default the upload fails
 		bool uploadFailed = true;
 
+		// Track whether this upload actually used the simple upload path so that
+		// successful post-upload timestamp reconciliation is account-type neutral.
+		bool simpleUploadUsed = false;
+
 		// OneDrive API Upload Response
 		JSONValue uploadResponse;
 
@@ -10789,6 +11073,7 @@ class SyncEngine {
 			// Additionally, only where file size is < 4MB should be uploaded by simpleUpload - everything else should use a session to upload
 
 			if ((thisFileSize == 0) || (useSimpleUpload)) {
+				simpleUploadUsed = true;
 				try {
 					// Initialise API for simple upload
 					uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
@@ -10956,61 +11241,83 @@ class SyncEngine {
 						// Check the integrity of the uploaded file, if the local file still exists
 						uploadIntegrityPassed = performUploadIntegrityValidationChecks(uploadResponse, fileToUpload, thisFileSize);
 
-						// Update the file modified time on OneDrive and save item details to database
-						// Update the item's metadata on OneDrive
-						SysTime mtime;
-						try {
-							mtime = timeLastModified(fileToUpload).toUTC();
-						} catch (FileException exception) {
-							if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
-								addLogEntry("File disappeared locally after upload: " ~ fileToUpload);
-							} else {
-								displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+						// A successful simple upload cannot carry the originating filesystem timestamp.
+						// Microsoft therefore assigns the resulting fileSystemInfo timestamp. For a
+						// successful simple upload, make that returned timestamp authoritative for
+						// the local object as well, consistently for every account type.
+						if (simpleUploadUsed && uploadIntegrityPassed) {
+							// Save the upload response exactly as returned by Microsoft.
+							saveItem(uploadResponse);
+
+							// Preserve existing --upload-only semantics: when operating upload-only,
+							// do not modify the local object after the upload completes.
+							if (!uploadOnly) {
+								Item onlineItem = makeItem(uploadResponse);
+								setLocalPathTimestamp(dryRun, fileToUpload, onlineItem.mtime);
 							}
-							// Return upload status
-							return uploadFailed;
-						}
-						mtime.fracSecs = Duration.zero;
-						string newFileId = uploadResponse["id"].str;
-						string newFileETag = uploadResponse["eTag"].str;
-						// Attempt to update the online date time stamp based on our local data
-						if (appConfig.accountType == "personal") {
-							// Business | SharePoint we used a session to upload the data, thus, local timestamps are given when the session is created
-							uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
 						} else {
-							// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
-							// This means that the file which was uploaded, is potentially no longer the file we have locally
-							// There are 2 ways to solve this:
-							//   1. Download the modified file immediately after upload as per v2.4.x (default)
-							//   2. Create a new online version of the file, which then contributes to the users 'quota'
-							if (!uploadIntegrityPassed) {
-								// upload integrity check failed
-								// We do not want to create a new online file version .. unless configured to do so
-								if (!appConfig.getValueBool("create_new_file_version")) {
-									// are we in an --upload-only scenario
-									if(!uploadOnly){
-										// Download the now online modified file
-										addLogEntry("WARNING: Microsoft OneDrive modified your uploaded file via its SharePoint 'enrichment' feature. To keep your local and online versions consistent, the altered file will now be downloaded.");
-										addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
-										// Download the file directly using the prior upload JSON response
-										downloadFileItem(uploadResponse, true);
+							// Session uploads and integrity-failure handling retain their existing logic.
+							SysTime mtime;
+							try {
+								mtime = timeLastModified(fileToUpload).toUTC();
+							} catch (FileException exception) {
+								if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+									addLogEntry("File disappeared locally after upload: " ~ fileToUpload);
+								} else {
+									displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+								}
+								// Return upload status
+								return uploadFailed;
+							}
+							mtime.fracSecs = Duration.zero;
+							string newFileId = uploadResponse["id"].str;
+							string newFileETag = uploadResponse["eTag"].str;
+							// Attempt to update the online date time stamp based on our local data
+							if (appConfig.accountType == "personal") {
+								if (uploadIntegrityPassed) {
+										// Successful Personal session upload already preserved the authoritative
+										// local filesystem timestamp in fileSystemInfo.
+										// Save the completed upload response directly; no timestamp PATCH required.
+										saveItem(uploadResponse);
 									} else {
-										// --upload-only being used
-										// we are not downloading a file, warn that file differences will exist
-										addLogEntry("WARNING: The file uploaded to Microsoft OneDrive has been modified through its SharePoint 'enrichment' process and no longer matches your local version.");
-										addLogEntry("WARNING: The online metadata will now be modified to match your local file which will create a new file version.");
-										addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
-										// Create a new online version of the file by updating the metadata - this ensures that the file we uploaded is the file online
+										// Preserve existing Personal-account integrity-failure handling.
+										uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
+									}
+							} else {
+								// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+								// This means that the file which was uploaded, is potentially no longer the file we have locally
+								// There are 2 ways to solve this:
+								//   1. Download the modified file immediately after upload as per v2.4.x (default)
+								//   2. Create a new online version of the file, which then contributes to the users 'quota'
+								if (!uploadIntegrityPassed) {
+									// upload integrity check failed
+									// We do not want to create a new online file version .. unless configured to do so
+									if (!appConfig.getValueBool("create_new_file_version")) {
+										// are we in an --upload-only scenario
+										if(!uploadOnly){
+											// Download the now online modified file
+											addLogEntry("WARNING: Microsoft OneDrive modified your uploaded file via its SharePoint 'enrichment' feature. To keep your local and online versions consistent, the altered file will now be downloaded.");
+											addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
+											// Download the file directly using the prior upload JSON response
+											downloadFileItem(uploadResponse, true);
+										} else {
+											// --upload-only being used
+											// we are not downloading a file, warn that file differences will exist
+											addLogEntry("WARNING: The file uploaded to Microsoft OneDrive has been modified through its SharePoint 'enrichment' process and no longer matches your local version.");
+											addLogEntry("WARNING: The online metadata will now be modified to match your local file which will create a new file version.");
+											addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
+											// Create a new online version of the file by updating the metadata - this ensures that the file we uploaded is the file online
+											uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
+										}
+									} else {
+										// Create a new online version of the file by updating the metadata, which negates the need to download the file
 										uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
 									}
 								} else {
-									// Create a new online version of the file by updating the metadata, which negates the need to download the file
-									uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
+									// integrity checks passed
+									// save the uploadResponse to the database
+									saveItem(uploadResponse);
 								}
-							} else {
-								// integrity checks passed
-								// save the uploadResponse to the database
-								saveItem(uploadResponse);
 							}
 						}
 					}
@@ -12333,6 +12640,17 @@ class SyncEngine {
 					addLogEntry("Not " ~ operation ~ "ed: " ~ failedFile, ["info", "notify"]);
 				}
 
+				// A failed replacement download can deliberately retain the previous
+				// canonical local file. Its existing database row is the baseline needed
+				// to recognise that retained file correctly on the next reconciliation.
+				// Only purge failed-download identity when no canonical file remains.
+				if ((operation == "download") && exists(failedFile)) {
+					if (debugLogging) {
+						addLogEntry("Retaining database identity for failed download because the canonical local file remains present: " ~ failedFile, ["debug"]);
+					}
+					continue;
+				}
+
 				foreach (searchDriveId; onlineDriveDetails.keys) {
 					Item dbItem;
 					if (itemDB.selectByPath(failedFile, searchDriveId, dbItem)) {
@@ -12471,12 +12789,30 @@ class SyncEngine {
 
 		Item[] drivePathChildren = getChildren(searchItem.driveId, searchItem.id);
 		if (count(drivePathChildren) > 0) {
+			// Flag the entire set of children within a single transaction. Each item flagged here
+			// would otherwise be committed individually, and as 'synchronous' is FULL that
+			// requires a flush to physical media per item. For a shared folder containing many
+			// thousands of items this dominates the time taken to generate the /delta response.
+			//
+			// This is safe for the same reasons as the batched processing of received items: no
+			// network activity is performed here, the loop is sequential, and the change is
+			// reconstructible, as this only flags existing records as requiring re-validation.
+			// https://github.com/abraunegg/onedrive/issues/3788
+			itemDB.beginTransaction();
+
+			// If flagging these items throws, discard the partial set rather than leaving the
+			// transaction open
+			scope(failure) itemDB.rollbackTransaction();
+
 			// Children to process and flag as out-of-sync
 			foreach (drivePathChild; drivePathChildren) {
 				// Flag any object in the database as out-of-sync for this driveId & and object id
 				if (debugLogging) {addLogEntry("Downgrading item as out-of-sync: " ~ drivePathChild.id, ["debug"]);}
 				itemDB.downgradeSyncStatusFlag(drivePathChild.driveId, drivePathChild.id);
 			}
+
+			// Commit the flagged items to the database
+			itemDB.commitTransaction();
 		}
 		// Clear DB response array
 		drivePathChildren = [];
@@ -13478,23 +13814,18 @@ class SyncEngine {
 					}
 				}
 
-				// Configure the modification JSON item
+				// Configure the modification JSON item. A local move must use the actual
+				// filesystem timestamp of the moved item; never manufacture a new mtime.
 				SysTime mtime;
-				if (appConfig.getValueBool("monitor")) {
-					// Use the newPath modified timestamp
-					try {
-						mtime = timeLastModified(newPath).toUTC();
-					} catch (FileException exception) {
-						if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
-							addLogEntry("Moved local item disappeared before timestamp update: " ~ newPath);
-						} else {
-							displayFileSystemErrorMessage(exception.msg, thisFunctionName, newPath);
-						}
-						return;
+				try {
+					mtime = timeLastModified(newPath).toUTC();
+				} catch (FileException exception) {
+					if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+						addLogEntry("Moved local item disappeared before timestamp update: " ~ newPath);
+					} else {
+						displayFileSystemErrorMessage(exception.msg, thisFunctionName, newPath);
 					}
-				} else {
-					// Use the current system time
-					mtime = Clock.currTime().toUTC();
+					return;
 				}
 
 				JSONValue data = [
@@ -16190,9 +16521,6 @@ class SyncEngine {
 					// Debug response output
 					if (debugLogging) {addLogEntry("getSharedWithMe Response Shared File JSON: " ~ sanitiseJSONItem(searchResult), ["debug"]);}
 
-					// Make a DB item from this JSON
-					Item sharedFileOriginalData = makeItem(searchResult);
-
 					// Variables for each item
 					string sharedByName;
 					string sharedByEmail;
@@ -16282,8 +16610,22 @@ class SyncEngine {
 					// The file to download JSON details
 					fileToDownload = searchResult;
 
-					// Get the latest online details
-					latestOnlineDetails = sharedWithMeOneDriveApiInstance.getPathDetailsById(sharedFileOriginalData.remoteDriveId, sharedFileOriginalData.remoteId);
+					// Get the latest online details using the identifiers already present in the
+					// Search response. Do not construct an Item from the Search result first because
+					// Search may legitimately omit fileSystemInfo; the full DriveItem query below is
+					// the authoritative source for the filesystem timestamp used by the sync engine.
+					latestOnlineDetails = sharedWithMeOneDriveApiInstance.getPathDetailsById(
+						searchResult["remoteItem"]["parentReference"]["driveId"].str,
+						searchResult["remoteItem"]["id"].str
+					);
+
+					SysTime authoritativeModifiedTime;
+					string authoritativeLastModifiedDateTime;
+					if (!getFileSystemInfoLastModifiedDateTime(latestOnlineDetails, authoritativeModifiedTime, authoritativeLastModifiedDateTime)) {
+						addLogEntry("WARNING: Skipping OneDrive Business shared file because its full DriveItem response does not contain a valid fileSystemInfo.lastModifiedDateTime: " ~ searchResult["name"].str);
+						continue;
+					}
+
 					Item tempOnlineRecord = makeItem(latestOnlineDetails);
 
 					// With the local folders created, now update 'fileToDownload' to download the file to our location:
@@ -16328,11 +16670,17 @@ class SyncEngine {
 					// Update 'size'
 					fileToDownload["size"] = to!int(tempOnlineRecord.size);
 					fileToDownload["remoteItem"]["size"] = to!int(tempOnlineRecord.size);
-					// Update 'lastModifiedDateTime'
-					fileToDownload["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
-					fileToDownload["fileSystemInfo"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
-					fileToDownload["remoteItem"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
-					fileToDownload["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
+					// Update 'lastModifiedDateTime' using the authoritative fileSystemInfo value
+					// returned by the full DriveItem query. Search responses may not contain a
+					// fileSystemInfo object at all, so create it here rather than fabricating one.
+					fileToDownload["lastModifiedDateTime"] = authoritativeLastModifiedDateTime;
+					fileToDownload["fileSystemInfo"] = JSONValue([
+						"lastModifiedDateTime": JSONValue(authoritativeLastModifiedDateTime)
+					]);
+					fileToDownload["remoteItem"]["lastModifiedDateTime"] = authoritativeLastModifiedDateTime;
+					fileToDownload["remoteItem"]["fileSystemInfo"] = JSONValue([
+						"lastModifiedDateTime": JSONValue(authoritativeLastModifiedDateTime)
+					]);
 
 					// Final JSON that will be used to download the file
 					if (debugLogging) {addLogEntry("Final fileToDownload: " ~ to!string(fileToDownload), ["debug"]);}
@@ -16370,11 +16718,9 @@ class SyncEngine {
 								// Attempt to apply this changed item
 								applyPotentiallyChangedItem(existingDatabaseItem, existingItemPath, downloadSharedFileDbItem, newItemPath, fileToDownload);
 							} else {
-								// File exists locally, it is not in sync, there is no record in the DB of this file
-								// In case the renamed path is needed
-								string renamedPath;
-								// If local data protection is configured (bypassDataPreservation = false), safeBackup the local file, passing in if we are performing a --dry-run or not
-								safeBackupAndNotifyExpectedLocalMove(newItemPath, dryRun, bypassDataPreservation, renamedPath);
+								// File exists locally, it is not in sync, there is no record in the DB of this file.
+								// Keep the canonical file in place; downloadFileItem() will preserve it
+								// transactionally only after the online replacement is ready.
 								// Submit this shared file to be processed further for downloading
 								applyPotentiallyNewLocalItem(downloadSharedFileDbItem, fileToDownload, newItemPath);
 							}
@@ -16531,10 +16877,10 @@ class SyncEngine {
 						}
 					}
 
-					// Configure the modification JSON item
-					SysTime mtime;
-					// Use the current system time
-					mtime = Clock.currTime().toUTC();
+					// Configure the modification JSON item using the existing online filesystem
+					// timestamp. This operation is an online move/rename and must not manufacture
+					// a new lastModifiedDateTime value from the local wall clock.
+					SysTime mtime = sourceItem.mtime;
 
 					JSONValue data = [
 						"name": JSONValue(baseName(destinationPath)),

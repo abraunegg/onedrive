@@ -21,6 +21,7 @@ Before reading this document, please ensure you are running application version 
   - [disable_download_validation](#disable_download_validation)
   - [disable_notifications](#disable_notifications)
   - [disable_permission_set](#disable_permission_set)
+  - [disable_time_check](#disable_time_check)
   - [disable_upload_hash_streaming](#disable_upload_hash_streaming)
   - [disable_upload_validation](#disable_upload_validation)
   - [disable_version_check](#disable_version_check)
@@ -154,7 +155,9 @@ _**Config Example:**_ `azure_tenant_id = "example.onmicrosoft.us"` or `azure_ten
 > This option is commonly used in Microsoft 365 Business, Enterprise, Education, Government, and other managed Microsoft Entra ID environments where authentication must be restricted to a specific tenant rather than using the multi-tenant `common` endpoint.
 
 ### bypass_data_preservation
-_**Description:**_ This config option allows the disabling of preserving local data by renaming the local file in the event of data conflict. If this is enabled, you will experience data loss on your local data as the local file will be over-written with data from OneDrive online. Use with care and caution.
+_**Description:**_ This config option disables `safeBackup` data preservation when the client detects that unique local file content would otherwise be displaced during conflict resolution or reconciliation. By default, replacement-style conflicts preserve the existing local content as a verified `safeBackup` copy before a validated replacement is committed. The online-deleted/local-modified conflict is the intentional exception where the local file is renamed to `safeBackup` while the online deletion is honoured.
+
+When this option is enabled, those preservation operations are bypassed. This can allow local content to be overwritten or removed without a recoverable `safeBackup`. Use with extreme care and caution.
 
 _**Value Type:**_ Boolean
 
@@ -327,6 +330,20 @@ _**Config Example:**_ `disable_permission_set = "false"` or `disable_permission_
 
 _**CLI Option Use:**_ *None - this is a config file option only*
 
+### disable_time_check
+_**Description:**_ This option disables validation of the local system clock against Microsoft service time. Microsoft service connectivity checks remain enabled, but the client will not use the Microsoft HTTPS `Date` response to detect unsafe system-clock drift or suspend timestamp-sensitive synchronisation.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `disable_time_check = "false"` or `disable_time_check = "true"`
+
+_**CLI Option Use:**_ `--disable-time-check`
+
+> [!CAUTION]
+> Disabling this option bypasses a synchronisation correctness safeguard. If the local system clock is significantly incorrect, timestamp-related reconciliation behaviour may be unreliable.
+
 ### disable_upload_hash_streaming
 _**Description:**_ This setting controls whether the client uses hash values calculated while streaming file uploads. When set to `false`, the client will use upload-streamed hash values where available and valid, falling back to the traditional local hash generation path if upload hash streaming is unavailable or fails. When set to `true`, the client will ignore hash values calculated during upload streaming and will always generate upload hashes using the traditional local file hash generation path. This option is primarily intended as a compatibility and diagnostic fail-safe for upload scenarios where Microsoft OneDrive or SharePoint may modify uploaded file content or metadata after upload, causing the hash later reported by Microsoft Graph to differ from the hash calculated during the upload stream.
 
@@ -386,7 +403,7 @@ _**Config Example:**_ `display_manager_integration = "false"` or `display_manage
 _**CLI Option Use:**_ *None - this is a config file option only*
 
 ### display_running_config
-_**Description:**_ This option will include the running config of the application at application startup. This may be desirable to enable when running in containerised environments so that any application logging that is occurring, will have the application configuration being consumed at startup, written out to any applicable log file.
+_**Description:**_ This option will include the running config of the application at application startup. This may be desirable to enable when running in containerised environments so that any application logging that is occurring, will have the application configuration being consumed at startup, written out to any applicable log file. When system-time validation is enabled, the runtime output also includes the detailed Microsoft service-time validation state, authority, local and remote UTC values, observed offset, effective skew, round-trip time, measurement uncertainty, safety-gate state, and active drift thresholds once the initial Microsoft service probe has completed.
 
 _**Value Type:**_ Boolean
 

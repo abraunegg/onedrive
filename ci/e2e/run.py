@@ -78,7 +78,19 @@ from testcases.tc0062_transfer_metrics_validation import TestCase0062TransferMet
 from testcases.tc0063_local_parent_rename_during_download import TestCase0063LocalParentRenameDuringDownload
 from testcases.tc0064_mirror_local_state_remote_cleanup import TestCase0064MirrorLocalStateRemoteCleanup
 from testcases.tc0065_sync_list_remote_directory_move_reconciliation import TestCase0065SyncListRemoteDirectoryMoveReconciliation
-from testcases.tc0066_monitor_mode_rename_to_invalid_name import TestCase0066MonitorModeRenameToInvalidName
+from testcases.tc0066_safebackup_transactional_replacement_validation import TestCase0066SafeBackupTransactionalReplacementValidation
+from testcases.tc0067_safebackup_interrupted_replacement_validation import TestCase0067SafeBackupInterruptedReplacementValidation
+from testcases.tc0068_safebackup_upload_only_conflict_validation import TestCase0068SafeBackupUploadOnlyConflictValidation
+from testcases.tc0069_safebackup_remote_move_destination_collision_validation import TestCase0069SafeBackupRemoteMoveDestinationCollisionValidation
+from testcases.tc0070_safebackup_new_file_upload_collision_validation import TestCase0070SafeBackupNewFileUploadCollisionValidation
+from testcases.tc0071_safebackup_metadata_only_identity_validation import TestCase0071SafeBackupMetadataOnlyIdentityValidation
+from testcases.tc0072_safebackup_preservation_failure_aborts_replacement import TestCase0072SafeBackupPreservationFailureAbortsReplacement
+from testcases.tc0073_safebackup_existing_preservation_reuse_validation import TestCase0073SafeBackupExistingPreservationReuseValidation
+from testcases.tc0074_safebackup_clean_resync_no_conflict_validation import TestCase0074SafeBackupCleanResyncNoConflictValidation
+from testcases.tc0075_safebackup_remote_delete_local_modify_validation import TestCase0075SafeBackupRemoteDeleteLocalModifyValidation
+from testcases.tc0076_safebackup_resync_content_conflict_validation import TestCase0076SafeBackupResyncContentConflictValidation
+from testcases.tc0077_timestamp_authority_validation import TestCase0077TimestampAuthorityValidation
+from testcases.tc0078_monitor_mode_rename_to_invalid_name import TestCase0078MonitorModeRenameToInvalidName
 
 
 def build_test_suite() -> list:
@@ -148,7 +160,19 @@ def build_test_suite() -> list:
         TestCase0063LocalParentRenameDuringDownload(),
         TestCase0064MirrorLocalStateRemoteCleanup(),
         TestCase0065SyncListRemoteDirectoryMoveReconciliation(),
-        TestCase0066MonitorModeRenameToInvalidName(),
+        TestCase0066SafeBackupTransactionalReplacementValidation(),
+        TestCase0067SafeBackupInterruptedReplacementValidation(),
+        TestCase0068SafeBackupUploadOnlyConflictValidation(),
+        TestCase0069SafeBackupRemoteMoveDestinationCollisionValidation(),
+        TestCase0070SafeBackupNewFileUploadCollisionValidation(),
+        TestCase0071SafeBackupMetadataOnlyIdentityValidation(),
+        TestCase0072SafeBackupPreservationFailureAbortsReplacement(),
+        TestCase0073SafeBackupExistingPreservationReuseValidation(),
+        TestCase0074SafeBackupCleanResyncNoConflictValidation(),
+        TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(),
+        TestCase0076SafeBackupResyncContentConflictValidation(),
+        TestCase0077TimestampAuthorityValidation(),
+        TestCase0078MonitorModeRenameToInvalidName(),
     ]
 
 

@@ -1369,7 +1369,7 @@ WARNING: You have asked the client to perform a --resync operation.
 
          Because the previous sync state will no longer be available, the following may occur:
          * Local files that also exist in OneDrive may have local changes overwritten by the cloud version if a conflict cannot be safely resolved.
-         * Local files may be renamed or duplicated locally as part of conflict resolution and data-preservation handling.
+         * Local conflict data may be preserved as `safeBackup` files when the local bytes differ from the authoritative online version. In the specific case where an item was deleted online but changed locally, the local file may be renamed to a `safeBackup` while the online deletion is honoured.
          * The initial synchronisation pass may involve a large number of file uploads and downloads.
          * The increased activity against the Microsoft Graph API may trigger HTTP 429 (throttling) responses during the synchronisation process.
 
@@ -1395,7 +1395,7 @@ Local deletion of such files when using `--resync` only occurs when using the ex
 
 The risks associated with `--resync` stem entirely from the loss of the local historic state:
 * The client no longer knows which side previously held the authoritative version of your data.
-* Conflict handling still protects data using safe-backup mechanisms, but may result in renamed or duplicated files.
+* Conflict handling still protects local data using `safeBackup` preservation when the local bytes differ from the authoritative online state. A clean resync where local and online content already match does not create a `safeBackup`.
 * Upload and download volumes may spike significantly.
 * Increased calls to the Microsoft Graph API may result in temporary throttling (HTTP 429 responses).
 
@@ -1859,47 +1859,91 @@ mv ~/OneDrive ~/OneDrive.local-backup
 If you accidentally deleted local files while the client was still running, immediately stop the client and check the Microsoft OneDrive online Recycle Bin.
 
 ### Why does the client create 'safeBackup' files?
-'safeBackup' files are created to prevent local data loss whenever the client is about to replace or remove a local file and there’s any chance the current on-disk content might be different to what OneDrive expects.
+`safeBackup` files are a local data-preservation mechanism used when the client has evidence that locally stored file content would otherwise be displaced while reconciling with Microsoft OneDrive.
 
-Under the hood, the client makes specific decisions right before a local file would otherwise be overwritten, renamed, or deleted. Instead of risking silent data loss, the client renames your current local file to a clearly marked backup name and then proceeds with the sync action.
+A `safeBackup` is **not** created merely because a synchronisation or `--resync` is being performed, and it is **not** created simply because file timestamps or other metadata differ. The decision is based on whether the local file contains data that is different from both the authoritative online version and, where available, the last locally recorded in-sync database state.
 
 From v2.5.3+, the backup name is:
-```
+```text
 filename-hostname-safeBackup-0001.ext
 ```
-The client will increment the number if additional backups are needed.
+The client increments the four-digit number when another preservation file is required. If an existing same-device `safeBackup` already preserves the same file content and metadata, the client may reuse that preservation rather than creating another numbered duplicate.
 
-#### The most common reasons you’ll see 'safeBackup' files
-**1. You ran the client with `--resync`**
+#### How replacement-style safeBackup preservation works
+For normal replacement and conflict-resolution workflows, the client does **not** rename the canonical file away before the replacement is ready. The existing canonical pathname remains present while the replacement is downloaded to a `.partial` staging file and validated. If the current local bytes must be preserved, the client first creates the required `safeBackup` preservation entry without removing the canonical pathname. Where appropriate, this can use a filesystem hard link to retain the existing local file object efficiently, with an independent verified copy used where required or where hard-link creation is unavailable. The validated replacement is then committed to the original canonical pathname.
 
-`--resync` intentionally discards the client’s local state, so the client no longer “knows” what used to be in sync. During the first pass after a resync, the online state is treated as source-of-truth. If the client finds a local file whose content differs from the online version (hash mismatch), it will back up your local copy first and then bring the local file in line with OneDrive.
-
-If you wish to treat your local files as the source-of-truth, you can set the following configuration option:
+The expected successful state is therefore:
+```text
+original filename                  -> authoritative replacement
+filename-hostname-safeBackup-0001 -> preserved previous local content
 ```
-local_first = "true"
-```
 
-**2. Dual-booting and pointing sync_dir at your Windows OneDrive folder.**
+If the replacement download, validation, safeBackup creation, or final promotion fails, the existing canonical file is retained. A required safeBackup failure is treated as a hard preservation failure and the client refuses to replace the canonical file.
 
-If you dual boot and set the Linux client’s sync_dir to the same path used by the Windows client, there will be times when files already exist on disk without matching local DB entries or with content that changed while Linux wasn’t running. When the Linux client encounters such a file (e.g. “exists locally but isn’t represented the way the DB expects” or “exists but content/hash differs”), the client will protect the on-disk content by creating a 'safeBackup' before it reconciles the file.
+There is one intentional exception: when a file has been **deleted online but independently modified locally**, there is no online replacement to place back under the original name. In this specific workflow the modified local file is renamed to a `safeBackup` and the online deletion is honoured.
 
-**3. The online file was modified (server-side) and now differs from your local copy**
+#### When a safeBackup is created
+The client can create a `safeBackup` in the following situations:
 
-If Microsoft OneDrive (or another app) changes a file online, the hash reported by the Graph API won’t match your local content. When the client is about to update the local item to match what’s online, a 'safeBackup' is created so your current local data isn’t lost if the client determines that this action should be taken.
+**1. A tracked file changed both locally and online**
+
+The local file differs from the last in-sync database version and the authoritative online file also differs. Before applying the online replacement, the client preserves the local version as a `safeBackup`.
+
+If the local file still matches the last in-sync database version, it has not been independently modified locally and no safeBackup is required before applying the online update. Likewise, if the local bytes already match the incoming online bytes, no safeBackup is required.
+
+**2. A same-path local file exists without a usable database identity and differs from OneDrive**
+
+This can occur after `--resync`, after loss/removal of the local state database, or when a synchronisation directory is shared with another OneDrive client or operating system. Because there is no trustworthy previous local database baseline, the client compares the local file content with the online file. If the hashes differ, the local file is preserved before the authoritative online version is applied.
+
+Importantly, **`--resync` itself does not create a safeBackup**. If the local file is already in sync and its content hash matches OneDrive, the client rebuilds its database/metadata state without creating a safeBackup and without replacing identical file content. When rebuilding synchronisation state, file timestamp equality alone is not treated as proof that file content is identical; where content identity must be established, the file content hash is also compared.
+
+**3. A remote move or rename targets a locally occupied destination**
+
+If an online move or rename must place a file at a local pathname that is already occupied by different unsynchronised local content, the destination content is preserved as a `safeBackup` before the remote move is committed locally.
+
+A destination that is already tracked and confirmed in sync does not require preservation merely because it occupies the target pathname.
+
+**4. A locally modified tracked file conflicts with a newer online file during upload processing**
+
+If the client is preparing to upload a modified tracked file but discovers that the online file is newer, the local version is preserved as a `safeBackup` and the preservation copy can be uploaded under its safeBackup filename. In normal bidirectional operation the newer online canonical file can then be applied locally. In `--upload-only` mode the client does not force that download and keeps the local canonical file present.
+
+**5. A new or untracked local file collides with a newer different online file**
+
+If a local file is being treated as new but a different same-name file already exists online and the online version is newer, the local content is preserved as a `safeBackup` rather than overwriting the newer online object.
+
+**6. The canonical file changes while a replacement transaction is already in progress**
+
+The client rechecks the canonical file immediately before replacement. If new local content appears or the canonical bytes change while a validated replacement is being prepared, that new local state must be preserved before the replacement can be committed.
+
+**7. A file was deleted online but changed locally since the last in-sync state**
+
+The online deletion is authoritative, but the independently modified local bytes must not be discarded. This is the one preservation workflow where the original canonical pathname is intentionally removed: the modified local file is renamed to a `safeBackup`, and the online deletion is then honoured.
+
+#### When a safeBackup should *not* be created
+A `safeBackup` should not be created simply because:
+
+- the client is running `--resync`
+- the local and online file content is already identical
+- only the local modification time or other metadata differs while file content is identical
+- the online file changed but the local file still matches the last known in-sync database content
+- a download fails before any replacement can be committed
+- a required preservation operation itself fails
+
+In the content-identical cases above there is no unique local file content that needs to be preserved. Where a download or required preservation operation fails, the client instead refuses to commit the replacement and retains the existing canonical file.
 
 #### Can I turn this functionality off?
 
 Yes, but be careful. To disable local data protection entirely, set the following configuration option:
-```
+```text
 bypass_data_preservation = "true"
 ```
-If you enable this, the client will not create 'safeBackup' files and may overwrite or remove local content during conflict resolution. **Use with extreme caution.**
+If you enable this, the client will not create `safeBackup` files when conflict preservation would normally be required and may overwrite or remove local content during reconciliation. **Use with extreme caution.**
 
-If you simply don’t want 'safeBackup' files uploaded to OneDrive, it is advisable to keep protection enabled and add a 'skip_file' rule:
-```
+If you simply do not want `safeBackup` files uploaded to OneDrive, it is advisable to keep protection enabled and add a `skip_file` rule:
+```text
 skip_file = "~*|.~*|*.tmp|*.swp|*.partial|*-safeBackup-*"
 ```
-This allows you to handle the safeBackup files locally, without having to remediate anything online.
+This keeps the preservation files local so that you can review or remove them independently without disabling data protection.
 
 ### How to change what file and directory permissions are assigned to data that is downloaded from Microsoft OneDrive?
 The following are the application default permissions for any new directory or file that is created locally when downloaded from Microsoft OneDrive:
@@ -2365,6 +2409,8 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
       Disable download validation when downloading from OneDrive
   --disable-notifications
       Do not use desktop notifications in monitor mode
+  --disable-time-check
+      Disable validation of the local system clock against Microsoft service time
   --disable-upload-validation
       Disable upload validation when uploading to OneDrive
   --display-admin-consent-url

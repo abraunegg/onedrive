@@ -28,6 +28,7 @@ import config;
 import log;
 import curlEngine;
 import util;
+import time;
 import onedrive;
 import syncEngine;
 import itemdb;
@@ -680,15 +681,31 @@ int main(string[] cliArgs) {
 	// What IP Protocol are we going to use to access the network with
 	appConfig.displayIPProtocol();
 	
-	// Test if OneDrive service can be reached, exit if it cant be reached
-	if (debugLogging) {addLogEntry("Testing network to ensure network connectivity to Microsoft OneDrive Service", ["debug"]);}
-	online = testInternetReachability(appConfig);
+	// Probe Microsoft once for network reachability. When system-time validation
+	// is enabled, the time subsystem also consumes Date/timing data from this same
+	// request so startup does not require a second network operation merely to
+	// validate time.
+	if (debugLogging) {
+		if (appConfig.getValueBool("disable_time_check")) {
+			addLogEntry("Testing network connectivity to the Microsoft OneDrive Service; system time validation is disabled", ["debug"]);
+		} else {
+			addLogEntry("Testing network connectivity and system time against the Microsoft OneDrive Service", ["debug"]);
+		}
+	}
+	MicrosoftServiceProbeResult startupServiceProbe = probeMicrosoftService(appConfig);
+	online = startupServiceProbe.reachable;
 	
 	// If we are not 'online' - how do we handle this situation?
 	if (!online) {
+		// Record that authoritative service time could not be obtained. This is not
+		// itself proof that the local system clock is invalid.
+		validateSystemTime(appConfig, startupServiceProbe, true, false);
+
 		// We are unable to initialise the OneDrive API as we are not online
 		if (!appConfig.getValueBool("monitor")) {
-			// Running as --synchronize
+			// Running as --synchronize. If runtime configuration output was requested,
+			// include the unavailable/disabled time state before exiting.
+			displaySystemTimeValidationDetails(appConfig);
 			addLogEntry();
 			addLogEntry("ERROR: Unable to reach the Microsoft OneDrive API service, unable to initialise application");
 			addLogEntry();
@@ -698,8 +715,50 @@ int main(string[] cliArgs) {
 			addLogEntry();
 			addLogEntry("Unable to reach the Microsoft OneDrive API service at this point in time, re-trying network tests based on applicable intervals");
 			addLogEntry();
-			// Run the re-try of Internet connectivity test
-			online = retryInternetConnectivityTest(appConfig);
+			// Run the re-try of Internet connectivity test and retain the successful
+			// observation so it can immediately be used for time validation.
+			online = retryInternetConnectivityTest(appConfig, startupServiceProbe);
+		}
+	}
+
+	// If Microsoft is reachable, validate the wall clock before API initialisation
+	// and before any timestamp-sensitive reconciliation can begin.
+	if (online) {
+		validateSystemTime(appConfig, startupServiceProbe);
+		displaySystemTimeValidationDetails(appConfig);
+
+		if (!appConfig.systemTimeAllowsSync()) {
+			if (!appConfig.getValueBool("monitor")) {
+				// A one-shot --sync has no useful recovery loop. Refuse to perform
+				// reconciliation with a clock that has been confirmed unsafe.
+				addLogEntry("ERROR: --sync cannot continue while system time is in a blocking state.");
+				addLogEntry("Correct the local system time or time synchronisation service, then retry the sync.");
+				return EXIT_FAILURE;
+			}
+
+			// --monitor is supervisory and should self-heal. Do not initialise the API
+			// or enter the sync/monitor engine while the confirmed clock skew is unsafe;
+			// remain alive and re-check at the configured monitor interval.
+			auto timeRecoveryRetryInterval = dur!"seconds"(TIME_BLOCKED_RETRY_INTERVAL_SECONDS);
+			addLogEntry("OneDrive monitor startup is suspended until the local system clock returns to a safe range.");
+			addLogEntry("System time will be revalidated every " ~ to!string(TIME_BLOCKED_RETRY_INTERVAL_SECONDS) ~ " seconds.");
+
+			while (!appConfig.systemTimeAllowsSync()) {
+				if (sleepInterruptibly(timeRecoveryRetryInterval, "system time recovery retry sleep")) {
+					return EXIT_SUCCESS;
+				}
+				startupServiceProbe = probeMicrosoftService(appConfig);
+				online = startupServiceProbe.reachable;
+				validateSystemTime(appConfig, startupServiceProbe);
+
+				if (!online) {
+					addLogEntry("Microsoft OneDrive service is not reachable while waiting for system time recovery; time validation will be retried.");
+				} else if (!appConfig.systemTimeAllowsSync()) {
+					addLogEntry("System time remains unsafe; OneDrive monitor startup remains suspended.");
+				}
+			}
+
+			addLogEntry("System time is now safe; continuing OneDrive monitor startup.");
 		}
 	}
 	
@@ -1074,6 +1133,9 @@ int main(string[] cliArgs) {
 			if (appConfig.getValueBool("download_only")) {
 				// Only download data from OneDrive
 				syncEngineInstance.syncOneDriveAccountToLocalDisk();
+				if (!systemTimeAllowsSyncContinuation("download_only.post_online_sync")) {
+					return EXIT_FAILURE;
+				}
 				// Perform the DB consistency check 
 				// This will also delete any out-of-sync flagged items if configured to do so
 				syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
@@ -1093,6 +1155,11 @@ int main(string[] cliArgs) {
 				performStandardSyncProcess(localPath);
 			}
 		
+			if (!appConfig.systemTimeAllowsSync()) {
+				addLogEntry("ERROR: --sync stopped because system time became unsafe during synchronisation.");
+				return EXIT_FAILURE;
+			}
+
 			// Detail the outcome of the sync process
 			displaySyncOutcome();
 		}
@@ -1247,6 +1314,25 @@ int main(string[] cliArgs) {
 				}
 				// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file - the disk may have been ejected ..
 				checkForNoMountScenario();
+
+				// Keep time validation independent of the configured sync interval. A user may
+				// legitimately configure a monitor interval longer than five minutes, but a
+				// clock that becomes unsafe after startup must still be detected promptly.
+				// Reuse this probe later in the same loop if a scheduled sync is also due.
+				MicrosoftServiceProbeResult monitorLoopServiceProbe;
+				bool monitorLoopServiceProbeAvailable = false;
+				bool monitorLoopServiceProbeTimeValidated = false;
+				bool clockDiscontinuityDetected = false;
+				if (!appConfig.systemTimeRevalidationRequired) {
+					clockDiscontinuityDetected = detectSystemClockDiscontinuity(appConfig);
+				}
+
+				if (clockDiscontinuityDetected || isSystemTimeValidationDue(appConfig)) {
+					monitorLoopServiceProbe = probeMicrosoftService(appConfig, false);
+					monitorLoopServiceProbeAvailable = true;
+					validateSystemTime(appConfig, monitorLoopServiceProbe);
+					monitorLoopServiceProbeTimeValidated = true;
+				}
 			
 				// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
 				if (!appConfig.getValueBool("download_only")) {
@@ -1257,8 +1343,11 @@ int main(string[] cliArgs) {
 				// WebSocket and Webhook Notification Handling
 				bool notificationReceived = false;
 				
-				// If we are doing --upload-only however .. we need to 'ignore' online change
-				if (!appConfig.getValueBool("upload_only")) {
+				// If we are doing --upload-only however .. we need to 'ignore' online change.
+				// Also avoid initiating/renewing Microsoft notification infrastructure while
+				// the time safety gate is closed; the monitor remains alive and the normal
+				// interval probe will recover this state automatically.
+				if (!appConfig.getValueBool("upload_only") && appConfig.systemTimeAllowsSync()) {
 					// Check for notifications pushed from Microsoft to the webhook
 					if (webhookEnabled) {
 						// Create a subscription on the first run, or renew the subscription
@@ -1323,8 +1412,12 @@ int main(string[] cliArgs) {
 				// Get the current time this loop is starting
 				auto currentTime = MonoTime.currTime();
 				
-				// Do we perform a sync with OneDrive?
-				if ((currentTime - lastCheckTime >= checkOnlineInterval) || (monitorLoopFullCount == 0)) {
+				// Do we perform a sync with OneDrive? When time is blocking or requires
+				// revalidation, cap the retry cadence at five minutes even if the user has
+				// configured a longer normal monitor interval.
+				auto activeMonitorCheckInterval = appConfig.systemTimeAllowsSync() ?
+					checkOnlineInterval : dur!"seconds"(TIME_BLOCKED_RETRY_INTERVAL_SECONDS);
+				if ((currentTime - lastCheckTime >= activeMonitorCheckInterval) || (monitorLoopFullCount == 0)) {
 					// Increment relevant counters
 					monitorLoopFullCount++;
 					fullScanFrequencyLoopCount++;
@@ -1398,40 +1491,63 @@ int main(string[] cliArgs) {
 					auto elapsedTime = Clock.currTime() - applicationStartTime;
 					if (debugLogging) {addLogEntry("Application run-time thus far: " ~ to!string(elapsedTime), ["debug"]);}
 					
-					// Need to re-validate that the client is still online for this loop
-					if (testInternetReachability(appConfig)) {
-						// Starting a sync - we are online
-						addLogEntry("Starting a sync with Microsoft OneDrive");
-						
-						// Attempt to reset syncFailures from any prior loop
-						syncEngineInstance.resetSyncFailures();
-						
-						// Update cached quota details from online as this may have changed online in the background outside of this application
-						syncEngineInstance.freshenCachedDriveQuotaDetails();
-						
-						// Did the user specify --upload-only?
-						if (appConfig.getValueBool("upload_only")) {
-							// Perform the --upload-only sync process
-							performUploadOnlySyncProcess(localPath, filesystemMonitor);
-						} else {
-							// Perform the standard sync process
-							performStandardSyncProcess(localPath, filesystemMonitor);
-						}
-						
-						// Handle any new inotify events
-						captureAndApplyInotifyEvents("monitor_loop.post_sync_process");
-						
-						// Detail the outcome of the sync process
-						displaySyncOutcome();
-						
-						// Cleanup sync process arrays
-						syncEngineInstance.cleanupArrays();
-						
-						// Write WAL and SHM data to file for this loop and release memory used by in-memory processing
-						if (debugLogging) {addLogEntry("Merge contents of WAL and SHM files into main database file", ["debug"]);}
-						itemDB.performCheckpoint("PASSIVE");
+					// Re-validate both connectivity and system time immediately before every
+					// scheduled monitor sync. This catches clock drift that appears after the
+					// application originally started and prevents stale startup validation from
+					// authorising later timestamp-sensitive reconciliation.
+					MicrosoftServiceProbeResult monitorServiceProbe;
+					if (monitorLoopServiceProbeAvailable) {
+						monitorServiceProbe = monitorLoopServiceProbe;
 					} else {
-						// Not online
+						monitorServiceProbe = probeMicrosoftService(appConfig);
+					}
+					if (monitorServiceProbe.reachable) {
+						if (!monitorLoopServiceProbeTimeValidated) {
+							validateSystemTime(appConfig, monitorServiceProbe);
+						}
+
+						if (appConfig.systemTimeAllowsSync()) {
+							// Starting a sync - we are online and the process-visible clock is safe
+							addLogEntry("Starting a sync with Microsoft OneDrive");
+
+							// Attempt to reset syncFailures from any prior loop
+							syncEngineInstance.resetSyncFailures();
+
+							// Update cached quota details from online as this may have changed online in the background outside of this application
+							syncEngineInstance.freshenCachedDriveQuotaDetails();
+
+							// Did the user specify --upload-only?
+							if (appConfig.getValueBool("upload_only")) {
+								// Perform the --upload-only sync process
+								performUploadOnlySyncProcess(localPath, filesystemMonitor);
+							} else {
+								// Perform the standard sync process
+								performStandardSyncProcess(localPath, filesystemMonitor);
+							}
+
+							// Handle any new inotify events
+							captureAndApplyInotifyEvents("monitor_loop.post_sync_process");
+
+							// Detail the outcome of the sync process
+							if (appConfig.systemTimeAllowsSync()) {
+								displaySyncOutcome();
+							} else {
+								addLogEntry("Current synchronisation cycle was suspended because system time is not currently safe.");
+							}
+
+							// Cleanup sync process arrays
+							syncEngineInstance.cleanupArrays();
+
+							// Write WAL and SHM data to file for this loop and release memory used by in-memory processing
+							if (debugLogging) {addLogEntry("Merge contents of WAL and SHM files into main database file", ["debug"]);}
+							itemDB.performCheckpoint("PASSIVE");
+						} else {
+							addLogEntry("OneDrive synchronisation is suspended because system time is not currently safe. The monitor process will remain running and revalidate time on the next monitor cycle.");
+						}
+					} else {
+						// Not online. Preserve any previously-latched blocking state while recording
+						// that a fresh authoritative time observation is currently unavailable.
+						validateSystemTime(appConfig, monitorServiceProbe, true, false);
 						addLogEntry("Microsoft OneDrive service is not reachable at this time. Will re-try on next sync attempt.");
 					}
 					
@@ -1477,6 +1593,15 @@ int main(string[] cliArgs) {
 							// Perform GC actions
 							GC.collect();  // Perform Garbage Collection
 							GC.minimize(); // Return free memory to the operating system
+
+							// When memory telemetry is enabled, record the immediate post-cleanup
+							// state so the effect of the scheduled GC/minimize operation can be
+							// distinguished from normal allocator/RSS high-water behaviour.
+							if (displayMemoryUsage) {
+								addLogEntry("Memory usage after scheduled monitor-mode memory cleanup");
+								displayMemoryUsageDetails();
+							}
+
 							// Update time gate
 							lastMonitorGcCleanup = monitorGcCleanupTime;
 						}
@@ -1499,7 +1624,11 @@ int main(string[] cliArgs) {
 				}
 				
 				if (performFileSystemMonitoring) {	
-					auto nextCheckTime = lastCheckTime + checkOnlineInterval;
+					// Recompute after the loop because the time state may have changed during
+					// validation. Blocking/revalidation states retry no slower than five minutes.
+					auto nextMonitorCheckInterval = appConfig.systemTimeAllowsSync() ?
+						checkOnlineInterval : dur!"seconds"(TIME_BLOCKED_RETRY_INTERVAL_SECONDS);
+					auto nextCheckTime = lastCheckTime + nextMonitorCheckInterval;
 					currentTime = MonoTime.currTime();
 					auto sleepTime = nextCheckTime - currentTime;
 					if (debugLogging) {addLogEntry("Sleep for " ~ to!string(sleepTime), ["debug"]);}
@@ -1601,8 +1730,11 @@ int main(string[] cliArgs) {
 						// delta endpoint to sync to latest. Therefore, only one sync run is
 						// good enough to catch up for multiple notifications.
 						
-						// Only process online notifications if NOT '--upload-only'
-						if (!appConfig.getValueBool("upload_only") && onlineSignal) {
+						// Only process online notifications if NOT '--upload-only' and the
+						// system-time safety gate is open. Signals received while blocked are
+						// intentionally ignored; the next successful scheduled sync will use
+						// the delta endpoint to reconcile any remote changes after recovery.
+						if (!appConfig.getValueBool("upload_only") && onlineSignal && appConfig.systemTimeAllowsSync()) {
 							int signalCount = 1;
 							while (true) {
 								auto more = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
@@ -1711,8 +1843,53 @@ void printMissingOperationalSwitchesError() {
 	addLogEntry();
 }
 
+// Check whether a sync that is already in progress may safely move into its next
+// major phase. This is intentionally a safe-boundary check rather than an async
+// abort: an active HTTP/file operation is allowed to finish, then a detected wall
+// clock step or a due five-minute validation can stop subsequent reconciliation.
+bool systemTimeAllowsSyncContinuation(string invocationSource) {
+	bool clockDiscontinuityDetected = false;
+	if (!appConfig.systemTimeRevalidationRequired) {
+		clockDiscontinuityDetected = detectSystemClockDiscontinuity(appConfig);
+	}
+
+	if (clockDiscontinuityDetected || isSystemTimeValidationDue(appConfig)) {
+		MicrosoftServiceProbeResult continuationProbe = probeMicrosoftService(appConfig, false);
+		validateSystemTime(appConfig, continuationProbe);
+	}
+
+	if (!appConfig.systemTimeAllowsSync()) {
+		if (debugLogging) {
+			addLogEntry("Stopping further synchronisation work at safe boundary '" ~ invocationSource ~ "' because system time is not currently safe.", ["debug"]);
+		}
+		return false;
+	}
+
+	return true;
+}
+
 // Function used for WebSocket or Webhook callbacks to perform specific activities
 void oneDriveOnlineCallback() {
+	// Online notifications can arrive between the normal monitor-interval probes.
+	// When time validation is enabled, revalidate Microsoft service time before
+	// acting on the notification so post-start clock skew cannot bypass the safety
+	// gate. When explicitly disabled, retain the pre-time-check callback behaviour
+	// and do not introduce an additional HEAD request solely for clock validation.
+	if (!appConfig.getValueBool("disable_time_check")) {
+		MicrosoftServiceProbeResult callbackServiceProbe = probeMicrosoftService(appConfig, false);
+		if (!callbackServiceProbe.reachable) {
+			validateSystemTime(appConfig, callbackServiceProbe, true, false);
+			addLogEntry("Microsoft OneDrive service is not reachable; deferring notification-triggered synchronisation until a later monitor cycle.");
+			return;
+		}
+
+		validateSystemTime(appConfig, callbackServiceProbe);
+		if (!appConfig.systemTimeAllowsSync()) {
+			addLogEntry("Deferring notification-triggered synchronisation because system time is not currently safe. The monitor process will revalidate and recover automatically.");
+			return;
+		}
+	}
+
 	// Identify which online notification mechanism invoked this callback for debug correlation
 	string onlineCallbackSource = appConfig.getValueBool("webhook_enabled") ? "webhook_callback" : "websocket_callback";
 
@@ -1731,7 +1908,8 @@ void oneDriveOnlineCallback() {
 			appConfig.monitorSyncTriggeredByApiSignal = false;
 		}
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
-		if (syncEngineInstance.authoritativeCleanupPassUsedInLastSync) {
+		if (syncEngineInstance.authoritativeCleanupPassUsedInLastSync &&
+			systemTimeAllowsSyncContinuation(onlineCallbackSource ~ ".pre_database_consistency")) {
 			syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		}
 	}
@@ -1743,6 +1921,8 @@ void oneDriveOnlineCallback() {
 
 // Perform only an upload of data when using --upload-only
 void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = null) {
+	if (!systemTimeAllowsSyncContinuation("upload_only.pre_database_scan")) return;
+
 	// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 	syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 	if (appConfig.getValueBool("monitor")) {
@@ -1750,6 +1930,8 @@ void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = 
 		captureAndApplyInotifyEvents("upload_only.post_database_scan");
 	}
 	
+	if (!systemTimeAllowsSyncContinuation("upload_only.pre_local_scan")) return;
+
 	// Scan the configured 'sync_dir' for new data to upload
 	syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 	if (appConfig.getValueBool("monitor")) {
@@ -1760,6 +1942,8 @@ void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = 
 
 // Perform the normal application sync process
 void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = null) {
+	if (!systemTimeAllowsSyncContinuation("standard_sync.start")) return;
+
 	// If we are performing log suppression, output this message so the user knows what is happening
 	if (appConfig.suppressLoggingOutput) {
 		addLogEntry("Syncing changes from Microsoft OneDrive ...");
@@ -1781,6 +1965,8 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			captureAndApplyInotifyEvents("standard_sync.local_first.post_database_scan");
 		}
 		
+		if (!systemTimeAllowsSyncContinuation("standard_sync.local_first.pre_local_scan")) return;
+
 		// Scan the configured 'sync_dir' for new data to upload to OneDrive
 		syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 		if (appConfig.getValueBool("monitor")) {
@@ -1788,6 +1974,8 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			captureAndApplyInotifyEvents("standard_sync.local_first.post_local_scan");
 		}
 		
+		if (!systemTimeAllowsSyncContinuation("standard_sync.local_first.pre_online_sync")) return;
+
 		// Download data from OneDrive last
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
 		if (appConfig.getValueBool("monitor")) {
@@ -1814,6 +2002,8 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			completeRemoteApplyInotifyEvents("standard_sync.remote_first.post_online_sync");
 		}
 		
+		if (!systemTimeAllowsSyncContinuation("standard_sync.remote_first.pre_database_scan")) return;
+
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		if (appConfig.getValueBool("monitor")) {
@@ -1824,6 +2014,8 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		// Is --download-only NOT configured?
 		if (!appConfig.getValueBool("download_only")) {
 		
+			if (!systemTimeAllowsSyncContinuation("standard_sync.remote_first.pre_local_scan")) return;
+
 			// Scan the configured 'sync_dir' for new data to upload to OneDrive
 			syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 			if (appConfig.getValueBool("monitor")) {
@@ -1840,6 +2032,8 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 					if (!appConfig.suppressLoggingOutput) {
 						addLogEntry("Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process");
 					}
+					if (!systemTimeAllowsSyncContinuation("standard_sync.remote_first.pre_true_up")) return;
+
 					// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'
 					// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
 					syncEngineInstance.syncOneDriveAccountToLocalDisk();
@@ -1993,7 +2187,14 @@ void applyPendingLocalChanges(string invocationSource) {
 }
 
 void captureAndApplyInotifyEvents(string invocationSource) {
+	// Always capture local filesystem observations so they are not lost while the
+	// time safety gate is closed. Applying those observations may perform Graph
+	// uploads, deletes or moves, so only cross that boundary after revalidating any
+	// due/discontinuous clock state. Pending changes remain queued until recovery.
 	captureInotifyEvents(invocationSource);
+	if (!systemTimeAllowsSyncContinuation(invocationSource ~ ".pre_apply_pending_local_changes")) {
+		return;
+	}
 	filesystemMonitor.clearExpectedEvents(invocationSource);
 	applyPendingLocalChanges(invocationSource);
 }

@@ -46,6 +46,7 @@ autoupdate
 avmkfdiitirnrenzljwc
 avx
 bak
+basenames
 baus
 BBBA
 BBD
@@ -69,6 +70,7 @@ buildroot
 bytecompile
 bytesleft
 cancelfd
+cantseek
 CApath
 cattr
 cbf
@@ -106,6 +108,7 @@ datasize
 dchar
 dcompiler
 debian
+debugfunction
 debuginfo
 dechunk
 Deepin
@@ -357,6 +360,7 @@ nfor
 ngroups
 nintegrity
 niop
+nno
 noar
 noarch
 nobj
@@ -370,6 +374,7 @@ nph
 nrecords
 ntfs
 nto
+nunless
 nuntil
 nupgrade
 nupload
@@ -496,6 +501,8 @@ schedflags
 scl
 sdlang
 Searchmonkey
+seekdata
+seekfunction
 segsz
 segv
 semanage
@@ -596,6 +603,7 @@ userinfo
 usermod
 userns
 userpass
+userptr
 usl
 usrpri
 uticks

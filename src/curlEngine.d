@@ -11,6 +11,7 @@ import std.format;
 import std.json;
 import std.stdio;
 import std.range;
+import std.string : indexOf, toLower;
 import core.sys.posix.signal;
 // Required for WebSocket Support
 import core.stdc.stdlib : getenv;
@@ -69,6 +70,261 @@ private void* loadCurlLib() {
 
 private void* findSymbol(const(char)* name) {
 	return dlsym(_curlLib, name);
+}
+
+// OAuth field names and HTTP header names are ASCII. Use byte-oriented
+// case-insensitive matching so sanitisation remains safe even if a diagnostic
+// buffer contains data that is not valid UTF-8.
+private char asciiToLower(char value) {
+	if ((value >= 'A') && (value <= 'Z')) {
+		return cast(char)(value + ('a' - 'A'));
+	}
+	return value;
+}
+
+private size_t findAsciiCaseInsensitive(string input, string marker, size_t searchFrom = 0) {
+	if (marker.empty || (searchFrom > input.length) ||
+		(marker.length > (input.length - searchFrom))) {
+		return size_t.max;
+	}
+
+	for (size_t candidate = searchFrom;
+		candidate <= (input.length - marker.length); candidate++) {
+		bool matched = true;
+		foreach (size_t offset; 0 .. marker.length) {
+			if (asciiToLower(input[candidate + offset]) != asciiToLower(marker[offset])) {
+				matched = false;
+				break;
+			}
+		}
+		if (matched) return candidate;
+	}
+
+	return size_t.max;
+}
+
+// Replace the value of a HTTP header in debug output without altering the
+// request itself. Header names are matched case-insensitively in both normal
+// header blocks and libcurl HTTP/2/HTTP/3 diagnostic text.
+private string redactHeaderValue(string input, string headerName) {
+	immutable string redactedValue = "[REDACTED]";
+	string marker = headerName ~ ":";
+	size_t searchFrom = 0;
+
+	while (searchFrom < input.length) {
+		size_t headerStart = findAsciiCaseInsensitive(input, marker, searchFrom);
+		if (headerStart == size_t.max) break;
+		// libcurl may expose outgoing headers in more than one diagnostic form:
+		//   > Authorization: bearer ...
+		//   * [HTTP/2] [1] [authorization: bearer ...]
+		// Accept the normal line boundary as well as the bracketed HTTP/2/3 form.
+		bool validBoundary = (headerStart == 0) ||
+			(input[headerStart - 1] == '\n') || (input[headerStart - 1] == '\r') ||
+			(input[headerStart - 1] == '[') || (input[headerStart - 1] == '>') ||
+			(input[headerStart - 1] == ' ') || (input[headerStart - 1] == '\t');
+		if (!validBoundary) {
+			searchFrom = headerStart + marker.length;
+			continue;
+		}
+
+		size_t valueStart = headerStart + marker.length;
+		while ((valueStart < input.length) &&
+			((input[valueStart] == ' ') || (input[valueStart] == '\t'))) {
+			valueStart++;
+		}
+
+		size_t valueEnd = valueStart;
+		while ((valueEnd < input.length) &&
+			(input[valueEnd] != '\r') && (input[valueEnd] != '\n') &&
+			(input[valueEnd] != ']')) {
+			valueEnd++;
+		}
+
+		input = input[0 .. valueStart] ~ redactedValue ~ input[valueEnd .. $];
+		searchFrom = valueStart + redactedValue.length;
+	}
+
+	return input;
+}
+
+// Replace OAuth token values carried in application/x-www-form-urlencoded
+// request bodies or URL query strings. OAuth token values cannot contain a raw
+// '&', so the field boundary can be identified without decoding the payload.
+private string redactFormValue(string input, string fieldName) {
+	immutable string redactedValue = "[REDACTED]";
+	string marker = fieldName ~ "=";
+	size_t searchFrom = 0;
+
+	while (searchFrom < input.length) {
+		size_t fieldStart = findAsciiCaseInsensitive(input, marker, searchFrom);
+		if (fieldStart == size_t.max) break;
+		bool validBoundary = (fieldStart == 0) ||
+			(input[fieldStart - 1] == '&') || (input[fieldStart - 1] == '?') ||
+			(input[fieldStart - 1] == ' ') || (input[fieldStart - 1] == '\t') ||
+			(input[fieldStart - 1] == '\r') || (input[fieldStart - 1] == '\n');
+		if (!validBoundary) {
+			searchFrom = fieldStart + marker.length;
+			continue;
+		}
+
+		size_t valueStart = fieldStart + marker.length;
+		size_t valueEnd = valueStart;
+		while ((valueEnd < input.length) &&
+			(input[valueEnd] != '&') &&
+			(input[valueEnd] != ' ') && (input[valueEnd] != '\t') &&
+			(input[valueEnd] != '\r') && (input[valueEnd] != '\n')) {
+			valueEnd++;
+		}
+
+		input = input[0 .. valueStart] ~ redactedValue ~ input[valueEnd .. $];
+		searchFrom = valueStart + redactedValue.length;
+	}
+
+	return input;
+}
+
+// Replace OAuth token values returned as JSON strings. Token endpoint responses
+// are complete JSON documents when they reach CurlResponse, so redaction can be
+// performed on the debug copy without changing the response consumed by the
+// application.
+private string redactJsonStringValue(string input, string fieldName) {
+	immutable string redactedValue = "[REDACTED]";
+	string marker = "\"" ~ fieldName ~ "\"";
+	size_t searchFrom = 0;
+
+	while (searchFrom < input.length) {
+		size_t fieldStart = findAsciiCaseInsensitive(input, marker, searchFrom);
+		if (fieldStart == size_t.max) break;
+		size_t cursor = fieldStart + marker.length;
+
+		while ((cursor < input.length) &&
+			((input[cursor] == ' ') || (input[cursor] == '\t') ||
+			 (input[cursor] == '\r') || (input[cursor] == '\n'))) {
+			cursor++;
+		}
+
+		if ((cursor >= input.length) || (input[cursor] != ':')) {
+			searchFrom = fieldStart + marker.length;
+			continue;
+		}
+		cursor++;
+
+		while ((cursor < input.length) &&
+			((input[cursor] == ' ') || (input[cursor] == '\t') ||
+			 (input[cursor] == '\r') || (input[cursor] == '\n'))) {
+			cursor++;
+		}
+
+		if ((cursor >= input.length) || (input[cursor] != '"')) {
+			searchFrom = fieldStart + marker.length;
+			continue;
+		}
+
+		size_t valueStart = cursor + 1;
+		size_t valueEnd = valueStart;
+		bool escaped = false;
+		while (valueEnd < input.length) {
+			char current = input[valueEnd];
+			if ((current == '"') && !escaped) break;
+			if ((current == '\\') && !escaped) {
+				escaped = true;
+			} else {
+				escaped = false;
+			}
+			valueEnd++;
+		}
+
+		if (valueEnd >= input.length) break;
+
+		input = input[0 .. valueStart] ~ redactedValue ~ input[valueEnd .. $];
+		searchFrom = valueStart + redactedValue.length;
+	}
+
+	return input;
+}
+
+// Sanitise OAuth credentials before any HTTPS diagnostic data is written to a
+// log or to stderr. This operates only on a debug copy of the data; the actual
+// HTTP request/response remains untouched.
+private string redactOAuthSecrets(string input) {
+	if (input.empty) return input;
+
+	string output = input;
+	output = redactHeaderValue(output, "Authorization");
+	output = redactHeaderValue(output, "Proxy-Authorization");
+	output = redactFormValue(output, "access_token");
+	output = redactFormValue(output, "refresh_token");
+	output = redactJsonStringValue(output, "access_token");
+	output = redactJsonStringValue(output, "refresh_token");
+	return output;
+}
+
+unittest {
+	immutable accessToken = "ACCESS_TOKEN_SHOULD_NOT_APPEAR";
+	immutable refreshToken = "REFRESH_TOKEN_SHOULD_NOT_APPEAR";
+
+	string http1Headers =
+		"GET /v1.0/me/drive HTTP/1.1\r\n" ~
+		"Authorization: bearer " ~ accessToken ~ "\r\n" ~
+		"Accept: application/json\r\n";
+	string safeHttp1Headers = redactOAuthSecrets(http1Headers);
+	assert(safeHttp1Headers.indexOf(accessToken) < 0);
+	assert(safeHttp1Headers.indexOf("Authorization: [REDACTED]") >= 0);
+
+	string http2Trace =
+		"[HTTP/2] [1] [authorization: bearer " ~ accessToken ~ "]\n";
+	string safeHttp2Trace = redactOAuthSecrets(http2Trace);
+	assert(safeHttp2Trace.indexOf(accessToken) < 0);
+	assert(safeHttp2Trace.indexOf("[authorization: [REDACTED]]") >= 0);
+
+	string formBody =
+		"client_id=test&refresh_token=" ~ refreshToken ~
+		"&grant_type=refresh_token";
+	string safeFormBody = redactOAuthSecrets(formBody);
+	assert(safeFormBody.indexOf(refreshToken) < 0);
+	assert(safeFormBody.indexOf("refresh_token=[REDACTED]") >= 0);
+
+	string jsonBody =
+		"{\"token_type\":\"Bearer\",\"access_token\":\"" ~ accessToken ~
+		"\",\"refresh_token\":\"" ~ refreshToken ~ "\",\"expires_in\":3600}";
+	string safeJsonBody = redactOAuthSecrets(jsonBody);
+	assert(safeJsonBody.indexOf(accessToken) < 0);
+	assert(safeJsonBody.indexOf(refreshToken) < 0);
+	assert(safeJsonBody.indexOf("\"access_token\":\"[REDACTED]\"") >= 0);
+	assert(safeJsonBody.indexOf("\"refresh_token\":\"[REDACTED]\"") >= 0);
+}
+
+// libcurl's normal CURLOPT_VERBOSE handler writes directly to stderr and may
+// expose sensitive headers. Replace it with a callback that retains the same
+// connection/TLS/header diagnostics while sanitising OAuth credentials first.
+// The DATA_* and SSL_DATA_* callbacks are intentionally ignored: CURLOPT_VERBOSE
+// does not normally dump transfer bodies, and CurlResponse provides the
+// application-level body diagnostics after applying the same redaction.
+extern(C) int curlHTTPSDebugCallback(void* handle, int type, char* data, ulong size, void* userptr) nothrow {
+	try {
+		if ((data is null) || (size == 0)) return 0;
+
+		string debugData = data[0 .. cast(size_t) size].idup;
+		debugData = redactOAuthSecrets(debugData);
+
+		switch (cast(CurlCallbackInfo) type) {
+			case CurlCallbackInfo.text:
+				stderr.write("* ", debugData);
+				break;
+			case CurlCallbackInfo.header_out:
+				stderr.write("> ", debugData);
+				break;
+			case CurlCallbackInfo.header_in:
+				stderr.write("< ", debugData);
+				break;
+			default:
+				break;
+		}
+	} catch (Throwable) {
+		// Debug logging must never interfere with the HTTP operation.
+	}
+
+	return 0;
 }
 
 private bool probeCurlWsSymbols() {
@@ -184,7 +440,7 @@ class CurlResponse {
 				
 		// Output the response headers only if using debug mode + debugging https itself
 		if ((debugLogging) && (debugHTTPSResponse)) {
-			addLogEntry("HTTP Response Headers: " ~ to!string(this.responseHeaders), ["debug"]);
+			addLogEntry("HTTP Response Headers: " ~ redactOAuthSecrets(to!string(this.responseHeaders)), ["debug"]);
 			addLogEntry("HTTP Status Line: " ~ to!string(this.statusLine), ["debug"]);
 		}
 	}
@@ -219,7 +475,7 @@ class CurlResponse {
 		// Ensure response headers is not null and iterate over keys safely.
 		if (headers !is null) {
 			foreach (string header; headers.byKey()) {
-				if (header == "Authorization") {
+				if (header.toLower() == "authorization") {
 					continue;
 				}
 				// Use the 'in' operator to safely check if the key exists in the associative array.
@@ -261,7 +517,7 @@ class CurlResponse {
 		if (!responseHeaders.empty) {
 			str ~= parseResponseHeaders(responseHeaders);
 		}
-		return str;
+		return redactOAuthSecrets(str);
 	}
 
 	const string dumpResponse() {
@@ -272,7 +528,7 @@ class CurlResponse {
 		if (!content.empty) {
 			str ~= format("\n----\n%s\n----\n", content);
 		}
-		return str;
+		return redactOAuthSecrets(str);
 	}
 
 	override string toString() const {
@@ -286,6 +542,31 @@ class CurlResponse {
 	}
 }
 
+// When a request body is supplied to libcurl via a read callback, libcurl requires a seek
+// callback in order to rewind that body if the request has to be sent again - for example when
+// the server drops the connection after the body has already been sent. Without a seek callback
+// the body cannot be replayed, and libcurl fails the transfer with CURLE_SEND_FAIL_REWIND (65).
+//
+// That failure is not transient. Every subsequent attempt fails immediately having transferred
+// zero bytes, so a single file can prevent synchronisation from ever completing.
+// https://github.com/abraunegg/onedrive/issues/3789
+// https://curl.se/libcurl/c/CURLOPT_SEEKFUNCTION.html
+extern (C) int curlUploadSeekCallback(void* userData, long offset, int origin) nothrow {
+	// Only SEEK_SET is required by libcurl in order to rewind a request body
+	if (origin != CurlSeekPos.set) {
+		return CurlSeek.cantseek;
+	}
+
+	// Retrieve the CurlEngine instance that was supplied via CurlOption.seekdata
+	CurlEngine curlEngineInstance = cast(CurlEngine) userData;
+	if (curlEngineInstance is null) {
+		return CurlSeek.cantseek;
+	}
+
+	// Reposition the upload so that the request body can be sent again
+	return curlEngineInstance.repositionUploadFile(offset);
+}
+
 class CurlEngine {
 
 	HTTP http;
@@ -297,6 +578,16 @@ class CurlEngine {
 	SysTime releaseTimestamp;
 	ulong maxIdleTime;
 	private long resumeFromOffset = -1;
+	// Position within the file at which the current request body begins. This is zero for a
+	// whole-file upload, and the fragment offset when uploading part of a file.
+	// https://github.com/abraunegg/onedrive/issues/3789
+	private long uploadBodyBaseOffset = 0;
+	// An in-memory request body, as used by post() and patch(), together with how much of it has
+	// been sent. Retaining these allows the body to be replayed if libcurl has to send the
+	// request again.
+	// https://github.com/abraunegg/onedrive/issues/3789
+	private const(char)[] requestBodyData;
+	private size_t requestBodyOffset = 0;
 	private bool uploadStreamHashActive = false;
 	private QuickXorStreamHasher uploadQuickXorStreamHasher;
 	private ulong uploadStreamHashBytes = 0;
@@ -395,7 +686,12 @@ class CurlEngine {
 		
 		// Specify how many redirects should be allowed
 		http.maxRedirects(maxRedirects);
-		// Debug HTTPS
+		// Debug HTTPS. libcurl's default verbose handler can expose sensitive
+		// request headers directly to stderr, so install our sanitising callback
+		// before enabling verbose output.
+		if (httpsDebug) {
+			http.handle.set(CurlOption.debugfunction, cast(void*) &curlHTTPSDebugCallback);
+		}
 		http.verbose = httpsDebug;
 		// Use the configured 'user_agent' value
 		http.setUserAgent = userAgent;
@@ -478,15 +774,32 @@ class CurlEngine {
 		setResponseHolder(null);
 		addRequestHeader("Content-Type", contentType);
 		if (sendData) {
+			// Retain the request body and track how much of it has been sent, rather than
+			// consuming the data as it is sent. If libcurl has to send the request again, for
+			// example when the connection is dropped after the body has already been sent, the
+			// body must still be available in order to be replayed.
+			// https://github.com/abraunegg/onedrive/issues/3789
+			requestBodyData = sendData;
+			requestBodyOffset = 0;
+
 			http.contentLength = sendData.length;
 			http.onSend = (void[] buf) {
 				import std.algorithm: min;
-				size_t minLen = min(buf.length, sendData.length);
+				size_t remaining = requestBodyData.length - requestBodyOffset;
+				size_t minLen = min(buf.length, remaining);
 				if (minLen == 0) return 0;
-				buf[0 .. minLen] = cast(void[]) sendData[0 .. minLen];
-				sendData = sendData[minLen .. $];
+				buf[0 .. minLen] = cast(void[]) requestBodyData[requestBodyOffset .. requestBodyOffset + minLen];
+				requestBodyOffset += minLen;
 				return minLen;
 			};
+
+			// Allow libcurl to rewind this request body should the request need to be sent
+			// again. Without this the transfer fails with CURLE_SEND_FAIL_REWIND, which affects
+			// token acquisition as well as data requests.
+			// https://github.com/abraunegg/onedrive/issues/3789
+			http.handle.set(CurlOption.seekdata, cast(void*) this);
+			http.handle.set(CurlOption.seekfunction, cast(void*) &curlUploadSeekCallback);
+
 			response.postBody = sendData;
 		}
 	}
@@ -498,9 +811,43 @@ class CurlEngine {
 
 		if (contentRange.empty) {
 			offsetSize = uploadFile.size();
+			// The request body is the whole file, so it begins at the start of the file
+			uploadBodyBaseOffset = 0;
 		} else {
 			addRequestHeader("Content-Range", contentRange);
 			uploadFile.seek(offset);
+			// The request body is a fragment, so it begins at the fragment offset rather than
+			// at the start of the file. This is needed to rewind the body correctly.
+			uploadBodyBaseOffset = to!long(offset);
+		}
+
+		// Allow libcurl to rewind the request body should the request need to be sent again,
+		// for example if the server drops the connection after the body has been sent. Without
+		// this the transfer fails with CURLE_SEND_FAIL_REWIND and cannot recover.
+		// https://github.com/abraunegg/onedrive/issues/3789
+		http.handle.set(CurlOption.seekdata, cast(void*) this);
+		http.handle.set(CurlOption.seekfunction, cast(void*) &curlUploadSeekCallback);
+
+		// The streamed QuickXorHash is accumulated across an entire file as each fragment of a
+		// session upload is sent, and is only restarted for the fragment at offset zero. If this
+		// request is a re-send, for example because a transient error caused the fragment to be
+		// retried, then the data that is about to be read has already been passed through the
+		// hasher once, and the accumulated hash no longer represents the file being uploaded.
+		//
+		// The number of bytes hashed so far should always equal the offset of the fragment now
+		// being sent. Where it does not, the hash is out of step with the data being sent.
+		//
+		// Data already added to a streaming hash cannot be removed from it, so rather than
+		// reporting an integrity failure for a file that has in fact uploaded correctly, the
+		// streamed hash is discarded here. The upload is then validated using the existing
+		// fallback, which obtains the hash of the local file directly.
+		// https://github.com/abraunegg/onedrive/issues/3790
+		if (uploadStreamHashActive && (uploadStreamHashBytes != offset)) {
+			if (debugLogging) {
+				addLogEntry("Streamed QuickXorHash is not aligned with the data being sent (hashed " ~ to!string(uploadStreamHashBytes) ~ " bytes, sending from offset " ~ to!string(offset) ~ ") - discarding the streamed hash for this upload", ["debug"]);
+			}
+			uploadStreamHashActive = false;
+			uploadStreamHashBytes = 0;
 		}
 
 		// Setup progress bar to display
@@ -518,6 +865,60 @@ class CurlEngine {
 			return bytesRead.length;
 		};
 		http.contentLength = offsetSize;
+	}
+
+	// Reposition the file being uploaded so that libcurl is able to replay the request body.
+	// Returns a CurlSeek value indicating whether the reposition was possible.
+	// https://github.com/abraunegg/onedrive/issues/3789
+	private int repositionUploadFile(long offset) nothrow {
+		try {
+			// An in-memory request body, as used by post() and patch(). This covers token
+			// acquisition, which is otherwise unable to recover from a dropped connection.
+			if (!uploadFile.isOpen()) {
+				if (requestBodyData is null) {
+					// There is no request body that can be replayed
+					return CurlSeek.cantseek;
+				}
+				if ((offset < 0) || (offset > cast(long) requestBodyData.length)) {
+					// The requested position is not within the request body
+					return CurlSeek.cantseek;
+				}
+				requestBodyOffset = cast(size_t) offset;
+				return CurlSeek.ok;
+			}
+
+			// The offset supplied by libcurl is relative to the start of the request body. When
+			// uploading a fragment the body does not begin at the start of the file, so the
+			// offset of that fragment must be included.
+			uploadFile.seek(uploadBodyBaseOffset + offset);
+
+			// The data being replayed has already been passed through the streamed hasher once,
+			// and hashing it a second time would generate a hash that does not match the file
+			// that was actually uploaded.
+			if (uploadStreamHashActive) {
+				if (uploadBodyBaseOffset == 0) {
+					// The request body is the whole file, so the streamed hash covers only the
+					// data being replayed and can simply be restarted.
+					uploadQuickXorStreamHasher.start();
+					uploadStreamHashBytes = 0;
+				} else {
+					// The request body is one fragment of a larger file, and the streamed hash
+					// also covers the fragments that were sent before it. Those contributions
+					// cannot be removed from the hash, so the streamed hash can no longer be
+					// relied upon. Discard it, so that the upload is validated by other means
+					// rather than a false integrity failure being reported for a file that was
+					// uploaded correctly.
+					uploadStreamHashActive = false;
+					uploadStreamHashBytes = 0;
+				}
+			}
+
+			return CurlSeek.ok;
+		} catch (Exception exception) {
+			// The file could not be repositioned. Report this to libcurl rather than allowing
+			// incorrect data to be sent.
+			return CurlSeek.cantseek;
+		}
 	}
 
 	void beginUploadStreamHash() {
@@ -681,6 +1082,18 @@ class CurlEngine {
 		
 		// set the response to null
 		response = null;
+
+		// Remove the seek callback and the reference to this instance that was provided to
+		// libcurl. This instance is returned to the curl engine pool and reused, so the
+		// callback must not be left referring to an upload that has been completed.
+		// https://github.com/abraunegg/onedrive/issues/3789
+		if (!http.isStopped) {
+			http.handle.set(CurlOption.seekfunction, cast(void*) null);
+			http.handle.set(CurlOption.seekdata, cast(void*) null);
+		}
+		uploadBodyBaseOffset = 0;
+		requestBodyData = null;
+		requestBodyOffset = 0;
 
 		// close file if open
 		if (uploadFile.isOpen()){
@@ -848,9 +1261,11 @@ void releaseAllCurlInstances() {
 				if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine destroyed", ["debug"]);}
 			}
 		
-			// Clear the array after all instances have been handled
-			curlEnginePool.length = 0; // More explicit than curlEnginePool = [];
 		}
+
+		// Drop the pool backing allocation as well as its logical contents. The
+		// pool is rebuilt on demand during the next monitor loop.
+		curlEnginePool = null;
 	}
 	// Log that all curl engines have been released
 	if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine releaseAllCurlInstances() completed", ["debug"]);}

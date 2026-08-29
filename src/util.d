@@ -12,6 +12,7 @@ import core.sys.posix.sys.resource;
 import core.sys.posix.sys.stat;
 import core.sys.posix.unistd;
 import core.thread;
+import core.time : Duration, MonoTime, dur;
 import etc.c.curl;
 import std.algorithm;
 import std.array;
@@ -36,6 +37,7 @@ import std.socket;
 import std.stdio;
 import std.string;
 import std.traits;
+import std.typecons : Yes;
 import std.uri;
 import std.utf;
 
@@ -78,10 +80,111 @@ enum FsErrorSeverity {
 	permission
 }
 
+// Find an already-published safeBackup from this device whose bytes still match
+// the supplied canonical file. Replacement workflows can reuse that preservation
+// rather than generating another numbered copy after a retry or later reconciliation.
+bool findMatchingSafeBackup(const(char)[] path, out string matchingBackupPath) {
+	matchingBackupPath = null;
+	if (!exists(path)) return false;
+
+	const string spath = to!string(path);
+	const string ext = extension(spath);
+	const size_t stemLen = spath.length >= ext.length ? spath.length - ext.length : spath.length;
+	string stem = spath[0 .. stemLen];
+	string tag = "-" ~ deviceName ~ "-safeBackup-";
+	string baseStem = stem;
+
+	// Mirror safeBackup() naming when the input is itself one of this device's
+	// safeBackup files, so we search the same numbered family.
+	if (stem.length >= tag.length + 4) {
+		auto last4 = stem[$ - 4 .. $];
+		auto tagSpan = stem[$ - (tag.length + 4) .. $ - 4];
+		bool fourDigits = true;
+		foreach (c; last4) {
+			if (!c.isDigit) { fourDigits = false; break; }
+		}
+		if (fourDigits && tagSpan == tag) {
+			baseStem = stem[0 .. $ - (tag.length + 4)];
+		}
+	}
+
+	ulong canonicalSize;
+	SysTime canonicalModifiedTime;
+	uint canonicalAttributes;
+	try {
+		canonicalSize = getSize(spath);
+		canonicalModifiedTime = timeLastModified(spath);
+		canonicalAttributes = getAttributes(spath);
+	} catch (FileException e) {
+		if (debugLogging) {
+			addLogEntry("Unable to inspect canonical file while checking existing safeBackup files for " ~ spath ~ ": " ~ e.msg, ["debug"]);
+		}
+		return false;
+	}
+
+	string parentPath = dirName(spath);
+	string expectedPrefix = baseName(baseStem) ~ tag;
+	string[] candidatePaths;
+	try {
+		foreach (entry; dirEntries(parentPath, SpanMode.shallow)) {
+			if (!entry.isFile) continue;
+			string entryName = baseName(entry.name);
+			if (!entryName.startsWith(expectedPrefix) || !entryName.endsWith(ext)) continue;
+
+			size_t suffixEnd = entryName.length - ext.length;
+			if (suffixEnd != expectedPrefix.length + 4) continue;
+			auto digits = entryName[expectedPrefix.length .. suffixEnd];
+			bool fourDigits = true;
+			foreach (c; digits) {
+				if (!c.isDigit) { fourDigits = false; break; }
+			}
+			if (!fourDigits) continue;
+
+			string candidatePath = entry.name;
+			// dirEntries() can return a path with a different textual prefix (for
+			// example "./file") than the input. Because this scan is restricted to
+			// one parent directory, matching basenames identify the same entry.
+			if (entryName == baseName(spath)) continue;
+			if (getSize(candidatePath) != canonicalSize) continue;
+			if (timeLastModified(candidatePath) != canonicalModifiedTime) continue;
+			if (getAttributes(candidatePath) != canonicalAttributes) continue;
+			candidatePaths ~= candidatePath;
+		}
+	} catch (FileException e) {
+		if (debugLogging) {
+			addLogEntry("Unable to inspect existing safeBackup files for " ~ spath ~ ": " ~ e.msg, ["debug"]);
+		}
+		return false;
+	}
+
+	// Avoid hashing the canonical file at all when there is no plausible
+	// same-device safeBackup to reuse. This is the common first-preservation path.
+	if (candidatePaths.empty) return false;
+
+	string canonicalHash = computeQuickXorHash(spath);
+	if (canonicalHash.empty) return false;
+
+	// The four-digit counter is zero-padded, so descending lexical order checks
+	// the most recently numbered backup first. This avoids hashing a long history
+	// of large backups on the common retry path.
+	sort!("a > b")(candidatePaths);
+	foreach (candidatePath; candidatePaths) {
+		if (computeQuickXorHash(candidatePath) != canonicalHash) continue;
+
+		// Recheck the source after hashing the candidate. If it changed during
+		// this comparison, do not reuse a stale preservation snapshot.
+		if (computeQuickXorHash(spath) != canonicalHash) return false;
+		matchingBackupPath = candidatePath;
+		return true;
+	}
+
+	return false;
+}
+
 // Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario.
 // If the path already ends with "-<deviceName>-safeBackup-####", the counter is incremented
 // instead of appending another "-<deviceName>-safeBackup-".
-void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, out string renamedPath) {
+void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, out string renamedPath, bool retainOriginalPath = false, bool allowHardLinkPreservation = true) {
 	// Ensure this is currently null
 	renamedPath = null;
 	bool isDirectory = false;
@@ -109,14 +212,14 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 	// Is the input path a folder|directory? These should never be renamed
 	if (isDirectory) {
 		if (verboseLogging) {
-			addLogEntry("Renaming request of local directory is being ignored: " ~ to!string(path), ["verbose"]);
+			addLogEntry("safeBackup request of local directory is being ignored: " ~ to!string(path), ["verbose"]);
 		}
 		return;
 	}
 	
 	// Has the user configured to IGNORE local data protection rules?
 	if (bypassDataPreservation) {
-		addLogEntry("WARNING: Local Data Protection has been disabled - not renaming local file. You may experience data loss on this file: " ~ to!string(path), ["info", "notify"]);
+		addLogEntry("WARNING: Local Data Protection has been disabled - not creating a safeBackup. You may experience data loss on this file: " ~ to!string(path), ["info", "notify"]);
 		return;
 	}
 	
@@ -152,13 +255,17 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 		}
 	}
 
-	// Find the first available name, capped at 1000 attempts
+	// Find the first available name, capped at 1000 attempts. Replacement
+	// preservation reserves a filtered .partial staging name for the verified-copy
+	// fallback so an interrupted fallback cannot look like a valid safeBackup.
 	int n = startN;
 	string candidate;
+	string copyStagingPath;
 
 	while (n <= 1000) {
 		candidate = baseStem ~ tag ~ format("%04d", n) ~ ext;
-		if (!exists(candidate)) break;
+		copyStagingPath = candidate ~ ".partial";
+		if (!exists(candidate) && (!retainOriginalPath || !exists(copyStagingPath))) break;
 		++n;
 	}
 
@@ -170,22 +277,91 @@ void safeBackup(const(char)[] path, bool dryRun, bool bypassDataPreservation, ou
 
 	// Log intent
 	if (verboseLogging) {
-		addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ spath ~ " -> " ~ candidate, ["verbose"]);
+		string preservationAction = retainOriginalPath ? "preserving" : "renaming";
+		addLogEntry("The local item is out-of-sync with OneDrive, " ~ preservationAction ~ " to preserve existing file and prevent local data loss: " ~ spath ~ " -> " ~ candidate, ["verbose"]);
 	}
 
-	// Perform (or simulate) the rename
+	// Perform (or simulate) the preservation operation. The one deliberate
+	// remote-delete preservation path retains the historical rename behaviour.
+	// Replacement/conflict workflows keep the canonical pathname present.
 	if (!dryRun) {
-		// Not a --dry-run scenario - attempt the file rename to create a safe backup
-		// Use safeRename()
-		if (safeRename(spath, candidate, dryRun)) {
-			renamedPath = candidate;
+		if (retainOriginalPath) {
+			if (allowHardLinkPreservation) {
+				// Prefer a POSIX hard link when the canonical pathname is about to be
+				// atomically displaced. The safeBackup is created in the same directory as
+				// the canonical file, so this preserves the exact existing inode and its
+				// metadata without copying file data or requiring another file's worth of
+				// free space. If the filesystem refuses hard links, fall back to the
+				// verified independent-copy path below.
+				if (link(spath.toStringz, candidate.toStringz) == 0) {
+					renamedPath = candidate;
+					if (debugLogging) {
+						addLogEntry("Created local safeBackup using POSIX hard-link preservation: " ~ spath ~ " -> " ~ candidate, ["debug"]);
+					}
+					return;
+				}
+
+				// link() is atomic with respect to creation of the destination entry. If
+				// another actor created the selected name after our availability check, do
+				// not let the copy fallback overwrite it. A later reconciliation can select
+				// the next numbered safeBackup safely.
+				if (exists(candidate) || exists(copyStagingPath)) {
+					addLogEntry("Creating local safeBackup failed because the selected backup path became occupied: " ~ candidate, ["error"]);
+					return;
+				}
+
+				if (debugLogging) {
+					addLogEntry("POSIX hard-link preservation was unavailable; falling back to a verified safeBackup copy: " ~ spath ~ " -> " ~ candidate, ["debug"]);
+				}
+			} else if (debugLogging) {
+				// Upload-conflict preservation must be an independent snapshot. Leaving
+				// canonical and safeBackup hard-linked while one copy is uploaded (or while
+				// --upload-only keeps both paths) would allow later edits to mutate both.
+				addLogEntry("Creating an independent verified safeBackup copy because this preservation must remain stable while the canonical file remains active: " ~ spath, ["debug"]);
+			}
+
+			try {
+				// Keep the canonical file in place while creating the fallback copy.
+				// Write to a filtered staging name first so a process interruption can
+				// never leave incomplete bytes carrying a valid-looking safeBackup name.
+				std.file.copy(spath, copyStagingPath, Yes.preserveAttributes);
+
+				// A source file can be edited while a large copy is in progress. Verify
+				// that the completed staging copy still represents the current canonical
+				// bytes; otherwise abort preservation rather than publishing a torn backup.
+				string stagedHash = computeQuickXorHash(copyStagingPath);
+				string canonicalHash = computeQuickXorHash(spath);
+				if (stagedHash.empty || canonicalHash.empty || (stagedHash != canonicalHash)) {
+					safeRemove(copyStagingPath);
+					addLogEntry("Creating local safeBackup copy aborted because the canonical file changed while it was being preserved: " ~ spath, ["error", "notify"]);
+					return;
+				}
+
+				// Publish the verified backup name only after the fallback copy is complete.
+				if (safeRename(copyStagingPath, candidate, false)) {
+					renamedPath = candidate;
+				} else {
+					safeRemove(copyStagingPath);
+					addLogEntry("Publishing local safeBackup copy failed for " ~ spath ~ " -> " ~ candidate, ["error"]);
+				}
+			} catch (FileException e) {
+				// Never leave an incomplete staging artifact after a handled failure.
+				safeRemove(copyStagingPath);
+				displayFileSystemErrorMessage(e.msg, format("%s.%s", strip(__MODULE__), strip(getFunctionName!({}))), "sourcePath=" ~ spath ~ " backupPath=" ~ candidate);
+				addLogEntry("Creating local safeBackup copy failed for " ~ spath ~ " -> " ~ candidate, ["error"]);
+			}
 		} else {
-			// Failed to rename using safeRename()
-			addLogEntry("Renaming of local file failed for " ~ spath ~ " -> " ~ candidate, ["error"]);
+			// Historical behaviour: rename the local file to create the safe backup.
+			if (safeRename(spath, candidate, dryRun)) {
+				renamedPath = candidate;
+			} else {
+				addLogEntry("Renaming of local file failed for " ~ spath ~ " -> " ~ candidate, ["error"]);
+			}
 		}
 	} else {
 		if (debugLogging) {
-			addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ spath ~ " -> " ~ candidate, ["debug"]);
+			string dryRunAction = retainOriginalPath ? "preserving" : "renaming";
+			addLogEntry("DRY-RUN: Skipping " ~ dryRunAction ~ " local file to preserve existing file and prevent data loss: " ~ spath ~ " -> " ~ candidate, ["debug"]);
 		}
 	}
 }
@@ -540,10 +716,47 @@ Regex!char wild2regex(const(char)[] pattern) {
 	return regex(str, "i");
 }
 
-// Test Internet access to Microsoft OneDrive using a simple HTTP HEAD request
-bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging = true) {
+// Result of the lightweight Microsoft HTTPS service probe used for both
+// connectivity testing and process-visible system-time validation.
+struct MicrosoftServiceProbeResult {
+	bool reachable;
+	long httpStatusCode;
+	string serviceUrl;
+	string responseDateHeader;
+	SysTime requestStartUtc;
+	SysTime responseEndUtc;
+	MonoTime responseEndMonotonic;
+	Duration roundTripTime;
+	string failureReason;
+}
+
+// Return an HTTP response header without assuming how std.net.curl normalises
+// header-name casing.
+private string getHttpResponseHeaderCaseInsensitive(string[string] headers, string requestedHeader) {
+	foreach (headerName, headerValue; headers) {
+		if (icmp(headerName, requestedHeader) == 0) {
+			return headerValue;
+		}
+	}
+	return "";
+}
+
+// Probe the Microsoft identity endpoint using a minimal HTTPS HEAD request.
+//
+// This replaces the old boolean-only reachability observation with a structured
+// result. The same network request can therefore answer both questions:
+//   1. Can this process currently reach the applicable Microsoft cloud?
+//   2. If Microsoft supplied an HTTP Date header, how does service time compare
+//      with the wall clock visible to this process?
+MicrosoftServiceProbeResult probeMicrosoftService(ApplicationConfig appConfig, bool displayLogging = true) {
+	MicrosoftServiceProbeResult result;
+	result.serviceUrl = appConfig.getConfiguredMicrosoftAuthEndpoint();
+	result.requestStartUtc = SysTime.min;
+	result.responseEndUtc = SysTime.min;
+	result.failureReason = "not_attempted";
+
 	HTTP http = HTTP();
-	http.url = "https://login.microsoftonline.com";
+	http.url = result.serviceUrl;
 	
 	// Configure timeouts based on application configuration
 	http.dnsTimeout = dur!"seconds"(appConfig.getValueLong("dns_timeout"));
@@ -570,13 +783,17 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 	// Set HTTP method to HEAD for minimal data transfer
 	http.method = HTTP.Method.head;
 	
-	bool reachedService = false;
-	
 	// Exit scope to ensure cleanup http object
 	scope(exit) {
 		// Shut http down http object
 		http.shutdown();
 	}
+
+	// Capture both clocks immediately around the request. Realtime is required for
+	// comparison with Microsoft's wall-clock Date value; monotonic time is required
+	// for reliable RTT measurement even if the system clock is adjusted mid-request.
+	result.requestStartUtc = Clock.currTime(UTC());
+	auto requestStartMonotonic = MonoTime.currTime();
 
 	// Execute the request and handle exceptions
 	try {
@@ -585,36 +802,69 @@ bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging =
 		}
 		http.perform();
 
+		// Capture timing immediately after the transfer completes, before logging or
+		// response processing introduces unrelated delay into the measurement.
+		result.responseEndMonotonic = MonoTime.currTime();
+		result.responseEndUtc = Clock.currTime(UTC());
+		result.roundTripTime = result.responseEndMonotonic - requestStartMonotonic;
+		result.httpStatusCode = http.statusLine.code;
+
+		// Capture Date for the time subsystem. Missing Date is not a network failure;
+		// it will be classified separately as TIME_AUTHORITY_UNAVAILABLE.
+		auto responseHeaders = http.responseHeaders();
+		result.responseDateHeader = getHttpResponseHeaderCaseInsensitive(responseHeaders, "date");
+
 		// Check response for HTTP status code - consider 2xx and 3xx as "reachable"
 		if (http.statusLine.code >= 200 && http.statusLine.code < 400) {
 			if (displayLogging) {
 				addLogEntry("Successfully reached the Microsoft OneDrive Service");
 			}
-			reachedService = true;
+			result.reachable = true;
+			result.failureReason = "";
 		} else {
 			addLogEntry("Failed to reach the Microsoft OneDrive Service. HTTP status code: " ~ to!string(http.statusLine.code));
-			reachedService = false;
+			result.reachable = false;
+			result.failureReason = "http_status_" ~ to!string(http.statusLine.code);
 		}
 	} catch (SocketException e) {
+		result.responseEndMonotonic = MonoTime.currTime();
+		result.responseEndUtc = Clock.currTime(UTC());
+		result.roundTripTime = result.responseEndMonotonic - requestStartMonotonic;
 		addLogEntry("Cannot connect to the Microsoft OneDrive Service - Socket Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-		reachedService = false;
+		result.reachable = false;
+		result.failureReason = "socket_exception";
 	} catch (CurlException e) {
+		result.responseEndMonotonic = MonoTime.currTime();
+		result.responseEndUtc = Clock.currTime(UTC());
+		result.roundTripTime = result.responseEndMonotonic - requestStartMonotonic;
 		addLogEntry("Cannot connect to the Microsoft OneDrive Service - Network Connection Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-		reachedService = false;
+		result.reachable = false;
+		result.failureReason = "curl_exception";
 	} catch (Exception e) {
+		result.responseEndMonotonic = MonoTime.currTime();
+		result.responseEndUtc = Clock.currTime(UTC());
+		result.roundTripTime = result.responseEndMonotonic - requestStartMonotonic;
 		addLogEntry("An unexpected error occurred: " ~ e.toString());
 		displayOneDriveErrorMessage(e.toString(), getFunctionName!({}));
-		reachedService = false;
+		result.reachable = false;
+		result.failureReason = "unexpected_exception";
 	}
 	
-	// Return state
-	return reachedService;
+	return result;
 }
 
-// Retry Internet access test to Microsoft OneDrive
-bool retryInternetConnectivityTest(ApplicationConfig appConfig) {
+// Backwards-compatible boolean reachability wrapper used by subsystems that do
+// not need the richer time observation.
+bool testInternetReachability(ApplicationConfig appConfig, bool displayLogging = true) {
+	return probeMicrosoftService(appConfig, displayLogging).reachable;
+}
+
+// Retry Internet access test to Microsoft OneDrive and retain the final probe so
+// startup can consume its Date/timing data without immediately issuing another
+// request after connectivity is restored.
+bool retryInternetConnectivityTest(ApplicationConfig appConfig, out MicrosoftServiceProbeResult lastProbe) {
 	int retryAttempts = 0;
 	int backoffInterval = 1; // initial backoff interval in seconds
 	int maxBackoffInterval = 3600; // maximum backoff interval in seconds
@@ -632,7 +882,8 @@ bool retryInternetConnectivityTest(ApplicationConfig appConfig) {
 		}
 
 		Thread.sleep(dur!"seconds"(backoffInterval));
-		isOnline = testInternetReachability(appConfig); // assuming this function is defined elsewhere
+		lastProbe = probeMicrosoftService(appConfig);
+		isOnline = lastProbe.reachable;
 
 		if (isOnline) {
 			addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
@@ -645,8 +896,13 @@ bool retryInternetConnectivityTest(ApplicationConfig appConfig) {
 		addLogEntry("ERROR: Was unable to reconnect to the Microsoft OneDrive service after " ~ to!string(maxRetryCount) ~ " attempts!");
 	}
 	
-	// Return state
 	return isOnline;
+}
+
+// Preserve the original call signature for existing callers.
+bool retryInternetConnectivityTest(ApplicationConfig appConfig) {
+	MicrosoftServiceProbeResult ignoredProbe;
+	return retryInternetConnectivityTest(appConfig, ignoredProbe);
 }
 
 // Can we read the local file - as a permissions issue or file corruption will cause a failure
@@ -1744,6 +2000,28 @@ bool hasRemoteFileSystemInfoLastModifiedDateTime(const ref JSONValue item) {
 		   (item["remoteItem"]["fileSystemInfo"].type == JSONType.object) &&
 		   (("lastModifiedDateTime" in item["remoteItem"]["fileSystemInfo"]) != null) &&
 		   (item["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].type == JSONType.string);
+}
+
+// Extract and validate the authoritative filesystem last-modified timestamp from a live
+// Microsoft Graph DriveItem. Remote items normally carry this value under remoteItem,
+// but Add Shortcut to My Files objects may only expose it on the outer DriveItem (#1533).
+//
+// IMPORTANT: this function never fabricates a timestamp. A missing or invalid timestamp
+// is reported to the caller so that the item can be rejected or deferred safely.
+bool getFileSystemInfoLastModifiedDateTime(const ref JSONValue item, out SysTime parsedTime, out string timestamp) {
+	timestamp = "";
+
+	if (isItemRemote(item) && hasRemoteFileSystemInfoLastModifiedDateTime(item)) {
+		timestamp = strip(item["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+	} else if (hasFileSystemInfoLastModifiedDateTime(item)) {
+		// Normal non-remote item, or #1533 fallback for a remote shortcut whose
+		// remoteItem does not contain fileSystemInfo.
+		timestamp = strip(item["fileSystemInfo"]["lastModifiedDateTime"].str);
+	} else {
+		return false;
+	}
+
+	return parseUTCDateTime(timestamp, parsedTime);
 }
 
 bool isItemFile(const ref JSONValue item) {

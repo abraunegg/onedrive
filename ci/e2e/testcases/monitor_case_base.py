@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import signal
 import subprocess
 import time
@@ -18,6 +19,46 @@ from framework.utils import (
 
 class MonitorModeTestCaseBase(E2ETestCase):
     SYNC_COMPLETE_PATTERN = "Sync with Microsoft OneDrive is complete"
+
+    @staticmethod
+    def _normalise_monitor_path_rendering(value: str) -> str:
+        """Canonicalise equivalent relative-path renderings in monitor logs.
+
+        Monitor-mode output may render a sync-root-relative path either as
+        ``path/to/item`` or ``./path/to/item`` depending on the code path that
+        emitted the message. E2E assertions must validate the operation and
+        path, not this presentation-only difference.
+
+        Keep the normalisation deliberately narrow: only remove ``./`` when it
+        appears immediately after separators used by monitor log messages that
+        contain paths. Do not globally rewrite arbitrary ``./`` debug text.
+        """
+        return (
+            value.replace(": ./", ": ")
+            .replace("Moving ./", "Moving ")
+            .replace(" -> ./", " -> ")
+            .replace(" to ./", " to ")
+        )
+
+    def _monitor_output_contains(self, output: str, pattern: str) -> bool:
+        """Match monitor output while treating relative and ./relative paths as equivalent."""
+        return self._normalise_monitor_path_rendering(pattern) in self._normalise_monitor_path_rendering(output)
+
+    def _find_monitor_pattern_group(self, output: str, pattern_groups: list[list[str]]) -> int:
+        """Find a pattern group, preferring exact matches before canonical path matching."""
+        for idx, group in enumerate(pattern_groups):
+            if all(pattern in output for pattern in group):
+                return idx
+
+        normalised_output = self._normalise_monitor_path_rendering(output)
+        for idx, group in enumerate(pattern_groups):
+            if all(
+                self._normalise_monitor_path_rendering(pattern) in normalised_output
+                for pattern in group
+            ):
+                return idx
+
+        return -1
 
     def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
         write_text_file(
@@ -211,7 +252,7 @@ class MonitorModeTestCaseBase(E2ETestCase):
 
         while time.time() < deadline:
             content = self._read_monitor_output_from_offsets(stdout_file, start_offset)
-            if all(pattern in content for pattern in required_patterns):
+            if all(self._monitor_output_contains(content, pattern) for pattern in required_patterns):
                 return True
             time.sleep(poll_interval)
 
@@ -231,7 +272,7 @@ class MonitorModeTestCaseBase(E2ETestCase):
 
         while time.time() < deadline:
             latest_segment = self._read_monitor_output_from_offsets(stdout_file, start_offset)
-            if all(pattern in latest_segment for pattern in required_patterns):
+            if all(self._monitor_output_contains(latest_segment, pattern) for pattern in required_patterns):
                 return True, latest_segment
             time.sleep(poll_interval)
 
@@ -249,9 +290,9 @@ class MonitorModeTestCaseBase(E2ETestCase):
 
         while time.time() < deadline:
             content = self._read_monitor_output_from_offsets(stdout_file, start_offset)
-            for idx, group in enumerate(alternative_pattern_groups):
-                if all(pattern in content for pattern in group):
-                    return True, idx
+            matched_group = self._find_monitor_pattern_group(content, alternative_pattern_groups)
+            if matched_group >= 0:
+                return True, matched_group
             time.sleep(poll_interval)
 
         return False, -1
@@ -270,9 +311,9 @@ class MonitorModeTestCaseBase(E2ETestCase):
 
         while time.time() < deadline:
             latest_segment = self._read_monitor_output_from_offsets(stdout_file, start_offset)
-            for idx, group in enumerate(alternative_pattern_groups):
-                if all(pattern in latest_segment for pattern in group):
-                    return True, idx, latest_segment
+            matched_group = self._find_monitor_pattern_group(latest_segment, alternative_pattern_groups)
+            if matched_group >= 0:
+                return True, matched_group, latest_segment
             time.sleep(poll_interval)
 
         return False, -1, latest_segment
@@ -294,23 +335,15 @@ class MonitorModeTestCaseBase(E2ETestCase):
 
         while time.time() < deadline:
             latest_segment = self._read_monitor_output_from_offsets(stdout_file, start_offset)
-            fixed_ok = all(pattern in latest_segment for pattern in required_patterns)
-            matched_group = -1
-            for idx, group in enumerate(alternative_pattern_groups):
-                if all(pattern in latest_segment for pattern in group):
-                    matched_group = idx
-                    break
+            fixed_ok = all(self._monitor_output_contains(latest_segment, pattern) for pattern in required_patterns)
+            matched_group = self._find_monitor_pattern_group(latest_segment, alternative_pattern_groups)
             group_ok = matched_group >= 0
             if fixed_ok and group_ok:
                 return True, True, matched_group, latest_segment
             time.sleep(poll_interval)
 
-        fixed_ok = all(pattern in latest_segment for pattern in required_patterns)
-        matched_group = -1
-        for idx, group in enumerate(alternative_pattern_groups):
-            if all(pattern in latest_segment for pattern in group):
-                matched_group = idx
-                break
+        fixed_ok = all(self._monitor_output_contains(latest_segment, pattern) for pattern in required_patterns)
+        matched_group = self._find_monitor_pattern_group(latest_segment, alternative_pattern_groups)
         return fixed_ok, matched_group >= 0, matched_group, latest_segment
 
     def _wait_for_post_mutation_sync_complete(
@@ -362,15 +395,22 @@ class MonitorModeTestCaseBase(E2ETestCase):
         monitor_command: list[str],
         monitor_stdout: Path,
         monitor_stderr: Path,
+        *,
+        env: dict[str, str] | None = None,
     ) -> subprocess.Popen[str]:
         stdout_fp = monitor_stdout.open("w", encoding="utf-8")
         stderr_fp = monitor_stderr.open("w", encoding="utf-8")
+        process_env = None
+        if env:
+            process_env = dict(os.environ)
+            process_env.update(env)
         process = subprocess.Popen(
             monitor_command,
             cwd=str(context.repo_root),
             stdout=stdout_fp,
             stderr=stderr_fp,
             text=True,
+            env=process_env,
         )
         process._tc_stdout_fp = stdout_fp  # type: ignore[attr-defined]
         process._tc_stderr_fp = stderr_fp  # type: ignore[attr-defined]
@@ -413,6 +453,7 @@ class MonitorModeTestCaseBase(E2ETestCase):
         startup_timeout_seconds: int = 300,
         startup_retry_attempts: int = STARTUP_RETRY_ATTEMPTS,
         startup_retry_sleep_seconds: float = STARTUP_RETRY_SLEEP_SECONDS,
+        env: dict[str, str] | None = None,
     ) -> tuple[subprocess.Popen[str], bool]:
         last_process: subprocess.Popen[str] | None = None
 
@@ -422,7 +463,13 @@ class MonitorModeTestCaseBase(E2ETestCase):
             monitor_stdout.write_text("", encoding="utf-8")
             monitor_stderr.write_text("", encoding="utf-8")
 
-            process = self._launch_monitor_process_raw(context, monitor_command, monitor_stdout, monitor_stderr)
+            process = self._launch_monitor_process_raw(
+                context,
+                monitor_command,
+                monitor_stdout,
+                monitor_stderr,
+                env=env,
+            )
             status = self._wait_for_initial_sync_complete_or_transient_failure(
                 process,
                 monitor_stdout,
