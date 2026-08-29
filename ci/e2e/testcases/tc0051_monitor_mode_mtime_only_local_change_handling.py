@@ -236,10 +236,19 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             details["mutation_processed"] = mutation_processed
             details["post_mutation_log_segment_length"] = len(post_mutation_log_segment)
             details["mutation_required_patterns"] = required_patterns
-            details["monitor_observed_processing"] = f"Processing: {relative_path}" in post_mutation_log_segment
+            details["monitor_observed_processing"] = self._monitor_output_contains(
+                post_mutation_log_segment,
+                f"Processing: {relative_path}",
+            )
             details["monitor_reported_no_change"] = "The file has not changed" in post_mutation_log_segment
-            details["monitor_reported_upload"] = f"Uploading modified file: {relative_path} ... done" in post_mutation_log_segment
-            details["monitor_reported_local_change_event"] = f"[M] Local file changed: {relative_path}" in post_mutation_log_segment
+            details["monitor_reported_upload"] = self._monitor_output_contains(
+                post_mutation_log_segment,
+                f"Uploading modified file: {relative_path} ... done",
+            )
+            details["monitor_reported_local_change_event"] = self._monitor_output_contains(
+                post_mutation_log_segment,
+                f"[M] Local file changed: {relative_path}",
+            )
         finally:
             self._shutdown_monitor_process(process, details)
 
