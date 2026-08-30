@@ -87,9 +87,56 @@ struct DatabaseItemsToDeleteOnline {
 	string localFilePath;
 }
 
+private struct DisplaySyncStatusLocalAssessment {
+	long pendingLocalItems;
+	long newLocalFiles;
+	long newLocalDirectories;
+	long modifiedLocalFiles;
+	long timestampOnlyDifferences;
+	long locallyMissingItems;
+	long typeChangedItems;
+	long unclassifiedItems;
+	long excludedItems;
+	long approximateUploadSize;
+}
+
 private struct ExpectedLocalMoveEffect {
 	string from;
 	string to;
+}
+
+// Format --display-sync-status transfer estimates so they remain useful for both
+// human inspection and deterministic validation. Values below 1 KiB are shown
+// as exact bytes; larger values include a two-decimal human-readable value and
+// the exact byte count.
+private string formatDisplaySyncStatusDataSize(long bytes) {
+	if (bytes <= 0) {
+		return "0 bytes";
+	}
+
+	ulong exactBytes = cast(ulong) bytes;
+	if (exactBytes < 1024) {
+		return to!string(exactBytes) ~ " bytes";
+	}
+
+	double humanReadableValue;
+	string unit;
+
+	if (exactBytes < (1024UL * 1024UL)) {
+		humanReadableValue = exactBytes / 1024.0;
+		unit = "KB";
+	} else if (exactBytes < (1024UL * 1024UL * 1024UL)) {
+		humanReadableValue = exactBytes / (1024.0 * 1024.0);
+		unit = "MB";
+	} else if (exactBytes < (1024UL * 1024UL * 1024UL * 1024UL)) {
+		humanReadableValue = exactBytes / (1024.0 * 1024.0 * 1024.0);
+		unit = "GB";
+	} else {
+		humanReadableValue = exactBytes / (1024.0 * 1024.0 * 1024.0 * 1024.0);
+		unit = "TB";
+	}
+
+	return format("%.2f", humanReadableValue) ~ " " ~ unit ~ " (" ~ to!string(exactBytes) ~ " bytes)";
 }
 
 class SyncEngine {
@@ -14256,215 +14303,909 @@ class SyncEngine {
 		}
 	}
 
-	// Query the sync status of the client and the local system
+	// Normalise paths used by --display-sync-status to a stable, root-relative form.
+	private string normaliseDisplaySyncStatusPath(string inputPath) {
+		string normalisedPath = strip(inputPath);
+
+		if (normalisedPath.empty || (normalisedPath == ".") || (normalisedPath == "/")) {
+			return "/";
+		}
+
+		// Microsoft Graph parentReference.path values commonly contain a drive/root
+		// prefix such as "/drive/root:/Folder". Retain only the logical path after ':'.
+		auto splitIndex = normalisedPath.indexOf(":");
+		if (splitIndex != -1) {
+			normalisedPath = normalisedPath[splitIndex + 1 .. $];
+		}
+
+		normalisedPath = buildNormalizedPath(normalisedPath);
+		if (normalisedPath == ".") {
+			return "/";
+		}
+
+		if (!startsWith(normalisedPath, "/")) {
+			normalisedPath = "/" ~ normalisedPath;
+		}
+
+		while ((normalisedPath.length > 1) && endsWith(normalisedPath, "/")) {
+			normalisedPath = normalisedPath[0 .. $ - 1];
+		}
+
+		return normalisedPath;
+	}
+
+	// Determine whether a change affects the scope requested by --display-sync-status.
+	// Directory changes are also relevant when the changed directory is an ancestor
+	// of the selected --single-directory path.
+	private bool displaySyncStatusPathIsInScope(string itemPath, string requestedScope, bool directoryLike) {
+		string normalisedItemPath = normaliseDisplaySyncStatusPath(itemPath);
+		string normalisedScope = normaliseDisplaySyncStatusPath(requestedScope);
+
+		if (normalisedScope == "/") {
+			return true;
+		}
+
+		if (normalisedItemPath == normalisedScope) {
+			return true;
+		}
+
+		if (startsWith(normalisedItemPath, normalisedScope ~ "/")) {
+			return true;
+		}
+
+		if (directoryLike && startsWith(normalisedScope, normalisedItemPath ~ "/")) {
+			return true;
+		}
+
+		return false;
+	}
+
+	// Build the logical path for a live Microsoft Graph item without changing the
+	// database. parentReference.path is preferred because a newly-created parent
+	// may not yet exist in the local database when this read-only status query runs.
+	private string buildDisplaySyncStatusPathFromJSON(JSONValue onedriveJSONItem) {
+		if (!hasName(onedriveJSONItem)) {
+			return null;
+		}
+
+		string thisItemName = onedriveJSONItem["name"].str;
+
+		if (hasParentReferencePath(onedriveJSONItem)) {
+			return normaliseDisplaySyncStatusPath(onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ thisItemName);
+		}
+
+		if (hasParentReferenceDriveId(onedriveJSONItem) && hasParentReferenceId(onedriveJSONItem)) {
+			string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+			string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
+
+			if (appConfig.accountType == "personal") {
+				thisItemDriveId = transformToLowerCase(thisItemDriveId);
+			}
+
+			if (itemDB.idInLocalDatabase(thisItemDriveId, thisItemParentId)) {
+				string parentPath;
+				if (!tryBuildDisplaySyncStatusDatabasePath(thisItemDriveId, thisItemParentId, parentPath)) {
+					return null;
+				}
+				if (parentPath.empty) {
+					return normaliseDisplaySyncStatusPath(thisItemName);
+				}
+				return normaliseDisplaySyncStatusPath(parentPath ~ "/" ~ thisItemName);
+			}
+		}
+
+		return null;
+	}
+
+	// Convert the logical --display-sync-status scope to the relative path form used
+	// by normal local filesystem scans. main.d establishes the configured sync_dir
+	// as the working directory before these relative paths are evaluated.
+	private string buildDisplaySyncStatusLocalScopePath(string requestedScope) {
+		string normalisedScope = normaliseDisplaySyncStatusPath(requestedScope);
+		if (normalisedScope == "/") {
+			return ".";
+		}
+		return ensureStartsWithDotSlash(buildNormalizedPath(normalisedScope[1 .. $]));
+	}
+
+	private string buildDisplaySyncStatusItemKey(string driveId, string itemId) {
+		if (appConfig.accountType == "personal") {
+			driveId = transformToLowerCase(driveId);
+		}
+		return driveId ~ "|" ~ itemId;
+	}
+
+	// Resolve a database path without invoking computeItemPath(), because the normal
+	// helper deliberately forces a process exit when it encounters a broken parent
+	// chain. A status query must instead classify that state as incomplete.
+	private bool tryBuildDisplaySyncStatusDatabasePath(string driveId, string itemId, out string calculatedPath) {
+		static import core.exception;
+
+		if (appConfig.accountType == "personal") {
+			driveId = transformToLowerCase(driveId);
+		}
+
+		try {
+			calculatedPath = buildNormalizedPath(itemDB.computePath(driveId, itemId));
+			return true;
+		} catch (core.exception.AssertError) {
+			calculatedPath = null;
+			return false;
+		}
+	}
+
+	// A local path may belong to the default drive, a Personal/Business shared-folder
+	// target drive, or a Business Shared File drive. Search every drive represented
+	// in the status database copy so tracked shared content is not mistaken for new data.
+	private bool selectDisplaySyncStatusItemByPath(string path, out Item databaseItem) {
+		string searchPath = path;
+		if ((searchPath != ".") && !startsWith(searchPath, "./")) {
+			searchPath = ensureStartsWithDotSlash(buildNormalizedPath(searchPath));
+		}
+
+		foreach (driveId; itemDB.selectDistinctDriveIds()) {
+			if (itemDB.selectByPath(searchPath, driveId, databaseItem)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Walk a local path using the same high-level inclusion rules as the normal new
+	// data scan, but collect status only. No upload/create/delete operation is called.
+	private void assessDisplaySyncStatusNewLocalPath(string path, string requestedScope, ref DisplaySyncStatusLocalAssessment assessment) {
+		if (exitHandlerTriggered) return;
+
+		// Skip symbolic links as early as normal local discovery does when configured.
+		if (isSymlink(path) && appConfig.getValueBool("skip_symlinks")) {
+			assessment.excludedItems++;
+			return;
+		}
+
+		if (!exists(path)) return;
+
+		bool pathIsDirectory = isDir(path);
+		bool pathIsFile = isFile(path);
+
+		// The root itself is a scan anchor, not a candidate item.
+		bool isScanRoot = (path == ".");
+
+		// Do not walk the reserved local Business Shared Files area when normal sync
+		// would skip it.
+		if (!isScanRoot && (appConfig.accountType == "business") &&
+			canFind(path, baseName(appConfig.configuredBusinessSharedFilesDirectoryName))) {
+			assessment.excludedItems++;
+			return;
+		}
+
+		Item databaseItem;
+		bool itemFoundInDatabase = isScanRoot || selectDisplaySyncStatusItemByPath(path, databaseItem);
+		bool unwanted = false;
+		bool excludedBySyncListDirectory = false;
+
+		if (!itemFoundInDatabase) {
+			// Match the normal local discovery path-length restriction. If a directory
+			// itself exceeds the service limit normal sync does not traverse it either.
+			long maxPathLength = (appConfig.accountType == "personal") ? 430 : 400;
+			try {
+				if (path.byGrapheme.walkLength >= maxPathLength) {
+					assessment.excludedItems++;
+					return;
+				}
+			} catch (std.utf.UTFException e) {
+				assessment.unclassifiedItems++;
+				return;
+			}
+
+			if (!isValid(path)) {
+				assessment.unclassifiedItems++;
+				return;
+			}
+
+			unwanted = checkPathAgainstClientSideFiltering(path);
+			excludedBySyncListDirectory = syncListDirExcluded;
+
+			if (!unwanted) {
+				unwanted = checkPathAgainstMicrosoftNamingRestrictions(path);
+			}
+		}
+
+		if (!unwanted) {
+			if (!isScanRoot && !itemFoundInDatabase && displaySyncStatusPathIsInScope(path, requestedScope, pathIsDirectory)) {
+				if (pathIsDirectory) {
+					assessment.pendingLocalItems++;
+					assessment.newLocalDirectories++;
+				} else if (pathIsFile) {
+					// The normal new-data scan explicitly ignores .nosync files themselves.
+					if (canFind(path, ".nosync")) {
+						assessment.excludedItems++;
+						return;
+					}
+					assessment.pendingLocalItems++;
+					assessment.newLocalFiles++;
+					try {
+						assessment.approximateUploadSize += to!long(getSize(path));
+					} catch (FileException e) {
+						assessment.unclassifiedItems++;
+					}
+				}
+			}
+
+			if (pathIsDirectory) {
+				try {
+					auto directoryEntries = dirEntries(path, SpanMode.shallow, false);
+					foreach (DirEntry entry; directoryEntries) {
+						assessDisplaySyncStatusNewLocalPath(entry.name, requestedScope, assessment);
+					}
+					object.destroy(directoryEntries);
+				} catch (FileException e) {
+					assessment.unclassifiedItems++;
+				}
+			}
+			return;
+		}
+
+		// Issue #3126 semantics: an excluded sync_list parent may still contain a
+		// specifically-included descendant. Traverse only when normal discovery would.
+		if (pathIsDirectory && excludedBySyncListDirectory) {
+			bool mustTraversePath = selectiveSync.isSyncListPrefixMatch(path) || selectiveSync.syncListAnywhereInclusionRulesExist();
+			if (mustTraversePath) {
+				try {
+					auto directoryEntries = dirEntries(path, SpanMode.shallow, false);
+					foreach (DirEntry entry; directoryEntries) {
+						assessDisplaySyncStatusNewLocalPath(entry.name, requestedScope, assessment);
+					}
+					object.destroy(directoryEntries);
+				} catch (FileException e) {
+					assessment.unclassifiedItems++;
+				}
+			}
+		} else {
+			assessment.excludedItems++;
+		}
+	}
+
+	// Compare database-tracked state with the local filesystem without changing
+	// timestamps, files, database records or remote state. Missing descendants beneath
+	// a missing directory are collapsed so one directory departure is not inflated into
+	// hundreds of child deletions.
+	private void assessDisplaySyncStatusTrackedLocalItems(string requestedScope, ref DisplaySyncStatusLocalAssessment assessment, ref bool[string] remoteDeletionKeys) {
+		Item[] databaseItems;
+		foreach (driveId; itemDB.selectDistinctDriveIds()) {
+			// selectByDriveId() deliberately returns only top-level entries for a drive
+			// (parentId IS NULL). Normal consistency checking then traverses directory
+			// children recursively. Mirror that topology here so every tracked item is
+			// assessed rather than only the drive/root anchors.
+			Item[] topLevelItems = itemDB.selectByDriveId(driveId);
+			foreach (topLevelItem; topLevelItems) {
+				databaseItems ~= topLevelItem;
+				databaseItems ~= getChildren(topLevelItem.driveId, topLevelItem.id);
+			}
+		}
+
+		bool[string] missingHierarchyKeys;
+		Item[string] databaseItemsByKey;
+		Item[] missingItems;
+
+		foreach (dbItem; databaseItems) {
+			databaseItemsByKey[buildDisplaySyncStatusItemKey(dbItem.driveId, dbItem.id)] = dbItem;
+		}
+
+		foreach (dbItem; databaseItems) {
+			if (exitHandlerTriggered) return;
+
+			if (dbItem.type == ItemType.root) continue;
+			if ((dbItem.type == ItemType.unknown) || (dbItem.type == ItemType.none)) continue;
+			if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.dir)) continue;
+
+			bool directoryLike = (dbItem.type == ItemType.dir);
+			bool fileLike = (dbItem.type == ItemType.file) ||
+				((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file));
+			if (!directoryLike && !fileLike) continue;
+
+			string localPath;
+			if (!tryBuildDisplaySyncStatusDatabasePath(dbItem.driveId, dbItem.id, localPath)) {
+				assessment.unclassifiedItems++;
+				continue;
+			}
+			if (!displaySyncStatusPathIsInScope(localPath, requestedScope, directoryLike)) continue;
+
+			string itemKey = buildDisplaySyncStatusItemKey(dbItem.driveId, dbItem.id);
+
+			if (!exists(localPath)) {
+				missingItems ~= dbItem;
+				missingHierarchyKeys[itemKey] = true;
+				continue;
+			}
+
+			if (directoryLike) {
+				if (!isDir(localPath)) {
+					assessment.pendingLocalItems++;
+					assessment.typeChangedItems++;
+					missingHierarchyKeys[itemKey] = true;
+				}
+				continue;
+			}
+
+			// ItemType.file and remote-file entries should resolve to local files.
+			if (!isFile(localPath)) {
+				assessment.pendingLocalItems++;
+				assessment.typeChangedItems++;
+				continue;
+			}
+
+			long localSize = -1;
+			try {
+				localSize = to!long(getSize(localPath));
+			} catch (FileException e) {
+				assessment.unclassifiedItems++;
+				continue;
+			}
+
+			bool sizeChanged = false;
+			if (!dbItem.size.empty) {
+				try {
+					sizeChanged = (localSize != to!long(dbItem.size));
+				} catch (ConvException e) {
+					// A malformed/legacy size value should not allow a false clean result.
+					assessment.unclassifiedItems++;
+				}
+			}
+
+			if (sizeChanged) {
+				assessment.pendingLocalItems++;
+				assessment.modifiedLocalFiles++;
+				assessment.approximateUploadSize += localSize;
+				continue;
+			}
+
+			SysTime localModifiedTime;
+			try {
+				localModifiedTime = timeLastModified(localPath).toUTC();
+			} catch (FileException e) {
+				assessment.unclassifiedItems++;
+				continue;
+			}
+
+			SysTime databaseModifiedTime = dbItem.mtime;
+			localModifiedTime.fracSecs = Duration.zero;
+			databaseModifiedTime.fracSecs = Duration.zero;
+
+			if (localModifiedTime != databaseModifiedTime) {
+				if (!readLocalFile(localPath)) {
+					assessment.unclassifiedItems++;
+					continue;
+				}
+
+				if (!testFileHash(localPath, dbItem)) {
+					assessment.pendingLocalItems++;
+					assessment.modifiedLocalFiles++;
+					assessment.approximateUploadSize += localSize;
+				} else {
+					// Content is unchanged, but normal sync still has a timestamp correction
+					// to perform in one direction or the other.
+					assessment.pendingLocalItems++;
+					assessment.timestampOnlyDifferences++;
+				}
+			}
+		}
+
+		// Collapse missing children beneath a missing parent directory. If the online
+		// delta already contains the same item's deletion tombstone, it is a remote-side
+		// pending change rather than an additional local->remote deletion request.
+		foreach (dbItem; missingItems) {
+			string itemKey = buildDisplaySyncStatusItemKey(dbItem.driveId, dbItem.id);
+			string parentKey = buildDisplaySyncStatusItemKey(dbItem.driveId, dbItem.parentId);
+			if ((parentKey in missingHierarchyKeys) !is null) continue;
+
+			// A remote tombstone for this item or any tracked ancestor means the
+			// absence is already represented by the online->local side. Do not also
+			// describe it as a local request to delete something that is already gone online.
+			bool coveredByRemoteDeletion = ((itemKey in remoteDeletionKeys) !is null);
+			string ancestorDriveId = dbItem.driveId;
+			string ancestorItemId = dbItem.parentId;
+			while (!coveredByRemoteDeletion && !ancestorItemId.empty) {
+				string ancestorKey = buildDisplaySyncStatusItemKey(ancestorDriveId, ancestorItemId);
+				if ((ancestorKey in remoteDeletionKeys) !is null) {
+					coveredByRemoteDeletion = true;
+					break;
+				}
+
+				auto ancestorItemPointer = ancestorKey in databaseItemsByKey;
+				if (ancestorItemPointer is null) break;
+				ancestorDriveId = (*ancestorItemPointer).driveId;
+				ancestorItemId = (*ancestorItemPointer).parentId;
+			}
+			if (coveredByRemoteDeletion) continue;
+
+			assessment.pendingLocalItems++;
+			assessment.locallyMissingItems++;
+		}
+	}
+
+	private DisplaySyncStatusLocalAssessment assessDisplaySyncStatusLocalState(string requestedScope, ref bool[string] remoteDeletionKeys) {
+		DisplaySyncStatusLocalAssessment assessment;
+
+		// main.d establishes the configured sync_dir as the process working directory
+		// before invoking --display-sync-status, matching normal sync/monitor path
+		// semantics. All local assessment paths are therefore relative to sync_dir.
+
+		// First assess database-tracked items for local departures/modifications.
+		assessDisplaySyncStatusTrackedLocalItems(requestedScope, assessment, remoteDeletionKeys);
+
+		// Then discover new local content that is not represented in the database.
+		string localScopePath = buildDisplaySyncStatusLocalScopePath(requestedScope);
+		if (exists(localScopePath)) {
+			assessDisplaySyncStatusNewLocalPath(localScopePath, requestedScope, assessment);
+		}
+
+		return assessment;
+	}
+
+	// The default-drive /delta feed contains the shared-folder shortcut itself, but
+	// not the authoritative contents of the target drive. Until a read-only generated
+	// traversal is performed for those targets, never allow their presence within the
+	// requested scope to produce a false IN SYNC result.
+	private long countDisplaySyncStatusUnassessedSharedFolderScopes(string requestedScope) {
+		bool sharedFolderSyncApplies = (appConfig.accountType == "personal") ||
+			((appConfig.accountType == "business") && appConfig.getValueBool("sync_business_shared_items"));
+		if (!sharedFolderSyncApplies) return 0;
+
+		long unassessedScopes = 0;
+		Item[] remoteItems = itemDB.selectRemoteItems();
+		foreach (remoteItem; remoteItems) {
+			if (remoteItem.remoteType != ItemType.dir) continue;
+
+			// Match the shared-folder loop used by normal synchronisation.
+			if (!appConfig.getValueString("skip_dir").empty && selectiveSync.isDirNameExcluded(remoteItem.name)) {
+				continue;
+			}
+
+			string sharedFolderLogicalPath;
+			if (!tryBuildDisplaySyncStatusDatabasePath(remoteItem.driveId, remoteItem.id, sharedFolderLogicalPath)) {
+				// A broken shared-folder anchor cannot safely be declared out of scope.
+				unassessedScopes++;
+				continue;
+			}
+			if (sharedFolderLogicalPath.empty) {
+				// A root-level status request includes every configured shared-folder target.
+				// For a narrower scope, an unresolvable anchor cannot safely be declared out of scope.
+				unassessedScopes++;
+				continue;
+			}
+
+			if (displaySyncStatusPathIsInScope(sharedFolderLogicalPath, requestedScope, true)) {
+				unassessedScopes++;
+			}
+		}
+
+		return unassessedScopes;
+	}
+
+	// Query pending Microsoft OneDrive delta state and combine it with a read-only
+	// local filesystem assessment. No files, database records or delta cursors are
+	// modified by this operation.
 	void queryOneDriveForSyncStatus(string pathToQueryStatusOn) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
 		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
-		// Only set this if we are generating performance processing times
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			functionStartTime = Clock.currTime();
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 
-		// Query the account driveId and rootId to get the /delta JSON information
-		// Process that JSON data for relevancy
+		string requestedScope = normaliseDisplaySyncStatusPath(pathToQueryStatusOn);
 
-		// Function variables
-		long downloadSize = 0;
+		long approximateDownloadSize = 0;
+		long pendingRemoteItems = 0;
+		long deletedItems = 0;
+		long newFiles = 0;
+		long newDirectories = 0;
+		long filesRequiringDownload = 0;
+		long movedOrRenamedItems = 0;
+		long timestampOnlyRemoteDifferences = 0;
+		long otherPendingItems = 0;
+		long unclassifiedRemoteItems = 0;
+		long excludedRemoteItems = 0;
+		long untrackedDeletionTombstones = 0;
+		bool remoteDeltaTraversalComplete = false;
+		long unassessedSharedFolderScopes = countDisplaySyncStatusUnassessedSharedFolderScopes(requestedScope);
+		bool businessSharedFilesAssessmentIncomplete = false;
+		if ((appConfig.accountType == "business") && appConfig.getValueBool("sync_business_shared_files")) {
+			string businessSharedFilesLogicalRoot = baseName(appConfig.configuredBusinessSharedFilesDirectoryName);
+			businessSharedFilesAssessmentIncomplete = displaySyncStatusPathIsInScope(businessSharedFilesLogicalRoot, requestedScope, true);
+		}
+
 		string deltaLink = null;
 		string driveIdToQuery = appConfig.defaultDriveId;
 		string itemIdToQuery = appConfig.defaultRootId;
 		JSONValue deltaChanges;
 
-		// Array of JSON items
-		JSONValue[] jsonItemsArray;
+		JSONValue[string] latestDeltaItems;
+		bool[string] remoteDeletionKeys;
 
-		// Query Database for a potential deltaLink starting point
-		deltaLink = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
+		if (!nationalCloudDeployment) {
+			deltaLink = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
 
-		// Log what we are doing
-		addProcessingLogHeaderEntry("Querying the change status of Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
+			addProcessingLogHeaderEntry("Querying the change status of Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
 
-		// Create a new API Instance for querying the actual /delta and initialise it
-		OneDriveApi getDeltaDataOneDriveApiInstance;
-		getDeltaDataOneDriveApiInstance = new OneDriveApi(appConfig);
-		getDeltaDataOneDriveApiInstance.initialise();
+			OneDriveApi getDeltaDataOneDriveApiInstance;
+			getDeltaDataOneDriveApiInstance = new OneDriveApi(appConfig);
+			getDeltaDataOneDriveApiInstance.initialise();
 
-		// To handle SIGINT (CTRL-C) and SIGTERM (kill) events we need this while loop
-		while (true) {
-			// Check if exitHandlerTriggered is true
-			if (exitHandlerTriggered) {
-				// break out of the 'while (true)' loop
-				break;
-			}
+			while (true) {
+				if (exitHandlerTriggered) break;
 
-			// Add a processing '.'
-			if (appConfig.verbosityCount == 0) {
-				addProcessingDotEntry();
-			}
+				if (appConfig.verbosityCount == 0) addProcessingDotEntry();
 
-			// Get the /delta changes via the OneDrive API
-			// getDeltaChangesByItemId has the re-try logic for transient errors
-			deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink, getDeltaDataOneDriveApiInstance);
+				deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink, getDeltaDataOneDriveApiInstance);
 
-			// If the initial deltaChanges response does not contain a valid collection array, keep trying until we get a valid response.
-			if (!hasValidValueArray(deltaChanges)) {
-				// While the response does not contain a valid collection array
-				while (!hasValidValueArray(deltaChanges)) {
-					// Handle the invalid JSON response and retry
+				while (!hasValidValueArray(deltaChanges) && !exitHandlerTriggered) {
 					if (debugLogging) {addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned a JSON response without a valid value array", ["debug"]);}
 					deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink, getDeltaDataOneDriveApiInstance);
 				}
-			}
 
-			// We have a valid deltaChanges JSON array. This means we have at least 200+ JSON items to process.
-			// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
-			foreach (onedriveJSONItem; deltaChanges["value"].array) {
-				// is the JSON a root object - we dont want to count this
-				if (!isItemRoot(onedriveJSONItem)) {
-					// Files are the only item that we want to calculate
-					if (isItemFile(onedriveJSONItem)) {
-						// JSON item is a file
-						// Is the item filtered out due to client side filtering rules?
-						if (!checkJSONAgainstClientSideFiltering(onedriveJSONItem)) {
-							// Is the path of this JSON item 'in-scope' or 'out-of-scope' ?
-							if (pathToQueryStatusOn != "/") {
-								// We need to check the path of this item against pathToQueryStatusOn
-								string thisItemPath = "";
-								if (("path" in onedriveJSONItem["parentReference"]) != null) {
-									// If there is a parent reference path, try and use it
-									string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
+				if (!hasValidValueArray(deltaChanges)) break;
 
-									// Check for ':' and split if present
-									auto splitIndex = selfBuiltPath.indexOf(":");
-									if (splitIndex != -1) {
-										// Keep only the part after ':'
-										selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
-									}
+				foreach (onedriveJSONItem; deltaChanges["value"].array) {
+					if (isItemRoot(onedriveJSONItem)) continue;
 
-									// Set thisItemPath to the self built path
-									thisItemPath = selfBuiltPath;
-								} else {
-									// no parent reference path available
-									thisItemPath = onedriveJSONItem["name"].str;
-								}
-								// can we find 'pathToQueryStatusOn' in 'thisItemPath' ?
-								if (canFind(thisItemPath, pathToQueryStatusOn)) {
-									// Add this to the array for processing
-									jsonItemsArray ~= onedriveJSONItem;
-								}
-							} else {
-								// We are not doing a --single-directory check
-								// Add this to the array for processing
-								jsonItemsArray ~= onedriveJSONItem;
-							}
-						}
+					if (!hasId(onedriveJSONItem)) {
+						unclassifiedRemoteItems++;
+						if (debugLogging) {addLogEntry("Unable to classify OneDrive delta item without an id while determining sync status: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);}
+						continue;
 					}
+
+					string itemDriveId = driveIdToQuery;
+					if (hasParentReferenceDriveId(onedriveJSONItem)) itemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+					string itemKey = buildDisplaySyncStatusItemKey(itemDriveId, onedriveJSONItem["id"].str);
+					latestDeltaItems[itemKey] = onedriveJSONItem;
 				}
-			}
 
-			// The response may contain either @odata.deltaLink or @odata.nextLink
-			if ("@odata.deltaLink" in deltaChanges) {
-				deltaLink = deltaChanges["@odata.deltaLink"].str;
-				if (debugLogging) {addLogEntry("Setting next deltaLink to (@odata.deltaLink): " ~ deltaLink, ["debug"]);}
-			}
+				if ("@odata.deltaLink" in deltaChanges) {
+					deltaLink = deltaChanges["@odata.deltaLink"].str;
+					if (debugLogging) {addLogEntry("Setting next deltaLink to (@odata.deltaLink): " ~ deltaLink, ["debug"]);}
+				}
 
-			// Update deltaLink to next changeSet bundle
-			if ("@odata.nextLink" in deltaChanges) {
-				deltaLink = deltaChanges["@odata.nextLink"].str;
-				if (debugLogging) {addLogEntry("Setting next deltaLink to (@odata.nextLink): " ~ deltaLink, ["debug"]);}
-			} else break;
-
-			// Sleep for a while to avoid busy-waiting
-			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
-		}
-
-		// Terminate getDeltaDataOneDriveApiInstance here
-		getDeltaDataOneDriveApiInstance.releaseCurlEngine();
-		getDeltaDataOneDriveApiInstance = null;
-
-		// Needed after printing out '....' when fetching changes from OneDrive API
-		if (appConfig.verbosityCount == 0) {
-			completeProcessingDots();
-		}
-
-		// Are there any JSON items to process?
-		if (count(jsonItemsArray) != 0) {
-			// There are items to process
-			foreach (onedriveJSONItem; jsonItemsArray.array) {
-
-				// variables we need
-				string thisItemParentDriveId;
-				string thisItemId;
-				string thisItemHash;
-				bool existingDBEntry = false;
-
-				// Is this file a remote item (on a shared folder) ?
-				if (isItemRemote(onedriveJSONItem)) {
-					// remote drive item
-					thisItemParentDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
-					thisItemId = onedriveJSONItem["id"].str;
+				if ("@odata.nextLink" in deltaChanges) {
+					deltaLink = deltaChanges["@odata.nextLink"].str;
+					if (debugLogging) {addLogEntry("Setting next deltaLink to (@odata.nextLink): " ~ deltaLink, ["debug"]);}
 				} else {
-					// standard drive item
-					thisItemParentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
-					thisItemId = onedriveJSONItem["id"].str;
+					// A final deltaLink is the proof that the complete paging sequence reached
+					// an authoritative checkpoint. Without it, a clean remote state cannot be asserted.
+					remoteDeltaTraversalComplete = ("@odata.deltaLink" in deltaChanges) != null;
+					break;
 				}
 
-				// Get the file hash
-				if (hasHashes(onedriveJSONItem)) {
-					// At a minimum we require 'quickXorHash' to exist
-					if (hasQuickXorHash(onedriveJSONItem)) {
-						// JSON item has a hash we can use
-						thisItemHash = onedriveJSONItem["file"]["hashes"]["quickXorHash"].str;
-					}
+				Thread.sleep(dur!"msecs"(100));
+			}
 
-					// Check if the item has been seen before
-					Item existingDatabaseItem;
-					existingDBEntry = itemDB.selectById(thisItemParentDriveId, thisItemId, existingDatabaseItem);
+			getDeltaDataOneDriveApiInstance.releaseCurlEngine();
+			getDeltaDataOneDriveApiInstance = null;
 
-					if (existingDBEntry) {
-						// item exists in database .. do the database details match the JSON record?
-						if (existingDatabaseItem.quickXorHash != thisItemHash) {
-							// file hash is different, this will trigger a download event
-							if (hasFileSize(onedriveJSONItem)) {
-								downloadSize = downloadSize + onedriveJSONItem["size"].integer;
-							}
-						}
-					} else {
-						// item does not exist in the database
-						// this item has already passed client side filtering rules (skip_dir, skip_file, sync_list)
-						// this will trigger a download event
-						if (hasFileSize(onedriveJSONItem)) {
-							downloadSize = downloadSize + onedriveJSONItem["size"].integer;
-						}
+			if (appConfig.verbosityCount == 0) completeProcessingDots();
+		} else if (debugLogging) {
+			addLogEntry("Skipping Microsoft OneDrive /delta status query because this configuration requires generated /children traversal", ["debug"]);
+		}
+
+		foreach (itemKey, onedriveJSONItem; latestDeltaItems) {
+			string thisItemId = onedriveJSONItem["id"].str;
+			string thisItemDriveId = driveIdToQuery;
+			if (hasParentReferenceDriveId(onedriveJSONItem)) thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+			if (appConfig.accountType == "personal") thisItemDriveId = transformToLowerCase(thisItemDriveId);
+
+			if (isItemDeleted(onedriveJSONItem)) {
+				remoteDeletionKeys[buildDisplaySyncStatusItemKey(thisItemDriveId, thisItemId)] = true;
+
+				Item existingDatabaseItem;
+				if (!itemDB.selectById(thisItemDriveId, thisItemId, existingDatabaseItem)) {
+					untrackedDeletionTombstones++;
+					continue;
+				}
+
+				string existingItemPath;
+				if (!tryBuildDisplaySyncStatusDatabasePath(existingDatabaseItem.driveId, existingDatabaseItem.id, existingItemPath)) {
+					unclassifiedRemoteItems++;
+					continue;
+				}
+
+				bool directoryLike = (existingDatabaseItem.type == ItemType.dir) ||
+					((existingDatabaseItem.type == ItemType.remote) && (existingDatabaseItem.remoteType == ItemType.dir));
+
+				if (!displaySyncStatusPathIsInScope(existingItemPath, requestedScope, directoryLike)) continue;
+
+				if (checkPathAgainstClientSideFiltering(existingItemPath)) {
+					excludedRemoteItems++;
+					continue;
+				}
+
+				pendingRemoteItems++;
+				deletedItems++;
+				continue;
+			}
+
+			if (!hasName(onedriveJSONItem) || !hasParentReferenceDriveId(onedriveJSONItem) || !hasParentReferenceId(onedriveJSONItem)) {
+				unclassifiedRemoteItems++;
+				if (debugLogging) {addLogEntry("Unable to classify malformed live OneDrive delta item while determining sync status: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);}
+				continue;
+			}
+
+			bool jsonItemIsDirectory = isItemFolder(onedriveJSONItem) ||
+				(isItemRemote(onedriveJSONItem) && (("folder" in onedriveJSONItem["remoteItem"]) != null));
+			bool jsonItemIsFile = isItemFile(onedriveJSONItem) ||
+				(isItemRemote(onedriveJSONItem) && (("file" in onedriveJSONItem["remoteItem"]) != null));
+
+			Item existingDatabaseItem;
+			bool existingDBEntry = itemDB.selectById(thisItemDriveId, thisItemId, existingDatabaseItem);
+
+			// Scope must be evaluated against both the live remote path and the tracked
+			// database path. A remote move/rename can leave --single-directory (or move
+			// into an excluded path), and the old path still represents pending local
+			// reconciliation work even though the new path is outside the requested scope.
+			string thisItemPath = buildDisplaySyncStatusPathFromJSON(onedriveJSONItem);
+			string existingItemPath;
+			bool existingItemIsDirectory = false;
+			if (existingDBEntry) {
+				existingItemIsDirectory = (existingDatabaseItem.type == ItemType.dir) ||
+					((existingDatabaseItem.type == ItemType.remote) && (existingDatabaseItem.remoteType == ItemType.dir));
+				if (!tryBuildDisplaySyncStatusDatabasePath(existingDatabaseItem.driveId, existingDatabaseItem.id, existingItemPath)) {
+					unclassifiedRemoteItems++;
+					continue;
+				}
+			}
+
+			bool livePathInScope = thisItemPath.empty ? (requestedScope == "/") :
+				displaySyncStatusPathIsInScope(thisItemPath, requestedScope, jsonItemIsDirectory);
+			bool existingPathInScope = existingDBEntry &&
+				displaySyncStatusPathIsInScope(existingItemPath, requestedScope, existingItemIsDirectory);
+
+			if (!livePathInScope && !existingPathInScope) continue;
+			if (thisItemPath.empty && (requestedScope != "/") && !existingPathInScope) {
+				unclassifiedRemoteItems++;
+				continue;
+			}
+
+			// checkJSONAgainstClientSideFiltering() normally resolves an in-database parent
+			// through computeItemPath(), whose production error path force-exits on a broken
+			// parent chain. Preflight that same parent read through the non-fatal status
+			// resolver so a damaged status database copy becomes INDETERMINATE instead.
+			string thisItemParentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+			if (appConfig.accountType == "personal") thisItemParentDriveId = transformToLowerCase(thisItemParentDriveId);
+			string thisItemParentIdForFiltering = onedriveJSONItem["parentReference"]["id"].str;
+			if (itemDB.idInLocalDatabase(thisItemParentDriveId, thisItemParentIdForFiltering)) {
+				string filteringParentPath;
+				if (!tryBuildDisplaySyncStatusDatabasePath(thisItemParentDriveId, thisItemParentIdForFiltering, filteringParentPath)) {
+					unclassifiedRemoteItems++;
+					continue;
+				}
+			}
+
+			bool liveItemExcluded = checkJSONAgainstClientSideFiltering(onedriveJSONItem);
+			bool existingPathExcluded = true;
+			if (existingDBEntry && !existingItemPath.empty) {
+				existingPathExcluded = checkPathAgainstClientSideFiltering(existingItemPath);
+			}
+
+			// A live item that is excluded can normally be ignored. The exception is a
+			// tracked item whose old path was included and in scope: moving that item
+			// into an excluded location is still pending reconciliation for the old path.
+			if (liveItemExcluded && (!existingDBEntry || existingPathExcluded || !existingPathInScope)) {
+				excludedRemoteItems++;
+				continue;
+			}
+
+			// Timestamp metadata is one classification signal, not a prerequisite for
+			// recognising changes already proven by item existence, path or content. A
+			// missing authoritative timestamp therefore makes part of the assessment
+			// incomplete, but must not hide an otherwise-confirmed NOT IN SYNC state.
+			SysTime onlineModifiedTime;
+			string onlineModifiedTimestamp;
+			bool authoritativeTimestampAvailable = getFileSystemInfoLastModifiedDateTime(onedriveJSONItem, onlineModifiedTime, onlineModifiedTimestamp);
+
+			if (!existingDBEntry) {
+				pendingRemoteItems++;
+				if (jsonItemIsFile) {
+					newFiles++;
+					filesRequiringDownload++;
+					if (hasFileSize(onedriveJSONItem)) approximateDownloadSize += onedriveJSONItem["size"].integer;
+				} else if (jsonItemIsDirectory) {
+					newDirectories++;
+				} else {
+					otherPendingItems++;
+				}
+
+				if (!authoritativeTimestampAvailable) {
+					unclassifiedRemoteItems++;
+					if (debugLogging) {addLogEntry("New live OneDrive delta item is confirmed pending but does not contain a valid fileSystemInfo.lastModifiedDateTime: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);}
+				}
+				continue;
+			}
+
+			string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
+			string thisItemName = onedriveJSONItem["name"].str;
+			bool pathChanged = (existingDatabaseItem.parentId != thisItemParentId) || (existingDatabaseItem.name != thisItemName);
+			bool contentChanged = false;
+			bool contentIdentityUncertain = false;
+			bool fileTimestampChanged = false;
+
+			if (jsonItemIsFile) {
+				if (hasQuickXorHash(onedriveJSONItem)) {
+					contentChanged = existingDatabaseItem.quickXorHash != onedriveJSONItem["file"]["hashes"]["quickXorHash"].str;
+				} else if (hasSHA256Hash(onedriveJSONItem)) {
+					contentChanged = existingDatabaseItem.sha256Hash != onedriveJSONItem["file"]["hashes"]["sha256Hash"].str;
+				} else if (hasFileSize(onedriveJSONItem)) {
+					string onlineSize = to!string(onedriveJSONItem["size"].integer);
+					if (!existingDatabaseItem.size.empty && (existingDatabaseItem.size != onlineSize)) {
+						contentChanged = true;
+					} else if (hasETag(onedriveJSONItem) && (existingDatabaseItem.eTag != onedriveJSONItem["eTag"].str)) {
+						contentIdentityUncertain = true;
 					}
+				} else if (hasETag(onedriveJSONItem) && (existingDatabaseItem.eTag != onedriveJSONItem["eTag"].str)) {
+					contentIdentityUncertain = true;
+				}
+
+				if (authoritativeTimestampAvailable) {
+					SysTime databaseModifiedTime = existingDatabaseItem.mtime;
+					onlineModifiedTime.fracSecs = Duration.zero;
+					databaseModifiedTime.fracSecs = Duration.zero;
+					fileTimestampChanged = (onlineModifiedTime != databaseModifiedTime);
+				}
+			}
+
+			bool confirmedPendingChange = pathChanged || contentChanged || fileTimestampChanged || contentIdentityUncertain;
+			if (confirmedPendingChange) {
+				pendingRemoteItems++;
+				if (pathChanged) movedOrRenamedItems++;
+				if (contentChanged) {
+					filesRequiringDownload++;
+					if (hasFileSize(onedriveJSONItem)) approximateDownloadSize += onedriveJSONItem["size"].integer;
+				}
+				if (fileTimestampChanged && !pathChanged && !contentChanged && !contentIdentityUncertain) {
+					timestampOnlyRemoteDifferences++;
+				}
+				if (contentIdentityUncertain) otherPendingItems++;
+			}
+
+			if (!authoritativeTimestampAvailable) {
+				unclassifiedRemoteItems++;
+				if (debugLogging) {
+					string timestampDiagnosticPrefix = confirmedPendingChange ?
+						"Live OneDrive delta item is confirmed pending but" :
+						"Unable to fully classify live OneDrive delta item because it";
+					addLogEntry(timestampDiagnosticPrefix ~ " does not contain a valid fileSystemInfo.lastModifiedDateTime: " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 				}
 			}
 		}
 
-		// Was anything detected that would constitute a download?
-		if (downloadSize > 0) {
-			// we have something to download
-			if (pathToQueryStatusOn != "/") {
-				addLogEntry("The selected local directory via --single-directory is out of sync with Microsoft OneDrive");
-			} else {
-				addLogEntry("The configured local 'sync_dir' directory is out of sync with Microsoft OneDrive");
-			}
-			addLogEntry("Approximate data to download from Microsoft OneDrive: " ~ to!string(downloadSize/1024) ~ " KB");
+		// Local assessment is deliberately performed only after the complete remote
+		// delta sequence has been reduced to final item state, allowing known remote
+		// deletion tombstones to avoid being misreported as local delete requests.
+		DisplaySyncStatusLocalAssessment localAssessment = assessDisplaySyncStatusLocalState(requestedScope, remoteDeletionKeys);
+
+		addLogEntry();
+		addLogEntry("Synchronization status for the configured sync scope:");
+		addLogEntry();
+		addLogEntry("Microsoft OneDrive -> Local filesystem");
+		if (pendingRemoteItems > 0) {
+			addLogEntry("  Pending remote items:         " ~ to!string(pendingRemoteItems));
+			addLogEntry("  Deleted items:                " ~ to!string(deletedItems));
+			addLogEntry("  New files:                    " ~ to!string(newFiles));
+			addLogEntry("  New directories:              " ~ to!string(newDirectories));
+			addLogEntry("  Files requiring download:     " ~ to!string(filesRequiringDownload));
+			addLogEntry("  Moved or renamed items:       " ~ to!string(movedOrRenamedItems));
+			if (timestampOnlyRemoteDifferences > 0) addLogEntry("  Timestamp-only differences:   " ~ to!string(timestampOnlyRemoteDifferences));
+			if (otherPendingItems > 0) addLogEntry("  Other/uncertain changes:       " ~ to!string(otherPendingItems));
+			if (filesRequiringDownload > 0) addLogEntry("  Approximate download data:    " ~ formatDisplaySyncStatusDataSize(approximateDownloadSize));
+		} else if ((unclassifiedRemoteItems == 0) && remoteDeltaTraversalComplete && (unassessedSharedFolderScopes == 0) && !businessSharedFilesAssessmentIncomplete) {
+			addLogEntry("  No pending remote changes detected.");
 		} else {
-			// No changes were returned
-			addLogEntry("There are no pending changes from Microsoft OneDrive; your local directory matches the data online.");
+			addLogEntry("  No confirmed pending remote changes detected; status is incomplete.");
 		}
 
-		// Display function processing time if configured to do so
+		addLogEntry();
+		addLogEntry("Local filesystem -> Microsoft OneDrive");
+		if (localAssessment.pendingLocalItems > 0) {
+			addLogEntry("  Pending local items:          " ~ to!string(localAssessment.pendingLocalItems));
+			addLogEntry("  New local files:              " ~ to!string(localAssessment.newLocalFiles));
+			addLogEntry("  New local directories:        " ~ to!string(localAssessment.newLocalDirectories));
+			addLogEntry("  Modified local files:         " ~ to!string(localAssessment.modifiedLocalFiles));
+			addLogEntry("  Timestamp-only differences:   " ~ to!string(localAssessment.timestampOnlyDifferences));
+			addLogEntry("  Locally deleted/missing:      " ~ to!string(localAssessment.locallyMissingItems));
+			if (localAssessment.typeChangedItems > 0) addLogEntry("  File/directory type changes:   " ~ to!string(localAssessment.typeChangedItems));
+
+			long potentialFileUploads = localAssessment.newLocalFiles + localAssessment.modifiedLocalFiles;
+			if (!appConfig.getValueBool("download_only")) {
+				addLogEntry("  Files requiring upload:       " ~ to!string(potentialFileUploads));
+				addLogEntry("  Directories to create online: " ~ to!string(localAssessment.newLocalDirectories));
+				if (noRemoteDelete) {
+					addLogEntry("  Remote deletions requested:   0 (--no-remote-delete configured)");
+				} else {
+					addLogEntry("  Remote deletions requested:   " ~ to!string(localAssessment.locallyMissingItems));
+				}
+				if (potentialFileUploads > 0) addLogEntry("  Approximate upload data:      " ~ formatDisplaySyncStatusDataSize(localAssessment.approximateUploadSize));
+			} else {
+				addLogEntry("  Upload actions enabled:       no (--download-only configured)");
+			}
+		} else if (localAssessment.unclassifiedItems == 0) {
+			addLogEntry("  No pending local changes detected.");
+		} else {
+			addLogEntry("  No confirmed pending local changes detected; status is incomplete.");
+		}
+
+		bool statusIncomplete = (unclassifiedRemoteItems > 0) || (localAssessment.unclassifiedItems > 0) ||
+			!remoteDeltaTraversalComplete || (unassessedSharedFolderScopes > 0) || businessSharedFilesAssessmentIncomplete;
+		bool anyPendingChanges = (pendingRemoteItems > 0) || (localAssessment.pendingLocalItems > 0);
+
+		addLogEntry();
+		if (anyPendingChanges) {
+			addLogEntry("Overall status: NOT IN SYNC");
+			if (statusIncomplete) {
+				addLogEntry("Additional unclassified items were encountered, but confirmed pending changes already establish that the scope is not in sync.");
+			}
+		} else if (statusIncomplete) {
+			addLogEntry("Overall status: INDETERMINATE");
+			addLogEntry("One or more items could not be fully classified, so a clean sync state cannot be asserted.");
+		} else {
+			addLogEntry("Overall status: IN SYNC");
+			addLogEntry("No pending local or remote changes were detected for the configured sync scope.");
+		}
+		
+		// Seperate sync status from other information
+		addLogEntry();
+
+		if (appConfig.getValueBool("upload_only") && (pendingRemoteItems > 0)) {
+			addLogEntry("Configuration note: --upload-only is enabled; pending remote changes are reported for visibility but are not scheduled for normal download processing.");
+		}
+		if (appConfig.getValueBool("download_only") && (localAssessment.pendingLocalItems > 0)) {
+			addLogEntry("Configuration note: --download-only is enabled; local differences are reported for visibility but will not be uploaded to Microsoft OneDrive.");
+			if (cleanupLocalFiles && ((localAssessment.newLocalFiles + localAssessment.newLocalDirectories) > 0)) {
+				addLogEntry("Configuration note: --cleanup-local-files is enabled; untracked local additions may be removed locally by normal download-only cleanup processing.");
+			}
+		}
+		if (noRemoteDelete && (localAssessment.locallyMissingItems > 0)) {
+			addLogEntry("Configuration note: --no-remote-delete is enabled; locally missing items will not be deleted from Microsoft OneDrive.");
+		}
+
+		if (unclassifiedRemoteItems > 0) addLogEntry("WARNING: " ~ to!string(unclassifiedRemoteItems) ~ " OneDrive delta item(s) could not be fully classified.");
+		if (!remoteDeltaTraversalComplete) {
+			if (nationalCloudDeployment) {
+				addLogEntry("WARNING: This configuration uses generated /children traversal rather than /delta; that remote traversal is not performed by --display-sync-status, so remote status is incomplete.");
+			} else {
+				addLogEntry("WARNING: The Microsoft OneDrive delta traversal did not reach a final checkpoint; remote status is incomplete.");
+			}
+		}
+		if (unassessedSharedFolderScopes > 0) {
+			addLogEntry("WARNING: " ~ to!string(unassessedSharedFolderScopes) ~ " configured shared-folder scope(s) require separate generated traversal and were not assessed by this read-only status query; remote status is incomplete.");
+		}
+		if (businessSharedFilesAssessmentIncomplete) {
+			addLogEntry("WARNING: --sync-business-shared-files is enabled; the Business Shared Files source is not represented by the default-drive delta feed, so remote status is incomplete.");
+		}
+		if (localAssessment.unclassifiedItems > 0) addLogEntry("WARNING: " ~ to!string(localAssessment.unclassifiedItems) ~ " local item(s) could not be fully classified or read.");
+
+		if (debugLogging) {
+			addLogEntry("display-sync-status remote diagnostics: excludedItems=" ~ to!string(excludedRemoteItems) ~
+				", untrackedDeletionTombstones=" ~ to!string(untrackedDeletionTombstones) ~
+				", unclassifiedItems=" ~ to!string(unclassifiedRemoteItems) ~
+				", deltaTraversalComplete=" ~ to!string(remoteDeltaTraversalComplete) ~
+				", unassessedSharedFolderScopes=" ~ to!string(unassessedSharedFolderScopes) ~
+				", businessSharedFilesAssessmentIncomplete=" ~ to!string(businessSharedFilesAssessmentIncomplete), ["debug"]);
+			addLogEntry("display-sync-status local diagnostics: excludedItems=" ~ to!string(localAssessment.excludedItems) ~
+				", unclassifiedItems=" ~ to!string(localAssessment.unclassifiedItems), ["debug"]);
+		}
+
+		addLogEntry("Note: --display-sync-status performs a read-only point-in-time assessment of pending Microsoft OneDrive delta changes and local filesystem differences against the client's stored sync database. No files, database records or delta cursors are modified.");
+		if (pendingRemoteItems > 0) {
+			addLogEntry("Note: When remote changes are also pending, some reported local actions may be reconciled or superseded when those remote changes are processed.");
+		}
+
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
-			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
+
+
 
 	// Query OneDrive for file details of a given path, returning either the 'webURL' or 'lastModifiedBy' JSON facet
 	void queryOneDriveForFileDetails(string inputFilePath, string runtimePath, string outputType) {
