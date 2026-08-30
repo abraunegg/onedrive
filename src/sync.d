@@ -15152,7 +15152,7 @@ class SyncEngine {
 			addLogEntry("No pending local or remote changes were detected for the configured sync scope.");
 		}
 		
-		// Seperate sync status from other information
+		// Separate sync status from other information
 		addLogEntry();
 
 		if (appConfig.getValueBool("upload_only") && (pendingRemoteItems > 0)) {
