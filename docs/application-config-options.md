@@ -1555,7 +1555,7 @@ _**Usage Example:**_ `onedrive --display-sync-status`
 
 The command reports two independent directions:
 
-- `Microsoft OneDrive -> Local filesystem` - pending remote changes visible through the stored Microsoft Graph delta position, including new items, deletions, moves/renames, content changes and applicable timestamp-only differences.
+- `Microsoft OneDrive -> Local filesystem` - pending remote changes determined from the stored Microsoft Graph delta position for full-scope operation, or from an authoritative read-only `/children` current-state traversal when `--single-directory` is used. This includes new items, deletions/absence, moves/renames, content changes and applicable timestamp-only differences.
 - `Local filesystem -> Microsoft OneDrive` - local filesystem differences relative to the client's stored sync database, including new files/directories, modified files, timestamp-only differences and locally missing items.
 
 The final `Overall status` is one of:
@@ -1569,10 +1569,10 @@ The operation does not upload, download, rename or delete content, does not modi
 Client-side filtering is honoured, and one-way modes retain their normal meaning while still reporting the opposite direction for visibility. For example, `--upload-only` can report pending remote changes even though those changes will not be downloaded, and `--download-only` can report local differences while noting that upload actions are disabled.
 
 > [!TIP]
-> This option can also use `--single-directory` to assess a specific directory within the configured `sync_dir`, for example: `onedrive --display-sync-status --single-directory 'Documents'`.
+> This option can also use `--single-directory` to assess a specific directory within the configured `sync_dir`, for example: `onedrive --display-sync-status --single-directory 'Documents'`. In this mode the requested online directory is enumerated read-only with `/children` and compared with the stored database scope; the default-drive delta cursor is neither required nor advanced.
 
 > [!NOTE]
-> Some configurations cannot be fully represented by the default-drive `/delta` feed. Where generated `/children` traversal or separately traversed shared-folder sources would be required, the command reports the limitation and returns `INDETERMINATE` unless a confirmed pending change has already established `NOT IN SYNC`.
+> Full-scope configurations that cannot use the normal `/delta` feed may still be incomplete, as may separately traversed shared-folder sources outside an assessed `--single-directory` scope. A full-scope query with tracked default-drive state but no stored delta cursor is also conservative because a tokenless `/delta` response cannot prove historical deletions without mutating/rebuilding state. In these cases the command reports the limitation and returns `INDETERMINATE` unless a confirmed pending change has already established `NOT IN SYNC`. A `--single-directory` request itself uses a read-only `/children` current-state traversal and is not made indeterminate merely because normal single-directory synchronisation uses generated traversal.
 >
 > The sync state is reported in the textual `Overall status` field. `NOT IN SYNC` is an assessment result, not a command execution failure, so the process exit status should not be used as the sync-state indicator.
 

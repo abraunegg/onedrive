@@ -28,7 +28,6 @@ Before reading this document, please ensure you are running application version 
   - [Performing a 'one-way' download synchronisation with Microsoft OneDrive](#performing-a-one-way-download-synchronisation-with-microsoft-onedrive)
   - [Performing a 'one-way' upload synchronisation with Microsoft OneDrive](#performing-a-one-way-upload-synchronisation-with-microsoft-onedrive)
   - [Performing a selective synchronisation via 'sync_list' file](#performing-a-selective-synchronisation-via-sync_list-file)
-  - [Checking synchronisation status without performing a sync](#checking-synchronisation-status-without-performing-a-sync)
   - [Performing a --resync](#performing-a---resync)
   - [Performing a --force-sync without a --resync or changing your configuration](#performing-a---force-sync-without-a---resync-or-changing-your-configuration)
   - [Enabling the Client Activity Log](#enabling-the-client-activity-log)
@@ -1339,7 +1338,7 @@ The final state has three possible values:
 - `NOT IN SYNC` - at least one pending local or remote change was positively identified.
 - `INDETERMINATE` - no pending change was positively identified, but one or more parts of the configured scope could not be assessed completely enough to assert a clean state.
 
-`INDETERMINATE` is intentionally conservative. For example, configurations that require generated `/children` traversal rather than the normal `/delta` feed, or configured shared-folder sources that require a separate traversal, may not be fully assessable by this read-only query. Any such limitation is printed with the result.
+`INDETERMINATE` is intentionally conservative. A `--single-directory` status request is assessed differently from a full-drive query: the client performs a read-only `/children` traversal of the requested online directory, compares that authoritative current-state tree with the stored database scope, and resolves tracked items missing from the tree as deleted or moved out of scope. Full-scope configurations that cannot use the normal `/delta` feed, a full-scope query with tracked state but no stored delta cursor, or separately traversed shared-folder sources that are not covered by the requested scope may still be incomplete; any such limitation is printed with the result.
 
 Client-side filtering is honoured. Items excluded by `skip_file`, `skip_dir`, `sync_list`, `skip_dotfiles`, `check_nosync`, or applicable size limits are not treated as pending work for the configured sync scope. One-way modes are also reflected in the output: `--upload-only` still reports remote changes for visibility, while `--download-only` still reports local differences but notes that uploads are disabled.
 
@@ -1348,6 +1347,8 @@ To assess only one configured directory, combine the command with `--single-dire
 ```text
 onedrive --display-sync-status --single-directory 'Documents'
 ```
+
+For this scoped form the client does not consume the default-drive delta cursor. It builds the current online directory tree directly, compares that tree with the tracked database state for the same scope, and can therefore detect new/changed items, moves within or out of the scope, and tracked items that are no longer present online.
 
 > [!IMPORTANT]
 > `--display-sync-status` reports its assessment in the textual `Overall status` field. A `NOT IN SYNC` result is not itself a command execution failure, so do not use the process exit status as a substitute for parsing the reported sync state.
