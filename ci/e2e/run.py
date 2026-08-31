@@ -90,6 +90,7 @@ from testcases.tc0074_safebackup_clean_resync_no_conflict_validation import Test
 from testcases.tc0075_safebackup_remote_delete_local_modify_validation import TestCase0075SafeBackupRemoteDeleteLocalModifyValidation
 from testcases.tc0076_safebackup_resync_content_conflict_validation import TestCase0076SafeBackupResyncContentConflictValidation
 from testcases.tc0077_timestamp_authority_validation import TestCase0077TimestampAuthorityValidation
+from testcases.tc0078_monitor_mode_rename_to_invalid_name import TestCase0078MonitorModeRenameToInvalidName
 
 
 def build_test_suite() -> list:
@@ -171,6 +172,7 @@ def build_test_suite() -> list:
         TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(),
         TestCase0076SafeBackupResyncContentConflictValidation(),
         TestCase0077TimestampAuthorityValidation(),
+        TestCase0078MonitorModeRenameToInvalidName(),
     ]
 
 
