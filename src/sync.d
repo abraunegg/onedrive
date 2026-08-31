@@ -92,6 +92,14 @@ private struct ExpectedLocalMoveEffect {
 	string to;
 }
 
+// A local move can have three materially different outcomes. Keep these explicit
+// because only one of them is allowed to remove the existing online object.
+private enum LocalMoveTargetDisposition {
+	syncable,
+	excludedFromSyncScope,
+	unrepresentableOnline
+}
+
 class SyncEngine {
 	// Class Variables
 	ApplicationConfig appConfig;
@@ -6719,7 +6727,7 @@ class SyncEngine {
 	}
 
 	// Does this local path (directory or file) conform with the Microsoft Naming Restrictions? It needs to conform otherwise we cannot create the directory or upload the file.
-	bool checkPathAgainstMicrosoftNamingRestrictions(string localFilePath, string logModifier = "item") {
+	bool checkPathAgainstMicrosoftNamingRestrictions(string localFilePath, string logModifier = "item", bool notifyUser = true) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -6734,11 +6742,15 @@ class SyncEngine {
 		// Check if the given path violates certain Microsoft restrictions and limitations
 		// Return a true|false response
 		bool invalidPath = false;
+		string[] invalidPathLogTags = ["info"];
+		if (notifyUser) {
+			invalidPathLogTags ~= "notify";
+		}
 
 		// Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
 		if (!invalidPath) {
 			if (!isValidName(localFilePath)) { // This will return false if this is not a valid name according to the OneDrive API specifications
-				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Microsoft Naming Convention): " ~ localFilePath, ["info", "notify"]);
+				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Microsoft Naming Convention): " ~ localFilePath, invalidPathLogTags);
 				invalidPath = true;
 			}
 		}
@@ -6746,7 +6758,7 @@ class SyncEngine {
 		// Check path for bad whitespace items
 		if (!invalidPath) {
 			if (containsBadWhiteSpace(localFilePath)) { // This will return true if this contains a bad whitespace character
-				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Contains an invalid whitespace character): " ~ localFilePath, ["info", "notify"]);
+				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Contains an invalid whitespace character): " ~ localFilePath, invalidPathLogTags);
 				invalidPath = true;
 			}
 		}
@@ -6754,7 +6766,7 @@ class SyncEngine {
 		// Check path for HTML ASCII Codes
 		if (!invalidPath) {
 			if (containsASCIIHTMLCodes(localFilePath)) { // This will return true if this contains HTML ASCII Codes
-				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Contains HTML ASCII Code): " ~ localFilePath, ["info", "notify"]);
+				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Contains HTML ASCII Code): " ~ localFilePath, invalidPathLogTags);
 				invalidPath = true;
 			}
 		}
@@ -6762,7 +6774,7 @@ class SyncEngine {
 		// Validate that the path is a valid UTF-16 encoded path
 		if (!invalidPath) {
 			if (!isValidUTF16(localFilePath)) { // This will return true if this is a valid UTF-16 encoded path, so we are checking for 'false' as response
-				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Invalid UTF-16 encoded path): " ~ localFilePath, ["info", "notify"]);
+				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Invalid UTF-16 encoded path): " ~ localFilePath, invalidPathLogTags);
 				invalidPath = true;
 			}
 		}
@@ -6770,7 +6782,7 @@ class SyncEngine {
 		// Check path for ASCII Control Codes
 		if (!invalidPath) {
 			if (containsASCIIControlCodes(localFilePath)) { // This will return true if this contains ASCII Control Codes
-				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Contains ASCII Control Codes): " ~ localFilePath, ["info", "notify"]);
+				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Contains ASCII Control Codes): " ~ localFilePath, invalidPathLogTags);
 				invalidPath = true;
 			}
 		}
@@ -13698,6 +13710,70 @@ class SyncEngine {
 		}
 	}
 
+	// Remove stale local database tracking after a local rename to a name that cannot
+	// be represented online. No Microsoft OneDrive API operation is performed here.
+	// Returns false if the required database state could not be established safely.
+	private bool detachUnrepresentableMoveFromDatabase(string oldPath) {
+		Item oldItem;
+		if (!itemDB.selectByPath(oldPath, appConfig.defaultDriveId, oldItem)) {
+			if (debugLogging) {addLogEntry("uploadMoveItem: old path has no local database entry to detach: " ~ oldPath, ["debug"]);}
+			return true;
+		}
+
+		// selectByPath() traverses a top-level shared-folder shortcut and returns the
+		// actual remote-drive item. Resolve the logical path without traversal as well
+		// so both sides of that database mapping can be removed without touching OneDrive.
+		Item pathItem;
+		bool topLevelSharedFolder = itemDB.selectByPathIncludingRemoteItems(oldPath, appConfig.defaultDriveId, pathItem) &&
+			(pathItem.type == ItemType.remote);
+
+		if (topLevelSharedFolder) {
+			itemDB.deleteById(pathItem.driveId, pathItem.id);
+			if (itemDB.idInLocalDatabase(pathItem.driveId, pathItem.id)) {
+				addLogEntry("ERROR: Unable to remove stale shared-folder shortcut database tracking for: " ~ oldPath, ["error"]);
+				return false;
+			}
+
+			// If selectByPath() could not resolve the remote child, oldItem is the shortcut
+			// itself. The logical stale path is now detached; do not treat its default-drive
+			// parent as a synthetic remote-drive root.
+			if (oldItem.type == ItemType.remote) {
+				if (debugLogging) {addLogEntry("uploadMoveItem: detached shared-folder shortcut with no resolved remote child for " ~ oldPath, ["debug"]);}
+				return true;
+			}
+		}
+
+		// The item table uses ON DELETE CASCADE for parent/child relationships, so a
+		// single delete removes the complete tracked subtree for a directory.
+		string oldParentId = oldItem.parentId;
+		itemDB.deleteById(oldItem.driveId, oldItem.id);
+		if (itemDB.idInLocalDatabase(oldItem.driveId, oldItem.id)) {
+			addLogEntry("ERROR: Unable to remove stale local database tracking for: " ~ oldPath, ["error"]);
+			return false;
+		}
+
+		// Business shared folders may have a synthetic remote-drive root record. Mirror
+		// the existing shared-folder delete cleanup and remove it only when it is now
+		// orphaned. Personal shared-folder roots have a null parentId and skip this block.
+		if (topLevelSharedFolder && !oldParentId.empty) {
+			Item[] remainingChildren = itemDB.selectChildren(oldItem.driveId, oldParentId);
+			if (remainingChildren.length == 0) {
+				Item sharedDriveRoot;
+				if (itemDB.selectById(oldItem.driveId, oldParentId, sharedDriveRoot) &&
+					(sharedDriveRoot.type == ItemType.root)) {
+					itemDB.deleteById(sharedDriveRoot.driveId, sharedDriveRoot.id);
+					if (itemDB.idInLocalDatabase(sharedDriveRoot.driveId, sharedDriveRoot.id)) {
+						addLogEntry("ERROR: Unable to remove orphaned shared-folder root database tracking for: " ~ oldPath, ["error"]);
+						return false;
+					}
+				}
+			}
+		}
+
+		if (debugLogging) {addLogEntry("uploadMoveItem: removed stale local database tracking for " ~ oldPath ~ " whilst preserving the online copy", ["debug"]);}
+		return true;
+	}
+
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move
 	// This function is only called in monitor mode when an move event is coming from
 	// inotify and we try to move the item.
@@ -13715,18 +13791,21 @@ class SyncEngine {
 
 		// Log that we are doing a move
 		addLogEntry("Moving " ~ oldPath ~ " to " ~ newPath);
-		// Is this move unwanted?
-		bool unwanted = false;
+		// Classify the move before taking any destructive action. A configured exclusion
+		// means the old online object is no longer wanted; an unrepresentable name means
+		// the object is still in scope and the existing online copy must be preserved.
+		LocalMoveTargetDisposition disposition = LocalMoveTargetDisposition.syncable;
 		// Item variables
 		Item oldItem, newItem, parentItem;
 
 		// This not a Client Side Filtering check, nor a Microsoft Check, but is a sanity check that the path provided is UTF encoded correctly
 		// Check the std.encoding of the path against: Unicode 5.0, ASCII, ISO-8859-1, ISO-8859-2, WINDOWS-1250, WINDOWS-1251, WINDOWS-1252
-		if (!unwanted) {
+		if (disposition == LocalMoveTargetDisposition.syncable) {
 			if(!isValid(newPath)) {
 				// Path is not valid according to https://dlang.org/phobos/std_encoding.html
-				addLogEntry("Skipping item - invalid character encoding sequence: " ~ newPath, ["info", "notify"]);
-				unwanted = true;
+				// The terminal preservation message below is the user notification for this move.
+				addLogEntry("Skipping item - invalid character encoding sequence: " ~ newPath, ["info"]);
+				disposition = LocalMoveTargetDisposition.unrepresentableOnline;
 			}
 		}
 
@@ -13738,8 +13817,10 @@ class SyncEngine {
 		// - skip_dir
 		// - sync_list
 		// - skip_size
-		if (!unwanted) {
-			unwanted = checkPathAgainstClientSideFiltering(newPath);
+		if (disposition == LocalMoveTargetDisposition.syncable) {
+			if (checkPathAgainstClientSideFiltering(newPath)) {
+				disposition = LocalMoveTargetDisposition.excludedFromSyncScope;
+			}
 		}
 
 		// Check this path against the Microsoft Naming Conventions & Restrictions
@@ -13747,12 +13828,17 @@ class SyncEngine {
 		// - Check path for bad whitespace items
 		// - Check path for HTML ASCII Codes
 		// - Check path for ASCII Control Codes
-		if (!unwanted) {
-			unwanted = checkPathAgainstMicrosoftNamingRestrictions(newPath);
+		if (disposition == LocalMoveTargetDisposition.syncable) {
+			// Suppress the validation helper notification here. This move emits one terminal
+			// notification after the database has reached the safe preservation state.
+			if (checkPathAgainstMicrosoftNamingRestrictions(newPath, "item", false)) {
+				// The new name cannot exist online. The item itself is still in scope.
+				disposition = LocalMoveTargetDisposition.unrepresentableOnline;
+			}
 		}
 
 		// 'newPath' has passed client side filtering validation
-		if (!unwanted) {
+		if (disposition == LocalMoveTargetDisposition.syncable) {
 
 			if (!itemDB.selectByPath(oldPath, appConfig.defaultDriveId, oldItem)) {
 				// The old path|item is not synced with the database, upload as a new file
@@ -13868,10 +13954,37 @@ class SyncEngine {
 					if (debugLogging) {addLogEntry("uploadMoveItem: skipping saveItem() (no JSON payload returned or move not successful)", ["debug"]);}
 				}
 			}
-		} else {
-			// Moved item is unwanted
+		} else if (disposition == LocalMoveTargetDisposition.unrepresentableOnline) {
+			// The item has not been moved out of scope, it has been renamed to something that
+			// cannot exist online. First remove stale local tracking so a later reconciliation
+			// cannot reinterpret the old path as a deletion and remove the online copy.
+			if (!detachUnrepresentableMoveFromDatabase(oldPath)) {
+				addLogEntry("ERROR: Unable to establish a safe local database state after an unrepresentable rename. Exiting to preserve data on Microsoft OneDrive: " ~ oldPath, ["error", "notify"]);
+				forceExit();
+				return;
+			}
+
+			// This is intentionally the terminal message for the unrepresentable move path.
+			// Tests and users can rely on it meaning that the stale DB identity is gone and
+			// the existing online object has not been modified or deleted.
+			addLogEntry("Skipping move - the new name cannot be used on Microsoft OneDrive. The existing online copy has been preserved: " ~ oldPath, ["info", "notify"]);
+		} else if (disposition == LocalMoveTargetDisposition.excludedFromSyncScope) {
+			// Moved item is genuinely outside the configured sync scope.
 			addLogEntry("Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive");
-			uploadDeletedItem(oldItem, oldPath);
+
+			// Load the database record for the old path before attempting to remove it online.
+			// 'oldItem' is only populated by the successful move path above, so without this the
+			// delete is issued with a default constructed Item and cannot identify anything.
+			if (!itemDB.selectByPath(oldPath, appConfig.defaultDriveId, oldItem)) {
+				if (debugLogging) {addLogEntry("uploadMoveItem: old path has no local database entry, nothing to remove online: " ~ oldPath, ["debug"]);}
+			} else {
+				uploadDeletedItem(oldItem, oldPath);
+			}
+		} else {
+			// Fail closed if another disposition is ever introduced without explicit handling.
+			addLogEntry("ERROR: Unexpected local move disposition. Exiting without modifying Microsoft OneDrive: " ~ oldPath ~ " -> " ~ newPath, ["error", "notify"]);
+			forceExit();
+			return;
 		}
 
 		// Display function processing time if configured to do so
