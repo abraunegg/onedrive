@@ -28,6 +28,7 @@ Before reading this document, please ensure you are running application version 
   - [Performing a 'one-way' download synchronisation with Microsoft OneDrive](#performing-a-one-way-download-synchronisation-with-microsoft-onedrive)
   - [Performing a 'one-way' upload synchronisation with Microsoft OneDrive](#performing-a-one-way-upload-synchronisation-with-microsoft-onedrive)
   - [Performing a selective synchronisation via 'sync_list' file](#performing-a-selective-synchronisation-via-sync_list-file)
+  - [Checking synchronisation status without performing a sync](#checking-synchronisation-status-without-performing-a-sync)
   - [Performing a --resync](#performing-a---resync)
   - [Performing a --force-sync without a --resync or changing your configuration](#performing-a---force-sync-without-a---resync-or-changing-your-configuration)
   - [Enabling the Client Activity Log](#enabling-the-client-activity-log)
@@ -1292,6 +1293,66 @@ To ensure correct behaviour, explicitly include each shared-folder shortcut path
 > Treat each shared-folder shortcut as an independent root for the purposes of `sync_list`. Always explicitly include the exact shared-folder paths you want synchronised.
 
 
+
+### Checking synchronisation status without performing a sync
+
+Use `--display-sync-status` when you need to determine whether the configured sync scope has pending work **without actually performing a synchronisation**:
+
+```text
+onedrive --display-sync-status
+```
+
+This command exists as a safe diagnostic alternative to running `--sync`, `--dry-run`, or especially `--resync` simply to answer the question "is this client currently in sync?". It performs a read-only point-in-time assessment in both directions:
+
+- **Microsoft OneDrive -> Local filesystem** - examines pending Microsoft Graph delta changes that would require local reconciliation, including new files and directories, remote deletions, moves or renames, file-content changes, and timestamp-only differences.
+- **Local filesystem -> Microsoft OneDrive** - compares the local filesystem with the client's stored sync database to identify new local files and directories, modified files, timestamp-only differences, locally missing items, and other changes that normal synchronisation would need to reconcile.
+
+The command does **not** upload, download, rename or delete files, does not modify the live sync database, and does not advance the stored Microsoft Graph delta cursor. This means it can be run repeatedly without consuming the pending changes it is reporting.
+
+A clean result is reported as:
+
+```text
+Synchronization status for the configured sync scope:
+
+Microsoft OneDrive -> Local filesystem
+  No pending remote changes detected.
+
+Local filesystem -> Microsoft OneDrive
+  No pending local changes detected.
+
+Overall status: IN SYNC
+No pending local or remote changes were detected for the configured sync scope.
+```
+
+When changes are pending, the relevant direction includes a summary of the work detected. Transfer quantities are estimates; for values of at least 1 KiB the client displays both a human-readable value and the exact byte count, for example:
+
+```text
+Approximate download data:    14.15 MB (14838177 bytes)
+Approximate upload data:      14.15 MB (14838177 bytes)
+```
+
+Small non-zero values are shown directly in bytes rather than being rounded down to `0 KB`.
+
+The final state has three possible values:
+
+- `IN SYNC` - no pending local or remote changes were detected for the configured scope.
+- `NOT IN SYNC` - at least one pending local or remote change was positively identified.
+- `INDETERMINATE` - no pending change was positively identified, but one or more parts of the configured scope could not be assessed completely enough to assert a clean state.
+
+`INDETERMINATE` is intentionally conservative. For example, configurations that require generated `/children` traversal rather than the normal `/delta` feed, or configured shared-folder sources that require a separate traversal, may not be fully assessable by this read-only query. Any such limitation is printed with the result.
+
+Client-side filtering is honoured. Items excluded by `skip_file`, `skip_dir`, `sync_list`, `skip_dotfiles`, `check_nosync`, or applicable size limits are not treated as pending work for the configured sync scope. One-way modes are also reflected in the output: `--upload-only` still reports remote changes for visibility, while `--download-only` still reports local differences but notes that uploads are disabled.
+
+To assess only one configured directory, combine the command with `--single-directory`:
+
+```text
+onedrive --display-sync-status --single-directory 'Documents'
+```
+
+> [!IMPORTANT]
+> `--display-sync-status` reports its assessment in the textual `Overall status` field. A `NOT IN SYNC` result is not itself a command execution failure, so do not use the process exit status as a substitute for parsing the reported sync state.
+>
+> The result is a point-in-time reconciliation assessment based on the current local filesystem, the client's stored sync database and the remote change feed. It is not a byte-for-byte comparison of every object stored in Microsoft OneDrive.
 
 ### Performing a --resync
 A `--resync` operation instructs the client to delete its local state database and fully rebuild it from the current online OneDrive contents. This is a powerful recovery and re-alignment action that should be used **sparingly** and **with care**.
