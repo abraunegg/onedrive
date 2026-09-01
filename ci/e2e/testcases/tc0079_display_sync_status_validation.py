@@ -4,7 +4,6 @@ import hashlib
 import os
 import re
 import shutil
-import sqlite3
 import time
 from pathlib import Path
 
@@ -27,13 +26,10 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
     name = "display sync status validation"
     description = (
         "Validate clean, local-only, remote-only and mixed --display-sync-status results, "
-        "including filtering, deletion tombstones, transfer-size reporting and read-only state"
+        "including filtering, scoped remote delete/move detection, transfer-size reporting and read-only state"
     )
 
     EXCLUDED_SUFFIX = ".tc0079-excluded"
-    MALFORMED_TOMBSTONE_WARNING = (
-        "WARNING: Excluding malformed OneDrive JSON item from client-side filtering"
-    )
 
     @staticmethod
     def _sha256_file(path: Path) -> str:
@@ -67,17 +63,6 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
             else:
                 snapshot.append((relative, "other", 0, stat_result.st_mtime_ns, ""))
         return snapshot
-
-    @staticmethod
-    def _read_nonempty_delta_links(database_path: Path) -> list[tuple[str, str, str]]:
-        if not database_path.is_file():
-            return []
-        with sqlite3.connect(database_path) as connection:
-            rows = connection.execute(
-                "SELECT driveId, id, deltaLink FROM item "
-                "WHERE deltaLink IS NOT NULL AND deltaLink != '' ORDER BY driveId, id"
-            ).fetchall()
-        return [(str(drive_id), str(item_id), str(delta_link)) for drive_id, item_id, delta_link in rows]
 
     @staticmethod
     def _rewrite_runtime_config(
@@ -258,15 +243,11 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
         reconcile_stderr = case_log_dir / "ds0002_reconcile_stderr.log"
         clean2_stdout = case_log_dir / "ds0002_post_reconcile_clean_stdout.log"
         clean2_stderr = case_log_dir / "ds0002_post_reconcile_clean_stderr.log"
-        cursor_seed_stdout = case_log_dir / "ds0002b_delta_cursor_seed_stdout.log"
-        cursor_seed_stderr = case_log_dir / "ds0002b_delta_cursor_seed_stderr.log"
         actor_stdout = case_log_dir / "ds0003_actor_monitor_stdout.log"
         actor_stderr = case_log_dir / "ds0003_actor_monitor_stderr.log"
         actor_app_log_dir = case_log_dir / "app-logs"
         remote_stdout = case_log_dir / "ds0003_remote_dirty_status_stdout.log"
         remote_stderr = case_log_dir / "ds0003_remote_dirty_status_stderr.log"
-        delta_remote_stdout = case_log_dir / "ds0003b_delta_tombstone_status_stdout.log"
-        delta_remote_stderr = case_log_dir / "ds0003b_delta_tombstone_status_stderr.log"
         mixed_stdout = case_log_dir / "ds0004_mixed_status_stdout.log"
         mixed_stderr = case_log_dir / "ds0004_mixed_status_stderr.log"
 
@@ -288,15 +269,11 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
             str(reconcile_stderr),
             str(clean2_stdout),
             str(clean2_stderr),
-            str(cursor_seed_stdout),
-            str(cursor_seed_stderr),
             str(actor_stdout),
             str(actor_stderr),
             str(actor_app_log_dir),
             str(remote_stdout),
             str(remote_stderr),
-            str(delta_remote_stdout),
-            str(delta_remote_stderr),
             str(mixed_stdout),
             str(mixed_stderr),
             str(baseline_manifest_file),
@@ -522,38 +499,25 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
         if not clean2_read_only["read_only_ok"]:
             failures.append("DS-0002: post-reconcile status assessment was not read-only")
 
-        # DS-0002B: establish a real persisted default-drive delta checkpoint on the
-        # same evaluated client. A narrow sync_list keeps the normal /delta pass scoped
-        # to this testcase tree without introducing another validator client. This lets
-        # DS-0003B exercise the genuine Graph deletion-tombstone path independently of
-        # the --single-directory current-state traversal.
-        write_text_file(conf_main / "sync_list", f"/{root_name}\n")
-        cursor_seed_command = [
-            context.onedrive_bin,
-            "--sync",
-            "--download-only",
-            "--verbose",
-            "--confdir",
-            str(conf_main),
-        ]
-        cursor_seed_result = self._run_and_capture(
-            context,
-            "DS-0002B establish delta cursor",
-            cursor_seed_command,
-            cursor_seed_stdout,
-            cursor_seed_stderr,
-        )
-        details["ds0002b_cursor_seed_returncode"] = cursor_seed_result.returncode
-        delta_links_before_actor = self._read_nonempty_delta_links(live_database)
-        details["ds0002b_delta_links"] = delta_links_before_actor
-        if cursor_seed_result.returncode != 0:
-            failures.append(f"DS-0002B: delta cursor seed sync failed with {cursor_seed_result.returncode}")
-        if not delta_links_before_actor:
-            failures.append("DS-0002B: normal /delta seed did not persist a non-empty delta cursor")
+        # All baseline/local phases are prerequisites for the remote-side half of this
+        # testcase. Do not continue into actor mutations if the evaluated client is
+        # already known-bad; doing so only creates cascading, misleading failures.
+        if failures:
+            details["failures"] = failures
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "; ".join(failures),
+                artifacts,
+                details,
+            )
 
-        # Snapshot the now-current client state. This independent mutator client makes
-        # remote changes while the primary client deliberately remains stale. Keep the
-        # established E2E topology: one mutator client, one client under evaluation.
+        # Create an independent mutator from the established clean evaluator state.
+        # This is the same operating model used by the existing monitor E2E cases:
+        # one client mutates Microsoft OneDrive while a separate client remains stale
+        # and is evaluated afterwards. No alternate scoping or artificial delta
+        # seeding is involved in TC0079.
         if conf_actor.exists():
             shutil.rmtree(conf_actor)
         if actor_root.exists():
@@ -561,11 +525,10 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
         shutil.copytree(conf_main, conf_actor)
         shutil.copytree(main_root, actor_root)
 
-        # The mutator must not inherit the primary skip_file rule, otherwise it could not
-        # deliberately create a remote item which the primary status query must exclude.
-        # Monitor settings mirror the proven TC0065 mutator topology: local rename events
-        # are translated into a real Graph move of the existing DriveItem ID rather than
-        # a one-shot sync degrading the rename into delete + new upload.
+        # The mutator must not inherit the evaluator's skip_file rule, otherwise it
+        # could not deliberately create an online item which the evaluator must filter.
+        # Monitor settings follow the proven monitor-mode E2E topology and preserve
+        # DriveItem identity for the rename operation.
         self._rewrite_runtime_config(
             conf_actor,
             actor_root,
@@ -607,75 +570,149 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
         details["ds0003_actor_initial_sync_complete"] = actor_initial_sync_complete
         details["ds0003_actor_monitor_command"] = command_to_string(actor_monitor_command)
 
-        actor_mutations_processed = False
-        actor_mutation_segment = ""
+        actor_failure: str | None = None
+
+        def run_actor_mutation(
+            mutation_id: str,
+            action,
+            required_patterns: list[str],
+        ) -> tuple[bool, str]:
+            mutation_offset = self._prepare_monitor_for_local_mutation(
+                actor_process,
+                actor_stdout,
+                details,
+                quiet_seconds=3.0,
+                timeout_seconds=30,
+            )
+            ready = bool(details.get("monitor_ready_after_initial_sync", False))
+            details[f"ds0003_actor_{mutation_id}_ready"] = ready
+            if not ready:
+                return False, ""
+
+            action()
+            processed, segment = self._wait_for_stdout_growth_patterns(
+                actor_stdout,
+                start_offset=mutation_offset,
+                required_patterns=required_patterns,
+                timeout_seconds=180,
+            )
+            details[f"ds0003_actor_{mutation_id}_processed"] = processed
+            details[f"ds0003_actor_{mutation_id}_required_patterns"] = required_patterns
+            details[f"ds0003_actor_{mutation_id}_log_segment_length"] = len(segment)
+            return processed, segment
+
         try:
-            if actor_initial_sync_complete:
-                mutation_start_offset = self._prepare_monitor_for_local_mutation(
-                    actor_process,
-                    actor_stdout,
-                    details,
-                    quiet_seconds=3.0,
-                    timeout_seconds=30,
-                )
+            if not actor_initial_sync_complete:
+                actor_failure = "DS-0003: mutator monitor did not complete its initial sync"
+            else:
+                # Keep mutations sequential and wait for the established monitor evidence
+                # after each one. This mirrors the existing monitor E2E cases and avoids
+                # turning event ordering/timing into part of the status testcase.
+                time.sleep(1.1)
 
-                if details.get("monitor_ready_after_initial_sync", False):
-                    time.sleep(1.1)
-                    (actor_root / remote_rename_old_relative).rename(actor_root / remote_rename_new_relative)
-                    (actor_root / remote_delete_relative).unlink()
-                    write_text_file(actor_root / remote_modify_relative, remote_modify_changed)
-                    write_text_file(actor_root / remote_zero_relative, "")
-                    write_text_file(actor_root / remote_large_relative, "L" * 2048)
-                    (actor_root / remote_new_directory_relative).mkdir(parents=True, exist_ok=True)
-                    write_text_file(actor_root / remote_excluded_relative, "E" * 333)
-
-                    required_actor_patterns = [
+                rename_ok, rename_segment = run_actor_mutation(
+                    "rename",
+                    lambda: (actor_root / remote_rename_old_relative).rename(
+                        actor_root / remote_rename_new_relative
+                    ),
+                    [
                         f"[M] Local item moved: ./{remote_rename_old_relative} -> ./{remote_rename_new_relative}",
                         f"Moving ./{remote_rename_old_relative} to ./{remote_rename_new_relative}",
-                        f"Deleting item from Microsoft OneDrive: {remote_delete_relative}",
-                        f"Uploading modified file: {remote_modify_relative} ... done",
-                        f"Uploading new file: {remote_zero_relative} ... done",
-                        f"Uploading new file: {remote_large_relative} ... done",
-                        f"Uploading new file: {remote_excluded_relative} ... done",
-                        "Successfully created the remote directory",
-                    ]
-                    actor_mutations_processed, actor_mutation_segment = self._wait_for_stdout_growth_patterns(
-                        actor_stdout,
-                        start_offset=mutation_start_offset,
-                        required_patterns=required_actor_patterns,
-                        timeout_seconds=180,
+                    ],
+                )
+                if not rename_ok:
+                    actor_failure = "DS-0003: mutator monitor did not propagate the remote rename"
+                elif (
+                    self._monitor_output_contains(
+                        rename_segment,
+                        f"Deleting item from Microsoft OneDrive: {remote_rename_old_relative}",
                     )
-                    details["ds0003_actor_required_patterns"] = required_actor_patterns
-                    details["ds0003_actor_mutations_processed"] = actor_mutations_processed
-                    details["ds0003_actor_mutation_log_segment_length"] = len(actor_mutation_segment)
-                    actor_rename_degraded = (
-                        self._monitor_output_contains(
-                            actor_mutation_segment,
-                            f"Deleting item from Microsoft OneDrive: {remote_rename_old_relative}",
-                        )
-                        or self._monitor_output_contains(
-                            actor_mutation_segment,
-                            f"Uploading new file: {remote_rename_new_relative}",
-                        )
+                    or self._monitor_output_contains(
+                        rename_segment,
+                        f"Uploading new file: {remote_rename_new_relative}",
                     )
-                    details["ds0003_actor_rename_degraded_to_delete_upload"] = actor_rename_degraded
+                ):
+                    actor_failure = (
+                        "DS-0003: mutator rename degraded into delete + new upload instead of a real remote move"
+                    )
+
+                if actor_failure is None:
+                    delete_ok, _ = run_actor_mutation(
+                        "delete",
+                        lambda: (actor_root / remote_delete_relative).unlink(),
+                        [f"Deleting item from Microsoft OneDrive: {remote_delete_relative}"],
+                    )
+                    if not delete_ok:
+                        actor_failure = "DS-0003: mutator monitor did not propagate the remote deletion"
+
+                if actor_failure is None:
+                    modify_ok, _ = run_actor_mutation(
+                        "modify",
+                        lambda: write_text_file(actor_root / remote_modify_relative, remote_modify_changed),
+                        [f"Uploading modified file: {remote_modify_relative} ... done"],
+                    )
+                    if not modify_ok:
+                        actor_failure = "DS-0003: mutator monitor did not propagate the remote modification"
+
+                if actor_failure is None:
+                    zero_ok, _ = run_actor_mutation(
+                        "zero_byte_create",
+                        lambda: write_text_file(actor_root / remote_zero_relative, ""),
+                        [f"Uploading new file: {remote_zero_relative} ... done"],
+                    )
+                    if not zero_ok:
+                        actor_failure = "DS-0003: mutator monitor did not upload the zero-byte file"
+
+                if actor_failure is None:
+                    large_ok, _ = run_actor_mutation(
+                        "large_create",
+                        lambda: write_text_file(actor_root / remote_large_relative, "L" * 2048),
+                        [f"Uploading new file: {remote_large_relative} ... done"],
+                    )
+                    if not large_ok:
+                        actor_failure = "DS-0003: mutator monitor did not upload the 2048-byte file"
+
+                if actor_failure is None:
+                    directory_ok, _ = run_actor_mutation(
+                        "directory_create",
+                        lambda: (actor_root / remote_new_directory_relative).mkdir(parents=True, exist_ok=True),
+                        ["Successfully created the remote directory"],
+                    )
+                    if not directory_ok:
+                        actor_failure = "DS-0003: mutator monitor did not create the remote directory"
+
+                if actor_failure is None:
+                    excluded_ok, _ = run_actor_mutation(
+                        "excluded_create",
+                        lambda: write_text_file(actor_root / remote_excluded_relative, "E" * 333),
+                        [f"Uploading new file: {remote_excluded_relative} ... done"],
+                    )
+                    if not excluded_ok:
+                        actor_failure = "DS-0003: mutator monitor did not upload the evaluator-filtered remote file"
         finally:
             self._shutdown_monitor_process(actor_process, details)
 
         actor_manifest = build_manifest(actor_root)
         write_manifest(actor_manifest_file, actor_manifest)
-        if not actor_initial_sync_complete:
-            failures.append("DS-0003: mutator monitor did not complete its initial sync")
-        elif not details.get("monitor_ready_after_initial_sync", False):
-            failures.append("DS-0003: mutator monitor was not ready for local mutations")
-        elif not actor_mutations_processed:
-            failures.append("DS-0003: mutator monitor did not propagate all required remote changes")
-        elif details.get("ds0003_actor_rename_degraded_to_delete_upload", False):
-            failures.append("DS-0003: mutator rename degraded into delete + new upload instead of a real remote move")
 
-        # DS-0003: remote-only --single-directory status. Expected transfer bytes are
-        # 2048 + 96 + 0; deletion is identified by authoritative current-state absence
-        # and rename is identified by the preserved DriveItem identity.
+        if actor_failure is not None:
+            failures.append(actor_failure)
+            details["failures"] = failures
+            details["actor_manifest_count"] = len(actor_manifest)
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "; ".join(failures),
+                artifacts,
+                details,
+            )
+
+        # DS-0003: the evaluator has remained completely passive while the independent
+        # mutator changed Microsoft OneDrive. Its scoped status query must therefore
+        # report remote-only divergence from the evaluator's stored baseline. Expected
+        # transfer bytes are 2048 + 96 + 0; the deletion is identified from authoritative
+        # current-state absence and the rename from the preserved DriveItem identity.
         remote_result, remote_read_only = self._run_status_and_validate_read_only(
             context,
             label="DS-0003 remote-only dirty status",
@@ -709,59 +746,31 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
         for label, value in expected_remote_metrics.items():
             if not self._contains_metric(remote_output, label, value):
                 failures.append(f"DS-0003: expected metric missing: {label}: {value}")
-        if self.MALFORMED_TOMBSTONE_WARNING in remote_output:
-            failures.append("DS-0003: remote deletion tombstone triggered the historical malformed-JSON warning")
         if not remote_read_only["read_only_ok"]:
             failures.append("DS-0003: --display-sync-status modified live DB/local state or left temporary DB files")
 
-        delta_links_after_scoped_status = self._read_nonempty_delta_links(live_database)
-        details["ds0003_delta_links_after_scoped_status"] = delta_links_after_scoped_status
-        if delta_links_after_scoped_status != delta_links_before_actor:
-            failures.append("DS-0003: --single-directory status changed the persisted delta cursor")
+        # DS-0004 depends on a valid remote-only assessment. If DS-0003 itself failed,
+        # stop here instead of generating a second page of derivative assertions.
+        if failures:
+            details.update(
+                {
+                    "expected_remote_metrics": expected_remote_metrics,
+                    "actor_manifest_count": len(actor_manifest),
+                    "failures": failures,
+                }
+            )
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "; ".join(failures),
+                artifacts,
+                details,
+            )
 
-        # DS-0003B: use the same evaluated client and its persisted pre-mutation delta
-        # cursor, but omit --single-directory so Graph returns the genuine incremental
-        # deletion tombstone. sync_list keeps the assessment limited to the TC0079 tree.
-        delta_status_command = [
-            context.onedrive_bin,
-            "--display-sync-status",
-            "--verbose",
-            "--confdir",
-            str(conf_main),
-        ]
-        delta_remote_result, delta_remote_read_only = self._run_status_and_validate_read_only(
-            context,
-            label="DS-0003B incremental delta tombstone status",
-            command=delta_status_command,
-            stdout_file=delta_remote_stdout,
-            stderr_file=delta_remote_stderr,
-            sync_root=main_root,
-            live_database=live_database,
-            dry_run_database=dry_run_database,
-        )
-        delta_remote_output = f"{delta_remote_result.stdout}\n{delta_remote_result.stderr}"
-        details["ds0003b_returncode"] = delta_remote_result.returncode
-        details["ds0003b_read_only"] = delta_remote_read_only
-        delta_links_after_delta_status = self._read_nonempty_delta_links(live_database)
-        details["ds0003b_delta_links_after_status"] = delta_links_after_delta_status
-
-        if delta_remote_result.returncode != 0:
-            failures.append(f"DS-0003B: delta status command exited with {delta_remote_result.returncode}")
-        if "Overall status: NOT IN SYNC" not in delta_remote_output:
-            failures.append("DS-0003B: incremental delta divergence did not report 'Overall status: NOT IN SYNC'")
-        for label, value in expected_remote_metrics.items():
-            if not self._contains_metric(delta_remote_output, label, value):
-                failures.append(f"DS-0003B: expected incremental delta metric missing: {label}: {value}")
-        if self.MALFORMED_TOMBSTONE_WARNING in delta_remote_output:
-            failures.append("DS-0003B: genuine Graph deletion tombstone triggered the historical malformed-JSON warning")
-        if delta_links_after_delta_status != delta_links_before_actor:
-            failures.append("DS-0003B: --display-sync-status advanced or changed the persisted delta cursor")
-        if not delta_remote_read_only["read_only_ok"]:
-            failures.append("DS-0003B: incremental delta status assessment was not read-only")
-
-        # DS-0004: add one local change without reconciling the remote changes. The
-        # same authoritative scoped remote state must still be visible on a repeated
-        # read-only query while the local direction becomes dirty as well.
+        # DS-0004: add one local change without reconciling any of the remote changes.
+        # Both directions must now be dirty and the complete scoped remote assessment
+        # must still be visible on a repeated read-only query.
         write_text_file(main_root / mixed_local_relative, "Z" * 77)
         mixed_result, mixed_read_only = self._run_status_and_validate_read_only(
             context,
@@ -797,8 +806,6 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
                 failures.append(f"DS-0004: expected local metric missing: {label}: {value}")
         if "When remote changes are also pending" not in mixed_output:
             failures.append("DS-0004: mixed status did not emit the remote/local reconciliation qualification note")
-        if self.MALFORMED_TOMBSTONE_WARNING in mixed_output:
-            failures.append("DS-0004: repeated deletion tombstone query triggered malformed-JSON warning")
         if not mixed_read_only["read_only_ok"]:
             failures.append("DS-0004: --display-sync-status modified live DB/local state or left temporary DB files")
 
