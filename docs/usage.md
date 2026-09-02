@@ -28,6 +28,7 @@ Before reading this document, please ensure you are running application version 
   - [Performing a 'one-way' download synchronisation with Microsoft OneDrive](#performing-a-one-way-download-synchronisation-with-microsoft-onedrive)
   - [Performing a 'one-way' upload synchronisation with Microsoft OneDrive](#performing-a-one-way-upload-synchronisation-with-microsoft-onedrive)
   - [Performing a selective synchronisation via 'sync_list' file](#performing-a-selective-synchronisation-via-sync_list-file)
+  - [Checking synchronisation status without performing a sync](#checking-synchronisation-status-without-performing-a-sync)
   - [Performing a --resync](#performing-a---resync)
   - [Performing a --force-sync without a --resync or changing your configuration](#performing-a---force-sync-without-a---resync-or-changing-your-configuration)
   - [Enabling the Client Activity Log](#enabling-the-client-activity-log)
