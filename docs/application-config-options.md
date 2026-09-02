@@ -1549,12 +1549,32 @@ _**Description:**_ This CLI option will display the effective application config
 _**Usage Example:**_ `onedrive --display-config`
 
 ### CLI Option: --display-sync-status
-_**Description:**_ This CLI option will display the sync status of the configured 'sync_dir'
+_**Description:**_ Performs a read-only, point-in-time assessment of whether the configured sync scope has pending changes in either direction between Microsoft OneDrive and the local filesystem.
 
 _**Usage Example:**_ `onedrive --display-sync-status`
 
+The command reports two independent directions:
+
+- `Microsoft OneDrive -> Local filesystem` - pending remote changes determined from the stored Microsoft Graph delta position for full-scope operation, or from an authoritative read-only `/children` current-state traversal when `--single-directory` is used. This includes new items, deletions/absence, moves/renames, content changes and applicable timestamp-only differences.
+- `Local filesystem -> Microsoft OneDrive` - local filesystem differences relative to the client's stored sync database, including new files/directories, modified files, timestamp-only differences and locally missing items.
+
+The final `Overall status` is one of:
+
+- `IN SYNC` - no pending changes were detected in either direction.
+- `NOT IN SYNC` - one or more pending changes were positively identified.
+- `INDETERMINATE` - a clean result cannot be asserted because one or more items or configured remote scopes could not be fully classified.
+
+The operation does not upload, download, rename or delete content, does not modify the live sync database, and does not advance the stored delta cursor. Transfer quantities are estimates. Values below 1 KiB are displayed as exact bytes; larger values are shown as a human-readable value plus the exact byte count, for example `14.15 MB (14838177 bytes)`.
+
+Client-side filtering is honoured, and one-way modes retain their normal meaning while still reporting the opposite direction for visibility. For example, `--upload-only` can report pending remote changes even though those changes will not be downloaded, and `--download-only` can report local differences while noting that upload actions are disabled.
+
 > [!TIP]
-> This option can also use the `--single-directory` option to determine the sync status of a specific directory within the configured 'sync_dir'
+> This option can also use `--single-directory` to assess a specific directory within the configured `sync_dir`, for example: `onedrive --display-sync-status --single-directory 'Documents'`. In this mode the requested online directory is enumerated read-only with `/children` and compared with the stored database scope; the default-drive delta cursor is neither required nor advanced.
+
+> [!NOTE]
+> Full-scope configurations that cannot use the normal `/delta` feed may still be incomplete, as may separately traversed shared-folder sources outside an assessed `--single-directory` scope. A full-scope query with tracked default-drive state but no stored delta cursor is also conservative because a tokenless `/delta` response cannot prove historical deletions without mutating/rebuilding state. In these cases the command reports the limitation and returns `INDETERMINATE` unless a confirmed pending change has already established `NOT IN SYNC`. A `--single-directory` request itself uses a read-only `/children` current-state traversal and is not made indeterminate merely because normal single-directory synchronisation uses generated traversal.
+>
+> The sync state is reported in the textual `Overall status` field. `NOT IN SYNC` is an assessment result, not a command execution failure, so the process exit status should not be used as the sync-state indicator.
 
 ### CLI Option: --display-quota
 _**Description:**_ This CLI option will display the quota status of the account drive id or the configured 'drive_id' value
