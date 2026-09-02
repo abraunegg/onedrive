@@ -175,6 +175,8 @@ class SyncEngine {
 	JSONValue[] fileJSONItemsToDownload;
 	// Array of paths that failed to download
 	string[] fileDownloadFailures;
+	// Array of local paths that failed to move to the configured Recycle Bin
+	string[] recycleBinMoveFailures;
 	// Associative array mapping of all OneDrive driveId's that have been seen, mapped with DriveDetailsCache data for reference
 	DriveDetailsCache[string] onlineDriveDetails;
 	// List of items we fake created when using --dry-run
@@ -1083,9 +1085,12 @@ class SyncEngine {
 		if (fileUploadFailures.length > 0) {
 			logMessage ~= "fileUploadFailures is not empty; ";
 		}
+		if (recycleBinMoveFailures.length > 0) {
+			logMessage ~= "recycleBinMoveFailures is not empty; ";
+		}
 
-		// Check if both arrays are empty to reset syncFailures
-		if (fileDownloadFailures.length == 0 && fileUploadFailures.length == 0) {
+		// Check if all failure arrays are empty to reset syncFailures
+		if (fileDownloadFailures.length == 0 && fileUploadFailures.length == 0 && recycleBinMoveFailures.length == 0) {
 			if (syncFailures) {
 				syncFailures = false;
 				logMessage ~= "Resetting syncFailures to false.";
@@ -1375,6 +1380,7 @@ class SyncEngine {
 
 		// String Arrays
 		fileDownloadFailures = null;
+		recycleBinMoveFailures = null;
 		pathFakeDeletedArray = null;
 		pathsRenamed = null;
 		newLocalFilesToUploadToOneDrive = null;
@@ -5808,13 +5814,6 @@ class SyncEngine {
 					}
 				}
 
-				// Process the database entry removal. In a --dry-run scenario, this is being done against a DB copy
-				itemDB.deleteById(item.driveId, item.id);
-				if (item.remoteDriveId != null) {
-					// delete the linked remote folder
-					itemDB.deleteById(item.remoteDriveId, item.remoteId);
-				}
-
 				// Add to pathFakeDeletedArray
 				// We dont want to try and upload this item again, so we need to track this objects removal
 				if (dryRun) {
@@ -5841,6 +5840,8 @@ class SyncEngine {
 					}
 				}
 
+				bool recycleBinMoveSucceeded = true;
+
 				if (needsRemoval) {
 					// Log the action
 					if (item.type == ItemType.file) {
@@ -5851,12 +5852,46 @@ class SyncEngine {
 
 					// Perform the action
 					if (!dryRun) {
-						// Move the 'path' to the configured recycle bin
-						movePathToRecycleBin(path);
-						if (!exists(path)) {
+						// Move the 'path' to the configured recycle bin. The database record
+						// must remain intact until this operation succeeds.
+						recycleBinMoveSucceeded = movePathToRecycleBin(path);
+						if (recycleBinMoveSucceeded && !exists(path)) {
 							notifyExpectedLocalRemoval(path);
 						}
 					}
+				}
+
+				if (recycleBinMoveSucceeded) {
+					// The local object was moved successfully, was already absent, or the
+					// local path belongs to a different database item. It is now safe to
+					// remove the database identity for the item deleted online.
+					itemDB.deleteById(item.driveId, item.id);
+					if (item.remoteDriveId != null) {
+						// delete the linked remote folder
+						itemDB.deleteById(item.remoteDriveId, item.remoteId);
+					}
+				} else {
+					// Retain the database identity so the unchanged local item cannot be
+					// classified as new content and uploaded again on a later local scan.
+					if (!canFind(recycleBinMoveFailures, path)) {
+						recycleBinMoveFailures ~= path;
+					}
+
+					// Do not advance the /delta checkpoint for this response. Keeping the
+					// previous checkpoint allows the online deletion to be returned again
+					// and the local Recycle Bin move to be retried on the next sync.
+					deltaLinkCache.driveId = null;
+					deltaLinkCache.itemId = null;
+					deltaLinkCache.latestDeltaLink = null;
+					latestDeltaLink = null;
+					if (debugLogging) {
+						addLogEntry("Retaining previous deltaLink because the local Recycle Bin move failed: " ~ path, ["debug"]);
+					}
+
+					// Stop processing this deletion batch. This is particularly important
+					// for a failed parent-directory move: descendants must remain in place
+					// with their database records until the parent move can be retried.
+					break;
 				}
 			}
 		}
@@ -5874,7 +5909,7 @@ class SyncEngine {
 	}
 
 	// Move to the 'Recycle Bin' rather than a hard delete locally of the online deleted item
-	void movePathToRecycleBin(string path) {
+	bool movePathToRecycleBin(string path) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -5936,14 +5971,25 @@ class SyncEngine {
 		try {
 			rename(computedFullLocalPath, computedRecycleBinFilePath);
 		} catch (Exception e) {
-			// Handle exceptions, e.g., log error
+			// The source path remains in sync_dir. Report failure to the caller so
+			// the corresponding database identity is retained and the move retried.
 			if (isPathFile) {
-				addLogEntry("Move of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
+				addLogEntry("ERROR: Move of local file to the configured Recycle Bin failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error", "notify"]);
 			} else {
-				addLogEntry("Move of local directory failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
+				addLogEntry("ERROR: Move of local directory to the configured Recycle Bin failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error", "notify"]);
 			}
+
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+
+			return false;
 		}
 
+		// The move completed successfully. Only now create the corresponding
+		// FreeDesktop.org metadata entry.
 		// Generate the 'Recycle Bin' metadata file using computedRecycleBinInfoPath
 		auto now = Clock.currTime().toLocalTime();
 		string deletionDate = format("%04d-%02d-%02dT%02d:%02d:%02d",now.year, now.month, now.day, now.hour, now.minute, now.second);
@@ -5964,6 +6010,8 @@ class SyncEngine {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
+
+		return true;
 	}
 
 	// List items that were deleted online, but, due to --download-only being used, will not be deleted locally
@@ -12724,9 +12772,21 @@ class SyncEngine {
 			return true;
 		}
 
+		bool logRecycleBinMoveFailures() {
+			if (recycleBinMoveFailures.empty) return false;
+
+			addLogEntry();
+			addLogEntry("Failed local items to move to the configured Recycle Bin: " ~ to!string(recycleBinMoveFailures.length));
+			foreach (failedPath; recycleBinMoveFailures) {
+				addLogEntry("Failed to move to the configured Recycle Bin: " ~ failedPath, ["info"]);
+			}
+			return true;
+		}
+
 		bool downloadFailuresLogged = logFailures(fileDownloadFailures, "download");
 		bool uploadFailuresLogged = logFailures(fileUploadFailures, "upload");
-		syncFailures = downloadFailuresLogged || uploadFailuresLogged;
+		bool recycleBinFailuresLogged = logRecycleBinMoveFailures();
+		syncFailures = downloadFailuresLogged || uploadFailuresLogged || recycleBinFailuresLogged;
 
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
