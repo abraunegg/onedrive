@@ -832,6 +832,23 @@ int main(string[] cliArgs) {
 
 				// --display-sync-status - Query the sync status
 				if (appConfig.getValueBool("display_sync_status")) {
+					// --display-sync-status performs local filesystem inspection using the same
+					// relative-path semantics as the normal sync engine. Establish the configured
+					// sync_dir as the process working directory before performing the assessment.
+					// Do not create a missing sync_dir here: this operation is intentionally read-only.
+					if (verboseLogging) {addLogEntry("All application operations will be performed in the configured local 'sync_dir' directory: " ~ runtimeSyncDirectory, ["verbose"]);}
+					try {
+						chdir(runtimeSyncDirectory);
+					} catch (FileException e) {
+						addLogEntry("FATAL: Unable to change to the configured local 'sync_dir' directory: " ~ runtimeSyncDirectory);
+						displayFileSystemErrorMessage(e.msg, strip(getFunctionName!({})), runtimeSyncDirectory, FsErrorSeverity.fatal);
+						return EXIT_FAILURE;
+					}
+
+					// Apply the same mounted-filesystem safeguard used by normal sync/monitor
+					// operation before examining any local paths.
+					checkForNoMountScenario();
+
 					// path to query variable
 					string pathToQueryStatusOn;
 					// What path do we query?
