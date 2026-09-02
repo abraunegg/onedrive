@@ -2,19 +2,27 @@ from __future__ import annotations
 
 import os
 import shutil
+import sqlite3
 from pathlib import Path
 
 from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import (
+    command_to_string,
+    compute_quickxor_hash_file,
+    reset_directory,
+    run_command,
+    write_onedrive_config,
+    write_text_file,
+)
 
 
 class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
     case_id = "0057"
     name = "recycle bin delete behaviour validation"
-    description = "Validate use_recycle_bin behaviour for online-origin deletes and local-origin delete propagation"
+    description = "Validate Recycle Bin delete behaviour, including transactional handling of failed online-delete moves"
 
     def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
         write_text_file(metadata_file, "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n")
@@ -28,17 +36,36 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
         use_recycle_bin: bool,
         recycle_bin_path: Path,
         extra_config: str = "",
+        preserve_state: bool = False,
     ) -> None:
-        context.prepare_minimal_config_dir(
-            config_dir,
-            (
-                "# tc0057 config\n"
-                f'sync_dir = "{sync_dir}"\n'
-                f'use_recycle_bin = "{str(use_recycle_bin).lower()}"\n'
-                f'recycle_bin_path = "{recycle_bin_path}"\n'
-                f"{extra_config}"
-            ),
+        config_text = (
+            "# tc0057 config\n"
+            f'sync_dir = "{sync_dir}"\n'
+            f'use_recycle_bin = "{str(use_recycle_bin).lower()}"\n'
+            f'recycle_bin_path = "{recycle_bin_path}"\n'
+            f"{extra_config}"
         )
+
+        if not preserve_state:
+            context.prepare_minimal_config_dir(config_dir, config_text)
+            return
+
+        # Rewrite only the runtime configuration metadata. The existing
+        # items.sqlite3 and delta state must survive so the retry exercises the
+        # exact database state left by the failed Recycle Bin operation.
+        config_path = config_dir / "config"
+        write_onedrive_config(config_path, config_text)
+        os.chmod(config_path, 0o600)
+
+        backup_path = config_dir / ".config.backup"
+        backup_path.write_bytes(config_path.read_bytes())
+        os.chmod(backup_path, 0o600)
+
+        hash_path = config_dir / ".config.hash"
+        write_text_file(hash_path, compute_quickxor_hash_file(config_path))
+        os.chmod(hash_path, 0o600)
+
+        context.validate_generated_config_dir(config_dir)
 
     def _run_and_capture(
         self,
@@ -63,6 +90,18 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
     def _recycle_bin_has_trashinfo(self, manifest: list[str]) -> bool:
         return any(entry.endswith(".trashinfo") for entry in manifest)
 
+    def _database_item_count(self, database_path: Path, item_name: str) -> int:
+        if not database_path.is_file():
+            return -1
+
+        with sqlite3.connect(f"file:{database_path}?mode=ro", uri=True) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM item WHERE name = ?",
+                (item_name,),
+            ).fetchone()
+
+        return int(row[0]) if row is not None else -1
+
     def _run_scenario(
         self,
         context: E2EContext,
@@ -71,6 +110,7 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
         scenario_name: str,
         delete_origin: str,
         use_recycle_bin: bool,
+        force_recycle_bin_move_failure: bool,
         case_work_dir: Path,
         case_log_dir: Path,
         state_dir: Path,
@@ -87,6 +127,33 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
         reset_directory(recycle_bin_root)
 
         root_name = f"ZZ_E2E_TC0057_{context.run_id}_{os.getpid()}_{scenario_id}"
+
+        configured_recycle_bin_root = recycle_bin_root
+        failure_recycle_bin_root: Path | None = None
+        sync_device_id: int | None = None
+        recycle_device_id: int | None = None
+        cross_device_precondition_error = ""
+
+        if force_recycle_bin_move_failure:
+            cross_device_base = Path("/dev/shm")
+            if not cross_device_base.is_dir():
+                cross_device_precondition_error = "required cross-filesystem test path /dev/shm is not available"
+            elif not os.access(cross_device_base, os.W_OK | os.X_OK):
+                cross_device_precondition_error = "required cross-filesystem test path /dev/shm is not writable"
+            else:
+                failure_recycle_bin_root = (
+                    cross_device_base
+                    / f"onedrive-e2e-tc0057-{context.e2e_target}-{context.run_id}-{os.getpid()}-{scenario_id}"
+                )
+                reset_directory(failure_recycle_bin_root)
+                configured_recycle_bin_root = failure_recycle_bin_root
+                sync_device_id = sync_root.stat().st_dev
+                recycle_device_id = failure_recycle_bin_root.stat().st_dev
+                if sync_device_id == recycle_device_id:
+                    cross_device_precondition_error = (
+                        "cross-filesystem Recycle Bin precondition was not met: "
+                        f"sync_dir and recycle_bin_path both use st_dev={sync_device_id}"
+                    )
         delete_dir_relative = f"{root_name}/DeleteMe"
         keep_file_relative = f"{root_name}/Keep/keep.txt"
         delete_file_relative = f"{delete_dir_relative}/delete-me.txt"
@@ -99,7 +166,7 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
             conf_runtime,
             sync_root,
             use_recycle_bin=use_recycle_bin,
-            recycle_bin_path=recycle_bin_root,
+            recycle_bin_path=configured_recycle_bin_root,
         )
         self._prepare_config(
             context,
@@ -125,6 +192,10 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
         local_manifest_file = scenario_state_dir / "local_manifest.txt"
         remote_manifest_file = scenario_state_dir / "remote_manifest.txt"
         recycle_manifest_file = scenario_state_dir / "recycle_manifest.txt"
+        failed_move_local_manifest_file = scenario_state_dir / "failed_move_local_manifest.txt"
+        failed_move_recycle_manifest_file = scenario_state_dir / "failed_move_recycle_manifest.txt"
+        retry_stdout = scenario_log_dir / "retry_stdout.log"
+        retry_stderr = scenario_log_dir / "retry_stderr.log"
         metadata_file = scenario_state_dir / "metadata.txt"
 
         artifacts = [
@@ -146,12 +217,24 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
             "scenario_name": scenario_name,
             "delete_origin": delete_origin,
             "use_recycle_bin": use_recycle_bin,
+            "force_recycle_bin_move_failure": force_recycle_bin_move_failure,
+            "configured_recycle_bin_root": str(configured_recycle_bin_root),
+            "sync_device_id": sync_device_id,
+            "recycle_device_id": recycle_device_id,
+            "cross_device_precondition_error": cross_device_precondition_error,
             "root_name": root_name,
             "delete_dir_relative": delete_dir_relative,
             "delete_file_relative": delete_file_relative,
             "keep_file_relative": keep_file_relative,
         }
         failures: list[str] = []
+
+        if force_recycle_bin_move_failure and cross_device_precondition_error:
+            failures.append(f"{scenario_id}: {cross_device_precondition_error}")
+            self._write_metadata(metadata_file, details)
+            if failure_recycle_bin_root is not None:
+                shutil.rmtree(failure_recycle_bin_root, ignore_errors=True)
+            return failures, artifacts, details
 
         seed_command = [
             context.onedrive_bin,
@@ -171,6 +254,8 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
         if seed_result.returncode != 0:
             failures.append(f"{scenario_id}: seed phase failed with status {seed_result.returncode}")
             self._write_metadata(metadata_file, details)
+            if failure_recycle_bin_root is not None:
+                shutil.rmtree(failure_recycle_bin_root, ignore_errors=True)
             return failures, artifacts, details
 
         if delete_origin == "online":
@@ -188,6 +273,8 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
             if delete_result.returncode != 0:
                 failures.append(f"{scenario_id}: online delete failed with status {delete_result.returncode}")
                 self._write_metadata(metadata_file, details)
+                if failure_recycle_bin_root is not None:
+                    shutil.rmtree(failure_recycle_bin_root, ignore_errors=True)
                 return failures, artifacts, details
 
             process_command = [
@@ -207,6 +294,8 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
             if not delete_local_path.is_dir():
                 failures.append(f"{scenario_id}: expected local delete directory missing before local delete: {delete_local_path}")
                 self._write_metadata(metadata_file, details)
+                if failure_recycle_bin_root is not None:
+                    shutil.rmtree(failure_recycle_bin_root, ignore_errors=True)
                 return failures, artifacts, details
 
             shutil.rmtree(delete_local_path)
@@ -227,12 +316,142 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
         else:
             failures.append(f"{scenario_id}: invalid delete_origin: {delete_origin}")
             self._write_metadata(metadata_file, details)
+            if failure_recycle_bin_root is not None:
+                shutil.rmtree(failure_recycle_bin_root, ignore_errors=True)
             return failures, artifacts, details
+
+        if force_recycle_bin_move_failure:
+            items_database = conf_runtime / "items.sqlite3"
+            details["database_path"] = str(items_database)
+            details["db_delete_dir_count_before_failure"] = self._database_item_count(items_database, "DeleteMe")
+            details["db_delete_file_count_before_failure"] = self._database_item_count(items_database, "delete-me.txt")
+
+            if details["db_delete_dir_count_before_failure"] != 1:
+                failures.append(
+                    f"{scenario_id}: expected one DeleteMe database record before the forced Recycle Bin failure, "
+                    f"found {details['db_delete_dir_count_before_failure']}"
+                )
+            if details["db_delete_file_count_before_failure"] != 1:
+                failures.append(
+                    f"{scenario_id}: expected one delete-me.txt database record before the forced Recycle Bin failure, "
+                    f"found {details['db_delete_file_count_before_failure']}"
+                )
 
         process_result = self._run_and_capture(context, f"{scenario_id} process delete", process_command, process_stdout, process_stderr)
         details["process_returncode"] = process_result.returncode
-        if process_result.returncode != 0:
+        if process_result.returncode != 0 and not force_recycle_bin_move_failure:
             failures.append(f"{scenario_id}: delete processing failed with status {process_result.returncode}")
+
+        if force_recycle_bin_move_failure:
+            failed_move_local_manifest = build_manifest(sync_root)
+            failed_move_recycle_manifest = build_manifest(configured_recycle_bin_root)
+            write_manifest(failed_move_local_manifest_file, failed_move_local_manifest)
+            write_manifest(failed_move_recycle_manifest_file, failed_move_recycle_manifest)
+            artifacts.extend(
+                [
+                    str(failed_move_local_manifest_file),
+                    str(failed_move_recycle_manifest_file),
+                    str(retry_stdout),
+                    str(retry_stderr),
+                ]
+            )
+
+            failed_move_local_has_delete_dir = self._contains_path_prefix(
+                failed_move_local_manifest,
+                delete_dir_relative,
+            )
+            failed_move_recycle_has_payload = self._recycle_bin_has_payload(
+                failed_move_recycle_manifest,
+                "delete-me.txt",
+            )
+            failed_move_recycle_has_trashinfo = self._recycle_bin_has_trashinfo(
+                failed_move_recycle_manifest,
+            )
+
+            items_database = conf_runtime / "items.sqlite3"
+            db_delete_dir_count_after_failure = self._database_item_count(items_database, "DeleteMe")
+            db_delete_file_count_after_failure = self._database_item_count(items_database, "delete-me.txt")
+            process_output = process_result.stdout + "\n" + process_result.stderr
+            failure_was_reported = (
+                "Move of local directory" in process_output
+                and "Recycle Bin" in process_output
+                and "failed" in process_output.lower()
+            )
+
+            details.update(
+                {
+                    "failed_move_local_has_delete_dir": failed_move_local_has_delete_dir,
+                    "failed_move_recycle_has_payload": failed_move_recycle_has_payload,
+                    "failed_move_recycle_has_trashinfo": failed_move_recycle_has_trashinfo,
+                    "db_delete_dir_count_after_failure": db_delete_dir_count_after_failure,
+                    "db_delete_file_count_after_failure": db_delete_file_count_after_failure,
+                    "failure_was_reported": failure_was_reported,
+                }
+            )
+
+            if not failed_move_local_has_delete_dir:
+                failures.append(
+                    f"{scenario_id}: forced cross-filesystem Recycle Bin move unexpectedly removed the local directory"
+                )
+            if failed_move_recycle_has_payload:
+                failures.append(
+                    f"{scenario_id}: failed Recycle Bin move unexpectedly created a payload in the destination"
+                )
+            if failed_move_recycle_has_trashinfo:
+                failures.append(
+                    f"{scenario_id}: failed Recycle Bin move created misleading .trashinfo metadata"
+                )
+            if db_delete_dir_count_after_failure != 1:
+                failures.append(
+                    f"{scenario_id}: DeleteMe database identity was not retained after failed Recycle Bin move "
+                    f"(count={db_delete_dir_count_after_failure})"
+                )
+            if db_delete_file_count_after_failure != 1:
+                failures.append(
+                    f"{scenario_id}: delete-me.txt database identity was not retained after failed parent Recycle Bin move "
+                    f"(count={db_delete_file_count_after_failure})"
+                )
+            if not failure_was_reported:
+                failures.append(
+                    f"{scenario_id}: failed Recycle Bin move was not clearly reported in process output"
+                )
+
+            # Repair the Recycle Bin configuration to the normal same-filesystem path
+            # and retry the same online deletion. A correct implementation must still
+            # have enough database state to complete the deferred local deletion.
+            self._prepare_config(
+                context,
+                conf_runtime,
+                sync_root,
+                use_recycle_bin=True,
+                recycle_bin_path=recycle_bin_root,
+                preserve_state=True,
+            )
+            retry_result = self._run_and_capture(
+                context,
+                f"{scenario_id} retry delete",
+                process_command,
+                retry_stdout,
+                retry_stderr,
+            )
+            details["retry_returncode"] = retry_result.returncode
+            details["db_delete_dir_count_after_retry"] = self._database_item_count(items_database, "DeleteMe")
+            details["db_delete_file_count_after_retry"] = self._database_item_count(items_database, "delete-me.txt")
+
+            if retry_result.returncode != 0:
+                failures.append(
+                    f"{scenario_id}: retry after restoring a valid Recycle Bin failed with status {retry_result.returncode}"
+                )
+            if details["db_delete_dir_count_after_retry"] != 0:
+                failures.append(
+                    f"{scenario_id}: DeleteMe database identity remained after successful retry "
+                    f"(count={details['db_delete_dir_count_after_retry']})"
+                )
+            if details["db_delete_file_count_after_retry"] != 0:
+                failures.append(
+                    f"{scenario_id}: delete-me.txt database identity remained after successful parent retry "
+                    f"(count={details['db_delete_file_count_after_retry']})"
+                )
 
         reset_directory(verify_root)
         self._prepare_config(
@@ -315,6 +534,8 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
                     failures.append(f"{scenario_id}: recycle bin contains deleted data even though use_recycle_bin=false")
 
         self._write_metadata(metadata_file, details)
+        if failure_recycle_bin_root is not None:
+            shutil.rmtree(failure_recycle_bin_root, ignore_errors=True)
         return failures, artifacts, details
 
     def run(self, context: E2EContext) -> TestResult:
@@ -333,24 +554,35 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
                 "scenario_name": "online delete with use_recycle_bin=false",
                 "delete_origin": "online",
                 "use_recycle_bin": False,
+                "force_recycle_bin_move_failure": False,
             },
             {
                 "scenario_id": "S02_online_delete_recycle_bin_true",
                 "scenario_name": "online delete with use_recycle_bin=true",
                 "delete_origin": "online",
                 "use_recycle_bin": True,
+                "force_recycle_bin_move_failure": False,
             },
             {
                 "scenario_id": "S03_local_delete_recycle_bin_false",
                 "scenario_name": "local delete with use_recycle_bin=false",
                 "delete_origin": "local",
                 "use_recycle_bin": False,
+                "force_recycle_bin_move_failure": False,
             },
             {
                 "scenario_id": "S04_local_delete_recycle_bin_true",
                 "scenario_name": "local delete with use_recycle_bin=true",
                 "delete_origin": "local",
                 "use_recycle_bin": True,
+                "force_recycle_bin_move_failure": False,
+            },
+            {
+                "scenario_id": "S05_online_delete_recycle_bin_move_failure",
+                "scenario_name": "online delete with cross-filesystem Recycle Bin move failure",
+                "delete_origin": "online",
+                "use_recycle_bin": True,
+                "force_recycle_bin_move_failure": True,
             },
         ]
 
@@ -374,6 +606,7 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(E2ETestCase):
                 scenario_name=str(scenario["scenario_name"]),
                 delete_origin=str(scenario["delete_origin"]),
                 use_recycle_bin=bool(scenario["use_recycle_bin"]),
+                force_recycle_bin_move_failure=bool(scenario["force_recycle_bin_move_failure"]),
                 case_work_dir=case_work_dir,
                 case_log_dir=case_log_dir,
                 state_dir=state_dir,
