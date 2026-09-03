@@ -167,6 +167,11 @@ class SyncEngine {
 	// These are the 'parent path' id's that are being excluded, so if the parent id is in here, the child needs to be skipped as well
 	RedBlackTree!string skippedItems = redBlackTree!string();
 
+	// Directory item IDs protected by a local .nosync boundary. Keep these separate
+	// from skippedItems because .nosync means "do not synchronise this local subtree",
+	// not "this online object is unwanted and may be reconciled destructively".
+	RedBlackTree!string noSyncProtectedItems = redBlackTree!string();
+
 	// Array consisting of 'item.driveId', 'item.id' and 'item.parentId' values to delete after all the online changes have been downloaded
 	string[3][] idsToDelete;
 	// Array of JSON items which are files or directories that are not 'root', skipped or to be deleted, that need to be processed
@@ -2556,8 +2561,22 @@ class SyncEngine {
 
 			// Is the deleted item in our database?
 			if (existingDBEntry) {
+				// .nosync is a local synchronisation boundary. An online deletion beneath
+				// that boundary must not remove the retained local object or its DB identity.
+				bool protectedByNoSync = false;
+				string protectedLocalPath;
+				if (appConfig.getValueBool("check_nosync")) {
+					protectedLocalPath = buildNormalizedPath(computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name);
+					protectedByNoSync = pathIsProtectedByNoSync(protectedLocalPath);
+				}
+				if (protectedByNoSync) {
+					if (verboseLogging) {addLogEntry("Ignoring online deletion for path protected by .nosync: " ~ protectedLocalPath, ["verbose"]);}
+					if ((nativeFullScanTrueUpResponse || generatedSimulatedDeltaResponse) && (existingDatabaseItem.syncStatus != "Y")) {
+						existingDatabaseItem.syncStatus = "Y";
+						itemDB.upsert(existingDatabaseItem);
+					}
 				// In fast monitor passes defer deletes from raw /delta tombstones.
-				if (shouldDeferDeletedItemsFromRawDelta()) {
+				} else if (shouldDeferDeletedItemsFromRawDelta()) {
 					if (verboseLogging) {
 						addLogEntry("Deferring local deletion from raw /delta delete tombstone until next authoritative monitor cleanup pass", ["verbose"]);
 					}
@@ -2685,6 +2704,9 @@ class SyncEngine {
 
 			// Do we NOT want this item?
 			bool unwanted = false; // meaning by default we will WANT this item
+			// .nosync is not an "unwanted" classification. It is a local boundary that
+			// preserves both local content and existing online content without reconciliation.
+			bool excludedByNoSync = false;
 			// Is this parent is in the database
 			bool parentInDatabase = false;
 			// Is this the 'root' folder of a Shared Folder
@@ -2873,6 +2895,24 @@ class SyncEngine {
 							addLogEntry("Handling a SharePoint Shared Item JSON object - NOT IMPLEMENTED YET ........ RAISE A BUG PLEASE", ["info"]);
 						}
 					}
+				}
+			}
+
+			// .nosync must be resolved before generic skipped/unwanted handling. A protected
+			// parent may be absent from the DB (for example a new remote-only directory),
+			// so propagate the boundary by immutable parent ID as well as by local path.
+			if (appConfig.getValueBool("check_nosync")) {
+				if (thisItemParentId in noSyncProtectedItems) {
+					excludedByNoSync = true;
+				} else {
+					if (!newItemPath.empty && pathIsProtectedByNoSync(newItemPath)) {
+						excludedByNoSync = true;
+					}
+				}
+
+				if (excludedByNoSync) {
+					// Stop all subsequent generic filtering/action classification for this item.
+					unwanted = true;
 				}
 			}
 
@@ -3140,18 +3180,8 @@ class SyncEngine {
 				}
 			}
 
-			// Check if this should be skipped due to a --check-for-nosync directive (.nosync)?
-			if (!unwanted) {
-				if (appConfig.getValueBool("check_nosync")) {
-					// need the parent path for this object
-					string parentPath = dirName(newItemPath);
-					// Check for the presence of a .nosync in the parent path
-					if (exists(parentPath ~ "/.nosync")) {
-						if (verboseLogging) {addLogEntry("Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: " ~ newItemPath, ["verbose"]);}
-						unwanted = true;
-					}
-				}
-			}
+			// .nosync is handled as a distinct preservation boundary above rather than
+			// being folded into the generic 'unwanted' client-side filtering state.
 
 			// Check if this is excluded by a user set maximum filesize to download
 			if (!unwanted) {
@@ -3174,8 +3204,29 @@ class SyncEngine {
 			// - skip_size
 			// - We know if this item exists in the DB or not in the DB
 
-			// We know if this JSON item is unwanted or not
-			if (unwanted) {
+			// We know if this JSON item is unwanted or protected by .nosync. These are
+			// intentionally different semantics: .nosync must never feed destructive
+			// exclusion/reconciliation behaviour.
+			if (excludedByNoSync) {
+				if (verboseLogging) {
+					string noSyncDisplayPath = newItemPath.empty ? thisItemName : newItemPath;
+					addLogEntry("Ignoring OneDrive item because the local path is protected by .nosync: " ~ noSyncDisplayPath, ["verbose"]);
+				}
+
+				// Current-state reconciliation can use syncStatus as a presence marker. A
+				// tracked object protected by .nosync is intentionally retained,
+				// so do not allow it to remain marked as absent.
+				if ((nativeFullScanTrueUpResponse || generatedSimulatedDeltaResponse) && existingDBEntry && (existingDatabaseItem.syncStatus != "Y")) {
+					existingDatabaseItem.syncStatus = "Y";
+					itemDB.upsert(existingDatabaseItem);
+				}
+
+				// Preserve the boundary across JSON descendants whose newly-seen parent is
+				// intentionally not inserted into the local database.
+				if ((isItemFolder(onedriveJSONItem)) || (isRemoteFolderItem(onedriveJSONItem))) {
+					noSyncProtectedItems.insert(thisItemId);
+				}
+			} else if (unwanted) {
 				// This JSON item is NOT wanted - it is excluded
 				if (debugLogging) {addLogEntry("Skipping OneDrive JSON item as this is determined to be unwanted either through Client Side Filtering Rules or prior processing to this point", ["debug"]);}
 
@@ -3388,6 +3439,9 @@ class SyncEngine {
 		if (!skippedItems.empty) {
 			// Cleanup array memory
 			skippedItems.clear();
+		}
+		if (!noSyncProtectedItems.empty) {
+			noSyncProtectedItems.clear();
 		}
 
 		// Was exitHandlerTriggered flagged
@@ -6304,6 +6358,18 @@ class SyncEngine {
 				// For each unique OneDrive driveID we know about
 				Item[] outOfSyncItems = itemDB.selectOutOfSyncItems(driveId);
 				foreach (outOfSyncItem; outOfSyncItems) {
+					if (appConfig.getValueBool("check_nosync")) {
+						string outOfSyncLocalPath = buildNormalizedPath(computeItemPath(outOfSyncItem.driveId, outOfSyncItem.id));
+						if (pathIsProtectedByNoSync(outOfSyncLocalPath)) {
+							if (verboseLogging) {addLogEntry("Retaining database item protected by .nosync during online reconciliation: " ~ outOfSyncLocalPath, ["verbose"]);}
+							if (outOfSyncItem.syncStatus != "Y") {
+								outOfSyncItem.syncStatus = "Y";
+								itemDB.upsert(outOfSyncItem);
+							}
+							continue;
+						}
+					}
+
 					if (!dryRun) {
 						// An item absent from a generated authoritative view is semantically the
 						// same online deletion represented by a raw /delta tombstone. For tracked
@@ -6476,6 +6542,13 @@ class SyncEngine {
 
 		// Compute this dbItem path early as we we use this path often
 		localFilePath = buildNormalizedPath(computeItemPath(dbItem.driveId, dbItem.id));
+
+		// A DB-known path remains protected if .nosync is added after the item was
+		// originally synchronised. Do not infer local changes/deletions beneath it.
+		if (pathIsProtectedByNoSync(localFilePath)) {
+			if (verboseLogging) {addLogEntry("Skipping database consistency processing for path protected by .nosync: " ~ localFilePath, ["verbose"]);}
+			return;
+		}
 
 		// A newer online version for this exact path already failed to download or
 		// commit during the current remote-first cycle. The retained canonical file
@@ -6890,6 +6963,65 @@ class SyncEngine {
 
 		// Return if this is a valid path
 		return invalidPath;
+	}
+
+	// Does this local path sit at or beneath an active local .nosync boundary?
+	//
+	// This is intentionally separate from generic client-side filtering. Generic
+	// exclusions can mean an item has left the configured sync scope and should be
+	// reconciled online. .nosync has the opposite contract: preserve both sides and
+	// perform no synchronisation action across the local boundary.
+	private bool pathIsProtectedByNoSync(string localPath) {
+		if (!appConfig.getValueBool("check_nosync") || localPath.empty) {
+			return false;
+		}
+
+		string syncRoot = buildNormalizedPath(absolutePath("."));
+		string candidatePath = buildNormalizedPath(absolutePath(localPath));
+		string relativeCandidate = buildNormalizedPath(relativePath(candidatePath, syncRoot));
+
+		// Never allow a .nosync marker outside the configured sync root to affect this client.
+		if ((relativeCandidate == "..") || startsWith(relativeCandidate, "../")) {
+			return false;
+		}
+
+		// The marker itself is always excluded from synchronisation. This remains true
+		// for a delete/move event where the marker has just disappeared from disk.
+		if (baseName(candidatePath) == ".nosync") {
+			return true;
+		}
+
+		string currentPath = candidatePath;
+		bool candidateIsDirectory = false;
+		try {
+			candidateIsDirectory = exists(candidatePath) && isDir(candidatePath);
+		} catch (FileException e) {
+			// A filesystem race can make the leaf disappear. The existing parent may
+			// still carry the .nosync boundary, so continue from the parent directory.
+			candidateIsDirectory = false;
+		}
+
+		if (!candidateIsDirectory) {
+			currentPath = dirName(candidatePath);
+		}
+
+		while (true) {
+			if (exists(buildPath(currentPath, ".nosync"))) {
+				return true;
+			}
+
+			if (currentPath == syncRoot) {
+				break;
+			}
+
+			string parentPath = dirName(currentPath);
+			if (parentPath == currentPath) {
+				break;
+			}
+			currentPath = parentPath;
+		}
+
+		return false;
 	}
 
 	// Does this local path (directory or file) get excluded from any operation based on any client side filtering rules?
@@ -7906,6 +8038,13 @@ class SyncEngine {
 		string changedItemDriveId = localItemDetails[0];
 		string changedItemId = localItemDetails[1];
 		string localFilePath = localItemDetails[2];
+
+		// A .nosync marker may have appeared after this item was queued. Re-check the
+		// boundary immediately before any upload work begins.
+		if (pathIsProtectedByNoSync(localFilePath)) {
+			if (verboseLogging) {addLogEntry("Skipping changed-file upload for path protected by .nosync: " ~ localFilePath, ["verbose"]);}
+			return;
+		}
 
 		// Log the path that was modified
 		if (debugLogging) {addLogEntry("uploadChangedLocalFileToOneDrive: " ~ localFilePath, ["debug"]);}
@@ -9250,6 +9389,13 @@ class SyncEngine {
 			}
 		}
 
+		// .nosync is a subtree boundary, including for directories that already
+		// exist in items.sqlite3. Stop before DB-presence shortcuts or traversal.
+		if (pathIsProtectedByNoSync(path)) {
+			if (verboseLogging) {addLogEntry("Skipping local path protected by .nosync: " ~ path, ["verbose"]);}
+			return;
+		}
+
 		// Add a processing '.' if path exists
 		if (exists(path)) {
 			if (isDir(path)) {
@@ -9919,6 +10065,11 @@ class SyncEngine {
 		//		  Error Timestamp:     2025-08-01T21:08:26
 		//		  API Request ID:      dca77bd6-1e9a-432a-bc6c-1c6b5380745d
 		if (isRootEquivalent(thisNewPathToCreate)) return;
+
+		if (pathIsProtectedByNoSync(thisNewPathToCreate)) {
+			if (verboseLogging) {addLogEntry("Skipping online directory creation for path protected by .nosync: " ~ thisNewPathToCreate, ["verbose"]);}
+			return;
+		}
 
 		// Log what path we are attempting to create online
 		if (verboseLogging) {addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate, ["verbose"]);}
@@ -10744,6 +10895,13 @@ class SyncEngine {
 			functionStartTime = Clock.currTime();
 			logKey = generateAlphanumericString();
 			displayFunctionProcessingStart(thisFunctionName, logKey);
+		}
+
+		// A .nosync marker may have appeared after discovery but before this upload
+		// thread starts. The local boundary always wins.
+		if (pathIsProtectedByNoSync(fileToUpload)) {
+			if (verboseLogging) {addLogEntry("Skipping new-file upload for path protected by .nosync: " ~ fileToUpload, ["verbose"]);}
+			return;
 		}
 
 		// Debug for the moment
@@ -11891,6 +12049,14 @@ class SyncEngine {
 		}
 
 		OneDriveApi uploadDeletedItemOneDriveApiInstance;
+
+		// .nosync means local changes beneath this boundary must never be translated
+		// into remote deletions. This action-time check also protects against a marker
+		// being created after database consistency queued the delete.
+		if (pathIsProtectedByNoSync(path)) {
+			if (verboseLogging) {addLogEntry("Skipping remote delete for path protected by .nosync: " ~ path, ["verbose"]);}
+			return;
+		}
 
 		// Are we in a situation where we HAVE to keep the data online - do not delete the remote object
 		if (noRemoteDelete) {
