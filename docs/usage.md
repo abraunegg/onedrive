@@ -366,16 +366,36 @@ This client supports the following methods to authenticate the application with 
 #### Interactive Authentication using OAuth2 and a redirect URI
 When you run the application for the first time, the recommended authentication method is interactive browser-based OAuth2 authentication. The application will direct you to the Microsoft login page, where you sign in with your Microsoft Account and grant the application permission to access your files.
 
-When the application detects that it is running inside a graphical desktop session, it will automatically open the Microsoft authorisation URL in your default browser and listen locally for the Microsoft authorisation response. In this mode, you do **not** need to manually copy and paste the redirect URI from your browser back into the terminal.
+When the application detects that it is running inside a graphical desktop session, it will automatically open the Microsoft authorisation URL and listen locally for the Microsoft authorisation response. By default, the application uses the browser configured by your desktop environment. If the `BROWSER` environment variable is set, the application will first attempt to use the browser executable specified by that variable. In this mode, you do **not** need to manually copy and paste the redirect URI from your browser back into the terminal.
 
 When no graphical desktop session is detected, or when the local browser-based authentication flow cannot be used, the application will fall back to the existing manual copy-and-paste authentication method. This fallback behaviour may also occur when running remotely via SSH, inside containers, under WSL, or when no supported browser launch mechanism is available.
 
 ##### Graphical Desktop Authentication using the Local Browser Redirect
-When running inside a supported graphical desktop environment, the application will open your default browser and wait for the Microsoft authorisation response on:
+When running inside a supported graphical desktop environment, the application will open the Microsoft authorisation URL and wait for the Microsoft authorisation response on:
 
 ```text
 http://127.0.0.1:53100/
 ```
+
+By default, the application uses the browser configured by your desktop environment. To use a specific browser for interactive authentication, set the `BROWSER` environment variable to the browser executable when starting the client. For example, to use Microsoft Edge:
+
+```bash
+BROWSER=/usr/bin/microsoft-edge-stable onedrive --reauth
+```
+
+If the browser executable is available through your `PATH`, the executable name can be used instead:
+
+```bash
+BROWSER=microsoft-edge-stable onedrive --reauth
+```
+
+The same override can be used during initial authentication by running the client without `--reauth`:
+
+```bash
+BROWSER=microsoft-edge-stable onedrive
+```
+
+If the browser configured by `BROWSER` cannot be launched, the application falls back to the normal desktop browser launch mechanism. The `BROWSER` value is treated as a browser executable name or path; it is not interpreted as a shell command.
 
 This local listener is only used during the authentication process. It binds only to the loopback interface, does not require any inbound firewall changes, and is closed once authentication has completed or failed.
 
