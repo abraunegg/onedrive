@@ -250,6 +250,66 @@ systemctl start podman-auto-update.timer
 systemctl list-timers --all
 ```
 
+### Podman Quadlet (Alternative to `podman generate systemd`)
+Since Podman 4.4, [Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) is the recommended way to run containers as systemd services. It is declarative, does not require 'root' access to install the unit file, and integrates auto-updating via a dedicated directive rather than a container label.
+
+> [!NOTE]
+> This is an alternative to the `podman generate systemd` approach described above - you do not need to do both.
+
+**Prerequisites**
+*   Podman >= 4.4
+*   The config directory `~/.config/onedrive` and data directory `~/OneDrive` exist
+*   The container has already been authorised at least once, so that a `refresh_token` exists in `~/.config/onedrive`
+
+**Create the required directories and perform authorisation** using a throwaway container:
+```bash
+mkdir -p ~/.config/onedrive ~/OneDrive
+podman run --rm -it --name onedrive \
+    --userns=keep-id \
+    -v ~/.config/onedrive:/onedrive/conf:U,Z \
+    -v ~/OneDrive:/onedrive/data:U,Z \
+    docker.io/driveone/onedrive:edge
+```
+Follow the authorisation steps as described above in step 5. Once the initial sync has completed, stop the container with Ctrl+C - as it was started with `--rm`, it will be automatically removed, freeing up the container name `onedrive` for use by the Quadlet unit below.
+
+**Create the Quadlet unit file** at `~/.config/containers/systemd/onedrive.container`:
+```ini
+[Unit]
+Description=OneDrive Client for Linux (Podman Quadlet)
+After=network-online.target
+
+[Container]
+Image=docker.io/driveone/onedrive:edge
+ContainerName=onedrive
+Volume=%h/.config/onedrive:/onedrive/conf:U,Z
+Volume=%h/OneDrive:/onedrive/data:U,Z
+PodmanArgs=--userns=keep-id
+AutoUpdate=registry
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+**Enable and start the service:**
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now onedrive.service
+```
+
+**Check the service status and logs:**
+```bash
+systemctl --user status onedrive.service
+journalctl --user -u onedrive.service -f
+```
+
+To have the container image auto-update, enable the `podman-auto-update.timer` service as described above:
+```bash
+systemctl --user enable --now podman-auto-update.timer
+```
+
 ### Editing the running configuration and using a 'config' file
 The 'onedrive' client should run in default configuration, however you can change this default configuration by placing a custom config file in the `onedrive_conf` podman volume. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  
 Then put it into your onedrive_conf volume path, which can be found with:  
