@@ -415,6 +415,9 @@ class ApplicationConfig {
 		// Do we bypass all the download validation? 
 		// - This is critically important not to disable, but because of SharePoint 'feature' can be highly desirable to enable
 		boolValues["disable_download_validation"] = false;
+		// Do we allow downloading files reported as malware by Microsoft OneDrive?
+		// - This is disabled by default because the downloaded content may be unsafe
+		boolValues["download_flagged_files"] = false;
 		// Do we bypass all the upload validation? 
 		// - This is critically important not to disable, but because of SharePoint 'feature' can be highly desirable to enable
 		boolValues["disable_upload_validation"] = false;
@@ -1824,6 +1827,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'disable_upload_hash_streaming' = " ~ to!string(getValueBool("disable_upload_hash_streaming")));
 		addLogEntry("Config option 'disable_upload_validation'     = " ~ to!string(getValueBool("disable_upload_validation")));
 		addLogEntry("Config option 'disable_download_validation'   = " ~ to!string(getValueBool("disable_download_validation")));
+		addLogEntry("Config option 'download_flagged_files'        = " ~ to!string(getValueBool("download_flagged_files")));
 		addLogEntry("Config option 'bypass_data_preservation'      = " ~ to!string(getValueBool("bypass_data_preservation")));
 		addLogEntry("Config option 'no_remote_delete'              = " ~ to!string(getValueBool("no_remote_delete")));
 		addLogEntry("Config option 'remove_source_files'           = " ~ to!string(getValueBool("remove_source_files")));

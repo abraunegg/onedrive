@@ -4617,11 +4617,16 @@ class SyncEngine {
 		completedDownloadPath = newItemPath ~ ".partial";
 
 		// Is the item reported as Malware ?
-		if (isMalware(onedriveJSONItem)){
+		bool malwareDetected = isMalware(onedriveJSONItem);
+		if (malwareDetected && !appConfig.getValueBool("download_flagged_files")){
 			// OneDrive reports that this file is malware
 			addLogEntry("ERROR: MALWARE DETECTED IN FILE - DOWNLOAD SKIPPED: " ~ newItemPath, ["info", "notify"]);
 			downloadFailed = true;
 		} else {
+			if (malwareDetected) {
+				addLogEntry("WARNING: Malware-flagged file download explicitly enabled via 'download_flagged_files': " ~ newItemPath, ["info", "notify"]);
+			}
+
 			// Grab this file's filesize
 			if (hasFileSize(onedriveJSONItem)) {
 				// Use the configured filesize as reported by OneDrive
@@ -4724,7 +4729,7 @@ class SyncEngine {
 						// Curl-layer promotion so the completed .partial is validated before any
 						// canonical pathname can be created or replaced.
 						downloadTransferStartTime = Clock.currTime();
-						auto downloadResponse = downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset, true);
+						auto downloadResponse = downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset, true, malwareDetected);
 						downloadTransferEndTime = Clock.currTime();
 						if (downloadResponse !is null) {
 							// Every download remains at .partial until sync-layer validation and commit.
@@ -4747,7 +4752,10 @@ class SyncEngine {
 						downloadFailed = true;
 
 						// HTTP request returned status code 403
-						if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
+						if ((exception.httpStatusCode == 403) && malwareDetected) {
+							addLogEntry("Unable to download this malware-flagged file. Microsoft OneDrive or the tenant policy denied the infected-file download: " ~ newItemPath);
+							downloadFailed = true;
+						} else if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
 							// We attempted to download a file, that was shared with us, but this was shared with us as read-only and no download permission
 							addLogEntry("Unable to download this file as this was shared as read-only without download permission: " ~ newItemPath);
 							downloadFailed = true;
@@ -17812,6 +17820,14 @@ class SyncEngine {
 
 					foreach (string key, JSONValue value; detailsToUpdate.object) {
 						fileToDownload[key] = value;
+					}
+
+					// The Graph Search response can omit facets that are present on the
+					// authoritative drive item. Preserve the malware facet for the
+					// central download policy check.
+					if (("malware" in latestOnlineDetails) && (latestOnlineDetails["malware"].type != JSONType.null_)) {
+						fileToDownload["malware"] = parseJSON(latestOnlineDetails["malware"].toString());
+						fileToDownload["remoteItem"]["malware"] = parseJSON(latestOnlineDetails["malware"].toString());
 					}
 
 					// Update specific items
