@@ -778,8 +778,9 @@ OneDrive synchronisation interval (seconds): 300
 Maximum allowed open files (soft):           1024
 Maximum allowed open files (hard):           262144
 Maximum allowed inotify user watches:        29463
-Initialising filesystem inotify monitoring ...
+Initialising local filesystem monitoring using inotify ...
 ...
+Local filesystem monitoring using inotify is active.
 ```
 To determine what value to change to, you need to count all the files and folders in your configured 'sync_dir' location:
 ```text
@@ -1739,7 +1740,11 @@ To enable these specific notifications, add the following to your 'config' file:
 notify_file_actions = "true"
 ```
 
-When running in `--monitor` mode, a GUI notification is also sent each time the client successfully starts monitoring your local filesystem. To disable *only* this notification while keeping all other notifications enabled, add the following to your 'config' file:
+When running in `--monitor` mode, the client sends a concise GUI notification when monitor mode becomes active. The notification summarises the local and remote monitoring mechanisms applicable to the current configuration, for example:
+```
+Monitor mode active — inotify enabled, WebSocket enabled
+```
+To disable *only* this monitor-start notification while retaining the detailed console startup status and all other GUI notifications, add the following to your 'config' file:
 ```
 notify_monitor_start = "false"
 ```

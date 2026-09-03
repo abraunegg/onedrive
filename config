@@ -142,7 +142,7 @@
 ## This setting controls whether the client logs GUI notifications when file actions occur.
 #notify_file_actions = "false"
 
-## This setting controls whether a GUI notification is sent when '--monitor' mode has successfully started monitoring the local filesystem.
+## This setting controls whether a GUI notification is sent when '--monitor' mode becomes active.
 #notify_monitor_start = "true"
 
 ## This configuration controls the maximum amount of time a file operation is allowed to take.
