@@ -503,8 +503,8 @@ class ApplicationConfig {
 		
 		// GUI File Transfer and Deletion Notifications
 		boolValues["notify_file_actions"] = false;
-
-		// GUI Notification when '--monitor' mode has successfully started and is monitoring the local filesystem
+		
+		// GUI Notification when '--monitor' mode has successfully started
 		boolValues["notify_monitor_start"] = true;
 		
 		// Display file transfer metrics
