@@ -1719,6 +1719,21 @@ _**Description:**_ This CLI option controls the ability to re-authenticate your 
 
 _**Usage Example:**_ `onedrive --reauth`
 
+When using interactive authentication from a graphical desktop session, a specific browser can be selected by setting the `BROWSER` environment variable to the required browser executable. For example:
+
+```bash
+BROWSER=/usr/bin/microsoft-edge-stable onedrive --reauth
+```
+
+If the browser executable is available through your `PATH`, the executable name can also be used:
+
+```bash
+BROWSER=microsoft-edge-stable onedrive --reauth
+```
+
+> [!NOTE]
+> `BROWSER` is an environment variable, not an application configuration option. If the configured browser cannot be launched, the application falls back to the normal desktop browser launch mechanism. The value is treated as a browser executable name or path and is not interpreted as a shell command.
+
 ### CLI Option: --remove-directory
 _**Description:**_ This CLI option allows the user to remove the specified directory path on Microsoft OneDrive without performing a sync.
 

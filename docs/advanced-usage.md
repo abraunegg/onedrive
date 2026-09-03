@@ -46,18 +46,16 @@ Authenticate the client using the specific configuration file:
 ```text
 onedrive --confdir="~/.config/my-new-config"
 ```
-You will be asked to open a specific URL by using your web browser where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving permission to the application, you will be redirected to a blank page. Copy the URI of the blank page into the application.
-```text
-[user@hostname ~]$ onedrive --confdir="~/.config/my-new-config"
-Configuration file successfully loaded
-Configuring Global Azure AD Endpoints
-Authorize this app visiting:
 
-https://.....
+Authentication follows the standard client authentication process documented in [Authorise the Application with Your Microsoft OneDrive Account](usage.md#authorise-the-application-with-your-microsoft-onedrive-account). When running inside a supported graphical desktop environment, the application will automatically open the Microsoft authorisation URL and receive the authorisation response using the local browser redirect. When graphical browser authentication cannot be used, the application falls back to the documented manual browser authentication process.
 
-Enter the response uri: 
+If a specific browser is required for this configuration, set the `BROWSER` environment variable when starting the client. For example:
 
+```bash
+BROWSER=microsoft-edge-stable onedrive --confdir="~/.config/my-new-config"
 ```
+
+If `BROWSER` is not set, the normal desktop browser launch mechanism is used.
 
 ### 5. Display and Test the configuration
 Test the configuration using '--display-config' and '--dry-run'. By doing so, this allows you to test any configuration that you have currently made, enabling you to fix this configuration before using the configuration.
