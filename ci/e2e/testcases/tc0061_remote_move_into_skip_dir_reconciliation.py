@@ -22,12 +22,12 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
 
     SYNC_COMPLETE_PATTERN = "Sync with Microsoft OneDrive is complete"
 
-    def _build_skip_config_text(self, sync_dir: Path) -> str:
+    def _build_skip_config_text(self, sync_dir: Path, skipped_relative: str) -> str:
         return self._build_config_text(
             sync_dir,
             sync_dir.parent / "linux-skip-client-app-logs",
             extra_config_lines=[
-                'skip_dir = "Pictures/Archive"',
+                f'skip_dir = "{skipped_relative}"',
                 'skip_dir_strict_match = "true"',
             ],
         )
@@ -127,7 +127,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         dcim_relative = f"{root_name}/Pictures/DCIM"
         archive_relative = f"{root_name}/Pictures/Archive"
         archive_2025_relative = f"{archive_relative}/2025"
-        skipped_relative = "Pictures/Archive"
+        skipped_relative = archive_relative
 
         # Keep one file behind in DCIM to model Norbert's clarified case:
         # only selected files are moved out to the skipped archive path, while
@@ -149,7 +149,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
 
         context.prepare_minimal_config_dir(
             linux_conf,
-            self._build_skip_config_text(linux_sync_root),
+            self._build_skip_config_text(linux_sync_root, skipped_relative),
         )
         context.prepare_minimal_config_dir(
             mutator_conf,
