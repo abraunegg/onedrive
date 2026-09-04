@@ -287,16 +287,16 @@ class MonitorBackgroundWorker {
 			// buffered there is genuinely nothing to do until the descriptor becomes
 			// readable, so blocking is correct.
 			timeval tv;
-			timeval* tvp = null;
+			timeval* selectTimeout = null;
 			if (notifyPending) {
 				tv.tv_sec = 0;
 				tv.tv_usec = 100_000;
-				tvp = &tv;
+				selectTimeout = &tv;
 			}
 
 			// select() only needs to scan up to the highest descriptor plus one.
 			int maxFd = max(fd, controlPipeFd) + 1;
-			res = select(maxFd, &fds, null, null, tvp);
+			res = select(maxFd, &fds, null, null, selectTimeout);
 
 			if (res == -1) {
 				if (errno() == EINTR) {

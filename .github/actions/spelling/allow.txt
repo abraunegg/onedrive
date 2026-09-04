@@ -576,6 +576,7 @@ Thh
 thnk
 tidx
 timerfd
+timeval
 tkx
 tlsv
 tpgid
