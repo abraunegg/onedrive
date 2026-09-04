@@ -13,12 +13,18 @@ from framework.utils import command_to_string, reset_directory, run_command, wri
 class TestCase0012SkipDirValidation(E2ETestCase):
     case_id = "0012"
     name = "skip_dir validation"
-    description = "Validate skip_dir loose matching and skip_dir_strict_match behaviour"
+    description = (
+        "Validate skip_dir loose matching, skip_dir_strict_match behaviour, "
+        "and sync-root anchored full-path matching"
+    )
 
     def _write_config(self, config_path: Path, skip_dir_value: str, strict: bool) -> None:
-        lines = ["# tc0012 config", "bypass_data_preservation = \"true\"", f"skip_dir = \"{skip_dir_value}\""]
-        if strict:
-            lines.append("skip_dir_strict_match = \"true\"")
+        lines = [
+            "# tc0012 config",
+            'bypass_data_preservation = "true"',
+            f'skip_dir = "{skip_dir_value}"',
+            f'skip_dir_strict_match = "{"true" if strict else "false"}"',
+        ]
         write_onedrive_config(config_path, "\n".join(lines) + "\n")
 
     def _run_loose(self, context: E2EContext, case_log_dir: Path, all_artifacts: list[str], failures: list[str]) -> None:
@@ -65,6 +71,144 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         if f"{root}/Cache/top.txt" not in manifest: failures.append("Strict skip_dir scenario incorrectly skipped top-level Cache directory")
         if f"{root}/App/Cache/nested.txt" in manifest: failures.append("Strict skip_dir scenario unexpectedly synchronised strict-matched directory content")
 
+    def _run_sync_root_anchored(
+        self,
+        context: E2EContext,
+        case_log_dir: Path,
+        all_artifacts: list[str],
+        failures: list[str],
+    ) -> None:
+        scenario_root = context.work_root / "tc0012" / "sync_root_anchored"
+        scenario_state = context.state_dir / "tc0012" / "sync_root_anchored"
+        reset_directory(scenario_root)
+        reset_directory(scenario_state)
+
+        seed_root = scenario_root / "seed-syncroot"
+        seed_conf = scenario_root / "conf-seed"
+        loose_root = scenario_root / "loose-syncroot"
+        loose_conf = scenario_root / "conf-anchored-loose"
+        strict_root = scenario_root / "strict-syncroot"
+        strict_conf = scenario_root / "conf-anchored-strict"
+
+        unique_suffix = f"{context.run_id}_{os.getpid()}"
+        anchored_name = f"ZZ_E2E_TC0012_ANCHORED_{unique_suffix}"
+        container_name = f"ZZ_E2E_TC0012_CONTAINER_{unique_suffix}"
+
+        root_skipped_file = f"{anchored_name}/root-only.txt"
+        nested_required_file = f"{container_name}/{anchored_name}/nested-must-sync.txt"
+        control_required_file = f"{container_name}/keep.txt"
+
+        # Seed the online state through an unfiltered client so the filtered
+        # clients below must evaluate these directories from remote /delta data.
+        write_text_file(seed_root / root_skipped_file, "root anchored directory must be skipped\n")
+        write_text_file(seed_root / nested_required_file, "same-named nested directory must remain in scope\n")
+        write_text_file(seed_root / control_required_file, "unrelated control file\n")
+
+        context.bootstrap_config_dir(seed_conf)
+        write_onedrive_config(
+            seed_conf / "config",
+            '# tc0012 anchored remote seed\nbypass_data_preservation = "true"\n',
+        )
+        context.bootstrap_config_dir(loose_conf)
+        self._write_config(loose_conf / "config", f"/{anchored_name}", False)
+        context.bootstrap_config_dir(strict_conf)
+        self._write_config(strict_conf / "config", f"/{anchored_name}", True)
+
+        seed_stdout = case_log_dir / "sync_root_anchored_seed_stdout.log"
+        seed_stderr = case_log_dir / "sync_root_anchored_seed_stderr.log"
+        loose_stdout = case_log_dir / "sync_root_anchored_loose_stdout.log"
+        loose_stderr = case_log_dir / "sync_root_anchored_loose_stderr.log"
+        strict_stdout = case_log_dir / "sync_root_anchored_strict_stdout.log"
+        strict_stderr = case_log_dir / "sync_root_anchored_strict_stderr.log"
+        loose_manifest_file = scenario_state / "loose_local_manifest.txt"
+        strict_manifest_file = scenario_state / "strict_local_manifest.txt"
+
+        all_artifacts.extend(
+            [
+                str(seed_stdout),
+                str(seed_stderr),
+                str(loose_stdout),
+                str(loose_stderr),
+                str(strict_stdout),
+                str(strict_stderr),
+                str(loose_manifest_file),
+                str(strict_manifest_file),
+            ]
+        )
+
+        seed_result = run_command(
+            [
+                context.onedrive_bin,
+                "--display-running-config",
+                "--sync",
+                "--verbose",
+                "--resync",
+                "--resync-auth",
+                "--syncdir",
+                str(seed_root),
+                "--confdir",
+                str(seed_conf),
+            ],
+            cwd=context.repo_root,
+        )
+        write_text_file(seed_stdout, seed_result.stdout)
+        write_text_file(seed_stderr, seed_result.stderr)
+        if seed_result.returncode != 0:
+            failures.append(f"Sync-root anchored seed scenario failed with status {seed_result.returncode}")
+            return
+
+        scenarios = [
+            ("strict=false", loose_root, loose_conf, loose_stdout, loose_stderr, loose_manifest_file),
+            ("strict=true", strict_root, strict_conf, strict_stdout, strict_stderr, strict_manifest_file),
+        ]
+
+        for label, sync_root, confdir, stdout_file, stderr_file, manifest_file in scenarios:
+            result = run_command(
+                [
+                    context.onedrive_bin,
+                    "--display-running-config",
+                    "--sync",
+                    "--verbose",
+                    "--download-only",
+                    "--resync",
+                    "--resync-auth",
+                    "--syncdir",
+                    str(sync_root),
+                    "--confdir",
+                    str(confdir),
+                ],
+                cwd=context.repo_root,
+            )
+            write_text_file(stdout_file, result.stdout)
+            write_text_file(stderr_file, result.stderr)
+
+            manifest = build_manifest(sync_root)
+            write_manifest(manifest_file, manifest)
+
+            if result.returncode != 0:
+                failures.append(
+                    f"Sync-root anchored skip_dir scenario ({label}) failed with status {result.returncode}"
+                )
+                continue
+
+            if root_skipped_file in manifest:
+                failures.append(
+                    f"Sync-root anchored skip_dir scenario ({label}) synchronised the explicitly skipped root path: "
+                    f"{root_skipped_file}"
+                )
+
+            if nested_required_file not in manifest:
+                failures.append(
+                    f"Sync-root anchored skip_dir scenario ({label}) incorrectly skipped the same-named nested directory: "
+                    f"{nested_required_file}"
+                )
+
+            if control_required_file not in manifest:
+                failures.append(
+                    f"Sync-root anchored skip_dir scenario ({label}) did not synchronise the unrelated control file: "
+                    f"{control_required_file}"
+                )
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -75,6 +219,7 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         all_artifacts = []; failures = []
         self._run_loose(context, case_log_dir, all_artifacts, failures)
         self._run_strict(context, case_log_dir, all_artifacts, failures)
+        self._run_sync_root_anchored(context, case_log_dir, all_artifacts, failures)
         details = {"failures": failures}
         if failures: return self.fail_result(self.case_id, self.name, "; ".join(failures), all_artifacts, details)
         return self.pass_result(self.case_id, self.name, all_artifacts, details)
