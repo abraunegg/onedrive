@@ -2993,24 +2993,15 @@ class SyncEngine {
 						}
 
 						// OK .. what checks are we doing?
-						if ((!simplePathToCheck.empty) && (complexPathToCheck.empty)) {
-							// just a simple check
+						if (complexPathToCheck.empty) {
+							// Only a simple path is available
 							if (debugLogging) {addLogEntry("Performing a simple check only", ["debug"]);}
 							unwanted = selectiveSync.isDirNameExcluded(simplePathToCheck);
 						} else {
-							// simple and complex
-							if (debugLogging) {addLogEntry("Performing a simple then complex path match if required", ["debug"]);}
-
-							// simple first
-							if (debugLogging) {addLogEntry("Performing a simple check first", ["debug"]);}
-							unwanted = selectiveSync.isDirNameExcluded(simplePathToCheck);
-							matchDisplay = simplePathToCheck;
-							if (!unwanted) {
-								// simple didnt match, perform a complex check
-								if (debugLogging) {addLogEntry("Simple match was false, attempting complex match", ["debug"]);}
-								unwanted = selectiveSync.isDirNameExcluded(complexPathToCheck);
-								matchDisplay = complexPathToCheck;
-							}
+							// The complex path is the complete sync-root-relative path, so use it as the authoritative value
+							if (debugLogging) {addLogEntry("Performing a complex path check", ["debug"]);}
+							unwanted = selectiveSync.isDirNameExcluded(complexPathToCheck);
+							matchDisplay = complexPathToCheck;
 						}
 						// result
 						if (debugLogging) {addLogEntry("skip_dir exclude result (directory based): " ~ to!string(unwanted), ["debug"]);}
@@ -7225,22 +7216,14 @@ class SyncEngine {
 					}
 
 					// OK .. what checks are we doing?
-					if ((!simplePathToCheck.empty) && (complexPathToCheck.empty)) {
-						// just a simple check
+					if (complexPathToCheck.empty) {
+						// Only a simple path is available
 						if (debugLogging) {addLogEntry("Performing a simple check only", ["debug"]);}
 						clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(simplePathToCheck);
 					} else {
-						// simple and complex
-						if (debugLogging) {addLogEntry("Performing a simple then complex path match if required", ["debug"]);}
-
-						// simple first
-						if (debugLogging) {addLogEntry("Performing a simple check first", ["debug"]);}
-						clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(simplePathToCheck);
-						if (!clientSideRuleExcludesPath) {
-							if (debugLogging) {addLogEntry("Simple match was false, attempting complex match", ["debug"]);}
-							// simple didnt match, perform a complex check
-							clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(complexPathToCheck);
-						}
+						// The complex path is the complete sync-root-relative path, so use it as the authoritative value
+						if (debugLogging) {addLogEntry("Performing a complex path check", ["debug"]);}
+						clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(complexPathToCheck);
 					}
 
 					// End Result
