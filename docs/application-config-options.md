@@ -49,6 +49,7 @@ Before reading this document, please ensure you are running application version 
   - [monitor_log_frequency](#monitor_log_frequency)
   - [no_remote_delete](#no_remote_delete)
   - [notify_file_actions](#notify_file_actions)
+  - [notify_monitor_start](#notify_monitor_start)
   - [operation_timeout](#operation_timeout)
   - [permanent_delete](#permanent_delete)
   - [rate_limit](#rate_limit)
@@ -731,22 +732,32 @@ _**Usage Example:**_
 
 By default, at application start-up when using `--monitor` mode, the following will be logged to indicate that the application has correctly started and has performed all the initial processing steps:
 ```text
-Reading configuration file: /home/user/.config/onedrive/config
+Reading configuration file: /home/alex/.config/onedrive/config
 Configuration file successfully loaded
+WARNING: D-Bus message bus daemon is not available; GUI notifications are disabled
+Using IPv4 and IPv6 (if configured) for all network operations
+Attempting to contact the Microsoft OneDrive Service
+Successfully reached the Microsoft OneDrive Service
 Configuring Global Azure AD Endpoints
-Sync Engine Initialised with new Onedrive API instance
-All application operations will be performed in: /home/user/OneDrive
-OneDrive synchronisation interval (seconds): 300
-Initialising filesystem inotify monitoring ...
+Attempting to enable WebSocket support to monitor Microsoft Graph API changes in near real-time.
+Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.
+Initialising local filesystem monitoring using inotify ...
+Local filesystem monitoring using inotify is active.
+Monitor mode is active:
+  Local filesystem monitoring:       enabled (inotify)
+  Remote change notifications:       enabled (WebSocket)
+  Scheduled reconciliation interval: 300 seconds
 Performing initial synchronisation to ensure consistent local state ...
+Attempting to contact the Microsoft OneDrive Service
+Successfully reached the Microsoft OneDrive Service
 Starting a sync with Microsoft OneDrive
-Fetching items from the OneDrive API for Drive ID: b!bO8V6s9SSk9R7mWhpIjUrotN73WlW3tEv3OxP_QfIdQimEdOHR-1So6CqeG1MfDB ..
-Processing changes and items received from Microsoft OneDrive ...
-Performing a database consistency and integrity check on locally stored data ... 
-Scanning the local file system '~/OneDrive' for new data to upload ...
-Performing a final true-up scan of online data from Microsoft OneDrive
-Fetching items from the OneDrive API for Drive ID: b!bO8V6s9SSk9R7mWhpIjUrotN73WlW3tEv3OxP_QfIdQimEdOHR-1So6CqeG1MfDB ..
-Processing changes and items received from Microsoft OneDrive ...
+Fetching items from the OneDrive API for Drive ID: 5c0d9e159b3310ab .. 
+No changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive
+Performing a database consistency and integrity check on locally stored data . 
+Scanning the local file system '~/OneDrive' for new data to upload . 
+Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process
+Fetching items from the OneDrive API for Drive ID: 5c0d9e159b3310ab .. 
+No changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive
 Sync with Microsoft OneDrive is complete
 ```
 Then, based on 'monitor_log_frequency', the following output will be logged until the suppression loop value is reached:
@@ -785,6 +796,18 @@ _**Value Type:**_ Boolean
 _**Default Value:**_ False
 
 _**Config Example:**_ `notify_file_actions = "true"`
+
+> [!NOTE]
+> GUI Notification Support must be compiled in first, otherwise this option will have zero effect and will not be used.
+
+### notify_monitor_start
+_**Description:**_ This configuration option controls whether the client sends a concise GUI notification when `--monitor` mode becomes active. The notification summarises the local and remote monitoring mechanisms applicable to the current configuration. Disabling this option suppresses only the monitor-start GUI notification; console startup status logging and all other GUI notifications are unaffected.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ True
+
+_**Config Example:**_ `notify_monitor_start = "false"`
 
 > [!NOTE]
 > GUI Notification Support must be compiled in first, otherwise this option will have zero effect and will not be used.
