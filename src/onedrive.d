@@ -5,6 +5,7 @@ module onedrive;
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.memory;
 import core.thread;
+import core.sync.mutex;
 import std.stdio;
 import std.string;
 import std.utf;
@@ -31,6 +32,77 @@ import util;
 import curlEngine;
 import intune;
 import localAuth;
+
+// Downloads use a deterministic '<canonical>.partial' staging pathname. Multiple
+// reconciliation workers can legitimately reach the download subsystem in parallel,
+// however only one download transaction may own a given canonical pathname at a time.
+// Keep that ownership enforcement here so sync.d does not need to know anything about
+// the transport staging filename or its lifecycle.
+private class DownloadPathLockEntry {
+	Mutex mutex;
+	size_t users;
+
+	this() {
+		mutex = new Mutex();
+	}
+}
+
+private __gshared Mutex downloadPathRegistryMutex;
+private __gshared DownloadPathLockEntry[string] downloadPathLocks;
+
+shared static this() {
+	downloadPathRegistryMutex = new Mutex();
+}
+
+private DownloadPathLockEntry acquireDownloadPathLock(string canonicalPath) {
+	DownloadPathLockEntry entry;
+
+	downloadPathRegistryMutex.lock();
+	try {
+		auto existingEntry = canonicalPath in downloadPathLocks;
+		if (existingEntry is null) {
+			entry = new DownloadPathLockEntry();
+			downloadPathLocks[canonicalPath] = entry;
+		} else {
+			entry = *existingEntry;
+		}
+		entry.users++;
+	} finally {
+		downloadPathRegistryMutex.unlock();
+	}
+
+	entry.mutex.lock();
+	return entry;
+}
+
+private void releaseDownloadPathLock(string canonicalPath, DownloadPathLockEntry entry) {
+	entry.mutex.unlock();
+
+	downloadPathRegistryMutex.lock();
+	try {
+		if (entry.users > 0) {
+			entry.users--;
+		}
+		if (entry.users == 0) {
+			downloadPathLocks.remove(canonicalPath);
+		}
+	} finally {
+		downloadPathRegistryMutex.unlock();
+	}
+}
+
+// Neutral facts about a completed download staging file. onedrive.d owns the staging
+// pathname and therefore generates any on-disk hashes that sync.d needs for integrity
+// inspection. The decision whether those values are acceptable remains exclusively in
+// sync.d; this structure intentionally contains no Graph comparison or policy result.
+struct DownloadCommitInfo {
+	long size;
+	SysTime transferEndTime;
+	bool hasStreamedQuickXorHash;
+	string streamedQuickXorHash;
+	string generatedQuickXorHash;
+	string generatedSHA256Hash;
+}
 
 // Define the 'OneDriveException' class
 class OneDriveException : Exception {
@@ -1788,7 +1860,7 @@ class OneDriveApi {
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
-	CurlResponse downloadById(const(char)[] driveId, const(char)[] itemId, string saveToPath, long fileSize, JSONValue onlineHash, long resumeOffset = 0, bool deferFinalRename = false) {
+	CurlResponse downloadById(const(char)[] driveId, const(char)[] itemId, string saveToPath, long fileSize, JSONValue onlineHash, long resumeOffset = 0, bool delegate(DownloadCommitInfo) inspectDownloadBeforeCommit = null) {
 		// Set this function name
 		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
 
@@ -1825,7 +1897,7 @@ class OneDriveApi {
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ itemId ~ "/content?AVOverride=1";
 
 		// Download file using the URL created above
-		CurlResponse downloadResponse = downloadFile(driveId, itemId, url, saveToPath, fileSize, onlineHash, resumeOffset, deferFinalRename);
+		CurlResponse downloadResponse = downloadFile(driveId, itemId, url, saveToPath, fileSize, onlineHash, resumeOffset, inspectDownloadBeforeCommit);
 		if (downloadResponse !is null) {
 			if (debugLogging) {
 				addLogEntry("downloadById() downloadResponse.hasStreamedQuickXorHash = " ~ to!string(downloadResponse.hasStreamedQuickXorHash), ["debug"]);
@@ -1833,25 +1905,24 @@ class OneDriveApi {
 			}
 		}
 
-		// Does the completed download now exist locally? When final promotion is
-		// deferred, the accepted response body intentionally remains at .partial
-		// so the sync layer can validate and transactionally replace an existing file.
-		string completedDownloadPath = deferFinalRename ? saveToPath ~ ".partial" : saveToPath;
+		// A successful downloadById() call means the complete private staging transaction
+		// has finished and the canonical file now exists. The '.partial' pathname remains
+		// an implementation detail of onedrive.d/curlEngine.d and is never exposed here.
 		try {
-			if ((downloadResponse !is null) && exists(completedDownloadPath)) {
+			if ((downloadResponse !is null) && exists(saveToPath)) {
 				// Has the user disabled the setting of filesystem permissions?
 				if (!appConfig.getValueBool("disable_permission_set")) {
 					// File was downloaded successfully - configure the applicable permissions for the file
-					if (debugLogging) {addLogEntry("Setting file permissions for: " ~ completedDownloadPath, ["debug"]);}
-					completedDownloadPath.setAttributes(appConfig.returnRequiredFilePermissions());
+					if (debugLogging) {addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);}
+					saveToPath.setAttributes(appConfig.returnRequiredFilePermissions());
 				} else {
 					// Use inherited permissions
-					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ completedDownloadPath, ["debug"]);}
+					if (debugLogging) {addLogEntry("Using inherited filesystem permissions for: " ~ saveToPath, ["debug"]);}
 				}
 			}
 		} catch (FileException exception) {
 			// display the error message
-			displayFileSystemErrorMessage(exception.msg, thisFunctionName, completedDownloadPath);
+			displayFileSystemErrorMessage(exception.msg, thisFunctionName, saveToPath);
 		}
 
 		// Return the CurlResponse from the completed download so callers can inspect
@@ -2116,13 +2187,23 @@ class OneDriveApi {
 	}
 
 	// Download a file based on the URL request
-	private CurlResponse downloadFile(const(char)[] driveId, const(char)[] itemId, const(char)[] url, string filename, long fileSize, JSONValue onlineHash, long resumeOffset = 0, bool deferFinalRename = false, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+	private CurlResponse downloadFile(const(char)[] driveId, const(char)[] itemId, const(char)[] url, string filename, long fileSize, JSONValue onlineHash, long resumeOffset = 0, bool delegate(DownloadCommitInfo) inspectDownloadBeforeCommit = null, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
 
-		// To support marking of partially-downloaded files
+		// To support marking of partially-downloaded files. The staging pathname and its
+		// final promotion are private to the download subsystem.
 		string originalFilename = filename;
 		string downloadFilename = filename ~ ".partial";
+
+		// Multiple parallel workers can request the same canonical pathname. Serialize
+		// the complete transaction here so two CurlEngine instances can never open,
+		// write, resume, remove or promote the same deterministic '.partial' file at once.
+		string canonicalLockPath = buildNormalizedPath(absolutePath(originalFilename));
+		DownloadPathLockEntry downloadPathLock = acquireDownloadPathLock(canonicalLockPath);
+		scope(exit) {
+			releaseDownloadPathLock(canonicalLockPath, downloadPathLock);
+		}
 
 		// To support resumable downloads, configure the 'resumable data' file path
 		string threadResumeDownloadFilePath = appConfig.resumeDownloadFilePath ~ "." ~ generateAlphanumericString();
@@ -2475,17 +2556,96 @@ class OneDriveApi {
 			throw new OneDriveException(downloadResponse.statusLine.code, downloadResponse.statusLine.reason, downloadResponse);
 		}
 
-		// The wrapper has now accepted the transport and HTTP response. Normally the
-		// completed temporary file is promoted here. Replacement downloads can defer
-		// this final rename so the sync layer can validate the completed .partial while
-		// leaving the existing canonical file untouched.
-		if (!deferFinalRename) {
-			rename(downloadFilename, originalFilename);
+		// The HTTP transfer is complete and accepted, but the canonical destination has
+		// not yet been touched. Generate neutral facts about the private staging file so
+		// sync.d can perform the existing Graph integrity inspection and data-preservation
+		// policy without ever seeing the staging pathname itself.
+		DownloadCommitInfo downloadCommitInfo;
+		downloadCommitInfo.transferEndTime = Clock.currTime();
+		downloadCommitInfo.size = cast(long) getSize(downloadFilename);
+		downloadCommitInfo.hasStreamedQuickXorHash = downloadResponse.hasStreamedQuickXorHash;
+		downloadCommitInfo.streamedQuickXorHash = downloadResponse.streamedQuickXorHash;
+
+		bool expectedQuickXorHash = (onlineHash.type == JSONType.object) &&
+			("quickXorHash" in onlineHash) &&
+			(onlineHash["quickXorHash"].type == JSONType.string) &&
+			!onlineHash["quickXorHash"].str.empty;
+		bool disableDownloadValidation = appConfig.getValueBool("disable_download_validation");
+
+		// Preserve the existing hash-selection semantics from sync.d. A generated
+		// QuickXorHash is required when no streamed value is available, and also for
+		// the non-Personal --disable-download-validation AIP/SharePoint enrichment path.
+		if ((expectedQuickXorHash && !downloadCommitInfo.hasStreamedQuickXorHash) ||
+			(disableDownloadValidation && (appConfig.accountType != "personal"))) {
+			downloadCommitInfo.generatedQuickXorHash = computeQuickXorHash(downloadFilename);
 		}
 
-		// A successful complete transfer no longer needs resumable-download state.
-		// In deferred mode the completed .partial remains intentionally for the sync
-		// layer to validate and promote.
+		// When no QuickXorHash was supplied by Graph, sync.d falls back to SHA256 for
+		// download-integrity evaluation. Generate that value while the staging file is
+		// still private to this layer.
+		if (!expectedQuickXorHash && !disableDownloadValidation) {
+			downloadCommitInfo.generatedSHA256Hash = computeSHA256Hash(downloadFilename);
+		}
+
+		// Snapshot the current canonical file around the sync-layer inspection callback.
+		// The callback may create a non-destructive safeBackup, but it must not replace
+		// or otherwise modify the canonical object. A genuine local edit that occurs
+		// while the completed download is being inspected must win over this replacement.
+		bool canonicalExistsBeforeInspection = exists(originalFilename);
+		string canonicalHashBeforeInspection;
+		if (canonicalExistsBeforeInspection) {
+			canonicalHashBeforeInspection = computeQuickXorHash(originalFilename);
+			if (canonicalHashBeforeInspection.empty) {
+				addLogEntry("ERROR: Unable to verify canonical file before download commit; refusing replacement: " ~ originalFilename, ["error", "notify"]);
+				safeRemove(downloadFilename);
+				safeRemove(threadResumeDownloadFilePath);
+				curlEngine.resetDownloadResumeOffset();
+				return null;
+			}
+		}
+
+		if ((inspectDownloadBeforeCommit !is null) && !inspectDownloadBeforeCommit(downloadCommitInfo)) {
+			// sync.d rejected the completed staging file or could not preserve required
+			// local data. Discard only the transfer-owned staging artifact; any existing
+			// canonical file remains untouched.
+			safeRemove(downloadFilename);
+			safeRemove(threadResumeDownloadFilePath);
+			curlEngine.resetDownloadResumeOffset();
+			return null;
+		}
+
+		// Recheck the canonical path after sync.d has completed integrity inspection
+		// and any safeBackup preservation. If its existence or bytes changed while the
+		// commit was being prepared, local intent wins and the staged replacement is
+		// discarded for a later reconciliation.
+		bool canonicalExistsAfterInspection = exists(originalFilename);
+		bool canonicalChangedDuringInspection = canonicalExistsAfterInspection != canonicalExistsBeforeInspection;
+		if (!canonicalChangedDuringInspection && canonicalExistsAfterInspection) {
+			string canonicalHashAfterInspection = computeQuickXorHash(originalFilename);
+			canonicalChangedDuringInspection = canonicalHashAfterInspection.empty ||
+				(canonicalHashAfterInspection != canonicalHashBeforeInspection);
+		}
+
+		if (canonicalChangedDuringInspection) {
+			addLogEntry("WARNING: Canonical file changed while the validated replacement was being committed; refusing promotion: " ~ originalFilename, ["info", "notify"]);
+			safeRemove(downloadFilename);
+			safeRemove(threadResumeDownloadFilePath);
+			curlEngine.resetDownloadResumeOffset();
+			return null;
+		}
+
+		// onedrive.d owns the completed staging file for the entire transaction. The
+		// only successful exit is after the accepted staging object has been promoted
+		// to the canonical pathname. Keep the current retry-aware filesystem handling.
+		if (!safeRename(downloadFilename, originalFilename, false)) {
+			addLogEntry("ERROR: Validated download could not be promoted; retaining any existing canonical file: " ~ originalFilename, ["error", "notify"]);
+			safeRemove(downloadFilename);
+			safeRemove(threadResumeDownloadFilePath);
+			curlEngine.resetDownloadResumeOffset();
+			return null;
+		}
+
+		// Successful canonical promotion completes resumable-download state.
 		safeRemove(threadResumeDownloadFilePath);
 		curlEngine.resetDownloadResumeOffset();
 
