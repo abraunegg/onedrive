@@ -4548,6 +4548,7 @@ class SyncEngine {
 		string OneDriveFileSHA256Hash;
 		long jsonFileSize = 0;
 		Item databaseItem;
+		bool fileFoundInDB = false;
 		bool canonicalFileExistedBeforeDownload = false;
 		string canonicalHashBeforeDownload;
 		SysTime itemModifiedTime;
@@ -4601,7 +4602,6 @@ class SyncEngine {
 			// transfer is still detected and preserved at commit time.
 			canonicalHashBeforeDownload = computeQuickXorHash(newItemPath);
 		}
-
 		// Is the item reported as Malware ?
 		if (isMalware(onedriveJSONItem)){
 			// OneDrive reports that this file is malware
@@ -4658,6 +4658,7 @@ class SyncEngine {
 			if (canonicalFileExistedBeforeDownload && !ignoreDataPreservationCheck) {
 				foreach (driveId; onlineDriveDetails.keys) {
 					if (itemDB.selectByPath(newItemPath, driveId, databaseItem)) {
+						fileFoundInDB = true;
 						break;
 					}
 				}
@@ -4691,57 +4692,90 @@ class SyncEngine {
 					// Attempt to download the file as there is enough free space locally
 					OneDriveApi downloadFileOneDriveApiInstance;
 
-					// The download subsystem owns the .partial file and final canonical promotion.
-					// This callback contains only reconciliation policy: once onedrive.d has a
-					// complete staging file, validate it and decide whether the current canonical file
-					// contains local data that must be preserved before replacement. The callback
-					// never receives or manipulates the transport staging pathname.
-					bool delegate(DownloadCommitInfo) prepareDownloadCommit = (DownloadCommitInfo downloadCommitInfo) {
-						bool canonicalExistsAtCommit = exists(newItemPath);
-						string canonicalHashAtCommit;
-						bool preserveCanonicalAsSafeBackup = false;
+					// onedrive.d owns the private '.partial' staging file and generates neutral
+					// facts about the completed transfer. All integrity inspection and the
+					// decision whether that download is acceptable remain here in sync.d.
+					bool delegate(DownloadCommitInfo) inspectDownloadBeforeCommit = (DownloadCommitInfo downloadCommitInfo) {
+						// Preserve the transfer-only timing boundary used by displayTransferMetrics().
+						downloadTransferEndTime = downloadCommitInfo.transferEndTime;
 
-						// Keep download integrity policy in sync.d, as in the original download
-						// architecture. onedrive.d supplies only facts about its completed private
-						// staging object and will not promote it unless this callback accepts it.
+						// Validate only when the requested online version was downloaded. A failed
+						// transfer may deliberately leave an older final file untouched.
+						// The staging pathname is intentionally not exposed to sync.d; onedrive.d
+						// supplies the size and generated/streamed hashes required below.
+
+						// When downloading some files from SharePoint, the OneDrive API reports one file size, 
+						// but the SharePoint HTTP Server sends a totally different byte count for the same file
+						// we have implemented --disable-download-validation to disable these checks
+
+						// Regardless of --disable-download-validation we still need to set the file timestamp correctly.
+						// itemModifiedTime was validated before the transfer began so this operation never
+						// needs to manufacture a replacement timestamp.
+
+						// Did the user configure --disable-download-validation ?
 						if (!disableDownloadValidation) {
+							// A 'file' was downloaded - does what we downloaded = reported jsonFileSize or if there is some sort of funky local disk compression going on
+							// Does the file hash OneDrive reports match what we have locally?
 							string onlineFileHash;
 							string downloadedFileHash;
 							long downloadFileSize = downloadCommitInfo.size;
 
 							if (!OneDriveFileXORHash.empty) {
 								onlineFileHash = OneDriveFileXORHash;
+								// Use the streamed QuickXorHash from the completed download when available; otherwise calculate the QuickXorHash for this file
 								if (downloadCommitInfo.hasStreamedQuickXorHash) {
-									if (debugLogging) {addLogEntry("Using stream calculated hash", ["debug"]);}
-								} else if (debugLogging) {
-									addLogEntry("Must generate file hash", ["debug"]);
+									if (debugLogging) {
+										addLogEntry("Using stream calculated hash", ["debug"]);
+									}
+									downloadedFileHash = downloadCommitInfo.streamedQuickXorHash;
+								} else {
+									if (debugLogging) {
+										addLogEntry("Must generate file hash", ["debug"]);
+									}
+									downloadedFileHash = downloadCommitInfo.generatedQuickXorHash;
 								}
-								downloadedFileHash = downloadCommitInfo.quickXorHash;
 							} else {
 								onlineFileHash = OneDriveFileSHA256Hash;
-								downloadedFileHash = downloadCommitInfo.sha256Hash;
+								// Fallback: Calculate the SHA256 Hash for this file
+								downloadedFileHash = downloadCommitInfo.generatedSHA256Hash;
 							}
 
 							if ((downloadFileSize == jsonFileSize) && (downloadedFileHash == onlineFileHash)) {
+								// Downloaded file matches size and hash
 								if (debugLogging) {addLogEntry("Downloaded file matches reported size and reported file hash", ["debug"]);}
+
+								// Set the timestamp, logging and error handling done within function
+								// Timestamp application occurs after onedrive.d has promoted the accepted
+								// staging file to the canonical pathname.
 								applyAuthoritativeTimestamp = true;
 							} else {
+								// QuickXorHash in this client incorporates the file length into the final digest, so a size mismatch would be expected to also produce a hash mismatch.
+								// However, QuickXorHash is not collision-resistant, so we treat the hash mismatch as the definitive integrity failure condition and log size mismatches
+								// as advisory
+
+								// Downloaded file does not match size or hash .. which is it?
 								bool downloadValueMismatch = false;
 
+								// Size difference between what was written to disk and what the API reported as the file size
 								if (downloadFileSize != jsonFileSize) {
+									// downloaded file size does not match
 									downloadValueMismatch = true;
 									if (debugLogging) {
 										addLogEntry("Actual file size on disk:   " ~ to!string(downloadFileSize), ["debug"]);
 										addLogEntry("OneDrive API reported size: " ~ to!string(jsonFileSize), ["debug"]);
 									}
 									if ((verboseLogging)||(debugLogging)) {
+										// verbose or debug message
 										addLogEntry("WARNING: Download validation failed (size mismatch): " ~ newItemPath ~ " | expected=" ~ to!string(jsonFileSize) ~ " | actual=" ~ to!string(downloadFileSize), ["verbose"]);
 									} else {
+										// non-verbose message
 										addLogEntry("WARNING: File download size mismatch. Re-run with --verbose for additional diagnostic information to assist with troubleshooting.");
 									}
 								}
 
+								// Hash difference between what was written to disk and then QuickXOR calculated and what the API reported as the file hash online
 								if (downloadedFileHash != onlineFileHash) {
+									// downloaded file hash does not match
 									downloadValueMismatch = true;
 									if (debugLogging) {
 										addLogEntry("Actual local file hash:     " ~ downloadedFileHash, ["debug"]);
@@ -4749,42 +4783,85 @@ class SyncEngine {
 									}
 
 									if ((verboseLogging)||(debugLogging)) {
+										// verbose or debug message
 										addLogEntry("ERROR: Download validation failed (hash mismatch): " ~ newItemPath ~ " | expected=" ~ onlineFileHash ~ " | actual=" ~ downloadedFileHash, ["verbose"]);
 									} else {
+										// non-verbose message
 										addLogEntry("ERROR: File download hash mismatch. Re-run with --verbose for additional diagnostic information to assist with troubleshooting.");
 									}
 								}
 
+								// .heic data loss check
+								// - https://github.com/abraunegg/onedrive/issues/2471
+								// - https://github.com/OneDrive/onedrive-api-docs/issues/1532
+								// - https://github.com/OneDrive/onedrive-api-docs/issues/1723
 								if (downloadValueMismatch && (toLower(extension(newItemPath)) == ".heic")) {
+									// Need to display a message to the user that they have experienced data loss
 									addLogEntry("DATA-LOSS: File downloaded has experienced data loss due to a Microsoft OneDrive API bug. DO NOT DELETE THIS FILE ONLINE: " ~ newItemPath, ["info", "notify"]);
 									if (verboseLogging) {addLogEntry("           Please read https://github.com/OneDrive/onedrive-api-docs/issues/1723 for more details.", ["verbose"]);}
 								}
 
-								if (appConfig.accountType == "documentLibrary") {
+								// Add some workaround messaging for SharePoint
+								if (appConfig.accountType == "documentLibrary"){
+									// It has been seen where SharePoint / OneDrive API reports one size via the JSON
+									// but the content length and file size written to disk is totally different - example:
+									// From JSON:         "size": 17133
+									// From HTTPS Server: < Content-Length: 19340
+									// with no logical reason for the difference, except for a 302 redirect before file download
 									addLogEntry("INFO: It is most likely that a SharePoint OneDrive API issue is the root cause. Add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
 								} else {
+									// other account types
 									addLogEntry("INFO: Potentially add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
 								}
 
+								// If the computed hash does not equal provided online hash, consider this a failed download
 								if (downloadedFileHash != onlineFileHash) {
-									// Preserve the existing diagnostic while refusing the commit before
-									// the private staging file can replace the canonical destination.
+									// We do not want this downloaded file to be promoted as it failed the integrity checks
 									addLogEntry("Removing local file " ~ newItemPath ~ " due to failed integrity checks");
+
+									// Was this item previously in-sync with the local system?
+									// We previously searched for the file in the DB, we need to use that record
+									if (fileFoundInDB && !exists(newItemPath)) {
+										// Purge DB record only when no canonical local file remains
+										// In a --dry-run scenario, this is being done against a DB copy
+										addLogEntry("Removing DB record due to failed integrity checks");
+										itemDB.deleteById(databaseItem.driveId, databaseItem.id);
+									}
+
+									// onedrive.d owns and removes the private staging file when this callback
+									// rejects the download. The canonical path is left untouched.
 									return false;
 								}
 							}
 						} else {
+							// Download validation checks were disabled
 							if (debugLogging) {addLogEntry("Downloaded file validation disabled due to --disable-download-validation", ["debug"]);}
 							if (verboseLogging) {addLogEntry("WARNING: Skipping download integrity check for: " ~ newItemPath, ["verbose"]);}
+
+							// Whilst the download integrity checks were disabled, we still have to set the correct timestamp on the file
+							// Set the timestamp, logging and error handling done within function
+							// Timestamp application occurs after onedrive.d has promoted the accepted
+							// staging file to the canonical path.
 							applyAuthoritativeTimestamp = true;
 
-							// Preserve the existing AIP/SharePoint enrichment behaviour using facts
-							// calculated by the download layer before canonical promotion.
+							// Azure Information Protection (AIP) protected files potentially have missing data and/or inconsistent data
 							if (appConfig.accountType != "personal") {
-								string localFileHash = downloadCommitInfo.quickXorHash;
+								// AIP Protected Files cause issues here, as the online size & hash are not what has been downloaded
+								// There is ZERO way to determine if this is an AIP protected file either from the JSON data
+
+								// Calculate the local file hash and get the local file size
+								// The actual hash generation is performed by onedrive.d while it owns
+								// the private staging file; evaluation of those values remains here.
+								string localFileHash = downloadCommitInfo.generatedQuickXorHash;
 								long downloadFileSize = downloadCommitInfo.size;
 
 								if ((OneDriveFileXORHash != localFileHash) && (jsonFileSize != downloadFileSize)) {
+									// High potential to be an AIP protected file given the following scenario
+									// Business | SharePoint Account Type (not a personal account)
+									// --disable-download-validation is being used .. meaning the user has specifically configured this due the Microsoft SharePoint Enrichment Feature (bug)
+									// The file downloaded but the XOR hash and file size locally is not as per the provided JSON - both are different
+									//
+									// Update the 'onedriveJSONItem' JSON data with the local values .....
 									if (debugLogging) {
 										string aipLogMessage = format("POTENTIAL AIP FILE (Issue 3070) - Changing the source JSON data provided by Graph API to use actual on-disk values (quickXorHash,size): %s", newItemPath);
 										addLogEntry(aipLogMessage, ["debug"]);
@@ -4794,12 +4871,22 @@ class SyncEngine {
 										addLogEntry(" - Local Size   : " ~ to!string(downloadFileSize), ["debug"]);
 									}
 
+									// Make the change in the JSON using local values
 									onedriveJSONItem["file"]["hashes"]["quickXorHash"] = localFileHash;
 									onedriveJSONItem["size"] = downloadFileSize;
 								}
 							}
-						}
+						} // end of (!disableDownloadValidation)
 
+						// The completed download has passed integrity inspection. Re-evaluate the
+						// canonical path now, before onedrive.d is allowed to promote its private
+						// staging file. This preserves the transactional safeBackup behaviour.
+						bool canonicalExistsAtCommit = exists(newItemPath);
+						string canonicalHashAtCommit;
+						bool preserveCanonicalAsSafeBackup = false;
+
+						// Snapshot the canonical bytes at the commit boundary. onedrive.d performs
+						// a final recheck after this callback returns and immediately before promotion.
 						if (canonicalExistsAtCommit) {
 							canonicalHashAtCommit = computeQuickXorHash(newItemPath);
 							if (canonicalHashAtCommit.empty) {
@@ -4810,21 +4897,22 @@ class SyncEngine {
 
 						// If this workflow started as a replacement but the canonical file has
 						// disappeared, a genuine local removal/move may have occurred during the
-						// transfer. Do not silently recreate it and erase that local intent.
+						// download. Do not silently recreate it and erase that local intent.
 						if (canonicalFileExistedBeforeDownload && !canonicalExistsAtCommit) {
 							addLogEntry("WARNING: Canonical file changed or disappeared while replacement was downloading; refusing validated replacement: " ~ newItemPath, ["info", "notify"]);
 							return false;
 						}
 
 						if (canonicalExistsAtCommit && ignoreDataPreservationCheck) {
-							// Post-upload enrichment normally replaces the file just uploaded without
-							// creating a safeBackup. Preserve only if a new local file appeared or the
-							// canonical bytes changed while the replacement download was in flight.
+							// The caller expects replacement of the file it just uploaded, so do not
+							// create a safeBackup for that known difference. However, if the canonical
+							// bytes changed again while this download was running, that is new local
+							// data and must be preserved. A file that appeared unexpectedly is treated
+							// the same way.
 							if (!canonicalFileExistedBeforeDownload) {
 								preserveCanonicalAsSafeBackup = true;
 							} else {
-								preserveCanonicalAsSafeBackup = canonicalHashBeforeDownload.empty ||
-									(canonicalHashAtCommit != canonicalHashBeforeDownload);
+								preserveCanonicalAsSafeBackup = canonicalHashBeforeDownload.empty || (canonicalHashAtCommit != canonicalHashBeforeDownload);
 							}
 
 							if (preserveCanonicalAsSafeBackup) {
@@ -4877,25 +4965,40 @@ class SyncEngine {
 						}
 
 						// Perform the download with any applicable resume offset. onedrive.d and
-						// curlEngine.d own the complete staging lifecycle; a non-null response means
-						// the validated staging file has already been promoted to newItemPath.
+						// curlEngine.d own the complete staging lifecycle. sync.d supplies only
+						// integrity/preservation inspection policy and never sees '.partial'.
 						downloadTransferStartTime = Clock.currTime();
-						auto downloadResponse = downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset, prepareDownloadCommit);
-						downloadTransferEndTime = Clock.currTime();
+						auto downloadResponse = downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset, inspectDownloadBeforeCommit);
 						if (downloadResponse !is null) {
 							// A non-null response means the private staging file passed sync.d's
-							// integrity/preservation policy and was promoted by onedrive.d.
+							// integrity/preservation inspection and onedrive.d promoted it to
+							// the canonical destination.
 							downloadTransferCompleted = true;
+
+							// File should now exist at the canonical pathname. Apply the authoritative
+							// Microsoft timestamp only after successful lower-layer promotion.
 							if (exists(newItemPath)) {
 								if (applyAuthoritativeTimestamp) {
 									setLocalPathTimestamp(dryRun, newItemPath, itemModifiedTime);
 								}
 							} else {
+								// Was exitHandlerTriggered flagged
 								if (!exitHandlerTriggered) {
+									// File does not exist locally ... so the download failed
 									if ((verboseLogging)||(debugLogging)) {
+										// If we are doing verbose logging,
 										addLogEntry("ERROR: Download failed (file not present after download): " ~ newItemPath ~ " | expectedSize=" ~ to!string(jsonFileSize) ~ " | resumeOffset=" ~ to!string(resumeOffset), ["verbose"]);
 									} else {
 										addLogEntry("ERROR: File failed to download. Re-run with --verbose for additional diagnostic information to assist with troubleshooting.");
+									}
+
+									// Was this item previously in-sync with the local system?
+									// We previously searched for the file in the DB, we need to use that record
+									if (fileFoundInDB && !exists(newItemPath)) {
+										// Purge DB record only when no canonical local file remains
+										// In a --dry-run scenario, this is being done against a DB copy
+										addLogEntry("Removing existing DB record due to failed file download.");
+										itemDB.deleteById(databaseItem.driveId, databaseItem.id);
 									}
 								}
 								downloadFailed = true;
@@ -4904,11 +5007,22 @@ class SyncEngine {
 							if (debugLogging) {
 								addLogEntry("downloadResponse is null", ["debug"]);
 							}
+
+							// Was exitHandlerTriggered flagged
+							if (exitHandlerTriggered && appConfig.getValueBool("force_xfer_abort")) {
+								// exitHandlerTriggered triggered
+								// this is force abort
+								if ((verboseLogging)||(debugLogging)) {
+									// add log message
+									addLogEntry("Download aborted: " ~ newItemPath, ["verbose"]);
+								}
+							}
+							// Flag that the download failed
 							downloadFailed = true;
 						}
 
 					} catch (OneDriveException exception) {
-						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset, prepareDownloadCommit); generated a OneDriveException", ["debug"]);}
+						if (debugLogging) {addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize, onlineHash, resumeOffset, inspectDownloadBeforeCommit); generated a OneDriveException", ["debug"]);}
 
 						// Any propagated API exception means that the requested online version was
 						// not downloaded. A pre-existing final path, if present, is still the last
@@ -4949,8 +5063,9 @@ class SyncEngine {
 				}
 			}
 
-			// A successful downloadById() call has already completed the private
-			// .partial -> canonical transaction inside the download subsystem.
+			// File should have been downloaded. A successful downloadById() call has
+			// already completed the private '.partial' -> canonical transaction inside
+			// onedrive.d.
 			if (!downloadFailed) {
 				// Download did not fail
 				addLogEntry("Downloading file: " ~ newItemPath ~ " ... done", fileTransferNotifications());
