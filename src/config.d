@@ -504,6 +504,9 @@ class ApplicationConfig {
 		// GUI File Transfer and Deletion Notifications
 		boolValues["notify_file_actions"] = false;
 		
+		// GUI Notification when '--monitor' mode has successfully started
+		boolValues["notify_monitor_start"] = true;
+		
 		// Display file transfer metrics
 		// - Enable the calculation of transfer metrics (duration,speed) for the transfer of a file
 		boolValues["display_transfer_metrics"] = false;
@@ -1856,6 +1859,7 @@ class ApplicationConfig {
 			addLogEntry("Environment var 'XDG_RUNTIME_DIR'             = " ~ to!string(xdg_exists));
 			addLogEntry("Environment var 'DBUS_SESSION_BUS_ADDRESS'    = " ~ to!string(dbus_exists));
 			addLogEntry("Config option 'notify_file_actions'           = " ~ to!string(getValueBool("notify_file_actions")));
+			addLogEntry("Config option 'notify_monitor_start'          = " ~ to!string(getValueBool("notify_monitor_start")));
 		} else {
 			addLogEntry("Compile time option --enable-notifications    = false");
 		}
