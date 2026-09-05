@@ -13992,6 +13992,53 @@ class SyncEngine {
 				movePathOnlineApiInstance = new OneDriveApi(appConfig);
 				movePathOnlineApiInstance.initialise();
 
+				// Try and get the absolute latest object details from online, so we use the
+				// current eTag and validate that the source object is still where the local
+				// database says it is before attempting the move.
+				JSONValue currentOnlineJSONData;
+				try {
+					currentOnlineJSONData = movePathOnlineApiInstance.getPathDetailsById(oldItem.driveId, oldItem.id);
+				} catch (OneDriveException exception) {
+					// - 408,429,503,504 errors are handled as a retry within movePathOnlineApiInstance
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+					movePathOnlineApiInstance.releaseCurlEngine();
+					movePathOnlineApiInstance = null;
+					return;
+				}
+
+				// Only proceed when the current online object still represents the source
+				// DriveItem and location that this local move was based on.
+				if ((currentOnlineJSONData.type() != JSONType.object) ||
+					isItemDeleted(currentOnlineJSONData) ||
+					(!hasId(currentOnlineJSONData)) ||
+					(currentOnlineJSONData["id"].str != oldItem.id) ||
+					(!hasName(currentOnlineJSONData)) ||
+					(currentOnlineJSONData["name"].str != oldItem.name) ||
+					(!hasParentReferenceId(currentOnlineJSONData)) ||
+					(currentOnlineJSONData["parentReference"]["id"].str != oldItem.parentId)) {
+					if (debugLogging) {
+						addLogEntry("Online state for moved item no longer matches the local database source state - deferring local move for reconciliation", ["debug"]);
+						addLogEntry("Database source item: " ~ to!string(oldItem), ["debug"]);
+						addLogEntry("Current online item: " ~ sanitiseJSONItem(currentOnlineJSONData), ["debug"]);
+					}
+
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+					movePathOnlineApiInstance.releaseCurlEngine();
+					movePathOnlineApiInstance = null;
+					return;
+				}
+
+				// Prefer the current online eTag over the potentially stale database value.
+				if (hasETag(currentOnlineJSONData)) {
+					eTag = currentOnlineJSONData["eTag"].str;
+					if (debugLogging && (eTag != oldItem.eTag)) {addLogEntry("Online eTag for moved item differs from database eTag - using current online value", ["debug"]);}
+				} else {
+					// Preserve the existing database fallback if Microsoft omits the eTag.
+					if (debugLogging) {addLogEntry("Online data for moved item returned zero eTag - using database eTag value", ["debug"]);}
+				}
+
 				// Try the online move
 				for (int i = 0; i < 3; i++) {
 					try {
