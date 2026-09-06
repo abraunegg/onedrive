@@ -1245,9 +1245,6 @@ int main(string[] cliArgs) {
 			// What is the currently configured maximum inotify watches that can be used
 			string maxInotifyWatches = strip(getMaxInotifyWatches());
 			
-			// Start the monitor process
-			addLogEntry("OneDrive synchronisation interval (seconds): " ~ to!string(appConfig.getValueLong("monitor_interval")));
-			
 			// If we are in a --download-only method of operation, the output of these is not required
 			if (!appConfig.getValueBool("download_only")) {
 				if (verboseLogging) {
@@ -1289,15 +1286,65 @@ int main(string[] cliArgs) {
 			if (!appConfig.getValueBool("download_only")) {
 				// Not using --download-only
 				try {
-					addLogEntry("Initialising filesystem inotify monitoring ...", ["info", "notify"]);
+					addLogEntry("Initialising local filesystem monitoring using inotify ...");
 					filesystemMonitor.initialise();
-					addLogEntry("Performing initial synchronisation to ensure consistent local state ...");
+					addLogEntry("Local filesystem monitoring using inotify is active.");
 				} catch (MonitorException e) {	
 					// monitor class initialisation failed
 					addLogEntry("ERROR: " ~ e.msg);
 					return EXIT_FAILURE;
 				}
 			}
+			
+			// Build one authoritative monitor startup status from the mode and notification
+			// configuration that will be used when the monitor loop starts. Component startup
+			// messages above remain console/log output only; the optional GUI notification is
+			// emitted once from the concise summary derived here.
+			string localMonitorStatus;
+			string guiLocalMonitorStatus;
+			if (appConfig.getValueBool("download_only")) {
+				localMonitorStatus = "not used (--download-only)";
+				guiLocalMonitorStatus = "inotify disabled";
+			} else {
+				localMonitorStatus = "enabled (inotify)";
+				guiLocalMonitorStatus = "inotify enabled";
+			}
+			
+			string remoteMonitorStatus;
+			string guiRemoteMonitorStatus;
+			if (appConfig.getValueBool("upload_only")) {
+				remoteMonitorStatus = "not used (--upload-only)";
+				guiRemoteMonitorStatus = "remote notifications disabled";
+			} else if (appConfig.getValueBool("webhook_enabled")) {
+				remoteMonitorStatus = "enabled (Webhook)";
+				guiRemoteMonitorStatus = "Webhook enabled";
+			} else if (appConfig.getValueBool("disable_websocket_support")) {
+				remoteMonitorStatus = "disabled by configuration";
+				guiRemoteMonitorStatus = "WebSocket disabled";
+			} else if (!appConfig.curlSupportsWebSockets) {
+				remoteMonitorStatus = "unavailable (WebSocket support is not available in the installed libcurl)";
+				guiRemoteMonitorStatus = "WebSocket unavailable";
+			} else if (appConfig.websocketNotificationUrlAvailable) {
+				remoteMonitorStatus = "enabled (WebSocket)";
+				guiRemoteMonitorStatus = "WebSocket enabled";
+			} else {
+				remoteMonitorStatus = "unavailable (WebSocket setup will be retried)";
+				guiRemoteMonitorStatus = "WebSocket unavailable; retrying";
+			}
+			
+			addLogEntry("Monitor mode is active:");
+			addLogEntry("  Local filesystem monitoring:       " ~ localMonitorStatus);
+			addLogEntry("  Remote change notifications:       " ~ remoteMonitorStatus);
+			addLogEntry("  Scheduled reconciliation interval: " ~ to!string(appConfig.getValueLong("monitor_interval")) ~ " seconds");
+			
+			// The routine monitor-start GUI notification is enabled by default and can be
+			// disabled independently of all other GUI notifications via 'notify_monitor_start'.
+			if (appConfig.getValueBool("notify_monitor_start") && !debugLogging) {
+				string monitorStartNotification = "Monitor mode active — " ~ guiLocalMonitorStatus ~ ", " ~ guiRemoteMonitorStatus;
+				addLogEntry(monitorStartNotification, ["notify"]);
+			}
+			
+			addLogEntry("Performing initial synchronisation to ensure consistent local state ...");
 		
 			// Filesystem monitor loop variables
 			// Immutables
