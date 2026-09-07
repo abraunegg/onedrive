@@ -5088,8 +5088,14 @@ class SyncEngine {
 							// We attempted to download a file, that was shared with us, but this was shared with us as read-only and no download permission
 							addLogEntry("Unable to download this file as this was shared as read-only without download permission: " ~ newItemPath);
 							downloadFailed = true;
+						} else if (exception.httpStatusCode == 404) {
+							// The online item is no longer available at the time of download. This can legitimately
+							// occur when an item is moved or deleted online after it was queued for download. Keep
+							// the existing failed-download and reconciliation behaviour, but avoid presenting this
+							// expected race as a Microsoft OneDrive API application error.
+							addLogEntry("The online item is no longer available at the time of download; continuing reconciliation: " ~ newItemPath);
 						} else {
-							// Default operation if not a 403 error
+							// Default operation if not a 403 or 404 error
 							// - 408,429,503,504 errors are handled as a retry within downloadFileOneDriveApiInstance
 							// Display what the error is
 							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
