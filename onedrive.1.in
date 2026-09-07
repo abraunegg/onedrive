@@ -147,11 +147,16 @@ Once you've installed the application, you'll need to authorise it using your Mi
 .TP
 Please be aware that some organisations may require administrator approval before this client can be used. If administrator consent is required, use \fB--display-admin-consent-url\fP to generate the appropriate Microsoft Entra ID administrator consent URL for your tenant.
 .TP
-When run for the first time in a supported graphical environment, the client will attempt to open the Microsoft authorisation URL in your default web browser and listen for the authorisation response on the local loopback callback address \fBhttp://127.0.0.1:53100/\fP. After you sign in and grant access, authentication should complete automatically and you may close the browser window.
+When run for the first time in a supported graphical environment, the client will attempt to open the Microsoft authorisation URL in a web browser and listen for the authorisation response on the local loopback callback address \fBhttp://127.0.0.1:53100/\fP. If the \fBBROWSER\fP environment variable is set, the client will first attempt to use the browser executable specified by that variable; otherwise it uses the normal desktop browser launch mechanism. If the configured browser cannot be launched, the client falls back to the normal desktop browser mechanism. After you sign in and grant access, authentication should complete automatically and you may close the browser window.
 .TP
 If local browser authentication cannot be used, the client will fall back to the manual authentication flow. In that mode, open the displayed URL in your browser, sign in, grant access, then copy the full redirect URI from the browser address bar and paste it back into the application.
 .TP
 This process authenticates the application with your account information, after which the client is ready to sync your data between your local system and Microsoft OneDrive.
+
+.SH ENVIRONMENT
+.TP
+\fBBROWSER\fP
+Specifies the browser executable that the client should try first when launching the Microsoft authorisation URL in a supported graphical environment. The value may be an executable name available through \fBPATH\fP or an explicit executable path. The value is treated as an executable name or path and is not interpreted as a shell command. If the specified browser cannot be launched, the client falls back to the normal desktop browser launch mechanism. This applies to both initial authentication and \fB--reauth\fP.
 
 .SH GUI NOTIFICATIONS
 If the client has been compiled with support for notifications, the client will send notifications about client activity via libnotify to the GUI via DBus when the client is being run in --monitor mode.
