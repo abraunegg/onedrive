@@ -2164,7 +2164,20 @@ Refer to [advanced-usage.md](advanced-usage.md) for configuration instructions.
 
 ### How to Receive Real-time Changes from Microsoft OneDrive Service, instead of waiting for the next sync period?
 
-Refer to [webhooks.md](webhooks.md) for configuration instructions.
+When running in `--monitor` mode, the client can receive Microsoft OneDrive API change signals using either its built-in WebSocket support or the optional webhook capability. These signals allow an online change to trigger a synchronisation cycle as soon as possible, rather than relying only on the next scheduled `monitor_interval`.
+
+**WebSocket support is the default near real-time notification mechanism.** Where the installed curl/libcurl version provides the required WebSocket capability, the client will automatically attempt to establish a WebSocket subscription to Microsoft Graph. No public listener, reverse proxy, or additional webhook configuration is required.
+
+If WebSocket support is unsuitable for your environment, it can be disabled by setting:
+
+```text
+disable_websocket_support = "true"
+```
+
+**Webhooks provide an alternative notification mechanism** and require explicit configuration, including a public URL that Microsoft can reach. When webhooks are enabled, WebSocket support is not used because only one Microsoft Graph API notification mechanism is active for a client instance at a time. Refer to [webhooks.md](webhooks.md) for webhook configuration instructions.
+
+> [!NOTE]
+> WebSocket and webhook notifications are change **signals**; they do not contain the complete synchronisation data. When a signal is received, the client queries Microsoft OneDrive through the Microsoft Graph API and performs the normal reconciliation process. The configured `monitor_interval` remains the scheduled fallback so that synchronisation does not depend solely on receipt of a near real-time notification.
 
 ### How to initiate the client as a background service?
 There are a few ways to employ onedrive as a service:
