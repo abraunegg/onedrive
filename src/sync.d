@@ -6211,9 +6211,14 @@ class SyncEngine {
 				}
 			}
 		} catch (OneDriveException exception) {
-			// Handle a 409 - ETag does not match current item's value
-			// Handle a 412 - A precondition provided in the request (such as an if-match header) does not match the resource's current state.
-			if ((exception.httpStatusCode == 409) || (exception.httpStatusCode == 412)) {
+			// A 404 can legitimately occur when an item disappears online after it was
+			// selected for timestamp reconciliation. The requested metadata update is
+			// no longer applicable; leave current state for normal reconciliation.
+			if (exception.httpStatusCode == 404) {
+				if (debugLogging) {addLogEntry("Remote item no longer exists while attempting to update its modified time; skipping timestamp correction", ["debug"]);}
+			} else if ((exception.httpStatusCode == 409) || (exception.httpStatusCode == 412)) {
+				// Handle a 409 - ETag does not match current item's value
+				// Handle a 412 - A precondition provided in the request (such as an if-match header) does not match the resource's current state.
 				// Handle the 409
 				if (exception.httpStatusCode == 409) {
 					// OneDrive threw a 412 error
