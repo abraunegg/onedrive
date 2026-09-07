@@ -49,6 +49,7 @@ Before reading this document, please ensure you are running application version 
   - [monitor_log_frequency](#monitor_log_frequency)
   - [no_remote_delete](#no_remote_delete)
   - [notify_file_actions](#notify_file_actions)
+  - [notify_monitor_start](#notify_monitor_start)
   - [operation_timeout](#operation_timeout)
   - [permanent_delete](#permanent_delete)
   - [rate_limit](#rate_limit)
@@ -731,22 +732,32 @@ _**Usage Example:**_
 
 By default, at application start-up when using `--monitor` mode, the following will be logged to indicate that the application has correctly started and has performed all the initial processing steps:
 ```text
-Reading configuration file: /home/user/.config/onedrive/config
+Reading configuration file: /home/alex/.config/onedrive/config
 Configuration file successfully loaded
+WARNING: D-Bus message bus daemon is not available; GUI notifications are disabled
+Using IPv4 and IPv6 (if configured) for all network operations
+Attempting to contact the Microsoft OneDrive Service
+Successfully reached the Microsoft OneDrive Service
 Configuring Global Azure AD Endpoints
-Sync Engine Initialised with new Onedrive API instance
-All application operations will be performed in: /home/user/OneDrive
-OneDrive synchronisation interval (seconds): 300
-Initialising filesystem inotify monitoring ...
+Attempting to enable WebSocket support to monitor Microsoft Graph API changes in near real-time.
+Enabled WebSocket support to monitor Microsoft Graph API changes in near real-time.
+Initialising local filesystem monitoring using inotify ...
+Local filesystem monitoring using inotify is active.
+Monitor mode is active:
+  Local filesystem monitoring:       enabled (inotify)
+  Remote change notifications:       enabled (WebSocket)
+  Scheduled reconciliation interval: 300 seconds
 Performing initial synchronisation to ensure consistent local state ...
+Attempting to contact the Microsoft OneDrive Service
+Successfully reached the Microsoft OneDrive Service
 Starting a sync with Microsoft OneDrive
-Fetching items from the OneDrive API for Drive ID: b!bO8V6s9SSk9R7mWhpIjUrotN73WlW3tEv3OxP_QfIdQimEdOHR-1So6CqeG1MfDB ..
-Processing changes and items received from Microsoft OneDrive ...
-Performing a database consistency and integrity check on locally stored data ... 
-Scanning the local file system '~/OneDrive' for new data to upload ...
-Performing a final true-up scan of online data from Microsoft OneDrive
-Fetching items from the OneDrive API for Drive ID: b!bO8V6s9SSk9R7mWhpIjUrotN73WlW3tEv3OxP_QfIdQimEdOHR-1So6CqeG1MfDB ..
-Processing changes and items received from Microsoft OneDrive ...
+Fetching items from the OneDrive API for Drive ID: 5c0d9e159b3310ab .. 
+No changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive
+Performing a database consistency and integrity check on locally stored data . 
+Scanning the local file system '~/OneDrive' for new data to upload . 
+Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process
+Fetching items from the OneDrive API for Drive ID: 5c0d9e159b3310ab .. 
+No changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive
 Sync with Microsoft OneDrive is complete
 ```
 Then, based on 'monitor_log_frequency', the following output will be logged until the suppression loop value is reached:
@@ -785,6 +796,18 @@ _**Value Type:**_ Boolean
 _**Default Value:**_ False
 
 _**Config Example:**_ `notify_file_actions = "true"`
+
+> [!NOTE]
+> GUI Notification Support must be compiled in first, otherwise this option will have zero effect and will not be used.
+
+### notify_monitor_start
+_**Description:**_ This configuration option controls whether the client sends a concise GUI notification when `--monitor` mode becomes active. The notification summarises the local and remote monitoring mechanisms applicable to the current configuration. Disabling this option suppresses only the monitor-start GUI notification; console startup status logging and all other GUI notifications are unaffected.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ True
+
+_**Config Example:**_ `notify_monitor_start = "false"`
 
 > [!NOTE]
 > GUI Notification Support must be compiled in first, otherwise this option will have zero effect and will not be used.
@@ -1549,12 +1572,32 @@ _**Description:**_ This CLI option will display the effective application config
 _**Usage Example:**_ `onedrive --display-config`
 
 ### CLI Option: --display-sync-status
-_**Description:**_ This CLI option will display the sync status of the configured 'sync_dir'
+_**Description:**_ Performs a read-only, point-in-time assessment of whether the configured sync scope has pending changes in either direction between Microsoft OneDrive and the local filesystem.
 
 _**Usage Example:**_ `onedrive --display-sync-status`
 
+The command reports two independent directions:
+
+- `Microsoft OneDrive -> Local filesystem` - pending remote changes determined from the stored Microsoft Graph delta position for full-scope operation, or from an authoritative read-only `/children` current-state traversal when `--single-directory` is used. This includes new items, deletions/absence, moves/renames, content changes and applicable timestamp-only differences.
+- `Local filesystem -> Microsoft OneDrive` - local filesystem differences relative to the client's stored sync database, including new files/directories, modified files, timestamp-only differences and locally missing items.
+
+The final `Overall status` is one of:
+
+- `IN SYNC` - no pending changes were detected in either direction.
+- `NOT IN SYNC` - one or more pending changes were positively identified.
+- `INDETERMINATE` - a clean result cannot be asserted because one or more items or configured remote scopes could not be fully classified.
+
+The operation does not upload, download, rename or delete content, does not modify the live sync database, and does not advance the stored delta cursor. Transfer quantities are estimates. Values below 1 KiB are displayed as exact bytes; larger values are shown as a human-readable value plus the exact byte count, for example `14.15 MB (14838177 bytes)`.
+
+Client-side filtering is honoured, and one-way modes retain their normal meaning while still reporting the opposite direction for visibility. For example, `--upload-only` can report pending remote changes even though those changes will not be downloaded, and `--download-only` can report local differences while noting that upload actions are disabled.
+
 > [!TIP]
-> This option can also use the `--single-directory` option to determine the sync status of a specific directory within the configured 'sync_dir'
+> This option can also use `--single-directory` to assess a specific directory within the configured `sync_dir`, for example: `onedrive --display-sync-status --single-directory 'Documents'`. In this mode the requested online directory is enumerated read-only with `/children` and compared with the stored database scope; the default-drive delta cursor is neither required nor advanced.
+
+> [!NOTE]
+> Full-scope configurations that cannot use the normal `/delta` feed may still be incomplete, as may separately traversed shared-folder sources outside an assessed `--single-directory` scope. A full-scope query with tracked default-drive state but no stored delta cursor is also conservative because a tokenless `/delta` response cannot prove historical deletions without mutating/rebuilding state. In these cases the command reports the limitation and returns `INDETERMINATE` unless a confirmed pending change has already established `NOT IN SYNC`. A `--single-directory` request itself uses a read-only `/children` current-state traversal and is not made indeterminate merely because normal single-directory synchronisation uses generated traversal.
+>
+> The sync state is reported in the textual `Overall status` field. `NOT IN SYNC` is an assessment result, not a command execution failure, so the process exit status should not be used as the sync-state indicator.
 
 ### CLI Option: --display-quota
 _**Description:**_ This CLI option will display the quota status of the account drive id or the configured 'drive_id' value
@@ -1675,6 +1718,21 @@ _**Usage Example:**_ `onedrive --verbose --verbose --debug-https --print-access-
 _**Description:**_ This CLI option controls the ability to re-authenticate your client with Microsoft OneDrive.
 
 _**Usage Example:**_ `onedrive --reauth`
+
+When using interactive authentication from a graphical desktop session, a specific browser can be selected by setting the `BROWSER` environment variable to the required browser executable. For example:
+
+```bash
+BROWSER=/usr/bin/microsoft-edge-stable onedrive --reauth
+```
+
+If the browser executable is available through your `PATH`, the executable name can also be used:
+
+```bash
+BROWSER=microsoft-edge-stable onedrive --reauth
+```
+
+> [!NOTE]
+> `BROWSER` is an environment variable, not an application configuration option. If the configured browser cannot be launched, the application falls back to the normal desktop browser launch mechanism. The value is treated as a browser executable name or path and is not interpreted as a shell command.
 
 ### CLI Option: --remove-directory
 _**Description:**_ This CLI option allows the user to remove the specified directory path on Microsoft OneDrive without performing a sync.

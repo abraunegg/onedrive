@@ -22,12 +22,12 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
 
     SYNC_COMPLETE_PATTERN = "Sync with Microsoft OneDrive is complete"
 
-    def _build_skip_config_text(self, sync_dir: Path) -> str:
+    def _build_skip_config_text(self, sync_dir: Path, skipped_relative: str) -> str:
         return self._build_config_text(
             sync_dir,
             sync_dir.parent / "linux-skip-client-app-logs",
             extra_config_lines=[
-                'skip_dir = "Pictures/Archive"',
+                f'skip_dir = "{skipped_relative}"',
                 'skip_dir_strict_match = "true"',
             ],
         )
@@ -94,7 +94,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         while time.time() < deadline:
             content = self._read_stdout(stdout_file)
             latest_segment = content[start_offset:]
-            if all(pattern in latest_segment for pattern in required_patterns):
+            if all(self._monitor_output_contains(latest_segment, pattern) for pattern in required_patterns):
                 return True, latest_segment
             time.sleep(poll_interval)
 
@@ -127,7 +127,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         dcim_relative = f"{root_name}/Pictures/DCIM"
         archive_relative = f"{root_name}/Pictures/Archive"
         archive_2025_relative = f"{archive_relative}/2025"
-        skipped_relative = "Pictures/Archive"
+        skipped_relative = archive_relative
 
         # Keep one file behind in DCIM to model Norbert's clarified case:
         # only selected files are moved out to the skipped archive path, while
@@ -149,7 +149,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
 
         context.prepare_minimal_config_dir(
             linux_conf,
-            self._build_skip_config_text(linux_sync_root),
+            self._build_skip_config_text(linux_sync_root, skipped_relative),
         )
         context.prepare_minimal_config_dir(
             mutator_conf,
@@ -486,7 +486,8 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                     "skip_dir" in reconcile_combined and skipped_relative in reconcile_combined
                 ),
                 "archive_download_logged_in_reconcile": any(
-                    f"Downloading file: {moved_relative}" in reconcile_combined for moved_relative in moved_files
+                    self._monitor_output_contains(reconcile_combined, f"Downloading file: {moved_relative}")
+                    for moved_relative in moved_files
                 ),
             }
         )

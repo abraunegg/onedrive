@@ -28,6 +28,7 @@ Before reading this document, please ensure you are running application version 
   - [Performing a 'one-way' download synchronisation with Microsoft OneDrive](#performing-a-one-way-download-synchronisation-with-microsoft-onedrive)
   - [Performing a 'one-way' upload synchronisation with Microsoft OneDrive](#performing-a-one-way-upload-synchronisation-with-microsoft-onedrive)
   - [Performing a selective synchronisation via 'sync_list' file](#performing-a-selective-synchronisation-via-sync_list-file)
+  - [Checking synchronisation status without performing a sync](#checking-synchronisation-status-without-performing-a-sync)
   - [Performing a --resync](#performing-a---resync)
   - [Performing a --force-sync without a --resync or changing your configuration](#performing-a---force-sync-without-a---resync-or-changing-your-configuration)
   - [Enabling the Client Activity Log](#enabling-the-client-activity-log)
@@ -365,16 +366,36 @@ This client supports the following methods to authenticate the application with 
 #### Interactive Authentication using OAuth2 and a redirect URI
 When you run the application for the first time, the recommended authentication method is interactive browser-based OAuth2 authentication. The application will direct you to the Microsoft login page, where you sign in with your Microsoft Account and grant the application permission to access your files.
 
-When the application detects that it is running inside a graphical desktop session, it will automatically open the Microsoft authorisation URL in your default browser and listen locally for the Microsoft authorisation response. In this mode, you do **not** need to manually copy and paste the redirect URI from your browser back into the terminal.
+When the application detects that it is running inside a graphical desktop session, it will automatically open the Microsoft authorisation URL and listen locally for the Microsoft authorisation response. By default, the application uses the browser configured by your desktop environment. If the `BROWSER` environment variable is set, the application will first attempt to use the browser executable specified by that variable. In this mode, you do **not** need to manually copy and paste the redirect URI from your browser back into the terminal.
 
 When no graphical desktop session is detected, or when the local browser-based authentication flow cannot be used, the application will fall back to the existing manual copy-and-paste authentication method. This fallback behaviour may also occur when running remotely via SSH, inside containers, under WSL, or when no supported browser launch mechanism is available.
 
 ##### Graphical Desktop Authentication using the Local Browser Redirect
-When running inside a supported graphical desktop environment, the application will open your default browser and wait for the Microsoft authorisation response on:
+When running inside a supported graphical desktop environment, the application will open the Microsoft authorisation URL and wait for the Microsoft authorisation response on:
 
 ```text
 http://127.0.0.1:53100/
 ```
+
+By default, the application uses the browser configured by your desktop environment. To use a specific browser for interactive authentication, set the `BROWSER` environment variable to the browser executable when starting the client. For example, to use Microsoft Edge:
+
+```bash
+BROWSER=/usr/bin/microsoft-edge-stable onedrive --reauth
+```
+
+If the browser executable is available through your `PATH`, the executable name can be used instead:
+
+```bash
+BROWSER=microsoft-edge-stable onedrive --reauth
+```
+
+The same override can be used during initial authentication by running the client without `--reauth`:
+
+```bash
+BROWSER=microsoft-edge-stable onedrive
+```
+
+If the browser configured by `BROWSER` cannot be launched, the application falls back to the normal desktop browser launch mechanism. The `BROWSER` value is treated as a browser executable name or path; it is not interpreted as a shell command.
 
 This local listener is only used during the authentication process. It binds only to the loopback interface, does not require any inbound firewall changes, and is closed once authentication has completed or failed.
 
@@ -777,8 +798,9 @@ OneDrive synchronisation interval (seconds): 300
 Maximum allowed open files (soft):           1024
 Maximum allowed open files (hard):           262144
 Maximum allowed inotify user watches:        29463
-Initialising filesystem inotify monitoring ...
+Initialising local filesystem monitoring using inotify ...
 ...
+Local filesystem monitoring using inotify is active.
 ```
 To determine what value to change to, you need to count all the files and folders in your configured 'sync_dir' location:
 ```text
@@ -1293,6 +1315,68 @@ To ensure correct behaviour, explicitly include each shared-folder shortcut path
 
 
 
+### Checking synchronisation status without performing a sync
+
+Use `--display-sync-status` when you need to determine whether the configured sync scope has pending work **without actually performing a synchronisation**:
+
+```text
+onedrive --display-sync-status
+```
+
+This command exists as a safe diagnostic alternative to running `--sync`, `--dry-run`, or especially `--resync` simply to answer the question "is this client currently in sync?". It performs a read-only point-in-time assessment in both directions:
+
+- **Microsoft OneDrive -> Local filesystem** - examines pending Microsoft Graph delta changes that would require local reconciliation, including new files and directories, remote deletions, moves or renames, file-content changes, and timestamp-only differences.
+- **Local filesystem -> Microsoft OneDrive** - compares the local filesystem with the client's stored sync database to identify new local files and directories, modified files, timestamp-only differences, locally missing items, and other changes that normal synchronisation would need to reconcile.
+
+The command does **not** upload, download, rename or delete files, does not modify the live sync database, and does not advance the stored Microsoft Graph delta cursor. This means it can be run repeatedly without consuming the pending changes it is reporting.
+
+A clean result is reported as:
+
+```text
+Synchronization status for the configured sync scope:
+
+Microsoft OneDrive -> Local filesystem
+  No pending remote changes detected.
+
+Local filesystem -> Microsoft OneDrive
+  No pending local changes detected.
+
+Overall status: IN SYNC
+No pending local or remote changes were detected for the configured sync scope.
+```
+
+When changes are pending, the relevant direction includes a summary of the work detected. Transfer quantities are estimates; for values of at least 1 KiB the client displays both a human-readable value and the exact byte count, for example:
+
+```text
+Approximate download data:    14.15 MB (14838177 bytes)
+Approximate upload data:      14.15 MB (14838177 bytes)
+```
+
+Small non-zero values are shown directly in bytes rather than being rounded down to `0 KB`.
+
+The final state has three possible values:
+
+- `IN SYNC` - no pending local or remote changes were detected for the configured scope.
+- `NOT IN SYNC` - at least one pending local or remote change was positively identified.
+- `INDETERMINATE` - no pending change was positively identified, but one or more parts of the configured scope could not be assessed completely enough to assert a clean state.
+
+`INDETERMINATE` is intentionally conservative. A `--single-directory` status request is assessed differently from a full-drive query: the client performs a read-only `/children` traversal of the requested online directory, compares that authoritative current-state tree with the stored database scope, and resolves tracked items missing from the tree as deleted or moved out of scope. Full-scope configurations that cannot use the normal `/delta` feed, a full-scope query with tracked state but no stored delta cursor, or separately traversed shared-folder sources that are not covered by the requested scope may still be incomplete; any such limitation is printed with the result.
+
+Client-side filtering is honoured. Items excluded by `skip_file`, `skip_dir`, `sync_list`, `skip_dotfiles`, `check_nosync`, or applicable size limits are not treated as pending work for the configured sync scope. One-way modes are also reflected in the output: `--upload-only` still reports remote changes for visibility, while `--download-only` still reports local differences but notes that uploads are disabled.
+
+To assess only one configured directory, combine the command with `--single-directory`:
+
+```text
+onedrive --display-sync-status --single-directory 'Documents'
+```
+
+For this scoped form the client does not consume the default-drive delta cursor. It builds the current online directory tree directly, compares that tree with the tracked database state for the same scope, and can therefore detect new/changed items, moves within or out of the scope, and tracked items that are no longer present online.
+
+> [!IMPORTANT]
+> `--display-sync-status` reports its assessment in the textual `Overall status` field. A `NOT IN SYNC` result is not itself a command execution failure, so do not use the process exit status as a substitute for parsing the reported sync state.
+>
+> The result is a point-in-time reconciliation assessment based on the current local filesystem, the client's stored sync database and the remote change feed. It is not a byte-for-byte comparison of every object stored in Microsoft OneDrive.
+
 ### Performing a --resync
 A `--resync` operation instructs the client to delete its local state database and fully rebuild it from the current online OneDrive contents. This is a powerful recovery and re-alignment action that should be used **sparingly** and **with care**.
 
@@ -1674,6 +1758,15 @@ Additionally, GUI notifications can also be sent for the following activities:
 To enable these specific notifications, add the following to your 'config' file:
 ```
 notify_file_actions = "true"
+```
+
+When running in `--monitor` mode, the client sends a concise GUI notification when monitor mode becomes active. The notification summarises the local and remote monitoring mechanisms applicable to the current configuration, for example:
+```
+Monitor mode active — inotify enabled, WebSocket enabled
+```
+To disable *only* this monitor-start notification while retaining the detailed console startup status and all other GUI notifications, add the following to your 'config' file:
+```
+notify_monitor_start = "false"
 ```
 
 To disable *all* GUI notifications, add the following to your 'config' file:
@@ -2071,7 +2164,20 @@ Refer to [advanced-usage.md](advanced-usage.md) for configuration instructions.
 
 ### How to Receive Real-time Changes from Microsoft OneDrive Service, instead of waiting for the next sync period?
 
-Refer to [webhooks.md](webhooks.md) for configuration instructions.
+When running in `--monitor` mode, the client can receive Microsoft OneDrive API change signals using either its built-in WebSocket support or the optional webhook capability. These signals allow an online change to trigger a synchronisation cycle as soon as possible, rather than relying only on the next scheduled `monitor_interval`.
+
+**WebSocket support is the default near real-time notification mechanism.** Where the installed curl/libcurl version provides the required WebSocket capability, the client will automatically attempt to establish a WebSocket subscription to Microsoft Graph. No public listener, reverse proxy, or additional webhook configuration is required.
+
+If WebSocket support is unsuitable for your environment, it can be disabled by setting:
+
+```text
+disable_websocket_support = "true"
+```
+
+**Webhooks provide an alternative notification mechanism** and require explicit configuration, including a public URL that Microsoft can reach. When webhooks are enabled, WebSocket support is not used because only one Microsoft Graph API notification mechanism is active for a client instance at a time. Refer to [webhooks.md](webhooks.md) for webhook configuration instructions.
+
+> [!NOTE]
+> WebSocket and webhook notifications are change **signals**; they do not contain the complete synchronisation data. When a signal is received, the client queries Microsoft OneDrive through the Microsoft Graph API and performs the normal reconciliation process. The configured `monitor_interval` remains the scheduled fallback so that synchronisation does not depend solely on receipt of a near real-time notification.
 
 ### How to initiate the client as a background service?
 There are a few ways to employ onedrive as a service:

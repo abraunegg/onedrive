@@ -45,6 +45,34 @@ version (FreeBSD) {
 	private immutable bool triggerFileCreateAsChanged = false;
 }
 
+version (linux) {
+	// Linux normally requires IN_CLOSE_WRITE before a regular file is actionable.
+	// Some local writers finalise a completed temporary file by creating a second
+	// pathname and then removing the temporary pathname. Linux reports that as:
+	//
+	//   IN_CREATE source
+	//   IN_CLOSE_WRITE source
+	//   IN_CREATE destination
+	//   IN_DELETE source
+	//
+	// rather than IN_MOVED_FROM/IN_MOVED_TO. Keep a deliberately narrow,
+	// capture-local state machine so the destination can inherit the already
+	// observed write-completion signal without making generic Linux IN_CREATE
+	// events actionable.
+	private enum LinuxFileHandoffStage : ubyte {
+		none,
+		sourceCreated,
+		sourceClosed,
+		destinationCreated
+	}
+
+	private struct LinuxFileHandoffCandidate {
+		LinuxFileHandoffStage stage = LinuxFileHandoffStage.none;
+		string sourcePath;
+		string destinationPath;
+	}
+}
+
 class MonitorException: ErrnoException {
 	@safe this(string msg, string file = __FILE__, size_t line = __LINE__) {
 		super(msg, file, line);
@@ -1284,6 +1312,13 @@ final class Monitor {
 
 	// Capture and coalesce inotify observations. No remote operation is executed here.
 	void capture(string invocationSource = "unspecified", string parentLogKey = "") {
+		version (linux) {
+			// Deliberately scoped to one capture/drain. A completed-file hand-off is
+			// only promoted when its complete event sequence is observed together.
+			// Incomplete or ambiguous sequences expire without changing behaviour.
+			LinuxFileHandoffCandidate[int] linuxFileHandoffCandidates;
+		}
+
 		// Observation-only counters for this invocation
 		size_t readBatchCount = 0;
 		size_t eventBatchCount = 0;
@@ -1389,6 +1424,9 @@ final class Monitor {
 					// skip events that need to be ignored
 					if (event.mask & IN_IGNORED) {
 						ignoredEventCount++;
+						version (linux) {
+							linuxFileHandoffCandidates.remove(event.wd);
+						}
 						// Forget both directions of the watch bookkeeping entry.
 						string ignoredPath;
 						unregisterWatchDescriptor(event.wd, ignoredPath);
@@ -1401,6 +1439,9 @@ final class Monitor {
 
 					// if the event is not to be ignored, obtain path
 					if (!getPath(event, path)) {
+						version (linux) {
+							linuxFileHandoffCandidates.remove(event.wd);
+						}
 						goto skip;
 					}
 					// A client download is written to a filtered '.partial' path and then
@@ -1423,6 +1464,11 @@ final class Monitor {
 						if (!(expectedMoveSourceEvent || expectedMoveDestinationEvent) && selectiveSync.isDirNameExcluded(evalPath)) {
 							// The path to evaluate matches a path that the user has configured to skip
 							filteredEventCount++;
+							version (linux) {
+								// A filtered event still breaks adjacency for the strict Linux
+								// completed-file hand-off sequence.
+								linuxFileHandoffCandidates.remove(event.wd);
+							}
 							goto skip;
 						}
 					} else {
@@ -1431,6 +1477,9 @@ final class Monitor {
 						if (!(expectedMoveSourceEvent || expectedMoveDestinationEvent) && selectiveSync.isFileNameExcluded(evalPath)) {
 							// The path to evaluate matches a path that the user has configured to skip
 							filteredEventCount++;
+							version (linux) {
+								linuxFileHandoffCandidates.remove(event.wd);
+							}
 							goto skip;
 						}
 					}
@@ -1439,12 +1488,20 @@ final class Monitor {
 					if (!(expectedMoveSourceEvent || expectedMoveDestinationEvent) && selectiveSync.isPathExcludedViaSyncList(path)) {
 						// The path to evaluate matches a directory or file that the user has configured not to include in the sync
 						filteredEventCount++;
+						version (linux) {
+							linuxFileHandoffCandidates.remove(event.wd);
+						}
 						goto skip;
 					}
 					
 					// handle the inotify events
 					if (event.mask & IN_MOVED_FROM) {
 						if (debugLogging) {addLogEntry("event IN_MOVED_FROM: " ~ path, ["debug"]);}
+						version (linux) {
+							// A real move is authoritative and must never be reclassified as the
+							// create/close/create/delete hand-off handled below.
+							linuxFileHandoffCandidates.remove(event.wd);
+						}
 						if (consumeExpectedRemovalObservation(path)) {
 							// Online-to-local deletion/recycle-bin move. Do not turn it into local intent.
 							if (event.mask & IN_ISDIR) remove(path);
@@ -1454,6 +1511,9 @@ final class Monitor {
 						}
 					} else if (event.mask & IN_MOVED_TO) {
 						if (debugLogging) {addLogEntry("event IN_MOVED_TO: " ~ path, ["debug"]);}
+						version (linux) {
+							linuxFileHandoffCandidates.remove(event.wd);
+						}
 						auto from = event.cookie in cookieToPath;
 						if (from) {
 							string sourcePath = *from;
@@ -1489,6 +1549,12 @@ final class Monitor {
 					} else if (event.mask & IN_CREATE) {
 						if (debugLogging) {addLogEntry("event IN_CREATE: " ~ path, ["debug"]);}
 						if (event.mask & IN_ISDIR) {
+							version (linux) {
+								// Keep the Linux hand-off matcher intentionally strict. Any
+								// directory activity on this watch breaks the file-only sequence.
+								linuxFileHandoffCandidates.remove(event.wd);
+							}
+
 							// fix from #2586
 							auto cookieToPath1 = cookieToPath.dup();
 							foreach (cookie, path1; cookieToPath1) {
@@ -1517,6 +1583,32 @@ final class Monitor {
 							// OpenBSD, a genuine local file write may be represented only by
 							// IN_CREATE, with no subsequent IN_CLOSE_WRITE event.
 							bool expectedFileArrival = consumeExpectedFileArrival(path);
+
+							version (linux) {
+								string normalisedPath = normaliseMonitorPath(path);
+								auto candidate = event.wd in linuxFileHandoffCandidates;
+
+								if (expectedFileArrival || (event.cookie != 0)) {
+									// Expected client writes and cookie-bearing events are not local
+									// create-only hand-offs. Do not allow them to bridge the sequence.
+									linuxFileHandoffCandidates.remove(event.wd);
+								} else if ((candidate !is null) &&
+								           ((*candidate).stage == LinuxFileHandoffStage.sourceClosed) &&
+								           ((*candidate).sourcePath != normalisedPath)) {
+									// The immediately preceding locally-created source has already
+									// produced IN_CLOSE_WRITE. Keep this destination provisional until
+									// the source is deleted; IN_CREATE alone is still not actionable.
+									(*candidate).stage = LinuxFileHandoffStage.destinationCreated;
+									(*candidate).destinationPath = normalisedPath;
+								} else {
+									// Start (or restart) the strict sequence with this local create.
+									LinuxFileHandoffCandidate newCandidate;
+									newCandidate.stage = LinuxFileHandoffStage.sourceCreated;
+									newCandidate.sourcePath = normalisedPath;
+									linuxFileHandoffCandidates[event.wd] = newCandidate;
+								}
+							}
+
 							if (!expectedFileArrival && triggerFileCreateAsChanged) {
 								if (debugLogging) {addLogEntry("Treating file IN_CREATE as an actionable local change on this platform: " ~ path, ["debug"]);}
 								pendingChanges.append(LocalChangeType.changed, path);
@@ -1524,6 +1616,9 @@ final class Monitor {
 						}
 					} else if (event.mask & IN_DELETE_SELF) {
 						if (debugLogging) {addLogEntry("event IN_DELETE_SELF: " ~ path, ["debug"]);}
+						version (linux) {
+							linuxFileHandoffCandidates.remove(event.wd);
+						}
 						removeWatchTree(path);
 						if (!consumeExpectedRemovalObservation(path)) {
 							pendingChanges.append(LocalChangeType.deleted, path);
@@ -1533,15 +1628,63 @@ final class Monitor {
 						// are reconciled via the matching parent IN_MOVED_FROM/IN_MOVED_TO
 						// cookie pair, where the watch tree is rebased to the new path.
 						if (debugLogging) {addLogEntry("event IN_MOVE_SELF: " ~ path, ["debug"]);}
+						version (linux) {
+							linuxFileHandoffCandidates.remove(event.wd);
+						}
 					} else if (event.mask & IN_DELETE) {
-						if (consumeExpectedRemovalObservation(path)) {
-							// Online-to-local removal echo consumed.
-						} else if (path in movedNotDeleted) {
-							suppressedMoveDeleteCount++;
-							movedNotDeleted.remove(path); // Ignore delete for moved files
+						version (linux) {
+							bool expectedRemovalObservation = consumeExpectedRemovalObservation(path);
+							bool suppressMovedDelete = (path in movedNotDeleted) !is null;
+							string linuxHandoffDestination;
+							auto candidate = event.wd in linuxFileHandoffCandidates;
+							string normalisedPath = normaliseMonitorPath(path);
+
+							if (!expectedRemovalObservation && !suppressMovedDelete &&
+							    (event.cookie == 0) &&
+							    (candidate !is null) &&
+							    ((*candidate).stage == LinuxFileHandoffStage.destinationCreated) &&
+							    ((*candidate).sourcePath == normalisedPath) &&
+							    !(*candidate).destinationPath.empty &&
+							    exists((*candidate).destinationPath) &&
+							    isFile((*candidate).destinationPath)) {
+								linuxHandoffDestination = (*candidate).destinationPath;
+							}
+
+							// Whether promoted or rejected, the source deletion terminates this
+							// strict candidate. Never allow it to match a later unrelated create.
+							linuxFileHandoffCandidates.remove(event.wd);
+
+							if (expectedRemovalObservation) {
+								// Online-to-local removal echo consumed.
+							} else if (suppressMovedDelete) {
+								suppressedMoveDeleteCount++;
+								movedNotDeleted.remove(path); // Ignore delete for moved files
+							} else {
+								if (debugLogging) {addLogEntry("event IN_DELETE: " ~ path, ["debug"]);}
+								pendingChanges.append(LocalChangeType.deleted, path);
+
+								if (!linuxHandoffDestination.empty) {
+									if (debugLogging) {
+										addLogEntry(
+											"Linux completed-file hand-off detected: " ~
+											normalisedPath ~ " -> " ~ linuxHandoffDestination,
+											["debug"]
+										);
+									}
+									pendingChanges.append(LocalChangeType.changed, linuxHandoffDestination);
+								}
+							}
 						} else {
-							if (debugLogging) {addLogEntry("event IN_DELETE: " ~ path, ["debug"]);}
-							pendingChanges.append(LocalChangeType.deleted, path);
+							// Preserve the existing non-Linux delete behaviour unchanged.
+							if (consumeExpectedRemovalObservation(path)) {
+								// Online-to-local removal echo consumed.
+							} else if (path in movedNotDeleted) {
+								suppressedMoveDeleteCount++;
+								movedNotDeleted.remove(path); // Ignore delete for moved files
+							} else {
+								if (debugLogging) {addLogEntry("event IN_DELETE: " ~ path, ["debug"]);}
+								pendingChanges.append(LocalChangeType.deleted, path);
+							}
 						}
 					} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
 						if (debugLogging) {addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);}
@@ -1552,8 +1695,32 @@ final class Monitor {
 								cookieToPath.remove(cookie);
 							}
 						}
-						if (!consumeExpectedFileArrival(path)) {
-							pendingChanges.append(LocalChangeType.changed, path);
+
+						version (linux) {
+							bool expectedFileArrival = consumeExpectedFileArrival(path);
+							auto candidate = event.wd in linuxFileHandoffCandidates;
+							string normalisedPath = normaliseMonitorPath(path);
+
+							if (!expectedFileArrival && (event.cookie == 0) &&
+							    (candidate !is null) &&
+							    ((*candidate).stage == LinuxFileHandoffStage.sourceCreated) &&
+							    ((*candidate).sourcePath == normalisedPath)) {
+								(*candidate).stage = LinuxFileHandoffStage.sourceClosed;
+							} else {
+								// A close on any other path breaks the strict sequence. A close
+								// on the provisional destination also makes the special case
+								// unnecessary because normal IN_CLOSE_WRITE handling is sufficient.
+								linuxFileHandoffCandidates.remove(event.wd);
+							}
+
+							if (!expectedFileArrival) {
+								pendingChanges.append(LocalChangeType.changed, path);
+							}
+						} else {
+							// Preserve the existing non-Linux close-write behaviour unchanged.
+							if (!consumeExpectedFileArrival(path)) {
+								pendingChanges.append(LocalChangeType.changed, path);
+							}
 						}
 					} else {
 						// An unexpected event-mask combination must not terminate the

@@ -9,7 +9,7 @@ import std.concurrency;
 import std.conv;
 import std.datetime;
 import std.exception;
-import std.process : spawnProcess, Config;
+import std.process : environment, spawnProcess, Config;
 import std.stdio : File;
 import std.socket;
 import std.string;
@@ -71,6 +71,28 @@ ushort findAvailableLocalAuthPort() {
 }
 
 bool openUrlInDefaultBrowser(string url) {
+	string browser = environment.get("BROWSER", "").strip;
+	if (!browser.empty) {
+		try {
+			auto devNullIn = File("/dev/null", "r");
+			auto devNullOut = File("/dev/null", "w");
+			auto devNullErr = File("/dev/null", "w");
+
+			spawnProcess(
+				[browser, url],
+				devNullIn,
+				devNullOut,
+				devNullErr,
+				null,
+				Config.detached
+			);
+
+			return true;
+		} catch (Exception e) {
+			addLogEntry("Unable to open the authorisation URL with the browser configured by BROWSER ('" ~ browser ~ "'): " ~ e.msg ~ ". Falling back to xdg-open.", ["debug"]);
+		}
+	}
+
 	try {
 		auto devNullIn = File("/dev/null", "r");
 		auto devNullOut = File("/dev/null", "w");

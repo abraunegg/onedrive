@@ -71,7 +71,7 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
 
         while time.time() < deadline:
             content = self._read_stdout(stdout_file)
-            if all(pattern in content for pattern in required_patterns):
+            if all(self._monitor_output_contains(content, pattern) for pattern in required_patterns):
                 return True
             time.sleep(poll_interval)
 

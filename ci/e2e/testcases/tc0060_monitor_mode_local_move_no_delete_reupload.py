@@ -57,7 +57,7 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         while time.time() < deadline:
             content = self._read_stdout(stdout_file)
             latest_segment = content[start_offset:]
-            if all(pattern in latest_segment for pattern in required_patterns):
+            if all(self._monitor_output_contains(latest_segment, pattern) for pattern in required_patterns):
                 return True, latest_segment
             time.sleep(poll_interval)
 
