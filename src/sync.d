@@ -8759,11 +8759,9 @@ class SyncEngine {
 					// This is a valid JSON object
 					// Perform the upload using the session that has been created
 					try {
-						// so that we have this data available if we need to re-create the session
-						// - targetDriveId, targetParentId, baseName(localFilePath), currentOnlineItemData.eTag, threadUploadSessionFilePath
+						// Ensure the remote targeting data required to re-create the session is available in-memory
 						uploadSessionData["targetDriveId"] = targetDriveId;
 						uploadSessionData["targetParentId"] = targetParentId;
-						uploadSessionData["currentETag"] = currentOnlineItemData.eTag;
 
 						// attempt the session upload using the session data provided
 						uploadTransferStartTime = Clock.currTime();
@@ -11643,9 +11641,6 @@ class SyncEngine {
 				uploadSession["localPath"] = fileToUpload;
 				uploadSession["targetDriveId"] = parentDriveId;
 				uploadSession["targetParentId"] = parentId;
-				if (!eTag.empty) {
-					uploadSession["currentETag"] = eTag;
-				}
 
 				// Save the complete session state before any fragment upload begins
 				saveSessionFile(threadUploadSessionFilePath, uploadSession);
@@ -16570,6 +16565,21 @@ class SyncEngine {
 			// Display function processing time if configured to do so
 			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+
+			// return session file is invalid
+			return false;
+		}
+
+		// The current session format requires the remote targeting data needed to re-create
+		// an upload session after a resumed fragment receives a 403/404 response.
+		if (!("targetDriveId" in sessionFileData) || (sessionFileData["targetDriveId"].type() != JSONType.string) || sessionFileData["targetDriveId"].str.empty ||
+			!("targetParentId" in sessionFileData) || (sessionFileData["targetParentId"].type() != JSONType.string) || sessionFileData["targetParentId"].str.empty) {
+			if (debugLogging) {addLogEntry("SESSION-RESUME: Missing or invalid targetDriveId/targetParentId data in: " ~ sessionFilePath, ["debug"]);}
+
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 			}
 
