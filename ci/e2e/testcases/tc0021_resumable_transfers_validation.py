@@ -1837,10 +1837,16 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         # only the session upload under test.
         app_log_file.unlink(missing_ok=True)
 
+        # RT-0004 validates the real Microsoft response and upload-session GUID
+        # continuity during replacement. Those diagnostics require the client's
+        # double-verbose logging level, so use --verbose --verbose for the
+        # modified-upload phase being inspected. This does not inject or
+        # manufacture any API response.
         modify_command = [
             context.onedrive_bin,
             "--display-running-config",
             "--sync",
+            "--verbose",
             "--verbose",
             "--single-directory",
             f"{root_name}/{scenario_id}",
