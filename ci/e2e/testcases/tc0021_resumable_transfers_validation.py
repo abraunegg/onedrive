@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import base64
 import os
+import random
 import re
 import signal
 import subprocess
 import time
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,13 +31,20 @@ class ScenarioResult:
 class TestCase0021ResumableTransfersValidation(E2ETestCase):
     case_id = "0021"
     name = "resumable transfers validation"
-    description = "Validate interrupted upload and download recovery for resumable transfers"
+    description = "Validate resumable transfers and modified multi-fragment upload-session replacement"
 
     LARGE_FILE_SIZE = 100 * 1024 * 1024
     INTERRUPT_THRESHOLD_PERCENT = 15.0
     TRANSFER_WAIT_TIMEOUT = 300
     PROCESS_EXIT_TIMEOUT = 120
     PHASE_COMMAND_TIMEOUT = 1200
+
+    XLSX_FRAGMENT_SIZE_BYTES = 10 * 1024 * 1024
+    XLSX_MIN_SIZE_BYTES = 2 * XLSX_FRAGMENT_SIZE_BYTES
+    XLSX_RANDOM_PAYLOAD_ROWS = 1000
+    XLSX_RANDOM_PAYLOAD_BYTES_PER_ROW = 24_000
+    XLSX_REVISION_0 = "E2E-REVISION-0000"
+    XLSX_REVISION_1 = "E2E-REVISION-0001"
 
     # Use 10 MB/s to deliberately slow both upload and download so the 15% threshold
     # is reached with ample time to deliver SIGINT before the transfer can complete.
@@ -52,6 +62,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         config_path: Path,
         sync_dir: Path,
         app_log_dir: Path,
+        extra_config_lines: list[str] | None = None,
     ) -> None:
         lines = [
             "# tc0021 config",
@@ -64,6 +75,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             lines.append(f'rate_limit = "{self.RATE_LIMIT}"')
         if self.FORCE_XFER_ABORT:
             lines.append('force_xfer_abort = "true"')
+        if extra_config_lines:
+            lines.extend(extra_config_lines)
         write_onedrive_config(config_path, "\n".join(lines) + "\n")
 
     def _read_text_if_exists(self, path: Path) -> str:
@@ -96,6 +109,179 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             remainder = size_bytes % len(chunk)
             if remainder:
                 fp.write(chunk[:remainder])
+
+    def _create_random_xlsx(self, path: Path, seed: str) -> dict:
+        """
+        Create a real XLSX package without external Python dependencies.
+
+        Cell A1 carries a fixed revision marker used by the mutation and
+        verification phases. The remaining rows contain deterministic
+        high-entropy base64 payloads generated from the supplied per-run seed,
+        preventing ZIP compression from collapsing the workbook below the
+        multi-fragment session-upload boundary.
+        """
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rng = random.Random(seed)
+
+        content_types = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>
+'''
+        package_rels = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>
+'''
+        workbook = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Issue3859" sheetId="1" r:id="rId1"/></sheets>
+</workbook>
+'''
+        workbook_rels = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>
+'''
+        core_props = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <dc:title>TC0021 session replacement workbook</dc:title>
+  <dc:creator>OneDrive E2E Harness</dc:creator>
+</cp:coreProperties>
+'''
+        app_props = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>OneDrive E2E Harness</Application>
+</Properties>
+'''
+
+        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+            archive.writestr("[Content_Types].xml", content_types)
+            archive.writestr("_rels/.rels", package_rels)
+            archive.writestr("xl/workbook.xml", workbook)
+            archive.writestr("xl/_rels/workbook.xml.rels", workbook_rels)
+            archive.writestr("docProps/core.xml", core_props)
+            archive.writestr("docProps/app.xml", app_props)
+
+            with archive.open("xl/worksheets/sheet1.xml", "w") as sheet:
+                sheet.write(
+                    b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+                    b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">\n'
+                    b'<sheetData>\n'
+                )
+                sheet.write(
+                    (
+                        '<row r="1"><c r="A1" t="inlineStr"><is><t>'
+                        f'{self.XLSX_REVISION_0}'
+                        '</t></is></c></row>\n'
+                    ).encode("utf-8")
+                )
+
+                for row_index in range(2, self.XLSX_RANDOM_PAYLOAD_ROWS + 2):
+                    payload = base64.b64encode(
+                        rng.randbytes(self.XLSX_RANDOM_PAYLOAD_BYTES_PER_ROW)
+                    ).decode("ascii")
+                    sheet.write(
+                        (
+                            f'<row r="{row_index}"><c r="A{row_index}" t="inlineStr">'
+                            f'<is><t>{payload}</t></is></c></row>\n'
+                        ).encode("ascii")
+                    )
+
+                sheet.write(b'</sheetData>\n</worksheet>\n')
+
+        validation_error = self._validate_xlsx(path, self.XLSX_REVISION_0)
+        if validation_error:
+            raise RuntimeError(validation_error)
+
+        return {
+            "seed": seed,
+            "payload_rows": self.XLSX_RANDOM_PAYLOAD_ROWS,
+            "payload_bytes_per_row": self.XLSX_RANDOM_PAYLOAD_BYTES_PER_ROW,
+            "size_bytes": path.stat().st_size,
+            "revision": self.XLSX_REVISION_0,
+        }
+
+    def _validate_xlsx(self, path: Path, expected_revision: str) -> str:
+        required_members = {
+            "[Content_Types].xml",
+            "_rels/.rels",
+            "xl/workbook.xml",
+            "xl/_rels/workbook.xml.rels",
+            "xl/worksheets/sheet1.xml",
+        }
+
+        if not path.is_file():
+            return f"XLSX file does not exist: {path}"
+
+        try:
+            with zipfile.ZipFile(path, "r") as archive:
+                names = set(archive.namelist())
+                missing = sorted(required_members - names)
+                if missing:
+                    return f"XLSX package is missing required members: {', '.join(missing)}"
+                corrupt_member = archive.testzip()
+                if corrupt_member is not None:
+                    return f"XLSX package contains corrupt ZIP member: {corrupt_member}"
+                sheet_xml = archive.read("xl/worksheets/sheet1.xml")
+        except (OSError, zipfile.BadZipFile) as exc:
+            return f"Unable to validate XLSX package: {exc}"
+
+        if expected_revision.encode("utf-8") not in sheet_xml:
+            return f"XLSX worksheet does not contain expected revision marker: {expected_revision}"
+
+        return ""
+
+    def _mutate_xlsx_revision(self, path: Path) -> None:
+        """
+        Modify the already-uploaded XLSX in place while preserving all other
+        package members, including any SharePoint enrichment added after the
+        first upload. The revision markers are the same length, so the test
+        changes workbook content without using file-size inflation as mutation.
+        """
+        temp_path = path.with_name(path.name + ".mutating")
+        old_marker = self.XLSX_REVISION_0.encode("utf-8")
+        new_marker = self.XLSX_REVISION_1.encode("utf-8")
+        replacement_count = 0
+
+        try:
+            with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(temp_path, "w") as target:
+                for info in source.infolist():
+                    data = source.read(info.filename)
+                    if info.filename == "xl/worksheets/sheet1.xml":
+                        replacement_count = data.count(old_marker)
+                        data = data.replace(old_marker, new_marker, 1)
+                    target.writestr(info, data)
+
+            if replacement_count != 1:
+                raise RuntimeError(
+                    f"Expected exactly one XLSX revision marker before mutation; found {replacement_count}"
+                )
+
+            os.replace(temp_path, path)
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+        validation_error = self._validate_xlsx(path, self.XLSX_REVISION_1)
+        if validation_error:
+            raise RuntimeError(validation_error)
+
+    def _extract_upload_session_guids(self, text: str) -> list[str]:
+        guids: list[str] = []
+        for line in text.splitlines():
+            if "HTTP put request to URL:" not in line or "uploadSession?guid='" not in line:
+                continue
+            match = re.search(r"uploadSession\?guid='([^']+)'", line)
+            if match:
+                guids.append(match.group(1))
+        return guids
 
     def _contains_any_marker(self, text: str, markers: list[str]) -> bool:
         return any(marker in text for marker in markers)
@@ -1418,6 +1604,474 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         return self._scenario_pass(scenario_id, description, artifacts, details)
 
+    def _run_modified_xlsx_session_replacement_scenario(
+        self,
+        context: E2EContext,
+        root_name: str,
+        scenario_work_dir: Path,
+        scenario_log_dir: Path,
+        scenario_state_dir: Path,
+    ) -> ScenarioResult:
+        scenario_id = "RT-0004"
+        description = "modified multi-fragment XLSX upload session replacement"
+
+        sync_root = scenario_work_dir / "syncroot"
+        verify_root = scenario_work_dir / "verifyroot"
+        conf_dir = scenario_work_dir / "conf"
+        verify_conf_dir = scenario_work_dir / "verify-conf"
+        app_log_dir = scenario_log_dir / "app-logs"
+        verify_app_log_dir = scenario_log_dir / "verify-app-logs"
+
+        reset_directory(sync_root)
+        reset_directory(verify_root)
+        reset_directory(conf_dir)
+        reset_directory(verify_conf_dir)
+        context.bootstrap_config_dir(conf_dir)
+        context.bootstrap_config_dir(verify_conf_dir)
+
+        self._write_config(
+            conf_dir / "config",
+            sync_root,
+            app_log_dir,
+            extra_config_lines=['file_fragment_size = "10"'],
+        )
+        self._write_config(
+            verify_conf_dir / "config",
+            verify_root,
+            verify_app_log_dir,
+            extra_config_lines=['file_fragment_size = "10"'],
+        )
+
+        app_log_file = self._phase_app_log_file(app_log_dir)
+        verify_app_log_file = self._phase_app_log_file(verify_app_log_dir)
+
+        relative_path = f"{root_name}/{scenario_id}/session-replacement.xlsx"
+        local_file = sync_root / relative_path
+        verify_file = verify_root / relative_path
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:{scenario_id}:{os.getpid()}"
+
+        seed_stdout = scenario_log_dir / "seed_stdout.log"
+        seed_stderr = scenario_log_dir / "seed_stderr.log"
+        modify_stdout = scenario_log_dir / "modify_stdout.log"
+        modify_stderr = scenario_log_dir / "modify_stderr.log"
+        verify_stdout = scenario_log_dir / "verify_stdout.log"
+        verify_stderr = scenario_log_dir / "verify_stderr.log"
+        metadata_file = scenario_state_dir / "metadata.txt"
+        pre_modify_state_file = scenario_state_dir / "pre_modify_state.txt"
+        post_modify_state_file = scenario_state_dir / "post_modify_state.txt"
+        session_guid_file = scenario_state_dir / "session_guid_sequence.txt"
+        verify_manifest_file = scenario_state_dir / "verify_manifest.txt"
+
+        artifacts = [
+            str(seed_stdout),
+            str(seed_stderr),
+            str(modify_stdout),
+            str(modify_stderr),
+            str(verify_stdout),
+            str(verify_stderr),
+            str(metadata_file),
+            str(pre_modify_state_file),
+            str(post_modify_state_file),
+            str(session_guid_file),
+            str(verify_manifest_file),
+        ]
+
+        try:
+            generated = self._create_random_xlsx(local_file, xlsx_seed)
+        except Exception as exc:
+            details = {
+                "scenario_id": scenario_id,
+                "xlsx_seed": xlsx_seed,
+                "generation_error": str(exc),
+            }
+            write_text_file(metadata_file, f"generation_error={exc}\n")
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Failed to generate runtime XLSX fixture: {exc}",
+                artifacts,
+                details,
+            )
+
+        generated_size = local_file.stat().st_size
+        write_text_file(
+            pre_modify_state_file,
+            "\n".join(
+                [
+                    f"xlsx_seed={xlsx_seed}",
+                    f"generated_size={generated_size}",
+                    f"generated_revision={self.XLSX_REVISION_0}",
+                    f"payload_rows={generated['payload_rows']}",
+                    f"payload_bytes_per_row={generated['payload_bytes_per_row']}",
+                ]
+            )
+            + "\n",
+        )
+
+        if generated_size <= self.XLSX_MIN_SIZE_BYTES:
+            details = {
+                "scenario_id": scenario_id,
+                "xlsx_seed": xlsx_seed,
+                "generated_size": generated_size,
+                "required_minimum_size": self.XLSX_MIN_SIZE_BYTES + 1,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Generated XLSX did not exceed two 10 MiB fragments; multi-fragment regression coverage is not guaranteed",
+                artifacts,
+                details,
+            )
+
+        seed_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(conf_dir),
+        ]
+        seed_result = self._run_and_capture(
+            context,
+            f"{scenario_id} seed",
+            seed_command,
+            seed_stdout,
+            seed_stderr,
+        )
+
+        if seed_result.returncode != 0:
+            details = {
+                "scenario_id": scenario_id,
+                "seed_returncode": seed_result.returncode,
+                "relative_path": relative_path,
+                "generated_size": generated_size,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Initial XLSX seed upload failed with status {seed_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        canonical_validation_error = self._validate_xlsx(local_file, self.XLSX_REVISION_0)
+        if canonical_validation_error:
+            details = {
+                "scenario_id": scenario_id,
+                "seed_returncode": seed_result.returncode,
+                "relative_path": relative_path,
+                "canonical_validation_error": canonical_validation_error,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Post-seed local XLSX is not a valid canonical workbook: {canonical_validation_error}",
+                artifacts,
+                details,
+            )
+
+        canonical_size_before_modify = local_file.stat().st_size
+        if canonical_size_before_modify <= self.XLSX_MIN_SIZE_BYTES:
+            details = {
+                "scenario_id": scenario_id,
+                "relative_path": relative_path,
+                "canonical_size_before_modify": canonical_size_before_modify,
+                "required_minimum_size": self.XLSX_MIN_SIZE_BYTES + 1,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Canonical XLSX after initial upload/enrichment no longer exceeds the multi-fragment boundary",
+                artifacts,
+                details,
+            )
+
+        try:
+            self._mutate_xlsx_revision(local_file)
+        except Exception as exc:
+            details = {
+                "scenario_id": scenario_id,
+                "relative_path": relative_path,
+                "mutation_error": str(exc),
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Failed to mutate the canonical XLSX in place: {exc}",
+                artifacts,
+                details,
+            )
+
+        modified_size = local_file.stat().st_size
+        write_text_file(
+            post_modify_state_file,
+            "\n".join(
+                [
+                    f"canonical_size_before_modify={canonical_size_before_modify}",
+                    f"modified_size={modified_size}",
+                    f"modified_revision={self.XLSX_REVISION_1}",
+                ]
+            )
+            + "\n",
+        )
+
+        if modified_size <= self.XLSX_MIN_SIZE_BYTES:
+            details = {
+                "scenario_id": scenario_id,
+                "relative_path": relative_path,
+                "modified_size": modified_size,
+                "required_minimum_size": self.XLSX_MIN_SIZE_BYTES + 1,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Modified XLSX no longer exceeds the multi-fragment session-upload boundary",
+                artifacts,
+                details,
+            )
+
+        # The seed upload has already written this application's log. Remove it
+        # before the modified-file phase so the GUID sequence below contains
+        # only the session upload under test.
+        app_log_file.unlink(missing_ok=True)
+
+        modify_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(conf_dir),
+        ]
+        modify_result = self._run_and_capture(
+            context,
+            f"{scenario_id} modified upload",
+            modify_command,
+            modify_stdout,
+            modify_stderr,
+        )
+
+        modify_app_log_text = self._read_text_if_exists(app_log_file)
+        combined_modify_output = (
+            modify_result.stdout + "\n" + modify_result.stderr + "\n" + modify_app_log_text
+        )
+        session_guids = self._extract_upload_session_guids(
+            modify_app_log_text if modify_app_log_text else combined_modify_output
+        )
+        write_text_file(session_guid_file, "\n".join(session_guids) + ("\n" if session_guids else ""))
+
+        upload_session_not_found_seen = (
+            "The upload session was not found" in combined_modify_output
+            and "itemNotFound" in combined_modify_output
+        )
+        replacement_adopted_seen = (
+            "Adopted replacement upload session after 404; restarting from offset: 0"
+            in combined_modify_output
+        )
+        name_already_exists_seen = "nameAlreadyExists" in combined_modify_output
+        safe_backup_seen = "safeBackup" in combined_modify_output
+        modified_upload_done_seen = (
+            f"Uploading modified file: {relative_path} ... done" in combined_modify_output
+        )
+
+        replacement_guid_continuity = False
+        if len(session_guids) >= 3:
+            original_guid = session_guids[0]
+            replacement_guid = session_guids[1]
+            replacement_guid_continuity = (
+                original_guid != replacement_guid
+                and all(guid == replacement_guid for guid in session_guids[1:])
+            )
+
+        post_modify_resumable_state_files = self._find_resumable_state_files(
+            conf_dir,
+            ["session_upload*", "session_upload.*"],
+        )
+        safe_backup_files = sorted(
+            str(path.relative_to(sync_root))
+            for path in sync_root.rglob("*safeBackup*")
+            if path.is_file()
+        )
+
+        verify_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--download-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(verify_conf_dir),
+        ]
+        verify_result = self._run_and_capture(
+            context,
+            f"{scenario_id} verify",
+            verify_command,
+            verify_stdout,
+            verify_stderr,
+        )
+        verify_manifest = build_manifest(verify_root)
+        write_manifest(verify_manifest_file, verify_manifest)
+        verify_validation_error = self._validate_xlsx(verify_file, self.XLSX_REVISION_1)
+        self._append_if_exists(artifacts, app_log_dir)
+        self._append_if_exists(artifacts, verify_app_log_dir)
+
+        # The exact first-fragment 404 is a SharePoint document-library service
+        # behaviour. Other account types still exercise a real modified XLSX
+        # multi-fragment session upload, but only the SharePoint target requires
+        # the replacement-session path to occur on every E2E run.
+        replacement_required = context.e2e_target == "sharepoint"
+        details = {
+            "scenario_id": scenario_id,
+            "relative_path": relative_path,
+            "xlsx_seed": xlsx_seed,
+            "generated_size": generated_size,
+            "canonical_size_before_modify": canonical_size_before_modify,
+            "modified_size": modified_size,
+            "seed_returncode": seed_result.returncode,
+            "modify_returncode": modify_result.returncode,
+            "verify_returncode": verify_result.returncode,
+            "replacement_required": replacement_required,
+            "upload_session_not_found_seen": upload_session_not_found_seen,
+            "replacement_adopted_seen": replacement_adopted_seen,
+            "session_guids": session_guids,
+            "replacement_guid_continuity": replacement_guid_continuity,
+            "name_already_exists_seen": name_already_exists_seen,
+            "safe_backup_seen": safe_backup_seen,
+            "safe_backup_files": safe_backup_files,
+            "modified_upload_done_seen": modified_upload_done_seen,
+            "post_modify_resumable_state_files": post_modify_resumable_state_files,
+            "verify_validation_error": verify_validation_error,
+        }
+
+        write_text_file(
+            metadata_file,
+            "\n".join(
+                [
+                    f"scenario_id={scenario_id}",
+                    f"relative_path={relative_path}",
+                    f"xlsx_seed={xlsx_seed}",
+                    f"generated_size={generated_size}",
+                    f"canonical_size_before_modify={canonical_size_before_modify}",
+                    f"modified_size={modified_size}",
+                    f"seed_returncode={seed_result.returncode}",
+                    f"modify_returncode={modify_result.returncode}",
+                    f"verify_returncode={verify_result.returncode}",
+                    f"replacement_required={replacement_required}",
+                    f"upload_session_not_found_seen={upload_session_not_found_seen}",
+                    f"replacement_adopted_seen={replacement_adopted_seen}",
+                    f"session_guid_count={len(session_guids)}",
+                    f"replacement_guid_continuity={replacement_guid_continuity}",
+                    f"name_already_exists_seen={name_already_exists_seen}",
+                    f"safe_backup_seen={safe_backup_seen}",
+                    f"safe_backup_file_count={len(safe_backup_files)}",
+                    f"modified_upload_done_seen={modified_upload_done_seen}",
+                    f"post_modify_resumable_state_file_count={len(post_modify_resumable_state_files)}",
+                    f"verify_validation_error={verify_validation_error}",
+                ]
+            )
+            + "\n",
+        )
+
+        if modify_result.returncode != 0:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Modified XLSX upload failed with status {modify_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        if not modified_upload_done_seen:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Modified XLSX upload did not report successful completion",
+                artifacts,
+                details,
+            )
+
+        if replacement_required and not upload_session_not_found_seen:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "SharePoint modified-XLSX upload did not exercise the expected upload-session-not-found recovery path",
+                artifacts,
+                details,
+            )
+
+        if upload_session_not_found_seen and not replacement_adopted_seen:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Upload-session 404 was observed but the replacement session was not adopted",
+                artifacts,
+                details,
+            )
+
+        if upload_session_not_found_seen and not replacement_guid_continuity:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Replacement upload-session GUID was not used consistently for all fragments after the 404 recovery",
+                artifacts,
+                details,
+            )
+
+        if name_already_exists_seen:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Modified XLSX upload regressed to nameAlreadyExists after upload-session replacement",
+                artifacts,
+                details,
+            )
+
+        if safe_backup_seen or safe_backup_files:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Modified XLSX upload unexpectedly created or reported a safeBackup",
+                artifacts,
+                details,
+            )
+
+        if post_modify_resumable_state_files:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Successful modified XLSX upload left stale resumable upload-session state behind",
+                artifacts,
+                details,
+            )
+
+        if verify_result.returncode != 0:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Remote XLSX verification failed with status {verify_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        if verify_validation_error:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Remote verification did not contain the expected modified XLSX revision: {verify_validation_error}",
+                artifacts,
+                details,
+            )
+
+        return self._scenario_pass(scenario_id, description, artifacts, details)
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -1498,6 +2152,25 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     upload_symlink_work_dir,
                     upload_symlink_log_dir,
                     upload_symlink_state_dir,
+                )
+            )
+
+        xlsx_replacement_work_dir = case_work_dir / "rt0004-modified-xlsx-session-replacement"
+        xlsx_replacement_log_dir = case_log_dir / "rt0004-modified-xlsx-session-replacement"
+        xlsx_replacement_state_dir = state_dir / "rt0004-modified-xlsx-session-replacement"
+
+        reset_directory(xlsx_replacement_work_dir)
+        reset_directory(xlsx_replacement_log_dir)
+        reset_directory(xlsx_replacement_state_dir)
+
+        if context.should_run_scenario(self.case_id, "RT-0004"):
+            results.append(
+                self._run_modified_xlsx_session_replacement_scenario(
+                    context,
+                    root_name,
+                    xlsx_replacement_work_dir,
+                    xlsx_replacement_log_dir,
+                    xlsx_replacement_state_dir,
                 )
             )
 
