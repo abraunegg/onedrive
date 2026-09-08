@@ -8759,11 +8759,9 @@ class SyncEngine {
 					// This is a valid JSON object
 					// Perform the upload using the session that has been created
 					try {
-						// so that we have this data available if we need to re-create the session
-						// - targetDriveId, targetParentId, baseName(localFilePath), currentOnlineItemData.eTag, threadUploadSessionFilePath
+						// Ensure the remote targeting data required to re-create the session is available in-memory
 						uploadSessionData["targetDriveId"] = targetDriveId;
 						uploadSessionData["targetParentId"] = targetParentId;
-						uploadSessionData["currentETag"] = currentOnlineItemData.eTag;
 
 						// attempt the session upload using the session data provided
 						uploadTransferStartTime = Clock.currTime();
@@ -11639,9 +11637,12 @@ class SyncEngine {
 		if (uploadSession.type() == JSONType.object) {
 			// a valid session object was created
 			if ("uploadUrl" in uploadSession) {
-				// Add the file path we are uploading to this JSON Session Data
+				// Add the local and remote targeting data required to resume or re-create this upload session
 				uploadSession["localPath"] = fileToUpload;
-				// Save this session
+				uploadSession["targetDriveId"] = parentDriveId;
+				uploadSession["targetParentId"] = parentId;
+
+				// Save the complete session state before any fragment upload begins
 				saveSessionFile(threadUploadSessionFilePath, uploadSession);
 			}
 
@@ -11711,6 +11712,34 @@ class SyncEngine {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
+	}
+
+	// Adopt a replacement upload session after the current Microsoft Graph session becomes unusable
+	bool adoptReplacementUploadSession(ref JSONValue uploadSessionData, JSONValue replacementUploadSession, string threadUploadSessionFilePath, ref long offset, ref size_t fragmentCount, long fragmentSize) {
+		// A replacement session must contain everything required to continue the upload safely
+		if (!hasUploadURL(replacementUploadSession) || !hasNextExpectedRanges(replacementUploadSession) || !hasLocalPath(replacementUploadSession)) {
+			return false;
+		}
+
+		if (!("expirationDateTime" in replacementUploadSession) || (replacementUploadSession["expirationDateTime"].type != JSONType.string)) {
+			return false;
+		}
+
+		// The replacement session is now authoritative. Keep client-side targeting metadata already
+		// present in uploadSessionData, but replace all Microsoft Graph session identity/progress data.
+		uploadSessionData["uploadUrl"] = replacementUploadSession["uploadUrl"];
+		uploadSessionData["localPath"] = replacementUploadSession["localPath"];
+		uploadSessionData["expirationDateTime"] = replacementUploadSession["expirationDateTime"];
+		uploadSessionData["nextExpectedRanges"] = replacementUploadSession["nextExpectedRanges"];
+
+		// A newly-created replacement session owns its own byte-range state. Never continue using
+		// the offset from the superseded session; restart from the range requested by this session.
+		offset = uploadSessionData["nextExpectedRanges"][0].str.splitter('-').front.to!long;
+		fragmentCount = cast(size_t)(offset / fragmentSize);
+
+		// Persist one coherent session record: replacement URL and replacement progress together.
+		saveSessionFile(threadUploadSessionFilePath, uploadSessionData);
+		return true;
 	}
 
 	// Perform the upload of file via the Upload Session that was created
@@ -11829,7 +11858,7 @@ class SyncEngine {
 					addLogEntry("                The upload session URL itself may still appear active (based on expirationDateTime), but the upload URL is no longer usable once this 'tempauth' token expires.");
 					addLogEntry("                A new upload session will now be created. Upload will restart from the beginning using the new session URL and new 'tempauth' token.");
 
-					// Attempt creation of new upload session
+					// Attempt creation of a replacement upload session
 					newUploadSession = createSessionForFileUpload(
 						activeOneDriveApiInstance,
 						uploadSessionData["localPath"].str,
@@ -11840,13 +11869,25 @@ class SyncEngine {
 						threadUploadSessionFilePath
 					);
 
-					// Attempt retry (which will start upload again from scratch) with new session upload URL
-					continue;
+					// The expired session can no longer be used. Adopt the replacement session as the
+					// authoritative session and restart from the byte range requested by that new session.
+					if (adoptReplacementUploadSession(uploadSessionData, newUploadSession, threadUploadSessionFilePath, offset, fragmentCount, fragmentSize)) {
+						if (debugLogging) {addLogEntry("Adopted replacement upload session after 403; restarting from offset: " ~ to!string(offset), ["debug"]);}
+						continue;
+					}
+
+					if (verboseLogging) {addLogEntry("Unable to continue upload because the replacement upload session is invalid", ["verbose"]);}
+					if (exists(threadUploadSessionFilePath)) {
+						safeRemove(threadUploadSessionFilePath);
+					}
+					uploadResponse = null;
+					return uploadResponse;
 				}
 
 				// There was an error uploadResponse from OneDrive when uploading the file fragment
 				if (exception.httpStatusCode == 404) {
-					// The upload session was not found .. ?? we just created it .. maybe the backend is still creating it or failed to create it
+					// Microsoft Graph documents a 404 from an uploadUrl as meaning that the upload
+					// session no longer exists. The entire upload must restart using a new session.
 					if (debugLogging) {addLogEntry("The upload session was not found .... re-create session");}
 					newUploadSession = createSessionForFileUpload(
 						activeOneDriveApiInstance,
@@ -11857,6 +11898,20 @@ class SyncEngine {
 						null,
 						threadUploadSessionFilePath
 					);
+
+					// Do not retry the failed fragment against a fresh session using the old session's
+					// offset. Make the replacement session authoritative and restart from its own range.
+					if (adoptReplacementUploadSession(uploadSessionData, newUploadSession, threadUploadSessionFilePath, offset, fragmentCount, fragmentSize)) {
+						if (debugLogging) {addLogEntry("Adopted replacement upload session after 404; restarting from offset: " ~ to!string(offset), ["debug"]);}
+						continue;
+					}
+
+					if (verboseLogging) {addLogEntry("Unable to continue upload because the replacement upload session is invalid", ["verbose"]);}
+					if (exists(threadUploadSessionFilePath)) {
+						safeRemove(threadUploadSessionFilePath);
+					}
+					uploadResponse = null;
+					return uploadResponse;
 				}
 
 				// Issue https://github.com/abraunegg/onedrive/issues/2747
@@ -16510,6 +16565,21 @@ class SyncEngine {
 			// Display function processing time if configured to do so
 			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 				// Combine module name & running Function
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+
+			// return session file is invalid
+			return false;
+		}
+
+		// The current session format requires the remote targeting data needed to re-create
+		// an upload session after a resumed fragment receives a 403/404 response.
+		if (!("targetDriveId" in sessionFileData) || (sessionFileData["targetDriveId"].type() != JSONType.string) || sessionFileData["targetDriveId"].str.empty ||
+			!("targetParentId" in sessionFileData) || (sessionFileData["targetParentId"].type() != JSONType.string) || sessionFileData["targetParentId"].str.empty) {
+			if (debugLogging) {addLogEntry("SESSION-RESUME: Missing or invalid targetDriveId/targetParentId data in: " ~ sessionFilePath, ["debug"]);}
+
+			// Display function processing time if configured to do so
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 			}
 
