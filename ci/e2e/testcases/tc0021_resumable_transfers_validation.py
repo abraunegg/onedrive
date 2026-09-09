@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import os
 import random
 import re
@@ -31,7 +33,7 @@ class ScenarioResult:
 class TestCase0021ResumableTransfersValidation(E2ETestCase):
     case_id = "0021"
     name = "resumable transfers validation"
-    description = "Validate resumable transfers and modified multi-fragment upload-session replacement"
+    description = "Validate resumable transfers, source identity, and modified multi-fragment upload-session replacement"
 
     LARGE_FILE_SIZE = 100 * 1024 * 1024
     INTERRUPT_THRESHOLD_PERCENT = 15.0
@@ -99,9 +101,11 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     lines.append(rel)
         write_text_file(output, "\n".join(lines) + ("\n" if lines else ""))
 
-    def _create_large_file(self, path: Path, size_bytes: int) -> None:
+    def _create_large_file(self, path: Path, size_bytes: int, fill_byte: bytes = b"R") -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        chunk = b"R" * (1024 * 1024)
+        if len(fill_byte) != 1:
+            raise ValueError("fill_byte must contain exactly one byte")
+        chunk = fill_byte * (1024 * 1024)
         chunk_count = size_bytes // len(chunk)
         with path.open("wb") as fp:
             for _ in range(chunk_count):
@@ -109,6 +113,13 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             remainder = size_bytes % len(chunk)
             if remainder:
                 fp.write(chunk[:remainder])
+
+    def _sha256_file(self, path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as fp:
+            for chunk in iter(lambda: fp.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
 
     def _create_random_xlsx(self, path: Path, seed: str) -> dict:
         """
@@ -849,6 +860,442 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 scenario_id,
                 description,
                 "Interrupted resumable upload did not complete successfully on the subsequent run",
+                artifacts,
+                details,
+            )
+
+        return self._scenario_pass(scenario_id, description, artifacts, details)
+
+    def _run_upload_source_change_scenario(
+        self,
+        context: E2EContext,
+        root_name: str,
+        sync_root: Path,
+        verify_root: Path,
+        scenario_work_dir: Path,
+        scenario_log_dir: Path,
+        scenario_state_dir: Path,
+    ) -> ScenarioResult:
+        scenario_id = "RT-0005"
+        description = "changed local source invalidates resumable upload session"
+
+        conf_dir = scenario_work_dir / "conf"
+        verify_conf_dir = scenario_work_dir / "verify-conf"
+        app_log_dir = scenario_log_dir / "app-logs"
+        verify_app_log_dir = scenario_log_dir / "verify-app-logs"
+
+        reset_directory(conf_dir)
+        reset_directory(verify_conf_dir)
+        context.bootstrap_config_dir(conf_dir)
+        context.bootstrap_config_dir(verify_conf_dir)
+
+        self._write_config(
+            conf_dir / "config",
+            sync_root,
+            app_log_dir,
+            extra_config_lines=['file_fragment_size = "10"'],
+        )
+        self._write_config(
+            verify_conf_dir / "config",
+            verify_root,
+            verify_app_log_dir,
+            extra_config_lines=['file_fragment_size = "10"'],
+        )
+
+        app_log_file = self._phase_app_log_file(app_log_dir)
+
+        relative_path = f"{root_name}/{scenario_id}/session-source-change.bin"
+        local_file = sync_root / relative_path
+        verify_file = verify_root / relative_path
+        self._create_large_file(local_file, self.LARGE_FILE_SIZE, b"A")
+
+        revision_a_size = local_file.stat().st_size
+        revision_a_mtime_ns = local_file.stat().st_mtime_ns
+        revision_a_sha256 = self._sha256_file(local_file)
+
+        phase1_stdout = scenario_log_dir / "phase1_stdout.log"
+        phase1_stderr = scenario_log_dir / "phase1_stderr.log"
+        phase1_app_log_capture = scenario_log_dir / "phase1_app.log"
+        phase2_stdout = scenario_log_dir / "phase2_stdout.log"
+        phase2_stderr = scenario_log_dir / "phase2_stderr.log"
+        verify_stdout = scenario_log_dir / "verify_stdout.log"
+        verify_stderr = scenario_log_dir / "verify_stderr.log"
+
+        session_state_dump = scenario_state_dir / "phase1_session_state.txt"
+        metadata_file = scenario_state_dir / "metadata.txt"
+        verify_manifest_file = scenario_state_dir / "verify_manifest.txt"
+
+        upload_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--verbose",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(conf_dir),
+        ]
+
+        (
+            phase1_returncode,
+            phase1_stdout_text,
+            phase1_stderr_text,
+            threshold_reached,
+            observed_max_percent,
+        ) = self._interrupt_process_at_transfer_threshold(
+            context,
+            f"{scenario_id} phase 1",
+            upload_command,
+            phase1_stdout,
+            phase1_stderr,
+            app_log_file,
+            "session-source-change.bin",
+            self.INTERRUPT_THRESHOLD_PERCENT,
+            self.TRANSFER_WAIT_TIMEOUT,
+            self.PROCESS_EXIT_TIMEOUT,
+        )
+
+        phase1_app_log_text = self._read_text_if_exists(app_log_file)
+        write_text_file(phase1_app_log_capture, phase1_app_log_text)
+        combined_phase1_output = (
+            phase1_stdout_text + "\n" + phase1_stderr_text + "\n" + phase1_app_log_text
+        )
+        phase1_completed_transfer = self._target_transfer_completed_in_phase1(
+            combined_phase1_output,
+            "session-source-change.bin",
+            "upload",
+        )
+        interrupted_as_expected, crash_marker_seen = self._phase1_interruption_acceptable(
+            combined_phase1_output,
+            phase1_returncode,
+        )
+
+        resumable_state_files = self._find_resumable_state_files(
+            conf_dir,
+            ["session_upload.*"],
+        )
+        self._write_resumable_state_dump(session_state_dump, resumable_state_files)
+
+        saved_source_size = None
+        saved_source_mtime = ""
+        saved_next_offset = -1
+        saved_upload_url = ""
+        session_parse_error = ""
+
+        if len(resumable_state_files) == 1:
+            try:
+                saved_session = json.loads(
+                    Path(resumable_state_files[0]).read_text(encoding="utf-8")
+                )
+                saved_source_size = saved_session.get("sourceFileSize")
+                saved_source_mtime = saved_session.get("sourceFileMtime", "")
+                saved_upload_url = saved_session.get("uploadUrl", "")
+                next_ranges = saved_session.get("nextExpectedRanges", [])
+                if next_ranges:
+                    saved_next_offset = int(str(next_ranges[0]).split("-", 1)[0])
+            except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+                session_parse_error = str(exc)
+
+        # Replace revision A with a different revision B while preserving the exact
+        # byte size. Force a distinct filesystem mtime as well so the persisted
+        # source identity must reject the old Microsoft upload session.
+        self._create_large_file(local_file, self.LARGE_FILE_SIZE, b"B")
+        revision_b_stat = local_file.stat()
+        if revision_b_stat.st_mtime_ns == revision_a_mtime_ns:
+            forced_mtime_ns = revision_a_mtime_ns + 1_000_000_000
+            os.utime(
+                local_file,
+                ns=(revision_b_stat.st_atime_ns, forced_mtime_ns),
+            )
+            revision_b_stat = local_file.stat()
+
+        revision_b_size = revision_b_stat.st_size
+        revision_b_mtime_ns = revision_b_stat.st_mtime_ns
+        revision_b_sha256 = self._sha256_file(local_file)
+
+        # Isolate phase-2 application logging so source-rejection and fresh-upload
+        # evidence cannot be satisfied by messages from the interrupted first run.
+        app_log_file.unlink(missing_ok=True)
+
+        phase2_result = self._run_and_capture(
+            context,
+            f"{scenario_id} phase 2",
+            upload_command,
+            phase2_stdout,
+            phase2_stderr,
+        )
+
+        phase2_app_log_text = self._read_text_if_exists(app_log_file)
+        combined_phase2_output = (
+            phase2_result.stdout + "\n" + phase2_result.stderr + "\n" + phase2_app_log_text
+        )
+
+        source_change_rejected_seen = (
+            "The local file has changed since the upload session was created; "
+            "the existing upload session cannot be resumed"
+            in combined_phase2_output
+        )
+        stale_session_cancel_seen = (
+            "Cancelling invalid Microsoft OneDrive upload session"
+            in combined_phase2_output
+        )
+        fresh_zero_start_seen = any(
+            "session-source-change.bin" in line
+            and "Uploading:" in line
+            and re.search(r"\b0%", line) is not None
+            for line in combined_phase2_output.splitlines()
+        )
+
+        post_phase2_resumable_state_files = self._find_resumable_state_files(
+            conf_dir,
+            ["session_upload.*"],
+        )
+
+        verify_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--download-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(verify_conf_dir),
+        ]
+        verify_result = self._run_and_capture(
+            context,
+            f"{scenario_id} verify",
+            verify_command,
+            verify_stdout,
+            verify_stderr,
+        )
+
+        verify_manifest = build_manifest(verify_root)
+        write_manifest(verify_manifest_file, verify_manifest)
+        verified_size = verify_file.stat().st_size if verify_file.is_file() else -1
+        verified_sha256 = self._sha256_file(verify_file) if verify_file.is_file() else ""
+
+        artifacts = [
+            str(phase1_stdout),
+            str(phase1_stderr),
+            str(phase1_app_log_capture),
+            str(phase2_stdout),
+            str(phase2_stderr),
+            str(verify_stdout),
+            str(verify_stderr),
+            str(session_state_dump),
+            str(metadata_file),
+            str(verify_manifest_file),
+        ]
+        self._append_if_exists(artifacts, app_log_dir)
+        self._append_if_exists(artifacts, verify_app_log_dir)
+
+        details = {
+            "scenario_id": scenario_id,
+            "phase1_returncode": phase1_returncode,
+            "phase2_returncode": phase2_result.returncode,
+            "verify_returncode": verify_result.returncode,
+            "threshold_reached": threshold_reached,
+            "observed_max_percent": observed_max_percent,
+            "phase1_transfer_completed": phase1_completed_transfer,
+            "phase1_interrupted_as_expected": interrupted_as_expected,
+            "phase1_crash_marker_seen": crash_marker_seen,
+            "resumable_state_files": resumable_state_files,
+            "session_parse_error": session_parse_error,
+            "saved_source_size": saved_source_size,
+            "saved_source_mtime": saved_source_mtime,
+            "saved_next_offset": saved_next_offset,
+            "saved_upload_url_present": bool(saved_upload_url),
+            "revision_a_size": revision_a_size,
+            "revision_b_size": revision_b_size,
+            "revision_a_mtime_ns": revision_a_mtime_ns,
+            "revision_b_mtime_ns": revision_b_mtime_ns,
+            "revision_a_sha256": revision_a_sha256,
+            "revision_b_sha256": revision_b_sha256,
+            "source_change_rejected_seen": source_change_rejected_seen,
+            "stale_session_cancel_seen": stale_session_cancel_seen,
+            "fresh_zero_start_seen": fresh_zero_start_seen,
+            "post_phase2_resumable_state_files": post_phase2_resumable_state_files,
+            "verified_size": verified_size,
+            "verified_sha256": verified_sha256,
+        }
+
+        write_text_file(
+            metadata_file,
+            "\n".join(f"{key}={value}" for key, value in details.items()) + "\n",
+        )
+
+        if not threshold_reached:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Interrupted upload never reached {self.INTERRUPT_THRESHOLD_PERCENT}% transfer progress; observed maximum was {observed_max_percent:.2f}%",
+                artifacts,
+                details,
+            )
+
+        if phase1_completed_transfer:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Interrupted phase completed the target transfer before shutdown, so no reusable partial upload was guaranteed",
+                artifacts,
+                details,
+            )
+
+        if not interrupted_as_expected:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Interrupted phase did not terminate as expected; return code was {phase1_returncode}",
+                artifacts,
+                details,
+            )
+
+        if len(resumable_state_files) != 1:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Expected exactly one persisted upload session after interruption, found {len(resumable_state_files)}",
+                artifacts,
+                details,
+            )
+
+        if session_parse_error:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Unable to parse persisted upload-session metadata: {session_parse_error}",
+                artifacts,
+                details,
+            )
+
+        if saved_source_size != revision_a_size or not saved_source_mtime:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Persisted upload session did not contain the expected sourceFileSize/sourceFileMtime identity for revision A",
+                artifacts,
+                details,
+            )
+
+        minimum_expected_offset = 2 * self.XLSX_FRAGMENT_SIZE_BYTES
+        if saved_next_offset < minimum_expected_offset:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Persisted upload session did not contain progress from at least two completed fragments; observed offset {saved_next_offset}, required at least {minimum_expected_offset}",
+                artifacts,
+                details,
+            )
+
+        if revision_a_size != revision_b_size:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Revision B did not preserve the exact byte size of revision A",
+                artifacts,
+                details,
+            )
+
+        if revision_a_mtime_ns == revision_b_mtime_ns:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Revision B did not receive a distinct local modification timestamp",
+                artifacts,
+                details,
+            )
+
+        if revision_a_sha256 == revision_b_sha256:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Revision B content hash unexpectedly matches revision A",
+                artifacts,
+                details,
+            )
+
+        if phase2_result.returncode != 0:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Recovery run failed with status {phase2_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        if not source_change_rejected_seen:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Recovery run did not report rejection of the resumable upload because the local source had changed",
+                artifacts,
+                details,
+            )
+
+        if not stale_session_cancel_seen:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Recovery run did not show best-effort cancellation of the stale Microsoft upload session",
+                artifacts,
+                details,
+            )
+
+        if not fresh_zero_start_seen:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Recovery run did not show the current local revision starting a fresh upload from zero percent",
+                artifacts,
+                details,
+            )
+
+        if post_phase2_resumable_state_files:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Stale resumable upload-session metadata remained after successful recovery",
+                artifacts,
+                details,
+            )
+
+        if verify_result.returncode != 0:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Independent remote verification failed with status {verify_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        if relative_path not in verify_manifest or not verify_file.is_file():
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Independent verification client did not download the expected remote file",
+                artifacts,
+                details,
+            )
+
+        if verified_size != revision_b_size or verified_sha256 != revision_b_sha256:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Remote object does not exactly match local revision B after stale-session recovery",
+                artifacts,
+                details,
+            )
+
+        if verified_sha256 == revision_a_sha256:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Remote object unexpectedly matches revision A after source-change recovery",
                 artifacts,
                 details,
             )
@@ -2177,6 +2624,31 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     xlsx_replacement_work_dir,
                     xlsx_replacement_log_dir,
                     xlsx_replacement_state_dir,
+                )
+            )
+
+        upload_source_change_sync_root = case_work_dir / "upload-source-change-syncroot"
+        upload_source_change_verify_root = case_work_dir / "upload-source-change-verifyroot"
+        upload_source_change_work_dir = case_work_dir / "rt0005-upload-source-change"
+        upload_source_change_log_dir = case_log_dir / "rt0005-upload-source-change"
+        upload_source_change_state_dir = state_dir / "rt0005-upload-source-change"
+
+        reset_directory(upload_source_change_sync_root)
+        reset_directory(upload_source_change_verify_root)
+        reset_directory(upload_source_change_work_dir)
+        reset_directory(upload_source_change_log_dir)
+        reset_directory(upload_source_change_state_dir)
+
+        if context.should_run_scenario(self.case_id, "RT-0005"):
+            results.append(
+                self._run_upload_source_change_scenario(
+                    context,
+                    root_name,
+                    upload_source_change_sync_root,
+                    upload_source_change_verify_root,
+                    upload_source_change_work_dir,
+                    upload_source_change_log_dir,
+                    upload_source_change_state_dir,
                 )
             )
 
