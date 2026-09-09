@@ -11606,10 +11606,16 @@ class SyncEngine {
 		// Upload file via a OneDrive API session
 		JSONValue uploadSession;
 
-		// Calculate modification time
+		// Capture the local source state that this upload session is bound to.
+		// Preserve the full filesystem timestamp precision here; the timestamp sent
+		// to Microsoft Graph below is intentionally normalised separately.
+		long sourceFileSize;
 		SysTime localFileLastModifiedTime;
+		string sourceFileMtime;
 		try {
+			sourceFileSize = getSize(fileToUpload);
 			localFileLastModifiedTime = timeLastModified(fileToUpload).toUTC();
+			sourceFileMtime = localFileLastModifiedTime.toISOExtString();
 		} catch (FileException exception) {
 			if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
 				addLogEntry("File disappeared locally before upload session creation: " ~ fileToUpload);
@@ -11637,8 +11643,11 @@ class SyncEngine {
 		if (uploadSession.type() == JSONType.object) {
 			// a valid session object was created
 			if ("uploadUrl" in uploadSession) {
-				// Add the local and remote targeting data required to resume or re-create this upload session
+				// Add the local source identity and remote targeting data required to resume
+				// or re-create this upload session safely.
 				uploadSession["localPath"] = fileToUpload;
+				uploadSession["sourceFileSize"] = JSONValue(sourceFileSize);
+				uploadSession["sourceFileMtime"] = sourceFileMtime;
 				uploadSession["targetDriveId"] = parentDriveId;
 				uploadSession["targetParentId"] = parentId;
 
@@ -11714,10 +11723,50 @@ class SyncEngine {
 		}
 	}
 
+	// Validate that a persisted upload session still belongs to the same local file revision.
+	// A resumable session may already contain accepted remote fragments, so both the
+	// source size and full-precision local modification timestamp must still match.
+	bool uploadSessionSourceStateMatches(JSONValue uploadSessionData, ref long currentFileSize) {
+		if (!("localPath" in uploadSessionData) || (uploadSessionData["localPath"].type() != JSONType.string) || uploadSessionData["localPath"].str.empty) {
+			return false;
+		}
+
+		if (!("sourceFileSize" in uploadSessionData) || (uploadSessionData["sourceFileSize"].type() != JSONType.integer)) {
+			if (debugLogging) {addLogEntry("SESSION-RESUME: Missing or invalid sourceFileSize for: " ~ uploadSessionData["localPath"].str, ["debug"]);}
+			return false;
+		}
+
+		if (!("sourceFileMtime" in uploadSessionData) || (uploadSessionData["sourceFileMtime"].type() != JSONType.string) || uploadSessionData["sourceFileMtime"].str.empty) {
+			if (debugLogging) {addLogEntry("SESSION-RESUME: Missing or invalid sourceFileMtime for: " ~ uploadSessionData["localPath"].str, ["debug"]);}
+			return false;
+		}
+
+		string localPath = uploadSessionData["localPath"].str;
+		currentFileSize = getSize(localPath);
+		string currentFileMtime = timeLastModified(localPath).toUTC().toISOExtString();
+
+		if ((currentFileSize != uploadSessionData["sourceFileSize"].integer) ||
+			(currentFileMtime != uploadSessionData["sourceFileMtime"].str)) {
+			if (verboseLogging) {
+				addLogEntry("The local file has changed since the upload session was created; the existing upload session cannot be resumed: " ~ localPath, ["verbose"]);
+			}
+			if (debugLogging) {
+				addLogEntry("SESSION-RESUME: Persisted source size: " ~ to!string(uploadSessionData["sourceFileSize"].integer) ~ ", current source size: " ~ to!string(currentFileSize), ["debug"]);
+				addLogEntry("SESSION-RESUME: Persisted source mtime: " ~ uploadSessionData["sourceFileMtime"].str ~ ", current source mtime: " ~ currentFileMtime, ["debug"]);
+			}
+			return false;
+		}
+
+		return true;
+	}
+
 	// Adopt a replacement upload session after the current Microsoft Graph session becomes unusable
 	bool adoptReplacementUploadSession(ref JSONValue uploadSessionData, JSONValue replacementUploadSession, string threadUploadSessionFilePath, ref long offset, ref size_t fragmentCount, long fragmentSize) {
-		// A replacement session must contain everything required to continue the upload safely
-		if (!hasUploadURL(replacementUploadSession) || !hasNextExpectedRanges(replacementUploadSession) || !hasLocalPath(replacementUploadSession)) {
+		// A replacement session must contain everything required to continue the upload safely,
+		// including the local source identity captured when that replacement session was created.
+		if (!hasUploadURL(replacementUploadSession) || !hasNextExpectedRanges(replacementUploadSession) || !hasLocalPath(replacementUploadSession) ||
+			!("sourceFileSize" in replacementUploadSession) || (replacementUploadSession["sourceFileSize"].type() != JSONType.integer) ||
+			!("sourceFileMtime" in replacementUploadSession) || (replacementUploadSession["sourceFileMtime"].type() != JSONType.string) || replacementUploadSession["sourceFileMtime"].str.empty) {
 			return false;
 		}
 
@@ -11729,6 +11778,8 @@ class SyncEngine {
 		// present in uploadSessionData, but replace all Microsoft Graph session identity/progress data.
 		uploadSessionData["uploadUrl"] = replacementUploadSession["uploadUrl"];
 		uploadSessionData["localPath"] = replacementUploadSession["localPath"];
+		uploadSessionData["sourceFileSize"] = replacementUploadSession["sourceFileSize"];
+		uploadSessionData["sourceFileMtime"] = replacementUploadSession["sourceFileMtime"];
 		uploadSessionData["expirationDateTime"] = replacementUploadSession["expirationDateTime"];
 		uploadSessionData["nextExpectedRanges"] = replacementUploadSession["nextExpectedRanges"];
 
@@ -16624,10 +16675,16 @@ class SyncEngine {
 					return false;
 				}
 
-				// Can we stat the file?
-				// This catches dangling symbolic links and local source races before
-				// the upload session is queued for parallel resume processing.
-				getSize(sessionLocalFilePath);
+				// Confirm that the local source is still the exact source revision that
+				// created this upload session. Existing pre-fix session files deliberately
+				// fail closed because they do not contain source identity metadata.
+				long currentFileSize;
+				if (!uploadSessionSourceStateMatches(sessionFileData, currentFileSize)) {
+					if (verboseLogging) {
+						addLogEntry("Discarding resumable upload session because the saved local source state is missing or no longer matches: " ~ sessionLocalFilePath, ["verbose"]);
+					}
+					return false;
+				}
 			} catch (FileException exception) {
 
 				bool localPathIsSymlink = false;
@@ -17104,10 +17161,23 @@ class SyncEngine {
 			string localPathToResume = jsonItemToResume["localPath"].str;
 			long thisFileSizeLocal;
 
-			// The local source may have disappeared or become a dangling symlink
-			// after validation but before this parallel worker starts.
+			// Revalidate the source immediately before this parallel worker resumes the
+			// Microsoft upload session. This closes the normal validation-to-worker race
+			// without changing the upload/reconciliation architecture.
 			try {
-				thisFileSizeLocal = getSize(localPathToResume);
+				if (!uploadSessionSourceStateMatches(jsonItemToResume, thisFileSizeLocal)) {
+					if (!dryRun) {
+						cancelUploadSessionIfPresent(threadUploadSessionFilePath);
+					}
+
+					if (exists(threadUploadSessionFilePath)) {
+						if (!dryRun) {
+							safeRemove(threadUploadSessionFilePath);
+						}
+					}
+
+					continue;
+				}
 			} catch (FileException exception) {
 				bool localPathIsSymlink = false;
 
@@ -17132,8 +17202,13 @@ class SyncEngine {
 					addLogEntry("SESSION-RESUME: FileException: " ~ exception.msg, ["debug"]);
 				}
 
-				// The saved upload session can no longer be resumed because the
-				// original local source is gone/unreadable. Remove stale session data.
+				// The saved upload session can no longer be resumed because the original
+				// local source is gone/unreadable. Cancel the stale remote session where
+				// possible, then remove the local resumable state.
+				if (!dryRun) {
+					cancelUploadSessionIfPresent(threadUploadSessionFilePath);
+				}
+
 				if (exists(threadUploadSessionFilePath)) {
 					if (!dryRun) {
 						safeRemove(threadUploadSessionFilePath);
