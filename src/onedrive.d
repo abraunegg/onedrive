@@ -3014,14 +3014,15 @@ class OneDriveApi {
 						if (debugLogging) {addLogEntry("Using Retry-After Value = " ~ to!string(thisBackOffInterval), ["debug"]);}
 						transientError = true;
 						break;
-					//  Transient errors
-					//	503 - Service Unavailable
+					//  Transient server errors
+					//  500 - Internal Server Error
+					//  502 - Bad Gateway
+					//  503 - Service Unavailable
 					//  504 - Gateway Timeout
-					case 503,504:
-						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request
+					case 500,502,503,504:
 						auto errorArray = splitLines(exception.msg);
 						addLogEntry(to!string(errorArray[0]) ~ " when attempting to query the Microsoft Graph API Service - retrying applicable request in 30 seconds - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
-						if (debugLogging) {addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);}
+						if (debugLogging) {addLogEntry("Thread sleeping for 30 seconds before retrying transient Microsoft Graph API server error", ["debug"]);}
 						// Transient error - try again in 30 seconds
 						thisBackOffInterval = 30;
 						transientError = true;
@@ -3242,6 +3243,9 @@ class OneDriveApi {
 			case 406:
 				message = "Not Acceptable";
 				break;
+			case 408:
+				message = "Request Timeout";
+				break;
 			case 409:
 				message = "Conflict";
 				break;
@@ -3277,6 +3281,9 @@ class OneDriveApi {
 				break;
 			case 501:
 				message = "Not Implemented";
+				break;
+			case 502:
+				message = "Bad Gateway";
 				break;
 			case 503:
 				message = "Service Unavailable";
