@@ -11985,10 +11985,7 @@ class SyncEngine {
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
 
-				// retry fragment upload in case error is transient
-				if (verboseLogging) {addLogEntry("Retrying fragment upload", ["verbose"]);}
-
-				// Retry fragment upload logic
+				// Retry fragment upload in case error is transient
 				try {
 					string effectiveRetryUploadURL;
 					string effectiveLocalPath;
@@ -12006,6 +12003,7 @@ class SyncEngine {
 						}
 
 						// retry the fragment upload
+						if (verboseLogging) {addLogEntry("Retrying fragment upload", ["verbose"]);}
 						uploadResponse = activeOneDriveApiInstance.uploadFragment(
 							effectiveRetryUploadURL,
 							effectiveLocalPath,
