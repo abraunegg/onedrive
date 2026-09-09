@@ -30,10 +30,19 @@ struct LocalAuthResponse {
 
 private struct LocalAuthServerResult {
 	bool received = false;
+	bool browserResponsePending = false;
 	string responseUri = "";
 	string code = "";
 	string error = "";
 	string errorDescription = "";
+}
+
+private struct LocalAuthCompletionResult {
+	bool success = false;
+}
+
+private struct LocalAuthBrowserResponseResult {
+	bool sent = false;
 }
 
 private enum string LOCAL_AUTH_HOST = "127.0.0.1";
@@ -123,12 +132,16 @@ private string htmlEscape(string input) {
 		.replace("'", "&#39;");
 }
 
-private string buildBrowserResponse(LocalAuthServerResult result) {
-	bool success = !result.code.empty && result.error.empty;
-	string title = success ? "Authentication complete" : "Authentication failed";
-	string message = success ?
-		"Authentication is complete. You may close this browser window and return to the OneDrive Client for Linux." :
-		"Authentication did not complete successfully. Please return to the OneDrive Client for Linux.";
+private string buildBrowserResponse(LocalAuthServerResult result, bool authenticationSucceeded) {
+	string title = authenticationSucceeded ? "Authentication complete" : "Authentication failed";
+	string message;
+	if (authenticationSucceeded) {
+		message = "The OneDrive Client for Linux has been successfully authorised. You may close this browser window and return to the application.";
+	} else if (!result.error.empty) {
+		message = "Microsoft did not return a successful authorisation response. Please return to the OneDrive Client for Linux.";
+	} else {
+		message = "The OneDrive Client for Linux was unable to complete authentication with Microsoft. Please return to the application for additional information.";
+	}
 
 	string body = "<!doctype html><html><head><meta charset=\"utf-8\"><title>" ~ title ~ "</title></head>" ~
 		"<body><h1>" ~ title ~ "</h1><p>" ~ message ~ "</p>";
@@ -180,8 +193,8 @@ private void parseHttpRequestTarget(string requestTarget, ushort port, ref Local
 	result.errorDescription = queryValue(query, "error_description");
 }
 
-private void sendHttpResponse(Socket client, LocalAuthServerResult result) {
-	string body = buildBrowserResponse(result);
+private void sendHttpResponse(Socket client, LocalAuthServerResult result, bool authenticationSucceeded) {
+	string body = buildBrowserResponse(result, authenticationSucceeded);
 	string response = "HTTP/1.1 200 OK\r\n" ~
 		"Content-Type: text/html; charset=utf-8\r\n" ~
 		"Content-Length: " ~ to!string(body.length) ~ "\r\n" ~
@@ -204,6 +217,7 @@ private void localAuthServeOnce(Tid parentTid, ushort port) {
 	LocalAuthServerResult result;
 	Socket listener;
 	Socket client;
+	bool resultSent = false;
 
 	scope(exit) closeSocketNoThrow(client);
 	scope(exit) closeSocketNoThrow(listener);
@@ -236,20 +250,38 @@ private void localAuthServeOnce(Tid parentTid, ushort port) {
 			result.errorDescription = "The local authentication listener received an empty HTTP request.";
 		}
 
-		sendHttpResponse(client, result);
-	} catch (Exception e) {
-		result.received = true;
-		result.error = "local_auth_listener_error";
-		result.errorDescription = e.msg;
-	}
+		// Keep the browser connection open until the normal OneDrive authentication flow
+		// confirms whether token redemption and credential persistence actually succeeded.
+		result.browserResponsePending = true;
+		send(parentTid, result);
+		resultSent = true;
 
-	send(parentTid, result);
+		LocalAuthCompletionResult completionResult;
+		receive(
+			(LocalAuthCompletionResult finalResult) {
+				completionResult = finalResult;
+			}
+		);
+
+		sendHttpResponse(client, result, completionResult.success);
+		send(parentTid, LocalAuthBrowserResponseResult(true));
+	} catch (Exception e) {
+		if (!resultSent) {
+			result.received = true;
+			result.error = "local_auth_listener_error";
+			result.errorDescription = e.msg;
+			send(parentTid, result);
+		} else {
+			send(parentTid, LocalAuthBrowserResponseResult(false));
+		}
+	}
 }
 
-LocalAuthResponse performLocalBrowserAuth(string authorisationUrl, ushort port) {
+LocalAuthResponse performLocalBrowserAuth(string authorisationUrl, ushort port, bool delegate(string) completeAuthentication) {
 	LocalAuthResponse response;
 	Tid ownerTid = thisTid;
-	spawn(&localAuthServeOnce, ownerTid, port);
+	Tid serverTid = spawn(&localAuthServeOnce, ownerTid, port);
+	bool browserResponsePending = false;
 
 	// Give the listener a very small window to bind before launching the browser.
 	Thread.sleep(dur!"msecs"(200));
@@ -266,12 +298,36 @@ LocalAuthResponse performLocalBrowserAuth(string authorisationUrl, ushort port) 
 			response.code = decodeComponent(serverResult.code);
 			response.error = decodeComponent(serverResult.error);
 			response.errorDescription = decodeComponent(serverResult.errorDescription);
-			response.success = response.received && !response.code.empty && response.error.empty;
+			browserResponsePending = serverResult.browserResponsePending;
 		}
 	);
 
 	if (!gotMessage) {
 		response.error = "local_auth_timeout";
+		return response;
 	}
+
+	bool callbackSucceeded = response.received && !response.code.empty && response.error.empty;
+	if (callbackSucceeded) {
+		try {
+			response.success = completeAuthentication(response.code);
+		} catch (Exception e) {
+			addLogEntry("Local browser authentication could not be completed: " ~ e.msg);
+			response.success = false;
+		}
+	}
+
+	if (browserResponsePending) {
+		send(serverTid, LocalAuthCompletionResult(response.success));
+
+		receive(
+			(LocalAuthBrowserResponseResult browserResult) {
+				if (!browserResult.sent) {
+					addLogEntry("Unable to send the final authentication result to the browser.", ["debug"]);
+				}
+			}
+		);
+	}
+
 	return response;
 }

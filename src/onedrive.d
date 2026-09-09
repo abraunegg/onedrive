@@ -931,11 +931,18 @@ class OneDriveApi {
 									addLogEntry();
 									addLogEntry("Opening the Microsoft authorisation URL in your default browser ...", ["consoleOnly"]);
 									addLogEntry("Waiting for the Microsoft authorisation response on " ~ redirectUrl, ["consoleOnly"]);
-									LocalAuthResponse localAuthResponse = performLocalBrowserAuth(url, localAuthPort);
+									LocalAuthResponse localAuthResponse = performLocalBrowserAuth(url, localAuthPort,
+										(string authCode) {
+											return redeemToken(authCode, true);
+										}
+									);
 									if (localAuthResponse.success) {
 										appConfig.applicationAuthoriseResponseURIReceived = true;
-										redeemToken(localAuthResponse.code);
 										return true;
+									}
+									if (localAuthResponse.received && !localAuthResponse.code.empty && localAuthResponse.error.empty) {
+										addLogEntry("Local browser authentication failed while completing OAuth token processing.", ["consoleOnly"]);
+										return false;
 									}
 									addLogEntry("Local browser authentication did not complete successfully; falling back to manual redirect URI entry.", ["consoleOnly"]);
 									if (!localAuthResponse.error.empty) {
@@ -1948,16 +1955,16 @@ class OneDriveApi {
 		(*headers)["Prefer"] = "Include-Feature=AddToOneDrive";
 	}
 
-	private void redeemToken(string authCode) {
+	private bool redeemToken(string authCode, bool returnOnAuthenticationFailure = false) {
 		string postData =
 			"client_id=" ~ clientId ~
 			"&redirect_uri=" ~ encodeComponent(redirectUrl) ~
 			"&code=" ~ encodeComponent(authCode) ~
 			"&grant_type=authorization_code";
-		acquireToken(postData.dup);
+		return acquireToken(postData.dup, returnOnAuthenticationFailure);
 	}
 
-	private void acquireToken(char[] postData) {
+	private bool acquireToken(char[] postData, bool returnOnAuthenticationFailure = false) {
 		// Set this function name
 		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
 
@@ -1979,14 +1986,23 @@ class OneDriveApi {
 				releaseCurlEngine();
 				// Handle an unauthorised client
 				handleClientUnauthorised(exception.httpStatusCode, exception.error);
+				if (returnOnAuthenticationFailure) {
+					return false;
+				}
 				// Must force exit here, allow logging to be done
 				forceExit();
 			} else {
 				if (exception.httpStatusCode >= 500) {
 					// There was a HTTP 5xx Server Side Error - retry
+					if (returnOnAuthenticationFailure) {
+						return acquireToken(postData, true);
+					}
 					acquireToken(postData);
 				} else {
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+					if (returnOnAuthenticationFailure) {
+						return false;
+					}
 				}
 			}
 		}
@@ -2019,6 +2035,9 @@ class OneDriveApi {
 						addLogEntry();
 						// force exit
 						releaseCurlEngine();
+						if (returnOnAuthenticationFailure) {
+							return false;
+						}
 						// Must force exit here, allow logging to be done
 						forceExit();
 					}
@@ -2026,27 +2045,47 @@ class OneDriveApi {
 			}
 
 			if ("access_token" in response) {
+				if (returnOnAuthenticationFailure) {
+					try {
+						if (strip(response["access_token"].str).empty || !("refresh_token" in response) || strip(response["refresh_token"].str).empty || !("expires_in" in response)) {
+							addLogEntry("Invalid authentication response from OneDrive. Required authentication token data was missing.");
+							return false;
+						}
+					} catch (JSONException exception) {
+						addLogEntry("Invalid authentication response from OneDrive. Required authentication token data could not be processed.");
+						return false;
+					}
+				}
 				// Process the response JSON
-				processAuthenticationJSON(response);
+				return processAuthenticationJSON(response);
 			} else {
 				// Release curl engine
 				releaseCurlEngine();
 				// Log error message
 				addLogEntry("\nInvalid authentication response from OneDrive. Please check the response uri\n");
+				if (returnOnAuthenticationFailure) {
+					return false;
+				}
 				// re-authorize
 				authorise();
+				return false;
 			}
 		} else {
 			// Release curl engine
 			releaseCurlEngine();
 			addLogEntry("Invalid response from the Microsoft Graph API. Unable to initialise OneDrive API instance.");
+			if (returnOnAuthenticationFailure) {
+				return false;
+			}
 			// Must force exit here, allow logging to be done
 			forceExit();
 		}
+
+		return false;
 	}
 
 	// Process the authentication JSON
-	private void processAuthenticationJSON(JSONValue response) {
+	private bool processAuthenticationJSON(JSONValue response) {
 		// Set this function name
 		string thisFunctionName = format("%s.%s", strip(__MODULE__) , strip(getFunctionName!({})));
 
@@ -2062,6 +2101,8 @@ class OneDriveApi {
 
 		// Debug this response
 		if (debugLogging) {addLogEntry("appConfig.accessTokenExpiration = " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);}
+
+		bool authenticationStatePersisted = true;
 
 		if (!dryRun) {
 			// Update the refreshToken in appConfig so that we can reuse it
@@ -2087,8 +2128,11 @@ class OneDriveApi {
 			} catch (FileException exception) {
 				// display the error message
 				displayFileSystemErrorMessage(exception.msg, thisFunctionName, appConfig.refreshTokenFilePath);
+				authenticationStatePersisted = false;
 			}
 		}
+
+		return authenticationStatePersisted;
 	}
 
 	private void generateNewAccessToken() {
