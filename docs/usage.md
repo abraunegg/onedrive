@@ -399,7 +399,7 @@ If the browser configured by `BROWSER` cannot be launched, the application falls
 
 This local listener is only used during the authentication process. It binds only to the loopback interface, does not require any inbound firewall changes, and is closed once authentication has completed or failed.
 
-Following successful **initial** graphical authentication, the completion page also provides an optional link to support ongoing development and maintenance through [GitHub Sponsors](https://github.com/sponsors/abraunegg?metadata_campaign=onedrive-sponsorship&metadata_source=github&metadata_content=usage-auth). This sponsorship message is not displayed during `--reauth`, is not shown as a desktop notification, and is not added to normal terminal or synchronisation output.
+Following successful **initial** graphical authentication, the completion page also displays an optional **Help sustain OneDrive Client for Linux** section with a link to support ongoing development, testing and maintenance through [GitHub Sponsors](https://github.com/sponsors/abraunegg?metadata_campaign=onedrive-sponsorship&metadata_source=github&metadata_content=usage-auth). Sponsorship is entirely optional. This section is not displayed during `--reauth`, is not shown as a desktop notification, and is not added to normal terminal or synchronisation output.
 
 **Example Terminal Session within Graphical Desktop session:**
 ```text
@@ -421,6 +421,8 @@ user@hostname:~$
 ```
 
 **Graphical Desktop OAuth2 Authentication Process Illustrated:**
+
+The successful initial-authentication examples below include the optional project sponsorship section described above.
 
 Fedora graphical authentication example:
 
