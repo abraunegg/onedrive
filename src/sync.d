@@ -8637,9 +8637,38 @@ class SyncEngine {
 				localModifiedTime.fracSecs = Duration.zero;
 				onlineModifiedTime.fracSecs = Duration.zero;
 
+				// The timestamp alone cannot prove that the online item changed after our last
+				// successful sync. A local replacement may deliberately preserve an older mtime.
+				// Only trust the stored eTag as a baseline when the freshly queried DriveItem is
+				// the same object represented by this database row and both eTags are usable.
+				bool onlineObjectMatchesDatabaseIdentity =
+					(targetDriveId == dbItem.driveId) &&
+					(targetItemId == dbItem.id) &&
+					hasId(currentOnlineJSONData) &&
+					(currentOnlineJSONData["id"].str == dbItem.id);
+				bool onlineUnchangedSinceLastSync =
+					onlineObjectMatchesDatabaseIdentity &&
+					hasETag(currentOnlineJSONData) &&
+					!currentOnlineJSONData["eTag"].str.empty &&
+					!dbItem.eTag.empty &&
+					(currentOnlineJSONData["eTag"].str == dbItem.eTag);
+				bool trustDatabaseBaseline =
+					onlineUnchangedSinceLastSync &&
+					!appConfig.getValueBool("resync");
+
 				// Which file is newer? If local is newer, it will be uploaded as a modified file in the correct manner
-				if (localModifiedTime < onlineModifiedTime) {
-					// Online File is actually newer than the locally modified file
+				if ((localModifiedTime < onlineModifiedTime) && trustDatabaseBaseline) {
+					// The online item is timestamp-newer, but its eTag still matches the last-known
+					// database baseline. The remote content has therefore not changed since the last
+					// sync, so continue with the normal modified-file upload despite the older mtime.
+					if (debugLogging) {
+						addLogEntry("Online eTag matches database eTag; treating as local modification despite older local timestamp: " ~ localFilePath, ["debug"]);
+					}
+				}
+
+				if ((localModifiedTime < onlineModifiedTime) && !trustDatabaseBaseline) {
+					// Online File is actually newer than the locally modified file, or we cannot
+					// safely prove that the online item is unchanged from our database baseline.
 					if (debugLogging) {
 						addLogEntry("currentOnlineJSONData: " ~ to!string(currentOnlineJSONData), ["debug"]);
 						addLogEntry("currentOnlineItemData: " ~ to!string(currentOnlineItemData), ["debug"]);
