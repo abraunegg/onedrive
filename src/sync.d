@@ -8380,6 +8380,11 @@ class SyncEngine {
 								// --upload-only being used
 								// we are not downloading a file, warn that file differences will exist
 								addLogEntry("WARNING: The file uploaded to Microsoft OneDrive has been modified through its SharePoint 'enrichment' process and no longer matches your local version.");
+								// When also using --local-first, keep the online/database timestamp aligned with the authoritative local file
+								if (appConfig.getValueBool("local_first")) {
+									addLogEntry("WARNING: The online metadata will now be modified to match your local file which will create a new file version.");
+									uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);
+								}
 								addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
 							}
 						} else {
