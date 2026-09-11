@@ -13,6 +13,7 @@ addrlist
 Adevice
 adminconsent
 adr
+aeff
 Agrant
 ags
 Aietf
@@ -103,6 +104,7 @@ ctl
 ctls
 cvs
 cyb
+dafbe
 datadir
 datasize
 dchar
@@ -140,6 +142,7 @@ drwxrwxr
 dryrun
 DTime
 Dynu
+edf
 eflag
 EIOv
 eis
@@ -171,6 +174,8 @@ fedoraproject
 fefefe
 fexceptions
 ffat
+ffebe
+fff
 FFFD
 fhandler
 flto
@@ -503,6 +508,7 @@ sdlang
 Searchmonkey
 seekdata
 seekfunction
+Segoe
 segsz
 segv
 semanage

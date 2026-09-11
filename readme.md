@@ -9,7 +9,7 @@
 
 [![E2E Testing - Master Status](https://github.com/abraunegg/onedrive/actions/workflows/e2e-master-status.yaml/badge.svg?branch=master)](https://github.com/abraunegg/onedrive/blob/master/docs/end_to_end_testing.md)
 
-A fully featured, free, and actively maintained Microsoft OneDrive client that seamlessly supports OneDrive Personal, OneDrive for Business, Microsoft 365 (formerly Office 365), and SharePoint document libraries.
+A fully featured, free, open-source and actively maintained Microsoft OneDrive client that seamlessly supports OneDrive Personal, OneDrive for Business, Microsoft 365 (formerly Office 365), and SharePoint document libraries.
 
 Designed for maximum flexibility and reliability, this powerful and highly configurable client works across all major Linux distributions, FreeBSD and OpenBSD. It can also be deployed in containerised environments using Docker or Podman. Supporting both one-way and two-way synchronisation modes, the client provides secure and efficient file syncing with Microsoft OneDrive services — tailored to suit both desktop and server environments.
 
@@ -22,6 +22,14 @@ The original [skilion repository](https://github.com/skilion/onedrive) was forma
 Under the terms of the GNU General Public License (GPL), forking and continuing development of open source software is fully permitted — provided that derivative works retain the same license. This client complies with the original GPLv3 licensing, ensuring the same freedoms granted by the original project remain intact.
 
 Since forking in early 2018, this client has evolved into a clean re-imagining of the original codebase, resolving long-standing bugs and adding extensive new functionality to better support both personal and enterprise use cases to interact with Microsoft OneDrive from Linux, FreeBSD and OpenBSD platforms.
+
+
+## Help Sustain OneDrive Client for Linux
+OneDrive Client for Linux is free, open-source software that is independently developed and maintained.
+
+If the client is useful to you or your organisation, you can help sustain ongoing development, compatibility work, testing across supported operating systems and Microsoft OneDrive account types, and long-term project maintenance through [GitHub Sponsors](https://github.com/sponsors/abraunegg?metadata_campaign=onedrive-sponsorship&metadata_source=github&metadata_content=readme).
+
+Sponsorship is entirely optional and does not alter access to the software, project documentation, community support, or the ability to report issues and contribute to the project.
 
 
 ## Features
