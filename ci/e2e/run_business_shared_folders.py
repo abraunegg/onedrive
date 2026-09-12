@@ -30,6 +30,9 @@ from testcases_business_shared_folders.bsftc0005_get_sharepoint_drive_id_while_m
 from testcases_business_shared_folders.bsftc0006_sharepoint_shared_folder_timestamp_replacement import (
     BusinessSharedFolderTestCase0006SharePointTimestampReplacement,
 )
+from testcases_business_shared_folders.bsftc0007_direct_shared_office_timestamp_replacement import (
+    BusinessSharedFolderTestCase0007DirectSharedOfficeTimestampReplacement,
+)
 
 
 def build_test_suite() -> list:
@@ -40,6 +43,7 @@ def build_test_suite() -> list:
         BusinessSharedFolderTestCase0004SharedFilesPullDown(),
         BusinessSharedFolderTestCase0005GetSharePointDriveIdWhileMonitoring(),
         BusinessSharedFolderTestCase0006SharePointTimestampReplacement(),
+        BusinessSharedFolderTestCase0007DirectSharedOfficeTimestampReplacement(),
     ]
 
 
