@@ -65,7 +65,7 @@ jobs:
       
     - name: Install build-dependencies
       if: steps.changes.outputs.code_changed == 'true'
-      run: sudo apt install -y libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc libdbus-1-dev
+      run: sudo apt install -y libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc libdbus-1-dev libfuse3-dev
 
     - name: Configure
       if: steps.changes.outputs.code_changed == 'true'
