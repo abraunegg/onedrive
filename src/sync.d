@@ -8380,6 +8380,11 @@ class SyncEngine {
 								// --upload-only being used
 								// we are not downloading a file, warn that file differences will exist
 								addLogEntry("WARNING: The file uploaded to Microsoft OneDrive has been modified through its SharePoint 'enrichment' process and no longer matches your local version.");
+								// When also using --local-first, keep the online/database timestamp aligned with the authoritative local file
+								if (appConfig.getValueBool("local_first")) {
+									addLogEntry("WARNING: The online metadata will now be modified to match your local file which will create a new file version.");
+									uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);
+								}
 								addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
 							}
 						} else {
@@ -8637,9 +8642,38 @@ class SyncEngine {
 				localModifiedTime.fracSecs = Duration.zero;
 				onlineModifiedTime.fracSecs = Duration.zero;
 
+				// The timestamp alone cannot prove that the online item changed after our last
+				// successful sync. A local replacement may deliberately preserve an older mtime.
+				// Only trust the stored eTag as a baseline when the freshly queried DriveItem is
+				// the same object represented by this database row and both eTags are usable.
+				bool onlineObjectMatchesDatabaseIdentity =
+					(targetDriveId == dbItem.driveId) &&
+					(targetItemId == dbItem.id) &&
+					hasId(currentOnlineJSONData) &&
+					(currentOnlineJSONData["id"].str == dbItem.id);
+				bool onlineUnchangedSinceLastSync =
+					onlineObjectMatchesDatabaseIdentity &&
+					hasETag(currentOnlineJSONData) &&
+					!currentOnlineJSONData["eTag"].str.empty &&
+					!dbItem.eTag.empty &&
+					(currentOnlineJSONData["eTag"].str == dbItem.eTag);
+				bool trustDatabaseBaseline =
+					onlineUnchangedSinceLastSync &&
+					!appConfig.getValueBool("resync");
+
 				// Which file is newer? If local is newer, it will be uploaded as a modified file in the correct manner
-				if (localModifiedTime < onlineModifiedTime) {
-					// Online File is actually newer than the locally modified file
+				if ((localModifiedTime < onlineModifiedTime) && trustDatabaseBaseline) {
+					// The online item is timestamp-newer, but its eTag still matches the last-known
+					// database baseline. The remote content has therefore not changed since the last
+					// sync, so continue with the normal modified-file upload despite the older mtime.
+					if (debugLogging) {
+						addLogEntry("Online eTag matches database eTag; treating as local modification despite older local timestamp: " ~ localFilePath, ["debug"]);
+					}
+				}
+
+				if ((localModifiedTime < onlineModifiedTime) && !trustDatabaseBaseline) {
+					// Online File is actually newer than the locally modified file, or we cannot
+					// safely prove that the online item is unchanged from our database baseline.
 					if (debugLogging) {
 						addLogEntry("currentOnlineJSONData: " ~ to!string(currentOnlineJSONData), ["debug"]);
 						addLogEntry("currentOnlineItemData: " ~ to!string(currentOnlineItemData), ["debug"]);
