@@ -1,48 +1,63 @@
 @startuml
+title applyPotentiallyChangedItem()
 start
-partition "applyPotentiallyChangedItem" {
-  :Check if existing item path differs from changed item path;
-  if (itemWasMoved) then (yes)
-    :Log moving item;
-    if (destination exists) then (yes)
-      if (item in database) then (yes)
-        :Check if item is synced;
-        if (item is synced) then (yes)
-          :Log destination is in sync;
-        else (no)
-          :Log destination occupied with a different item;
-          :Backup conflicting file;
-          note right: Local data loss prevention
-        endif
+
+:Read previously applied DB state and incoming online state;
+:Determine whether file content identity changed;
+
+if (eTag changed?) then (yes)
+  if (Online path / name changed?) then (yes)
+    :Prepare local move / rename;
+    if (Destination already exists?) then (yes)
+      :Look up destination in DB when possible;
+      if (Destination is demonstrably in sync?) then (yes)
+        :Destination may be overwritten by the online move;
       else (no)
-        :Log destination occupied by an un-synced file;
-        :Backup conflicting file;
-        note right: Local data loss prevention
+        :Create verified non-destructive safeBackup\nof conflicting destination;
+        if (Preservation failed?) then (yes)
+          :Abort this item without advancing state;
+          stop
+        endif
       endif
     endif
-    :Try to rename path;
-    if (dry run) then (yes)
-      :Track as faked id item;
-      :Track path not renamed;
+
+    if (~--dry-run?) then (yes)
+      :Track simulated move only;
     else (no)
-      :Rename item;
-      :Flag item as moved;
-      if (item is a file) then (yes)
-        :Set local timestamp to match online;
+      :safeRename old path to new path;
+      if (Rename failed?) then (yes)
+        :Abort this item without treating it as moved;
+        stop
+      endif
+      :Publish expected local move for monitor correlation;
+      if (Pure file move with unchanged content?) then (yes)
+        :Apply online timestamp to moved local file;
       endif
     endif
-  else (no)
   endif
-  :Check if eTag changed;
-  if (eTag changed) then (yes)
-    if (item is a file and not moved) then (yes)
-      :Decide if to download based on hash;
+
+  if (Incoming item is file-like?) then (yes)
+    if (File content identity changed?) then (yes)
+      :Queue online file content for transactional download;
+      if (Path was moved successfully?) then (yes)
+        :Persist new location but retain old applied\ncontent identity until download commits;
+      endif
     else (no)
-      :Update database;
+      :Persist metadata / location change when required;
     endif
   else (no)
-    :Update database if timestamp differs or in specific operational mode;
+    :Persist directory / remote-item metadata;
+    if (Renamed shared-folder shortcut?) then (yes)
+      :Update associated remote DB record name;
+    endif
   endif
-}
+else (no)
+  if (mtime changed or generated response is in use?) then (yes)
+    :Refresh DB metadata;
+  else (no)
+    :No applied-state change required;
+  endif
+endif
+
 stop
 @enduml

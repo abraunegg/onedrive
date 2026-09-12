@@ -1,28 +1,31 @@
 @startuml
+title Local-First Conflict Handling
 start
-note left: Operational Mode 'onedrive -s --local-first'
-:Perform database consistency and integrity check;
-note left: Local filesystem is evaluated first for upload intent
+
+:Run DB consistency check against local filesystem first;
+:Identify locally modified tracked files;
+
 repeat
-  :Process each DB record;
-  if (DB record in sync with local file?) then (yes)
+  :Take next modified local file;
+  :Fetch current online DriveItem metadata before upload;
+  :Evaluate current online state against\nlocal file and last applied DB baseline;
+  if (Genuine / unresolved online conflict?) then (yes)
+    :Create and verify independent safeBackup copy of local version;
+    if (Preservation succeeds?) then (yes)
+      :Upload safeBackup as a new file;
+      if (~--upload-only?) then (yes)
+        :Retain canonical local path;
+      else (no)
+        :Apply current online canonical file\nthrough transactional download;
+      endif
+    endif
   else (no)
-    :Flag item as locally modified;
+    :Upload local modified file normally;
+    :Perform post-upload integrity / timestamp reconciliation;
   endif
-repeat while
+repeat while (More modified files?) is (yes)
 
-:Process modified items to upload;
-if (Latest online file is newer and differs?) then (yes)
-  :Create and verify safeBackup copy of local file;
-  note left: Canonical local pathname remains present
-  :Upload safeBackup as a new file;
-  :Apply newer online canonical file in bidirectional mode;
-else (no)
-  :Upload local modified file normally;
-endif
-
-:Scan local filesystem for new data to upload;
-:Query OneDrive /delta API for online changes;
-:Reconcile remaining online changes transactionally;
+:Scan local filesystem for new items and upload eligible data;
+:Reconcile Microsoft OneDrive online state last;
 stop
 @enduml

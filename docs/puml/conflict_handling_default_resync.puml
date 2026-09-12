@@ -1,27 +1,36 @@
 @startuml
+title Default Remote-First Conflict Handling with ~--resync
 start
-note left: Operational Mode 'onedrive -s --resync'
+
 :Discard previous local sync database state;
-:Query OneDrive and rebuild authoritative online state;
-if (Online item is a file and same pathname exists locally?) then (yes)
-  note left: There is no prior DB baseline after --resync
-  :Compare local content hash with online content hash;
-  if (Hashes match?) then (yes)
-    :Reconcile metadata and rebuild DB record;
-    note left: --resync by itself does NOT create a safeBackup
+:Enumerate current Microsoft OneDrive state and rebuild identity baseline;
+
+if (Online file maps to an existing local pathname?) then (yes)
+  :Compare existing local content with online content;
+  if (Content already matches?) then (yes)
+    :Reconcile timestamp / metadata and rebuild DB record;
+    note right
+      ~--resync does not create a safeBackup
+      merely because the previous DB was discarded.
+    end note
   else (no)
-    :Download online replacement to <canonical>.partial;
-    :Validate HTTP result, size and file hash;
-    :Create and verify safeBackup copy of local file;
-    note left: Canonical pathname remains present\nuntil validated replacement commit
-    :Recheck canonical did not change;
-    :Atomically promote validated .partial to canonical pathname;
+    :Download online replacement into private .partial staging file;
+    :Validate downloaded content;
+    :Create and verify safeBackup copy of differing local content;
+    if (Preservation fails?) then (yes)
+      :Reject replacement; retain local canonical file;
+      stop
+    endif
+    :Recheck canonical stability;
+    :Atomically promote validated online replacement;
+    :Apply online timestamp and rebuild DB state;
   endif
 else (no)
-  :Download/create online item as required;
+  :Create / download online item normally;
 endif
-:Perform database consistency and integrity check;
-:Scan local filesystem for new data to upload;
-note left: A created safeBackup may be uploaded here\nunless excluded by skip_file
+
+:Run local database/filesystem consistency pass;
+:Scan for new local data when uploads are enabled;
+:Perform final online true-up where applicable;
 stop
 @enduml

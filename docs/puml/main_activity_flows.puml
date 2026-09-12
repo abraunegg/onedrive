@@ -1,81 +1,47 @@
 @startuml
-
+title OneDrive Client for Linux - Main Synchronisation Activity
 start
 
-:Validate access and existing access token\nRefresh if needed;
+:Initialise configuration, logging, database,\nMicrosoft API and runtime services;
+:Validate authentication / token state;
+:Validate service reachability and system time when enabled;
 
-:Query /delta API;
-note right: Query Microsoft OneDrive /delta API
-:Receive JSON responses;
+if (~--local-first?) then (yes)
+  :Database consistency / known local state pass;
+  :Apply locally modified / deleted tracked items;
+  :Scan local filesystem for new data;
+  :Upload eligible new local items;
+  :Enumerate online state (/delta or generated response);
+  :Process online JSON and apply remaining remote changes;
+else (no)
+  :Enumerate online state (/delta or generated response);
+  :Validate, filter and classify online JSON;
+  :Process root and deletion state;
+  :Route known items to applyPotentiallyChangedItem();
+  :Route untracked online items to applyPotentiallyNewLocalItem();
+  :Process queued downloads transactionally;
 
-:Process JSON Responses;
-partition "Process /delta JSON Responses" {
-    while (for each JSON response) is (yes)
-        :Determine if JSON is 'root'\nor 'deleted' item;
-        if ('root' or 'deleted') then (yes)
-            :Process 'root' or 'deleted' items;
-            if ('root' object) then (yes)
-                :Process 'root' JSON;
-            else (no)
-                if (Is 'deleted' object in sync) then (yes)
-                    :Process deletion of local item;
-                else (no)
-                    :Rename local file as it is not in sync;
-                    note right: Deletion event conflict handling\nLocal data loss prevention
-                endif
-            endif
-        else (no)
-            :Evaluate against 'Client Side Filtering' rules;
-            if (unwanted) then (yes)
-                :Discard JSON;
-            else (no)
-                :Process JSON (create dir/download file);
-                if (Is the 'JSON' item in the local cache) then (yes)
-                  :Process JSON as a potentially changed local item;
-                  note left: Run 'applyPotentiallyChangedItem' function
-                else (no)
-                  :Process JSON as potentially new local item;
-                  note right:  Run 'applyPotentiallyNewLocalItem' function
-                endif
-                :Process objects in download queue;
-                :Download File;
-                note left: Download file from Microsoft OneDrive (Multi Threaded Download)
-                :Save in local database cache;
-            endif
-        endif
-    endwhile
-}
+  :Database consistency / known local state pass;
+  :Apply locally modified / deleted tracked items;
 
-partition "Perform data integrity check based on local cache database" {
-  :Process local cache database\nto check local data integrity and for differences;
-  if (difference found) then (yes)
-      :Upload file/folder change including deletion;
-      note right: Upload local change to Microsoft OneDrive
-      :Receive response with item metadata;
-      :Save response to local cache database;
+  if (~--download-only?) then (yes)
+    :Skip new-local-data upload scan;
   else (no)
+    :Scan local filesystem for new data;
+    :Apply local client-side filtering;
+    :Create directories / upload files as required;
+
+    if (force_children_scan enabled?) then (yes)
+      :No duplicate final online traversal;
+    else (no)
+      :Perform final online true-up;
+      :Process any additional remote changes;
+    endif
   endif
-}
+endif
 
-partition "Local Filesystem Scanning" {
-  :Scan local filesystem\nfor new files/folders;
-    while (for each new item) is (yes)
-        :Check item against 'Client Side Filtering' rules;
-        if (item passes filtering) then (yes)
-            :Upload new file/folder change including deletion;
-            note right: Upload to Microsoft OneDrive
-            :Receive response with item metadata;
-            :Save response in local\ncache database;
-        else (no)
-            :Discard item\n(Does not meet filtering criteria);
-        endif
-    endwhile
-}
-
-partition "Final True-Up" {
-  :Query /delta link for true-up;
-  note right: Final Data True-Up
-  :Process further online JSON changes if required;
-}
+:In monitor mode, reconcile expected/client-generated
+filesystem effects at the applicable phase boundaries;
+:Report transfer / synchronisation failures;
 stop
 @enduml

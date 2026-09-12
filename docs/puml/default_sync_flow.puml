@@ -1,32 +1,35 @@
 @startuml
-title Default Sync Flow (Online is Source of Truth)
+title Default Synchronisation Order (Remote-First)
 
 start
+:Validate authentication, service reachability\nand system time safety gates;
 
-:Step 1 - Scan OneDrive (online);
-:Detect online changes:
-- New files or folders
-- Modified files
-- Deleted files;
+:Enumerate Microsoft OneDrive online state;
+note right
+  Online state may come from Graph /delta
+  or a generated hierarchy walk depending
+  on scope and operating mode.
+end note
+:Filter, classify and apply required online changes locally;
 
-:Apply online changes to local:
-- Download new files or folders
-- Update modified files
-- Delete local files or folders;
+:Process known database state against\nthe local filesystem;
+note right
+  Detect locally modified or deleted
+  objects that were previously tracked.
+end note
 
-:Step 2 - Scan local files;
-:Detect local-only changes:
-- New files or folders
-- Modified files;
+if (~--download-only?) then (yes)
+  :Skip upload-side local filesystem scan;
+else (no)
+  :Scan local filesystem for new data;
+  :Upload eligible new local files / directories;
 
-:Upload local changes to OneDrive:
-- Upload new files or folders
-- Upload modified files;
-
-:Step 3 - Final reconciliation;
-:Rescan OneDrive to ensure:
-- Any last-minute online changes
-  are applied locally;
+  if (force_children_scan enabled?) then (yes)
+    :Skip duplicate final /children traversal;
+  else (no)
+    :Perform final online true-up;
+  endif
+endif
 
 stop
 @enduml

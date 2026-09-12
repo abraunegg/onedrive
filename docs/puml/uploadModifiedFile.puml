@@ -1,56 +1,45 @@
 @startuml
+title Modified Local File Upload Flow
 start
-partition "Upload Modified File" {
-  :Initialize API Instance;
-  :Check for Dry Run;
-  if (Is Dry Run?) then (yes)
-    :Create Fake Response;
-  else (no)
-    :Get Current Online Data;
-    if (Error Fetching Data) then (yes)
-      :Handle Errors;
-      if (Retryable Error?) then (yes)
-        :Retry Fetching Data;
-        detach
+
+:Resolve canonical or remote/shared target DriveItem identity;
+:Fetch latest online metadata and eTag where possible;
+:Read local file size and choose provisional upload method;
+
+if (~--upload-only + ~--local-first or force_session_upload?) then (yes)
+  :Force upload-session path;
+endif
+
+if (Current online metadata is available?) then (yes)
+  :Evaluate current online state against\nlocal file and last applied DB baseline;
+  note right
+    This is the conflict-protection boundary.
+    The exact proof used to distinguish a genuine
+    online change from a local replacement belongs
+    to reconciliation policy, not upload transport.
+  end note
+  if (Online conflict requires preserving local version?) then (yes)
+    :Create verified independent safeBackup copy;
+    if (Preservation succeeds?) then (yes)
+      :Upload safeBackup as a new file;
+      if (~--upload-only?) then (yes)
+        :Retain canonical local file;
       else (no)
-        :Log and Display Error;
+        :Apply current online canonical file via\ntransactional download;
       endif
     endif
-    if (filesize > 0 and valid latest online data) then (yes)
-      if (is online file newer) then (yes)
-        :Log that online is newer; 
-        :Perform safe backup;
-        note left: Local data loss prevention
-        :Upload renamed local file as new file;
-      endif
-    endif
-    :Determine Upload Method;
-    if (Use Simple Upload?) then (yes)
-      :Perform Simple Upload;
-      if (Upload Error) then (yes)
-        :Handle Upload Errors and Retries;
-        if (Retryable Upload Error?) then (yes)
-          :Retry Upload;
-          detach
-        else (no)
-          :Log and Display Upload Error;
-        endif
-      endif
-    else (no)
-      :Create Upload Session;
-      :Perform Upload via Session;
-      if (Session Upload Error) then (yes)
-        :Handle Session Upload Errors and Retries;
-        if (Retryable Session Error?) then (yes)
-          :Retry Session Upload;
-          detach
-        else (no)
-          :Log and Display Session Error;
-        endif
-      endif
-    endif
+    :Do not overwrite online canonical with original local file;
+    stop
   endif
-  :Finalize;
-}
+endif
+
+if (Zero-byte or simple-upload-sized file?) then (yes)
+  :simpleUploadReplace();
+else (no)
+  :Create resumable upload session using current eTag;
+  :Upload file fragments / resume as required;
+endif
+
+:Return upload response to higher-level\npost-upload integrity / timestamp reconciliation;
 stop
 @enduml

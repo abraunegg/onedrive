@@ -1,34 +1,41 @@
 @startuml
+title Default Remote-First Conflict Handling
 start
-note left: Operational Mode 'onedrive --sync'
-:Query OneDrive /delta API for online changes;
-note left: Online change data is authoritative\nfor the remote item being reconciled
-:Process received JSON data;
-if (JSON item is a changed file?) then (yes)
-  :Queue/download replacement to <canonical>.partial;
-  :Validate HTTP result, size and file hash;
-  if (Does canonical file exist locally?) then (yes)
-    :Read current canonical hash;
-    :Read last in-sync DB baseline when available;
+
+:Enumerate Microsoft OneDrive online state;
+:Classify and reconcile incoming online item;
+if (Incoming item replaces file content?) then (yes)
+  :Download candidate into private .partial staging file;
+  :Validate final HTTP result, size/hash policy and metadata;
+
+  if (Canonical local file exists?) then (yes)
+    :Read canonical local content at commit boundary;
+    :Read last applied DB baseline when available;
     if (Canonical matches incoming online content?) then (yes)
-      :No safeBackup required;
+      :No preservation required;
     else (no)
-      if (Canonical matches last in-sync DB baseline?) then (yes)
-        :No independent local change;\nno safeBackup required;
+      if (Canonical matches last applied DB baseline?) then (yes)
+        :No independent local content change;\nno preservation required;
       else (no)
-        :Create and verify safeBackup copy;
-        note left: Canonical pathname remains present\nuntil replacement commit
+        :Create and verify non-destructive safeBackup copy;
+        if (Preservation fails?) then (yes)
+          :Reject replacement and retain canonical / DB state;
+          stop
+        endif
       endif
     endif
     :Recheck canonical did not change during commit preparation;
-  else (no)
   endif
-  :Atomically promote validated .partial to canonical pathname;
+
+  :Atomically promote validated .partial to canonical path;
+  :Apply authoritative online timestamp and metadata;
+  :Save applied online state in DB;
 else (no)
-  :Other handling for directories | root objects | deleted items;
+  :Apply directory, metadata, move or delete handling as required;
 endif
-:Perform database consistency and integrity check;
-:Scan local filesystem for new data to upload;
-note left: A newly-created safeBackup may be uploaded here\nunless excluded by skip_file
+
+:Run known-state database consistency pass;
+:Scan for new local data when uploads are enabled;
+:Perform final online true-up where applicable;
 stop
 @enduml
