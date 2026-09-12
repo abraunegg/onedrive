@@ -551,7 +551,8 @@ final class ItemDatabase {
 				auto res = p.exec();
 				
 				while (!res.empty) {
-					items ~= buildItem(res);
+					auto _bi = buildItem(res);
+					if (_bi.type != ItemType.none) items ~= _bi;
 					res.step();
 				}
 				return items;
@@ -575,6 +576,7 @@ final class ItemDatabase {
 				auto r = p.exec();
 				if (!r.empty) {
 					item = buildItem(r);
+					if (item.type == ItemType.none) return false;
 					return true;
 				}
 			} catch (SqliteException exception) {
@@ -596,6 +598,7 @@ final class ItemDatabase {
 				auto r = p.exec();
 				if (!r.empty) {
 					item = buildItem(r);
+					if (item.type == ItemType.none) return false;
 					return true;
 				}
 			} catch (SqliteException exception) {
@@ -617,6 +620,7 @@ final class ItemDatabase {
 				auto r = p.exec();
 				if (!r.empty) {
 					item = buildItem(r);
+					if (item.type == ItemType.none) return false;
 					return true;
 				}
 			} catch (SqliteException exception) {
@@ -637,6 +641,7 @@ final class ItemDatabase {
 				auto r = p.exec();
 				if (!r.empty) {
 					item = buildItem(r);
+					if (item.type == ItemType.none) return false;
 					return true;
 				}
 			} catch (SqliteException exception) {
@@ -658,6 +663,7 @@ final class ItemDatabase {
 				auto r = p.exec();
 				if (!r.empty) {
 					item = buildItem(r);
+					if (item.type == ItemType.none) return false;
 					return true;
 				}
 			} catch (SqliteException exception) {
@@ -706,8 +712,8 @@ final class ItemDatabase {
 					auto r = s.exec();
 					if (r.empty) return false;
 					currItem = buildItem(r);
-					
-					// If the item is of type remote, substitute it with the child
+					// The item could not be constructed from the DB row - do not process further
+					if (currItem.type == ItemType.none) return false;
 					if (currItem.type == ItemType.remote) {
 						if (debugLogging) {addLogEntry("Record is a Remote Object: " ~ to!string(currItem), ["debug"]);}
 						Item child;
@@ -747,6 +753,7 @@ final class ItemDatabase {
 					auto r = s.exec();
 					if (r.empty) return false;
 					currItem = buildItem(r);
+					if (currItem.type == ItemType.none) return false;
 				}
 
 				if (currItem.type == ItemType.remote) {
@@ -824,7 +831,17 @@ final class ItemDatabase {
 
 	private Item buildItem(Statement.Result result) {
 		assert(!result.empty, "The DB result must not be empty");
-		assert(result.front.length == 20, "The DB result must have 20 columns");
+		// The D SQLite binding reports the count of all bound values across the
+		// entire result set, which can differ from the expected 20 columns when a
+		// query matches multiple rows or binds NULL values. Do not abort the client
+		// on such a mismatch - log a warning and skip this item instead.
+		// https://github.com/abraunegg/onedrive/issues/3871
+		if (result.front.length != 20) {
+			addLogEntry("WARNING: DB result has " ~ to!string(result.front.length) ~ " columns instead of the expected 20 - skipping this item (D SQLite binding column-count glitch)");
+			Item emptyItem;
+			emptyItem.type = ItemType.none;
+			return emptyItem;
+		}
 		
 		// Make one owned copy of the DB row before extracting fields.
 		// On OpenBSD, avoid repeatedly evaluating result.front[] while
@@ -962,6 +979,8 @@ final class ItemDatabase {
 
 					if (!r.empty) {
 						item = buildItem(r);
+						// The item could not be constructed from the DB row - do not process further
+						if (item.type == ItemType.none) break;
 
 						// Track the highest non-root row we encounter
 						if (item.type != ItemType.root) {
@@ -1075,7 +1094,8 @@ final class ItemDatabase {
 			try {
 				auto res = stmt.exec();
 				while (!res.empty) {
-					items ~= buildItem(res);
+					auto _bi = buildItem(res);
+					if (_bi.type != ItemType.none) items ~= _bi;
 					res.step();
 				}
 			} catch (SqliteException exception) {
@@ -1180,7 +1200,8 @@ final class ItemDatabase {
 				stmt.bind(1, driveId);
 				auto res = stmt.exec();
 				while (!res.empty) {
-					items ~= buildItem(res);
+					auto _bi = buildItem(res);
+					if (_bi.type != ItemType.none) items ~= _bi;
 					res.step();
 				}
 			} catch (SqliteException exception) {
@@ -1204,7 +1225,8 @@ final class ItemDatabase {
 				stmt.bind(1, driveId);
 				auto res = stmt.exec();
 				while (!res.empty) {
-					items ~= buildItem(res);
+					auto _bi = buildItem(res);
+					if (_bi.type != ItemType.none) items ~= _bi;
 					res.step();
 				}
 			} catch (SqliteException exception) {
