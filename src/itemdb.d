@@ -551,7 +551,8 @@ final class ItemDatabase {
 				auto res = p.exec();
 				
 				while (!res.empty) {
-					items ~= buildItem(res);
+					auto _bi = buildItem(res);
+					if (_bi.type != ItemType.none) items ~= _bi;
 					res.step();
 				}
 				return items;
@@ -575,6 +576,7 @@ final class ItemDatabase {
 				auto r = p.exec();
 				if (!r.empty) {
 					item = buildItem(r);
+					if (item.type == ItemType.none) return false;
 					return true;
 				}
 			} catch (SqliteException exception) {
@@ -596,6 +598,7 @@ final class ItemDatabase {
 				auto r = p.exec();
 				if (!r.empty) {
 					item = buildItem(r);
+					if (item.type == ItemType.none) return false;
 					return true;
 				}
 			} catch (SqliteException exception) {
@@ -617,6 +620,7 @@ final class ItemDatabase {
 				auto r = p.exec();
 				if (!r.empty) {
 					item = buildItem(r);
+					if (item.type == ItemType.none) return false;
 					return true;
 				}
 			} catch (SqliteException exception) {
@@ -637,6 +641,7 @@ final class ItemDatabase {
 				auto r = p.exec();
 				if (!r.empty) {
 					item = buildItem(r);
+					if (item.type == ItemType.none) return false;
 					return true;
 				}
 			} catch (SqliteException exception) {
@@ -658,6 +663,7 @@ final class ItemDatabase {
 				auto r = p.exec();
 				if (!r.empty) {
 					item = buildItem(r);
+					if (item.type == ItemType.none) return false;
 					return true;
 				}
 			} catch (SqliteException exception) {
@@ -706,8 +712,8 @@ final class ItemDatabase {
 					auto r = s.exec();
 					if (r.empty) return false;
 					currItem = buildItem(r);
-					
-					// If the item is of type remote, substitute it with the child
+					// The item could not be constructed from the DB row - do not process further
+					if (currItem.type == ItemType.none) return false;
 					if (currItem.type == ItemType.remote) {
 						if (debugLogging) {addLogEntry("Record is a Remote Object: " ~ to!string(currItem), ["debug"]);}
 						Item child;
@@ -747,6 +753,7 @@ final class ItemDatabase {
 					auto r = s.exec();
 					if (r.empty) return false;
 					currItem = buildItem(r);
+					if (currItem.type == ItemType.none) return false;
 				}
 
 				if (currItem.type == ItemType.remote) {
@@ -824,7 +831,20 @@ final class ItemDatabase {
 
 	private Item buildItem(Statement.Result result) {
 		assert(!result.empty, "The DB result must not be empty");
-		assert(result.front.length == 20, "The DB result must have 20 columns");
+		// Verify that the query result row has the expected number of columns for the
+		// 'item' table schema used by this client version. The column count is taken
+		// from the current row of the result set; a row with fewer columns than the
+		// expected 20 indicates that the local database schema does not match what
+		// this client version expects (for example a database created by an older
+		// client version). Do not abort the client on such a mismatch - log a warning
+		// and skip this item instead.
+		// https://github.com/abraunegg/onedrive/issues/3871
+		if (result.front.length != 20) {
+			addLogEntry("WARNING: DB result has " ~ to!string(result.front.length) ~ " columns instead of the expected 20 - skipping this item (local database schema mismatch)");
+			Item emptyItem;
+			emptyItem.type = ItemType.none;
+			return emptyItem;
+		}
 		
 		// Make one owned copy of the DB row before extracting fields.
 		// On OpenBSD, avoid repeatedly evaluating result.front[] while
@@ -962,6 +982,13 @@ final class ItemDatabase {
 
 					if (!r.empty) {
 						item = buildItem(r);
+						// The item could not be constructed from the DB row (the row reported an
+						// unexpected column count). Do not return a partial or guessed path from
+						// here - path consumers use this value for local delete, backup and
+						// consistency operations, so returning empty propagates the failure
+						// explicitly and makes those consumers skip the item.
+						// https://github.com/abraunegg/onedrive/issues/3871
+						if (item.type == ItemType.none) return "";
 
 						// Track the highest non-root row we encounter
 						if (item.type != ItemType.root) {
@@ -1075,7 +1102,8 @@ final class ItemDatabase {
 			try {
 				auto res = stmt.exec();
 				while (!res.empty) {
-					items ~= buildItem(res);
+					auto _bi = buildItem(res);
+					if (_bi.type != ItemType.none) items ~= _bi;
 					res.step();
 				}
 			} catch (SqliteException exception) {
@@ -1180,7 +1208,8 @@ final class ItemDatabase {
 				stmt.bind(1, driveId);
 				auto res = stmt.exec();
 				while (!res.empty) {
-					items ~= buildItem(res);
+					auto _bi = buildItem(res);
+					if (_bi.type != ItemType.none) items ~= _bi;
 					res.step();
 				}
 			} catch (SqliteException exception) {
@@ -1204,7 +1233,8 @@ final class ItemDatabase {
 				stmt.bind(1, driveId);
 				auto res = stmt.exec();
 				while (!res.empty) {
-					items ~= buildItem(res);
+					auto _bi = buildItem(res);
+					if (_bi.type != ItemType.none) items ~= _bi;
 					res.step();
 				}
 			} catch (SqliteException exception) {
