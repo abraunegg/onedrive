@@ -1911,10 +1911,17 @@ class SyncEngine {
 				if (itemDB.idInLocalDatabase(driveIdToQuery, itemIdToQuery)) {
 					// The entries are in our DB, but we need to use our Drive details to compute the actual local path the the point of the 'remote' record and DB Tie Record
 					Item remoteEntryItem;
-					itemDB.selectByRemoteEntryByName(sharedFolderName, remoteEntryItem);
-
-					// Use the 'remote' item type DB entry to calculate the local path of this item, which then will match the path online for this Shared Folder
-					string computedLocalPathToQuery = computeItemPath(remoteEntryItem.driveId, remoteEntryItem.id);
+					string computedLocalPathToQuery;
+					if (itemDB.selectByRemoteEntryByName(sharedFolderName, remoteEntryItem)) {
+						// Use the 'remote' item type DB entry to calculate the local path of this item, which then will match the path online for this Shared Folder
+						computedLocalPathToQuery = computeItemPath(remoteEntryItem.driveId, remoteEntryItem.id);
+					} else if (debugLogging) {
+						// The 'remote' entry could not be retrieved or constructed (for example it reported
+						// an unexpected column count) - 'computedLocalPathToQuery' stays empty and the
+						// shared folder name is used below.
+						// https://github.com/abraunegg/onedrive/issues/3871
+						addLogEntry("Unable to retrieve the 'remote' item type DB entry for shared folder: " ~ sharedFolderName, ["debug"]);
+					}
 					// If we have a computed path, use it, else use 'sharedFolderName'
 					if (!computedLocalPathToQuery.empty) {
 						// computedLocalPathToQuery is not empty
@@ -3678,21 +3685,29 @@ class SyncEngine {
 
 						// Fetch the latest DB record - as this could have been updated by the isItemSynced if the date online was being corrected, then the DB updated as a result
 						Item latestDatabaseItem;
-						itemDB.selectById(newDatabaseItem.driveId, newDatabaseItem.id, latestDatabaseItem);
-						if (debugLogging) {addLogEntry("latestDatabaseItem: " ~ to!string(latestDatabaseItem), ["debug"]);}
+						if (itemDB.selectById(newDatabaseItem.driveId, newDatabaseItem.id, latestDatabaseItem)) {
+							if (debugLogging) {addLogEntry("latestDatabaseItem: " ~ to!string(latestDatabaseItem), ["debug"]);}
 
-						SysTime latestItemModifiedTime = latestDatabaseItem.mtime;
-						// Reduce time resolution to seconds before comparing
-						latestItemModifiedTime.fracSecs = Duration.zero;
+							SysTime latestItemModifiedTime = latestDatabaseItem.mtime;
+							// Reduce time resolution to seconds before comparing
+							latestItemModifiedTime.fracSecs = Duration.zero;
 
-						if (localModifiedTime == latestItemModifiedTime) {
-							// Log action
-							if (verboseLogging) {addLogEntry("Local file modified time matches existing database record - keeping local file", ["verbose"]);}
-							if (debugLogging) {addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time matching database data", ["debug"]);}
+							if (localModifiedTime == latestItemModifiedTime) {
+								// Log action
+								if (verboseLogging) {addLogEntry("Local file modified time matches existing database record - keeping local file", ["verbose"]);}
+								if (debugLogging) {addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time matching database data", ["debug"]);}
+							} else {
+								// Log action
+								if (verboseLogging) {addLogEntry("Local file modified time is newer based on UTC time conversion - keeping local file as this exists in the local database", ["verbose"]);}
+								if (debugLogging) {addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time being newer than OneDrive file and present in the sqlite database", ["debug"]);}
+							}
 						} else {
-							// Log action
-							if (verboseLogging) {addLogEntry("Local file modified time is newer based on UTC time conversion - keeping local file as this exists in the local database", ["verbose"]);}
-							if (debugLogging) {addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time being newer than OneDrive file and present in the sqlite database", ["debug"]);}
+							// The latest DB record could not be retrieved (for example the row reported an
+							// unexpected column count). Do not read 'mtime' from the default item as that
+							// would incorrectly classify the local file and could suppress a required remote
+							// change - keep the local file here and let the next sync cycle re-evaluate.
+							// https://github.com/abraunegg/onedrive/issues/3871
+							if (debugLogging) {addLogEntry("Unable to retrieve the latest DB record - keeping local file", ["debug"]);}
 						}
 
 						// Display function processing time if configured to do so
@@ -7546,47 +7561,50 @@ class SyncEngine {
 							if (debugLogging) {addLogEntry("Query database for this 'remoteDriveId' record: " ~ to!string(remoteDriveId), ["debug"]);}
 
 							Item remoteItem;
-							itemDB.selectByRemoteDriveId(remoteDriveId, remoteItem);
-							if (debugLogging) {addLogEntry("Query returned result (itemDB.selectByRemoteDriveId): " ~ to!string(remoteItem), ["debug"]);}
+							if (itemDB.selectByRemoteDriveId(remoteDriveId, remoteItem)) {
+								if (debugLogging) {addLogEntry("Query returned result (itemDB.selectByRemoteDriveId): " ~ to!string(remoteItem), ["debug"]);}
 
-							// Shared Folders present a unique challenge to determine what path needs to be used,
-							// especially in a --resync scenario where there are near zero records available to use computeItemPath().
-							// For relocated shared folders, using only 'remoteItem.name' is insufficient because that drops
-							// the relocated parent path (for example: Documents/SharedFolderShortcutA -> SharedFolderShortcutA).
-							string sharedFolderAnchorPath;
+								// Shared Folders present a unique challenge to determine what path needs to be used,
+								// especially in a --resync scenario where there are near zero records available to use computeItemPath().
+								// For relocated shared folders, using only 'remoteItem.name' is insufficient because that drops
+								// the relocated parent path (for example: Documents/SharedFolderShortcutA -> SharedFolderShortcutA).
+								string sharedFolderAnchorPath;
 
-							// Try to compute the full local path of the shared-folder anchor from the database.
-							// This should return paths such as:
-							//   ./Documents/SharedFolderShortcutA
-							// rather than just:
-							//   ./SharedFolderShortcutA
-							try {
-								sharedFolderAnchorPath = computeItemPath(remoteItem.driveId, remoteItem.id);
-								if (debugLogging) {addLogEntry("Computed sharedFolderAnchorPath using computeItemPath() = " ~ sharedFolderAnchorPath, ["debug"]);}
-							} catch (Exception exception) {
-								if (debugLogging) {addLogEntry("Unable to compute sharedFolderAnchorPath using computeItemPath(): " ~ exception.msg, ["debug"]);}
-							}
+								// Try to compute the full local path of the shared-folder anchor from the database.
+								// This should return paths such as:
+								//   ./Documents/SharedFolderShortcutA
+								// rather than just:
+								//   ./SharedFolderShortcutA
+								try {
+									sharedFolderAnchorPath = computeItemPath(remoteItem.driveId, remoteItem.id);
+									if (debugLogging) {addLogEntry("Computed sharedFolderAnchorPath using computeItemPath() = " ~ sharedFolderAnchorPath, ["debug"]);}
+								} catch (Exception exception) {
+									if (debugLogging) {addLogEntry("Unable to compute sharedFolderAnchorPath using computeItemPath(): " ~ exception.msg, ["debug"]);}
+								}
 
-							// Fallback if computeItemPath() did not return anything usable.
-							if (sharedFolderAnchorPath.empty) {
-								sharedFolderAnchorPath = remoteItem.name;
-								if (debugLogging) {addLogEntry("Falling back to sharedFolderAnchorPath = remoteItem.name = " ~ sharedFolderAnchorPath, ["debug"]);}
-							}
+								// Fallback if computeItemPath() did not return anything usable.
+								if (sharedFolderAnchorPath.empty) {
+									sharedFolderAnchorPath = remoteItem.name;
+									if (debugLogging) {addLogEntry("Falling back to sharedFolderAnchorPath = remoteItem.name = " ~ sharedFolderAnchorPath, ["debug"]);}
+								}
 
-							// Normalise the computed anchor path for concatenation with selfBuiltPath.
-							sharedFolderAnchorPath = processPathToRemoveRootReference(sharedFolderAnchorPath);
-							sharedFolderAnchorPath = stripLeft(sharedFolderAnchorPath, "./");
-							if (!sharedFolderAnchorPath.empty && sharedFolderAnchorPath[0] == '/') {
-								sharedFolderAnchorPath = sharedFolderAnchorPath[1 .. $];
-							}
+								// Normalise the computed anchor path for concatenation with selfBuiltPath.
+								sharedFolderAnchorPath = processPathToRemoveRootReference(sharedFolderAnchorPath);
+								sharedFolderAnchorPath = stripLeft(sharedFolderAnchorPath, "./");
+								if (!sharedFolderAnchorPath.empty && sharedFolderAnchorPath[0] == '/') {
+									sharedFolderAnchorPath = sharedFolderAnchorPath[1 .. $];
+								}
 
-							// Avoid duplicating the shared-folder anchor if it is already present.
-							if (!selfBuiltPath.startsWith("/" ~ sharedFolderAnchorPath ~ "/") &&
-								selfBuiltPath != "/" ~ sharedFolderAnchorPath) {
-								selfBuiltPath = sharedFolderAnchorPath ~ selfBuiltPath;
-								if (debugLogging) {addLogEntry("selfBuiltPath after full shared-folder anchor update = " ~ to!string(selfBuiltPath), ["debug"]);}
+								// Avoid duplicating the shared-folder anchor if it is already present.
+								if (!selfBuiltPath.startsWith("/" ~ sharedFolderAnchorPath ~ "/") &&
+									selfBuiltPath != "/" ~ sharedFolderAnchorPath) {
+									selfBuiltPath = sharedFolderAnchorPath ~ selfBuiltPath;
+									if (debugLogging) {addLogEntry("selfBuiltPath after full shared-folder anchor update = " ~ to!string(selfBuiltPath), ["debug"]);}
+								} else {
+									if (debugLogging) {addLogEntry("Full shared-folder anchor already present in path; no update needed to selfBuiltPath", ["debug"]);}
+								}
 							} else {
-								if (debugLogging) {addLogEntry("Full shared-folder anchor already present in path; no update needed to selfBuiltPath", ["debug"]);}
+								if (debugLogging) {addLogEntry("Unable to retrieve the 'remote' item DB entry for remoteDriveId: " ~ remoteDriveId, ["debug"]);}
 							}
 						}
 

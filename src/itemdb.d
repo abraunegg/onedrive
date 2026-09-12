@@ -831,13 +831,16 @@ final class ItemDatabase {
 
 	private Item buildItem(Statement.Result result) {
 		assert(!result.empty, "The DB result must not be empty");
-		// The D SQLite binding reports the count of all bound values across the
-		// entire result set, which can differ from the expected 20 columns when a
-		// query matches multiple rows or binds NULL values. Do not abort the client
-		// on such a mismatch - log a warning and skip this item instead.
+		// Verify that the query result row has the expected number of columns for the
+		// 'item' table schema used by this client version. The column count is taken
+		// from the current row of the result set; a row with fewer columns than the
+		// expected 20 indicates that the local database schema does not match what
+		// this client version expects (for example a database created by an older
+		// client version). Do not abort the client on such a mismatch - log a warning
+		// and skip this item instead.
 		// https://github.com/abraunegg/onedrive/issues/3871
 		if (result.front.length != 20) {
-			addLogEntry("WARNING: DB result has " ~ to!string(result.front.length) ~ " columns instead of the expected 20 - skipping this item (D SQLite binding column-count glitch)");
+			addLogEntry("WARNING: DB result has " ~ to!string(result.front.length) ~ " columns instead of the expected 20 - skipping this item (local database schema mismatch)");
 			Item emptyItem;
 			emptyItem.type = ItemType.none;
 			return emptyItem;
@@ -979,8 +982,13 @@ final class ItemDatabase {
 
 					if (!r.empty) {
 						item = buildItem(r);
-						// The item could not be constructed from the DB row - do not process further
-						if (item.type == ItemType.none) break;
+						// The item could not be constructed from the DB row (the row reported an
+						// unexpected column count). Do not return a partial or guessed path from
+						// here - path consumers use this value for local delete, backup and
+						// consistency operations, so returning empty propagates the failure
+						// explicitly and makes those consumers skip the item.
+						// https://github.com/abraunegg/onedrive/issues/3871
+						if (item.type == ItemType.none) return "";
 
 						// Track the highest non-root row we encounter
 						if (item.type != ItemType.root) {
