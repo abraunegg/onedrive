@@ -1,0 +1,34 @@
+@startuml
+title Monitor Mode - Synchronisation Trigger Sources
+
+rectangle "Monitor loop" as Loop
+rectangle "Synchronisation engine" as Sync
+rectangle "Local filesystem\ninotify" as Inotify
+rectangle "Microsoft Graph\nWebSocket / Socket.IO" as WS
+rectangle "Microsoft Graph\nWebhook subscription" as WH
+rectangle "monitor_interval\nscheduled cycle" as Timer
+rectangle "System-time / service\nsafety gate" as Gate
+
+Inotify --> Loop : local change signal
+WS --> Loop : remote change signal
+WH --> Loop : remote change signal
+Timer --> Loop : scheduled sync due
+Loop --> Gate : validate before remote action
+Gate --> Sync : safe to continue
+Gate ..> Loop : defer and retry later
+
+note right of WS
+  Used when supported by the linked libcurl build
+  and webhook mode is not configured.
+end note
+
+note right of WH
+  Optional alternative remote notification path.
+  Webhook and WebSocket modes are not active together.
+end note
+
+note bottom of Loop
+  Signals cause earlier reconciliation; monitor_interval remains
+  the scheduled idle-sync cadence rather than a minimum delay.
+end note
+@enduml

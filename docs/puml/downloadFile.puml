@@ -1,63 +1,86 @@
 @startuml
+title Transactional File Download and Replacement
 start
 
-partition "Download File" {
+:Validate required JSON identity / parent fields;
+:Compute canonical local path;
+:Require valid Microsoft fileSystemInfo.lastModifiedDateTime;
+if (Authoritative timestamp unavailable or invalid?) then (yes)
+  :Record download failure;\ndo not manufacture a timestamp;
+  stop
+endif
 
-  :Get item specifics from JSON;
-  :Calculate item's path;
-  
-  if (Is item malware?) then (yes)
-      :Log malware detected;
-      stop
-  else (no)
-      :Check for file size in JSON;
-      if (File size missing) then (yes)
-          :Log error;
-          stop
-      endif
-      
-      :Configure hashes for comparison;
-      if (Hashes missing) then (yes)
-          :Log error;
-          stop
-      endif
-      
-      if (Does file exist locally?) then (yes)
-          :Check DB for item;
-          if (DB hash match?) then (no)
-              :Log modification; Perform safe backup;
-              note left: Local data loss prevention
-          endif
-      endif
-      
-      :Check local disk space;
-      if (Insufficient space?) then (yes)
-          :Log insufficient space;
-          stop
-      else (no)
-          if (Dry run?) then (yes)
-              :Fake download process;
-          else (no)
-              :Attempt to download file;
-              if (Download exception occurs?) then (yes)
-                  :Handle exceptions; Retry download or log error;
-              endif
-              
-              if (File downloaded successfully?) then (yes)
-                  :Validate download;
-                  if (Validation passes?) then (yes)
-                      :Log success; Update DB;
-                  else (no)
-                      :Log validation failure; Remove file;
-                  endif
-              else (no)
-                  :Log download failed;
-              endif
-          endif
-      endif
+if (Microsoft reports malware?) then (yes)
+  :Reject download and notify user;
+  stop
+endif
+
+:Read expected file size and available online hash metadata;
+:Capture pre-existing canonical / DB baseline when applicable;
+:Check local free space and reservation;
+if (Insufficient local disk space?) then (yes)
+  :Record download failure;
+  stop
+endif
+
+if (~--dry-run?) then (yes)
+  :Simulate successful download / state transition;
+else (no)
+  :Download through onedrive.d / curlEngine.d\nto private <canonical>.partial staging file;
+  note right
+    Resumable-download state belongs to the transfer layer.
+    A failed HTTP response is never promoted to the canonical path.
+  end note
+
+  if (Final HTTP response is not successful?) then (yes)
+    :Retry when applicable or report failure;
+    :Retain existing canonical file;
+    stop
   endif
 
-}
+  :Build neutral commit information\n(size and streamed/generated hashes);
 
+  if (Download validation enabled?) then (yes)
+    :Compare downloaded hash and reported online hash;
+    :Compare size for validation / diagnostics;
+    if (Hash validation fails?) then (yes)
+      :Reject and remove private staging file;
+      :Retain canonical file and applied DB baseline;
+      stop
+    endif
+  else (no)
+    :Skip content-integrity rejection by configuration;
+  endif
+
+  :Re-evaluate canonical file at commit boundary;
+  if (Canonical contains unique local content\nnot matching incoming online or DB baseline?) then (yes)
+    :Create and verify non-destructive safeBackup copy;
+    if (safeBackup preservation fails?) then (yes)
+      :Reject staged replacement;
+      :Retain canonical file and DB state;
+      stop
+    endif
+  endif
+
+  :Recheck canonical existence / content after inspection;
+  if (Canonical changed while commit was prepared?) then (yes)
+    :Discard staged replacement;\nlocal activity wins this race;
+    stop
+  endif
+
+  :Atomically promote .partial to canonical path;
+  if (Promotion fails?) then (yes)
+    :Record failure and retain any existing canonical file;
+    stop
+  endif
+
+  :Apply authoritative Microsoft timestamp;
+endif
+
+:Save applied online item in DB;
+if (write_xattr_data enabled?) then (yes)
+  :Write OneDrive metadata xattr;
+endif
+:Record transfer success / metrics;
 stop
 @enduml

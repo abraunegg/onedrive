@@ -1,31 +1,39 @@
 @startuml
+title Local-First Conflict Handling with ~--resync
 start
-note left: Operational Mode 'onedrive --sync --local-first --resync'
+
 :Discard previous local sync database state;
-:Query OneDrive API and create new database root objects;
-:Scan local filesystem for potential new items;
+:Initialise required online root / drive identities;
+:Scan local filesystem before normal online reconciliation;
+
 repeat
-  :For each local file candidate;
-  if (Same pathname exists online?) then (yes)
-    :Compare local and online file content;
+  :Take next local file candidate;
+  :Check whether same logical target already exists online;
+  if (No online item exists?) then (yes)
+    :Upload as new local file;
+  else (no)
+    :Compare local content with online content;
     if (Content matches?) then (yes)
-      :Save online identity in rebuilt DB;
-      note left: No safeBackup is created for identical bytes
+      :Bind online identity / metadata to rebuilt DB state;
     else (no)
-      :Compare local and online modified times;
-      if (Local is at least as new?) then (yes)
-        :Upload local file as modified content;
-      else (no)
-        :Create and verify safeBackup copy of local file;
+      note right
+        With no trusted pre-resync baseline, conflict policy
+        must remain conservative for same-path differing data.
+      end note
+      :Evaluate local versus current online state;
+      if (Local version is selected for upload?) then (yes)
+        :Upload as modified content;
+      else (online conflict)
+        :Create and verify independent safeBackup copy;
         :Upload safeBackup as a new file;
-        :Apply newer online canonical file in bidirectional mode;
+        if (Not ~--upload-only?) then (yes)
+          :Apply current online canonical file transactionally;
+        endif
       endif
     endif
-  else (no)
-    :Upload new local file;
   endif
-repeat while
-:Query OneDrive /delta API for remaining online changes;
-:Reconcile downloads transactionally;
+repeat while (More local candidates?) is (yes)
+
+:Reconcile remaining Microsoft OneDrive online state;
 stop
 @enduml

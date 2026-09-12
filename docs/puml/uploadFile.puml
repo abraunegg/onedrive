@@ -1,62 +1,96 @@
 @startuml
+title New Local File Upload Flow
 start
-partition "Upload File" {
-  :Log "fileToUpload";
-  :Check database for parent path;
-  if (parent path found?) then (yes)
-      if (drive ID not empty?) then (yes)
-          :Proceed;
+
+if (Path is protected by .nosync?) then (yes)
+  :Skip upload;
+  stop
+endif
+
+:Resolve parent DB identity / target drive;
+if (Parent cannot be resolved?) then (yes)
+  :Record upload failure;
+  stop
+endif
+
+if (Local file still exists and is readable?) then (no)
+  :Treat disappeared file as no-op,\nor unreadable file as failure;
+  stop
+endif
+
+:Read file size;
+if (Exceeds Microsoft maximum upload size?) then (yes)
+  :Record upload failure;
+  stop
+endif
+
+:Check cached / available OneDrive quota where available;
+if (Known insufficient online space?) then (yes)
+  :Record upload failure;
+  stop
+endif
+
+:Query target name online;
+if (Same-name online item exists?) then (yes)
+  :Validate case-sensitive/POSIX naming compatibility;
+  if (Local content matches online item?) then (yes)
+    :Zero data traversal;
+    :Save online identity / metadata in DB;
+    stop
+  else (no)
+    :Treat collision as existing-file reconciliation;
+    :Temporarily establish online identity in DB;
+    :Evaluate local versus current online state;
+    if (Local version is selected for modified upload?) then (yes)
+      :Route to modified-file upload path;
+    else (no / conflict)
+      :Create verified independent safeBackup copy;
+      :Upload safeBackup as a new file;
+      :Remove temporary canonical DB association;
+      if (~--upload-only?) then (yes)
+        :Retain canonical local file for future reconciliation;
       else (no)
-          :Use defaultDriveId;
+        :Download authoritative online file transactionally;
       endif
-  else (no)
-      stop
+    endif
+    stop
   endif
-  :Check if file exists locally;
-  if (file exists?) then (yes)
-      :Read local file;
-      if (can read file?) then (yes)
-          if (parent path in DB?) then (yes)
-              :Get file size;
-              if (file size <= max?) then (yes)
-                  :Check available space on OneDrive;
-                  if (space available?) then (yes)
-                      :Check if file exists on OneDrive;
-                      if (file exists online?) then (yes)
-                          :Save online metadata only;
-                          if (if local file newer) then (yes)
-                            :Local file is newer;
-                            :Upload file as changed local file;
-                          else (no)
-                            :Remote file is newer;
-                            :Perform safe backup;
-                            note right: Local data loss prevention
-                            :Upload renamed file as new file;
-                          endif
-                      else (no)
-                          :Attempt upload;
-                      endif
-                  else (no)
-                      :Log "Insufficient space";
-                  endif
-              else (no)
-                  :Log "File too large";
-              endif
-          else (no)
-              :Log "Parent path issue";
-          endif
-      else (no)
-          :Log "Cannot read file";
-      endif
+else (404 / no existing item)
+  :Proceed with actual new-file upload;
+endif
+
+if (File is zero bytes?) then (yes)
+  :Use simple upload;
+else (no)
+  if (force_session_upload or\n~--upload-only + ~--local-first?) then (yes)
+    :Use upload session;
   else (no)
-      :Log "File disappeared locally";
+    if (File <= session threshold?) then (yes)
+      :Use simple upload;
+    else (no)
+      :Use resumable upload session;
+    endif
   endif
-  :Upload success or failure;
-  if (upload failed?) then (yes)
-      :Log failure;
+endif
+
+:Validate upload response and content integrity;
+if (Simple upload succeeded and integrity passed?) then (yes)
+  :Save Microsoft-returned metadata;
+  if (Not ~--upload-only?) then (yes)
+    :Apply Microsoft-returned timestamp locally;
+  endif
+else (session / enrichment handling)
+  :Apply session-upload and account-specific\npost-upload reconciliation rules;
+  if (SharePoint enrichment changed uploaded content?) then (yes)
+    if (Bidirectional mode and no new-version override?) then (yes)
+      :Download Microsoft-returned enriched file transactionally;
+    else (no)
+      :Apply configured metadata/version reconciliation;
+    endif
   else (no)
-      :Update cache;
+    :Save successful upload state;
   endif
-}  
+endif
+
 stop
 @enduml
