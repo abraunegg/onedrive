@@ -419,37 +419,42 @@ final class ItemDatabase {
 			auto result = statement.exec();
 
 			static foreach (index; 0 .. itemDatabaseColumnCount) {
-				enum expectedColumnName = __traits(identifier, EnumMembers!ItemDatabaseColumn[index]);
-				enum size_t expectedColumnPosition = cast(size_t) EnumMembers!ItemDatabaseColumn[index];
+				// static foreach expands each iteration into the surrounding scope.
+				// Add an explicit nested scope so per-column declarations remain local
+				// to that generated iteration.
+				{
+					enum expectedColumnName = __traits(identifier, EnumMembers!ItemDatabaseColumn[index]);
+					enum size_t expectedColumnPosition = cast(size_t) EnumMembers!ItemDatabaseColumn[index];
 
-				if (result.empty) {
-					mismatchReason = "Missing database column at position " ~ to!string(expectedColumnPosition) ~
-						"; expected '" ~ expectedColumnName ~ "'";
-					return false;
+					if (result.empty) {
+						mismatchReason = "Missing database column at position " ~ to!string(expectedColumnPosition) ~
+							"; expected '" ~ expectedColumnName ~ "'";
+						return false;
+					}
+
+					auto schemaRow = result.front;
+					// PRAGMA table_info() returns: cid, name, type, notnull, dflt_value, pk.
+					// Only cid and name are required here to prove the positional mapping
+					// used by SELECT * and buildItem().
+					if (schemaRow.length < 2) {
+						mismatchReason = "Unable to read item table schema metadata";
+						return false;
+					}
+
+					if (schemaRow[0] != to!string(expectedColumnPosition)) {
+						mismatchReason = "Database column position mismatch for '" ~ expectedColumnName ~
+							"': expected " ~ to!string(expectedColumnPosition) ~ ", found " ~ schemaRow[0].idup;
+						return false;
+					}
+
+					if (schemaRow[1] != expectedColumnName) {
+						mismatchReason = "Database column mismatch at position " ~ to!string(expectedColumnPosition) ~
+							": expected '" ~ expectedColumnName ~ "', found '" ~ schemaRow[1].idup ~ "'";
+						return false;
+					}
+
+					result.step();
 				}
-
-				auto schemaRow = result.front;
-				// PRAGMA table_info() returns: cid, name, type, notnull, dflt_value, pk.
-				// Only cid and name are required here to prove the positional mapping
-				// used by SELECT * and buildItem().
-				if (schemaRow.length < 2) {
-					mismatchReason = "Unable to read item table schema metadata";
-					return false;
-				}
-
-				if (schemaRow[0] != to!string(expectedColumnPosition)) {
-					mismatchReason = "Database column position mismatch for '" ~ expectedColumnName ~
-						"': expected " ~ to!string(expectedColumnPosition) ~ ", found " ~ schemaRow[0].idup;
-					return false;
-				}
-
-				if (schemaRow[1] != expectedColumnName) {
-					mismatchReason = "Database column mismatch at position " ~ to!string(expectedColumnPosition) ~
-						": expected '" ~ expectedColumnName ~ "', found '" ~ schemaRow[1].idup ~ "'";
-					return false;
-				}
-
-				result.step();
 			}
 
 			// All expected columns were consumed. Any remaining row means the physical
