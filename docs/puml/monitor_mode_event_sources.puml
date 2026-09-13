@@ -17,14 +17,22 @@ Loop --> Gate : validate before remote action
 Gate --> Sync : safe to continue
 Gate ..> Loop : defer and retry later
 
+note right of Inotify
+  Local filesystem monitoring is not initialised
+  when ~--download-only is active.
+end note
+
 note right of WS
-  Used when supported by the linked libcurl build
-  and webhook mode is not configured.
+  Used only when ~--upload-only is not active,
+  the linked libcurl build supports WebSockets,
+  WebSocket support is not disabled, and
+  webhook mode is not configured.
 end note
 
 note right of WH
   Optional alternative remote notification path.
-  Webhook and WebSocket modes are not active together.
+  Not used with ~--upload-only. Webhook and
+  WebSocket modes are not active together.
 end note
 
 note bottom of Loop
