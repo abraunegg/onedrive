@@ -8646,11 +8646,26 @@ class SyncEngine {
 				// successful sync. A local replacement may deliberately preserve an older mtime.
 				// Only trust the stored eTag as a baseline when the freshly queried DriveItem is
 				// the same object represented by this database row and both eTags are usable.
+				//
+				// OneDrive Business Shared Files are stored locally as remote items. Their DB row
+				// uses driveId/id for the synthetic local shared-file hierarchy, while uploads and
+				// fresh metadata queries target remoteDriveId/remoteId. The row's eTag is populated
+				// from that authoritative remote target, so identity must be checked against the
+				// remote fields before that eTag can be trusted as the historical baseline.
+				string databaseBaselineDriveId = dbItem.driveId;
+				string databaseBaselineItemId = dbItem.id;
+				if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
+					databaseBaselineDriveId = dbItem.remoteDriveId;
+					databaseBaselineItemId = dbItem.remoteId;
+				}
+
 				bool onlineObjectMatchesDatabaseIdentity =
-					(targetDriveId == dbItem.driveId) &&
-					(targetItemId == dbItem.id) &&
+					!databaseBaselineDriveId.empty &&
+					!databaseBaselineItemId.empty &&
+					(targetDriveId == databaseBaselineDriveId) &&
+					(targetItemId == databaseBaselineItemId) &&
 					hasId(currentOnlineJSONData) &&
-					(currentOnlineJSONData["id"].str == dbItem.id);
+					(currentOnlineJSONData["id"].str == databaseBaselineItemId);
 				bool onlineUnchangedSinceLastSync =
 					onlineObjectMatchesDatabaseIdentity &&
 					hasETag(currentOnlineJSONData) &&
