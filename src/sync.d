@@ -18726,12 +18726,20 @@ class SyncEngine {
 				return "JSON Validation Failed: JSON data from OneDrive API contains invalid UTF-8 characters";
 			}
 
-			// Redact PII in JSON before serialisation
-			redactPII(onedriveJSONItem);
+			// JSONValue object and array payloads are reference-backed. A simple value copy
+			// would therefore still allow redactPII() to mutate the caller's live JSON data.
+			// Serialise and parse the item to create an independent deep copy before any
+			// diagnostic redaction is applied. Logging must never alter sync state.
+			auto sourceJSON = appender!string();
+			toJSON(sourceJSON, onedriveJSONItem);
+			JSONValue sanitisedJSONItem = parseJSON(sourceJSON.data);
 
-			// Try and serialise the JSON into a string
+			// Redact PII only in the independent copy used for logging output
+			redactPII(sanitisedJSONItem);
+
+			// Try and serialise the sanitised copy into a string
 			auto app = appender!string();
-			toJSON(app, onedriveJSONItem);
+			toJSON(app, sanitisedJSONItem);
 
 			// Return sanitised JSON string for logging output
 			return app.data;
