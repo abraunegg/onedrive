@@ -252,7 +252,7 @@ class BusinessSharedFolderTestCase0007DirectSharedOfficeTimestampReplacement(E2E
         result = self._run_logged(
             context,
             "recovery_preflight_sync",
-            self._sync_command(context, config_dir, debug=True),
+            self._sync_command(context, config_dir, local_first=True, debug=True),
             log_dir,
             artifacts,
         )
@@ -309,7 +309,7 @@ class BusinessSharedFolderTestCase0007DirectSharedOfficeTimestampReplacement(E2E
         restore_result = self._run_logged(
             context,
             "rollback_restore_original",
-            self._sync_command(context, config_dir, debug=True),
+            self._sync_command(context, config_dir, local_first=True, debug=True),
             cleanup_log_dir,
             artifacts,
         )
@@ -519,7 +519,7 @@ class BusinessSharedFolderTestCase0007DirectSharedOfficeTimestampReplacement(E2E
             replacement_result = self._run_logged(
                 context,
                 "DSF-0001_timestamp_preserving_replacement",
-                self._sync_command(context, config_dir, debug=True),
+                self._sync_command(context, config_dir, local_first=True, debug=True),
                 main_log_dir,
                 artifacts,
             )
