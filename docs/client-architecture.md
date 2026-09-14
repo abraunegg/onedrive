@@ -72,7 +72,9 @@ There are two primary execution modes:
 
 ### Default remote-first ordering
 
-The default bidirectional flow processes Microsoft OneDrive state before processing local changes.
+The default bidirectional flow processes Microsoft OneDrive state before processing local changes. This is the normal ordering used by `--sync` and by normal `--monitor` reconciliation cycles when `--local-first` is not configured.
+
+The important point is that **remote-first describes ordering, not unconditional authority over local user data**. When an online file needs to replace a local pathname, the client still evaluates whether the existing local file contains unique data. If it does, that local content must be preserved before the online replacement is committed.
 
 ![Default Sync Flow Process](./puml/default_sync_flow.png)
 
@@ -89,7 +91,9 @@ This is best understood as **remote-first reconciliation ordering**, rather than
 
 ### Local-first ordering
 
-With `--local-first`, local reconciliation is intentionally performed before the normal online pass.
+With `--local-first`, local reconciliation is intentionally performed before the normal online pass. Typical invocations are `onedrive --sync --local-first` and `onedrive --monitor --local-first`.
+
+`--local-first` means **evaluate local intent first**. It does not mean that local bytes are allowed to blindly overwrite a file that has independently changed online. Before a modified tracked local file replaces its online counterpart, the client still obtains current online state and applies the conflict-protection policy described later in this document.
 
 ![Local First Sync Flow Process](./puml/local_first_sync_process.png)
 
@@ -114,6 +118,44 @@ The order becomes approximately:
 `--download-only` applies online changes locally but suppresses the normal upload-side filesystem scan. The database consistency pass still has a role because it validates known local state and may correct metadata without treating the mode as a normal bidirectional upload cycle.
 
 Other options can further modify reconciliation policy, but they do not collapse the distinction between online state, database state and live filesystem state.
+
+## Local database recovery and resynchronisation
+
+The `items.sqlite3` database is **client synchronisation state**. It is not a repository of user file content and it is not an authoritative copy of the data stored in either the local `sync_dir` or Microsoft OneDrive.
+
+The database records the client's knowledge of the synchronisation relationship between the local filesystem and Microsoft OneDrive. This includes item and drive identifiers, parent relationships, timestamps, hashes, synchronisation status, delta state and other metadata required to reconcile local and online objects safely.
+
+Because this database represents reconstructible client state, the client can deliberately discard that state and establish a new synchronisation baseline when the previous baseline is no longer considered trustworthy or no longer corresponds to the active configuration.
+
+This is the purpose of `--resync`.
+
+When `--resync` is used, the client intentionally removes its previous synchronisation database state and creates a new baseline by re-enumerating the applicable Microsoft OneDrive state and reconciling it with the existing local filesystem according to the selected operational mode.
+
+`--resync` therefore does **not** mean that user file data has itself been lost. It means that the client has deliberately discarded its previous knowledge of what was considered synchronised.
+
+This distinction is important:
+
+```text
+items.sqlite3
+    = reconstructible client synchronisation state
+
+local sync_dir
+    = user file data
+
+Microsoft OneDrive
+    = user file data / remote state
+```
+
+Discarding `items.sqlite3` does not itself delete the user's local files or Microsoft OneDrive files. The subsequent reconciliation is, however, a real synchronisation operation and can modify local or online data according to the normal rules of the selected mode.
+
+> [!IMPORTANT]
+> `--resync` removes the previous last-known synchronisation baseline. During the first reconciliation after that reset, the client can no longer use the old database record to prove that a same-path local file was previously synchronised with a particular online DriveItem.
+>
+> This is why conflict handling during `--resync` can be more conservative. Matching local and online content can be rebound directly, but differing same-path content may require preservation because the historical database evidence no longer exists.
+
+The application also checks database schema compatibility during initialisation. That structural compatibility check is separate from `--resync`: the architectural purpose of `--resync` is to rebuild the **meaningful synchronisation state** when the previous client baseline cannot safely be relied upon, such as after a detected cache-state inconsistency or a configuration change that requires a new baseline.
+
+Continuing to reconcile using synchronisation state whose meaning cannot be trusted would present a greater risk to user data than discarding that reconstructible state and establishing a new known-good baseline. This is why `--resync` is intentionally treated as a recovery operation and why the client requires explicit risk acknowledgement before proceeding.
 
 ## Monitor mode event architecture
 
@@ -233,11 +275,15 @@ The diagrams below map the major high-level code paths used during reconciliatio
 
 `applyPotentiallyNewLocalItem()` handles an online identity that is not currently represented as that tracked item in the local database. A local pathname may nevertheless already exist, so the function must reconcile the incoming online identity with live local content before it can safely bind the two together.
 
+The presence of an existing local pathname is therefore not treated as permission to overwrite it. Where content differs and an online replacement is required, the replacement is deferred to the transactional download commit path so the canonical local file can be re-evaluated and preserved with `safeBackup` if it contains unique local data.
+
 ![applyPotentiallyNewLocalItem](./puml/applyPotentiallyNewLocalItem.png)
 
 ### Processing a changed tracked online item
 
 `applyPotentiallyChangedItem()` handles an incoming online item whose identity is already known. It detects path/name changes separately from file-content changes so an online move and an online content update in the same change can be applied correctly.
+
+If an online move or rename targets a local pathname that is already occupied by content which cannot be proven safe to replace, that destination is preserved first. This is another `safeBackup` data-loss-prevention boundary: the online move must not silently destroy an unrelated or independently changed local object simply because Microsoft OneDrive says the tracked item now belongs at that path.
 
 ![applyPotentiallyChangedItem](./puml/applyPotentiallyChangedItem.png)
 
@@ -285,7 +331,9 @@ For directory and remote-directory items, the current implementation treats an e
 
 ## Transactional download architecture
 
-Downloads that can replace an existing canonical file are transactional.
+Downloads that can replace an existing canonical file are transactional. This design exists primarily to ensure that receiving an online replacement cannot silently destroy data that was changed locally while the client was not yet aware of that change.
+
+A download therefore has two distinct phases: first acquire and validate the incoming file privately, then decide whether it is safe to commit that file to the user's canonical pathname. The existing local file remains in place throughout the transfer and preservation decision.
 
 ![Download File](./puml/downloadFile.png)
 
@@ -307,14 +355,26 @@ If transfer, validation, required preservation or final promotion fails, the exi
 
 ### `safeBackup` data preservation
 
-A replacement-style `safeBackup` is required when the existing canonical file contains content that is different from both:
+`safeBackup` is the client's **local data-loss prevention mechanism** for reconciliation conflicts. It is not created for every difference and it is not a second synchronisation database. It is used when the client is about to honour an online operation but the local pathname contains user data that cannot safely be discarded.
+
+A useful way to think about the replacement decision is to compare three states:
+
+1. **the last applied database baseline** - what the client last successfully reconciled;
+2. **the current canonical local file** - what exists on disk now; and
+3. **the incoming online file** - the Microsoft OneDrive content that is ready to be applied.
+
+If the current local file still matches the database baseline, it has not independently changed and can be replaced by the valid online version without creating a `safeBackup`. If the local file already matches the incoming online content, there is likewise nothing unique to preserve. However, if the local file differs from **both** the database baseline and the incoming online content, it contains an independent local modification. That is the point at which preservation is required before replacement can proceed.
+
+A replacement-style `safeBackup` is therefore required when the existing canonical file contains content that is different from both:
 
 * the incoming authoritative online file; and
 * the last successfully applied database baseline, where such a baseline exists.
 
 If the canonical file still matches the database baseline, it has not been independently modified and does not require a preservation copy before a valid online replacement. If it already matches the incoming online content, no preservation is required either.
 
-The replacement workflow uses a **copy**, not a destructive rename, so the canonical pathname remains present until the validated replacement is ready to commit.
+The replacement workflow uses a **copy**, not a destructive rename, so the canonical pathname remains present until the validated replacement is ready to commit. If the preservation copy cannot be created and verified, the replacement is rejected rather than risking local data loss.
+
+Once preservation succeeds, the validated online file can become the canonical local file while the previous unique local version survives under its generated `safeBackup` name.
 
 The deliberate exception is an online deletion of a tracked file that has independently changed locally. There is no incoming replacement to promote in that workflow, so the changed local data can be moved to a `safeBackup` name while the online deletion is honoured.
 
@@ -365,7 +425,9 @@ If the target does not exist, the client selects simple upload or an upload sess
 
 A modified-file upload first resolves the true target DriveItem, including remote/shared-item targeting, and fetches the current online metadata where possible. This provides both a current eTag for conditional/session operations and a conflict-protection boundary before the local bytes are allowed to replace the online canonical file.
 
-The architectural rule is that upload transport selection occurs **after** the client has decided that a normal modified-file upload is safe to perform. If current online state represents a genuine or unresolved conflict, the local version is preserved instead of being used to silently overwrite that online state.
+This check is especially important under `--local-first`. Local-first causes the modified local file to be considered earlier in the cycle, but the client still checks the current online object before replacing it. A genuine or unresolved online change must not be silently overwritten simply because local processing happened first.
+
+The architectural rule is that upload transport selection occurs **after** the client has decided that a normal modified-file upload is safe to perform. If current online state represents a genuine or unresolved conflict, the local version is preserved instead of being used to silently overwrite that online state. In that conflict path, the preserved local version can be uploaded as an independent `safeBackup` file while the existing online canonical DriveItem remains protected from the original local overwrite.
 
 This separation is important: conflict classification is reconciliation policy; simple upload versus resumable session upload is transport policy.
 
@@ -392,13 +454,29 @@ SharePoint-backed account types can also modify supported file formats after upl
 
 ## Conflict handling by operating mode
 
+The same underlying data-protection rules are used in every operating mode, but **the order in which local and online state is examined changes the point at which a conflict is discovered**. The diagrams below therefore identify both the operating mode and the expected outcome when local and online content have diverged.
+
+A `safeBackup` in these flows is not an error by itself. It means the client has found local content that should not be silently discarded while another version is being treated as canonical.
+
 ### Default remote-first conflict handling
+
+**Operating mode:** normal bidirectional `--sync`, or a normal `--monitor` reconciliation cycle without `--local-first`.
+
+**Example scenario:** a file was previously synchronised, then the file was changed independently both online and locally. During the next cycle the client examines Microsoft OneDrive first and discovers the online replacement before it reaches the later local upload scan.
+
+**Expected outcome:** the online replacement is downloaded and validated privately. Immediately before commit, the current local file is compared with the incoming online content and the last applied DB baseline. If the current local file contains an independent modification, it is copied to a verified `safeBackup` **to prevent local data loss**. Only after that preservation succeeds can the online version become the canonical local file. The `safeBackup` may subsequently be discovered as a new local file and uploaded unless it is excluded with `skip_file`.
 
 ![Default Conflict Handling](./puml/conflict_handling_default.png)
 
 In default mode, an incoming online replacement is validated before the canonical local file is changed. The last applied DB baseline is used where available to distinguish an unchanged tracked local file from independently modified local content.
 
 ### Default remote-first conflict handling with `--resync`
+
+**Operating mode:** `onedrive --sync --resync` using normal remote-first ordering.
+
+**Example scenario:** a pathname already exists locally when `--resync` rebuilds state from the current online tree. Because `--resync` deliberately discarded the previous database, the client no longer has its historical last-applied baseline for that file.
+
+**Expected outcome:** if local and online content already match, the identity and metadata can be rebuilt directly and **no `safeBackup` is created merely because `--resync` was used**. If the same pathname contains different local and online content, the missing historical baseline means the client cannot prove that the local bytes are safe to discard. The local file is therefore preserved conservatively before the authoritative online replacement is committed.
 
 ![Default Conflict Handling with resync](./puml/conflict_handling_default_resync.png)
 
@@ -408,6 +486,12 @@ Where same-path content differs and there is no trusted prior baseline, the clie
 
 ### Local-first conflict handling
 
+**Operating mode:** `onedrive --sync --local-first`, or `--monitor --local-first` during normal monitor reconciliation.
+
+**Example scenario:** a tracked file is modified locally, but the corresponding online file has also changed independently. The local database consistency pass finds the local modification first because `--local-first` changes the reconciliation order.
+
+**Expected outcome:** before the modified local bytes are uploaded over the canonical online DriveItem, the client fetches current online metadata and applies the conflict-protection policy. If the online object represents a genuine or unresolved conflict, the original local modification is preserved as a verified `safeBackup` rather than being allowed to overwrite the online canonical file. In normal bidirectional operation the current online canonical file can then be applied locally through the transactional download path; in `--upload-only` operation the client does not download that conflicting online file back over the local pathname.
+
 ![Local First Conflict Handling](./puml/conflict_handling_local-first_default.png)
 
 With `--local-first`, locally modified tracked items are considered before the general online reconciliation pass. Before a modified file is uploaded, the client obtains current online metadata and applies its conflict-protection policy against the local file and last applied database state.
@@ -415,6 +499,12 @@ With `--local-first`, locally modified tracked items are considered before the g
 If the current online state cannot safely be replaced by the original local modified file, the local content is preserved before the client proceeds with conflict resolution.
 
 ### Local-first conflict handling with `--resync`
+
+**Operating mode:** `onedrive --sync --local-first --resync`.
+
+**Example scenario:** local files are examined first, but the previous database baseline has just been deleted by `--resync`. A local file and an online file occupy the same logical pathname but contain different data.
+
+**Expected outcome:** identical local and online bytes can be rebound to the rebuilt DB without preservation. When the bytes differ, however, there is no historical DB state with which to prove which side changed after the previous successful synchronisation. The client must therefore evaluate the current local and online state conservatively. If the online version remains canonical, the differing local version is preserved as `safeBackup` before the online content is applied locally in bidirectional mode. If policy selects the local version for upload, it is processed as modified content instead.
 
 ![Local First Conflict Handling with resync](./puml/conflict_handling_local-first_resync.png)
 
@@ -466,3 +556,5 @@ The local SQLite database records the last known/applied synchronisation state a
 The primary item identity is the `(driveId, id)` pair. Parent relationships are stored by DriveItem identity rather than only by pathname. This allows the client to recognise a tracked item across online rename and move operations instead of treating every path change as delete-and-create.
 
 The database also stores remote/shared-item identifiers, hashes, timestamps, delta state, synchronisation status and relocation data used by generated/shared-folder reconciliation.
+
+Because this database is reconstructible synchronisation state rather than user file content, its recovery and rebuild semantics are described in [Local database recovery and resynchronisation](#local-database-recovery-and-resynchronisation).

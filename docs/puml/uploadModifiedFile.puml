@@ -2,6 +2,13 @@
 title Modified Local File Upload Flow
 start
 
+note right
+  This path is reached after a tracked local file has been identified
+  as modified. Under ~--local-first it may run before the general
+  online reconciliation pass, but local-first does not authorise a
+  blind overwrite of independently changed online content.
+end note
+
 :Resolve canonical or remote/shared target DriveItem identity;
 :Fetch latest online metadata and eTag where possible;
 :Read local file size and choose provisional upload method;
@@ -13,20 +20,48 @@ endif
 if (Current online metadata is available?) then (yes)
   :Evaluate current online state against\nlocal file and last applied DB baseline;
   note right
-    This is the conflict-protection boundary.
-    The exact proof used to distinguish a genuine
-    online change from a local replacement belongs
-    to reconciliation policy, not upload transport.
+    CONFLICT-PROTECTION BOUNDARY
+
+    The client checks current online state before local bytes are
+    allowed to replace the online canonical file. The exact proof
+    used to classify a genuine online change belongs to reconciliation
+    policy, not to simple-versus-session upload transport.
   end note
   if (Online conflict requires preserving local version?) then (yes)
     :Create verified independent safeBackup copy;
+    note right
+      LOCAL DATA LOSS PREVENTION
+
+      Preserve the local modification before conflict resolution.
+      This prevents a genuine online change from causing the local
+      user's different content to be silently discarded.
+    end note
     if (Preservation succeeds?) then (yes)
       :Upload safeBackup as a new file;
+      note right
+        The preserved local version becomes an independent online file,
+        while the original online canonical item is left untouched.
+      end note
       if (~--upload-only?) then (yes)
         :Retain canonical local file;
+        note right
+          In upload-only operation the client does not download the
+          conflicting online canonical version back over the local path.
+        end note
       else (no)
         :Apply current online canonical file via\ntransactional download;
+        note right
+          In bidirectional operation the current online canonical can
+          now be applied locally because the differing local version
+          has been safely preserved first.
+        end note
       endif
+    else (no)
+      :Preservation failed; keep original local data;
+      note right
+        Required preservation failed, so the original local file must
+        not be used to overwrite the conflicting online canonical item.
+      end note
     endif
     :Do not overwrite online canonical with original local file;
     stop

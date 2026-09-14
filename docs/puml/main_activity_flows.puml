@@ -5,9 +5,20 @@ start
 :Initialise configuration, logging, database,\nMicrosoft API and runtime services;
 :Validate authentication / token state;
 :Validate service reachability and system time when enabled;
+note right
+  This diagram shows high-level orchestration.
+  Data-preservation decisions are made by the
+  lower-level conflict and transactional transfer
+  paths shown in the following diagrams.
+end note
 
 if (~--local-first?) then (yes)
   :Database consistency / known local state pass;
+  note right
+    Local filesystem intent is evaluated first.
+    ~--local-first changes ordering, not the
+    requirement to protect independent online data.
+  end note
   :Apply locally modified / deleted tracked items;
   :Scan local filesystem for new data;
   :Upload eligible new local items;
@@ -17,9 +28,20 @@ else (no)
   :Enumerate online state (/delta or generated response);
   :Validate, filter and classify online JSON;
   :Process root and deletion state;
+  note right
+    An online deletion of a tracked file that has
+    independently changed locally is a data-loss
+    prevention case: the local content is preserved
+    before the online deletion is honoured.
+  end note
   :Route known items to applyPotentiallyChangedItem();
   :Route untracked online items to applyPotentiallyNewLocalItem();
   :Process queued downloads transactionally;
+  note right
+    File replacement is staged to .partial first.
+    The canonical local path is only replaced after
+    validation and any required safeBackup succeeds.
+  end note
 
   :Database consistency / known local state pass;
   :Apply locally modified / deleted tracked items;
@@ -40,8 +62,7 @@ else (no)
   endif
 endif
 
-:In monitor mode, reconcile expected/client-generated
-filesystem effects at the applicable phase boundaries;
+:In monitor mode, reconcile expected/client-generated\nfilesystem effects at the applicable phase boundaries;
 :Report transfer / synchronisation failures;
 stop
 @enduml

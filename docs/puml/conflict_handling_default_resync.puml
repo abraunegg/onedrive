@@ -2,6 +2,17 @@
 title Default Remote-First Conflict Handling with ~--resync
 start
 
+:Begin remote-first reconciliation with ~--resync;
+note right
+  Operating mode:
+  onedrive ~--sync ~--resync
+
+  ~--resync intentionally discards the previous application
+  sync database. The client therefore loses the historical
+  last-applied baseline that would normally help prove whether
+  an existing local file changed independently.
+end note
+
 :Discard previous local sync database state;
 :Enumerate current Microsoft OneDrive state and rebuild identity baseline;
 
@@ -10,13 +21,22 @@ if (Online file maps to an existing local pathname?) then (yes)
   if (Content already matches?) then (yes)
     :Reconcile timestamp / metadata and rebuild DB record;
     note right
-      ~--resync does not create a safeBackup
-      merely because the previous DB was discarded.
+      NO safeBackup is required simply because ~--resync was used.
+      If the local and online bytes already match, there is no unique
+      local content to preserve and no reason to replace identical data.
     end note
   else (no)
     :Download online replacement into private .partial staging file;
     :Validate downloaded content;
     :Create and verify safeBackup copy of differing local content;
+    note right
+      LOCAL DATA LOSS PREVENTION
+
+      The previous DB baseline no longer exists, so the client cannot
+      use history to prove that the differing local bytes are disposable.
+      Conservative preservation protects the local file before the
+      authoritative online replacement is committed.
+    end note
     if (Preservation fails?) then (yes)
       :Reject replacement; retain local canonical file;
       stop
@@ -31,6 +51,10 @@ endif
 
 :Run local database/filesystem consistency pass;
 :Scan for new local data when uploads are enabled;
+note right
+  A safeBackup created during rebuild may subsequently be discovered
+  as new local data and uploaded unless excluded through skip_file.
+end note
 :Perform final online true-up where applicable;
 stop
 @enduml

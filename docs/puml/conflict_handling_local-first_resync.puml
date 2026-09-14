@@ -2,6 +2,20 @@
 title Local-First Conflict Handling with ~--resync
 start
 
+:Begin local-first reconciliation with ~--resync;
+note right
+  Operating mode:
+  onedrive ~--sync ~--local-first ~--resync
+
+  Two behaviours interact:
+  - ~--local-first asks the client to evaluate local intent first
+  - ~--resync discards the previous last-applied DB baseline
+
+  Therefore same-path differing content must be handled conservatively;
+  the client has no historical DB state with which to prove which side
+  changed after the previous successful synchronisation.
+end note
+
 :Discard previous local sync database state;
 :Initialise required online root / drive identities;
 :Scan local filesystem before normal online reconciliation;
@@ -15,19 +29,37 @@ repeat
     :Compare local content with online content;
     if (Content matches?) then (yes)
       :Bind online identity / metadata to rebuilt DB state;
+      note right
+        Identical bytes need no safeBackup. The database identity can be
+        rebuilt directly because preserving another copy would add no value.
+      end note
     else (no)
       note right
-        With no trusted pre-resync baseline, conflict policy
-        must remain conservative for same-path differing data.
+        There is no trusted pre-resync baseline for this pathname.
+        Different local and online content therefore represents an
+        ambiguous conflict that requires conservative handling.
       end note
       :Evaluate local versus current online state;
       if (Local version is selected for upload?) then (yes)
         :Upload as modified content;
       else (online conflict)
         :Create and verify independent safeBackup copy;
+        note right
+          LOCAL DATA LOSS PREVENTION
+
+          Preserve the differing local bytes before the online canonical
+          version is allowed to remain authoritative for this pathname.
+        end note
         :Upload safeBackup as a new file;
         if (Not ~--upload-only?) then (yes)
           :Apply current online canonical file transactionally;
+          note right
+            Bidirectional result:
+            - local content survives as safeBackup
+            - current online canonical becomes canonical locally
+          end note
+        else (upload-only)
+          :Retain local canonical path after preservation;
         endif
       endif
     endif

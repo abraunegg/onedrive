@@ -2,22 +2,60 @@
 title Local-First Conflict Handling
 start
 
+:Begin local-first reconciliation;
+note right
+  Operating mode:
+  onedrive ~--sync ~--local-first
+  or ~--monitor ~--local-first.
+
+  The local filesystem is evaluated first for upload intent.
+  ~--local-first changes ordering; it does NOT mean local bytes
+  automatically win over an independently changed online file.
+end note
+
 :Run DB consistency check against local filesystem first;
 :Identify locally modified tracked files;
 
 repeat
   :Take next modified local file;
   :Fetch current online DriveItem metadata before upload;
+  note right
+    Fresh online state is checked before upload so that processing
+    local changes first cannot silently overwrite a genuine remote
+    change that happened since the last applied DB baseline.
+  end note
   :Evaluate current online state against\nlocal file and last applied DB baseline;
   if (Genuine / unresolved online conflict?) then (yes)
     :Create and verify independent safeBackup copy of local version;
+    note right
+      LOCAL DATA LOSS PREVENTION
+
+      The local modification is valuable user data. Preserve it before
+      resolving a conflict in which the current online canonical item
+      cannot safely be overwritten by the original local file.
+    end note
     if (Preservation succeeds?) then (yes)
       :Upload safeBackup as a new file;
+      note right
+        The local modification survives as an independent online file.
+        The conflicting canonical online DriveItem is not overwritten.
+      end note
       if (~--upload-only?) then (yes)
         :Retain canonical local path;
+        note right
+          Upload-only mode does not apply the online conflicting version
+          back to the local filesystem after preservation.
+        end note
       else (no)
         :Apply current online canonical file\nthrough transactional download;
+        note right
+          Bidirectional result:
+          - local modification is preserved as safeBackup
+          - current online canonical content becomes canonical locally
+        end note
       endif
+    else (no)
+      :Preservation failed; do not overwrite online canonical;
     endif
   else (no)
     :Upload local modified file normally;

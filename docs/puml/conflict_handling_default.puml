@@ -2,24 +2,66 @@
 title Default Remote-First Conflict Handling
 start
 
+:Begin normal remote-first reconciliation;
+note right
+  Operating mode:
+  onedrive ~--sync
+  or a normal ~--monitor reconciliation cycle
+  without ~--local-first.
+
+  Online changes are examined first, but remote-first
+  is an ordering rule - not permission to destroy
+  unique local data.
+end note
+
 :Enumerate Microsoft OneDrive online state;
 :Classify and reconcile incoming online item;
 if (Incoming item replaces file content?) then (yes)
   :Download candidate into private .partial staging file;
   :Validate final HTTP result, size/hash policy and metadata;
+  note right
+    The online replacement is staged privately first.
+    The existing canonical local file is still present.
+  end note
 
   if (Canonical local file exists?) then (yes)
     :Read canonical local content at commit boundary;
     :Read last applied DB baseline when available;
+    note right
+      Three states are compared here:
+      1. current local canonical content
+      2. last successfully applied DB baseline
+      3. incoming authoritative online content
+    end note
     if (Canonical matches incoming online content?) then (yes)
       :No preservation required;
+      note right
+        Local bytes already equal the incoming online version.
+        Replacing them cannot lose unique local content.
+      end note
     else (no)
       if (Canonical matches last applied DB baseline?) then (yes)
         :No independent local content change;\nno preservation required;
+        note right
+          The local file still represents the last applied state.
+          It has not independently changed since the previous sync.
+        end note
       else (no)
         :Create and verify non-destructive safeBackup copy;
+        note right
+          LOCAL DATA LOSS PREVENTION
+
+          The local file contains content that is different from both
+          the last applied DB baseline and the incoming online version.
+          Preserve those unique local bytes before replacement.
+        end note
         if (Preservation fails?) then (yes)
           :Reject replacement and retain canonical / DB state;
+          note right
+            A required safeBackup is a commit prerequisite.
+            Failure to preserve means the online replacement
+            must NOT overwrite the canonical local file.
+          end note
           stop
         endif
       endif
@@ -30,12 +72,22 @@ if (Incoming item replaces file content?) then (yes)
   :Atomically promote validated .partial to canonical path;
   :Apply authoritative online timestamp and metadata;
   :Save applied online state in DB;
+  note right
+    Result:
+    - online version becomes the canonical local file
+    - any unique previous local version survives as safeBackup
+    - DB now describes the content actually committed locally
+  end note
 else (no)
   :Apply directory, metadata, move or delete handling as required;
 endif
 
 :Run known-state database consistency pass;
 :Scan for new local data when uploads are enabled;
+note right
+  A newly created safeBackup is a local file and may be uploaded
+  as a new item during this scan unless excluded with skip_file.
+end note
 :Perform final online true-up where applicable;
 stop
 @enduml

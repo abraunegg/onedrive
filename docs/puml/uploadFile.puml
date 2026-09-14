@@ -2,6 +2,12 @@
 title New Local File Upload Flow
 start
 
+note right
+  This path handles local files that are not yet tracked as an
+  existing canonical DriveItem. A same-name online object is not
+  automatically safe to overwrite; it becomes a reconciliation case.
+end note
+
 if (Path is protected by .nosync?) then (yes)
   :Skip upload;
   stop
@@ -36,6 +42,10 @@ if (Same-name online item exists?) then (yes)
   if (Local content matches online item?) then (yes)
     :Zero data traversal;
     :Save online identity / metadata in DB;
+    note right
+      Matching bytes can be bound to the existing online identity;
+      there is no reason to upload or create a conflict copy.
+    end note
     stop
   else (no)
     :Treat collision as existing-file reconciliation;
@@ -45,12 +55,28 @@ if (Same-name online item exists?) then (yes)
       :Route to modified-file upload path;
     else (no / conflict)
       :Create verified independent safeBackup copy;
+      note right
+        LOCAL DATA LOSS PREVENTION
+
+        The local candidate must not be discarded merely because the
+        same pathname already exists online. Preserve the local bytes
+        before resolving which object remains canonical.
+      end note
       :Upload safeBackup as a new file;
       :Remove temporary canonical DB association;
       if (~--upload-only?) then (yes)
         :Retain canonical local file for future reconciliation;
+        note right
+          ~--upload-only cannot apply the online version locally, so
+          the canonical local path is retained after preservation.
+        end note
       else (no)
         :Download authoritative online file transactionally;
+        note right
+          In bidirectional operation the online canonical can now be
+          applied locally because the differing local bytes have been
+          preserved independently.
+        end note
       endif
     endif
     stop

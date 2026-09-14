@@ -28,8 +28,9 @@ if (~--dry-run?) then (yes)
 else (no)
   :Download through onedrive.d / curlEngine.d\nto private <canonical>.partial staging file;
   note right
-    Resumable-download state belongs to the transfer layer.
-    A failed HTTP response is never promoted to the canonical path.
+    The existing canonical file is left untouched while data
+    is transferred. A failed HTTP response or incomplete transfer
+    is never promoted into the user's real pathname.
   end note
 
   if (Final HTTP response is not successful?) then (yes)
@@ -53,13 +54,35 @@ else (no)
   endif
 
   :Re-evaluate canonical file at commit boundary;
+  note right
+    The canonical file is checked again at the last responsible
+    moment because it may have changed locally while the online
+    replacement was being downloaded.
+  end note
   if (Canonical contains unique local content\nnot matching incoming online or DB baseline?) then (yes)
     :Create and verify non-destructive safeBackup copy;
+    note right
+      LOCAL DATA LOSS PREVENTION
+
+      The staged online replacement must not overwrite unique local
+      bytes. A verified safeBackup copy is required before commit,
+      and the canonical pathname remains present while this happens.
+    end note
     if (safeBackup preservation fails?) then (yes)
       :Reject staged replacement;
       :Retain canonical file and DB state;
+      note right
+        Preservation is mandatory. If safeBackup cannot be verified,
+        the client refuses to replace the user's canonical local file.
+      end note
       stop
     endif
+  else (no)
+    note right
+      No safeBackup is needed when the local file still matches the
+      last applied DB baseline, or already matches the incoming online
+      content. In those cases there is no unique local content to save.
+    end note
   endif
 
   :Recheck canonical existence / content after inspection;
@@ -78,6 +101,11 @@ else (no)
 endif
 
 :Save applied online item in DB;
+note right
+  The DB is advanced only after the corresponding local state
+  has actually been committed. It must not claim that online
+  content is applied when the canonical replacement failed.
+end note
 if (write_xattr_data enabled?) then (yes)
   :Write OneDrive metadata xattr;
 endif

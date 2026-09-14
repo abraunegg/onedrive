@@ -3,15 +3,29 @@ title Local-First Synchronisation Order (~--local-first)
 
 start
 :Validate authentication, service reachability\nand system time safety gates;
+note right
+  Operating context:
+  ~--sync ~--local-first or ~--monitor ~--local-first.
+
+  ~--local-first changes reconciliation order.
+  It does NOT mean that a local file may blindly
+  overwrite an independently changed online file.
+end note
 
 :Process known database state against\nthe local filesystem first;
 note right
-  Detect and action locally modified or
-  deleted objects that were previously tracked.
+  Detect and action locally modified or deleted
+  objects that were previously tracked.
 end note
 
 :Scan local filesystem for new data;
 :Upload eligible new local files / directories;
+note right
+  Modified tracked files still fetch current online
+  metadata before replacement. If a genuine or
+  unresolved online conflict exists, local data is
+  preserved before conflict resolution continues.
+end note
 
 :Reconcile Microsoft OneDrive online state;
 note right

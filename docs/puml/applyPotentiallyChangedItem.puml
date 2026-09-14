@@ -4,6 +4,10 @@ start
 
 :Read previously applied DB state and incoming online state;
 :Determine whether file content identity changed;
+note right
+  The existing DB row supplies the last successfully applied
+  identity/path/content baseline for this tracked DriveItem.
+end note
 
 if (eTag changed?) then (yes)
   if (Online path / name changed?) then (yes)
@@ -14,6 +18,12 @@ if (eTag changed?) then (yes)
         :Destination may be overwritten by the online move;
       else (no)
         :Create verified non-destructive safeBackup\nof conflicting destination;
+        note right
+          Local data loss prevention:
+          the destination pathname contains data that cannot be
+          proven safe to discard. Preserve it before the online
+          move/rename is allowed to occupy that pathname.
+        end note
         if (Preservation failed?) then (yes)
           :Abort this item without advancing state;
           stop
@@ -39,6 +49,12 @@ if (eTag changed?) then (yes)
   if (Incoming item is file-like?) then (yes)
     if (File content identity changed?) then (yes)
       :Queue online file content for transactional download;
+      note right
+        A successful move only proves the new path was applied.
+        If file content also changed online, canonical replacement
+        is deferred to the download transaction where preservation
+        is re-evaluated immediately before commit.
+      end note
       if (Path was moved successfully?) then (yes)
         :Persist new location but retain old applied\ncontent identity until download commits;
       endif
