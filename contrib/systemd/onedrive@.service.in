@@ -18,8 +18,7 @@ ProtectKernelTunables=true
 #ProtectKernelLogs=true
 ProtectControlGroups=true
 RestrictRealtime=true
-ExecStartPre=/bin/sh -c 'sleep 15'
-ExecStart=@prefix@/bin/onedrive --monitor --confdir=/home/%i/.config/onedrive
+ExecStart=/bin/sh -c 'sleep 15; exec @prefix@/bin/onedrive --monitor'
 User=%i
 Group=users
 Restart=on-failure

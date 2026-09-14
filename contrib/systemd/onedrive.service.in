@@ -18,8 +18,7 @@ ProtectKernelTunables=true
 #ProtectKernelLogs=true
 ProtectControlGroups=true
 RestrictRealtime=true
-ExecStartPre=/bin/sh -c 'sleep 15'
-ExecStart=@prefix@/bin/onedrive --monitor
+ExecStart=/bin/sh -c 'sleep 15; exec @prefix@/bin/onedrive --monitor'
 Restart=on-failure
 RestartSec=3
 # Do not restart the service if a --resync is required; the client exits with EX_CONFIG (78)
