@@ -1,41 +1,82 @@
 @startuml
-participant "OneDrive Client\nfor Linux" as od
-participant "libcurl" as lc
-participant "Client Web Browser" as browser
-participant "Microsoft Authentication Service\n(OAuth 2.0 Endpoint)" as oauth
-participant "GitHub API" as github
-participant "Microsoft Graph API" as graph
+title OneDrive Client for Linux - HTTPS / libcurl Interactions
 
-activate od
-activate lc
+participant "OneDrive Client\nfor Linux" as Client
+participant "Local OAuth\ncallback listener" as LocalAuth
+participant "Web Browser" as Browser
+participant "libcurl" as Curl
+participant "Microsoft Identity\nplatform" as Identity
+participant "Microsoft Graph API" as Graph
+participant "GitHub API" as GitHub
 
-od->od: Generate Authentication\nService URL
-activate browser
-od->browser: Navigate to Authentication\nService URL via Client Web Browser
-browser->oauth: Request access token
-activate oauth
-oauth-->browser: Access token
-browser-->od: Access token
-deactivate oauth
-deactivate browser
+== Standard OAuth token acquisition ==
+alt Stored refresh token is available
+  Client -> Curl: POST refresh-token grant
+  Curl -> Identity: HTTPS token request
+  Identity --> Curl: Access token + refreshed token data
+  Curl --> Client: Token response
+else Device authorisation is configured
+  Client -> Curl: Request device code
+  Curl -> Identity: HTTPS device-code request
+  Identity --> Curl: Device code + verification URI
+  Curl --> Client: Device authorisation details
+  Client -> Browser: User opens verification URI and enters code
+  Browser -> Identity: User authenticates / grants consent
+  loop Until authorised, declined or expired
+    Client -> Curl: Poll token endpoint
+    Curl -> Identity: HTTPS device-code token request
+    Identity --> Curl: Pending / error / token response
+    Curl --> Client: Poll result
+  end
+else Interactive authorisation-code flow
+  alt Local browser callback is available
+    Client -> LocalAuth: Start loopback listener
+    Client -> Browser: Open authorisation URL
+    Browser -> Identity: User authenticates and grants consent
+    note over Browser,Identity
+      MFA / Conditional Access, when required,
+      is handled by the Microsoft identity flow.
+    end note
+    Identity --> Browser: Redirect to loopback URI with authorisation code
+    Browser -> LocalAuth: GET redirect URI
+    LocalAuth --> Client: Authorisation code
+  else Manual / automated redirect-URI workflow
+    Client -> Browser: Present Microsoft authorisation URL
+    Browser -> Identity: User authenticates and grants consent
+    Identity --> Browser: Redirect URI containing authorisation code
+    Browser --> Client: Redirect URI supplied by user or configured auth workflow
+  end
+  Client -> Curl: Redeem authorisation code
+  Curl -> Identity: HTTPS token request
+  Identity --> Curl: Access token + refresh token
+  Curl --> Client: Token response
+end
 
-od->lc: Check application version\nvia api.github.com
-activate github
-lc->github: Query release status
-activate github
-github-->lc: Release information
-deactivate github
-lc-->od: Process release information
-deactivate lc
+note over Client,Identity
+  Intune / Microsoft Identity Broker authentication is a separate token-acquisition
+  path. After a token is available, Microsoft Graph data operations still use the
+  normal HTTP transport path shown below.
+end note
 
-loop API Communication
-    od->lc: Construct HTTPS request (with token)
-    activate lc
-    lc->graph: API Request
-    activate graph
-    graph-->lc: API Response
-    deactivate graph
-    lc-->od: Process response
-    deactivate lc
+== Runtime API communication ==
+opt Application version check
+  Client -> Curl: Query release information
+  Curl -> GitHub: HTTPS API request
+  GitHub --> Curl: Release metadata
+  Curl --> Client: Version response
+end
+
+loop Microsoft OneDrive operations
+  Client -> Client: Check access-token expiry
+  opt Access token has expired
+    Client -> Curl: POST refresh-token grant
+    Curl -> Identity: HTTPS token request
+    Identity --> Curl: New access token / expiry
+    Curl --> Client: Token response
+  end
+  Client -> Curl: Construct authenticated HTTPS request
+  Curl -> Graph: Microsoft Graph API request
+  Graph --> Curl: API response / file transfer
+  Curl --> Client: Parsed response / transfer result
 end
 @enduml
