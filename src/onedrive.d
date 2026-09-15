@@ -333,8 +333,8 @@ class OneDriveApi {
 			// Use the value entered by the user
 			tenantId = appConfig.getValueString("azure_tenant_id");
 		} else {
-			// set to common
-			tenantId = "common";
+			// Device-code onboarding in the native app is limited to work/school accounts.
+			tenantId = appConfig.getValueBool("gui_device_auth") ? "organizations" : "common";
 		}
 
 		// Did the user specify a 'drive_id' ?
@@ -922,7 +922,7 @@ class OneDriveApi {
 						if (!appConfig.getValueBool("dry_run")) {
 							// Prefer local loopback browser authentication when we are running under a GUI.
 							// If this cannot be used, preserve the existing manual paste workflow.
-							if (shouldAttemptLocalBrowserAuth(appConfig)) {
+							if (appConfig.getValueBool("gui_browser_auth") || shouldAttemptLocalBrowserAuth(appConfig)) {
 								string originalRedirectUrl = redirectUrl;
 								ushort localAuthPort = findAvailableLocalAuthPort();
 								if (localAuthPort != 0) {
@@ -1678,6 +1678,19 @@ class OneDriveApi {
 		if (nextLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/children";
 			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,createdBy,lastModifiedBy,package";
+		} else {
+			url = nextLink;
+		}
+		return get(url, false, requestHeaders);
+	}
+
+	JSONValue listChildrenIncludingShortcuts(string driveId, string id, string nextLink) {
+		string[string] requestHeaders;
+		addIncludeFeatureRequestHeader(&requestHeaders);
+		string url;
+		if (nextLink.empty) {
+			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/children";
+			url ~= "?select=id,name,folder,remoteItem,parentReference";
 		} else {
 			url = nextLink;
 		}

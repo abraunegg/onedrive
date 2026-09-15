@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>OneDrive File Provider</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleSymbolName</key>
+			<string>OneDriveSidebar</string>
+		</dict>
+	</dict>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<key>CFBundleShortVersionString</key>
+	<string>2.5.10</string>
+	<key>CFBundleVersion</key>
+	<string>48</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionFileProviderDocumentGroup</key>
+		<string>$(TeamIdentifierPrefix)org.onedrive.cli.macos</string>
+		<key>NSExtensionFileProviderSupportsEnumeration</key>
+		<true/>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.fileprovider-nonui</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).OneDriveFileProviderExtension</string>
+	</dict>
+	<key>OneDriveKeychainAccessGroup</key>
+	<string>$(AppIdentifierPrefix)org.onedrive.cli.macos.shared</string>
+	<key>OneDriveAppGroupIdentifier</key>
+	<string>$(TeamIdentifierPrefix)org.onedrive.cli.macos</string>
+</dict>
+</plist>

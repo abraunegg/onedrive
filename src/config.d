@@ -1293,6 +1293,9 @@ class ApplicationConfig {
 		stringValues["auth_response"] = "";
 		stringValues["share_password"] = "";
 		stringValues["download_single_file"] = "";
+		stringValues["gui_folder_id"] = "";
+		stringValues["gui_folder_path"] = "";
+		stringValues["gui_drive_id"] = "";
 		boolValues["display_config"] = false;
 		boolValues["display_sync_status"] = false;
 		boolValues["display_quota"] = false;
@@ -1307,6 +1310,10 @@ class ApplicationConfig {
 		boolValues["force_sync"] = false;
 		boolValues["with_editing_perms"] = false;
 		boolValues["display_admin_consent_url"] = false;
+		boolValues["gui_list_folders_json"] = false;
+		boolValues["gui_list_libraries_json"] = false;
+		boolValues["gui_device_auth"] = false;
+		boolValues["gui_browser_auth"] = false;
 				
 		// Specific options for CLI input handling
 		stringValues["sync_dir_cli"] = "";
@@ -1409,6 +1416,27 @@ class ApplicationConfig {
 				"get-sharepoint-drive-id",
 					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library",
 					&stringValues["sharepoint_library_name"],
+				"gui-list-folders-json",
+					"Return OneDrive folders as machine-readable JSON for the macOS app",
+					&boolValues["gui_list_folders_json"],
+				"gui-folder-id",
+					"Folder ID whose children should be returned to the macOS app",
+					&stringValues["gui_folder_id"],
+				"gui-folder-path",
+					"Folder path prepended to child paths returned to the macOS app",
+					&stringValues["gui_folder_path"],
+				"gui-drive-id",
+					"Drive ID whose folders should be returned to the macOS app",
+					&stringValues["gui_drive_id"],
+				"gui-list-libraries-json",
+					"Return SharePoint libraries as machine-readable JSON for the macOS app",
+					&boolValues["gui_list_libraries_json"],
+				"gui-device-auth",
+					"Use device-code authentication for the macOS app",
+					&boolValues["gui_device_auth"],
+				"gui-browser-auth",
+					"Use browser callback authentication for the macOS app",
+					&boolValues["gui_browser_auth"],
 				"list-shared-items",
 					"List OneDrive Business Shared Items",
 					&boolValues["list_business_shared_items"],
@@ -1674,6 +1702,10 @@ class ApplicationConfig {
 				newAuthFilesString = tempAuthUrl ~ ":" ~ tempResponseUrl;
 				if (debugLogging) {addLogEntry("auth_files - updated value: " ~ newAuthFilesString, ["debug"]);}
 				setValueString("auth_files", newAuthFilesString);
+			}
+
+			if (getValueBool("gui_device_auth")) {
+				setValueBool("use_device_auth", true);
 			}
 			
 			if (opt.helpWanted) {
@@ -2919,6 +2951,10 @@ class ApplicationConfig {
 			// flag that a no sync operation has been requested
 			noSyncOperation = true;
 		}
+
+		if (getValueBool("gui_list_folders_json") || getValueBool("gui_list_libraries_json")) {
+			noSyncOperation = true;
+		}
 		
 		// --create-directory - Are we just creating a directory online, without any sync being performed?
 		if ((getValueString("create_directory") != "")) {
@@ -3109,8 +3145,12 @@ class ApplicationConfig {
 		}
 		
 		bool hasGuiElements = hasDisplay || (xdgType == "wayland" || xdgType == "x11");
-		
-		return hasGuiElements && hasRuntime && uidMatches && homeOK;
+
+		version (OSX) {
+			return uidMatches && homeOK;
+		} else {
+			return hasGuiElements && hasRuntime && uidMatches && homeOK;
+		}
 	}
 	
 	// Attempt to detect the running display manager

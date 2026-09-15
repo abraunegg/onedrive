@@ -1,0 +1,102 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* OneDriveApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* OneDriveApp.swift */; };
+		A10000000000000000000002 /* ProviderShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ProviderShared.swift */; };
+		A10000000000000000000003 /* ProviderCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* ProviderCoordinator.swift */; };
+		A10000000000000000000004 /* ProviderShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ProviderShared.swift */; };
+		A10000000000000000000005 /* GraphClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* GraphClient.swift */; };
+		A10000000000000000000006 /* ProviderState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* ProviderState.swift */; };
+		A10000000000000000000007 /* ProviderItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* ProviderItem.swift */; };
+		A10000000000000000000008 /* ProviderEnumerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* ProviderEnumerator.swift */; };
+		A10000000000000000000009 /* FileProviderExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* FileProviderExtension.swift */; };
+		A1000000000000000000000A /* OneDriveFileProvider.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000C /* OneDriveFileProvider.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A1000000000000000000000B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A30000000000000000000001 = {isa = PBXContainerItemProxy; containerPortal = A40000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = A50000000000000000000002; remoteInfo = OneDriveFileProvider; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A60000000000000000000001 /* Embed App Extensions */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (A1000000000000000000000A /* OneDriveFileProvider.appex in Embed App Extensions */, ); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		A20000000000000000000001 /* OneDriveApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneDriveApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* ProviderShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderShared.swift; sourceTree = "<group>"; };
+		A20000000000000000000003 /* ProviderCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderCoordinator.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* GraphClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphClient.swift; sourceTree = "<group>"; };
+		A20000000000000000000005 /* ProviderState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderState.swift; sourceTree = "<group>"; };
+		A20000000000000000000006 /* ProviderItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderItem.swift; sourceTree = "<group>"; };
+		A20000000000000000000007 /* ProviderEnumerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderEnumerator.swift; sourceTree = "<group>"; };
+		A20000000000000000000008 /* FileProviderExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileProviderExtension.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2000000000000000000000A /* OneDrive.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OneDrive.entitlements; sourceTree = "<group>"; };
+		A2000000000000000000000B /* OneDrive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OneDrive.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000000000000000000000C /* OneDriveFileProvider.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OneDriveFileProvider.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000000000000000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2000000000000000000000E /* OneDriveFileProvider.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OneDriveFileProvider.entitlements; sourceTree = "<group>"; };
+		A2000000000000000000000F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A70000000000000000000001 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A70000000000000000000002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A80000000000000000000001 = {isa = PBXGroup; children = (A80000000000000000000002 /* App */, A80000000000000000000003 /* FileProvider */, A80000000000000000000004 /* Products */, ); sourceTree = "<group>"; };
+		A80000000000000000000002 /* App */ = {isa = PBXGroup; children = (A20000000000000000000001, A20000000000000000000009, A2000000000000000000000A, ); name = App; sourceTree = "<group>"; };
+		A80000000000000000000003 /* FileProvider */ = {isa = PBXGroup; children = (A20000000000000000000002, A20000000000000000000003, A20000000000000000000004, A20000000000000000000005, A20000000000000000000006, A20000000000000000000007, A20000000000000000000008, A2000000000000000000000D, A2000000000000000000000E, A2000000000000000000000F, ); path = FileProvider; sourceTree = "<group>"; };
+		A80000000000000000000004 /* Products */ = {isa = PBXGroup; children = (A2000000000000000000000B, A2000000000000000000000C, ); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A50000000000000000000001 /* OneDrive */ = {isa = PBXNativeTarget; buildConfigurationList = AA0000000000000000000001; buildPhases = (A90000000000000000000001 /* Sources */, A70000000000000000000001 /* Frameworks */, A60000000000000000000001 /* Embed App Extensions */, AB0000000000000000000001 /* Prepare Runtime Assets */, ); buildRules = (); dependencies = (AC0000000000000000000001, ); name = OneDrive; productName = OneDrive; productReference = A2000000000000000000000B; productType = "com.apple.product-type.application"; };
+		A50000000000000000000002 /* OneDriveFileProvider */ = {isa = PBXNativeTarget; buildConfigurationList = AA0000000000000000000002; buildPhases = (A90000000000000000000002 /* Sources */, A70000000000000000000002 /* Frameworks */, A90000000000000000000003 /* Resources */, ); buildRules = (); dependencies = (); name = OneDriveFileProvider; productName = OneDriveFileProvider; productReference = A2000000000000000000000C; productType = "com.apple.product-type.app-extension"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A40000000000000000000001 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1600; LastUpgradeCheck = 1600; TargetAttributes = {A50000000000000000000001 = {CreatedOnToolsVersion = 16.0; }; A50000000000000000000002 = {CreatedOnToolsVersion = 16.0; }; }; }; buildConfigurationList = AA0000000000000000000003; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base, ); mainGroup = A80000000000000000000001; productRefGroup = A80000000000000000000004; projectDirPath = ""; projectRoot = ""; targets = (A50000000000000000000001, A50000000000000000000002, ); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A90000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A1000000000000000000000B /* Assets.xcassets in Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AB0000000000000000000001 /* Prepare Runtime Assets */ = {isa = PBXShellScriptBuildPhase; alwaysOutOfDate = 1; buildActionMask = 2147483647; files = (); inputPaths = (); name = "Prepare Runtime Assets"; outputPaths = (); runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = "\"$SRCROOT/prepare-runtime-assets.sh\"\n"; };
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A90000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, ); runOnlyForDeploymentPostprocessing = 0; };
+		A90000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000007, A10000000000000000000008, A10000000000000000000009, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AC0000000000000000000001 = {isa = PBXTargetDependency; target = A50000000000000000000002; targetProxy = A30000000000000000000001; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		AD0000000000000000000001 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 13.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; }; name = Debug; };
+		AD0000000000000000000002 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 13.0; SDKROOT = macosx; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 5.0; }; name = Release; };
+		AD0000000000000000000003 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = OneDrive.entitlements; CODE_SIGN_STYLE = Automatic; COMBINE_HIDPI_IMAGES = YES; CURRENT_PROJECT_VERSION = 48; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Info.plist; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", ); MARKETING_VERSION = 2.5.10; PRODUCT_BUNDLE_IDENTIFIER = org.onedrive.cli.macos; PRODUCT_NAME = OneDrive; SWIFT_VERSION = 5.0; }; name = Debug; };
+		AD0000000000000000000004 = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CODE_SIGN_ENTITLEMENTS = OneDrive.entitlements; CODE_SIGN_STYLE = Automatic; COMBINE_HIDPI_IMAGES = YES; CURRENT_PROJECT_VERSION = 48; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Info.plist; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", ); MARKETING_VERSION = 2.5.10; PRODUCT_BUNDLE_IDENTIFIER = org.onedrive.cli.macos; PRODUCT_NAME = OneDrive; SWIFT_VERSION = 5.0; }; name = Release; };
+		AD0000000000000000000005 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = FileProvider/OneDriveFileProvider.entitlements; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 48; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = FileProvider/Info.plist; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", "@executable_path/../../../../Frameworks", ); MARKETING_VERSION = 2.5.10; PRODUCT_BUNDLE_IDENTIFIER = org.onedrive.cli.macos.fileprovider; PRODUCT_NAME = OneDriveFileProvider; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0; }; name = Debug; };
+		AD0000000000000000000006 = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CODE_SIGN_ENTITLEMENTS = FileProvider/OneDriveFileProvider.entitlements; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 48; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = FileProvider/Info.plist; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", "@executable_path/../../../../Frameworks", ); MARKETING_VERSION = 2.5.10; PRODUCT_BUNDLE_IDENTIFIER = org.onedrive.cli.macos.fileprovider; PRODUCT_NAME = OneDriveFileProvider; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA0000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (AD0000000000000000000003, AD0000000000000000000004, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		AA0000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (AD0000000000000000000005, AD0000000000000000000006, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		AA0000000000000000000003 = {isa = XCConfigurationList; buildConfigurations = (AD0000000000000000000001, AD0000000000000000000002, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = A40000000000000000000001 /* Project object */;
+}

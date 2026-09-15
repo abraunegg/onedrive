@@ -28,6 +28,8 @@
 ## Overview
 This document explains how to install or upgrade the OneDrive Client for Linux.
 
+The experimental native Finder Files On-Demand application and its DMG workflow are documented separately in the [macOS guide](macos.md).
+
 The preferred installation method is to use pre-built distribution packages wherever they are available and current. On some distributions, particularly Debian, Ubuntu, Linux Mint, and Raspberry Pi OS, the versions provided in the default distribution repositories are outdated and unsupported. These must not be used.
 
 If your distribution provides a current maintained package, you should install the client from your package manager. If your distribution does not provide a supported package, or you need to build the client for a custom or minimal environment, building from source is supported and documented below.
@@ -224,6 +226,16 @@ For GUI notifications the following is also necessary:
 ```text
 sudo dnf install libnotify-devel
 ```
+
+#### macOS
+
+The native macOS app requires Apple Command Line Tools, Homebrew dependencies, and full Xcode for the signed Finder extension. Install the command-line dependencies with:
+
+```text
+brew install git make pkgconf curl sqlite ldc imagemagick librsvg
+```
+
+The app uses Apple's File Provider framework for change observation. The legacy CLI `--monitor` mode remains unavailable on macOS. Continue with the [macOS guide](macos.md) for the signed app and DMG build.
 
 #### FreeBSD
 > [!NOTE]

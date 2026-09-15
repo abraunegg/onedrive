@@ -633,8 +633,11 @@ int main(string[] cliArgs) {
 	} else {
 		// Is the application currently authenticated? If not, it is pointless checking if a --resync is required until the application is authenticated
 		if (exists(appConfig.refreshTokenFilePath)) {
+			// Folder discovery is read-only and must remain available while the user
+			// repairs or changes their sync configuration.
+			bool guiMetadataDiscovery = appConfig.getValueBool("gui_list_folders_json") || appConfig.getValueBool("gui_list_libraries_json");
 			// Has any of our application configuration that would require a --resync been changed?
-			if (appConfig.applicationChangeWhereResyncRequired()) {
+			if (!guiMetadataDiscovery && appConfig.applicationChangeWhereResyncRequired()) {
 				// Application configuration has changed however --resync not issued, fail fast
 				addLogEntry();
 				addLogEntry("An application configuration change has been detected where a --resync is required", ["info", "notify"]);
@@ -820,6 +823,20 @@ int main(string[] cliArgs) {
 				// - Are we renaming or moving a directory?
 				// - Are we displaying the quota information?
 				// - Did we just authorise the client?
+
+				if (appConfig.getValueBool("gui_list_folders_json")) {
+					syncEngineInstance.outputGuiFolders(
+						appConfig.getValueString("gui_folder_id"),
+						appConfig.getValueString("gui_folder_path"),
+						appConfig.getValueString("gui_drive_id")
+					);
+					return EXIT_SUCCESS;
+				}
+
+				if (appConfig.getValueBool("gui_list_libraries_json")) {
+					syncEngineInstance.outputGuiLibraries();
+					return EXIT_SUCCESS;
+				}
 
 				// --get-sharepoint-drive-id - Get the SharePoint Library drive_id
 				if (appConfig.getValueString("sharepoint_library_name") != "") {

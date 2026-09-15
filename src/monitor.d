@@ -4,7 +4,10 @@ module monitor;
 // What does this module require to function?
 import core.stdc.errno;
 import core.stdc.stdlib;
-import core.sys.linux.sys.inotify;
+version (OSX) {
+} else {
+	import core.sys.linux.sys.inotify;
+}
 import core.sys.posix.poll;
 import core.sys.posix.unistd;
 import core.sys.posix.sys.select;
@@ -27,6 +30,52 @@ import config;
 import util;
 import log;
 import clientSideFiltering;
+
+version (OSX) {
+	enum LocalChangeType {
+		moved,
+		deleted,
+		changed,
+		createDir
+	}
+
+	struct LocalChange {
+		LocalChangeType type;
+		bool skipped;
+		string src;
+		string dst;
+	}
+
+	class MonitorException: ErrnoException {
+		@safe this(string msg, string file = __FILE__, size_t line = __LINE__) {
+			super(msg, file, line);
+		}
+	}
+
+	// The native macOS app uses File Provider for change observation. Keep the
+	// legacy monitor API present so the shared CLI builds, but fail clearly if
+	// someone requests the inotify-only monitor mode directly.
+	final class Monitor {
+		bool initialised = false;
+
+		this(ApplicationConfig appConfig, ClientSideFiltering selectiveSync) {}
+
+		void initialise() {
+			throw new MonitorException("Legacy --monitor mode is unavailable on macOS; use the native Files On-Demand app.");
+		}
+
+		void send(bool value) {}
+		void shutdown() {}
+		void capture(string invocationSource = "unspecified", string parentLogKey = "") {}
+		LocalChange[] takePendingChanges() { return []; }
+		void clearExpectedEvents(string invocationSource = "unspecified") {}
+		bool hasPendingDeparture(string path) { return false; }
+		void recordExpectedDirectoryCreate(string path) {}
+		void recordExpectedMove(string fromPath, string toPath) {}
+		void recordExpectedFileArrival(string path) {}
+		void recordExpectedRemoval(string path) {}
+	}
+} else {
 
 // Relevant inotify events. All currently supported/tested platforms provide
 // these markers through their inotify implementation.
@@ -1793,5 +1842,7 @@ final class Monitor {
 			// Debug Log that all inotify events are flushed
 			if (debugLogging) {addLogEntry("inotify events flushed", ["debug"]);}
 		}
-	}  
+	}
+}
+
 }

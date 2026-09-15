@@ -786,6 +786,142 @@ class SyncEngine {
 		return true;
 	}
 
+	// Return a small, stable JSON payload for native UI folder selection.
+	void outputGuiFolders(string requestedFolderId = "", string requestedFolderPath = "", string requestedDriveId = "") {
+		JSONValue[] folders;
+		string accountName = "Microsoft account";
+		string accountEmail = "";
+		string nextLink = "";
+
+		OneDriveApi api = new OneDriveApi(appConfig);
+		if (!api.initialise()) {
+			addLogEntry("ERROR: Unable to initialise OneDrive for folder discovery");
+			return;
+		}
+
+		try {
+			JSONValue drive = api.getDefaultDriveDetails();
+			string rootId = "";
+			if (("owner" in drive) && (drive["owner"].type == JSONType.object) &&
+				("user" in drive["owner"]) && (drive["owner"]["user"].type == JSONType.object)) {
+				JSONValue user = drive["owner"]["user"];
+				if (("displayName" in user) && (user["displayName"].type == JSONType.string)) accountName = user["displayName"].str;
+				if (("email" in user) && (user["email"].type == JSONType.string)) accountEmail = user["email"].str;
+			}
+
+			string driveId = requestedDriveId.empty ? appConfig.defaultDriveId : requestedDriveId;
+			string folderId = requestedFolderId;
+			JSONValue root = api.getDriveIdRoot(driveId);
+			rootId = root["id"].str;
+			if (folderId.empty) folderId = rootId;
+
+			while (true) {
+				JSONValue page = api.listChildren(driveId, folderId, nextLink);
+				if ((page.type != JSONType.object) || !("value" in page)) break;
+				foreach (item; page["value"].array) {
+					if (!("folder" in item) || !("id" in item) || !("name" in item)) continue;
+					string childPath = requestedFolderPath.empty ? item["name"].str : requestedFolderPath ~ "/" ~ item["name"].str;
+					JSONValue folder = ["id": item["id"], "name": item["name"], "path": JSONValue(childPath)];
+					if ((item["folder"].type == JSONType.object) && ("childCount" in item["folder"])) folder["childCount"] = item["folder"]["childCount"];
+					folders ~= folder;
+				}
+				if ("@odata.nextLink" in page) nextLink = page["@odata.nextLink"].str;
+				else break;
+			}
+
+			JSONValue payload = [
+				"accountType": JSONValue(appConfig.accountType),
+				"accountName": JSONValue(accountName),
+				"accountEmail": JSONValue(accountEmail),
+				"driveId": JSONValue(driveId),
+				"rootId": JSONValue(rootId),
+				"folders": JSONValue(folders)
+			];
+			writeln("ONEDRIVE_GUI_JSON=" ~ payload.toString());
+		} catch (Exception e) {
+			addLogEntry("ERROR: Folder discovery failed: " ~ e.msg);
+		}
+		api.releaseCurlEngine();
+	}
+
+	// Return SharePoint document libraries and root shortcuts visible to the account.
+	void outputGuiLibraries() {
+		JSONValue[] libraries;
+		JSONValue[] shortcuts;
+		bool[string] seenDriveIds;
+		string nextSiteLink = "";
+
+		OneDriveApi api = new OneDriveApi(appConfig);
+		if (!api.initialise()) {
+			addLogEntry("ERROR: Unable to initialise OneDrive for library discovery");
+			return;
+		}
+
+		try {
+			string nextShortcutLink = "";
+			while (true) {
+				JSONValue rootItems = api.listChildrenIncludingShortcuts(appConfig.defaultDriveId, appConfig.defaultRootId, nextShortcutLink);
+				if ((rootItems.type != JSONType.object) || !("value" in rootItems)) break;
+				foreach (item; rootItems["value"].array) {
+					if (!("remoteItem" in item) || item["remoteItem"].type != JSONType.object ||
+						!("folder" in item["remoteItem"]) || !("id" in item["remoteItem"]) ||
+						!("name" in item) || !("parentReference" in item["remoteItem"])) continue;
+					JSONValue remote = item["remoteItem"];
+					JSONValue parent = remote["parentReference"];
+					if (parent.type != JSONType.object || !("driveId" in parent)) continue;
+					string remotePath = "";
+					if (("path" in parent) && parent["path"].type == JSONType.string) {
+						string parentPath = parent["path"].str;
+						sizediff_t rootMarker = indexOf(parentPath, "root:");
+						if (rootMarker >= 0) remotePath = parentPath[rootMarker + 5 .. $];
+					}
+					if (!remotePath.empty && remotePath[$ - 1] != '/') remotePath ~= "/";
+					remotePath ~= (("name" in remote) && remote["name"].type == JSONType.string) ? remote["name"].str : item["name"].str;
+					JSONValue shortcut = ["id": remote["id"], "name": item["name"], "driveId": parent["driveId"], "path": JSONValue(remotePath)];
+					if ((remote["folder"].type == JSONType.object) && ("childCount" in remote["folder"])) shortcut["childCount"] = remote["folder"]["childCount"];
+					shortcuts ~= shortcut;
+				}
+				if ("@odata.nextLink" in rootItems) nextShortcutLink = rootItems["@odata.nextLink"].str;
+				else break;
+			}
+
+			while (true) {
+				JSONValue sites = api.o365SiteSearch(nextSiteLink);
+				if ((sites.type != JSONType.object) || !("value" in sites)) break;
+				foreach (site; sites["value"].array) {
+					if (!("id" in site) || site["id"].type != JSONType.string) continue;
+					string siteName = (("displayName" in site) && site["displayName"].type == JSONType.string) ? site["displayName"].str : "Company site";
+					string nextDriveLink = "";
+					while (true) {
+						JSONValue drives = api.o365SiteDrives(site["id"].str, nextDriveLink);
+						if ((drives.type != JSONType.object) || !("value" in drives)) break;
+						foreach (drive; drives["value"].array) {
+							if (!("id" in drive) || !("name" in drive) || drive["id"].type != JSONType.string || drive["name"].type != JSONType.string) continue;
+							string driveId = drive["id"].str;
+							if (driveId in seenDriveIds) continue;
+							seenDriveIds[driveId] = true;
+							JSONValue root = api.getDriveIdRoot(driveId);
+							if (!("id" in root) || root["id"].type != JSONType.string) continue;
+							JSONValue library = ["id": root["id"], "name": drive["name"], "siteName": JSONValue(siteName), "driveId": JSONValue(driveId)];
+							if (("folder" in root) && root["folder"].type == JSONType.object && ("childCount" in root["folder"])) library["childCount"] = root["folder"]["childCount"];
+							libraries ~= library;
+						}
+						if ("@odata.nextLink" in drives) nextDriveLink = drives["@odata.nextLink"].str;
+						else break;
+					}
+				}
+				if ("@odata.nextLink" in sites) nextSiteLink = sites["@odata.nextLink"].str;
+				else break;
+			}
+
+			JSONValue payload = ["libraries": JSONValue(libraries), "shortcuts": JSONValue(shortcuts)];
+			writeln("ONEDRIVE_GUI_LIBRARIES=" ~ payload.toString());
+		} catch (Exception e) {
+			addLogEntry("ERROR: Library discovery failed: " ~ e.msg);
+		}
+		api.releaseCurlEngine();
+	}
+
 	// Shutdown the sync engine, wait for anything in processPool to complete
 	void shutdown() {
 		// Function Start Time

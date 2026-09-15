@@ -7,6 +7,9 @@ Makefile
 config.log
 config.status
 autom4te.cache/
+build/
+**/*.xcodeproj/project.xcworkspace/
+**/*.xcodeproj/xcuserdata/
 contrib/pacman/PKGBUILD
 contrib/spec/onedrive.spec
 contrib/systemd/onedrive.service
