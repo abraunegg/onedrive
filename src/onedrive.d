@@ -1353,12 +1353,10 @@ class OneDriveApi {
 
 		if (ownDisplayName != "") {
 			queryString ~= ` AND NOT(CreatedBy:"` ~ escapeKqlString(ownDisplayName) ~ `")`;
-			queryString ~= ` AND NOT(Author:"` ~ escapeKqlString(ownDisplayName) ~ `")`;
 		}
 
 		if (ownEmail != "") {
 			queryString ~= ` AND NOT(CreatedBy:"` ~ escapeKqlString(ownEmail) ~ `")`;
-			queryString ~= ` AND NOT(Author:"` ~ escapeKqlString(ownEmail) ~ `")`;
 		}
 
 		if (ownOneDriveWebUrl != "") {

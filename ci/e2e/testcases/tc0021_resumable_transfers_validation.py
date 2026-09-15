@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import os
-import random
 import re
 import signal
 import subprocess
 import time
-import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +15,14 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import CommandResult, command_to_string, reset_directory, write_onedrive_config, write_text_file
+from framework.xlsx import (
+    DEFAULT_PAYLOAD_BYTES_PER_ROW,
+    REVISION_0,
+    REVISION_1,
+    create_random_xlsx,
+    mutate_xlsx_revision,
+    validate_xlsx,
+)
 
 
 @dataclass
@@ -44,9 +49,9 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
     XLSX_FRAGMENT_SIZE_BYTES = 10 * 1024 * 1024
     XLSX_MIN_SIZE_BYTES = 2 * XLSX_FRAGMENT_SIZE_BYTES
     XLSX_RANDOM_PAYLOAD_ROWS = 1000
-    XLSX_RANDOM_PAYLOAD_BYTES_PER_ROW = 24_000
-    XLSX_REVISION_0 = "E2E-REVISION-0000"
-    XLSX_REVISION_1 = "E2E-REVISION-0001"
+    XLSX_RANDOM_PAYLOAD_BYTES_PER_ROW = DEFAULT_PAYLOAD_BYTES_PER_ROW
+    XLSX_REVISION_0 = REVISION_0
+    XLSX_REVISION_1 = REVISION_1
 
     # Use 10 MB/s to deliberately slow both upload and download so the 15% threshold
     # is reached with ample time to deliver SIGINT before the transfer can complete.
@@ -120,169 +125,6 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             for chunk in iter(lambda: fp.read(1024 * 1024), b""):
                 digest.update(chunk)
         return digest.hexdigest()
-
-    def _create_random_xlsx(self, path: Path, seed: str) -> dict:
-        """
-        Create a real XLSX package without external Python dependencies.
-
-        Cell A1 carries a fixed revision marker used by the mutation and
-        verification phases. The remaining rows contain deterministic
-        high-entropy base64 payloads generated from the supplied per-run seed,
-        preventing ZIP compression from collapsing the workbook below the
-        multi-fragment session-upload boundary.
-        """
-        path.parent.mkdir(parents=True, exist_ok=True)
-        rng = random.Random(seed)
-
-        content_types = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
-  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
-</Types>
-'''
-        package_rels = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
-</Relationships>
-'''
-        workbook = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets><sheet name="Issue3859" sheetId="1" r:id="rId1"/></sheets>
-</workbook>
-'''
-        workbook_rels = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-</Relationships>
-'''
-        core_props = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <dc:title>TC0021 session replacement workbook</dc:title>
-  <dc:creator>OneDrive E2E Harness</dc:creator>
-</cp:coreProperties>
-'''
-        app_props = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>OneDrive E2E Harness</Application>
-</Properties>
-'''
-
-        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
-            archive.writestr("[Content_Types].xml", content_types)
-            archive.writestr("_rels/.rels", package_rels)
-            archive.writestr("xl/workbook.xml", workbook)
-            archive.writestr("xl/_rels/workbook.xml.rels", workbook_rels)
-            archive.writestr("docProps/core.xml", core_props)
-            archive.writestr("docProps/app.xml", app_props)
-
-            with archive.open("xl/worksheets/sheet1.xml", "w") as sheet:
-                sheet.write(
-                    b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
-                    b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">\n'
-                    b'<sheetData>\n'
-                )
-                sheet.write(
-                    (
-                        '<row r="1"><c r="A1" t="inlineStr"><is><t>'
-                        f'{self.XLSX_REVISION_0}'
-                        '</t></is></c></row>\n'
-                    ).encode("utf-8")
-                )
-
-                for row_index in range(2, self.XLSX_RANDOM_PAYLOAD_ROWS + 2):
-                    payload = base64.b64encode(
-                        rng.randbytes(self.XLSX_RANDOM_PAYLOAD_BYTES_PER_ROW)
-                    ).decode("ascii")
-                    sheet.write(
-                        (
-                            f'<row r="{row_index}"><c r="A{row_index}" t="inlineStr">'
-                            f'<is><t>{payload}</t></is></c></row>\n'
-                        ).encode("ascii")
-                    )
-
-                sheet.write(b'</sheetData>\n</worksheet>\n')
-
-        validation_error = self._validate_xlsx(path, self.XLSX_REVISION_0)
-        if validation_error:
-            raise RuntimeError(validation_error)
-
-        return {
-            "seed": seed,
-            "payload_rows": self.XLSX_RANDOM_PAYLOAD_ROWS,
-            "payload_bytes_per_row": self.XLSX_RANDOM_PAYLOAD_BYTES_PER_ROW,
-            "size_bytes": path.stat().st_size,
-            "revision": self.XLSX_REVISION_0,
-        }
-
-    def _validate_xlsx(self, path: Path, expected_revision: str) -> str:
-        required_members = {
-            "[Content_Types].xml",
-            "_rels/.rels",
-            "xl/workbook.xml",
-            "xl/_rels/workbook.xml.rels",
-            "xl/worksheets/sheet1.xml",
-        }
-
-        if not path.is_file():
-            return f"XLSX file does not exist: {path}"
-
-        try:
-            with zipfile.ZipFile(path, "r") as archive:
-                names = set(archive.namelist())
-                missing = sorted(required_members - names)
-                if missing:
-                    return f"XLSX package is missing required members: {', '.join(missing)}"
-                corrupt_member = archive.testzip()
-                if corrupt_member is not None:
-                    return f"XLSX package contains corrupt ZIP member: {corrupt_member}"
-                sheet_xml = archive.read("xl/worksheets/sheet1.xml")
-        except (OSError, zipfile.BadZipFile) as exc:
-            return f"Unable to validate XLSX package: {exc}"
-
-        if expected_revision.encode("utf-8") not in sheet_xml:
-            return f"XLSX worksheet does not contain expected revision marker: {expected_revision}"
-
-        return ""
-
-    def _mutate_xlsx_revision(self, path: Path) -> None:
-        """
-        Modify the already-uploaded XLSX in place while preserving all other
-        package members, including any SharePoint enrichment added after the
-        first upload. The revision markers are the same length, so the test
-        changes workbook content without using file-size inflation as mutation.
-        """
-        temp_path = path.with_name(path.name + ".mutating")
-        old_marker = self.XLSX_REVISION_0.encode("utf-8")
-        new_marker = self.XLSX_REVISION_1.encode("utf-8")
-        replacement_count = 0
-
-        try:
-            with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(temp_path, "w") as target:
-                for info in source.infolist():
-                    data = source.read(info.filename)
-                    if info.filename == "xl/worksheets/sheet1.xml":
-                        replacement_count = data.count(old_marker)
-                        data = data.replace(old_marker, new_marker, 1)
-                    target.writestr(info, data)
-
-            if replacement_count != 1:
-                raise RuntimeError(
-                    f"Expected exactly one XLSX revision marker before mutation; found {replacement_count}"
-                )
-
-            os.replace(temp_path, path)
-        finally:
-            temp_path.unlink(missing_ok=True)
-
-        validation_error = self._validate_xlsx(path, self.XLSX_REVISION_1)
-        if validation_error:
-            raise RuntimeError(validation_error)
 
     def _extract_upload_session_guids(self, text: str) -> list[str]:
         guids: list[str] = []
@@ -2124,7 +1966,14 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         ]
 
         try:
-            generated = self._create_random_xlsx(local_file, xlsx_seed)
+            generated = create_random_xlsx(
+                local_file,
+                xlsx_seed,
+                payload_rows=self.XLSX_RANDOM_PAYLOAD_ROWS,
+                payload_bytes_per_row=self.XLSX_RANDOM_PAYLOAD_BYTES_PER_ROW,
+                worksheet_name="Issue3859",
+                title="TC0021 session replacement workbook",
+            )
         except Exception as exc:
             details = {
                 "scenario_id": scenario_id,
@@ -2203,7 +2052,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 details,
             )
 
-        canonical_validation_error = self._validate_xlsx(local_file, self.XLSX_REVISION_0)
+        canonical_validation_error = validate_xlsx(local_file, self.XLSX_REVISION_0)
         if canonical_validation_error:
             details = {
                 "scenario_id": scenario_id,
@@ -2236,7 +2085,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             )
 
         try:
-            self._mutate_xlsx_revision(local_file)
+            mutate_xlsx_revision(local_file, self.XLSX_REVISION_0, self.XLSX_REVISION_1)
         except Exception as exc:
             details = {
                 "scenario_id": scenario_id,
@@ -2372,7 +2221,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         )
         verify_manifest = build_manifest(verify_root)
         write_manifest(verify_manifest_file, verify_manifest)
-        verify_validation_error = self._validate_xlsx(verify_file, self.XLSX_REVISION_1)
+        verify_validation_error = validate_xlsx(verify_file, self.XLSX_REVISION_1)
         self._append_if_exists(artifacts, app_log_dir)
         self._append_if_exists(artifacts, verify_app_log_dir)
 

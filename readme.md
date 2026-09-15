@@ -13,6 +13,14 @@ A fully featured, free, open-source and actively maintained Microsoft OneDrive c
 
 Designed for maximum flexibility and reliability, this powerful and highly configurable client works across all major Linux distributions, FreeBSD and OpenBSD. It can also be deployed in containerised environments using Docker or Podman. Supporting both one-way and two-way synchronisation modes, the client provides secure and efficient file syncing with Microsoft OneDrive services — tailored to suit both desktop and server environments.
 
+### Unsupported platforms
+
+This client does not currently provide native support for Microsoft Windows or macOS.
+
+Microsoft provides an official OneDrive client for both Windows and macOS, including native operating-system integration and Files On-Demand functionality. As a result, native support for these platforms is not currently a development priority for this project.
+
+Users who specifically wish to run this client on an otherwise unsupported host platform may be able to do so using the project's Docker container, provided Docker is supported on that platform and an appropriate host directory can be mounted as the synchronisation directory.
+
 
 ## Project Background
 This project originated as a fork of the skilion client in early 2018, after a number of proposed improvements and bug fixes — including [Pull Requests #82 and #314](https://github.com/skilion/onedrive/pulls?q=author%3Aabraunegg) — were not merged and development activity of the skilion client had largely stalled. While it’s unclear whether the original developer was unavailable or had stepped away from the project - bug reports and feature requests remained unanswered for extended periods. In 2020, the original developer (skilion) confirmed they had no intention of maintaining or supporting their work ([reference](https://github.com/skilion/onedrive/issues/518#issuecomment-717604726)).

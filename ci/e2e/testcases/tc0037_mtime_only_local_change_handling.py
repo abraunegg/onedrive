@@ -16,16 +16,21 @@ from framework.utils import (
     write_onedrive_config,
     write_text_file,
 )
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 
 
 class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
     case_id = "0037"
-    name = "mtime-only local change handling"
+    name = "mtime-only Microsoft file change handling"
     description = (
-        "Validate mtime-only local file changes across direct upload, automatic "
-        "session upload for files larger than 4 MiB, and forced session upload "
-        "behaviour without changing file content"
+        "Validate mtime-only local XLSX changes across initial simple upload, automatic "
+        "session upload for files larger than 4 MiB, and forced session upload behaviour "
+        "without changing workbook content"
     )
+
+    SESSION_THRESHOLD_BYTES = 4 * 1024 * 1024
+    SMALL_XLSX_PAYLOAD_ROWS = 80
+    LARGE_XLSX_PAYLOAD_ROWS = 240
 
     def _write_config(self, config_dir: Path, sync_dir: Path, extra_config_lines: list[str] | None = None) -> None:
         config_path = config_dir / "config"
@@ -56,23 +61,6 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
         )
 
-    def _write_file_with_exact_size(self, path: Path, size_bytes: int, header_text: str) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        header_bytes = header_text.encode("utf-8")
-        if len(header_bytes) > size_bytes:
-            raise ValueError(f"header_text is larger than requested file size for {path}")
-
-        filler_size = size_bytes - len(header_bytes)
-        filler_chunk = b"0123456789ABCDEF" * 4096
-
-        with path.open("wb") as handle:
-            handle.write(header_bytes)
-            while filler_size > 0:
-                chunk = filler_chunk[: min(len(filler_chunk), filler_size)]
-                handle.write(chunk)
-                filler_size -= len(chunk)
-
     def _run_logged_command(
         self,
         context: E2EContext,
@@ -89,7 +77,7 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
     def _scenario_uses_session_upload(self, file_size_bytes: int, force_session_upload: bool) -> bool:
         if force_session_upload:
             return True
-        return file_size_bytes > (4 * 1024 * 1024)
+        return file_size_bytes > self.SESSION_THRESHOLD_BYTES
 
     def _run_scenario(
         self,
@@ -99,7 +87,7 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         state_dir: Path,
         scenario_id: str,
         scenario_name: str,
-        file_size_bytes: int,
+        payload_rows: int,
         force_session_upload: bool,
         artifacts: list[str],
     ) -> tuple[bool, str, dict[str, object]]:
@@ -136,7 +124,7 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         self._write_config(conf_verify_final, verify_final_root)
 
         root_name = f"ZZ_E2E_TC0037_{scenario_id}_{context.run_id}_{os.getpid()}"
-        relative_path = f"{root_name}/mtime-only.txt"
+        relative_path = f"{root_name}/mtime-only.xlsx"
 
         local_file_path = local_root / relative_path
         verify_initial_file_path = verify_initial_root / relative_path
@@ -146,8 +134,6 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             root_name,
             relative_path,
         ]
-
-        uses_session_upload = self._scenario_uses_session_upload(file_size_bytes, force_session_upload)
 
         phase1_stdout = scenario_log_dir / "phase1_seed_stdout.log"
         phase1_stderr = scenario_log_dir / "phase1_seed_stderr.log"
@@ -178,12 +164,27 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             ]
         )
 
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:{scenario_id}:{os.getpid()}"
+        generated = create_random_xlsx(
+            local_file_path,
+            xlsx_seed,
+            payload_rows=payload_rows,
+            title=f"TC0037 {scenario_id} mtime-only workbook",
+        )
+        initial_generated_hash = compute_quickxor_hash_file(local_file_path)
+        initial_generated_size = local_file_path.stat().st_size
+        uses_session_upload = self._scenario_uses_session_upload(initial_generated_size, force_session_upload)
+
         details: dict[str, object] = {
             "scenario_id": scenario_id,
             "scenario_name": scenario_name,
             "root_name": root_name,
             "relative_path": relative_path,
-            "file_size_bytes": file_size_bytes,
+            "payload_rows": payload_rows,
+            "xlsx_seed": xlsx_seed,
+            "generated_size": int(generated["size_bytes"]),
+            "initial_generated_hash": initial_generated_hash,
+            "initial_generated_size": initial_generated_size,
             "force_session_upload": force_session_upload,
             "uses_session_upload": uses_session_upload,
             "main_conf_dir": str(conf_main),
@@ -195,20 +196,16 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             "expected_manifest": expected_manifest,
         }
 
-        initial_header = (
-            f"TC0037 {scenario_id} {scenario_name}\n"
-            "This file content must remain unchanged.\n"
-            "Only the local modification timestamp is altered.\n"
-        )
-        self._write_file_with_exact_size(local_file_path, file_size_bytes, initial_header)
+        if payload_rows == self.SMALL_XLSX_PAYLOAD_ROWS and initial_generated_size > self.SESSION_THRESHOLD_BYTES:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} small XLSX unexpectedly exceeded the 4 MiB session threshold", details
+        if payload_rows == self.LARGE_XLSX_PAYLOAD_ROWS and initial_generated_size <= self.SESSION_THRESHOLD_BYTES:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} large XLSX did not exceed the 4 MiB session threshold", details
 
-        initial_local_hash = compute_quickxor_hash_file(local_file_path)
-        initial_local_size = local_file_path.stat().st_size
-
-        details["initial_local_hash"] = initial_local_hash
-        details["initial_local_size"] = initial_local_size
-
-        # Phase 1: seed
+        # Phase 1: seed a real XLSX file. SharePoint may enrich the package after
+        # upload, so the post-sync local file becomes the authoritative settled
+        # content baseline for the mtime-only portion of this scenario.
         phase1_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -224,13 +221,23 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
 
         if phase1_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} seed phase failed with status {phase1_result.returncode}",
-                details,
-            )
+            return False, f"{scenario_id} seed phase failed with status {phase1_result.returncode}", details
 
-        # Phase 2: initial fresh remote verification
+        settled_validation_error = validate_xlsx(local_file_path, REVISION_0)
+        details["settled_validation_error"] = settled_validation_error
+        if settled_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} seeded XLSX was invalid after initial sync: {settled_validation_error}", details
+
+        settled_local_hash = compute_quickxor_hash_file(local_file_path)
+        settled_local_size = local_file_path.stat().st_size
+        settled_local_mtime = int(local_file_path.stat().st_mtime)
+        details["settled_local_hash"] = settled_local_hash
+        details["settled_local_size"] = settled_local_size
+        details["settled_local_mtime"] = settled_local_mtime
+        details["microsoft_changed_seed_bytes"] = settled_local_hash != initial_generated_hash
+
+        # Phase 2: verify the settled online workbook from a fresh client.
         phase2_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -254,53 +261,37 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} initial remote verification failed with status {phase2_result.returncode}",
-                details,
-            )
+            return False, f"{scenario_id} initial remote verification failed with status {phase2_result.returncode}", details
 
         if not verify_initial_file_path.is_file():
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} initial remote verification is missing expected file: {relative_path}",
-                details,
-            )
+            return False, f"{scenario_id} initial remote verification is missing expected file: {relative_path}", details
 
+        baseline_validation_error = validate_xlsx(verify_initial_file_path, REVISION_0)
         baseline_verified_hash = compute_quickxor_hash_file(verify_initial_file_path)
         baseline_verified_size = verify_initial_file_path.stat().st_size
         baseline_verified_mtime = int(verify_initial_file_path.stat().st_mtime)
 
+        details["baseline_validation_error"] = baseline_validation_error
         details["baseline_verified_hash"] = baseline_verified_hash
         details["baseline_verified_size"] = baseline_verified_size
         details["baseline_verified_mtime"] = baseline_verified_mtime
 
+        if baseline_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} initial remote XLSX validation failed: {baseline_validation_error}", details
         if verify_initial_manifest != expected_manifest:
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} initial remote verification manifest did not match expected structure",
-                details,
-            )
-
-        if baseline_verified_hash != initial_local_hash:
+            return False, f"{scenario_id} initial remote verification manifest did not match expected structure", details
+        if baseline_verified_hash != settled_local_hash:
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} initial remote verification hash did not match seeded local file",
-                details,
-            )
-
-        if baseline_verified_size != initial_local_size:
+            return False, f"{scenario_id} initial remote verification hash did not match the settled post-upload XLSX", details
+        if baseline_verified_size != settled_local_size:
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} initial remote verification size did not match seeded local file",
-                details,
-            )
+            return False, f"{scenario_id} initial remote verification size did not match the settled post-upload XLSX", details
 
-        # Phase 3: touch local file only by explicitly setting a later mtime
+        # Phase 3: change only the local mtime. The workbook bytes, including any
+        # Microsoft-added enrichment, must remain bit-for-bit unchanged.
         local_hash_before_touch = compute_quickxor_hash_file(local_file_path)
         local_mtime_before_touch = int(local_file_path.stat().st_mtime)
 
@@ -318,19 +309,10 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
 
         if local_hash_after_touch != local_hash_before_touch:
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} local file hash changed after mtime-only touch",
-                details,
-            )
-
+            return False, f"{scenario_id} local XLSX hash changed after mtime-only touch", details
         if local_mtime_after_touch <= local_mtime_before_touch:
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} local file mtime did not advance after touch",
-                details,
-            )
+            return False, f"{scenario_id} local XLSX mtime did not advance after touch", details
 
         phase3_command = [
             context.onedrive_bin,
@@ -358,29 +340,21 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
 
         if phase3_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} mtime-only sync phase failed with status {phase3_result.returncode}",
-                details,
-            )
-
+            return False, f"{scenario_id} mtime-only sync phase failed with status {phase3_result.returncode}", details
         if content_unchanged_marker not in phase3_combined_output:
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} did not log the expected content-unchanged timestamp handling marker",
-                details,
-            )
-
+            return False, f"{scenario_id} did not log the expected content-unchanged timestamp handling marker", details
         if same_hash_marker not in phase3_combined_output:
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} did not log the expected same-hash timestamp handling marker",
-                details,
-            )
+            return False, f"{scenario_id} did not log the expected same-hash timestamp handling marker", details
 
-        # Phase 4: final fresh remote verification
+        post_touch_validation_error = validate_xlsx(local_file_path, REVISION_0)
+        details["post_touch_validation_error"] = post_touch_validation_error
+        if post_touch_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} local XLSX became invalid during mtime-only reconciliation: {post_touch_validation_error}", details
+
+        # Phase 4: final fresh remote verification.
         phase4_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -404,52 +378,34 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
 
         if phase4_result.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} final remote verification failed with status {phase4_result.returncode}",
-                details,
-            )
-
+            return False, f"{scenario_id} final remote verification failed with status {phase4_result.returncode}", details
         if not verify_final_file_path.is_file():
             self._write_metadata(metadata_file, details)
-            return (
-                False,
-                f"{scenario_id} final remote verification is missing expected file: {relative_path}",
-                details,
-            )
+            return False, f"{scenario_id} final remote verification is missing expected file: {relative_path}", details
 
+        final_validation_error = validate_xlsx(verify_final_file_path, REVISION_0)
         final_verified_hash = compute_quickxor_hash_file(verify_final_file_path)
         final_verified_size = verify_final_file_path.stat().st_size
         final_verified_mtime = int(verify_final_file_path.stat().st_mtime)
 
+        details["final_validation_error"] = final_validation_error
         details["final_verified_hash"] = final_verified_hash
         details["final_verified_size"] = final_verified_size
         details["final_verified_mtime"] = final_verified_mtime
-
         self._write_metadata(metadata_file, details)
 
+        if final_validation_error:
+            return False, f"{scenario_id} final remote XLSX validation failed: {final_validation_error}", details
         if verify_final_manifest != expected_manifest:
-            return (
-                False,
-                f"{scenario_id} final remote verification manifest did not match expected structure",
-                details,
-            )
+            return False, f"{scenario_id} final remote verification manifest did not match expected structure", details
+        if final_verified_hash != local_hash_after_touch:
+            return False, f"{scenario_id} final verified XLSX hash changed during an mtime-only operation", details
+        if final_verified_size != settled_local_size:
+            return False, f"{scenario_id} final verified XLSX size changed during an mtime-only operation", details
 
-        if final_verified_hash != initial_local_hash:
-            return (
-                False,
-                f"{scenario_id} final verified file hash did not match original file content",
-                details,
-            )
-
-        if final_verified_size != initial_local_size:
-            return (
-                False,
-                f"{scenario_id} final verified file size did not match original file size",
-                details,
-            )
-
-        # Scenario-specific timestamp assertions
+        # Preserve the existing timestamp assertions. The initial transfer path is
+        # deliberately varied because timestamp authority differs between simple
+        # and session-upload workflows.
         if uses_session_upload:
             if abs(final_verified_mtime - touched_epoch) > 2:
                 return (
@@ -464,7 +420,6 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
                     f"{scenario_id} final remote mtime {final_verified_mtime} did not advance beyond baseline {baseline_verified_mtime}",
                     details,
                 )
-
             if correcting_timestamp_marker not in phase3_combined_output:
                 return (
                     False,
@@ -472,7 +427,7 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
                     details,
                 )
 
-        return (True, f"{scenario_id} passed", details)
+        return True, f"{scenario_id} passed", details
 
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
@@ -490,26 +445,26 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         scenarios = [
             {
                 "scenario_id": "MT-0001",
-                "scenario_name": "small file with default upload behaviour",
-                "file_size_bytes": 1 * 1024 * 1024,
+                "scenario_name": "small XLSX with default simple-upload seed behaviour",
+                "payload_rows": self.SMALL_XLSX_PAYLOAD_ROWS,
                 "force_session_upload": False,
             },
             {
                 "scenario_id": "MT-0002",
-                "scenario_name": "large file greater than 4 MiB with automatic session upload behaviour",
-                "file_size_bytes": 5 * 1024 * 1024,
+                "scenario_name": "large XLSX greater than 4 MiB with automatic session-upload seed behaviour",
+                "payload_rows": self.LARGE_XLSX_PAYLOAD_ROWS,
                 "force_session_upload": False,
             },
             {
                 "scenario_id": "MT-0003",
-                "scenario_name": "small file with force_session_upload enabled",
-                "file_size_bytes": 1 * 1024 * 1024,
+                "scenario_name": "small XLSX with force_session_upload enabled",
+                "payload_rows": self.SMALL_XLSX_PAYLOAD_ROWS,
                 "force_session_upload": True,
             },
             {
                 "scenario_id": "MT-0004",
-                "scenario_name": "large file greater than 4 MiB with force_session_upload enabled",
-                "file_size_bytes": 5 * 1024 * 1024,
+                "scenario_name": "large XLSX greater than 4 MiB with force_session_upload enabled",
+                "payload_rows": self.LARGE_XLSX_PAYLOAD_ROWS,
                 "force_session_upload": True,
             },
         ]
@@ -528,7 +483,7 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
                 state_dir=state_dir,
                 scenario_id=scenario["scenario_id"],
                 scenario_name=scenario["scenario_name"],
-                file_size_bytes=scenario["file_size_bytes"],
+                payload_rows=scenario["payload_rows"],
                 force_session_upload=scenario["force_session_upload"],
                 artifacts=artifacts,
             )
@@ -544,14 +499,14 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         details["failed_scenario_ids"] = list(failed_scenarios)
 
         summary_file = state_dir / "scenario-summary.txt"
-        write_text_file(
-            summary_file,
-            "\n".join(
-                f"{scenario_id}: passed={details.get(f'{scenario_id}_passed')} message={details.get(f'{scenario_id}_message')!r}"
-                for scenario_id in [scenario["scenario_id"] for scenario in scenarios]
+        summary_lines: list[str] = []
+        for scenario in scenarios:
+            scenario_id = scenario["scenario_id"]
+            summary_lines.append(
+                f"{scenario_id}: passed={details.get(f'{scenario_id}_passed')} "
+                f"message={details.get(f'{scenario_id}_message')!r}"
             )
-            + "\n",
-        )
+        write_text_file(summary_file, "\n".join(summary_lines) + "\n")
         artifacts.append(str(summary_file))
 
         metadata_file = state_dir / "metadata.txt"
@@ -562,7 +517,7 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"{len(failed_scenarios)} of {len(scenarios)} mtime-only scenarios failed: {', '.join(failed_scenarios)}",
+                f"{len(failed_scenarios)} of {len(scenarios)} mtime-only XLSX scenarios failed: {', '.join(failed_scenarios)}",
                 artifacts,
                 details,
             )

@@ -8380,6 +8380,11 @@ class SyncEngine {
 								// --upload-only being used
 								// we are not downloading a file, warn that file differences will exist
 								addLogEntry("WARNING: The file uploaded to Microsoft OneDrive has been modified through its SharePoint 'enrichment' process and no longer matches your local version.");
+								// When also using --local-first, keep the online/database timestamp aligned with the authoritative local file
+								if (appConfig.getValueBool("local_first")) {
+									addLogEntry("WARNING: The online metadata will now be modified to match your local file which will create a new file version.");
+									uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);
+								}
 								addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
 							}
 						} else {
@@ -8637,9 +8642,53 @@ class SyncEngine {
 				localModifiedTime.fracSecs = Duration.zero;
 				onlineModifiedTime.fracSecs = Duration.zero;
 
+				// The timestamp alone cannot prove that the online item changed after our last
+				// successful sync. A local replacement may deliberately preserve an older mtime.
+				// Only trust the stored eTag as a baseline when the freshly queried DriveItem is
+				// the same object represented by this database row and both eTags are usable.
+				//
+				// OneDrive Business Shared Files are stored locally as remote items. Their DB row
+				// uses driveId/id for the synthetic local shared-file hierarchy, while uploads and
+				// fresh metadata queries target remoteDriveId/remoteId. The row's eTag is populated
+				// from that authoritative remote target, so identity must be checked against the
+				// remote fields before that eTag can be trusted as the historical baseline.
+				string databaseBaselineDriveId = dbItem.driveId;
+				string databaseBaselineItemId = dbItem.id;
+				if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
+					databaseBaselineDriveId = dbItem.remoteDriveId;
+					databaseBaselineItemId = dbItem.remoteId;
+				}
+
+				bool onlineObjectMatchesDatabaseIdentity =
+					!databaseBaselineDriveId.empty &&
+					!databaseBaselineItemId.empty &&
+					(targetDriveId == databaseBaselineDriveId) &&
+					(targetItemId == databaseBaselineItemId) &&
+					hasId(currentOnlineJSONData) &&
+					(currentOnlineJSONData["id"].str == databaseBaselineItemId);
+				bool onlineUnchangedSinceLastSync =
+					onlineObjectMatchesDatabaseIdentity &&
+					hasETag(currentOnlineJSONData) &&
+					!currentOnlineJSONData["eTag"].str.empty &&
+					!dbItem.eTag.empty &&
+					(currentOnlineJSONData["eTag"].str == dbItem.eTag);
+				bool trustDatabaseBaseline =
+					onlineUnchangedSinceLastSync &&
+					!appConfig.getValueBool("resync");
+
 				// Which file is newer? If local is newer, it will be uploaded as a modified file in the correct manner
-				if (localModifiedTime < onlineModifiedTime) {
-					// Online File is actually newer than the locally modified file
+				if ((localModifiedTime < onlineModifiedTime) && trustDatabaseBaseline) {
+					// The online item is timestamp-newer, but its eTag still matches the last-known
+					// database baseline. The remote content has therefore not changed since the last
+					// sync, so continue with the normal modified-file upload despite the older mtime.
+					if (debugLogging) {
+						addLogEntry("Online eTag matches database eTag; treating as local modification despite older local timestamp: " ~ localFilePath, ["debug"]);
+					}
+				}
+
+				if ((localModifiedTime < onlineModifiedTime) && !trustDatabaseBaseline) {
+					// Online File is actually newer than the locally modified file, or we cannot
+					// safely prove that the online item is unchanged from our database baseline.
 					if (debugLogging) {
 						addLogEntry("currentOnlineJSONData: " ~ to!string(currentOnlineJSONData), ["debug"]);
 						addLogEntry("currentOnlineItemData: " ~ to!string(currentOnlineItemData), ["debug"]);
@@ -18677,12 +18726,20 @@ class SyncEngine {
 				return "JSON Validation Failed: JSON data from OneDrive API contains invalid UTF-8 characters";
 			}
 
-			// Redact PII in JSON before serialisation
-			redactPII(onedriveJSONItem);
+			// JSONValue object and array payloads are reference-backed. A simple value copy
+			// would therefore still allow redactPII() to mutate the caller's live JSON data.
+			// Serialise and parse the item to create an independent deep copy before any
+			// diagnostic redaction is applied. Logging must never alter sync state.
+			auto sourceJSON = appender!string();
+			toJSON(sourceJSON, onedriveJSONItem);
+			JSONValue sanitisedJSONItem = parseJSON(sourceJSON.data);
 
-			// Try and serialise the JSON into a string
+			// Redact PII only in the independent copy used for logging output
+			redactPII(sanitisedJSONItem);
+
+			// Try and serialise the sanitised copy into a string
 			auto app = appender!string();
-			toJSON(app, onedriveJSONItem);
+			toJSON(app, sanitisedJSONItem);
 
 			// Return sanitised JSON string for logging output
 			return app.data;
