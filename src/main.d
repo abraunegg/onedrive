@@ -116,11 +116,6 @@ version (OpenBSD) {
 }
 
 
-// What other constant variables do we require?
-// A mandatory --resync is an application configuration/state condition.
-// Use the traditional EX_CONFIG status value so callers can distinguish it from a generic failure.
-const int EXIT_RESYNC_REQUIRED = 78;
-
 // Class objects
 ApplicationConfig appConfig;
 OneDriveWebhook oneDriveWebhook;
