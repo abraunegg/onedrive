@@ -1,32 +1,56 @@
 @startuml
-title Default Sync Flow (Online is Source of Truth)
+title Default Synchronisation Order (Remote-First)
 
 start
+:Validate authentication, service reachability\nand system time safety gates;
+note right
+  Operating context:
+  normal ~--sync or ~--monitor reconciliation
+  without ~--local-first.
 
-:Step 1 - Scan OneDrive (online);
-:Detect online changes:
-- New files or folders
-- Modified files
-- Deleted files;
+  "Remote-first" describes ordering only.
+  It does not mean online content may blindly
+  overwrite unique local data.
+end note
 
-:Apply online changes to local:
-- Download new files or folders
-- Update modified files
-- Delete local files or folders;
+:Enumerate Microsoft OneDrive online state;
+note right
+  Online state may come from Graph /delta
+  or a generated hierarchy walk depending
+  on scope and operating mode.
+end note
+:Filter, classify and apply required online changes locally;
+note right
+  If an online file must replace an existing local file,
+  the transactional download path re-checks the local
+  canonical file before commit. Unique local content is
+  preserved with safeBackup before replacement.
+end note
 
-:Step 2 - Scan local files;
-:Detect local-only changes:
-- New files or folders
-- Modified files;
+:Process known database state against\nthe local filesystem;
+note right
+  Detect locally modified or deleted objects that were
+  previously tracked. The database provides the last
+  successfully applied reconciliation baseline.
+end note
 
-:Upload local changes to OneDrive:
-- Upload new files or folders
-- Upload modified files;
+if (~--download-only?) then (yes)
+  :Skip upload-side local filesystem scan;
+else (no)
+  :Scan local filesystem for new data;
+  :Upload eligible new local files / directories;
+  note right
+    A safeBackup created earlier in the cycle is itself
+    local data. It may be discovered and uploaded as a
+    new file unless excluded through skip_file.
+  end note
 
-:Step 3 - Final reconciliation;
-:Rescan OneDrive to ensure:
-- Any last-minute online changes
-  are applied locally;
+  if (force_children_scan enabled?) then (yes)
+    :Skip duplicate final /children traversal;
+  else (no)
+    :Perform final online true-up;
+  endif
+endif
 
 stop
 @enduml
