@@ -1,7 +1,7 @@
 [Unit]
 Description=OneDrive Client for Linux running for %i
 Documentation=https://github.com/abraunegg/onedrive
-After=network-online.target
+After=network-online.target multi-user.target
 Wants=network-online.target
 
 [Service]
