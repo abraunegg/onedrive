@@ -11,6 +11,7 @@ import std.algorithm.searching;
 import core.stdc.stdlib;
 import std.json;
 import std.conv;
+import std.traits : EnumMembers;
 
 // What other modules that we have created do we need to import?
 import sqlite;
@@ -25,6 +26,37 @@ enum ItemType {
 	root,
 	unknown
 }
+
+// Keep the physical item table column order in one place.
+// buildItem() uses this mapping when validating and decoding SELECT * results,
+// so a future schema change only needs the new column added here rather than
+// updating scattered numeric indexes and hard-coded column counts.
+private enum ItemDatabaseColumn : size_t {
+	driveId,
+	id,
+	name,
+	remoteName,
+	type,
+	eTag,
+	cTag,
+	mtime,
+	parentId,
+	quickXorHash,
+	sha256Hash,
+	remoteDriveId,
+	remoteParentId,
+	remoteId,
+	remoteType,
+	deltaLink,
+	syncStatus,
+	size,
+	relocDriveId,
+	relocParentId
+}
+
+// Derived from the actual enum members above; the enum contains only real database columns.
+// Do not maintain a separate literal count.
+private enum size_t itemDatabaseColumnCount = EnumMembers!ItemDatabaseColumn.length;
 
 struct Item {
 	string   driveId;
@@ -252,10 +284,25 @@ final class ItemDatabase {
 		
 		if (dbVersion == 0) {
 			createTable();
-		} else if (db.getVersion() != itemDatabaseVersion) {
+		} else if (dbVersion != itemDatabaseVersion) {
 			addLogEntry("The item database is incompatible, re-creating database table structures");
 			db.dropTableIfExists("item");  // Check and drop table if it exists
 			createTable();
+		}
+
+		// The database version is now compatible with this application version.
+		// Validate the physical item table before preparing or executing any normal
+		// synchronisation queries. PRAGMA user_version alone does not prove that
+		// the table has the column names and positions buildItem() expects.
+		string schemaMismatchReason;
+		if (!validateItemDatabaseShape(schemaMismatchReason)) {
+			addLogEntry();
+			addLogEntry("FATAL: The local item database schema does not match the schema expected by this version of the application.", ["info", "notify"]);
+			addLogEntry("Database schema mismatch: " ~ schemaMismatchReason);
+			addLogEntry("A --resync is required to rebuild the local item database.");
+			addLogEntry("Re-run the client with '--resync' appended to your normal '--sync' or '--monitor' command.");
+			addLogEntry();
+			forceExit(EXIT_RESYNC_REQUIRED);
 		}
 		
 		// What is the threadsafe value
@@ -359,6 +406,72 @@ final class ItemDatabase {
 			db.close();
 		}
 		databaseInitialised = false;
+	}
+
+	// Validate that the physical SQLite item table matches the column contract
+	// used by ItemDatabaseColumn and buildItem(). This is intentionally performed
+	// once at database initialisation so there is no per-query runtime overhead.
+	private bool validateItemDatabaseShape(out string mismatchReason) {
+		auto statement = db.prepare("PRAGMA table_info(item)");
+		scope(exit) statement.finalise();
+
+		try {
+			auto result = statement.exec();
+
+			static foreach (index; 0 .. itemDatabaseColumnCount) {
+				// static foreach expands each iteration into the surrounding scope.
+				// Add an explicit nested scope so per-column declarations remain local
+				// to that generated iteration.
+				{
+					enum expectedColumnName = __traits(identifier, EnumMembers!ItemDatabaseColumn[index]);
+					enum size_t expectedColumnPosition = cast(size_t) EnumMembers!ItemDatabaseColumn[index];
+
+					if (result.empty) {
+						mismatchReason = "Missing database column at position " ~ to!string(expectedColumnPosition) ~
+							"; expected '" ~ expectedColumnName ~ "'";
+						return false;
+					}
+
+					auto schemaRow = result.front;
+					// PRAGMA table_info() returns: cid, name, type, notnull, dflt_value, pk.
+					// Only cid and name are required here to prove the positional mapping
+					// used by SELECT * and buildItem().
+					if (schemaRow.length < 2) {
+						mismatchReason = "Unable to read item table schema metadata";
+						return false;
+					}
+
+					if (schemaRow[0] != to!string(expectedColumnPosition)) {
+						mismatchReason = "Database column position mismatch for '" ~ expectedColumnName ~
+							"': expected " ~ to!string(expectedColumnPosition) ~ ", found " ~ schemaRow[0].idup;
+						return false;
+					}
+
+					if (schemaRow[1] != expectedColumnName) {
+						mismatchReason = "Database column mismatch at position " ~ to!string(expectedColumnPosition) ~
+							": expected '" ~ expectedColumnName ~ "', found '" ~ schemaRow[1].idup ~ "'";
+						return false;
+					}
+
+					result.step();
+				}
+			}
+
+			// All expected columns were consumed. Any remaining row means the physical
+			// table contains an additional column that this application does not know.
+			if (!result.empty) {
+				auto schemaRow = result.front;
+				string extraColumnName = schemaRow.length >= 2 ? schemaRow[1].idup : "<unknown>";
+				mismatchReason = "Unexpected additional database column at position " ~
+					to!string(itemDatabaseColumnCount) ~ ": '" ~ extraColumnName ~ "'";
+				return false;
+			}
+
+			return true;
+		} catch (SqliteException exception) {
+			mismatchReason = "Unable to inspect item table schema: " ~ exception.msg;
+			return false;
+		}
 	}
 
 	void createTable() {
@@ -824,7 +937,20 @@ final class ItemDatabase {
 
 	private Item buildItem(Statement.Result result) {
 		assert(!result.empty, "The DB result must not be empty");
-		assert(result.front.length == 20, "The DB result must have 20 columns");
+
+		// SELECT * must match the physical item table layout defined by ItemDatabaseColumn.
+		// If this invariant is broken, do not continue synchronisation because the
+		// database row can no longer be mapped safely into an Item structure.
+		if (result.front.length != itemDatabaseColumnCount) {
+			addLogEntry();
+			addLogEntry("FATAL: The local item database does not match the database schema expected by this version of the application.", ["info", "notify"]);
+			addLogEntry("Expected database columns: " ~ to!string(itemDatabaseColumnCount));
+			addLogEntry("Actual database columns: " ~ to!string(result.front.length));
+			addLogEntry("A --resync is required to rebuild the local item database.");
+			addLogEntry("Re-run the client with '--resync' appended to your normal '--sync' or '--monitor' command.");
+			addLogEntry();
+			forceExit(EXIT_RESYNC_REQUIRED);
+		}
 		
 		// Make one owned copy of the DB row before extracting fields.
 		// On OpenBSD, avoid repeatedly evaluating result.front[] while
@@ -837,68 +963,47 @@ final class ItemDatabase {
 		// - ��Ϣc (#3014)
 		// - ����� (#2876)
 		// - non timestamp formatted strings such as 'CurlEngine curlEngin' (#2813)
-		string dbMtime = dbRow[7].dup;
+		string dbMtime = dbRow[ItemDatabaseColumn.mtime].dup;
 		SysTime parsedDbMtime;
 
 		if (!parseUTCDateTime(dbMtime, parsedDbMtime)) {
 			addLogEntry();
 			addLogEntry("FATAL: The DB record mtime entry is not a valid ISO timestamp entry. Please attempt a --resync to fix the local database.");
 			addLogEntry("FATAL: Invalid DB mtime value: " ~ dbMtime);
-			addLogEntry("FATAL: DB item driveId: " ~ dbRow[0].idup);
-			addLogEntry("FATAL: DB item id: " ~ dbRow[1].idup);
-			addLogEntry("FATAL: DB item name: " ~ dbRow[2].idup);
-			addLogEntry("FATAL: DB item parentId: " ~ dbRow[8].idup);
+			addLogEntry("FATAL: DB item driveId: " ~ dbRow[ItemDatabaseColumn.driveId].idup);
+			addLogEntry("FATAL: DB item id: " ~ dbRow[ItemDatabaseColumn.id].idup);
+			addLogEntry("FATAL: DB item name: " ~ dbRow[ItemDatabaseColumn.name].idup);
+			addLogEntry("FATAL: DB item parentId: " ~ dbRow[ItemDatabaseColumn.parentId].idup);
 			addLogEntry();
 			// Must force exit here, allow logging to be done
 			forceExit();
 		}
 		
 		Item item = {
-			// column 0: driveId
-			// column 1: id
-			// column 2: name
-			// column 3: remoteName - only used when there is a difference in the local name & remote shared folder name
-			// column 4: type
-			// column 5: eTag
-			// column 6: cTag
-			// column 7: mtime
-			// column 8: parentId
-			// column 9: quickXorHash
-			// column 10: sha256Hash
-			// column 11: remoteDriveId
-			// column 12: remoteParentId
-			// column 13: remoteId
-			// column 14: remoteType
-			// column 15: deltaLink
-			// column 16: syncStatus
-			// column 17: size
-			// column 18: relocDriveId
-			// column 19: relocParentId
-				
-			driveId: dbRow[0].dup,
-			id: dbRow[1].dup,
-			name: dbRow[2].dup,
-			remoteName: dbRow[3].dup,
-			// Column 4 is type - not set here
-			eTag: dbRow[5].dup,
-			cTag: dbRow[6].dup,
+			driveId: dbRow[ItemDatabaseColumn.driveId].dup,
+			id: dbRow[ItemDatabaseColumn.id].dup,
+			name: dbRow[ItemDatabaseColumn.name].dup,
+			remoteName: dbRow[ItemDatabaseColumn.remoteName].dup,
+			// type is configured below
+			eTag: dbRow[ItemDatabaseColumn.eTag].dup,
+			cTag: dbRow[ItemDatabaseColumn.cTag].dup,
 			mtime: parsedDbMtime,
-			parentId: dbRow[8].dup,
-			quickXorHash: dbRow[9].dup,
-			sha256Hash: dbRow[10].dup,
-			remoteDriveId: dbRow[11].dup,
-			remoteParentId: dbRow[12].dup,
-			remoteId: dbRow[13].dup,
-			// Column 14 is remoteType - not set here
-			// Column 15 is deltaLink - not set here
-			syncStatus: dbRow[16].dup,
-			size: dbRow[17].dup,
-			relocDriveId: dbRow[18].dup,
-			relocParentId: dbRow[19].dup,
+			parentId: dbRow[ItemDatabaseColumn.parentId].dup,
+			quickXorHash: dbRow[ItemDatabaseColumn.quickXorHash].dup,
+			sha256Hash: dbRow[ItemDatabaseColumn.sha256Hash].dup,
+			remoteDriveId: dbRow[ItemDatabaseColumn.remoteDriveId].dup,
+			remoteParentId: dbRow[ItemDatabaseColumn.remoteParentId].dup,
+			remoteId: dbRow[ItemDatabaseColumn.remoteId].dup,
+			// remoteType is configured below
+			// deltaLink is database metadata and is not part of Item
+			syncStatus: dbRow[ItemDatabaseColumn.syncStatus].dup,
+			size: dbRow[ItemDatabaseColumn.size].dup,
+			relocDriveId: dbRow[ItemDatabaseColumn.relocDriveId].dup,
+			relocParentId: dbRow[ItemDatabaseColumn.relocParentId].dup,
 		};
 		
 		// Configure item.type
-		switch (result.front[4]) {
+		switch (dbRow[ItemDatabaseColumn.type]) {
 			case "file":    item.type = ItemType.file;    break;
 			case "dir":     item.type = ItemType.dir;     break;
 			case "remote":  item.type = ItemType.remote;  break;
@@ -907,7 +1012,7 @@ final class ItemDatabase {
 		}
 		
 		// Configure item.remoteType
-		switch (result.front[14]) {
+		switch (dbRow[ItemDatabaseColumn.remoteType]) {
 			// We only care about 'dir' and 'file' for 'remote' items
 			case "file":    item.remoteType = ItemType.file;    break;
 			case "dir":     item.remoteType = ItemType.dir;     break;
