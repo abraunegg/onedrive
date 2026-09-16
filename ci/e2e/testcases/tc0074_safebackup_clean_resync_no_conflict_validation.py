@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from framework.context import E2EContext
 from framework.result import TestResult
-from framework.utils import reset_directory, write_text_file
+from framework.utils import compute_quickxor_hash_file, reset_directory
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 from testcases.safe_backup_case_base import SafeBackupCaseBase
 
 
@@ -13,9 +13,11 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
     case_id = "0074"
     name = "safeBackup clean resync no-conflict validation"
     description = (
-        "Validate that repeating --resync against an already in-sync local file with no online change "
-        "does not create a safeBackup or replace unchanged canonical content"
+        "Validate with a real XLSX workbook that repeating --resync against an already in-sync local file "
+        "with no online change does not create a safeBackup or replace unchanged canonical content"
     )
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(context, case_dir_name="tc0074", ensure_refresh_token=True)
@@ -35,12 +37,20 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
         self._prepare_config(context, conf_verify, verify_root)
 
         root_name = f"ZZ_E2E_TC0074_{context.run_id}_{os.getpid()}"
-        relative = f"{root_name}/already-in-sync.txt"
+        relative = f"{root_name}/already-in-sync.xlsx"
         seed_file = seed_root / relative
         local_file = local_root / relative
         verify_file = verify_root / relative
-        content = "TC0074 canonical content remains unchanged across a clean repeated resync\n"
-        write_text_file(seed_file, content)
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0074:{os.getpid()}"
+
+        generated = create_random_xlsx(
+            seed_file,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0074 clean repeated resync workbook",
+        )
+        generated_hash = compute_quickxor_hash_file(seed_file)
 
         seed_stdout, seed_stderr = logs / "seed_stdout.log", logs / "seed_stderr.log"
         baseline_stdout, baseline_stderr = logs / "baseline_stdout.log", logs / "baseline_stderr.log"
@@ -54,7 +64,14 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
             str(verify_stdout), str(verify_stderr),
             str(metadata_file),
         ]
-        details: dict[str, object] = {"root_name": root_name, "relative": relative}
+        details: dict[str, object] = {
+            "root_name": root_name,
+            "relative": relative,
+            "xlsx_seed": xlsx_seed,
+            "payload_rows": self.XLSX_PAYLOAD_ROWS,
+            "generated_size": int(generated["size_bytes"]),
+            "generated_hash": generated_hash,
+        }
 
         seed = self._run_phase(
             context,
@@ -100,24 +117,31 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 details=details,
             )
 
+        baseline_validation_error = validate_xlsx(local_file, REVISION_0)
         baseline_hash = self._hash_if_file(local_file)
-        baseline_content = self._text_if_file(local_file)
         baseline_mtime = int(local_file.stat().st_mtime)
         baseline_backups = self._safe_backup_files_for(local_file)
         baseline_partials = self._partial_files_under(local_root / root_name)
+        details.update(
+            {
+                "baseline_validation_error": baseline_validation_error,
+                "baseline_hash": baseline_hash,
+                "baseline_size": local_file.stat().st_size,
+                "baseline_mtime": baseline_mtime,
+                "microsoft_changed_seed_bytes": baseline_hash != generated_hash,
+            }
+        )
 
-        if baseline_content != content or not baseline_hash:
+        if baseline_validation_error or not baseline_hash:
             details.update(
                 {
-                    "baseline_hash": baseline_hash,
-                    "baseline_content": baseline_content,
                     "baseline_safe_backup_files": [str(p.relative_to(local_root)) for p in baseline_backups],
                     "baseline_partial_files": [str(p.relative_to(local_root)) for p in baseline_partials],
                 }
             )
             self._write_metadata(metadata_file, details)
             return self.fail_result(
-                reason="Tracked baseline content does not match the remote seed",
+                reason=f"Tracked baseline is not a valid revision-0 XLSX workbook: {baseline_validation_error}",
                 artifacts=artifacts,
                 details=details,
             )
@@ -155,15 +179,13 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
 
         backups_after_resync = self._safe_backup_files_for(local_file)
         partials_after_resync = self._partial_files_under(local_root / root_name)
+        canonical_validation_error = validate_xlsx(local_file, REVISION_0) if local_file.is_file() else "Canonical XLSX is missing"
         details.update(
             {
                 "repeated_resync_returncode": repeated_resync.returncode,
-                "baseline_hash": baseline_hash,
-                "baseline_content": baseline_content,
-                "baseline_mtime": baseline_mtime,
                 "canonical_exists_after_resync": local_file.is_file(),
+                "canonical_validation_error_after_resync": canonical_validation_error,
                 "canonical_hash_after_resync": self._hash_if_file(local_file),
-                "canonical_content_after_resync": self._text_if_file(local_file),
                 "canonical_mtime_after_resync": int(local_file.stat().st_mtime) if local_file.is_file() else -1,
                 "safe_backup_files_after_resync": [str(p.relative_to(local_root)) for p in backups_after_resync],
                 "partial_files_after_resync": [str(p.relative_to(local_root)) for p in partials_after_resync],
@@ -183,11 +205,12 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
             stdout_file=verify_stdout,
             stderr_file=verify_stderr,
         )
+        verify_validation_error = validate_xlsx(verify_file, REVISION_0) if verify_file.is_file() else "Verification XLSX is missing"
         details.update(
             {
                 "verify_returncode": verify.returncode,
                 "verify_hash": self._hash_if_file(verify_file),
-                "verify_content": self._text_if_file(verify_file),
+                "verify_validation_error": verify_validation_error,
             }
         )
         self._write_metadata(metadata_file, details)
@@ -204,9 +227,15 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 artifacts=artifacts,
                 details=details,
             )
-        if self._hash_if_file(local_file) != baseline_hash or self._text_if_file(local_file) != baseline_content:
+        if canonical_validation_error:
             return self.fail_result(
-                reason="Repeated clean resync changed canonical content despite no local or online change",
+                reason=f"Repeated clean resync left an invalid XLSX workbook: {canonical_validation_error}",
+                artifacts=artifacts,
+                details=details,
+            )
+        if self._hash_if_file(local_file) != baseline_hash:
+            return self.fail_result(
+                reason="Repeated clean resync changed canonical XLSX content despite no local or online change",
                 artifacts=artifacts,
                 details=details,
             )
@@ -222,9 +251,9 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 artifacts=artifacts,
                 details=details,
             )
-        if verify.returncode != 0 or self._hash_if_file(verify_file) != baseline_hash or self._text_if_file(verify_file) != baseline_content:
+        if verify.returncode != 0 or verify_validation_error or self._hash_if_file(verify_file) != baseline_hash:
             return self.fail_result(
-                reason="Fresh verification did not confirm that the online file remained unchanged",
+                reason="Fresh verification did not confirm that the online XLSX remained unchanged",
                 artifacts=artifacts,
                 details=details,
             )

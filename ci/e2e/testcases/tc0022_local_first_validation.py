@@ -5,16 +5,28 @@ import time
 from pathlib import Path
 
 from framework.base import E2ETestCase
-from framework.manifest import build_manifest, write_manifest
 from framework.context import E2EContext
+from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
+from framework.utils import (
+    command_to_string,
+    compute_quickxor_hash_file,
+    reset_directory,
+    run_command,
+    write_onedrive_config,
+    write_text_file,
+)
+from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
 
 
 class TestCase0022LocalFirstValidation(E2ETestCase):
     case_id = "0022"
     name = "local_first validation"
-    description = "Validate that local_first treats local content as the source of truth during a conflict"
+    description = (
+        "Validate with a real XLSX workbook that local_first treats local content as the source of truth during a conflict"
+    )
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def _write_config(self, config_path: Path, sync_dir: Path, local_first: bool = False) -> None:
         content = (
@@ -46,15 +58,32 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         conf_verify = case_work_dir / "conf-verify"
 
         root_name = f"ZZ_E2E_TC0022_{context.run_id}_{os.getpid()}"
-        relative_file = f"{root_name}/conflict.txt"
+        relative_file = f"{root_name}/conflict.xlsx"
+        seed_file = seed_root / relative_file
+        local_file = local_root / relative_file
+        remote_update_file = remote_update_root / relative_file
+        verify_file = verify_root / relative_file
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0022:{os.getpid()}"
 
         reset_directory(seed_root)
         reset_directory(local_root)
         reset_directory(remote_update_root)
         reset_directory(verify_root)
 
-        write_text_file(seed_root / relative_file, "base\n")
-        write_text_file(remote_update_root / relative_file, "remote wins unless local_first applies\n")
+        generated_seed = create_random_xlsx(
+            seed_file,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0022 local_first baseline workbook",
+        )
+        generated_remote = create_random_xlsx(
+            remote_update_file,
+            xlsx_seed,
+            revision=REVISION_1,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0022 local_first baseline workbook",
+        )
 
         context.bootstrap_config_dir(conf_seed)
         self._write_config(conf_seed / "config", seed_root)
@@ -80,6 +109,29 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         verify_stderr = case_log_dir / "verify_stderr.log"
         remote_manifest_file = state_dir / "remote_verify_manifest.txt"
         metadata_file = state_dir / "metadata.txt"
+
+        artifacts = [
+            str(seed_stdout),
+            str(seed_stderr),
+            str(download_stdout),
+            str(download_stderr),
+            str(remote_stdout),
+            str(remote_stderr),
+            str(final_stdout),
+            str(final_stderr),
+            str(verify_stdout),
+            str(verify_stderr),
+            str(remote_manifest_file),
+            str(metadata_file),
+        ]
+        details: dict[str, object] = {
+            "root_name": root_name,
+            "relative_file": relative_file,
+            "xlsx_seed": xlsx_seed,
+            "payload_rows": self.XLSX_PAYLOAD_ROWS,
+            "generated_seed_size": int(generated_seed["size_bytes"]),
+            "generated_remote_update_size": int(generated_remote["size_bytes"]),
+        }
 
         seed_command = [
             context.onedrive_bin,
@@ -117,6 +169,12 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         write_text_file(download_stdout, download_result.stdout)
         write_text_file(download_stderr, download_result.stderr)
 
+        baseline_validation_error = validate_xlsx(local_file, REVISION_0) if local_file.is_file() else "Local baseline XLSX is missing"
+        details["baseline_validation_error"] = baseline_validation_error
+        if local_file.is_file():
+            details["baseline_hash"] = compute_quickxor_hash_file(local_file)
+            details["baseline_size"] = local_file.stat().st_size
+
         remote_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -139,14 +197,22 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         # This is critical so the final sync actually exercises local_first.
         time.sleep(2)
 
-        local_file = local_root / relative_file
-        expected = "local wins because local_first is enabled\n"
-        write_text_file(local_file, expected)
+        local_revision_error = ""
+        expected_hash = ""
+        if local_file.is_file() and not baseline_validation_error:
+            mutate_xlsx_revision(local_file, REVISION_0, REVISION_2)
+            local_revision_error = validate_xlsx(local_file, REVISION_2)
+            expected_hash = compute_quickxor_hash_file(local_file)
+            now = time.time()
+            os.utime(local_file, (now, now))
+        else:
+            local_revision_error = baseline_validation_error or "Unable to mutate missing local XLSX"
 
-        now = time.time()
-        os.utime(local_file, (now, now))
+        details["local_revision_error"] = local_revision_error
+        details["expected_local_hash"] = expected_hash
+        details["local_mtime_before_final_sync"] = local_file.stat().st_mtime if local_file.exists() else 0
 
-        # Reuse the same local DB / delta state, but enable local_first
+        # Reuse the same local DB / delta state, but enable local_first.
         self._write_config(conf_local / "config", local_root, local_first=True)
 
         final_command = [
@@ -185,58 +251,30 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         remote_manifest = build_manifest(verify_root)
         write_manifest(remote_manifest_file, remote_manifest)
 
-        local_content = (local_root / relative_file).read_text(encoding="utf-8") if (local_root / relative_file).is_file() else ""
-        remote_content = (verify_root / relative_file).read_text(encoding="utf-8") if (verify_root / relative_file).is_file() else ""
+        local_validation_error = validate_xlsx(local_file, REVISION_2) if local_file.is_file() else "Local XLSX is missing"
+        remote_validation_error = validate_xlsx(verify_file, REVISION_2) if verify_file.is_file() else "Remote verification XLSX is missing"
+        local_hash = compute_quickxor_hash_file(local_file) if local_file.is_file() else ""
+        remote_hash = compute_quickxor_hash_file(verify_file) if verify_file.is_file() else ""
+
+        details.update(
+            {
+                "seed_returncode": seed_result.returncode,
+                "download_returncode": download_result.returncode,
+                "remote_returncode": remote_result.returncode,
+                "final_returncode": final_result.returncode,
+                "verify_returncode": verify_result.returncode,
+                "local_validation_error": local_validation_error,
+                "remote_validation_error": remote_validation_error,
+                "local_hash": local_hash,
+                "remote_hash": remote_hash,
+                "local_mtime": local_file.stat().st_mtime if local_file.exists() else 0,
+            }
+        )
 
         write_text_file(
             metadata_file,
-            "\n".join(
-                [
-                    f"case_id={self.case_id}",
-                    f"root_name={root_name}",
-                    f"seed_root={seed_root}",
-                    f"local_root={local_root}",
-                    f"remote_update_root={remote_update_root}",
-                    f"verify_root={verify_root}",
-                    f"seed_confdir={conf_seed}",
-                    f"local_confdir={conf_local}",
-                    f"remote_confdir={conf_remote}",
-                    f"verify_confdir={conf_verify}",
-                    f"seed_returncode={seed_result.returncode}",
-                    f"download_returncode={download_result.returncode}",
-                    f"remote_returncode={remote_result.returncode}",
-                    f"final_returncode={final_result.returncode}",
-                    f"verify_returncode={verify_result.returncode}",
-                    f"local_content={local_content!r}",
-                    f"remote_content={remote_content!r}",
-                    f"local_mtime={local_file.stat().st_mtime if local_file.exists() else 0}",
-                ]
-            )
-            + "\n",
+            "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
         )
-
-        artifacts = [
-            str(seed_stdout),
-            str(seed_stderr),
-            str(download_stdout),
-            str(download_stderr),
-            str(remote_stdout),
-            str(remote_stderr),
-            str(final_stdout),
-            str(final_stderr),
-            str(verify_stdout),
-            str(verify_stderr),
-            str(remote_manifest_file),
-            str(metadata_file),
-        ]
-        details = {
-            "seed_returncode": seed_result.returncode,
-            "download_returncode": download_result.returncode,
-            "remote_returncode": remote_result.returncode,
-            "final_returncode": final_result.returncode,
-            "verify_returncode": verify_result.returncode,
-            "root_name": root_name,
-        }
 
         for label, rc in [
             ("seed", seed_result.returncode),
@@ -254,20 +292,47 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                     details,
                 )
 
-        if local_content != expected:
+        if baseline_validation_error:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Local content was not retained after conflict resolution with local_first enabled",
+                f"Downloaded baseline is not a valid revision-0 XLSX workbook: {baseline_validation_error}",
                 artifacts,
                 details,
             )
 
-        if remote_content != expected:
+        if local_revision_error:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Remote content did not converge to the local source-of-truth content when local_first was enabled",
+                f"Unable to establish the local revision-2 XLSX conflict payload: {local_revision_error}",
+                artifacts,
+                details,
+            )
+
+        if local_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Local XLSX was not retained after conflict resolution with local_first enabled: {local_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if remote_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote XLSX did not converge to the local source-of-truth revision: {remote_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if not expected_hash or local_hash != expected_hash:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Local XLSX content was not retained after conflict resolution with local_first enabled",
                 artifacts,
                 details,
             )
