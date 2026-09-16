@@ -1,8 +1,20 @@
 [Unit]
 Description=OneDrive Client for Linux
 Documentation=https://github.com/abraunegg/onedrive
-After=network-online.target
+
+# This service is enabled by default.target but intentionally starts after
+# default.target has been reached. DefaultDependencies=no prevents systemd
+# from automatically ordering default.target after this service, which would
+# otherwise create an ordering cycle with After=default.target.
+#
+# Because default dependencies are disabled, explicitly restore the normal
+# basic startup and shutdown relationships for a service unit.
+DefaultDependencies=no
+Requires=basic.target
+After=basic.target network-online.target default.target
 Wants=network-online.target
+Conflicts=shutdown.target
+Before=shutdown.target
 
 [Service]
 # Commented out hardenings are disabled because they may not work out of the box on your distribution
