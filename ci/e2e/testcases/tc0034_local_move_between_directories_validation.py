@@ -7,6 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -21,9 +22,11 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
     case_id = "0034"
     name = "local move between directories validation"
     description = (
-        "Validate that moving a local file from one directory to another "
+        "Validate that moving a local real XLSX workbook from one directory to another "
         "is correctly propagated to remote state"
     )
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def _write_config(self, config_dir: Path, sync_dir: Path) -> None:
         config_path = config_dir / "config"
@@ -74,8 +77,8 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
         self._write_config(conf_verify, verify_root)
 
         root_name = f"ZZ_E2E_TC0034_{context.run_id}_{os.getpid()}"
-        source_relative = f"{root_name}/SourceDirectory/move-me.txt"
-        destination_relative = f"{root_name}/DestinationDirectory/move-me.txt"
+        source_relative = f"{root_name}/SourceDirectory/move-me.xlsx"
+        destination_relative = f"{root_name}/DestinationDirectory/move-me.xlsx"
         anchor_relative = f"{root_name}/DestinationDirectory/anchor.txt"
 
         local_source_path = local_root / source_relative
@@ -86,10 +89,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
         verify_destination_path = verify_root / destination_relative
         verify_anchor_path = verify_root / anchor_relative
 
-        initial_content = (
-            "TC0034 local move between directories validation\n"
-            "This content must survive the directory move unchanged.\n"
-        )
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0034:{os.getpid()}"
         anchor_content = (
             "TC0034 destination directory anchor\n"
             "This ensures the destination directory exists before the move.\n"
@@ -124,10 +124,19 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
             "verify_conf_dir": str(conf_verify),
             "local_root": str(local_root),
             "verify_root": str(verify_root),
+            "xlsx_seed": xlsx_seed,
+            "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
         # Phase 1: seed original state with source file and destination anchor
-        write_text_file(local_source_path, initial_content)
+        generated = create_random_xlsx(
+            local_source_path,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0034 local move between directories workbook",
+        )
+        details["generated_size"] = int(generated["size_bytes"])
         write_text_file(local_anchor_path, anchor_content)
 
         phase1_command = [
@@ -152,6 +161,18 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 self.case_id,
                 self.name,
                 f"seed phase failed with status {phase1_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        settled_validation_error = validate_xlsx(local_source_path, REVISION_0)
+        details["settled_validation_error"] = settled_validation_error
+        if settled_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"seeded XLSX was invalid after initial sync: {settled_validation_error}",
                 artifacts,
                 details,
             )
@@ -237,12 +258,12 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
         details["verify_destination_exists"] = verify_destination_path.is_file()
         details["verify_anchor_exists"] = verify_anchor_path.is_file()
 
-        verify_destination_content = (
-            verify_destination_path.read_text(encoding="utf-8")
+        verify_destination_validation_error = (
+            validate_xlsx(verify_destination_path, REVISION_0)
             if verify_destination_path.is_file()
-            else ""
+            else "Verification XLSX is missing"
         )
-        details["verify_destination_content"] = verify_destination_content
+        details["verify_destination_validation_error"] = verify_destination_validation_error
 
         self._write_metadata(metadata_file, details)
 
@@ -273,11 +294,11 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 details,
             )
 
-        if verify_destination_content != initial_content:
+        if verify_destination_validation_error:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "moved file content did not match the original content after remote verification",
+                f"moved XLSX is invalid or stale after remote verification: {verify_destination_validation_error}",
                 artifacts,
                 details,
             )

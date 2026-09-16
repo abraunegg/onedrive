@@ -7,6 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -20,7 +21,9 @@ from framework.utils import (
 class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
     case_id = "0030"
     name = "local rename propagation validation"
-    description = "Validate that renaming a local file is correctly propagated to remote state"
+    description = "Validate that renaming a local real XLSX workbook is correctly propagated to remote state"
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def _write_config(self, config_dir: Path, sync_dir: Path) -> None:
         config_path = config_dir / "config"
@@ -71,16 +74,13 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         self._write_config(conf_verify, verify_root)
 
         root_name = f"ZZ_E2E_TC0030_{context.run_id}_{os.getpid()}"
-        old_relative = f"{root_name}/original-name.txt"
-        new_relative = f"{root_name}/renamed-file.txt"
+        old_relative = f"{root_name}/original-name.xlsx"
+        new_relative = f"{root_name}/renamed-file.xlsx"
 
         old_local_path = local_root / old_relative
         new_local_path = local_root / new_relative
 
-        initial_content = (
-            "TC0030 local rename propagation validation\n"
-            "This content must survive the rename operation unchanged.\n"
-        )
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0030:{os.getpid()}"
 
         phase1_stdout = case_log_dir / "phase1_seed_stdout.log"
         phase1_stderr = case_log_dir / "phase1_seed_stderr.log"
@@ -110,9 +110,18 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             "verify_conf_dir": str(conf_verify),
             "local_root": str(local_root),
             "verify_root": str(verify_root),
+            "xlsx_seed": xlsx_seed,
+            "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
-        write_text_file(old_local_path, initial_content)
+        generated = create_random_xlsx(
+            old_local_path,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0030 local rename propagation workbook",
+        )
+        details["generated_size"] = int(generated["size_bytes"])
 
         phase1_command = [
             context.onedrive_bin,
@@ -134,6 +143,14 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id, self.name, f"seed phase failed with status {phase1_result.returncode}", artifacts, details
+            )
+
+        settled_validation_error = validate_xlsx(old_local_path, REVISION_0)
+        details["settled_validation_error"] = settled_validation_error
+        if settled_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name, f"seeded XLSX was invalid after initial sync: {settled_validation_error}", artifacts, details
             )
 
         old_local_path.rename(new_local_path)
@@ -200,8 +217,12 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         details["verified_old_exists"] = verified_old_path.exists()
         details["verified_new_exists"] = verified_new_path.exists()
 
-        verified_content = verified_new_path.read_text(encoding="utf-8") if verified_new_path.is_file() else ""
-        details["verified_content"] = verified_content
+        verified_validation_error = (
+            validate_xlsx(verified_new_path, REVISION_0)
+            if verified_new_path.is_file()
+            else "Verification XLSX is missing"
+        )
+        details["verified_validation_error"] = verified_validation_error
 
         self._write_metadata(metadata_file, details)
 
@@ -220,9 +241,9 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 self.case_id, self.name, f"remote verification is missing renamed file: {new_relative}", artifacts, details
             )
 
-        if verified_content != initial_content:
+        if verified_validation_error:
             return self.fail_result(
-                self.case_id, self.name, "renamed file content did not match the original content after remote verification", artifacts, details
+                self.case_id, self.name, f"remote verification returned an invalid or stale XLSX workbook: {verified_validation_error}", artifacts, details
             )
 
         return self.pass_result(self.case_id, self.name, artifacts, details)
