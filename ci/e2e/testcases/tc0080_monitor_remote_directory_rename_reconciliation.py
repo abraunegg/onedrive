@@ -68,7 +68,7 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
         return (
             f"# tc{self.case_id} subject config\n"
             f'sync_dir = "{sync_dir}"\n'
-            'bypass_data_preservation = "true"\n'
+            'bypass_data_preservation = "false"\n'
             'enable_logging = "true"\n'
             f'log_dir = "{app_log_dir}"\n'
             'monitor_interval = "300"\n'
@@ -95,6 +95,13 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
             return path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             return ""
+
+    def _websocket_signal_count(self, stdout_file: Path) -> int:
+        # stdout is the canonical event stream for this metric.  The same
+        # WebSocket signal is also written to the configured application log,
+        # so counting a combined stdout + app-log stream would double-count one
+        # real notification.
+        return self._read_text(stdout_file).count(self.WEBSOCKET_SIGNAL_PATTERN)
 
     def _combined_monitor_output(
         self,
@@ -170,6 +177,7 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
         stdout_file: Path,
         stderr_file: Path,
         app_log_dir: Path,
+        start_offsets: tuple[int, int, int],
         websocket_signal_count_before: int,
         timeout_seconds: int = 180,
         poll_interval: float = 0.5,
@@ -177,9 +185,19 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
         deadline = time.time() + timeout_seconds
         last_reason = "subject monitor did not converge to renamed directory state"
 
+        expected_move_markers = [
+            f"Moving ./{source_relative} to ./{destination_relative}"
+            for source_relative, destination_relative in renames
+        ]
+
         while time.time() < deadline:
-            output = self._combined_monitor_output(stdout_file, stderr_file, app_log_dir)
-            websocket_signal_count = output.count(self.WEBSOCKET_SIGNAL_PATTERN)
+            output = self._combined_monitor_output_from_offsets(
+                stdout_file,
+                stderr_file,
+                app_log_dir,
+                start_offsets,
+            )
+            websocket_signal_count = self._websocket_signal_count(stdout_file)
 
             state_ok = True
             for source_relative, destination_relative in renames:
@@ -210,6 +228,19 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
                 last_reason = (
                     "subject reached the expected local tree state but no new WebSocket "
                     "signal marker was observed after the remote rename stimulus"
+                )
+
+            missing_move_markers = [
+                marker
+                for marker in expected_move_markers
+                if not self._monitor_output_contains(output, marker)
+            ]
+            if state_ok and missing_move_markers:
+                state_ok = False
+                last_reason = (
+                    "subject reached the expected local tree state but did not prove the "
+                    "existing-item remote move path for: "
+                    + "; ".join(missing_move_markers)
                 )
 
             if state_ok:
@@ -591,13 +622,8 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
                     details,
                 )
 
-            subject_pre_mutation_output = self._combined_monitor_output(
-                phase_files["subject_monitor"][0],
-                phase_files["subject_monitor"][1],
-                subject_app_logs,
-            )
-            websocket_signal_count_before = subject_pre_mutation_output.count(
-                self.WEBSOCKET_SIGNAL_PATTERN
+            websocket_signal_count_before = self._websocket_signal_count(
+                phase_files["subject_monitor"][0]
             )
             subject_mutation_offsets = self._combined_monitor_output_lengths(
                 phase_files["subject_monitor"][0],
@@ -714,6 +740,7 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
                 stdout_file=phase_files["subject_monitor"][0],
                 stderr_file=phase_files["subject_monitor"][1],
                 app_log_dir=subject_app_logs,
+                start_offsets=subject_mutation_offsets,
                 websocket_signal_count_before=websocket_signal_count_before,
                 timeout_seconds=180,
             )
@@ -727,14 +754,20 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
                 subject_mutation_offsets,
             )
 
-            full_subject_output = self._combined_monitor_output(
-                phase_files["subject_monitor"][0],
-                phase_files["subject_monitor"][1],
-                subject_app_logs,
-            )
             details["subject_websocket_signal_count_after_renames"] = (
-                full_subject_output.count(self.WEBSOCKET_SIGNAL_PATTERN)
+                self._websocket_signal_count(phase_files["subject_monitor"][0])
             )
+            details["subject_expected_move_markers"] = [
+                f"Moving ./{source_relative} to ./{destination_relative}"
+                for source_relative, destination_relative in renames
+            ]
+            details["subject_move_markers_seen"] = {
+                f"{source_relative} -> {destination_relative}": self._monitor_output_contains(
+                    subject_post_mutation_output,
+                    f"Moving ./{source_relative} to ./{destination_relative}",
+                )
+                for source_relative, destination_relative in renames
+            }
             details["subject_bad_side_effects"] = self._subject_bad_side_effects(
                 subject_post_mutation_output,
                 root_name=root_name,
@@ -767,7 +800,13 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
         finally:
             if mutator_process is not None:
                 self._shutdown_monitor_process(mutator_process, details)
+                details["mutator_monitor_returncode"] = mutator_process.returncode
             self._shutdown_monitor_process(subject_process, details)
+            details["subject_monitor_returncode"] = subject_process.returncode
+            # _shutdown_monitor_process() uses this generic key for shared testcases.
+            # TC0080 owns two concurrent monitor processes, so retain only the
+            # explicit per-role return codes to avoid ambiguous overwritten data.
+            details.pop("monitor_returncode", None)
 
         # Phase 5: same subject state must remain converged in a normal follow-up
         # pass.  This catches delayed stale-DB feedback that only appears after
@@ -850,6 +889,28 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
             failures.append(
                 "subject convergence pass logged delayed destructive rename side effects: "
                 + "; ".join(details["subject_converge_bad_side_effects"])
+            )
+
+        missing_subject_moves = [
+            label
+            for label, seen in details.get("subject_move_markers_seen", {}).items()
+            if not seen
+        ]
+        if missing_subject_moves:
+            failures.append(
+                "subject monitor did not prove receiver-side existing-item move handling for: "
+                + "; ".join(missing_subject_moves)
+            )
+
+        if details.get("mutator_monitor_returncode") not in {0, 130}:
+            failures.append(
+                "mutator monitor exited unexpectedly with status "
+                f"{details.get('mutator_monitor_returncode')}"
+            )
+        if details.get("subject_monitor_returncode") not in {0, 130}:
+            failures.append(
+                "subject monitor exited unexpectedly with status "
+                f"{details.get('subject_monitor_returncode')}"
             )
 
         if not details["subject_items_db_exists_after_seed"]:
