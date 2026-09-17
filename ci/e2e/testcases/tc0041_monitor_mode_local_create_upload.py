@@ -10,13 +10,16 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
 class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
     case_id = "0041"
     name = "monitor mode local create upload"
-    description = "Start --monitor, create a local file, and validate it uploads without restarting the client"
+    description = "Start --monitor, create a local real XLSX workbook, and validate it uploads without restarting the client"
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
         write_text_file(
@@ -95,17 +98,14 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
 
         root_name = f"ZZ_E2E_TC0041_{context.run_id}_{os.getpid()}"
         baseline_relative = f"{root_name}/baseline.txt"
-        created_relative = f"{root_name}/monitor-created.txt"
+        created_relative = f"{root_name}/monitor-created.xlsx"
 
         baseline_local_path = sync_root / baseline_relative
         created_local_path = sync_root / created_relative
         created_verify_path = verify_root / created_relative
 
         baseline_content = "TC0041 baseline\n"
-        created_content = (
-            "TC0041 monitor mode local create upload\n"
-            "This file was created while --monitor was already running.\n"
-        )
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0041:{os.getpid()}"
 
         context.bootstrap_config_dir(conf_main)
         write_text_file(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
@@ -148,6 +148,8 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
             "verify_root": str(verify_root),
             "conf_main": str(conf_main),
             "conf_verify": str(conf_verify),
+            "xlsx_seed": xlsx_seed,
+            "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
         monitor_command = [
@@ -187,9 +189,17 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
 
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
 
-            context.log(f"Test Case {self.case_id}: creating local file while monitor is running: {created_relative}")
-            write_text_file(created_local_path, created_content)
+            context.log(f"Test Case {self.case_id}: creating local XLSX while monitor is running: {created_relative}")
+            generated = create_random_xlsx(
+                created_local_path,
+                xlsx_seed,
+                revision=REVISION_0,
+                payload_rows=self.XLSX_PAYLOAD_ROWS,
+                title="TC0041 monitor local create upload workbook",
+            )
+            details["generated_size"] = int(generated["size_bytes"])
             details["created_local_exists_after_write"] = created_local_path.is_file()
+            details["created_local_validation_error"] = validate_xlsx(created_local_path, REVISION_0)
 
             required_patterns = [
                 f"Uploading new file: {created_relative} ... done",
@@ -233,11 +243,12 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
         write_manifest(verify_manifest_file, verify_manifest)
 
         details["verify_created_exists"] = created_verify_path.is_file()
-        details["verify_created_content"] = (
-            created_verify_path.read_text(encoding="utf-8")
+        verify_validation_error = (
+            validate_xlsx(created_verify_path, REVISION_0)
             if created_verify_path.is_file()
-            else ""
+            else "Verification XLSX is missing"
         )
+        details["verify_validation_error"] = verify_validation_error
 
         self._write_metadata(metadata_file, details)
 
@@ -259,11 +270,11 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
                 details,
             )
 
-        if details["verify_created_content"] != created_content:
+        if verify_validation_error:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Created file content did not match after remote verification",
+                f"Remote verification returned an invalid or stale XLSX workbook: {verify_validation_error}",
                 artifacts,
                 details,
             )

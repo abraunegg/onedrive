@@ -10,13 +10,16 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
 class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
     case_id = "0044"
     name = "monitor mode local rename propagation"
-    description = "Rename a local file while --monitor is active and validate correct behaviour"
+    description = "Rename a local real XLSX workbook while --monitor is active and validate correct behaviour"
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
         write_text_file(
@@ -94,18 +97,15 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
         app_log_dir = case_log_dir / "app-logs"
 
         root_name = f"ZZ_E2E_TC0044_{context.run_id}_{os.getpid()}"
-        old_relative = f"{root_name}/original-name.txt"
-        new_relative = f"{root_name}/renamed-file.txt"
+        old_relative = f"{root_name}/original-name.xlsx"
+        new_relative = f"{root_name}/renamed-file.xlsx"
 
         old_local_path = sync_root / old_relative
         new_local_path = sync_root / new_relative
         old_verify_path = verify_root / old_relative
         new_verify_path = verify_root / new_relative
 
-        file_content = (
-            "TC0044 monitor mode local rename propagation\n"
-            "This content must survive the rename unchanged.\n"
-        )
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0044:{os.getpid()}"
 
         context.bootstrap_config_dir(conf_main)
         write_text_file(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
@@ -150,9 +150,18 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
             "verify_root": str(verify_root),
             "conf_main": str(conf_main),
             "conf_verify": str(conf_verify),
+            "xlsx_seed": xlsx_seed,
+            "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
-        write_text_file(old_local_path, file_content)
+        generated = create_random_xlsx(
+            old_local_path,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0044 monitor local rename propagation workbook",
+        )
+        details["generated_size"] = int(generated["size_bytes"])
 
         seed_command = [
             context.onedrive_bin,
@@ -178,6 +187,18 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
                 self.case_id,
                 self.name,
                 f"Seed phase failed with status {seed_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        settled_validation_error = validate_xlsx(old_local_path, REVISION_0)
+        details["settled_validation_error"] = settled_validation_error
+        if settled_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Seeded XLSX was invalid after initial sync: {settled_validation_error}",
                 artifacts,
                 details,
             )
@@ -272,7 +293,12 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
 
         details["verify_old_exists"] = old_verify_path.exists()
         details["verify_new_exists"] = new_verify_path.is_file()
-        details["verify_new_content"] = new_verify_path.read_text(encoding="utf-8") if new_verify_path.is_file() else ""
+        verify_validation_error = (
+            validate_xlsx(new_verify_path, REVISION_0)
+            if new_verify_path.is_file()
+            else "Verification XLSX is missing"
+        )
+        details["verify_validation_error"] = verify_validation_error
 
         self._write_metadata(metadata_file, details)
 
@@ -303,11 +329,11 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
                 details,
             )
 
-        if details["verify_new_content"] != file_content:
+        if verify_validation_error:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Renamed file content did not match after remote verification",
+                f"Remote verification returned an invalid or stale XLSX workbook: {verify_validation_error}",
                 artifacts,
                 details,
             )
