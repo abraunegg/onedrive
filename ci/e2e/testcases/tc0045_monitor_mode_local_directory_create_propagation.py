@@ -14,7 +14,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 class TestCase0045MonitorModeLocalDirectoryCreatePropagation(MonitorModeTestCaseBase):
     case_id = "0045"
     name = "monitor mode local directory create propagation"
-    description = "Create a new local directory and real XLSX child under --monitor and validate the remote state"
+    description = "Create a new local directory with passive TXT and real XLSX children under --monitor and validate the remote state"
 
     XLSX_PAYLOAD_ROWS = 32
 
@@ -38,14 +38,21 @@ class TestCase0045MonitorModeLocalDirectoryCreatePropagation(MonitorModeTestCase
         baseline_relative = f"{root_name}/baseline.txt"
         created_dir_relative = f"{root_name}/created-directory"
         created_file_relative = f"{created_dir_relative}/inside.xlsx"
+        created_text_relative = f"{created_dir_relative}/inside.txt"
 
         baseline_local_path = sync_root / baseline_relative
         created_dir_local_path = sync_root / created_dir_relative
         created_file_local_path = sync_root / created_file_relative
+        created_text_local_path = sync_root / created_text_relative
         created_dir_verify_path = verify_root / created_dir_relative
         created_file_verify_path = verify_root / created_file_relative
+        created_text_verify_path = verify_root / created_text_relative
 
         baseline_content = "TC0045 baseline\n"
+        created_text_content = (
+            "TC0045 monitor mode local directory create propagation\n"
+            "This passive TXT file was created inside a new directory while --monitor was running.\n"
+        )
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0045:{os.getpid()}"
 
         context.prepare_minimal_config_dir(conf_main, self._build_config_text(sync_root, app_log_dir))
@@ -81,6 +88,7 @@ class TestCase0045MonitorModeLocalDirectoryCreatePropagation(MonitorModeTestCase
             "baseline_relative": baseline_relative,
             "created_dir_relative": created_dir_relative,
             "created_file_relative": created_file_relative,
+            "created_text_relative": created_text_relative,
             "xlsx_seed": xlsx_seed,
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
@@ -120,9 +128,12 @@ class TestCase0045MonitorModeLocalDirectoryCreatePropagation(MonitorModeTestCase
             )
             details["generated_size"] = int(generated["size_bytes"])
             details["created_local_validation_error"] = validate_xlsx(created_file_local_path, REVISION_0)
+            write_text_file(created_text_local_path, created_text_content)
+            details["created_text_exists_after_write"] = created_text_local_path.is_file()
 
             required_patterns = [
                 f"Uploading new file: {created_file_relative} ... done",
+                f"Uploading new file: {created_text_relative} ... done",
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
@@ -161,6 +172,9 @@ class TestCase0045MonitorModeLocalDirectoryCreatePropagation(MonitorModeTestCase
         write_manifest(verify_manifest_file, verify_manifest)
         details["verify_created_dir_exists"] = created_dir_verify_path.is_dir()
         details["verify_created_file_exists"] = created_file_verify_path.is_file()
+        details["verify_created_text_exists"] = created_text_verify_path.is_file()
+        verify_text_content = created_text_verify_path.read_text(encoding="utf-8") if created_text_verify_path.is_file() else ""
+        details["verify_created_text_content"] = verify_text_content
         verify_validation_error = (
             validate_xlsx(created_file_verify_path, REVISION_0)
             if created_file_verify_path.is_file()
@@ -175,6 +189,10 @@ class TestCase0045MonitorModeLocalDirectoryCreatePropagation(MonitorModeTestCase
             return self.fail_result(self.case_id, self.name, f"Remote verification is missing created directory: {created_dir_relative}", artifacts, details)
         if not created_file_verify_path.is_file():
             return self.fail_result(self.case_id, self.name, f"Remote verification is missing created file: {created_file_relative}", artifacts, details)
+        if not created_text_verify_path.is_file():
+            return self.fail_result(self.case_id, self.name, f"Remote verification is missing passive TXT file: {created_text_relative}", artifacts, details)
+        if verify_text_content != created_text_content:
+            return self.fail_result(self.case_id, self.name, "Created directory passive TXT child content did not match after remote verification", artifacts, details)
         if verify_validation_error:
             return self.fail_result(self.case_id, self.name, f"Remote verification returned an invalid or stale XLSX workbook: {verify_validation_error}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

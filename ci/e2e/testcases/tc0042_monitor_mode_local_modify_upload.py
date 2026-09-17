@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 from testcases.monitor_case_base import MonitorModeTestCaseBase
@@ -21,7 +22,7 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
     case_id = "0042"
     name = "monitor mode local modify upload"
     description = (
-        "Modify an existing real XLSX workbook under --monitor and validate the update propagates"
+        "Modify existing passive-text and real XLSX files under --monitor and validate both updates propagate"
     )
 
     XLSX_PAYLOAD_ROWS = 32
@@ -61,9 +62,23 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
         app_log_dir = case_log_dir / "app-logs"
 
         root_name = f"ZZ_E2E_TC0042_{context.run_id}_{os.getpid()}"
-        relative_path = f"{root_name}/modify-me.xlsx"
-        local_file_path = sync_root / relative_path
-        verify_file_path = verify_root / relative_path
+        text_relative = f"{root_name}/modify-me.txt"
+        xlsx_relative = f"{root_name}/modify-me.xlsx"
+
+        local_text_path = sync_root / text_relative
+        verify_text_path = verify_root / text_relative
+        local_xlsx_path = sync_root / xlsx_relative
+        verify_xlsx_path = verify_root / xlsx_relative
+
+        initial_text_content = (
+            "TC0042 monitor mode local modify upload\n"
+            "INITIAL CONTENT\n"
+        )
+        modified_text_content = (
+            "TC0042 monitor mode local modify upload\n"
+            "MODIFIED CONTENT\n"
+            "This update occurred while --monitor was active.\n"
+        )
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0042:{os.getpid()}"
 
         context.bootstrap_config_dir(conf_main)
@@ -101,26 +116,28 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
         if app_log_dir.exists():
             artifacts.append(str(app_log_dir))
 
+        write_text_file(local_text_path, initial_text_content)
         generated = create_random_xlsx(
-            local_file_path,
+            local_xlsx_path,
             xlsx_seed,
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0042 monitor local modification workbook",
         )
-        initial_generated_hash = compute_quickxor_hash_file(local_file_path)
+        initial_generated_xlsx_hash = compute_quickxor_hash_file(local_xlsx_path)
 
         details: dict[str, object] = {
             "root_name": root_name,
-            "relative_path": relative_path,
+            "text_relative": text_relative,
+            "xlsx_relative": xlsx_relative,
             "sync_root": str(sync_root),
             "verify_root": str(verify_root),
             "conf_main": str(conf_main),
             "conf_verify": str(conf_verify),
             "xlsx_seed": xlsx_seed,
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
-            "generated_size": int(generated["size_bytes"]),
-            "initial_generated_hash": initial_generated_hash,
+            "generated_xlsx_size": int(generated["size_bytes"]),
+            "initial_generated_xlsx_hash": initial_generated_xlsx_hash,
         }
 
         seed_command = [
@@ -151,22 +168,37 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
                 details,
             )
 
-        settled_validation_error = validate_xlsx(local_file_path, REVISION_0)
-        details["settled_validation_error"] = settled_validation_error
-        if settled_validation_error:
+        settled_text_content = local_text_path.read_text(encoding="utf-8") if local_text_path.is_file() else ""
+        settled_xlsx_validation_error = (
+            validate_xlsx(local_xlsx_path, REVISION_0)
+            if local_xlsx_path.is_file()
+            else "Seeded XLSX is missing"
+        )
+        details["settled_text_content"] = settled_text_content
+        details["settled_xlsx_validation_error"] = settled_xlsx_validation_error
+        if settled_xlsx_validation_error:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Seeded XLSX was invalid after initial sync: {settled_validation_error}",
+                f"Seeded XLSX was invalid after initial sync: {settled_xlsx_validation_error}",
+                artifacts,
+                details,
+            )
+        if settled_text_content != initial_text_content:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Seeded passive-text content changed unexpectedly during initial sync",
                 artifacts,
                 details,
             )
 
-        settled_hash = compute_quickxor_hash_file(local_file_path)
-        details["settled_hash"] = settled_hash
-        details["settled_size"] = local_file_path.stat().st_size
-        details["microsoft_changed_seed_bytes"] = settled_hash != initial_generated_hash
+        settled_xlsx_hash = compute_quickxor_hash_file(local_xlsx_path)
+        details["settled_xlsx_hash"] = settled_xlsx_hash
+        details["settled_xlsx_size"] = local_xlsx_path.stat().st_size
+        details["microsoft_changed_seed_xlsx_bytes"] = settled_xlsx_hash != initial_generated_xlsx_hash
 
         monitor_command = [
             context.onedrive_bin,
@@ -203,24 +235,30 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
 
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
 
-            context.log(f"Test Case {self.case_id}: modifying local XLSX while monitor is running: {relative_path}")
-            mutate_xlsx_revision(local_file_path, REVISION_0, REVISION_1)
-            modified_validation_error = validate_xlsx(local_file_path, REVISION_1)
-            modified_hash = compute_quickxor_hash_file(local_file_path)
-            details["modified_validation_error"] = modified_validation_error
-            details["modified_hash"] = modified_hash
-            details["local_file_exists_after_modify"] = local_file_path.is_file()
+            context.log(
+                f"Test Case {self.case_id}: modifying passive-text and XLSX files while monitor is running"
+            )
+            time.sleep(1.5)
+            write_text_file(local_text_path, modified_text_content)
+            mutate_xlsx_revision(local_xlsx_path, REVISION_0, REVISION_1)
 
-            if modified_validation_error:
+            modified_xlsx_validation_error = validate_xlsx(local_xlsx_path, REVISION_1)
+            modified_xlsx_hash = compute_quickxor_hash_file(local_xlsx_path)
+            details["modified_xlsx_validation_error"] = modified_xlsx_validation_error
+            details["modified_xlsx_hash"] = modified_xlsx_hash
+            details["local_text_exists_after_modify"] = local_text_path.is_file()
+            details["local_xlsx_exists_after_modify"] = local_xlsx_path.is_file()
+
+            if modified_xlsx_validation_error:
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(
                     self.case_id,
                     self.name,
-                    f"Local XLSX mutation produced an invalid workbook: {modified_validation_error}",
+                    f"Local XLSX mutation produced an invalid workbook: {modified_xlsx_validation_error}",
                     artifacts,
                     details,
                 )
-            if modified_hash == settled_hash:
+            if modified_xlsx_hash == settled_xlsx_hash:
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(
                     self.case_id,
@@ -231,7 +269,8 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
                 )
 
             required_patterns = [
-                f"Uploading modified file: {relative_path} ... done",
+                f"Uploading modified file: {text_relative} ... done",
+                f"Uploading modified file: {xlsx_relative} ... done",
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
@@ -271,11 +310,17 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
         verify_manifest = build_manifest(verify_root)
         write_manifest(verify_manifest_file, verify_manifest)
 
-        details["verify_file_exists"] = verify_file_path.is_file()
-        verify_validation_error = validate_xlsx(verify_file_path, REVISION_1) if verify_file_path.is_file() else "Verification XLSX is missing"
-        verify_hash = compute_quickxor_hash_file(verify_file_path) if verify_file_path.is_file() else ""
-        details["verify_validation_error"] = verify_validation_error
-        details["verify_hash"] = verify_hash
+        verify_text_content = verify_text_path.read_text(encoding="utf-8") if verify_text_path.is_file() else ""
+        verify_xlsx_validation_error = (
+            validate_xlsx(verify_xlsx_path, REVISION_1)
+            if verify_xlsx_path.is_file()
+            else "Verification XLSX is missing"
+        )
+        details["verify_text_exists"] = verify_text_path.is_file()
+        details["verify_text_content"] = verify_text_content
+        details["verify_xlsx_exists"] = verify_xlsx_path.is_file()
+        details["verify_xlsx_validation_error"] = verify_xlsx_validation_error
+        details["verify_xlsx_hash"] = compute_quickxor_hash_file(verify_xlsx_path) if verify_xlsx_path.is_file() else ""
 
         self._write_metadata(metadata_file, details)
 
@@ -288,20 +333,29 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
                 details,
             )
 
-        if not verify_file_path.is_file():
+        if not details.get("mutation_processed"):
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Remote verification is missing modified file: {relative_path}",
+                "Monitor did not process both passive-text and XLSX modifications within the expected time",
                 artifacts,
                 details,
             )
 
-        if verify_validation_error:
+        if verify_text_content != modified_text_content:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Remote verification returned an invalid or stale XLSX workbook: {verify_validation_error}",
+                "Modified passive-text content did not match after remote verification",
+                artifacts,
+                details,
+            )
+
+        if verify_xlsx_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote verification returned an invalid or stale XLSX workbook: {verify_xlsx_validation_error}",
                 artifacts,
                 details,
             )

@@ -17,7 +17,7 @@ from framework.utils import command_to_string, reset_directory, run_command, wri
 class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
     case_id = "0044"
     name = "monitor mode local rename propagation"
-    description = "Rename a local real XLSX workbook while --monitor is active and validate correct behaviour"
+    description = "Rename passive TXT and real XLSX files while --monitor is active and validate correct behaviour"
 
     XLSX_PAYLOAD_ROWS = 32
 
@@ -99,12 +99,22 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
         root_name = f"ZZ_E2E_TC0044_{context.run_id}_{os.getpid()}"
         old_relative = f"{root_name}/original-name.xlsx"
         new_relative = f"{root_name}/renamed-file.xlsx"
+        old_text_relative = f"{root_name}/original-name.txt"
+        new_text_relative = f"{root_name}/renamed-file.txt"
 
         old_local_path = sync_root / old_relative
         new_local_path = sync_root / new_relative
+        old_text_local_path = sync_root / old_text_relative
+        new_text_local_path = sync_root / new_text_relative
         old_verify_path = verify_root / old_relative
         new_verify_path = verify_root / new_relative
+        old_text_verify_path = verify_root / old_text_relative
+        new_text_verify_path = verify_root / new_text_relative
 
+        file_content = (
+            "TC0044 monitor mode local rename propagation\n"
+            "This content must survive the rename unchanged.\n"
+        )
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0044:{os.getpid()}"
 
         context.bootstrap_config_dir(conf_main)
@@ -146,6 +156,8 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
             "root_name": root_name,
             "old_relative": old_relative,
             "new_relative": new_relative,
+            "old_text_relative": old_text_relative,
+            "new_text_relative": new_text_relative,
             "sync_root": str(sync_root),
             "verify_root": str(verify_root),
             "conf_main": str(conf_main),
@@ -162,6 +174,7 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
             title="TC0044 monitor local rename propagation workbook",
         )
         details["generated_size"] = int(generated["size_bytes"])
+        write_text_file(old_text_local_path, file_content)
 
         seed_command = [
             context.onedrive_bin,
@@ -203,6 +216,18 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
                 details,
             )
 
+        settled_text_content = old_text_local_path.read_text(encoding="utf-8") if old_text_local_path.is_file() else ""
+        details["settled_text_content"] = settled_text_content
+        if settled_text_content != file_content:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Seeded passive TXT content changed during initial sync",
+                artifacts,
+                details,
+            )
+
         monitor_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -238,19 +263,32 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
 
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
 
-            context.log(f"Test Case {self.case_id}: renaming local file while monitor is running: {old_relative} -> {new_relative}")
+            context.log(
+                f"Test Case {self.case_id}: renaming local files while monitor is running: "
+                f"{old_relative} -> {new_relative}; {old_text_relative} -> {new_text_relative}"
+            )
             old_local_path.rename(new_local_path)
+            old_text_local_path.rename(new_text_local_path)
             details["old_local_exists_after_rename"] = old_local_path.exists()
             details["new_local_exists_after_rename"] = new_local_path.is_file()
+            details["old_text_local_exists_after_rename"] = old_text_local_path.exists()
+            details["new_text_local_exists_after_rename"] = new_text_local_path.is_file()
 
+            xlsx_move_patterns = [
+                f"[M] Local item moved: {old_relative} -> {new_relative}",
+                f"Moving {old_relative} to {new_relative}",
+            ]
+            xlsx_upload_patterns = [f"Uploading new file: {new_relative} ... done"]
+            text_move_patterns = [
+                f"[M] Local item moved: {old_text_relative} -> {new_text_relative}",
+                f"Moving {old_text_relative} to {new_text_relative}",
+            ]
+            text_upload_patterns = [f"Uploading new file: {new_text_relative} ... done"]
             pattern_groups = [
-                [
-                    f"[M] Local item moved: {old_relative} -> {new_relative}",
-                    f"Moving {old_relative} to {new_relative}",
-                ],
-                [
-                    f"Uploading new file: {new_relative} ... done",
-                ],
+                xlsx_move_patterns + text_move_patterns,
+                xlsx_move_patterns + text_upload_patterns,
+                xlsx_upload_patterns + text_move_patterns,
+                xlsx_upload_patterns + text_upload_patterns,
             ]
             mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
                 monitor_stdout,
@@ -293,6 +331,13 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
 
         details["verify_old_exists"] = old_verify_path.exists()
         details["verify_new_exists"] = new_verify_path.is_file()
+        details["verify_old_text_exists"] = old_text_verify_path.exists()
+        details["verify_new_text_exists"] = new_text_verify_path.is_file()
+        details["verify_new_text_content"] = (
+            new_text_verify_path.read_text(encoding="utf-8")
+            if new_text_verify_path.is_file()
+            else ""
+        )
         verify_validation_error = (
             validate_xlsx(new_verify_path, REVISION_0)
             if new_verify_path.is_file()
@@ -311,11 +356,11 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
                 details,
             )
 
-        if old_verify_path.exists():
+        if old_verify_path.exists() or old_text_verify_path.exists():
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Remote verification still contains old filename: {old_relative}",
+                "Remote verification still contains one or more old filenames after rename",
                 artifacts,
                 details,
             )
@@ -334,6 +379,24 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
                 self.case_id,
                 self.name,
                 f"Remote verification returned an invalid or stale XLSX workbook: {verify_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if not new_text_verify_path.is_file():
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote verification is missing renamed passive TXT file: {new_text_relative}",
+                artifacts,
+                details,
+            )
+
+        if details["verify_new_text_content"] != file_content:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Renamed passive TXT content did not match after remote verification",
                 artifacts,
                 details,
             )

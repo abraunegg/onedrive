@@ -22,8 +22,8 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
     case_id = "0033"
     name = "remote directory rename reconciliation"
     description = (
-        "Validate that a second client with existing local and database state correctly "
-        "reconciles a remote directory rename containing a real XLSX workbook and nested companion file"
+        "Validate that a second client with existing local and database state correctly reconciles a remote "
+        "directory rename containing both passive TXT content and a real XLSX workbook"
     )
 
     XLSX_PAYLOAD_ROWS = 32
@@ -108,8 +108,10 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         source_file_1_relative = f"{source_dir_relative}/top-level.xlsx"
         source_file_2_relative = f"{source_dir_relative}/Nested/child.txt"
+        source_text_relative = f"{source_dir_relative}/top-level.txt"
         renamed_file_1_relative = f"{renamed_dir_relative}/top-level.xlsx"
         renamed_file_2_relative = f"{renamed_dir_relative}/Nested/child.txt"
+        renamed_text_relative = f"{renamed_dir_relative}/top-level.txt"
 
         seeder_source_dir = seeder_root / source_dir_relative
         seeder_renamed_dir = seeder_root / renamed_dir_relative
@@ -122,15 +124,20 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         validator_source_file_1 = validator_root / source_file_1_relative
         validator_source_file_2 = validator_root / source_file_2_relative
+        validator_source_text = validator_root / source_text_relative
         validator_renamed_file_1 = validator_root / renamed_file_1_relative
         validator_renamed_file_2 = validator_root / renamed_file_2_relative
+        validator_renamed_text = validator_root / renamed_text_relative
 
         verify_source_file_1 = verify_root / source_file_1_relative
         verify_source_file_2 = verify_root / source_file_2_relative
+        verify_source_text = verify_root / source_text_relative
         verify_renamed_file_1 = verify_root / renamed_file_1_relative
         verify_renamed_file_2 = verify_root / renamed_file_2_relative
+        verify_renamed_text = verify_root / renamed_text_relative
 
         file2_content = "child\n"
+        text_content = "top\n"
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0033:{os.getpid()}"
 
         phase1_seed_stdout = case_log_dir / "phase1_seed_stdout.log"
@@ -173,8 +180,10 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             "renamed_dir_relative": renamed_dir_relative,
             "source_file_1_relative": source_file_1_relative,
             "source_file_2_relative": source_file_2_relative,
+            "source_text_relative": source_text_relative,
             "renamed_file_1_relative": renamed_file_1_relative,
             "renamed_file_2_relative": renamed_file_2_relative,
+            "renamed_text_relative": renamed_text_relative,
             "seeder_conf_dir": str(conf_seeder),
             "validator_conf_dir": str(conf_validator),
             "verify_conf_dir": str(conf_verify),
@@ -195,6 +204,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         )
         details["generated_size"] = int(generated["size_bytes"])
         write_text_file(seeder_root / source_file_2_relative, file2_content)
+        write_text_file(seeder_root / source_text_relative, text_content)
 
         phase1_command = [
             context.onedrive_bin,
@@ -235,6 +245,18 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
+        seeder_text_content = (seeder_root / source_text_relative).read_text(encoding="utf-8")
+        details["seeder_settled_text_content"] = seeder_text_content
+        if seeder_text_content != text_content:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "seeded passive TXT content changed during initial sync",
+                artifacts,
+                details,
+            )
+
         # Phase 2: Validator downloads the original tree into its own local/database state.
         phase2_command = [
             context.onedrive_bin,
@@ -259,6 +281,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         details["validator_initial_source_dir_exists"] = validator_source_dir.is_dir()
         details["validator_initial_source_file_1_exists"] = validator_source_file_1.is_file()
         details["validator_initial_source_file_2_exists"] = validator_source_file_2.is_file()
+        details["validator_initial_source_text_exists"] = validator_source_text.is_file()
         details["validator_initial_renamed_dir_exists"] = validator_renamed_dir.exists()
 
         if phase2_result.returncode != 0:
@@ -301,6 +324,16 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
+        if not validator_source_text.is_file():
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"validator failed to download original passive TXT file: {source_text_relative}",
+                artifacts,
+                details,
+            )
+
         validator_initial_xlsx_validation_error = validate_xlsx(validator_source_file_1, REVISION_0)
         details["validator_initial_xlsx_validation_error"] = validator_initial_xlsx_validation_error
         if validator_initial_xlsx_validation_error:
@@ -321,6 +354,18 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 self.case_id,
                 self.name,
                 "validator initial nested companion file content did not match expected content",
+                artifacts,
+                details,
+            )
+
+        validator_initial_text_content = validator_source_text.read_text(encoding="utf-8")
+        details["validator_initial_text_content"] = validator_initial_text_content
+        if validator_initial_text_content != text_content:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "validator initial passive TXT content did not match expected content",
                 artifacts,
                 details,
             )
@@ -371,6 +416,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         details["phase3_deleted_old_nested_exact"] = f"{source_dir_relative}/Nested" in phase3_deleted_paths
         details["phase3_deleted_old_file_1_exact"] = source_file_1_relative in phase3_deleted_paths
         details["phase3_deleted_old_file_2_exact"] = source_file_2_relative in phase3_deleted_paths
+        details["phase3_deleted_old_text_exact"] = source_text_relative in phase3_deleted_paths
 
         if phase3_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -444,8 +490,10 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         details["verify_renamed_dir_exists"] = verify_renamed_dir.exists()
         details["verify_source_file_1_exists"] = verify_source_file_1.exists()
         details["verify_source_file_2_exists"] = verify_source_file_2.exists()
+        details["verify_source_text_exists"] = verify_source_text.exists()
         details["verify_renamed_file_1_exists"] = verify_renamed_file_1.exists()
         details["verify_renamed_file_2_exists"] = verify_renamed_file_2.exists()
+        details["verify_renamed_text_exists"] = verify_renamed_text.exists()
 
         verify_old_tree_files = self._list_files_under(verify_source_dir)
         verify_old_tree_dirs = self._list_dirs_under(verify_source_dir)
@@ -462,8 +510,14 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             if verify_renamed_file_2.is_file()
             else ""
         )
+        verify_new_text_content = (
+            verify_renamed_text.read_text(encoding="utf-8")
+            if verify_renamed_text.is_file()
+            else ""
+        )
         details["verify_renamed_file_1_validation_error"] = verify_new_file_1_validation_error
         details["verify_renamed_file_2_content"] = verify_new_file_2_content
+        details["verify_renamed_text_content"] = verify_new_text_content
 
         if verify_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -476,7 +530,12 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             )
 
         # Remote truth assertions: the old tree must be fully absent before validator is judged.
-        if verify_source_dir.exists() or verify_source_file_1.exists() or verify_source_file_2.exists():
+        if (
+            verify_source_dir.exists()
+            or verify_source_file_1.exists()
+            or verify_source_file_2.exists()
+            or verify_source_text.exists()
+        ):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -536,6 +595,16 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
+        if not verify_renamed_text.is_file():
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"remote verification is missing renamed passive TXT file: {renamed_text_relative}",
+                artifacts,
+                details,
+            )
+
         if verify_new_file_1_validation_error:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
@@ -552,6 +621,16 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 self.case_id,
                 self.name,
                 "remote verification renamed nested file content did not match expected content",
+                artifacts,
+                details,
+            )
+
+        if verify_new_text_content != text_content:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "remote verification renamed passive TXT content did not match expected content",
                 artifacts,
                 details,
             )
@@ -585,8 +664,10 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         details["validator_renamed_dir_exists_after_reconcile"] = validator_renamed_dir.exists()
         details["validator_source_file_1_exists_after_reconcile"] = validator_source_file_1.exists()
         details["validator_source_file_2_exists_after_reconcile"] = validator_source_file_2.exists()
+        details["validator_source_text_exists_after_reconcile"] = validator_source_text.exists()
         details["validator_renamed_file_1_exists_after_reconcile"] = validator_renamed_file_1.exists()
         details["validator_renamed_file_2_exists_after_reconcile"] = validator_renamed_file_2.exists()
+        details["validator_renamed_text_exists_after_reconcile"] = validator_renamed_text.exists()
 
         validator_old_tree_files = self._list_files_under(validator_source_dir)
         validator_old_tree_dirs = self._list_dirs_under(validator_source_dir)
@@ -603,8 +684,14 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             if validator_renamed_file_2.is_file()
             else ""
         )
+        validator_new_text_content = (
+            validator_renamed_text.read_text(encoding="utf-8")
+            if validator_renamed_text.is_file()
+            else ""
+        )
         details["validator_renamed_file_1_validation_error"] = validator_new_file_1_validation_error
         details["validator_renamed_file_2_content"] = validator_new_file_2_content
+        details["validator_renamed_text_content"] = validator_new_text_content
 
         self._write_metadata(metadata_file, details)
 
@@ -617,7 +704,12 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if validator_source_dir.exists() or validator_source_file_1.exists() or validator_source_file_2.exists():
+        if (
+            validator_source_dir.exists()
+            or validator_source_file_1.exists()
+            or validator_source_file_2.exists()
+            or validator_source_text.exists()
+        ):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -671,6 +763,15 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
+        if not validator_renamed_text.is_file():
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"validator is missing renamed passive TXT file after reconciliation: {renamed_text_relative}",
+                artifacts,
+                details,
+            )
+
         if validator_new_file_1_validation_error:
             return self.fail_result(
                 self.case_id,
@@ -685,6 +786,15 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 self.case_id,
                 self.name,
                 "validator renamed nested file content did not match expected content",
+                artifacts,
+                details,
+            )
+
+        if validator_new_text_content != text_content:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "validator renamed passive TXT content did not match expected content",
                 artifacts,
                 details,
             )

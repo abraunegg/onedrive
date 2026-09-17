@@ -23,8 +23,8 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
     case_id = "0032"
     name = "remote rename reconciliation"
     description = (
-        "Validate that a stale local client correctly reconciles a remote-side "
-        "real XLSX workbook rename without leaving stale local leftovers"
+        "Validate that a stale local client correctly reconciles remote-side passive TXT and real XLSX file renames "
+        "without leaving stale local leftovers"
     )
 
     XLSX_PAYLOAD_ROWS = 32
@@ -81,16 +81,30 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
         self._write_config(conf_verify, verify_root)
 
         root_name = f"ZZ_E2E_TC0032_{context.run_id}_{os.getpid()}"
-        old_relative = f"{root_name}/remote-original-name.xlsx"
-        new_relative = f"{root_name}/remote-renamed-name.xlsx"
+        old_txt_relative = f"{root_name}/remote-original-name.txt"
+        new_txt_relative = f"{root_name}/remote-renamed-name.txt"
+        old_xlsx_relative = f"{root_name}/remote-original-name.xlsx"
+        new_xlsx_relative = f"{root_name}/remote-renamed-name.xlsx"
 
-        seed_old_path = seed_root / old_relative
-        seed_new_path = seed_root / new_relative
-        stale_old_path = stale_root / old_relative
-        stale_new_path = stale_root / new_relative
-        verify_old_path = verify_root / old_relative
-        verify_new_path = verify_root / new_relative
+        seed_old_txt_path = seed_root / old_txt_relative
+        seed_new_txt_path = seed_root / new_txt_relative
+        seed_old_xlsx_path = seed_root / old_xlsx_relative
+        seed_new_xlsx_path = seed_root / new_xlsx_relative
 
+        stale_old_txt_path = stale_root / old_txt_relative
+        stale_new_txt_path = stale_root / new_txt_relative
+        stale_old_xlsx_path = stale_root / old_xlsx_relative
+        stale_new_xlsx_path = stale_root / new_xlsx_relative
+
+        verify_old_txt_path = verify_root / old_txt_relative
+        verify_new_txt_path = verify_root / new_txt_relative
+        verify_old_xlsx_path = verify_root / old_xlsx_relative
+        verify_new_xlsx_path = verify_root / new_xlsx_relative
+
+        txt_content = (
+            "TC0032 remote rename reconciliation\n"
+            "This passive text file is renamed remotely and must reconcile locally.\n"
+        )
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0032:{os.getpid()}"
 
         seed_stdout = case_log_dir / "phase1_seed_stdout.log"
@@ -121,8 +135,10 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
         details: dict[str, object] = {
             "root_name": root_name,
-            "old_relative": old_relative,
-            "new_relative": new_relative,
+            "old_txt_relative": old_txt_relative,
+            "new_txt_relative": new_txt_relative,
+            "old_xlsx_relative": old_xlsx_relative,
+            "new_xlsx_relative": new_xlsx_relative,
             "seed_root": str(seed_root),
             "stale_root": str(stale_root),
             "verify_root": str(verify_root),
@@ -133,15 +149,16 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
-        # Phase 1: seed original remote state
+        # Phase 1: seed original remote state with both a passive and Microsoft-processed payload class.
+        write_text_file(seed_old_txt_path, txt_content)
         generated = create_random_xlsx(
-            seed_old_path,
+            seed_old_xlsx_path,
             xlsx_seed,
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0032 remote rename reconciliation workbook",
         )
-        details["generated_size"] = int(generated["size_bytes"])
+        details["generated_xlsx_size"] = int(generated["size_bytes"])
 
         seed_command = [
             context.onedrive_bin,
@@ -169,20 +186,32 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        settled_validation_error = validate_xlsx(seed_old_path, REVISION_0)
-        details["settled_validation_error"] = settled_validation_error
-        if settled_validation_error:
+        settled_txt_content = seed_old_txt_path.read_text(encoding="utf-8") if seed_old_txt_path.is_file() else ""
+        settled_xlsx_validation_error = validate_xlsx(seed_old_xlsx_path, REVISION_0)
+        details["settled_txt_content"] = settled_txt_content
+        details["settled_xlsx_validation_error"] = settled_xlsx_validation_error
+
+        if settled_txt_content != txt_content:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"seeded XLSX was invalid after initial sync: {settled_validation_error}",
+                "seeded passive TXT content changed during initial sync",
+                artifacts,
+                details,
+            )
+
+        if settled_xlsx_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"seeded XLSX was invalid after initial sync: {settled_xlsx_validation_error}",
                 artifacts,
                 details,
             )
 
         # Snapshot the synchronised local + config/db state to create a stale client.
-        # This stale client represents a second machine that has not yet seen the rename.
         if conf_stale.exists():
             shutil.rmtree(conf_stale)
         if stale_root.exists():
@@ -194,39 +223,63 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
         # Rewrite stale runtime config so it points at stale_root while preserving DB state.
         self._write_config(conf_stale, stale_root)
 
-        details["stale_snapshot_old_exists_before_reconcile"] = stale_old_path.exists()
-        details["stale_snapshot_new_exists_before_reconcile"] = stale_new_path.exists()
+        details["stale_snapshot_old_txt_exists_before_reconcile"] = stale_old_txt_path.is_file()
+        details["stale_snapshot_new_txt_exists_before_reconcile"] = stale_new_txt_path.exists()
+        details["stale_snapshot_old_xlsx_exists_before_reconcile"] = stale_old_xlsx_path.is_file()
+        details["stale_snapshot_new_xlsx_exists_before_reconcile"] = stale_new_xlsx_path.exists()
 
-        if not stale_old_path.is_file():
+        if not stale_old_txt_path.is_file() or not stale_old_xlsx_path.is_file():
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "stale snapshot did not preserve original local file before reconciliation",
+                "stale snapshot did not preserve both original local files before reconciliation",
                 artifacts,
                 details,
             )
 
-        # Phase 2: perform the rename through the seed client.
-        # This is our remote-side rename mechanism.
-        seed_old_path.rename(seed_new_path)
-
-        if seed_old_path.exists():
+        if stale_old_txt_path.read_text(encoding="utf-8") != txt_content:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "seed local old filename still exists immediately after rename",
+                "stale snapshot passive TXT content did not match expected content",
                 artifacts,
                 details,
             )
 
-        if not seed_new_path.is_file():
+        stale_snapshot_xlsx_validation_error = validate_xlsx(stale_old_xlsx_path, REVISION_0)
+        details["stale_snapshot_xlsx_validation_error"] = stale_snapshot_xlsx_validation_error
+        if stale_snapshot_xlsx_validation_error:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "seed local renamed file does not exist immediately after rename",
+                f"stale snapshot XLSX was invalid before reconciliation: {stale_snapshot_xlsx_validation_error}",
+                artifacts,
+                details,
+            )
+
+        # Phase 2: perform both renames through the seed client.
+        seed_old_txt_path.rename(seed_new_txt_path)
+        seed_old_xlsx_path.rename(seed_new_xlsx_path)
+
+        if seed_old_txt_path.exists() or seed_old_xlsx_path.exists():
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "one or more seed old filenames still exist immediately after rename",
+                artifacts,
+                details,
+            )
+
+        if not seed_new_txt_path.is_file() or not seed_new_xlsx_path.is_file():
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "one or more seed renamed files are missing immediately after rename",
                 artifacts,
                 details,
             )
@@ -257,7 +310,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        # Phase 3: stale client reconciles the remote rename using existing DB/local state.
+        # Phase 3: stale client reconciles both remote renames using existing DB/local state.
         # No --resync here, because this is specifically a reconciliation test.
         stale_sync_command = [
             context.onedrive_bin,
@@ -279,14 +332,18 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
         stale_manifest = build_manifest(stale_root)
         write_manifest(stale_manifest_file, stale_manifest)
 
-        details["stale_old_exists_after_reconcile"] = stale_old_path.exists()
-        details["stale_new_exists_after_reconcile"] = stale_new_path.exists()
-        stale_new_validation_error = (
-            validate_xlsx(stale_new_path, REVISION_0)
-            if stale_new_path.is_file()
+        details["stale_old_txt_exists_after_reconcile"] = stale_old_txt_path.exists()
+        details["stale_new_txt_exists_after_reconcile"] = stale_new_txt_path.is_file()
+        details["stale_old_xlsx_exists_after_reconcile"] = stale_old_xlsx_path.exists()
+        details["stale_new_xlsx_exists_after_reconcile"] = stale_new_xlsx_path.is_file()
+        stale_new_txt_content = stale_new_txt_path.read_text(encoding="utf-8") if stale_new_txt_path.is_file() else ""
+        stale_new_xlsx_validation_error = (
+            validate_xlsx(stale_new_xlsx_path, REVISION_0)
+            if stale_new_xlsx_path.is_file()
             else "Stale client XLSX is missing"
         )
-        details["stale_new_validation_error"] = stale_new_validation_error
+        details["stale_new_txt_content"] = stale_new_txt_content
+        details["stale_new_xlsx_validation_error"] = stale_new_xlsx_validation_error
 
         if stale_sync_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -321,14 +378,18 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
         verify_manifest = build_manifest(verify_root)
         write_manifest(verify_manifest_file, verify_manifest)
 
-        details["verify_old_exists"] = verify_old_path.exists()
-        details["verify_new_exists"] = verify_new_path.exists()
-        verify_new_validation_error = (
-            validate_xlsx(verify_new_path, REVISION_0)
-            if verify_new_path.is_file()
+        details["verify_old_txt_exists"] = verify_old_txt_path.exists()
+        details["verify_new_txt_exists"] = verify_new_txt_path.is_file()
+        details["verify_old_xlsx_exists"] = verify_old_xlsx_path.exists()
+        details["verify_new_xlsx_exists"] = verify_new_xlsx_path.is_file()
+        verify_new_txt_content = verify_new_txt_path.read_text(encoding="utf-8") if verify_new_txt_path.is_file() else ""
+        verify_new_xlsx_validation_error = (
+            validate_xlsx(verify_new_xlsx_path, REVISION_0)
+            if verify_new_xlsx_path.is_file()
             else "Verification XLSX is missing"
         )
-        details["verify_new_validation_error"] = verify_new_validation_error
+        details["verify_new_txt_content"] = verify_new_txt_content
+        details["verify_new_xlsx_validation_error"] = verify_new_xlsx_validation_error
 
         self._write_metadata(metadata_file, details)
 
@@ -341,56 +402,74 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if stale_old_path.exists():
+        if stale_old_txt_path.exists() or stale_old_xlsx_path.exists():
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"stale client still contains old filename after reconciliation: {old_relative}",
+                "stale client still contains one or more old filenames after reconciliation",
                 artifacts,
                 details,
             )
 
-        if not stale_new_path.is_file():
+        if not stale_new_txt_path.is_file() or not stale_new_xlsx_path.is_file():
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"stale client is missing renamed file after reconciliation: {new_relative}",
+                "stale client is missing one or more renamed files after reconciliation",
                 artifacts,
                 details,
             )
 
-        if stale_new_validation_error:
+        if stale_new_txt_content != txt_content:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"stale client renamed XLSX is invalid or stale after reconciliation: {stale_new_validation_error}",
+                "stale client renamed passive TXT content did not match expected content after reconciliation",
                 artifacts,
                 details,
             )
 
-        if verify_old_path.exists():
+        if stale_new_xlsx_validation_error:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"fresh remote verification still contains old filename: {old_relative}",
+                f"stale client renamed XLSX is invalid or stale after reconciliation: {stale_new_xlsx_validation_error}",
                 artifacts,
                 details,
             )
 
-        if not verify_new_path.is_file():
+        if verify_old_txt_path.exists() or verify_old_xlsx_path.exists():
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"fresh remote verification is missing renamed file: {new_relative}",
+                "fresh remote verification still contains one or more old filenames",
                 artifacts,
                 details,
             )
 
-        if verify_new_validation_error:
+        if not verify_new_txt_path.is_file() or not verify_new_xlsx_path.is_file():
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"fresh remote verification returned an invalid or stale XLSX workbook: {verify_new_validation_error}",
+                "fresh remote verification is missing one or more renamed files",
+                artifacts,
+                details,
+            )
+
+        if verify_new_txt_content != txt_content:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "fresh remote verification passive TXT content did not match expected content",
+                artifacts,
+                details,
+            )
+
+        if verify_new_xlsx_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"fresh remote verification returned an invalid or stale XLSX workbook: {verify_new_xlsx_validation_error}",
                 artifacts,
                 details,
             )

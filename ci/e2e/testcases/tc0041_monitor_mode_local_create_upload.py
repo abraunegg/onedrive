@@ -17,7 +17,7 @@ from framework.utils import command_to_string, reset_directory, run_command, wri
 class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
     case_id = "0041"
     name = "monitor mode local create upload"
-    description = "Start --monitor, create a local real XLSX workbook, and validate it uploads without restarting the client"
+    description = "Start --monitor, create passive TXT and real XLSX files, and validate both upload without restarting the client"
 
     XLSX_PAYLOAD_ROWS = 32
 
@@ -99,12 +99,19 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
         root_name = f"ZZ_E2E_TC0041_{context.run_id}_{os.getpid()}"
         baseline_relative = f"{root_name}/baseline.txt"
         created_relative = f"{root_name}/monitor-created.xlsx"
+        created_text_relative = f"{root_name}/monitor-created.txt"
 
         baseline_local_path = sync_root / baseline_relative
         created_local_path = sync_root / created_relative
         created_verify_path = verify_root / created_relative
+        created_text_local_path = sync_root / created_text_relative
+        created_text_verify_path = verify_root / created_text_relative
 
         baseline_content = "TC0041 baseline\n"
+        created_text_content = (
+            "TC0041 monitor mode local create upload\n"
+            "This passive TXT file was created while --monitor was already running.\n"
+        )
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0041:{os.getpid()}"
 
         context.bootstrap_config_dir(conf_main)
@@ -144,6 +151,7 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
             "root_name": root_name,
             "baseline_relative": baseline_relative,
             "created_relative": created_relative,
+            "created_text_relative": created_text_relative,
             "sync_root": str(sync_root),
             "verify_root": str(verify_root),
             "conf_main": str(conf_main),
@@ -200,9 +208,12 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
             details["generated_size"] = int(generated["size_bytes"])
             details["created_local_exists_after_write"] = created_local_path.is_file()
             details["created_local_validation_error"] = validate_xlsx(created_local_path, REVISION_0)
+            write_text_file(created_text_local_path, created_text_content)
+            details["created_text_exists_after_write"] = created_text_local_path.is_file()
 
             required_patterns = [
                 f"Uploading new file: {created_relative} ... done",
+                f"Uploading new file: {created_text_relative} ... done",
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
@@ -243,6 +254,9 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
         write_manifest(verify_manifest_file, verify_manifest)
 
         details["verify_created_exists"] = created_verify_path.is_file()
+        details["verify_created_text_exists"] = created_text_verify_path.is_file()
+        verify_text_content = created_text_verify_path.read_text(encoding="utf-8") if created_text_verify_path.is_file() else ""
+        details["verify_created_text_content"] = verify_text_content
         verify_validation_error = (
             validate_xlsx(created_verify_path, REVISION_0)
             if created_verify_path.is_file()
@@ -266,6 +280,24 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
                 self.case_id,
                 self.name,
                 f"Remote verification is missing created file: {created_relative}",
+                artifacts,
+                details,
+            )
+
+        if not created_text_verify_path.is_file():
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote verification is missing created passive TXT file: {created_text_relative}",
+                artifacts,
+                details,
+            )
+
+        if verify_text_content != created_text_content:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Created passive TXT content did not match after remote verification",
                 artifacts,
                 details,
             )

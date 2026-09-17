@@ -23,7 +23,8 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
     case_id = "0022"
     name = "local_first validation"
     description = (
-        "Validate with a real XLSX workbook that local_first treats local content as the source of truth during a conflict"
+        "Validate with passive text and real XLSX payloads that local_first treats local content "
+        "as the source of truth during a conflict"
     )
 
     XLSX_PAYLOAD_ROWS = 32
@@ -58,11 +59,22 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         conf_verify = case_work_dir / "conf-verify"
 
         root_name = f"ZZ_E2E_TC0022_{context.run_id}_{os.getpid()}"
-        relative_file = f"{root_name}/conflict.xlsx"
-        seed_file = seed_root / relative_file
-        local_file = local_root / relative_file
-        remote_update_file = remote_update_root / relative_file
-        verify_file = verify_root / relative_file
+        text_relative = f"{root_name}/conflict.txt"
+        xlsx_relative = f"{root_name}/conflict.xlsx"
+
+        seed_text_file = seed_root / text_relative
+        local_text_file = local_root / text_relative
+        remote_update_text_file = remote_update_root / text_relative
+        verify_text_file = verify_root / text_relative
+
+        seed_xlsx_file = seed_root / xlsx_relative
+        local_xlsx_file = local_root / xlsx_relative
+        remote_update_xlsx_file = remote_update_root / xlsx_relative
+        verify_xlsx_file = verify_root / xlsx_relative
+
+        text_seed_content = "base\n"
+        text_remote_content = "remote wins unless local_first applies\n"
+        text_expected_local = "local wins because local_first is enabled\n"
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0022:{os.getpid()}"
 
         reset_directory(seed_root)
@@ -70,15 +82,17 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         reset_directory(remote_update_root)
         reset_directory(verify_root)
 
+        write_text_file(seed_text_file, text_seed_content)
+        write_text_file(remote_update_text_file, text_remote_content)
         generated_seed = create_random_xlsx(
-            seed_file,
+            seed_xlsx_file,
             xlsx_seed,
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0022 local_first baseline workbook",
         )
         generated_remote = create_random_xlsx(
-            remote_update_file,
+            remote_update_xlsx_file,
             xlsx_seed,
             revision=REVISION_1,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
@@ -126,11 +140,12 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         ]
         details: dict[str, object] = {
             "root_name": root_name,
-            "relative_file": relative_file,
+            "text_relative": text_relative,
+            "xlsx_relative": xlsx_relative,
             "xlsx_seed": xlsx_seed,
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
-            "generated_seed_size": int(generated_seed["size_bytes"]),
-            "generated_remote_update_size": int(generated_remote["size_bytes"]),
+            "generated_seed_xlsx_size": int(generated_seed["size_bytes"]),
+            "generated_remote_update_xlsx_size": int(generated_remote["size_bytes"]),
         }
 
         seed_command = [
@@ -169,11 +184,17 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         write_text_file(download_stdout, download_result.stdout)
         write_text_file(download_stderr, download_result.stderr)
 
-        baseline_validation_error = validate_xlsx(local_file, REVISION_0) if local_file.is_file() else "Local baseline XLSX is missing"
-        details["baseline_validation_error"] = baseline_validation_error
-        if local_file.is_file():
-            details["baseline_hash"] = compute_quickxor_hash_file(local_file)
-            details["baseline_size"] = local_file.stat().st_size
+        baseline_text_content = local_text_file.read_text(encoding="utf-8") if local_text_file.is_file() else ""
+        baseline_xlsx_validation_error = (
+            validate_xlsx(local_xlsx_file, REVISION_0)
+            if local_xlsx_file.is_file()
+            else "Local baseline XLSX is missing"
+        )
+        details["baseline_text_content"] = baseline_text_content
+        details["baseline_xlsx_validation_error"] = baseline_xlsx_validation_error
+        if local_xlsx_file.is_file():
+            details["baseline_xlsx_hash"] = compute_quickxor_hash_file(local_xlsx_file)
+            details["baseline_xlsx_size"] = local_xlsx_file.stat().st_size
 
         remote_command = [
             context.onedrive_bin,
@@ -193,24 +214,29 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         write_text_file(remote_stdout, remote_result.stdout)
         write_text_file(remote_stderr, remote_result.stderr)
 
-        # Ensure the local edit is definitively later than the remote update.
+        # Ensure both local edits are definitively later than the remote updates.
         # This is critical so the final sync actually exercises local_first.
         time.sleep(2)
 
-        local_revision_error = ""
-        expected_hash = ""
-        if local_file.is_file() and not baseline_validation_error:
-            mutate_xlsx_revision(local_file, REVISION_0, REVISION_2)
-            local_revision_error = validate_xlsx(local_file, REVISION_2)
-            expected_hash = compute_quickxor_hash_file(local_file)
-            now = time.time()
-            os.utime(local_file, (now, now))
+        write_text_file(local_text_file, text_expected_local)
+        local_xlsx_revision_error = ""
+        expected_xlsx_hash = ""
+        if local_xlsx_file.is_file() and not baseline_xlsx_validation_error:
+            mutate_xlsx_revision(local_xlsx_file, REVISION_0, REVISION_2)
+            local_xlsx_revision_error = validate_xlsx(local_xlsx_file, REVISION_2)
+            expected_xlsx_hash = compute_quickxor_hash_file(local_xlsx_file)
         else:
-            local_revision_error = baseline_validation_error or "Unable to mutate missing local XLSX"
+            local_xlsx_revision_error = baseline_xlsx_validation_error or "Unable to mutate missing local XLSX"
 
-        details["local_revision_error"] = local_revision_error
-        details["expected_local_hash"] = expected_hash
-        details["local_mtime_before_final_sync"] = local_file.stat().st_mtime if local_file.exists() else 0
+        now = time.time()
+        os.utime(local_text_file, (now, now))
+        if local_xlsx_file.exists():
+            os.utime(local_xlsx_file, (now, now))
+
+        details["local_xlsx_revision_error"] = local_xlsx_revision_error
+        details["expected_local_xlsx_hash"] = expected_xlsx_hash
+        details["local_text_mtime_before_final_sync"] = local_text_file.stat().st_mtime if local_text_file.exists() else 0
+        details["local_xlsx_mtime_before_final_sync"] = local_xlsx_file.stat().st_mtime if local_xlsx_file.exists() else 0
 
         # Reuse the same local DB / delta state, but enable local_first.
         self._write_config(conf_local / "config", local_root, local_first=True)
@@ -251,10 +277,20 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         remote_manifest = build_manifest(verify_root)
         write_manifest(remote_manifest_file, remote_manifest)
 
-        local_validation_error = validate_xlsx(local_file, REVISION_2) if local_file.is_file() else "Local XLSX is missing"
-        remote_validation_error = validate_xlsx(verify_file, REVISION_2) if verify_file.is_file() else "Remote verification XLSX is missing"
-        local_hash = compute_quickxor_hash_file(local_file) if local_file.is_file() else ""
-        remote_hash = compute_quickxor_hash_file(verify_file) if verify_file.is_file() else ""
+        local_text_content = local_text_file.read_text(encoding="utf-8") if local_text_file.is_file() else ""
+        remote_text_content = verify_text_file.read_text(encoding="utf-8") if verify_text_file.is_file() else ""
+        local_xlsx_validation_error = (
+            validate_xlsx(local_xlsx_file, REVISION_2)
+            if local_xlsx_file.is_file()
+            else "Local XLSX is missing"
+        )
+        remote_xlsx_validation_error = (
+            validate_xlsx(verify_xlsx_file, REVISION_2)
+            if verify_xlsx_file.is_file()
+            else "Remote verification XLSX is missing"
+        )
+        local_xlsx_hash = compute_quickxor_hash_file(local_xlsx_file) if local_xlsx_file.is_file() else ""
+        remote_xlsx_hash = compute_quickxor_hash_file(verify_xlsx_file) if verify_xlsx_file.is_file() else ""
 
         details.update(
             {
@@ -263,14 +299,14 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                 "remote_returncode": remote_result.returncode,
                 "final_returncode": final_result.returncode,
                 "verify_returncode": verify_result.returncode,
-                "local_validation_error": local_validation_error,
-                "remote_validation_error": remote_validation_error,
-                "local_hash": local_hash,
-                "remote_hash": remote_hash,
-                "local_mtime": local_file.stat().st_mtime if local_file.exists() else 0,
+                "local_text_content": local_text_content,
+                "remote_text_content": remote_text_content,
+                "local_xlsx_validation_error": local_xlsx_validation_error,
+                "remote_xlsx_validation_error": remote_xlsx_validation_error,
+                "local_xlsx_hash": local_xlsx_hash,
+                "remote_xlsx_hash": remote_xlsx_hash,
             }
         )
-
         write_text_file(
             metadata_file,
             "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
@@ -292,43 +328,70 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                     details,
                 )
 
-        if baseline_validation_error:
+        if baseline_text_content != text_seed_content:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Downloaded baseline is not a valid revision-0 XLSX workbook: {baseline_validation_error}",
+                "Downloaded passive-text baseline did not match the remote seed",
                 artifacts,
                 details,
             )
 
-        if local_revision_error:
+        if baseline_xlsx_validation_error:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Unable to establish the local revision-2 XLSX conflict payload: {local_revision_error}",
+                f"Downloaded XLSX baseline is not a valid revision-0 workbook: {baseline_xlsx_validation_error}",
                 artifacts,
                 details,
             )
 
-        if local_validation_error:
+        if local_xlsx_revision_error:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Local XLSX was not retained after conflict resolution with local_first enabled: {local_validation_error}",
+                f"Unable to establish the local revision-2 XLSX conflict payload: {local_xlsx_revision_error}",
                 artifacts,
                 details,
             )
 
-        if remote_validation_error:
+        if local_text_content != text_expected_local:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Remote XLSX did not converge to the local source-of-truth revision: {remote_validation_error}",
+                "Local passive-text content was not retained after conflict resolution with local_first enabled",
                 artifacts,
                 details,
             )
 
-        if not expected_hash or local_hash != expected_hash:
+        if remote_text_content != text_expected_local:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Remote passive-text content did not converge to the local source-of-truth content",
+                artifacts,
+                details,
+            )
+
+        if local_xlsx_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Local XLSX was not retained after conflict resolution: {local_xlsx_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if remote_xlsx_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote XLSX did not converge to the local source-of-truth revision: {remote_xlsx_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if not expected_xlsx_hash or local_xlsx_hash != expected_xlsx_hash:
             return self.fail_result(
                 self.case_id,
                 self.name,
