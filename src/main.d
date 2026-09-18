@@ -2323,7 +2323,7 @@ void processResyncDatabaseRemoval(string databaseFilePathToRemove) {
 	if (debugLogging) {addLogEntry("Testing if we have exclusive access to local database file", ["debug"]);}
 	
 	// Are we the only running instance? Test that we can open the database file path
-	itemDB = new ItemDatabase(databaseFilePathToRemove);
+	itemDB = new ItemDatabase(databaseFilePathToRemove, appConfig.getValueBool("resync"));
 	
 	// did we successfully initialise the database class?
 	if (!itemDB.isDatabaseInitialised()) {

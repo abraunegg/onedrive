@@ -232,7 +232,7 @@ final class ItemDatabase {
 	bool databaseInitialised = false;
 	private Object databaseLock;
 	
-	this(string filename) {
+	this(string filename, bool resyncRequested = false) {
 		// Initialise the database monitor used to serialise all database access
 		databaseLock = new Object();
 		
@@ -294,15 +294,24 @@ final class ItemDatabase {
 		// Validate the physical item table before preparing or executing any normal
 		// synchronisation queries. PRAGMA user_version alone does not prove that
 		// the table has the column names and positions buildItem() expects.
-		string schemaMismatchReason;
-		if (!validateItemDatabaseShape(schemaMismatchReason)) {
-			addLogEntry();
-			addLogEntry("FATAL: The local item database schema does not match the schema expected by this version of the application.", ["info", "notify"]);
-			addLogEntry("Database schema mismatch: " ~ schemaMismatchReason);
-			addLogEntry("A --resync is required to rebuild the local item database.");
-			addLogEntry("Re-run the client with '--resync' appended to your normal '--sync' or '--monitor' command.");
-			addLogEntry();
-			forceExit(EXIT_RESYNC_REQUIRED);
+		//
+		// When --resync has been explicitly requested, main.d opens the existing
+		// database here only to confirm exclusive access before deleting it. In that
+		// specific path the database contents are about to be discarded, so physical
+		// schema validation must not prevent the requested recovery operation.
+		if (!resyncRequested) {
+			string schemaMismatchReason;
+			if (!validateItemDatabaseShape(schemaMismatchReason)) {
+				addLogEntry();
+				addLogEntry("FATAL: The local item database schema does not match the schema expected by this version of the application.", ["info", "notify"]);
+				addLogEntry("Database schema mismatch: " ~ schemaMismatchReason);
+				addLogEntry("A --resync is required to rebuild the local item database.");
+				addLogEntry("Re-run the client with '--resync' appended to your normal '--sync' or '--monitor' command.");
+				addLogEntry();
+				forceExit(EXIT_RESYNC_REQUIRED);
+			}
+		} else {
+			if (debugLogging) {addLogEntry("Skipping physical item database schema validation because --resync has been requested", ["debug"]);}
 		}
 		
 		// What is the threadsafe value

@@ -280,9 +280,16 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
         return identities
 
     @staticmethod
-    def _identity_core(identity_map: dict[str, dict[str, str]]) -> dict[str, tuple[str, str, str]]:
+    def _identity_core(
+        identity_map: dict[str, dict[str, str]],
+        account_type: str,
+    ) -> dict[str, tuple[str, str, str]]:
         return {
-            path: (values["driveId"], values["id"], values["type"])
+            path: (
+                values["driveId"].lower() if account_type == "personal" else values["driveId"],
+                values["id"],
+                values["type"],
+            )
             for path, values in identity_map.items()
         }
 
@@ -669,7 +676,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
                 details=details,
             )
 
-        if self._identity_core(legacy_remote_identities) != self._identity_core(legacy_identity_map):
+        if self._identity_core(legacy_remote_identities, context.e2e_target) != self._identity_core(legacy_identity_map, context.e2e_target):
             details["db0001_main_identities"] = legacy_identity_map
             details["db0001_verify_identities"] = legacy_remote_identities
             self.write_metadata(metadata_file, details)
@@ -777,7 +784,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
                 details=details,
             )
 
-        if self._identity_core(upgraded_identity_map) != self._identity_core(legacy_identity_map):
+        if self._identity_core(upgraded_identity_map, context.e2e_target) != self._identity_core(legacy_identity_map, context.e2e_target):
             details["db0002_legacy_identities"] = legacy_identity_map
             details["db0002_upgraded_identities"] = upgraded_identity_map
             self.write_metadata(metadata_file, details)
@@ -809,7 +816,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
                 artifacts=artifacts,
                 details=details,
             )
-        if self._identity_core(verify_identities) != self._identity_core(legacy_identity_map):
+        if self._identity_core(verify_identities, context.e2e_target) != self._identity_core(legacy_identity_map, context.e2e_target):
             details["db0002_verify_identities"] = verify_identities
             self.write_metadata(metadata_file, details)
             return self.fail_result(
@@ -888,7 +895,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
                 artifacts=artifacts,
                 details=details,
             )
-        if self._identity_core(restored_upgraded_identities) != self._identity_core(legacy_identity_map):
+        if self._identity_core(restored_upgraded_identities, context.e2e_target) != self._identity_core(legacy_identity_map, context.e2e_target):
             details["db0003_upgraded_identities"] = restored_upgraded_identities
             self.write_metadata(metadata_file, details)
             return self.fail_result(
@@ -919,7 +926,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
                 artifacts=artifacts,
                 details=details,
             )
-        if self._identity_core(verify_identities) != self._identity_core(legacy_identity_map):
+        if self._identity_core(verify_identities, context.e2e_target) != self._identity_core(legacy_identity_map, context.e2e_target):
             details["db0003_verify_identities"] = verify_identities
             self.write_metadata(metadata_file, details)
             return self.fail_result(
@@ -1043,7 +1050,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
                 artifacts=artifacts,
                 details=details,
             )
-        if self._identity_core(verify_identities) != self._identity_core(legacy_identity_map):
+        if self._identity_core(verify_identities, context.e2e_target) != self._identity_core(legacy_identity_map, context.e2e_target):
             details["db0004_post_failure_verify_identities"] = verify_identities
             self.write_metadata(metadata_file, details)
             return self.fail_result(
@@ -1113,7 +1120,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
                 artifacts=artifacts,
                 details=details,
             )
-        if self._identity_core(recovery_identities) != self._identity_core(legacy_identity_map):
+        if self._identity_core(recovery_identities, context.e2e_target) != self._identity_core(legacy_identity_map, context.e2e_target):
             details["db0004_recovery_identities"] = recovery_identities
             self.write_metadata(metadata_file, details)
             return self.fail_result(
@@ -1144,7 +1151,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
                 artifacts=artifacts,
                 details=details,
             )
-        if self._identity_core(verify_identities) != self._identity_core(legacy_identity_map):
+        if self._identity_core(verify_identities, context.e2e_target) != self._identity_core(legacy_identity_map, context.e2e_target):
             details["db0004_recovery_verify_identities"] = verify_identities
             self.write_metadata(metadata_file, details)
             return self.fail_result(
