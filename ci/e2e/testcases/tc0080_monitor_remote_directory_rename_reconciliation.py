@@ -9,6 +9,7 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 
 
 class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCaseBase):
@@ -46,6 +47,7 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
       * require a later convergence cycle to repair or recreate state.
     """
 
+    XLSX_PAYLOAD_ROWS = 32
     case_id = "0080"
     name = "monitor remote populated directory rename reconciliation"
     description = (
@@ -174,6 +176,7 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
         subject_root: Path,
         renames: list[tuple[str, str]],
         expected_files: dict[str, str],
+        expected_xlsx_revisions: dict[str, str],
         stdout_file: Path,
         stderr_file: Path,
         app_log_dir: Path,
@@ -221,6 +224,19 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
                     if actual != expected_content:
                         state_ok = False
                         last_reason = f"subject renamed tree content mismatch: {relative}"
+                        break
+
+            if state_ok:
+                for relative, expected_revision in expected_xlsx_revisions.items():
+                    path = subject_root / relative
+                    if not path.is_file():
+                        state_ok = False
+                        last_reason = f"subject renamed tree is missing expected XLSX: {relative}"
+                        break
+                    validation_error = validate_xlsx(path, expected_revision)
+                    if validation_error:
+                        state_ok = False
+                        last_reason = f"subject renamed XLSX validation failed for {relative}: {validation_error}"
                         break
 
             if state_ok and websocket_signal_count <= websocket_signal_count_before:
@@ -397,6 +413,10 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
 
         root_name = f"ZZ_E2E_TC0080_{context.run_id}_{os.getpid()}"
         source_files, renames, expected_after = self._expected_tree(root_name)
+        xlsx_source_relative = f"{root_name}/Quarterly Reports/2025/Q4/forecast.xlsx"
+        xlsx_expected_relative = f"{root_name}/Quarterly Reports - Renamed/2025/Q4/forecast.xlsx"
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0080:{os.getpid()}"
+        expected_xlsx_revisions = {xlsx_expected_relative: REVISION_0}
 
         context.prepare_minimal_config_dir(
             conf_subject,
@@ -413,6 +433,13 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
 
         for relative, content in source_files.items():
             write_text_file(subject_root / relative, content)
+        generated_xlsx = create_random_xlsx(
+            subject_root / xlsx_source_relative,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0080 remote populated-directory rename workbook",
+        )
 
         phase_files = {
             "subject_seed": (
@@ -467,6 +494,11 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
             "renames": renames,
             "source_files": sorted(source_files),
             "expected_after_files": sorted(expected_after),
+            "xlsx_source_relative": xlsx_source_relative,
+            "xlsx_expected_relative": xlsx_expected_relative,
+            "xlsx_seed": xlsx_seed,
+            "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
+            "generated_xlsx_size": int(generated_xlsx["size_bytes"]),
             "subject_websocket_enabled_by_config": True,
             "subject_monitor_interval": 300,
             "subject_monitor_fullscan_frequency": 0,
@@ -501,6 +533,22 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
                 self.case_id,
                 self.name,
                 f"subject seed failed with status {seed_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        subject_seed_xlsx_validation_error = (
+            validate_xlsx(subject_root / xlsx_source_relative, REVISION_0)
+            if (subject_root / xlsx_source_relative).is_file()
+            else "Subject XLSX is missing after seed"
+        )
+        details["subject_seed_xlsx_validation_error"] = subject_seed_xlsx_validation_error
+        if subject_seed_xlsx_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"subject XLSX baseline is invalid after seed: {subject_seed_xlsx_validation_error}",
                 artifacts,
                 details,
             )
@@ -560,6 +608,22 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
                     artifacts,
                     details,
                 )
+
+        mutator_xlsx_validation_error = (
+            validate_xlsx(mutator_root / xlsx_source_relative, REVISION_0)
+            if (mutator_root / xlsx_source_relative).is_file()
+            else "Mutator XLSX is missing after baseline download"
+        )
+        details["mutator_xlsx_validation_error"] = mutator_xlsx_validation_error
+        if mutator_xlsx_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"mutator XLSX baseline is invalid: {mutator_xlsx_validation_error}",
+                artifacts,
+                details,
+            )
 
         # Phase 3: launch the subject first.  It remains running while the
         # independent endpoint performs both genuine existing-ID renames.
@@ -733,10 +797,27 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
 
             details["mutator_move_results"] = mutator_move_results
 
+            mutator_post_rename_xlsx_error = (
+                validate_xlsx(mutator_root / xlsx_expected_relative, REVISION_0)
+                if (mutator_root / xlsx_expected_relative).is_file()
+                else "Mutator XLSX is missing after directory rename"
+            )
+            details["mutator_post_rename_xlsx_validation_error"] = mutator_post_rename_xlsx_error
+            if mutator_post_rename_xlsx_error:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(
+                    self.case_id,
+                    self.name,
+                    f"mutator XLSX was invalid after local directory rename: {mutator_post_rename_xlsx_error}",
+                    artifacts,
+                    details,
+                )
+
             remote_rename_reconciled, remote_rename_failure = self._wait_for_subject_renames(
                 subject_root=subject_root,
                 renames=renames,
                 expected_files=expected_after,
+                expected_xlsx_revisions=expected_xlsx_revisions,
                 stdout_file=phase_files["subject_monitor"][0],
                 stderr_file=phase_files["subject_monitor"][1],
                 app_log_dir=subject_app_logs,
@@ -950,12 +1031,38 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
             elif verify_path.read_text(encoding="utf-8", errors="replace") != expected_content:
                 failures.append(f"remote truth final file content mismatch: {relative}")
 
+        subject_final_xlsx_error = (
+            validate_xlsx(subject_root / xlsx_expected_relative, REVISION_0)
+            if (subject_root / xlsx_expected_relative).is_file()
+            else "Subject final XLSX is missing"
+        )
+        verify_final_xlsx_error = (
+            validate_xlsx(verify_root / xlsx_expected_relative, REVISION_0)
+            if (verify_root / xlsx_expected_relative).is_file()
+            else "Remote truth final XLSX is missing"
+        )
+        details["subject_final_xlsx_validation_error"] = subject_final_xlsx_error
+        details["verify_final_xlsx_validation_error"] = verify_final_xlsx_error
+        if subject_final_xlsx_error:
+            failures.append(
+                f"subject final XLSX validation failed for {xlsx_expected_relative}: {subject_final_xlsx_error}"
+            )
+        if verify_final_xlsx_error:
+            failures.append(
+                f"remote truth final XLSX validation failed for {xlsx_expected_relative}: {verify_final_xlsx_error}"
+            )
+
+        if (subject_root / xlsx_source_relative).exists():
+            failures.append(f"subject retained stale old-path XLSX: {xlsx_source_relative}")
+        if (verify_root / xlsx_source_relative).exists():
+            failures.append(f"remote truth contains stale old-path XLSX: {xlsx_source_relative}")
+
         old_paths = set(source_files) - {f"{root_name}/control.txt"}
         for relative in old_paths:
             if relative in verify_manifest or (verify_root / relative).exists():
                 failures.append(f"remote truth contains stale old-path file: {relative}")
 
-        expected_manifest_files = set(expected_after)
+        expected_manifest_files = set(expected_after) | {xlsx_expected_relative}
         actual_subject_files = {
             entry for entry in subject_manifest if (subject_root / entry).is_file()
         }

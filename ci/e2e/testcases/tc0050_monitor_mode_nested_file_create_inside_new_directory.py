@@ -6,10 +6,12 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, write_text_file
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 
 
 class TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(MonitorModeTestCaseBase):
+    XLSX_PAYLOAD_ROWS = 32
     case_id = "0050"
     name = "monitor mode nested file create inside new directory"
     description = "Create a nested directory tree and deep file under --monitor and validate the remote state"
@@ -34,12 +36,16 @@ class TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(MonitorModeTestC
         anchor_relative = f"{root_name}/anchor.txt"
         deep_dir_relative = f"{root_name}/new-root/child/grandchild"
         deep_file_relative = f"{deep_dir_relative}/deep-file.txt"
+        deep_xlsx_relative = f"{deep_dir_relative}/deep-file.xlsx"
 
         anchor_local = sync_root / anchor_relative
         deep_dir_local = sync_root / deep_dir_relative
         deep_file_local = sync_root / deep_file_relative
+        deep_xlsx_local = sync_root / deep_xlsx_relative
         deep_file_verify = verify_root / deep_file_relative
+        deep_xlsx_verify = verify_root / deep_xlsx_relative
 
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0050:{os.getpid()}"
         deep_file_content = (
             "TC0050 monitor mode nested file create inside new directory\n"
             "This file was created at a nested path while --monitor was active.\n"
@@ -56,7 +62,7 @@ class TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(MonitorModeTestC
         verify_manifest_file = state_dir / "verify_manifest.txt"
         metadata_file = state_dir / "metadata.txt"
         artifacts = [str(monitor_stdout), str(monitor_stderr), str(verify_stdout), str(verify_stderr), str(verify_manifest_file), str(metadata_file)]
-        details = {"root_name": root_name, "anchor_relative": anchor_relative, "deep_dir_relative": deep_dir_relative, "deep_file_relative": deep_file_relative}
+        details = {"root_name": root_name, "anchor_relative": anchor_relative, "deep_dir_relative": deep_dir_relative, "deep_file_relative": deep_file_relative, "deep_xlsx_relative": deep_xlsx_relative, "xlsx_seed": xlsx_seed, "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS}
 
         monitor_command = [context.onedrive_bin, "--display-running-config", "--monitor", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(conf_main)]
         context.log(f"Executing Test Case {self.case_id} monitor: {command_to_string(monitor_command)}")
@@ -70,7 +76,19 @@ class TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(MonitorModeTestC
 
             deep_dir_local.mkdir(parents=True, exist_ok=True)
             write_text_file(deep_file_local, deep_file_content)
-            required_patterns = [f"Uploading new file: {deep_file_relative} ... done"]
+            generated_xlsx = create_random_xlsx(
+                deep_xlsx_local,
+                xlsx_seed,
+                revision=REVISION_0,
+                payload_rows=self.XLSX_PAYLOAD_ROWS,
+                title="TC0050 nested monitor create workbook",
+            )
+            details["generated_xlsx_size"] = int(generated_xlsx["size_bytes"])
+            details["created_xlsx_validation_error"] = validate_xlsx(deep_xlsx_local, REVISION_0)
+            required_patterns = [
+                f"Uploading new file: {deep_file_relative} ... done",
+                f"Uploading new file: {deep_xlsx_relative} ... done",
+            ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
                 start_offset=mutation_log_start_offset,
@@ -93,10 +111,18 @@ class TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(MonitorModeTestC
         write_manifest(verify_manifest_file, verify_manifest)
         details["verify_deep_file_exists"] = deep_file_verify.is_file()
         details["verify_deep_file_content"] = deep_file_verify.read_text(encoding="utf-8") if deep_file_verify.is_file() else ""
+        details["verify_deep_xlsx_exists"] = deep_xlsx_verify.is_file()
+        details["verify_deep_xlsx_validation_error"] = (
+            validate_xlsx(deep_xlsx_verify, REVISION_0)
+            if deep_xlsx_verify.is_file()
+            else "Verification XLSX is missing"
+        )
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
             return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if not deep_file_verify.is_file() or details["verify_deep_file_content"] != deep_file_content:
             return self.fail_result(self.case_id, self.name, f"Remote verification is missing deep nested file state: {deep_file_relative}", artifacts, details)
+        if details["verify_deep_xlsx_validation_error"]:
+            return self.fail_result(self.case_id, self.name, f"Remote verification is missing or contains an invalid nested XLSX: {deep_xlsx_relative}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)
