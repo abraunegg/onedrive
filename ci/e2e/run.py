@@ -93,6 +93,7 @@ from testcases.tc0077_timestamp_authority_validation import TestCase0077Timestam
 from testcases.tc0078_monitor_mode_rename_to_invalid_name import TestCase0078MonitorModeRenameToInvalidName
 from testcases.tc0079_display_sync_status_validation import TestCase0079DisplaySyncStatusValidation
 from testcases.tc0080_monitor_remote_directory_rename_reconciliation import TestCase0080MonitorRemoteDirectoryRenameReconciliation
+from testcases.tc0081_historical_database_upgrade_validation import TestCase0081HistoricalDatabaseUpgradeValidation
 
 
 def build_test_suite() -> list:
@@ -177,6 +178,7 @@ def build_test_suite() -> list:
         TestCase0078MonitorModeRenameToInvalidName(),
         TestCase0079DisplaySyncStatusValidation(),
         TestCase0080MonitorRemoteDirectoryRenameReconciliation(),
+        TestCase0081HistoricalDatabaseUpgradeValidation(),
     ]
 
 
