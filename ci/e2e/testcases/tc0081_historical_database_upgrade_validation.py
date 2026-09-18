@@ -22,6 +22,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
     )
 
     LEGACY_TAG = "v2.5.5"
+    LEGACY_REPOSITORY_URL = "https://github.com/abraunegg/onedrive.git"
     LEGACY_DATABASE_VERSION = 16
     LEGACY_ITEM_COLUMN_COUNT = 18
     EXIT_RESYNC_REQUIRED = 78
@@ -48,34 +49,6 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
         runner_temp = Path(os.environ.get("RUNNER_TEMP", "/tmp"))
         return runner_temp / "onedrive-e2e-legacy-build" / self.LEGACY_TAG
 
-    def _remove_stale_legacy_worktree(
-        self,
-        *,
-        context: E2EContext,
-        source_dir: Path,
-    ) -> None:
-        if not source_dir.exists():
-            return
-
-        # The source directory is a git worktree when a previous build reached
-        # that stage. Remove it through git first so the parent repository does
-        # not retain a stale worktree registration. If it was never registered,
-        # fall back to a normal filesystem removal.
-        remove_result = run_command(
-            ["git", "worktree", "remove", "--force", str(source_dir)],
-            cwd=context.repo_root,
-        )
-        if source_dir.exists():
-            shutil.rmtree(source_dir, ignore_errors=True)
-
-        # Keep the result available in the master log for diagnostics without
-        # treating an unregistered stale directory as a testcase failure.
-        if remove_result.returncode != 0:
-            context.log(
-                f"Test Case {self.case_id}: legacy worktree cleanup returned "
-                f"{remove_result.returncode}; continuing with filesystem cleanup"
-            )
-
     def _ensure_legacy_binary(
         self,
         *,
@@ -90,6 +63,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
         legacy_bin = prefix_dir / "bin" / "onedrive"
 
         details["legacy_tag"] = self.LEGACY_TAG
+        details["legacy_repository_url"] = self.LEGACY_REPOSITORY_URL
         details["legacy_cache_root"] = str(cache_root)
         details["legacy_binary"] = str(legacy_bin)
 
@@ -113,24 +87,30 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
 
         details["legacy_build_reused"] = False
 
-        self._remove_stale_legacy_worktree(
-            context=context,
-            source_dir=source_dir,
-        )
         if cache_root.exists():
             shutil.rmtree(cache_root, ignore_errors=True)
         cache_root.mkdir(parents=True, exist_ok=True)
 
+        # Build the historical client from an isolated shallow clone of the
+        # exact release tag. Do not depend on the current GitHub Actions
+        # workspace retaining usable .git metadata: the E2E harness only needs
+        # the tagged historical source tree, not a worktree relationship with
+        # the current checkout.
         build_steps: list[tuple[str, list[str], Path]] = [
             (
-                "legacy fetch",
-                ["git", "fetch", "--force", "--depth=1", "origin", "tag", self.LEGACY_TAG],
-                context.repo_root,
-            ),
-            (
-                "legacy worktree",
-                ["git", "worktree", "add", "--force", "--detach", str(source_dir), self.LEGACY_TAG],
-                context.repo_root,
+                "legacy clone",
+                [
+                    "git",
+                    "clone",
+                    "--depth",
+                    "1",
+                    "--branch",
+                    self.LEGACY_TAG,
+                    "--single-branch",
+                    self.LEGACY_REPOSITORY_URL,
+                    str(source_dir),
+                ],
+                cache_root,
             ),
             (
                 "legacy configure",
