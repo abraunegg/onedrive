@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from framework.base import E2ETestCase
@@ -198,7 +199,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
         if not db_path.is_file():
             raise RuntimeError(f"database does not exist: {db_path}")
 
-        with sqlite3.connect(str(db_path)) as connection:
+        with closing(sqlite3.connect(str(db_path))) as connection:
             user_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
             integrity_rows = [
                 str(row[0])
@@ -227,7 +228,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
 
     @staticmethod
     def _database_identity_map(db_path: Path, root_name: str) -> dict[str, dict[str, str]]:
-        with sqlite3.connect(str(db_path)) as connection:
+        with closing(sqlite3.connect(str(db_path))) as connection:
             rows = connection.execute(
                 "SELECT driveId, id, name, type, parentId FROM item"
             ).fetchall()
@@ -291,8 +292,8 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
         if destination.exists():
             destination.unlink()
 
-        with sqlite3.connect(str(source)) as source_connection:
-            with sqlite3.connect(str(destination)) as destination_connection:
+        with closing(sqlite3.connect(str(source))) as source_connection:
+            with closing(sqlite3.connect(str(destination))) as destination_connection:
                 source_connection.backup(destination_connection)
 
     @staticmethod
@@ -308,7 +309,7 @@ class TestCase0081HistoricalDatabaseUpgradeValidation(E2ETestCase):
 
     @staticmethod
     def _set_database_user_version(db_path: Path, user_version: int) -> None:
-        with sqlite3.connect(str(db_path)) as connection:
+        with closing(sqlite3.connect(str(db_path))) as connection:
             connection.execute(f"PRAGMA user_version = {int(user_version)}")
             connection.commit()
 
