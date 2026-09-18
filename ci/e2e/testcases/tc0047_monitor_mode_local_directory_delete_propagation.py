@@ -6,6 +6,7 @@ import shutil
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 
@@ -13,7 +14,9 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCaseBase):
     case_id = "0047"
     name = "monitor mode local directory delete propagation"
-    description = "Delete a populated local directory tree under --monitor and validate the remote delete"
+    description = "Delete a populated local directory tree containing passive TXT and real XLSX files under --monitor and validate the remote delete"
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
@@ -36,11 +39,13 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
         delete_dir_relative = f"{root_name}/delete-directory"
         delete_file1_relative = f"{delete_dir_relative}/file1.txt"
         delete_file2_relative = f"{delete_dir_relative}/nested/file2.txt"
+        delete_xlsx_relative = f"{delete_dir_relative}/nested/file3.xlsx"
 
         keep_local_path = sync_root / keep_relative
         delete_dir_local_path = sync_root / delete_dir_relative
         delete_file1_local_path = sync_root / delete_file1_relative
         delete_file2_local_path = sync_root / delete_file2_relative
+        delete_xlsx_local_path = sync_root / delete_xlsx_relative
         keep_verify_path = verify_root / keep_relative
         delete_dir_verify_path = verify_root / delete_dir_relative
 
@@ -57,6 +62,14 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
         write_text_file(keep_local_path, "TC0047 anchor\n")
         write_text_file(delete_file1_local_path, "TC0047 delete file 1\n")
         write_text_file(delete_file2_local_path, "TC0047 delete file 2\n")
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0047:{os.getpid()}"
+        generated = create_random_xlsx(
+            delete_xlsx_local_path,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0047 populated directory delete workbook",
+        )
 
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"
@@ -68,7 +81,18 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
         metadata_file = state_dir / "metadata.txt"
 
         artifacts = [str(seed_stdout), str(seed_stderr), str(monitor_stdout), str(monitor_stderr), str(verify_stdout), str(verify_stderr), str(verify_manifest_file), str(metadata_file)]
-        details = {"root_name": root_name, "keep_relative": keep_relative, "delete_dir_relative": delete_dir_relative, "delete_file1_relative": delete_file1_relative, "delete_file2_relative": delete_file2_relative}
+        details = {
+            "root_name": root_name,
+            "keep_relative": keep_relative,
+            "delete_dir_relative": delete_dir_relative,
+            "delete_file1_relative": delete_file1_relative,
+            "delete_file2_relative": delete_file2_relative,
+            "delete_xlsx_relative": delete_xlsx_relative,
+            "xlsx_seed": xlsx_seed,
+            "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
+            "generated_xlsx_size": int(generated["size_bytes"]),
+            "seed_xlsx_validation_error": validate_xlsx(delete_xlsx_local_path, REVISION_0),
+        }
 
         seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(conf_main)]
         context.log(f"Executing Test Case {self.case_id} seed: {command_to_string(seed_command)}")
@@ -95,6 +119,7 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
             groups = [
                 [f"Deleting item from Microsoft OneDrive: {delete_file1_relative}"],
                 [f"Deleting item from Microsoft OneDrive: {delete_file2_relative}"],
+                [f"Deleting item from Microsoft OneDrive: {delete_xlsx_relative}"],
                 [f"Deleting item from Microsoft OneDrive: {delete_dir_relative}"],
             ]
             mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
