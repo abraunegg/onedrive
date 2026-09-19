@@ -11,6 +11,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
@@ -72,6 +73,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         "moves/renames in bidirectional, download-only and monitor reconciliation modes, "
         "including post-move modification and cleanup deletion lifecycles"
     )
+
+    XLSX_PAYLOAD_ROWS = 32
 
     BAD_VALIDATOR_MOVE_MARKERS = [
         "The file has been deleted locally",
@@ -436,6 +439,14 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         }
         for relative, content in files.items():
             write_text_file(mutator_root / relative, content)
+        xlsx_relative = f"{root_name}/incoming/{source_name}/top-level.xlsx"
+        create_random_xlsx(
+            mutator_root / xlsx_relative,
+            f"{root_name}:{source_name}:xlsx",
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0065 sync_list moved-directory workbook",
+        )
         (mutator_root / root_name / "incoming" / source_name / "EmptyChild").mkdir(
             parents=True, exist_ok=True
         )
@@ -622,6 +633,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             root_name=root_name,
             source_name=source_name,
         )
+        xlsx_source_relative = f"{source_relative}/top-level.xlsx"
+        xlsx_destination_relative = xlsx_source_relative.replace(source_relative, destination_relative, 1)
 
         phase_files = {
             "seed": (
@@ -668,6 +681,9 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             "validator_mode": scenario.validator_mode,
             "source_relative": source_relative,
             "destination_relative": destination_relative,
+            "xlsx_source_relative": xlsx_source_relative,
+            "xlsx_destination_relative": xlsx_destination_relative,
+            "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "mutator_items_db": str(conf_mutator / "items.sqlite3"),
             "validator_items_db": str(conf_validator / "items.sqlite3"),
             "sync_list": [f"/{root_name}"],
@@ -737,6 +753,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 forbidden_paths=[destination_relative],
             )
         )
+        initial_xlsx_error = validate_xlsx(validator_root / xlsx_source_relative, REVISION_0)
+        details["validator_initial_xlsx_validation_error"] = initial_xlsx_error
+        if initial_xlsx_error:
+            failures.append(f"initial validator XLSX invalid: {initial_xlsx_error}")
+
         if failures:
             self._write_metadata(metadata_file, details)
             return failures, artifacts, details
@@ -870,6 +891,10 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 forbidden_paths=[source_relative],
             )
         )
+        validator_xlsx_error = validate_xlsx(validator_root / xlsx_destination_relative, REVISION_0)
+        details["validator_moved_xlsx_validation_error"] = validator_xlsx_error
+        if validator_xlsx_error:
+            failures.append(f"validator moved XLSX invalid: {validator_xlsx_error}")
 
         verify_result = self._run_phase(
             context=context,
@@ -907,6 +932,10 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 forbidden_paths=[source_relative],
             )
         )
+        verify_xlsx_error = validate_xlsx(verify_root / xlsx_destination_relative, REVISION_0)
+        details["verify_moved_xlsx_validation_error"] = verify_xlsx_error
+        if verify_xlsx_error:
+            failures.append(f"remote truth moved XLSX invalid: {verify_xlsx_error}")
 
         self._write_metadata(metadata_file, details)
         return failures, artifacts, details
@@ -972,6 +1001,24 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         }
         for relative, content in initial_files.items():
             write_text_file(mutator_root / relative, content)
+        whole_xlsx_source = f"{whole_source}/workbook.xlsx"
+        files_first_xlsx_source = f"{files_first_source}/workbook.xlsx"
+        whole_xlsx_destination = f"{whole_destination}/workbook.xlsx"
+        files_first_xlsx_destination = f"{files_first_destination}/workbook.xlsx"
+        create_random_xlsx(
+            mutator_root / whole_xlsx_source,
+            f"{root_name}:whole:xlsx",
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0065 whole-directory lifecycle workbook",
+        )
+        create_random_xlsx(
+            mutator_root / files_first_xlsx_source,
+            f"{root_name}:files-first:xlsx",
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0065 files-first lifecycle workbook",
+        )
 
         phase_names = [
             "phase1_seed",
@@ -1011,6 +1058,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             "whole_destination": whole_destination,
             "files_first_source": files_first_source,
             "files_first_destination": files_first_destination,
+            "whole_xlsx_source": whole_xlsx_source,
+            "whole_xlsx_destination": whole_xlsx_destination,
+            "files_first_xlsx_source": files_first_xlsx_source,
+            "files_first_xlsx_destination": files_first_xlsx_destination,
+            "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "sync_list": [f"/{root_name}"],
         }
         failures: list[str] = []
@@ -1061,6 +1113,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 forbidden_paths=[whole_destination, files_first_destination],
             )
         )
+        for label, relative in (("whole", whole_xlsx_source), ("files_first", files_first_xlsx_source)):
+            error = validate_xlsx(validator_root / relative, REVISION_0)
+            details[f"validator_initial_{label}_xlsx_validation_error"] = error
+            if error:
+                failures.append(f"initial validator {label} XLSX invalid: {error}")
         if failures:
             self._write_metadata(metadata_file, details)
             return failures, artifacts, details
@@ -1169,6 +1226,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                     forbidden_paths=[whole_source, files_first_source],
                 )
             )
+            for label, relative in (("whole", whole_xlsx_destination), ("files_first", files_first_xlsx_destination)):
+                error = validate_xlsx(validator_root / relative, REVISION_0)
+                details[f"validator_moved_{label}_xlsx_validation_error"] = error
+                if error:
+                    failures.append(f"validator moved {label} XLSX invalid: {error}")
             if failures:
                 self._write_metadata(metadata_file, details)
                 return failures, artifacts, details
@@ -1188,10 +1250,16 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             files_first_modified_content = "files-first nested post-move modified\n"
             write_text_file(mutator_root / whole_modified_relative, whole_modified_content)
             write_text_file(mutator_root / files_first_modified_relative, files_first_modified_content)
+            mutate_xlsx_revision(
+                mutator_root / files_first_xlsx_destination,
+                REVISION_0,
+                REVISION_1,
+            )
 
             modify_patterns = [
                 f"Uploading modified file: ./{whole_modified_relative} ... done",
                 f"Uploading modified file: ./{files_first_modified_relative} ... done",
+                f"Uploading modified file: ./{files_first_xlsx_destination} ... done",
             ]
             modify_processed, modify_segment = self._wait_for_stdout_growth_patterns(
                 phase_files["phase3_mutator_monitor"][0],
@@ -1234,6 +1302,14 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                     forbidden_paths=[whole_source, files_first_source],
                 )
             )
+            whole_xlsx_error = validate_xlsx(validator_root / whole_xlsx_destination, REVISION_0)
+            files_first_xlsx_error = validate_xlsx(validator_root / files_first_xlsx_destination, REVISION_1)
+            details["validator_postmodify_whole_xlsx_validation_error"] = whole_xlsx_error
+            details["validator_postmodify_files_first_xlsx_validation_error"] = files_first_xlsx_error
+            if whole_xlsx_error:
+                failures.append(f"validator whole XLSX changed unexpectedly after post-move modification: {whole_xlsx_error}")
+            if files_first_xlsx_error:
+                failures.append(f"validator files-first XLSX did not receive post-move revision: {files_first_xlsx_error}")
             if failures:
                 self._write_metadata(metadata_file, details)
                 return failures, artifacts, details
@@ -1280,7 +1356,7 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
 
             files_first_parent = mutator_root / files_first_destination
             files_first_file_results: dict[str, bool] = {}
-            for child_name in ["file0.txt", "file1.txt"]:
+            for child_name in ["file0.txt", "file1.txt", "workbook.xlsx"]:
                 child_relative = f"{files_first_destination}/{child_name}"
                 child_path = mutator_root / child_relative
                 child_delete_start = self._prepare_monitor_for_local_mutation(
