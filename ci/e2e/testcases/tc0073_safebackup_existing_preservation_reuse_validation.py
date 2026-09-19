@@ -8,6 +8,7 @@ from pathlib import Path
 from framework.context import E2EContext
 from framework.result import TestResult
 from framework.utils import reset_directory, write_text_file
+from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
 from testcases.safe_backup_case_base import SafeBackupCaseBase
 
 
@@ -15,9 +16,11 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
     case_id = "0073"
     name = "safeBackup existing preservation reuse validation"
     description = (
-        "Validate that an existing same-device safeBackup with identical content and metadata is "
-        "reused during replacement instead of creating another numbered backup"
+        "Validate with passive TXT and real XLSX payloads that an existing same-device safeBackup with "
+        "identical content and metadata is reused during replacement instead of creating another numbered backup"
     )
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(context, case_dir_name="tc0073", ensure_refresh_token=True)
@@ -26,107 +29,229 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
         seed_root = work / "seedroot"
         local_root = work / "localroot"
         updater_root = work / "updaterroot"
-        for root in (seed_root, local_root, updater_root):
+        verify_root = work / "verifyroot"
+        for root in (seed_root, local_root, updater_root, verify_root):
             reset_directory(root)
 
         conf_seed = work / "conf-seed"
         conf_local = work / "conf-local"
         conf_updater = work / "conf-updater"
+        conf_verify = work / "conf-verify"
         self._prepare_config(context, conf_seed, seed_root)
         self._prepare_config(context, conf_local, local_root)
         self._prepare_config(context, conf_updater, updater_root)
+        self._prepare_config(context, conf_verify, verify_root)
 
         root_name = f"ZZ_E2E_TC0073_{context.run_id}_{os.getpid()}"
-        relative = f"{root_name}/reuse-existing-backup.txt"
-        seed_file = seed_root / relative
-        local_file = local_root / relative
-        updater_file = updater_root / relative
+        text_relative = f"{root_name}/reuse-existing-backup.txt"
+        xlsx_relative = f"{root_name}/reuse-existing-backup.xlsx"
+        seed_text, seed_xlsx = seed_root / text_relative, seed_root / xlsx_relative
+        local_text, local_xlsx = local_root / text_relative, local_root / xlsx_relative
+        updater_text, updater_xlsx = updater_root / text_relative, updater_root / xlsx_relative
+        verify_text, verify_xlsx = verify_root / text_relative, verify_root / xlsx_relative
 
-        baseline = "TC0073 baseline remote content\n"
-        local_conflict = "TC0073 local conflicting content already preserved in safeBackup-0001\n"
-        remote_newer = "TC0073 newer remote replacement\n"
-        write_text_file(seed_file, baseline)
+        baseline_text = "TC0073 baseline remote content\n"
+        local_conflict_text = "TC0073 local conflicting content already preserved in safeBackup-0001\n"
+        remote_newer_text = "TC0073 newer remote replacement\n"
+        write_text_file(seed_text, baseline_text)
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0073:{os.getpid()}"
+        generated = create_random_xlsx(
+            seed_xlsx,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0073 existing preservation reuse workbook",
+        )
 
-        seed_stdout, seed_stderr = logs / "seed_stdout.log", logs / "seed_stderr.log"
-        initial_stdout, initial_stderr = logs / "initial_stdout.log", logs / "initial_stderr.log"
-        update_stdout, update_stderr = logs / "update_stdout.log", logs / "update_stderr.log"
-        reconcile_stdout, reconcile_stderr = logs / "reconcile_stdout.log", logs / "reconcile_stderr.log"
+        phase_files = {
+            label: (logs / f"{label}_stdout.log", logs / f"{label}_stderr.log")
+            for label in ("seed", "initial", "remote_update", "reconcile", "verify")
+        }
         metadata_file = state / "metadata.txt"
-        artifacts = [
-            str(seed_stdout), str(seed_stderr), str(initial_stdout), str(initial_stderr),
-            str(update_stdout), str(update_stderr), str(reconcile_stdout), str(reconcile_stderr),
-            str(metadata_file),
-        ]
-        details: dict[str, object] = {"root_name": root_name, "relative": relative}
+        artifacts = [str(p) for pair in phase_files.values() for p in pair] + [str(metadata_file)]
+        details: dict[str, object] = {
+            "root_name": root_name,
+            "text_relative": text_relative,
+            "xlsx_relative": xlsx_relative,
+            "xlsx_seed": xlsx_seed,
+            "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
+            "generated_xlsx_size": int(generated["size_bytes"]),
+        }
 
         seed = self._run_phase(
-            context, label="seed",
+            context,
+            label="seed",
             command=self._single_directory_command(context, root_name=root_name, config_dir=conf_seed, mode="upload-only", resync=True),
-            stdout_file=seed_stdout, stderr_file=seed_stderr,
+            stdout_file=phase_files["seed"][0],
+            stderr_file=phase_files["seed"][1],
         )
         initial = self._run_phase(
-            context, label="initial download",
+            context,
+            label="initial download",
             command=self._single_directory_command(context, root_name=root_name, config_dir=conf_local, mode="download-only", resync=True),
-            stdout_file=initial_stdout, stderr_file=initial_stderr,
+            stdout_file=phase_files["initial"][0],
+            stderr_file=phase_files["initial"][1],
         )
-        details.update({"seed_returncode": seed.returncode, "initial_returncode": initial.returncode})
-        if seed.returncode != 0 or initial.returncode != 0 or self._text_if_file(local_file) != baseline:
+        initial_xlsx_error = validate_xlsx(local_xlsx, REVISION_0)
+        details.update(
+            {
+                "seed_returncode": seed.returncode,
+                "initial_returncode": initial.returncode,
+                "initial_xlsx_validation_error": initial_xlsx_error,
+            }
+        )
+        if seed.returncode != 0 or initial.returncode != 0 or self._text_if_file(local_text) != baseline_text or initial_xlsx_error:
             self._write_metadata(metadata_file, details)
-            return self.fail_result(reason="Failed to establish baseline before existing-safeBackup reuse validation", artifacts=artifacts, details=details)
+            return self.fail_result(
+                reason=f"Failed to establish TXT/XLSX baseline before existing-safeBackup reuse validation: {initial_xlsx_error}",
+                artifacts=artifacts,
+                details=details,
+            )
+
+        # Fork the Microsoft-settled workbook before creating local and remote revisions.
+        updater_xlsx.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(local_xlsx, updater_xlsx)
 
         time.sleep(2)
-        write_text_file(local_file, local_conflict)
-        local_hash = self._hash_if_file(local_file)
+        write_text_file(local_text, local_conflict_text)
+        mutate_xlsx_revision(local_xlsx, REVISION_0, REVISION_1)
+        local_text_hash = self._hash_if_file(local_text)
+        local_xlsx_hash = self._hash_if_file(local_xlsx)
 
-        existing_backup = self._device_safe_backup_name(local_file, 1)
-        existing_backup.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(local_file, existing_backup)
-        if self._hash_if_file(existing_backup) != local_hash:
-            details["existing_backup_hash"] = self._hash_if_file(existing_backup)
+        existing_text_backup = self._device_safe_backup_name(local_text, 1)
+        existing_xlsx_backup = self._device_safe_backup_name(local_xlsx, 1)
+        existing_text_backup.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(local_text, existing_text_backup)
+        shutil.copy2(local_xlsx, existing_xlsx_backup)
+        existing_xlsx_error = validate_xlsx(existing_xlsx_backup, REVISION_1)
+        if (
+            self._hash_if_file(existing_text_backup) != local_text_hash
+            or self._hash_if_file(existing_xlsx_backup) != local_xlsx_hash
+            or existing_xlsx_error
+        ):
+            details.update(
+                {
+                    "existing_text_backup_hash": self._hash_if_file(existing_text_backup),
+                    "existing_xlsx_backup_hash": self._hash_if_file(existing_xlsx_backup),
+                    "existing_xlsx_validation_error": existing_xlsx_error,
+                }
+            )
             self._write_metadata(metadata_file, details)
-            return self.fail_result(reason="Harness failed to create the matching safeBackup precondition", artifacts=artifacts, details=details)
+            return self.fail_result(
+                reason=f"Harness failed to create matching TXT/XLSX safeBackup preconditions: {existing_xlsx_error}",
+                artifacts=artifacts,
+                details=details,
+            )
 
         time.sleep(2)
-        write_text_file(updater_file, remote_newer)
+        write_text_file(updater_text, remote_newer_text)
+        mutate_xlsx_revision(updater_xlsx, REVISION_0, REVISION_2)
         update = self._run_phase(
-            context, label="remote update",
+            context,
+            label="remote update",
             command=self._single_directory_command(context, root_name=root_name, config_dir=conf_updater, mode="upload-only", resync=True),
-            stdout_file=update_stdout, stderr_file=update_stderr,
+            stdout_file=phase_files["remote_update"][0],
+            stderr_file=phase_files["remote_update"][1],
         )
         details["remote_update_returncode"] = update.returncode
         if update.returncode != 0:
             self._write_metadata(metadata_file, details)
-            return self.fail_result(reason=f"Remote update failed with status {update.returncode}", artifacts=artifacts, details=details)
+            return self.fail_result(
+                reason=f"Remote update failed with status {update.returncode}",
+                artifacts=artifacts,
+                details=details,
+            )
 
         reconcile = self._run_phase(
-            context, label="reconcile with existing preservation",
+            context,
+            label="reconcile with existing preservation",
             command=self._single_directory_command(context, root_name=root_name, config_dir=conf_local, verbose_count=2),
-            stdout_file=reconcile_stdout, stderr_file=reconcile_stderr,
+            stdout_file=phase_files["reconcile"][0],
+            stderr_file=phase_files["reconcile"][1],
         )
-        backups = self._safe_backup_files_for(local_file)
+        text_backups = self._safe_backup_files_for(local_text)
+        xlsx_backups = self._safe_backup_files_for(local_xlsx)
         combined = reconcile.stdout + "\n" + reconcile.stderr
-        reuse_marker_seen = "reusing existing preservation" in combined
+        reuse_marker_count = combined.count("reusing existing preservation")
+        canonical_xlsx_error = validate_xlsx(local_xlsx, REVISION_2) if local_xlsx.is_file() else "Canonical XLSX is missing"
+        backup_xlsx_error = validate_xlsx(existing_xlsx_backup, REVISION_1) if existing_xlsx_backup.is_file() else "Existing XLSX safeBackup is missing"
         details.update(
             {
                 "reconcile_returncode": reconcile.returncode,
-                "reuse_marker_seen": reuse_marker_seen,
-                "canonical_content": self._text_if_file(local_file),
-                "safe_backup_files": [str(p.relative_to(local_root)) for p in backups],
-                "safe_backup_hashes": [self._hash_if_file(p) for p in backups],
-                "local_hash": local_hash,
+                "reuse_marker_count": reuse_marker_count,
+                "canonical_text_content": self._text_if_file(local_text),
+                "canonical_xlsx_validation_error": canonical_xlsx_error,
+                "text_safe_backup_files": [str(p.relative_to(local_root)) for p in text_backups],
+                "xlsx_safe_backup_files": [str(p.relative_to(local_root)) for p in xlsx_backups],
+                "local_text_hash": local_text_hash,
+                "local_xlsx_hash": local_xlsx_hash,
+                "existing_xlsx_validation_error_after_reconcile": backup_xlsx_error,
+            }
+        )
+
+        verify = self._run_phase(
+            context,
+            label="verify remote canonical files",
+            command=self._single_directory_command(context, root_name=root_name, config_dir=conf_verify, mode="download-only", resync=True),
+            stdout_file=phase_files["verify"][0],
+            stderr_file=phase_files["verify"][1],
+        )
+        verify_xlsx_error = validate_xlsx(verify_xlsx, REVISION_2) if verify_xlsx.is_file() else "Verification canonical XLSX is missing"
+        details.update(
+            {
+                "verify_returncode": verify.returncode,
+                "verify_text_content": self._text_if_file(verify_text),
+                "verify_xlsx_validation_error": verify_xlsx_error,
             }
         )
         self._write_metadata(metadata_file, details)
 
         if reconcile.returncode != 0:
-            return self.fail_result(reason=f"Reconciliation failed with status {reconcile.returncode}", artifacts=artifacts, details=details)
-        if not local_file.is_file() or self._text_if_file(local_file) != remote_newer:
-            return self.fail_result(reason="Canonical file did not converge to the newer remote content", artifacts=artifacts, details=details)
-        if len(backups) != 1:
-            return self.fail_result(reason=f"Existing safeBackup was not reused; expected one backup, found {len(backups)}", artifacts=artifacts, details=details)
-        if backups[0] != existing_backup or self._hash_if_file(backups[0]) != local_hash:
-            return self.fail_result(reason="The original matching safeBackup was not retained as the sole preservation copy", artifacts=artifacts, details=details)
-        if not reuse_marker_seen:
-            return self.fail_result(reason="Reconciliation state was correct but the intended existing-safeBackup reuse path was not observed", artifacts=artifacts, details=details)
+            return self.fail_result(
+                reason=f"Reconciliation failed with status {reconcile.returncode}",
+                artifacts=artifacts,
+                details=details,
+            )
+        if self._text_if_file(local_text) != remote_newer_text:
+            return self.fail_result(
+                reason="TXT canonical file did not converge to the newer remote content",
+                artifacts=artifacts,
+                details=details,
+            )
+        if canonical_xlsx_error:
+            return self.fail_result(
+                reason=f"XLSX canonical file did not converge to the newer remote revision: {canonical_xlsx_error}",
+                artifacts=artifacts,
+                details=details,
+            )
+        if len(text_backups) != 1 or text_backups[0] != existing_text_backup or self._hash_if_file(text_backups[0]) != local_text_hash:
+            return self.fail_result(
+                reason="The original matching TXT safeBackup was not retained as the sole preservation copy",
+                artifacts=artifacts,
+                details=details,
+            )
+        if (
+            len(xlsx_backups) != 1
+            or xlsx_backups[0] != existing_xlsx_backup
+            or self._hash_if_file(xlsx_backups[0]) != local_xlsx_hash
+            or backup_xlsx_error
+        ):
+            return self.fail_result(
+                reason=f"The original matching XLSX safeBackup was not retained as the sole valid preservation copy: {backup_xlsx_error}",
+                artifacts=artifacts,
+                details=details,
+            )
+        if reuse_marker_count < 1:
+            return self.fail_result(
+                reason="Reconciliation state was correct but the intended existing-safeBackup reuse path was not observed",
+                artifacts=artifacts,
+                details=details,
+            )
+        if verify.returncode != 0 or self._text_if_file(verify_text) != remote_newer_text or verify_xlsx_error:
+            return self.fail_result(
+                reason=f"Fresh verification did not confirm newer remote TXT/XLSX canonical content: {verify_xlsx_error}",
+                artifacts=artifacts,
+                details=details,
+            )
 
         return self.pass_result(artifacts=artifacts, details=details)

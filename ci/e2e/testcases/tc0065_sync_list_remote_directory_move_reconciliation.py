@@ -502,6 +502,7 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             return False, ""
 
         required_patterns: list[str] = []
+        completion_patterns: list[str] = []
         for source_path, destination_path, source_relative, destination_relative in moves:
             destination_path.parent.mkdir(parents=True, exist_ok=True)
             source_path.rename(destination_path)
@@ -512,13 +513,25 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 ]
             )
 
+            # The human-readable "Moving old -> new" marker is emitted before
+            # the Graph GET/PATCH transaction has completed.  Do not let the
+            # validator race the mutator by treating that marker as proof that
+            # the move is already visible online.  The debug DB-save record is
+            # emitted only after the successful PATCH response has been parsed,
+            # so waiting for the moved directory's saved Item record provides
+            # deterministic evidence that each remote move transaction finished.
+            completion_patterns.append(
+                f'"{destination_path.name}", "", dir,'
+            )
+
         processed, segment = self._wait_for_stdout_growth_patterns(
             monitor_stdout,
             start_offset=start_offset,
-            required_patterns=required_patterns,
+            required_patterns=required_patterns + completion_patterns,
             timeout_seconds=180,
         )
         details[f"{detail_prefix}_required_patterns"] = required_patterns
+        details[f"{detail_prefix}_completion_patterns"] = completion_patterns
         details[f"{detail_prefix}_processed"] = processed
         details[f"{detail_prefix}_bad_markers"] = self._bad_mutator_move_markers(segment)
         details[f"{detail_prefix}_log_segment_length"] = len(segment)
