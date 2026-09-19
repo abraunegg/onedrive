@@ -111,6 +111,10 @@ def main() -> int:
             "primary_results": str(primary_path),
             "debug_results": str(debug_path),
             "effective_results": None,
+            "primary_failed_case_ids": [],
+            "debug_failed_case_ids": [],
+            "recovered_case_ids": [],
+            "unrecovered_case_ids": [],
         }
         _write_json(gate_path, payload)
         print(payload["reason"])
@@ -127,6 +131,7 @@ def main() -> int:
             "effective_results": str(primary_path),
             "primary_failed_case_ids": [],
             "debug_failed_case_ids": [],
+            "recovered_case_ids": [],
             "unrecovered_case_ids": [],
         }
         _write_json(gate_path, payload)
@@ -149,6 +154,7 @@ def main() -> int:
             "effective_results": str(primary_path),
             "primary_failed_case_ids": sorted(primary_failures),
             "debug_failed_case_ids": [],
+            "recovered_case_ids": [],
             "unrecovered_case_ids": sorted(primary_failures),
             "non_rerunnable_case_ids": sorted(non_rerunnable_failures),
             "non_rerunnable_reasons": reason_lines,
@@ -169,6 +175,7 @@ def main() -> int:
             "effective_results": str(primary_path),
             "primary_failed_case_ids": sorted(primary_failures),
             "debug_failed_case_ids": [],
+            "recovered_case_ids": [],
             "unrecovered_case_ids": sorted(primary_failures),
         }
         _write_json(gate_path, payload)
@@ -183,6 +190,15 @@ def main() -> int:
         if not debug_case or str(debug_case.get("status", "")).lower() != "pass":
             unrecovered.append(case_id)
 
+    recovered_case_ids = set(primary_failures) - set(unrecovered)
+    effective_results_path = primary_path
+
+    if recovered_case_ids:
+        effective_path = gate_path.with_name("effective-results.json")
+        effective_results = _build_effective_results(primary, debug_cases, recovered_case_ids)
+        _write_json(effective_path, effective_results)
+        effective_results_path = effective_path
+
     if unrecovered:
         payload = {
             "conclusion": "failure",
@@ -190,20 +206,18 @@ def main() -> int:
             "reason": "Primary E2E run failed and one or more failed cases did not pass during debug rerun",
             "primary_results": str(primary_path),
             "debug_results": str(debug_path),
-            "effective_results": str(primary_path),
+            "effective_results": str(effective_results_path),
             "primary_failed_case_ids": sorted(primary_failures),
             "debug_failed_case_ids": sorted(debug_failures),
+            "recovered_case_ids": sorted(recovered_case_ids),
             "unrecovered_case_ids": unrecovered,
         }
         _write_json(gate_path, payload)
         print(payload["reason"])
+        if recovered_case_ids:
+            print("Recovered case ids:", ",".join(sorted(recovered_case_ids)))
         print("Unrecovered case ids:", ",".join(unrecovered))
         return 1
-
-    recovered_case_ids = set(primary_failures)
-    effective_path = gate_path.with_name("effective-results.json")
-    effective_results = _build_effective_results(primary, debug_cases, recovered_case_ids)
-    _write_json(effective_path, effective_results)
 
     payload = {
         "conclusion": "success",
@@ -211,14 +225,15 @@ def main() -> int:
         "reason": "Primary E2E run failed, but all failed cases passed during debug rerun",
         "primary_results": str(primary_path),
         "debug_results": str(debug_path),
-        "effective_results": str(effective_path),
+        "effective_results": str(effective_results_path),
         "primary_failed_case_ids": sorted(primary_failures),
         "debug_failed_case_ids": sorted(debug_failures),
+        "recovered_case_ids": sorted(recovered_case_ids),
         "unrecovered_case_ids": [],
     }
     _write_json(gate_path, payload)
     print(payload["reason"])
-    print("Recovered case ids:", ",".join(sorted(primary_failures)))
+    print("Recovered case ids:", ",".join(sorted(recovered_case_ids)))
     return 0
 
 

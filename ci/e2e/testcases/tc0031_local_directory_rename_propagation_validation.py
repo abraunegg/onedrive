@@ -7,6 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -20,7 +21,12 @@ from framework.utils import (
 class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
     case_id = "0031"
     name = "local directory rename propagation validation"
-    description = "Validate that renaming a local directory tree is correctly propagated to remote state"
+    description = (
+        "Validate that renaming a local directory tree containing passive TXT and real XLSX files "
+        "is correctly propagated to remote state"
+    )
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def _write_config(self, config_dir: Path, sync_dir: Path) -> None:
         config_path = config_dir / "config"
@@ -76,16 +82,20 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         source_dir = local_root / source_dir_relative
         renamed_dir = local_root / renamed_dir_relative
 
-        source_file_1_relative = f"{source_dir_relative}/top-level.txt"
+        source_file_1_relative = f"{source_dir_relative}/top-level.xlsx"
         source_file_2_relative = f"{source_dir_relative}/Nested/child.txt"
-        renamed_file_1_relative = f"{renamed_dir_relative}/top-level.txt"
+        source_text_relative = f"{source_dir_relative}/top-level.txt"
+        renamed_file_1_relative = f"{renamed_dir_relative}/top-level.xlsx"
         renamed_file_2_relative = f"{renamed_dir_relative}/Nested/child.txt"
+        renamed_text_relative = f"{renamed_dir_relative}/top-level.txt"
 
         source_file_1 = local_root / source_file_1_relative
         source_file_2 = local_root / source_file_2_relative
+        source_text = local_root / source_text_relative
 
-        file1_content = "top\n"
         file2_content = "child\n"
+        text_content = "top\n"
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0031:{os.getpid()}"
 
         phase1_stdout = case_log_dir / "phase1_seed_stdout.log"
         phase1_stderr = case_log_dir / "phase1_seed_stderr.log"
@@ -119,10 +129,20 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "verify_conf_dir": str(conf_verify),
             "local_root": str(local_root),
             "verify_root": str(verify_root),
+            "xlsx_seed": xlsx_seed,
+            "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
-        write_text_file(source_file_1, file1_content)
+        generated = create_random_xlsx(
+            source_file_1,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0031 local directory rename propagation workbook",
+        )
+        details["generated_size"] = int(generated["size_bytes"])
         write_text_file(source_file_2, file2_content)
+        write_text_file(source_text, text_content)
 
         phase1_command = [
             context.onedrive_bin,
@@ -171,6 +191,30 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
                 self.case_id,
                 self.name,
                 f"seed settle phase failed with status {phase1_settle_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        settled_validation_error = validate_xlsx(source_file_1, REVISION_0)
+        settled_text_content = source_text.read_text(encoding="utf-8") if source_text.is_file() else ""
+        details["settled_validation_error"] = settled_validation_error
+        details["settled_text_content"] = settled_text_content
+        if settled_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"seeded XLSX was invalid after settle sync: {settled_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if settled_text_content != text_content:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "seeded passive TXT content changed during initial settle sync",
                 artifacts,
                 details,
             )
@@ -250,21 +294,31 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         verify_new_dir = verify_root / renamed_dir_relative
         verify_old_file_1 = verify_root / source_file_1_relative
         verify_old_file_2 = verify_root / source_file_2_relative
+        verify_old_text = verify_root / source_text_relative
         verify_new_file_1 = verify_root / renamed_file_1_relative
         verify_new_file_2 = verify_root / renamed_file_2_relative
+        verify_new_text = verify_root / renamed_text_relative
 
         details["verify_old_dir_exists"] = verify_old_dir.exists()
         details["verify_new_dir_exists"] = verify_new_dir.exists()
         details["verify_old_file_1_exists"] = verify_old_file_1.exists()
         details["verify_old_file_2_exists"] = verify_old_file_2.exists()
+        details["verify_old_text_exists"] = verify_old_text.exists()
         details["verify_new_file_1_exists"] = verify_new_file_1.exists()
         details["verify_new_file_2_exists"] = verify_new_file_2.exists()
+        details["verify_new_text_exists"] = verify_new_text.exists()
 
-        verify_new_file_1_content = verify_new_file_1.read_text(encoding="utf-8") if verify_new_file_1.is_file() else ""
+        verify_new_file_1_validation_error = (
+            validate_xlsx(verify_new_file_1, REVISION_0)
+            if verify_new_file_1.is_file()
+            else "Verification XLSX is missing"
+        )
         verify_new_file_2_content = verify_new_file_2.read_text(encoding="utf-8") if verify_new_file_2.is_file() else ""
+        verify_new_text_content = verify_new_text.read_text(encoding="utf-8") if verify_new_text.is_file() else ""
 
-        details["verify_new_file_1_content"] = verify_new_file_1_content
+        details["verify_new_file_1_validation_error"] = verify_new_file_1_validation_error
         details["verify_new_file_2_content"] = verify_new_file_2_content
+        details["verify_new_text_content"] = verify_new_text_content
 
         self._write_metadata(metadata_file, details)
 
@@ -277,7 +331,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        if verify_old_dir.exists() or verify_old_file_1.exists() or verify_old_file_2.exists():
+        if verify_old_dir.exists() or verify_old_file_1.exists() or verify_old_file_2.exists() or verify_old_text.exists():
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -313,11 +367,20 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        if verify_new_file_1_content != file1_content:
+        if not verify_new_text.is_file():
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "renamed top-level file content did not match expected content",
+                f"remote verification is missing renamed passive TXT file: {renamed_text_relative}",
+                artifacts,
+                details,
+            )
+
+        if verify_new_file_1_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"renamed top-level XLSX was invalid or stale: {verify_new_file_1_validation_error}",
                 artifacts,
                 details,
             )
@@ -327,6 +390,15 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
                 self.case_id,
                 self.name,
                 "renamed nested file content did not match expected content",
+                artifacts,
+                details,
+            )
+
+        if verify_new_text_content != text_content:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "renamed passive TXT content did not match expected content",
                 artifacts,
                 details,
             )

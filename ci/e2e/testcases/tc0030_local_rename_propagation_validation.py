@@ -7,6 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -20,7 +21,11 @@ from framework.utils import (
 class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
     case_id = "0030"
     name = "local rename propagation validation"
-    description = "Validate that renaming a local file is correctly propagated to remote state"
+    description = (
+        "Validate that renaming passive TXT and real XLSX files locally is correctly propagated to remote state"
+    )
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def _write_config(self, config_dir: Path, sync_dir: Path) -> None:
         config_path = config_dir / "config"
@@ -71,16 +76,21 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         self._write_config(conf_verify, verify_root)
 
         root_name = f"ZZ_E2E_TC0030_{context.run_id}_{os.getpid()}"
-        old_relative = f"{root_name}/original-name.txt"
-        new_relative = f"{root_name}/renamed-file.txt"
+        old_txt_relative = f"{root_name}/original-name.txt"
+        new_txt_relative = f"{root_name}/renamed-file.txt"
+        old_xlsx_relative = f"{root_name}/original-name.xlsx"
+        new_xlsx_relative = f"{root_name}/renamed-file.xlsx"
 
-        old_local_path = local_root / old_relative
-        new_local_path = local_root / new_relative
+        old_txt_local_path = local_root / old_txt_relative
+        new_txt_local_path = local_root / new_txt_relative
+        old_xlsx_local_path = local_root / old_xlsx_relative
+        new_xlsx_local_path = local_root / new_xlsx_relative
 
-        initial_content = (
+        txt_content = (
             "TC0030 local rename propagation validation\n"
-            "This content must survive the rename operation unchanged.\n"
+            "This passive text content must survive the rename operation unchanged.\n"
         )
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0030:{os.getpid()}"
 
         phase1_stdout = case_log_dir / "phase1_seed_stdout.log"
         phase1_stderr = case_log_dir / "phase1_seed_stderr.log"
@@ -104,15 +114,27 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
 
         details: dict[str, object] = {
             "root_name": root_name,
-            "old_relative": old_relative,
-            "new_relative": new_relative,
+            "old_txt_relative": old_txt_relative,
+            "new_txt_relative": new_txt_relative,
+            "old_xlsx_relative": old_xlsx_relative,
+            "new_xlsx_relative": new_xlsx_relative,
             "main_conf_dir": str(conf_main),
             "verify_conf_dir": str(conf_verify),
             "local_root": str(local_root),
             "verify_root": str(verify_root),
+            "xlsx_seed": xlsx_seed,
+            "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
-        write_text_file(old_local_path, initial_content)
+        write_text_file(old_txt_local_path, txt_content)
+        generated = create_random_xlsx(
+            old_xlsx_local_path,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0030 local rename propagation workbook",
+        )
+        details["generated_xlsx_size"] = int(generated["size_bytes"])
 
         phase1_command = [
             context.onedrive_bin,
@@ -133,21 +155,65 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         if phase1_result.returncode != 0:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
-                self.case_id, self.name, f"seed phase failed with status {phase1_result.returncode}", artifacts, details
+                self.case_id,
+                self.name,
+                f"seed phase failed with status {phase1_result.returncode}",
+                artifacts,
+                details,
             )
 
-        old_local_path.rename(new_local_path)
+        settled_xlsx_validation_error = validate_xlsx(old_xlsx_local_path, REVISION_0)
+        details["settled_xlsx_validation_error"] = settled_xlsx_validation_error
+        details["settled_txt_content"] = (
+            old_txt_local_path.read_text(encoding="utf-8") if old_txt_local_path.is_file() else ""
+        )
 
-        if old_local_path.exists():
+        if details["settled_txt_content"] != txt_content:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
-                self.case_id, self.name, "local old filename still exists immediately after rename", artifacts, details
+                self.case_id,
+                self.name,
+                "seeded passive TXT content changed during initial sync",
+                artifacts,
+                details,
             )
 
-        if not new_local_path.is_file():
+        if settled_xlsx_validation_error:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
-                self.case_id, self.name, "local renamed file does not exist immediately after rename", artifacts, details
+                self.case_id,
+                self.name,
+                f"seeded XLSX was invalid after initial sync: {settled_xlsx_validation_error}",
+                artifacts,
+                details,
+            )
+
+        old_txt_local_path.rename(new_txt_local_path)
+        old_xlsx_local_path.rename(new_xlsx_local_path)
+
+        details["old_txt_exists_after_local_rename"] = old_txt_local_path.exists()
+        details["new_txt_exists_after_local_rename"] = new_txt_local_path.is_file()
+        details["old_xlsx_exists_after_local_rename"] = old_xlsx_local_path.exists()
+        details["new_xlsx_exists_after_local_rename"] = new_xlsx_local_path.is_file()
+
+        if old_txt_local_path.exists() or old_xlsx_local_path.exists():
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "one or more local old filenames still exist immediately after rename",
+                artifacts,
+                details,
+            )
+
+        if not new_txt_local_path.is_file() or not new_xlsx_local_path.is_file():
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "one or more local renamed files are missing immediately after rename",
+                artifacts,
+                details,
             )
 
         phase2_command = [
@@ -169,7 +235,11 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
-                self.case_id, self.name, f"rename propagation phase failed with status {phase2_result.returncode}", artifacts, details
+                self.case_id,
+                self.name,
+                f"rename propagation phase failed with status {phase2_result.returncode}",
+                artifacts,
+                details,
             )
 
         verify_command = [
@@ -194,35 +264,70 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         verify_manifest = build_manifest(verify_root)
         write_manifest(verify_manifest_file, verify_manifest)
 
-        verified_old_path = verify_root / old_relative
-        verified_new_path = verify_root / new_relative
+        verify_old_txt_path = verify_root / old_txt_relative
+        verify_new_txt_path = verify_root / new_txt_relative
+        verify_old_xlsx_path = verify_root / old_xlsx_relative
+        verify_new_xlsx_path = verify_root / new_xlsx_relative
 
-        details["verified_old_exists"] = verified_old_path.exists()
-        details["verified_new_exists"] = verified_new_path.exists()
-
-        verified_content = verified_new_path.read_text(encoding="utf-8") if verified_new_path.is_file() else ""
-        details["verified_content"] = verified_content
+        details["verify_old_txt_exists"] = verify_old_txt_path.exists()
+        details["verify_new_txt_exists"] = verify_new_txt_path.is_file()
+        details["verify_old_xlsx_exists"] = verify_old_xlsx_path.exists()
+        details["verify_new_xlsx_exists"] = verify_new_xlsx_path.is_file()
+        details["verify_new_txt_content"] = (
+            verify_new_txt_path.read_text(encoding="utf-8") if verify_new_txt_path.is_file() else ""
+        )
+        verify_xlsx_validation_error = (
+            validate_xlsx(verify_new_xlsx_path, REVISION_0)
+            if verify_new_xlsx_path.is_file()
+            else "Verification XLSX is missing"
+        )
+        details["verify_xlsx_validation_error"] = verify_xlsx_validation_error
 
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
             return self.fail_result(
-                self.case_id, self.name, f"remote verification failed with status {verify_result.returncode}", artifacts, details
+                self.case_id,
+                self.name,
+                f"remote verification failed with status {verify_result.returncode}",
+                artifacts,
+                details,
             )
 
-        if verified_old_path.exists():
+        if verify_old_txt_path.exists() or verify_old_xlsx_path.exists():
             return self.fail_result(
-                self.case_id, self.name, f"remote verification still contains old filename: {old_relative}", artifacts, details
+                self.case_id,
+                self.name,
+                "remote verification still contains one or more old filenames",
+                artifacts,
+                details,
             )
 
-        if not verified_new_path.is_file():
+        if not verify_new_txt_path.is_file() or not verify_new_xlsx_path.is_file():
             return self.fail_result(
-                self.case_id, self.name, f"remote verification is missing renamed file: {new_relative}", artifacts, details
+                self.case_id,
+                self.name,
+                "remote verification is missing one or more renamed files",
+                artifacts,
+                details,
             )
 
-        if verified_content != initial_content:
+        if details["verify_new_txt_content"] != txt_content:
             return self.fail_result(
-                self.case_id, self.name, "renamed file content did not match the original content after remote verification", artifacts, details
+                self.case_id,
+                self.name,
+                "renamed passive TXT content did not match the original content after remote verification",
+                artifacts,
+                details,
+            )
+
+        if verify_xlsx_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"remote verification returned an invalid or stale XLSX workbook: {verify_xlsx_validation_error}",
+                artifacts,
+                details,
             )
 
         return self.pass_result(self.case_id, self.name, artifacts, details)

@@ -6,6 +6,7 @@ from pathlib import Path
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 
@@ -13,7 +14,9 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCaseBase):
     case_id = "0046"
     name = "monitor mode local directory rename propagation"
-    description = "Rename a populated local directory while --monitor is active and validate the final remote state"
+    description = "Rename a populated local directory containing passive TXT and real XLSX files while --monitor is active and validate the final remote state"
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
@@ -34,21 +37,24 @@ class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCase
         root_name = f"ZZ_E2E_TC0046_{context.run_id}_{os.getpid()}"
         old_dir_relative = f"{root_name}/original-dir"
         new_dir_relative = f"{root_name}/renamed-dir"
-        old_file_relative = f"{old_dir_relative}/inside.txt"
-        new_file_relative = f"{new_dir_relative}/inside.txt"
+        old_file_relative = f"{old_dir_relative}/inside.xlsx"
+        new_file_relative = f"{new_dir_relative}/inside.xlsx"
+        old_text_relative = f"{old_dir_relative}/inside.txt"
+        new_text_relative = f"{new_dir_relative}/inside.txt"
 
         old_dir_local_path = sync_root / old_dir_relative
         new_dir_local_path = sync_root / new_dir_relative
         old_file_local_path = sync_root / old_file_relative
+        old_text_local_path = sync_root / old_text_relative
         old_dir_verify_path = verify_root / old_dir_relative
         new_dir_verify_path = verify_root / new_dir_relative
         old_file_verify_path = verify_root / old_file_relative
         new_file_verify_path = verify_root / new_file_relative
+        old_text_verify_path = verify_root / old_text_relative
+        new_text_verify_path = verify_root / new_text_relative
 
-        file_content = (
-            "TC0046 monitor mode local directory rename propagation\n"
-            "This file must survive the directory rename unchanged.\n"
-        )
+        text_content = "TC0046 passive TXT content must survive the directory rename unchanged.\n"
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0046:{os.getpid()}"
 
         context.prepare_minimal_config_dir(conf_main, self._build_config_text(sync_root, app_log_dir))
         context.prepare_minimal_config_dir(
@@ -60,7 +66,14 @@ class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCase
             ),
         )
 
-        write_text_file(old_file_local_path, file_content)
+        generated = create_random_xlsx(
+            old_file_local_path,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0046 monitor local directory rename workbook",
+        )
+        write_text_file(old_text_local_path, text_content)
 
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"
@@ -72,7 +85,7 @@ class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCase
         metadata_file = state_dir / "metadata.txt"
 
         artifacts = [str(seed_stdout), str(seed_stderr), str(monitor_stdout), str(monitor_stderr), str(verify_stdout), str(verify_stderr), str(verify_manifest_file), str(metadata_file)]
-        details = {"root_name": root_name, "old_dir_relative": old_dir_relative, "new_dir_relative": new_dir_relative, "old_file_relative": old_file_relative, "new_file_relative": new_file_relative}
+        details = {"root_name": root_name, "old_dir_relative": old_dir_relative, "new_dir_relative": new_dir_relative, "old_file_relative": old_file_relative, "new_file_relative": new_file_relative, "old_text_relative": old_text_relative, "new_text_relative": new_text_relative, "xlsx_seed": xlsx_seed, "payload_rows": self.XLSX_PAYLOAD_ROWS, "generated_size": int(generated["size_bytes"])}
 
         seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(conf_main)]
         context.log(f"Executing Test Case {self.case_id} seed: {command_to_string(seed_command)}")
@@ -83,6 +96,17 @@ class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCase
         if seed_result.returncode != 0:
             self._write_metadata(metadata_file, details)
             return self.fail_result(self.case_id, self.name, f"Seed phase failed with status {seed_result.returncode}", artifacts, details)
+
+        settled_validation_error = validate_xlsx(old_file_local_path, REVISION_0)
+        settled_text_content = old_text_local_path.read_text(encoding="utf-8") if old_text_local_path.is_file() else ""
+        details["settled_validation_error"] = settled_validation_error
+        details["settled_text_content"] = settled_text_content
+        if settled_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name, f"Seeded XLSX was invalid after initial sync: {settled_validation_error}", artifacts, details)
+        if settled_text_content != text_content:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name, "Seeded passive TXT content changed during initial sync", artifacts, details)
 
         monitor_command = [context.onedrive_bin, "--display-running-config", "--monitor", "--verbose", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(conf_main)]
         context.log(f"Executing Test Case {self.case_id} monitor: {command_to_string(monitor_command)}")
@@ -125,15 +149,26 @@ class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCase
         details["verify_new_dir_exists"] = new_dir_verify_path.is_dir()
         details["verify_old_file_exists"] = old_file_verify_path.exists()
         details["verify_new_file_exists"] = new_file_verify_path.is_file()
-        details["verify_new_file_content"] = new_file_verify_path.read_text(encoding="utf-8") if new_file_verify_path.is_file() else ""
+        details["verify_old_text_exists"] = old_text_verify_path.exists()
+        details["verify_new_text_exists"] = new_text_verify_path.is_file()
+        verify_text_content = new_text_verify_path.read_text(encoding="utf-8") if new_text_verify_path.is_file() else ""
+        details["verify_text_content"] = verify_text_content
+        verify_validation_error = (
+            validate_xlsx(new_file_verify_path, REVISION_0)
+            if new_file_verify_path.is_file()
+            else "Verification XLSX is missing"
+        )
+        details["verify_validation_error"] = verify_validation_error
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
             return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
-        if old_dir_verify_path.exists() or old_file_verify_path.exists():
+        if old_dir_verify_path.exists() or old_file_verify_path.exists() or old_text_verify_path.exists():
             return self.fail_result(self.case_id, self.name, f"Remote verification still contains old directory path: {old_dir_relative}", artifacts, details)
-        if not new_dir_verify_path.is_dir() or not new_file_verify_path.is_file():
+        if not new_dir_verify_path.is_dir() or not new_file_verify_path.is_file() or not new_text_verify_path.is_file():
             return self.fail_result(self.case_id, self.name, f"Remote verification is missing renamed directory content at: {new_dir_relative}", artifacts, details)
-        if details["verify_new_file_content"] != file_content:
-            return self.fail_result(self.case_id, self.name, "Renamed directory child file content did not match after remote verification", artifacts, details)
+        if verify_text_content != text_content:
+            return self.fail_result(self.case_id, self.name, "Renamed directory passive TXT content did not match expected content", artifacts, details)
+        if verify_validation_error:
+            return self.fail_result(self.case_id, self.name, f"Remote verification returned an invalid or stale XLSX workbook: {verify_validation_error}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)
