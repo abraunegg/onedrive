@@ -3293,7 +3293,7 @@ class SyncEngine {
 						// or deleted locally while this /delta response was being processed. Capture
 						// pending local observations before deciding whether remote state should
 						// recreate the old path.
-						if (!exists(existingItemPath) && !generatedSimulatedDeltaResponse) {
+						if (!exists(existingItemPath) && !generatedSimulatedDeltaResponse && (existingDatabaseItem.eTag != newDatabaseItem.eTag)) {
 							bool pendingLocalDeparture = false;
 							if (capturePendingLocalChanges !is null) {
 								capturePendingLocalChanges("sync.known_directory_missing");
