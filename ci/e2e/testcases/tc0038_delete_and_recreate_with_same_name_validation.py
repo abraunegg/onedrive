@@ -362,13 +362,13 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
         verified_xlsx_validation_error = validate_xlsx_pair(verify_xlsx_path, REVISION_1)
         details["verified_xlsx_validation_error"] = verified_xlsx_validation_error
 
-        expected_manifest = [
+        expected_manifest = sorted([
             root_name,
             anchor_relative,
             target_relative,
             xlsx_relative,
             large_xlsx_relative(xlsx_relative),
-        ]
+        ])
         details["expected_manifest"] = expected_manifest
 
         self._write_metadata(metadata_file, details)

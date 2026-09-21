@@ -229,9 +229,17 @@ def set_xlsx_pair_mtime(path: Path, times: tuple[float, float]) -> None:
 
 
 def xlsx_pair_backup_files(path: Path, finder) -> dict[str, list[Path]]:
+    small_path, large_path = xlsx_pair_paths(path)
+    large_backups = finder(large_path)
+    large_backup_set = set(large_backups)
+    small_backups = [
+        candidate
+        for candidate in finder(small_path)
+        if candidate not in large_backup_set
+    ]
     return {
-        label: finder(candidate)
-        for label, candidate in zip(("small", "large"), xlsx_pair_paths(path))
+        "small": small_backups,
+        "large": large_backups,
     }
 
 
