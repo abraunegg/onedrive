@@ -6,7 +6,7 @@ import time
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
+from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, rename_xlsx_pair, large_xlsx_relative
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 
@@ -54,7 +54,7 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
 
         context.prepare_minimal_config_dir(conf_main, self._build_config_text(sync_root, app_log_dir))
         context.prepare_minimal_config_dir(conf_verify, ("# tc0053 verify\n" f'sync_dir = "{verify_root}"\n' 'bypass_data_preservation = "true"\n'))
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             old_local,
             xlsx_seed,
             revision=REVISION_0,
@@ -84,7 +84,7 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
             self._write_metadata(metadata_file, details)
             return self.fail_result(self.case_id, self.name, f"Seed phase failed with status {seed_result.returncode}", artifacts, details)
 
-        settled_validation_error = validate_xlsx(old_local, REVISION_0)
+        settled_validation_error = validate_xlsx_pair(old_local, REVISION_0)
         settled_text_content = old_text_local.read_text(encoding="utf-8") if old_text_local.is_file() else ""
         details["settled_validation_error"] = settled_validation_error
         details["settled_text_content"] = settled_text_content
@@ -106,20 +106,30 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
 
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
 
-            old_local.rename(new_local)
+            rename_xlsx_pair(old_local, new_local)
             old_text_local.rename(new_text_local)
             time.sleep(1.0)
-            mutate_xlsx_revision(new_local, REVISION_0, REVISION_1)
+            mutate_xlsx_pair_revision(new_local, REVISION_0, REVISION_1)
             write_text_file(new_text_local, final_text_content)
-            modified_validation_error = validate_xlsx(new_local, REVISION_1)
+            modified_validation_error = validate_xlsx_pair(new_local, REVISION_1)
             details["modified_validation_error"] = modified_validation_error
             if modified_validation_error:
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(self.case_id, self.name, f"Renamed XLSX mutation produced an invalid workbook: {modified_validation_error}", artifacts, details)
+            per_xlsx_variant_groups = []
+            for old_xlsx_relative, new_xlsx_relative in (
+                (old_relative, new_relative),
+                (large_xlsx_relative(old_relative), large_xlsx_relative(new_relative)),
+            ):
+                per_xlsx_variant_groups.append([
+                    [f"[M] Local item moved: {old_xlsx_relative} -> {new_xlsx_relative}", f"Uploading modified file: {new_xlsx_relative} ... done"],
+                    [f"Moving {old_xlsx_relative} to {new_xlsx_relative}", f"Uploading modified file: {new_xlsx_relative} ... done"],
+                    [f"Deleting item from Microsoft OneDrive: {old_xlsx_relative}", f"Uploading new file: {new_xlsx_relative} ... done"],
+                ])
             xlsx_groups = [
-                [f"[M] Local item moved: {old_relative} -> {new_relative}", f"Uploading modified file: {new_relative} ... done"],
-                [f"Moving {old_relative} to {new_relative}", f"Uploading modified file: {new_relative} ... done"],
-                [f"Deleting item from Microsoft OneDrive: {old_relative}", f"Uploading new file: {new_relative} ... done"],
+                small_group + large_group
+                for small_group in per_xlsx_variant_groups[0]
+                for large_group in per_xlsx_variant_groups[1]
             ]
             text_groups = [
                 [f"[M] Local item moved: {old_text_relative} -> {new_text_relative}", f"Uploading modified file: {new_text_relative} ... done"],
@@ -155,7 +165,7 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
         verify_text_content = new_text_verify.read_text(encoding="utf-8") if new_text_verify.is_file() else ""
         details["verify_text_content"] = verify_text_content
         verify_validation_error = (
-            validate_xlsx(new_verify, REVISION_1)
+            validate_xlsx_pair(new_verify, REVISION_1)
             if new_verify.is_file()
             else "Verification XLSX is missing"
         )

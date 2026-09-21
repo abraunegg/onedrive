@@ -8,7 +8,7 @@ from pathlib import Path
 from framework.context import E2EContext
 from framework.result import TestResult
 from framework.utils import reset_directory, write_text_file
-from framework.xlsx import REVISION_1, REVISION_2, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
+from framework.xlsx import REVISION_1, REVISION_2, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, set_xlsx_pair_mtime, copy_xlsx_pair, xlsx_pair_hashes, xlsx_pair_backup_files, validate_xlsx_pair_backups, xlsx_pair_backup_hashes
 from testcases.safe_backup_case_base import SafeBackupCaseBase
 
 
@@ -55,7 +55,7 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
         write_text_file(local_text, local_text_content)
 
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0070:{os.getpid()}"
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             local_xlsx,
             xlsx_seed,
             revision=REVISION_1,
@@ -65,9 +65,9 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
 
         old_epoch = int(time.time()) - 3600
         os.utime(local_text, (old_epoch, old_epoch))
-        os.utime(local_xlsx, (old_epoch, old_epoch))
+        set_xlsx_pair_mtime(local_xlsx, (old_epoch, old_epoch))
         local_text_hash = self._hash_if_file(local_text)
-        local_xlsx_hash = self._hash_if_file(local_xlsx)
+        local_xlsx_hashes = xlsx_pair_hashes(local_xlsx, self._hash_if_file)
 
         # Build the newer online XLSX from the exact local package, then change only the
         # revision marker. This gives the collision two realistic related document versions
@@ -75,8 +75,8 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
         time.sleep(2)
         write_text_file(seed_text, remote_text_content)
         seed_xlsx.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(local_xlsx, seed_xlsx)
-        mutate_xlsx_revision(seed_xlsx, REVISION_1, REVISION_2)
+        copy_xlsx_pair(local_xlsx, seed_xlsx)
+        mutate_xlsx_pair_revision(seed_xlsx, REVISION_1, REVISION_2)
 
         seed_stdout, seed_stderr = logs / "seed_stdout.log", logs / "seed_stderr.log"
         collision_stdout, collision_stderr = logs / "collision_stdout.log", logs / "collision_stderr.log"
@@ -135,22 +135,22 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
         )
 
         text_backups = self._safe_backup_files_for(local_text)
-        xlsx_backups = self._safe_backup_files_for(local_xlsx)
-        local_xlsx_error = validate_xlsx(local_xlsx, REVISION_1) if local_xlsx.is_file() else "Local canonical XLSX is missing"
-        backup_xlsx_error = validate_xlsx(xlsx_backups[0], REVISION_1) if len(xlsx_backups) == 1 else "Expected exactly one local XLSX safeBackup"
+        xlsx_backups = xlsx_pair_backup_files(local_xlsx, self._safe_backup_files_for)
+        local_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_1) if local_xlsx.is_file() else "Local canonical XLSX is missing"
+        backup_xlsx_error = validate_xlsx_pair_backups(xlsx_backups, REVISION_1)
         details.update(
             {
                 "collision_returncode": collision.returncode,
                 "canonical_text_content": self._text_if_file(local_text),
                 "canonical_text_hash": self._hash_if_file(local_text),
-                "canonical_xlsx_hash": self._hash_if_file(local_xlsx),
+                "canonical_xlsx_hashes": xlsx_pair_hashes(local_xlsx, self._hash_if_file),
                 "canonical_xlsx_validation_error": local_xlsx_error,
                 "local_text_hash": local_text_hash,
-                "local_xlsx_hash": local_xlsx_hash,
+                "local_xlsx_hashes": local_xlsx_hashes,
                 "text_safe_backup_files": [str(p.relative_to(local_root)) for p in text_backups],
                 "text_safe_backup_hashes": [self._hash_if_file(p) for p in text_backups],
-                "xlsx_safe_backup_files": [str(p.relative_to(local_root)) for p in xlsx_backups],
-                "xlsx_safe_backup_hashes": [self._hash_if_file(p) for p in xlsx_backups],
+                "xlsx_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in xlsx_backups.items()},
+                "xlsx_safe_backup_hashes": xlsx_pair_backup_hashes(xlsx_backups, self._hash_if_file),
                 "xlsx_safe_backup_validation_error": backup_xlsx_error,
             }
         )
@@ -169,22 +169,17 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
             stderr_file=verify_stderr,
         )
         remote_text_backups = self._safe_backup_files_for(verify_text)
-        remote_xlsx_backups = self._safe_backup_files_for(verify_xlsx)
-        verify_xlsx_error = validate_xlsx(verify_xlsx, REVISION_2) if verify_xlsx.is_file() else "Verification canonical XLSX is missing"
-        remote_xlsx_backup_errors = {
-            str(path.relative_to(verify_root)): validate_xlsx(path, REVISION_1)
-            for path in remote_xlsx_backups
-        }
-        remote_xlsx_backup_revision_seen = any(not error for error in remote_xlsx_backup_errors.values())
+        remote_xlsx_backups = xlsx_pair_backup_files(verify_xlsx, self._safe_backup_files_for)
+        verify_xlsx_error = validate_xlsx_pair(verify_xlsx, REVISION_2) if verify_xlsx.is_file() else "Verification canonical XLSX is missing"
+        remote_xlsx_backup_error = validate_xlsx_pair_backups(remote_xlsx_backups, REVISION_1)
         details.update(
             {
                 "verify_returncode": verify.returncode,
                 "verify_canonical_text": self._text_if_file(verify_text),
                 "verify_xlsx_validation_error": verify_xlsx_error,
                 "verify_text_safe_backup_files": [str(p.relative_to(verify_root)) for p in remote_text_backups],
-                "verify_xlsx_safe_backup_files": [str(p.relative_to(verify_root)) for p in remote_xlsx_backups],
-                "verify_xlsx_safe_backup_validation_errors": remote_xlsx_backup_errors,
-                "verify_xlsx_safe_backup_revision_seen": remote_xlsx_backup_revision_seen,
+                "verify_xlsx_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_xlsx_backups.items()},
+                "verify_xlsx_safe_backup_validation_error": remote_xlsx_backup_error,
             }
         )
         self._write_metadata(metadata_file, details)
@@ -201,7 +196,7 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
                 artifacts=artifacts,
                 details=details,
             )
-        if local_xlsx_error or self._hash_if_file(local_xlsx) != local_xlsx_hash:
+        if local_xlsx_error or xlsx_pair_hashes(local_xlsx, self._hash_if_file) != local_xlsx_hashes:
             return self.fail_result(
                 reason=f"New-file upload-only collision removed or changed the local XLSX canonical workbook: {local_xlsx_error}",
                 artifacts=artifacts,
@@ -213,7 +208,7 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
                 artifacts=artifacts,
                 details=details,
             )
-        if len(xlsx_backups) != 1 or self._hash_if_file(xlsx_backups[0]) != local_xlsx_hash or backup_xlsx_error:
+        if xlsx_pair_backup_hashes(xlsx_backups, self._hash_if_file) != local_xlsx_hashes or backup_xlsx_error:
             return self.fail_result(
                 reason=f"New-file XLSX collision did not preserve exactly one valid local safeBackup: {backup_xlsx_error}",
                 artifacts=artifacts,
@@ -231,7 +226,7 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
                 artifacts=artifacts,
                 details=details,
             )
-        if not remote_xlsx_backup_revision_seen:
+        if remote_xlsx_backup_error:
             return self.fail_result(
                 reason="New-file XLSX collision did not upload the preserved revision-1 workbook under its safeBackup name",
                 artifacts=artifacts,

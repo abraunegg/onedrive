@@ -8,7 +8,7 @@ from pathlib import Path
 from framework.context import E2EContext
 from framework.result import TestResult
 from framework.utils import reset_directory, write_text_file
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, copy_xlsx_pair, set_xlsx_pair_mtime, xlsx_pair_hashes, xlsx_pair_mtimes, xlsx_pair_backup_files
 from testcases.safe_backup_case_base import SafeBackupCaseBase
 
 
@@ -58,7 +58,7 @@ class TestCase0071SafeBackupMetadataOnlyIdentityValidation(SafeBackupCaseBase):
         text_content = "TC0071 content is identical; only local mtime starts different\n"
         write_text_file(seed_text, text_content)
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0071:{os.getpid()}"
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             seed_xlsx,
             xlsx_seed,
             revision=REVISION_0,
@@ -119,7 +119,7 @@ class TestCase0071SafeBackupMetadataOnlyIdentityValidation(SafeBackupCaseBase):
             stdout_file=phase_files["settle"][0],
             stderr_file=phase_files["settle"][1],
         )
-        settled_xlsx_error = validate_xlsx(settled_xlsx, REVISION_0)
+        settled_xlsx_error = validate_xlsx_pair(settled_xlsx, REVISION_0)
         details.update(
             {
                 "settle_returncode": settle.returncode,
@@ -137,12 +137,12 @@ class TestCase0071SafeBackupMetadataOnlyIdentityValidation(SafeBackupCaseBase):
 
         local_text.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(settled_text, local_text)
-        shutil.copy2(settled_xlsx, local_xlsx)
+        copy_xlsx_pair(settled_xlsx, local_xlsx)
         deliberately_different_mtime = int(time.time()) + 7200
         os.utime(local_text, (deliberately_different_mtime, deliberately_different_mtime))
-        os.utime(local_xlsx, (deliberately_different_mtime, deliberately_different_mtime))
+        set_xlsx_pair_mtime(local_xlsx, (deliberately_different_mtime, deliberately_different_mtime))
         initial_text_hash = self._hash_if_file(local_text)
-        initial_xlsx_hash = self._hash_if_file(local_xlsx)
+        initial_xlsx_hashes = xlsx_pair_hashes(local_xlsx, self._hash_if_file)
 
         reconcile = self._run_phase(
             context,
@@ -158,9 +158,9 @@ class TestCase0071SafeBackupMetadataOnlyIdentityValidation(SafeBackupCaseBase):
             stderr_file=phase_files["reconcile"][1],
         )
         text_backups = self._safe_backup_files_for(local_text)
-        xlsx_backups = self._safe_backup_files_for(local_xlsx)
+        xlsx_backups = xlsx_pair_backup_files(local_xlsx, self._safe_backup_files_for)
         partials = self._partial_files_under(local_root / root_name)
-        canonical_xlsx_error = validate_xlsx(local_xlsx, REVISION_0) if local_xlsx.is_file() else "Canonical XLSX is missing"
+        canonical_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_0) if local_xlsx.is_file() else "Canonical XLSX is missing"
         details.update(
             {
                 "reconcile_returncode": reconcile.returncode,
@@ -168,13 +168,13 @@ class TestCase0071SafeBackupMetadataOnlyIdentityValidation(SafeBackupCaseBase):
                 "canonical_text_content": self._text_if_file(local_text),
                 "canonical_text_hash": self._hash_if_file(local_text),
                 "canonical_text_mtime": int(local_text.stat().st_mtime) if local_text.is_file() else -1,
-                "canonical_xlsx_hash": self._hash_if_file(local_xlsx),
-                "canonical_xlsx_mtime": int(local_xlsx.stat().st_mtime) if local_xlsx.is_file() else -1,
+                "canonical_xlsx_hashes": xlsx_pair_hashes(local_xlsx, self._hash_if_file),
+                "canonical_xlsx_mtimes": xlsx_pair_mtimes(local_xlsx),
                 "canonical_xlsx_validation_error": canonical_xlsx_error,
                 "initial_text_hash": initial_text_hash,
-                "initial_xlsx_hash": initial_xlsx_hash,
+                "initial_xlsx_hashes": initial_xlsx_hashes,
                 "text_safe_backup_files": [str(p.relative_to(local_root)) for p in text_backups],
-                "xlsx_safe_backup_files": [str(p.relative_to(local_root)) for p in xlsx_backups],
+                "xlsx_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in xlsx_backups.items()},
                 "partial_files": [str(p.relative_to(local_root)) for p in partials],
             }
         )
@@ -192,7 +192,7 @@ class TestCase0071SafeBackupMetadataOnlyIdentityValidation(SafeBackupCaseBase):
             stdout_file=phase_files["verify"][0],
             stderr_file=phase_files["verify"][1],
         )
-        verify_xlsx_error = validate_xlsx(verify_xlsx, REVISION_0) if verify_xlsx.is_file() else "Verification XLSX is missing"
+        verify_xlsx_error = validate_xlsx_pair(verify_xlsx, REVISION_0) if verify_xlsx.is_file() else "Verification XLSX is missing"
         details.update(
             {
                 "verify_returncode": verify.returncode,
@@ -200,8 +200,8 @@ class TestCase0071SafeBackupMetadataOnlyIdentityValidation(SafeBackupCaseBase):
                 "verify_text_hash": self._hash_if_file(verify_text),
                 "verify_text_mtime": int(verify_text.stat().st_mtime) if verify_text.is_file() else -1,
                 "verify_xlsx_validation_error": verify_xlsx_error,
-                "verify_xlsx_hash": self._hash_if_file(verify_xlsx),
-                "verify_xlsx_mtime": int(verify_xlsx.stat().st_mtime) if verify_xlsx.is_file() else -1,
+                "verify_xlsx_hashes": xlsx_pair_hashes(verify_xlsx, self._hash_if_file),
+                "verify_xlsx_mtimes": xlsx_pair_mtimes(verify_xlsx),
             }
         )
         self._write_metadata(metadata_file, details)
@@ -218,13 +218,13 @@ class TestCase0071SafeBackupMetadataOnlyIdentityValidation(SafeBackupCaseBase):
                 artifacts=artifacts,
                 details=details,
             )
-        if canonical_xlsx_error or self._hash_if_file(local_xlsx) != initial_xlsx_hash:
+        if canonical_xlsx_error or xlsx_pair_hashes(local_xlsx, self._hash_if_file) != initial_xlsx_hashes:
             return self.fail_result(
                 reason=f"Metadata-only reconciliation changed canonical XLSX content: {canonical_xlsx_error}",
                 artifacts=artifacts,
                 details=details,
             )
-        if text_backups or xlsx_backups:
+        if text_backups or any(xlsx_backups.values()):
             return self.fail_result(
                 reason="Metadata-only reconciliation incorrectly created a safeBackup for identical TXT/XLSX content",
                 artifacts=artifacts,
@@ -242,7 +242,7 @@ class TestCase0071SafeBackupMetadataOnlyIdentityValidation(SafeBackupCaseBase):
                 artifacts=artifacts,
                 details=details,
             )
-        if int(local_text.stat().st_mtime) == deliberately_different_mtime or int(local_xlsx.stat().st_mtime) == deliberately_different_mtime:
+        if int(local_text.stat().st_mtime) == deliberately_different_mtime or any(mtime == deliberately_different_mtime for mtime in xlsx_pair_mtimes(local_xlsx).values()):
             return self.fail_result(
                 reason="Metadata-only reconciliation did not correct one or more deliberately divergent local mtimes",
                 artifacts=artifacts,
@@ -254,7 +254,7 @@ class TestCase0071SafeBackupMetadataOnlyIdentityValidation(SafeBackupCaseBase):
                 artifacts=artifacts,
                 details=details,
             )
-        if int(local_xlsx.stat().st_mtime) != int(verify_xlsx.stat().st_mtime):
+        if xlsx_pair_mtimes(local_xlsx) != xlsx_pair_mtimes(verify_xlsx):
             return self.fail_result(
                 reason="Local XLSX mtime after metadata-only reconciliation does not match authoritative downloaded metadata",
                 artifacts=artifacts,

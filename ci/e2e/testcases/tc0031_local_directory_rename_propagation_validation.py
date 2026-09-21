@@ -7,7 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -133,7 +133,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             source_file_1,
             xlsx_seed,
             revision=REVISION_0,
@@ -195,7 +195,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        settled_validation_error = validate_xlsx(source_file_1, REVISION_0)
+        settled_validation_error = validate_xlsx_pair(source_file_1, REVISION_0)
         settled_text_content = source_text.read_text(encoding="utf-8") if source_text.is_file() else ""
         details["settled_validation_error"] = settled_validation_error
         details["settled_text_content"] = settled_text_content
@@ -309,7 +309,7 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
         details["verify_new_text_exists"] = verify_new_text.exists()
 
         verify_new_file_1_validation_error = (
-            validate_xlsx(verify_new_file_1, REVISION_0)
+            validate_xlsx_pair(verify_new_file_1, REVISION_0)
             if verify_new_file_1.is_file()
             else "Verification XLSX is missing"
         )

@@ -6,7 +6,7 @@ from pathlib import Path
 from framework.context import E2EContext
 from framework.result import TestResult
 from framework.utils import reset_directory, write_text_file
-from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
+from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, unlink_xlsx_pair, xlsx_pair_hashes, xlsx_pair_backup_files, validate_xlsx_pair_backups, xlsx_pair_backup_hashes, xlsx_pair_any_exists
 from testcases.safe_backup_case_base import SafeBackupCaseBase
 
 
@@ -52,7 +52,7 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
         local_modified_text = "TC0075 locally modified content that must survive the remote deletion\n"
         write_text_file(seed_text, baseline_text)
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0075:{os.getpid()}"
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             seed_xlsx,
             xlsx_seed,
             revision=REVISION_0,
@@ -103,8 +103,8 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
             stdout_file=phase_files["deleter_baseline"][0],
             stderr_file=phase_files["deleter_baseline"][1],
         )
-        local_xlsx_error = validate_xlsx(local_xlsx, REVISION_0)
-        deleter_xlsx_error = validate_xlsx(deleter_xlsx, REVISION_0)
+        local_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_0)
+        deleter_xlsx_error = validate_xlsx_pair(deleter_xlsx, REVISION_0)
         details.update(
             {
                 "local_baseline_returncode": local_baseline.returncode,
@@ -129,12 +129,12 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
             )
 
         write_text_file(local_text, local_modified_text)
-        mutate_xlsx_revision(local_xlsx, REVISION_0, REVISION_1)
+        mutate_xlsx_pair_revision(local_xlsx, REVISION_0, REVISION_1)
         local_text_hash = self._hash_if_file(local_text)
-        local_xlsx_hash = self._hash_if_file(local_xlsx)
+        local_xlsx_hashes = xlsx_pair_hashes(local_xlsx, self._hash_if_file)
 
         deleter_text.unlink()
-        deleter_xlsx.unlink()
+        unlink_xlsx_pair(deleter_xlsx)
         remote_delete = self._run_phase(
             context,
             label="propagate remote delete",
@@ -159,20 +159,20 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
             stderr_file=phase_files["reconcile"][1],
         )
         text_backups = self._safe_backup_files_for(local_text)
-        xlsx_backups = self._safe_backup_files_for(local_xlsx)
+        xlsx_backups = xlsx_pair_backup_files(local_xlsx, self._safe_backup_files_for)
         partials = self._partial_files_under(local_root / root_name)
-        backup_xlsx_error = validate_xlsx(xlsx_backups[0], REVISION_1) if len(xlsx_backups) == 1 else "Expected exactly one local XLSX safeBackup"
+        backup_xlsx_error = validate_xlsx_pair_backups(xlsx_backups, REVISION_1)
         details.update(
             {
                 "reconcile_returncode": reconcile.returncode,
                 "canonical_text_exists_after_reconcile": local_text.exists(),
-                "canonical_xlsx_exists_after_reconcile": local_xlsx.exists(),
+                "canonical_xlsx_exists_after_reconcile": xlsx_pair_any_exists(local_xlsx),
                 "local_text_modified_hash": local_text_hash,
-                "local_xlsx_modified_hash": local_xlsx_hash,
+                "local_xlsx_modified_hashes": local_xlsx_hashes,
                 "text_safe_backup_files": [str(p.relative_to(local_root)) for p in text_backups],
                 "text_safe_backup_hashes": [self._hash_if_file(p) for p in text_backups],
-                "xlsx_safe_backup_files": [str(p.relative_to(local_root)) for p in xlsx_backups],
-                "xlsx_safe_backup_hashes": [self._hash_if_file(p) for p in xlsx_backups],
+                "xlsx_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in xlsx_backups.items()},
+                "xlsx_safe_backup_hashes": xlsx_pair_backup_hashes(xlsx_backups, self._hash_if_file),
                 "xlsx_safe_backup_validation_error": backup_xlsx_error,
                 "partial_files": [str(p.relative_to(local_root)) for p in partials],
             }
@@ -186,21 +186,16 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
             stderr_file=phase_files["verify"][1],
         )
         remote_text_backups = self._safe_backup_files_for(verify_text)
-        remote_xlsx_backups = self._safe_backup_files_for(verify_xlsx)
-        remote_xlsx_backup_errors = {
-            str(path.relative_to(verify_root)): validate_xlsx(path, REVISION_1)
-            for path in remote_xlsx_backups
-        }
-        remote_xlsx_backup_revision_seen = any(not error for error in remote_xlsx_backup_errors.values())
+        remote_xlsx_backups = xlsx_pair_backup_files(verify_xlsx, self._safe_backup_files_for)
+        remote_xlsx_backup_error = validate_xlsx_pair_backups(remote_xlsx_backups, REVISION_1)
         details.update(
             {
                 "verify_returncode": verify.returncode,
                 "verify_text_canonical_exists": verify_text.exists(),
-                "verify_xlsx_canonical_exists": verify_xlsx.exists(),
+                "verify_xlsx_canonical_exists": xlsx_pair_any_exists(verify_xlsx),
                 "verify_text_safe_backup_files": [str(p.relative_to(verify_root)) for p in remote_text_backups],
-                "verify_xlsx_safe_backup_files": [str(p.relative_to(verify_root)) for p in remote_xlsx_backups],
-                "verify_xlsx_safe_backup_validation_errors": remote_xlsx_backup_errors,
-                "verify_xlsx_safe_backup_revision_seen": remote_xlsx_backup_revision_seen,
+                "verify_xlsx_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_xlsx_backups.items()},
+                "verify_xlsx_safe_backup_validation_error": remote_xlsx_backup_error,
             }
         )
         self._write_metadata(metadata_file, details)
@@ -211,7 +206,7 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
                 artifacts=artifacts,
                 details=details,
             )
-        if local_text.exists() or local_xlsx.exists():
+        if local_text.exists() or xlsx_pair_any_exists(local_xlsx):
             return self.fail_result(
                 reason="One or more canonical local files remained present even though the authoritative online items were deleted",
                 artifacts=artifacts,
@@ -223,7 +218,7 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
                 artifacts=artifacts,
                 details=details,
             )
-        if len(xlsx_backups) != 1 or self._hash_if_file(xlsx_backups[0]) != local_xlsx_hash or backup_xlsx_error:
+        if xlsx_pair_backup_hashes(xlsx_backups, self._hash_if_file) != local_xlsx_hashes or backup_xlsx_error:
             return self.fail_result(
                 reason=f"Remote-delete XLSX conflict did not preserve exactly one valid safeBackup containing the locally modified workbook: {backup_xlsx_error}",
                 artifacts=artifacts,
@@ -235,7 +230,7 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
                 artifacts=artifacts,
                 details=details,
             )
-        if verify.returncode != 0 or verify_text.exists() or verify_xlsx.exists():
+        if verify.returncode != 0 or verify_text.exists() or xlsx_pair_any_exists(verify_xlsx):
             return self.fail_result(
                 reason="Fresh verification did not confirm that both canonical online files remain deleted",
                 artifacts=artifacts,
@@ -247,7 +242,7 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
                 artifacts=artifacts,
                 details=details,
             )
-        if not remote_xlsx_backup_revision_seen:
+        if remote_xlsx_backup_error:
             return self.fail_result(
                 reason="Fresh verification did not confirm the preserved revision-1 XLSX safeBackup was uploaded",
                 artifacts=artifacts,

@@ -10,7 +10,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, large_xlsx_relative
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
@@ -198,7 +198,7 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
 
             context.log(f"Test Case {self.case_id}: creating local XLSX while monitor is running: {created_relative}")
-            generated = create_random_xlsx(
+            generated = create_random_xlsx_pair(
                 created_local_path,
                 xlsx_seed,
                 revision=REVISION_0,
@@ -207,12 +207,13 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
             )
             details["generated_size"] = int(generated["size_bytes"])
             details["created_local_exists_after_write"] = created_local_path.is_file()
-            details["created_local_validation_error"] = validate_xlsx(created_local_path, REVISION_0)
+            details["created_local_validation_error"] = validate_xlsx_pair(created_local_path, REVISION_0)
             write_text_file(created_text_local_path, created_text_content)
             details["created_text_exists_after_write"] = created_text_local_path.is_file()
 
             required_patterns = [
                 f"Uploading new file: {created_relative} ... done",
+                f"Uploading new file: {large_xlsx_relative(created_relative)} ... done",
                 f"Uploading new file: {created_text_relative} ... done",
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
@@ -258,7 +259,7 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
         verify_text_content = created_text_verify_path.read_text(encoding="utf-8") if created_text_verify_path.is_file() else ""
         details["verify_created_text_content"] = verify_text_content
         verify_validation_error = (
-            validate_xlsx(created_verify_path, REVISION_0)
+            validate_xlsx_pair(created_verify_path, REVISION_0)
             if created_verify_path.is_file()
             else "Verification XLSX is missing"
         )

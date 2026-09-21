@@ -7,7 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -195,7 +195,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         }
 
         # Phase 1: Seeder creates the original local directory tree and syncs it online.
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             seeder_root / source_file_1_relative,
             xlsx_seed,
             revision=REVISION_0,
@@ -230,7 +230,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        seeder_settled_validation_error = validate_xlsx(
+        seeder_settled_validation_error = validate_xlsx_pair(
             seeder_root / source_file_1_relative,
             REVISION_0,
         )
@@ -334,7 +334,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        validator_initial_xlsx_validation_error = validate_xlsx(validator_source_file_1, REVISION_0)
+        validator_initial_xlsx_validation_error = validate_xlsx_pair(validator_source_file_1, REVISION_0)
         details["validator_initial_xlsx_validation_error"] = validator_initial_xlsx_validation_error
         if validator_initial_xlsx_validation_error:
             self._write_metadata(metadata_file, details)
@@ -501,7 +501,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         details["verify_old_tree_dirs"] = verify_old_tree_dirs
 
         verify_new_file_1_validation_error = (
-            validate_xlsx(verify_renamed_file_1, REVISION_0)
+            validate_xlsx_pair(verify_renamed_file_1, REVISION_0)
             if verify_renamed_file_1.is_file()
             else "Verification XLSX is missing"
         )
@@ -675,7 +675,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         details["validator_old_tree_dirs_after_reconcile"] = validator_old_tree_dirs
 
         validator_new_file_1_validation_error = (
-            validate_xlsx(validator_renamed_file_1, REVISION_0)
+            validate_xlsx_pair(validator_renamed_file_1, REVISION_0)
             if validator_renamed_file_1.is_file()
             else "Validator XLSX is missing"
         )

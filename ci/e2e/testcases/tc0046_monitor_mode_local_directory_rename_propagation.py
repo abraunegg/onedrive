@@ -6,7 +6,7 @@ from pathlib import Path
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, large_xlsx_relative
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 
@@ -66,7 +66,7 @@ class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCase
             ),
         )
 
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             old_file_local_path,
             xlsx_seed,
             revision=REVISION_0,
@@ -97,7 +97,7 @@ class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCase
             self._write_metadata(metadata_file, details)
             return self.fail_result(self.case_id, self.name, f"Seed phase failed with status {seed_result.returncode}", artifacts, details)
 
-        settled_validation_error = validate_xlsx(old_file_local_path, REVISION_0)
+        settled_validation_error = validate_xlsx_pair(old_file_local_path, REVISION_0)
         settled_text_content = old_text_local_path.read_text(encoding="utf-8") if old_text_local_path.is_file() else ""
         details["settled_validation_error"] = settled_validation_error
         details["settled_text_content"] = settled_text_content
@@ -122,7 +122,12 @@ class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCase
             old_dir_local_path.rename(new_dir_local_path)
             groups = [
                 [f"[M] Local item moved: {old_dir_relative} -> {new_dir_relative}", f"Moving {old_dir_relative} to {new_dir_relative}"],
-                [f"Deleting item from Microsoft OneDrive: {old_file_relative}", f"Uploading new file: {new_file_relative} ... done"],
+                [
+                    f"Deleting item from Microsoft OneDrive: {old_file_relative}",
+                    f"Uploading new file: {new_file_relative} ... done",
+                    f"Deleting item from Microsoft OneDrive: {large_xlsx_relative(old_file_relative)}",
+                    f"Uploading new file: {large_xlsx_relative(new_file_relative)} ... done",
+                ],
             ]
             mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
                 monitor_stdout,
@@ -154,7 +159,7 @@ class TestCase0046MonitorModeLocalDirectoryRenamePropagation(MonitorModeTestCase
         verify_text_content = new_text_verify_path.read_text(encoding="utf-8") if new_text_verify_path.is_file() else ""
         details["verify_text_content"] = verify_text_content
         verify_validation_error = (
-            validate_xlsx(new_file_verify_path, REVISION_0)
+            validate_xlsx_pair(new_file_verify_path, REVISION_0)
             if new_file_verify_path.is_file()
             else "Verification XLSX is missing"
         )

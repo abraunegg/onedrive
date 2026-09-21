@@ -8,7 +8,7 @@ from pathlib import Path
 from framework.context import E2EContext
 from framework.result import TestResult
 from framework.utils import reset_directory, write_text_file
-from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
+from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, copy_xlsx_pair, xlsx_pair_hashes, xlsx_pair_mtimes, xlsx_pair_backup_files, validate_xlsx_pair_backups, xlsx_pair_backup_hashes
 from testcases.safe_backup_case_base import SafeBackupCaseBase
 
 
@@ -62,7 +62,7 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
         remote_replacement_text = "TC0066 newer authoritative remote replacement\n"
         write_text_file(seed_text, baseline_text)
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0066:{os.getpid()}"
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             seed_xlsx,
             xlsx_seed,
             revision=REVISION_0,
@@ -105,7 +105,7 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
             stderr_file=phase_files["initial_download"][1],
         )
         details["initial_download_returncode"] = initial.returncode
-        initial_xlsx_error = validate_xlsx(local_xlsx, REVISION_0)
+        initial_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_0)
         details["initial_xlsx_validation_error"] = initial_xlsx_error
         if initial.returncode != 0 or self._text_if_file(local_text) != baseline_text or initial_xlsx_error:
             self._write_metadata(metadata_file, details)
@@ -114,19 +114,19 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
         # The downloaded XLSX is now the Microsoft-settled baseline. Build both divergent
         # revisions from that package so any service-added package members remain under test.
         updater_xlsx.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(local_xlsx, updater_xlsx)
+        copy_xlsx_pair(local_xlsx, updater_xlsx)
 
         time.sleep(2)
         write_text_file(local_text, local_conflict_text)
-        mutate_xlsx_revision(local_xlsx, REVISION_0, REVISION_1)
+        mutate_xlsx_pair_revision(local_xlsx, REVISION_0, REVISION_1)
         local_text_hash = self._hash_if_file(local_text)
-        local_xlsx_hash = self._hash_if_file(local_xlsx)
+        local_xlsx_hashes = xlsx_pair_hashes(local_xlsx, self._hash_if_file)
         local_text_mtime = int(local_text.stat().st_mtime)
-        local_xlsx_mtime = int(local_xlsx.stat().st_mtime)
+        local_xlsx_mtimes = xlsx_pair_mtimes(local_xlsx)
 
         time.sleep(2)
         write_text_file(updater_text, remote_replacement_text)
-        mutate_xlsx_revision(updater_xlsx, REVISION_0, REVISION_2)
+        mutate_xlsx_pair_revision(updater_xlsx, REVISION_0, REVISION_2)
         remote_update = self._run_phase(
             context,
             label="remote update",
@@ -149,22 +149,22 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
         details["reconcile_returncode"] = reconcile.returncode
 
         text_backups = self._safe_backup_files_for(local_text)
-        xlsx_backups = self._safe_backup_files_for(local_xlsx)
+        xlsx_backups = xlsx_pair_backup_files(local_xlsx, self._safe_backup_files_for)
         partials = self._partial_files_under(local_root / root_name)
-        canonical_xlsx_error = validate_xlsx(local_xlsx, REVISION_2) if local_xlsx.is_file() else "Canonical XLSX is missing"
-        backup_xlsx_error = validate_xlsx(xlsx_backups[0], REVISION_1) if len(xlsx_backups) == 1 else "Expected exactly one XLSX safeBackup"
+        canonical_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_2) if local_xlsx.is_file() else "Canonical XLSX is missing"
+        backup_xlsx_error = validate_xlsx_pair_backups(xlsx_backups, REVISION_1)
         details.update(
             {
                 "canonical_text_content": self._text_if_file(local_text),
                 "canonical_xlsx_validation_error": canonical_xlsx_error,
                 "local_text_conflict_hash": local_text_hash,
-                "local_xlsx_conflict_hash": local_xlsx_hash,
+                "local_xlsx_conflict_hashes": local_xlsx_hashes,
                 "local_text_conflict_mtime": local_text_mtime,
-                "local_xlsx_conflict_mtime": local_xlsx_mtime,
+                "local_xlsx_conflict_mtimes": local_xlsx_mtimes,
                 "text_safe_backup_files": [str(p.relative_to(local_root)) for p in text_backups],
                 "text_safe_backup_hashes": [self._hash_if_file(p) for p in text_backups],
-                "xlsx_safe_backup_files": [str(p.relative_to(local_root)) for p in xlsx_backups],
-                "xlsx_safe_backup_hashes": [self._hash_if_file(p) for p in xlsx_backups],
+                "xlsx_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in xlsx_backups.items()},
+                "xlsx_safe_backup_hashes": xlsx_pair_backup_hashes(xlsx_backups, self._hash_if_file),
                 "xlsx_safe_backup_validation_error": backup_xlsx_error,
                 "partial_files": [str(p.relative_to(local_root)) for p in partials],
             }
@@ -177,7 +177,7 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
             stdout_file=phase_files["verify"][0],
             stderr_file=phase_files["verify"][1],
         )
-        verify_xlsx_error = validate_xlsx(verify_xlsx, REVISION_2) if verify_xlsx.is_file() else "Verification XLSX is missing"
+        verify_xlsx_error = validate_xlsx_pair(verify_xlsx, REVISION_2) if verify_xlsx.is_file() else "Verification XLSX is missing"
         details.update(
             {
                 "verify_returncode": verify.returncode,
@@ -195,7 +195,7 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
             return self.fail_result(reason=f"XLSX canonical filename does not contain the authoritative remote revision: {canonical_xlsx_error}", artifacts=artifacts, details=details)
         if len(text_backups) != 1 or self._text_if_file(text_backups[0]) != local_conflict_text or self._hash_if_file(text_backups[0]) != local_text_hash:
             return self.fail_result(reason="TXT safeBackup does not contain the exact pre-replacement local bytes", artifacts=artifacts, details=details)
-        if len(xlsx_backups) != 1 or self._hash_if_file(xlsx_backups[0]) != local_xlsx_hash or backup_xlsx_error:
+        if xlsx_pair_backup_hashes(xlsx_backups, self._hash_if_file) != local_xlsx_hashes or backup_xlsx_error:
             return self.fail_result(reason=f"XLSX safeBackup does not contain the exact valid pre-replacement local workbook: {backup_xlsx_error}", artifacts=artifacts, details=details)
         if partials:
             return self.fail_result(reason="Completed replacement left unexpected .partial files behind", artifacts=artifacts, details=details)

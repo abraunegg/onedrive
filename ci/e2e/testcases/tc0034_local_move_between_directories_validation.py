@@ -7,7 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, xlsx_pair_any_exists, xlsx_pair_all_files
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -142,7 +142,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
 
         # Phase 1: seed original state with passive TXT, real XLSX and destination anchor
         write_text_file(local_source_txt_path, initial_content)
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             local_source_xlsx_path,
             xlsx_seed,
             revision=REVISION_0,
@@ -194,7 +194,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 details,
             )
 
-        settled_validation_error = validate_xlsx(local_source_xlsx_path, REVISION_0)
+        settled_validation_error = validate_xlsx_pair(local_source_xlsx_path, REVISION_0)
         details["settled_validation_error"] = settled_validation_error
         if settled_validation_error:
             self._write_metadata(metadata_file, details)
@@ -209,7 +209,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
         # Phase 2: move both files locally between directories without renaming them.
         local_destination_txt_path.parent.mkdir(parents=True, exist_ok=True)
         local_source_txt_path.rename(local_destination_txt_path)
-        local_source_xlsx_path.rename(local_destination_xlsx_path)
+        rename_xlsx_pair(local_source_xlsx_path, local_destination_xlsx_path)
 
         details["local_source_txt_exists_after_move"] = local_source_txt_path.exists()
         details["local_destination_txt_exists_after_move"] = local_destination_txt_path.is_file()
@@ -217,7 +217,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
         details["local_destination_xlsx_exists_after_move"] = local_destination_xlsx_path.is_file()
         details["local_anchor_exists_after_move"] = local_anchor_path.is_file()
 
-        if local_source_txt_path.exists() or local_source_xlsx_path.exists():
+        if local_source_txt_path.exists() or xlsx_pair_any_exists(local_source_xlsx_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -227,7 +227,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 details,
             )
 
-        if not local_destination_txt_path.is_file() or not local_destination_xlsx_path.is_file():
+        if not local_destination_txt_path.is_file() or not xlsx_pair_all_files(local_destination_xlsx_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -288,8 +288,8 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
 
         details["verify_source_txt_exists"] = verify_source_txt_path.exists()
         details["verify_destination_txt_exists"] = verify_destination_txt_path.is_file()
-        details["verify_source_xlsx_exists"] = verify_source_xlsx_path.exists()
-        details["verify_destination_xlsx_exists"] = verify_destination_xlsx_path.is_file()
+        details["verify_source_xlsx_exists"] = xlsx_pair_any_exists(verify_source_xlsx_path)
+        details["verify_destination_xlsx_exists"] = xlsx_pair_all_files(verify_destination_xlsx_path)
         details["verify_anchor_exists"] = verify_anchor_path.is_file()
 
         verify_destination_txt_content = (
@@ -300,8 +300,8 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
         details["verify_destination_txt_content"] = verify_destination_txt_content
 
         verify_destination_validation_error = (
-            validate_xlsx(verify_destination_xlsx_path, REVISION_0)
-            if verify_destination_xlsx_path.is_file()
+            validate_xlsx_pair(verify_destination_xlsx_path, REVISION_0)
+            if xlsx_pair_all_files(verify_destination_xlsx_path)
             else "Verification XLSX is missing"
         )
         details["verify_destination_validation_error"] = verify_destination_validation_error
@@ -317,7 +317,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 details,
             )
 
-        if verify_source_txt_path.exists() or verify_source_xlsx_path.exists():
+        if verify_source_txt_path.exists() or xlsx_pair_any_exists(verify_source_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -344,7 +344,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 details,
             )
 
-        if not verify_destination_xlsx_path.is_file():
+        if not xlsx_pair_all_files(verify_destination_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,

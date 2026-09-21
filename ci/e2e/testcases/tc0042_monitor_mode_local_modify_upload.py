@@ -15,7 +15,7 @@ from framework.utils import (
     run_command,
     write_text_file,
 )
-from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
+from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, large_xlsx_relative, xlsx_pair_hashes, xlsx_pair_sizes
 
 
 class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
@@ -117,14 +117,14 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
             artifacts.append(str(app_log_dir))
 
         write_text_file(local_text_path, initial_text_content)
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             local_xlsx_path,
             xlsx_seed,
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0042 monitor local modification workbook",
         )
-        initial_generated_xlsx_hash = compute_quickxor_hash_file(local_xlsx_path)
+        initial_generated_xlsx_hashes = xlsx_pair_hashes(local_xlsx_path, compute_quickxor_hash_file)
 
         details: dict[str, object] = {
             "root_name": root_name,
@@ -137,7 +137,7 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
             "xlsx_seed": xlsx_seed,
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_xlsx_size": int(generated["size_bytes"]),
-            "initial_generated_xlsx_hash": initial_generated_xlsx_hash,
+            "initial_generated_xlsx_hashes": initial_generated_xlsx_hashes,
         }
 
         seed_command = [
@@ -170,7 +170,7 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
 
         settled_text_content = local_text_path.read_text(encoding="utf-8") if local_text_path.is_file() else ""
         settled_xlsx_validation_error = (
-            validate_xlsx(local_xlsx_path, REVISION_0)
+            validate_xlsx_pair(local_xlsx_path, REVISION_0)
             if local_xlsx_path.is_file()
             else "Seeded XLSX is missing"
         )
@@ -195,10 +195,10 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
                 details,
             )
 
-        settled_xlsx_hash = compute_quickxor_hash_file(local_xlsx_path)
-        details["settled_xlsx_hash"] = settled_xlsx_hash
-        details["settled_xlsx_size"] = local_xlsx_path.stat().st_size
-        details["microsoft_changed_seed_xlsx_bytes"] = settled_xlsx_hash != initial_generated_xlsx_hash
+        settled_xlsx_hashes = xlsx_pair_hashes(local_xlsx_path, compute_quickxor_hash_file)
+        details["settled_xlsx_hashes"] = settled_xlsx_hashes
+        details["settled_xlsx_sizes"] = xlsx_pair_sizes(local_xlsx_path)
+        details["microsoft_changed_seed_xlsx_bytes"] = {label: settled_xlsx_hashes[label] != initial_generated_xlsx_hashes[label] for label in settled_xlsx_hashes}
 
         monitor_command = [
             context.onedrive_bin,
@@ -240,12 +240,12 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
             )
             time.sleep(1.5)
             write_text_file(local_text_path, modified_text_content)
-            mutate_xlsx_revision(local_xlsx_path, REVISION_0, REVISION_1)
+            mutate_xlsx_pair_revision(local_xlsx_path, REVISION_0, REVISION_1)
 
-            modified_xlsx_validation_error = validate_xlsx(local_xlsx_path, REVISION_1)
-            modified_xlsx_hash = compute_quickxor_hash_file(local_xlsx_path)
+            modified_xlsx_validation_error = validate_xlsx_pair(local_xlsx_path, REVISION_1)
+            modified_xlsx_hashes = xlsx_pair_hashes(local_xlsx_path, compute_quickxor_hash_file)
             details["modified_xlsx_validation_error"] = modified_xlsx_validation_error
-            details["modified_xlsx_hash"] = modified_xlsx_hash
+            details["modified_xlsx_hashes"] = modified_xlsx_hashes
             details["local_text_exists_after_modify"] = local_text_path.is_file()
             details["local_xlsx_exists_after_modify"] = local_xlsx_path.is_file()
 
@@ -258,7 +258,7 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
                     artifacts,
                     details,
                 )
-            if modified_xlsx_hash == settled_xlsx_hash:
+            if any(modified_xlsx_hashes[label] == settled_xlsx_hashes[label] for label in modified_xlsx_hashes):
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(
                     self.case_id,
@@ -271,6 +271,7 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
             required_patterns = [
                 f"Uploading modified file: {text_relative} ... done",
                 f"Uploading modified file: {xlsx_relative} ... done",
+                f"Uploading modified file: {large_xlsx_relative(xlsx_relative)} ... done",
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
@@ -312,7 +313,7 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
 
         verify_text_content = verify_text_path.read_text(encoding="utf-8") if verify_text_path.is_file() else ""
         verify_xlsx_validation_error = (
-            validate_xlsx(verify_xlsx_path, REVISION_1)
+            validate_xlsx_pair(verify_xlsx_path, REVISION_1)
             if verify_xlsx_path.is_file()
             else "Verification XLSX is missing"
         )
@@ -320,7 +321,7 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
         details["verify_text_content"] = verify_text_content
         details["verify_xlsx_exists"] = verify_xlsx_path.is_file()
         details["verify_xlsx_validation_error"] = verify_xlsx_validation_error
-        details["verify_xlsx_hash"] = compute_quickxor_hash_file(verify_xlsx_path) if verify_xlsx_path.is_file() else ""
+        details["verify_xlsx_hashes"] = xlsx_pair_hashes(verify_xlsx_path, compute_quickxor_hash_file)
 
         self._write_metadata(metadata_file, details)
 

@@ -8,7 +8,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, xlsx_pair_any_exists, xlsx_pair_all_files
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -151,7 +151,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
         # Phase 1: seed original remote state with both a passive and Microsoft-processed payload class.
         write_text_file(seed_old_txt_path, txt_content)
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             seed_old_xlsx_path,
             xlsx_seed,
             revision=REVISION_0,
@@ -187,7 +187,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             )
 
         settled_txt_content = seed_old_txt_path.read_text(encoding="utf-8") if seed_old_txt_path.is_file() else ""
-        settled_xlsx_validation_error = validate_xlsx(seed_old_xlsx_path, REVISION_0)
+        settled_xlsx_validation_error = validate_xlsx_pair(seed_old_xlsx_path, REVISION_0)
         details["settled_txt_content"] = settled_txt_content
         details["settled_xlsx_validation_error"] = settled_xlsx_validation_error
 
@@ -248,7 +248,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        stale_snapshot_xlsx_validation_error = validate_xlsx(stale_old_xlsx_path, REVISION_0)
+        stale_snapshot_xlsx_validation_error = validate_xlsx_pair(stale_old_xlsx_path, REVISION_0)
         details["stale_snapshot_xlsx_validation_error"] = stale_snapshot_xlsx_validation_error
         if stale_snapshot_xlsx_validation_error:
             self._write_metadata(metadata_file, details)
@@ -262,9 +262,9 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
         # Phase 2: perform both renames through the seed client.
         seed_old_txt_path.rename(seed_new_txt_path)
-        seed_old_xlsx_path.rename(seed_new_xlsx_path)
+        rename_xlsx_pair(seed_old_xlsx_path, seed_new_xlsx_path)
 
-        if seed_old_txt_path.exists() or seed_old_xlsx_path.exists():
+        if seed_old_txt_path.exists() or xlsx_pair_any_exists(seed_old_xlsx_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -274,7 +274,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if not seed_new_txt_path.is_file() or not seed_new_xlsx_path.is_file():
+        if not seed_new_txt_path.is_file() or not xlsx_pair_all_files(seed_new_xlsx_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -338,7 +338,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
         details["stale_new_xlsx_exists_after_reconcile"] = stale_new_xlsx_path.is_file()
         stale_new_txt_content = stale_new_txt_path.read_text(encoding="utf-8") if stale_new_txt_path.is_file() else ""
         stale_new_xlsx_validation_error = (
-            validate_xlsx(stale_new_xlsx_path, REVISION_0)
+            validate_xlsx_pair(stale_new_xlsx_path, REVISION_0)
             if stale_new_xlsx_path.is_file()
             else "Stale client XLSX is missing"
         )
@@ -384,7 +384,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
         details["verify_new_xlsx_exists"] = verify_new_xlsx_path.is_file()
         verify_new_txt_content = verify_new_txt_path.read_text(encoding="utf-8") if verify_new_txt_path.is_file() else ""
         verify_new_xlsx_validation_error = (
-            validate_xlsx(verify_new_xlsx_path, REVISION_0)
+            validate_xlsx_pair(verify_new_xlsx_path, REVISION_0)
             if verify_new_xlsx_path.is_file()
             else "Verification XLSX is missing"
         )
@@ -402,7 +402,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if stale_old_txt_path.exists() or stale_old_xlsx_path.exists():
+        if stale_old_txt_path.exists() or xlsx_pair_any_exists(stale_old_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -411,7 +411,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if not stale_new_txt_path.is_file() or not stale_new_xlsx_path.is_file():
+        if not stale_new_txt_path.is_file() or not xlsx_pair_all_files(stale_new_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -438,7 +438,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if verify_old_txt_path.exists() or verify_old_xlsx_path.exists():
+        if verify_old_txt_path.exists() or xlsx_pair_any_exists(verify_old_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -447,7 +447,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if not verify_new_txt_path.is_file() or not verify_new_xlsx_path.is_file():
+        if not verify_new_txt_path.is_file() or not xlsx_pair_all_files(verify_new_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,

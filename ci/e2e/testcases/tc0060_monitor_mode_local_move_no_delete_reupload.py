@@ -9,7 +9,7 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, run_command, write_text_file
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists, xlsx_pair_all_files
 
 
 class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
@@ -148,7 +148,7 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         )
 
         write_text_file(file_source_path, file_content)
-        generated_xlsx = create_random_xlsx(
+        generated_xlsx = create_random_xlsx_pair(
             file_xlsx_source_path,
             xlsx_seed,
             revision=REVISION_0,
@@ -238,7 +238,7 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
                 )
 
             settled_xlsx_validation_error = (
-                validate_xlsx(file_xlsx_source_path, REVISION_0)
+                validate_xlsx_pair(file_xlsx_source_path, REVISION_0)
                 if file_xlsx_source_path.is_file()
                 else "Seeded XLSX is missing after monitor initial sync"
             )
@@ -260,7 +260,7 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
             file_destination_path.parent.mkdir(parents=True, exist_ok=True)
             file_source_path.rename(file_destination_path)
             context.log(f"Test Case {self.case_id}: moving in-sync local XLSX: {file_xlsx_source_relative} -> {file_xlsx_destination_relative}")
-            file_xlsx_source_path.rename(file_xlsx_destination_path)
+            rename_xlsx_pair(file_xlsx_source_path, file_xlsx_destination_path)
 
             context.log(f"Test Case {self.case_id}: moving in-sync local directory tree: {dir_source_relative} -> {dir_destination_relative}")
             dir_destination_path.parent.mkdir(parents=True, exist_ok=True)
@@ -268,11 +268,11 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
 
             details["file_source_exists_after_local_move"] = file_source_path.exists()
             details["file_destination_exists_after_local_move"] = file_destination_path.is_file()
-            details["file_xlsx_source_exists_after_local_move"] = file_xlsx_source_path.exists()
-            details["file_xlsx_destination_exists_after_local_move"] = file_xlsx_destination_path.is_file()
+            details["file_xlsx_source_exists_after_local_move"] = xlsx_pair_any_exists(file_xlsx_source_path)
+            details["file_xlsx_destination_exists_after_local_move"] = xlsx_pair_all_files(file_xlsx_destination_path)
             details["file_xlsx_destination_validation_error"] = (
-                validate_xlsx(file_xlsx_destination_path, REVISION_0)
-                if file_xlsx_destination_path.is_file()
+                validate_xlsx_pair(file_xlsx_destination_path, REVISION_0)
+                if xlsx_pair_all_files(file_xlsx_destination_path)
                 else "Moved local XLSX is missing"
             )
             if details["file_xlsx_destination_validation_error"]:
@@ -292,6 +292,8 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
                 f"Moving ./{file_source_relative} to ./{file_destination_relative}",
                 f"[M] Local item moved: ./{file_xlsx_source_relative} -> ./{file_xlsx_destination_relative}",
                 f"Moving ./{file_xlsx_source_relative} to ./{file_xlsx_destination_relative}",
+                f"[M] Local item moved: ./{large_xlsx_relative(file_xlsx_source_relative)} -> ./{large_xlsx_relative(file_xlsx_destination_relative)}",
+                f"Moving ./{large_xlsx_relative(file_xlsx_source_relative)} to ./{large_xlsx_relative(file_xlsx_destination_relative)}",
                 f"[M] Local item moved: ./{dir_source_relative} -> ./{dir_destination_relative}",
                 f"Moving ./{dir_source_relative} to ./{dir_destination_relative}",
             ]
@@ -342,10 +344,10 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         details["expected_destination_dir_files"] = expected_destination_dir_files
         details["verify_file_source_exists"] = file_source_verify_path.exists()
         details["verify_file_destination_exists"] = file_destination_verify_path.is_file()
-        details["verify_file_xlsx_source_exists"] = file_xlsx_source_verify_path.exists()
-        details["verify_file_xlsx_destination_exists"] = file_xlsx_destination_verify_path.is_file()
+        details["verify_file_xlsx_source_exists"] = xlsx_pair_any_exists(file_xlsx_source_verify_path)
+        details["verify_file_xlsx_destination_exists"] = xlsx_pair_all_files(file_xlsx_destination_verify_path)
         details["verify_file_xlsx_destination_validation_error"] = (
-            validate_xlsx(file_xlsx_destination_verify_path, REVISION_0)
+            validate_xlsx_pair(file_xlsx_destination_verify_path, REVISION_0)
             if file_xlsx_destination_verify_path.is_file()
             else "Verification XLSX is missing"
         )
@@ -408,7 +410,7 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
                 details,
             )
 
-        if file_xlsx_source_verify_path.exists():
+        if xlsx_pair_any_exists(file_xlsx_source_verify_path):
             return self.fail_result(
                 self.case_id,
                 self.name,

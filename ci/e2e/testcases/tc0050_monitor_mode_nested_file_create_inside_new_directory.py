@@ -6,7 +6,7 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, write_text_file
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, large_xlsx_relative
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 
 
@@ -76,7 +76,7 @@ class TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(MonitorModeTestC
 
             deep_dir_local.mkdir(parents=True, exist_ok=True)
             write_text_file(deep_file_local, deep_file_content)
-            generated_xlsx = create_random_xlsx(
+            generated_xlsx = create_random_xlsx_pair(
                 deep_xlsx_local,
                 xlsx_seed,
                 revision=REVISION_0,
@@ -84,10 +84,11 @@ class TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(MonitorModeTestC
                 title="TC0050 nested monitor create workbook",
             )
             details["generated_xlsx_size"] = int(generated_xlsx["size_bytes"])
-            details["created_xlsx_validation_error"] = validate_xlsx(deep_xlsx_local, REVISION_0)
+            details["created_xlsx_validation_error"] = validate_xlsx_pair(deep_xlsx_local, REVISION_0)
             required_patterns = [
                 f"Uploading new file: {deep_file_relative} ... done",
                 f"Uploading new file: {deep_xlsx_relative} ... done",
+                f"Uploading new file: {large_xlsx_relative(deep_xlsx_relative)} ... done",
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
@@ -113,7 +114,7 @@ class TestCase0050MonitorModeNestedFileCreateInsideNewDirectory(MonitorModeTestC
         details["verify_deep_file_content"] = deep_file_verify.read_text(encoding="utf-8") if deep_file_verify.is_file() else ""
         details["verify_deep_xlsx_exists"] = deep_xlsx_verify.is_file()
         details["verify_deep_xlsx_validation_error"] = (
-            validate_xlsx(deep_xlsx_verify, REVISION_0)
+            validate_xlsx_pair(deep_xlsx_verify, REVISION_0)
             if deep_xlsx_verify.is_file()
             else "Verification XLSX is missing"
         )

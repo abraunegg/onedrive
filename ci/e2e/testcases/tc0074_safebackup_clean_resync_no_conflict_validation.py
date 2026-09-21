@@ -5,7 +5,7 @@ import os
 from framework.context import E2EContext
 from framework.result import TestResult
 from framework.utils import compute_quickxor_hash_file, reset_directory, write_text_file
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, xlsx_pair_hashes, xlsx_pair_mtimes, xlsx_pair_sizes, xlsx_pair_backup_files, xlsx_pair_all_files
 from testcases.safe_backup_case_base import SafeBackupCaseBase
 
 
@@ -51,14 +51,14 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
         write_text_file(seed_text_file, text_content)
 
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0074:{os.getpid()}"
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             seed_xlsx_file,
             xlsx_seed,
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0074 clean repeated resync workbook",
         )
-        generated_xlsx_hash = compute_quickxor_hash_file(seed_xlsx_file)
+        generated_xlsx_hashes = xlsx_pair_hashes(seed_xlsx_file, compute_quickxor_hash_file)
 
         seed_stdout, seed_stderr = logs / "seed_stdout.log", logs / "seed_stderr.log"
         baseline_stdout, baseline_stderr = logs / "baseline_stdout.log", logs / "baseline_stderr.log"
@@ -79,7 +79,7 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
             "xlsx_seed": xlsx_seed,
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_xlsx_size": int(generated["size_bytes"]),
-            "generated_xlsx_hash": generated_xlsx_hash,
+            "generated_xlsx_hashes": generated_xlsx_hashes,
         }
 
         seed = self._run_phase(
@@ -118,7 +118,7 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
             stderr_file=baseline_stderr,
         )
         details["baseline_returncode"] = baseline.returncode
-        if baseline.returncode != 0 or not local_text_file.is_file() or not local_xlsx_file.is_file():
+        if baseline.returncode != 0 or not local_text_file.is_file() or not xlsx_pair_all_files(local_xlsx_file):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 reason="Failed to establish both tracked in-sync baselines before repeated resync",
@@ -129,11 +129,12 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
         baseline_text_hash = self._hash_if_file(local_text_file)
         baseline_text_content = self._text_if_file(local_text_file)
         baseline_text_mtime = int(local_text_file.stat().st_mtime)
-        baseline_xlsx_validation_error = validate_xlsx(local_xlsx_file, REVISION_0)
-        baseline_xlsx_hash = self._hash_if_file(local_xlsx_file)
-        baseline_xlsx_mtime = int(local_xlsx_file.stat().st_mtime)
+        baseline_xlsx_validation_error = validate_xlsx_pair(local_xlsx_file, REVISION_0)
+        baseline_xlsx_hashes = xlsx_pair_hashes(local_xlsx_file, self._hash_if_file)
+        baseline_xlsx_mtimes = xlsx_pair_mtimes(local_xlsx_file)
 
-        baseline_backups = self._safe_backup_files_for(local_text_file) + self._safe_backup_files_for(local_xlsx_file)
+        baseline_xlsx_backups = xlsx_pair_backup_files(local_xlsx_file, self._safe_backup_files_for)
+        baseline_backups = self._safe_backup_files_for(local_text_file)
         baseline_partials = self._partial_files_under(local_root / root_name)
         details.update(
             {
@@ -141,10 +142,10 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 "baseline_text_content": baseline_text_content,
                 "baseline_text_mtime": baseline_text_mtime,
                 "baseline_xlsx_validation_error": baseline_xlsx_validation_error,
-                "baseline_xlsx_hash": baseline_xlsx_hash,
-                "baseline_xlsx_size": local_xlsx_file.stat().st_size,
-                "baseline_xlsx_mtime": baseline_xlsx_mtime,
-                "microsoft_changed_seed_xlsx_bytes": baseline_xlsx_hash != generated_xlsx_hash,
+                "baseline_xlsx_hashes": baseline_xlsx_hashes,
+                "baseline_xlsx_sizes": xlsx_pair_sizes(local_xlsx_file),
+                "baseline_xlsx_mtimes": baseline_xlsx_mtimes,
+                "microsoft_changed_seed_xlsx_bytes": {label: baseline_xlsx_hashes[label] != generated_xlsx_hashes[label] for label in baseline_xlsx_hashes},
             }
         )
 
@@ -162,7 +163,7 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 details=details,
             )
 
-        if baseline_xlsx_validation_error or not baseline_xlsx_hash:
+        if baseline_xlsx_validation_error or not all(baseline_xlsx_hashes.values()):
             details.update(
                 {
                     "baseline_safe_backup_files": [str(p.relative_to(local_root)) for p in baseline_backups],
@@ -176,7 +177,7 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 details=details,
             )
 
-        if baseline_backups or baseline_partials:
+        if baseline_backups or any(baseline_xlsx_backups.values()) or baseline_partials:
             details.update(
                 {
                     "baseline_safe_backup_files": [str(p.relative_to(local_root)) for p in baseline_backups],
@@ -207,10 +208,11 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
             stderr_file=resync_stderr,
         )
 
-        backups_after_resync = self._safe_backup_files_for(local_text_file) + self._safe_backup_files_for(local_xlsx_file)
+        xlsx_backups_after_resync = xlsx_pair_backup_files(local_xlsx_file, self._safe_backup_files_for)
+        backups_after_resync = self._safe_backup_files_for(local_text_file)
         partials_after_resync = self._partial_files_under(local_root / root_name)
         canonical_xlsx_validation_error = (
-            validate_xlsx(local_xlsx_file, REVISION_0)
+            validate_xlsx_pair(local_xlsx_file, REVISION_0)
             if local_xlsx_file.is_file()
             else "Canonical XLSX is missing"
         )
@@ -223,9 +225,10 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 "canonical_text_mtime_after_resync": int(local_text_file.stat().st_mtime) if local_text_file.is_file() else -1,
                 "canonical_xlsx_exists_after_resync": local_xlsx_file.is_file(),
                 "canonical_xlsx_validation_error_after_resync": canonical_xlsx_validation_error,
-                "canonical_xlsx_hash_after_resync": self._hash_if_file(local_xlsx_file),
-                "canonical_xlsx_mtime_after_resync": int(local_xlsx_file.stat().st_mtime) if local_xlsx_file.is_file() else -1,
+                "canonical_xlsx_hashes_after_resync": xlsx_pair_hashes(local_xlsx_file, self._hash_if_file),
+                "canonical_xlsx_mtimes_after_resync": xlsx_pair_mtimes(local_xlsx_file),
                 "safe_backup_files_after_resync": [str(p.relative_to(local_root)) for p in backups_after_resync],
+                "xlsx_safe_backup_files_after_resync": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in xlsx_backups_after_resync.items()},
                 "partial_files_after_resync": [str(p.relative_to(local_root)) for p in partials_after_resync],
             }
         )
@@ -244,7 +247,7 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
             stderr_file=verify_stderr,
         )
         verify_xlsx_validation_error = (
-            validate_xlsx(verify_xlsx_file, REVISION_0)
+            validate_xlsx_pair(verify_xlsx_file, REVISION_0)
             if verify_xlsx_file.is_file()
             else "Verification XLSX is missing"
         )
@@ -253,7 +256,7 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 "verify_returncode": verify.returncode,
                 "verify_text_hash": self._hash_if_file(verify_text_file),
                 "verify_text_content": self._text_if_file(verify_text_file),
-                "verify_xlsx_hash": self._hash_if_file(verify_xlsx_file),
+                "verify_xlsx_hashes": xlsx_pair_hashes(verify_xlsx_file, self._hash_if_file),
                 "verify_xlsx_validation_error": verify_xlsx_validation_error,
             }
         )
@@ -265,7 +268,7 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 artifacts=artifacts,
                 details=details,
             )
-        if not local_text_file.is_file() or not local_xlsx_file.is_file():
+        if not local_text_file.is_file() or not xlsx_pair_all_files(local_xlsx_file):
             return self.fail_result(
                 reason="Repeated clean resync removed one or more canonical local files",
                 artifacts=artifacts,
@@ -277,7 +280,7 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 artifacts=artifacts,
                 details=details,
             )
-        if canonical_xlsx_validation_error or self._hash_if_file(local_xlsx_file) != baseline_xlsx_hash:
+        if canonical_xlsx_validation_error or xlsx_pair_hashes(local_xlsx_file, self._hash_if_file) != baseline_xlsx_hashes:
             return self.fail_result(
                 reason=f"Repeated clean resync changed or invalidated canonical XLSX content: {canonical_xlsx_validation_error}",
                 artifacts=artifacts,
@@ -305,7 +308,7 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 artifacts=artifacts,
                 details=details,
             )
-        if verify_xlsx_validation_error or self._hash_if_file(verify_xlsx_file) != baseline_xlsx_hash:
+        if verify_xlsx_validation_error or xlsx_pair_hashes(verify_xlsx_file, self._hash_if_file) != baseline_xlsx_hashes:
             return self.fail_result(
                 reason=f"Fresh verification did not confirm that the online XLSX remained unchanged: {verify_xlsx_validation_error}",
                 artifacts=artifacts,

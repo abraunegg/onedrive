@@ -10,7 +10,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists, xlsx_pair_all_files
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
@@ -166,7 +166,7 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             old_local_path,
             xlsx_seed,
             revision=REVISION_0,
@@ -204,7 +204,7 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
                 details,
             )
 
-        settled_validation_error = validate_xlsx(old_local_path, REVISION_0)
+        settled_validation_error = validate_xlsx_pair(old_local_path, REVISION_0)
         details["settled_validation_error"] = settled_validation_error
         if settled_validation_error:
             self._write_metadata(metadata_file, details)
@@ -267,28 +267,37 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
                 f"Test Case {self.case_id}: renaming local files while monitor is running: "
                 f"{old_relative} -> {new_relative}; {old_text_relative} -> {new_text_relative}"
             )
-            old_local_path.rename(new_local_path)
+            rename_xlsx_pair(old_local_path, new_local_path)
             old_text_local_path.rename(new_text_local_path)
-            details["old_local_exists_after_rename"] = old_local_path.exists()
-            details["new_local_exists_after_rename"] = new_local_path.is_file()
+            details["old_local_exists_after_rename"] = xlsx_pair_any_exists(old_local_path)
+            details["new_local_exists_after_rename"] = xlsx_pair_all_files(new_local_path)
             details["old_text_local_exists_after_rename"] = old_text_local_path.exists()
             details["new_text_local_exists_after_rename"] = new_text_local_path.is_file()
 
-            xlsx_move_patterns = [
-                f"[M] Local item moved: {old_relative} -> {new_relative}",
-                f"Moving {old_relative} to {new_relative}",
+            xlsx_variant_groups = []
+            for old_xlsx_relative, new_xlsx_relative in (
+                (old_relative, new_relative),
+                (large_xlsx_relative(old_relative), large_xlsx_relative(new_relative)),
+            ):
+                xlsx_variant_groups.append([
+                    [
+                        f"[M] Local item moved: {old_xlsx_relative} -> {new_xlsx_relative}",
+                        f"Moving {old_xlsx_relative} to {new_xlsx_relative}",
+                    ],
+                    [f"Uploading new file: {new_xlsx_relative} ... done"],
+                ])
+            text_groups = [
+                [
+                    f"[M] Local item moved: {old_text_relative} -> {new_text_relative}",
+                    f"Moving {old_text_relative} to {new_text_relative}",
+                ],
+                [f"Uploading new file: {new_text_relative} ... done"],
             ]
-            xlsx_upload_patterns = [f"Uploading new file: {new_relative} ... done"]
-            text_move_patterns = [
-                f"[M] Local item moved: {old_text_relative} -> {new_text_relative}",
-                f"Moving {old_text_relative} to {new_text_relative}",
-            ]
-            text_upload_patterns = [f"Uploading new file: {new_text_relative} ... done"]
             pattern_groups = [
-                xlsx_move_patterns + text_move_patterns,
-                xlsx_move_patterns + text_upload_patterns,
-                xlsx_upload_patterns + text_move_patterns,
-                xlsx_upload_patterns + text_upload_patterns,
+                small_group + large_group + text_group
+                for small_group in xlsx_variant_groups[0]
+                for large_group in xlsx_variant_groups[1]
+                for text_group in text_groups
             ]
             mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
                 monitor_stdout,
@@ -339,7 +348,7 @@ class TestCase0044MonitorModeLocalRenamePropagation(MonitorModeTestCaseBase):
             else ""
         )
         verify_validation_error = (
-            validate_xlsx(new_verify_path, REVISION_0)
+            validate_xlsx_pair(new_verify_path, REVISION_0)
             if new_verify_path.is_file()
             else "Verification XLSX is missing"
         )

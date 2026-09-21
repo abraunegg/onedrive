@@ -10,7 +10,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, unlink_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
@@ -166,7 +166,7 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
 
         write_text_file(keep_local_path, keep_content)
         write_text_file(delete_local_path, delete_content)
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             delete_xlsx_local_path,
             xlsx_seed,
             revision=REVISION_0,
@@ -174,7 +174,7 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
             title="TC0043 monitor local delete workbook",
         )
         details["generated_xlsx_size"] = int(generated["size_bytes"])
-        details["seed_xlsx_validation_error"] = validate_xlsx(delete_xlsx_local_path, REVISION_0)
+        details["seed_xlsx_validation_error"] = validate_xlsx_pair(delete_xlsx_local_path, REVISION_0)
 
         seed_command = [
             context.onedrive_bin,
@@ -242,15 +242,16 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
             context.log(f"Test Case {self.case_id}: deleting local files while monitor is running: {delete_relative}, {delete_xlsx_relative}")
             if delete_local_path.exists():
                 delete_local_path.unlink()
-            if delete_xlsx_local_path.exists():
-                delete_xlsx_local_path.unlink()
+            if xlsx_pair_any_exists(delete_xlsx_local_path):
+                unlink_xlsx_pair(delete_xlsx_local_path)
 
             details["local_deleted_exists_after_unlink"] = delete_local_path.exists()
-            details["local_deleted_xlsx_exists_after_unlink"] = delete_xlsx_local_path.exists()
+            details["local_deleted_xlsx_exists_after_unlink"] = xlsx_pair_any_exists(delete_xlsx_local_path)
 
             required_patterns = [
                 f"Deleting item from Microsoft OneDrive: {delete_relative}",
                 f"Deleting item from Microsoft OneDrive: {delete_xlsx_relative}",
+                f"Deleting item from Microsoft OneDrive: {large_xlsx_relative(delete_xlsx_relative)}",
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
@@ -292,7 +293,7 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
 
         details["verify_keep_exists"] = keep_verify_path.is_file()
         details["verify_deleted_exists"] = delete_verify_path.exists()
-        details["verify_deleted_xlsx_exists"] = delete_xlsx_verify_path.exists()
+        details["verify_deleted_xlsx_exists"] = xlsx_pair_any_exists(delete_xlsx_verify_path)
 
         self._write_metadata(metadata_file, details)
 
@@ -323,7 +324,7 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
                 details,
             )
 
-        if delete_xlsx_verify_path.exists():
+        if xlsx_pair_any_exists(delete_xlsx_verify_path):
             return self.fail_result(
                 self.case_id,
                 self.name,

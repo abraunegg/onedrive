@@ -6,7 +6,7 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
-from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
+from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, rename_xlsx_pair, unlink_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 
 
@@ -81,21 +81,21 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
         write_text_file(modify_local, initial_modify)
         write_text_file(delete_local, "TC0049 delete me\n")
         write_text_file(rename_old_local, rename_content)
-        generated_modify_xlsx = create_random_xlsx(
+        generated_modify_xlsx = create_random_xlsx_pair(
             modify_xlsx_local,
             f"{xlsx_seed_base}:modify",
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0049 mixed burst modify workbook",
         )
-        generated_delete_xlsx = create_random_xlsx(
+        generated_delete_xlsx = create_random_xlsx_pair(
             delete_xlsx_local,
             f"{xlsx_seed_base}:delete",
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0049 mixed burst delete workbook",
         )
-        generated_rename_xlsx = create_random_xlsx(
+        generated_rename_xlsx = create_random_xlsx_pair(
             rename_old_xlsx_local,
             f"{xlsx_seed_base}:rename",
             revision=REVISION_0,
@@ -142,9 +142,9 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
             return self.fail_result(self.case_id, self.name, f"Seed phase failed with status {seed_result.returncode}", artifacts, details)
 
         seed_xlsx_errors = {
-            "modify": validate_xlsx(modify_xlsx_local, REVISION_0) if modify_xlsx_local.is_file() else "missing",
-            "delete": validate_xlsx(delete_xlsx_local, REVISION_0) if delete_xlsx_local.is_file() else "missing",
-            "rename": validate_xlsx(rename_old_xlsx_local, REVISION_0) if rename_old_xlsx_local.is_file() else "missing",
+            "modify": validate_xlsx_pair(modify_xlsx_local, REVISION_0) if modify_xlsx_local.is_file() else "missing",
+            "delete": validate_xlsx_pair(delete_xlsx_local, REVISION_0) if delete_xlsx_local.is_file() else "missing",
+            "rename": validate_xlsx_pair(rename_old_xlsx_local, REVISION_0) if rename_old_xlsx_local.is_file() else "missing",
         }
         details["seed_xlsx_validation_errors"] = seed_xlsx_errors
         invalid_seed_xlsx = {key: value for key, value in seed_xlsx_errors.items() if value}
@@ -171,15 +171,14 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
 
             write_text_file(create_local, create_content)
             write_text_file(modify_local, final_modify)
-            mutate_xlsx_revision(modify_xlsx_local, REVISION_0, REVISION_1)
-            details["modified_xlsx_validation_error"] = validate_xlsx(modify_xlsx_local, REVISION_1)
+            mutate_xlsx_pair_revision(modify_xlsx_local, REVISION_0, REVISION_1)
+            details["modified_xlsx_validation_error"] = validate_xlsx_pair(modify_xlsx_local, REVISION_1)
             if delete_local.exists():
                 delete_local.unlink()
-            if delete_xlsx_local.exists():
-                delete_xlsx_local.unlink()
+            unlink_xlsx_pair(delete_xlsx_local)
             rename_old_local.rename(rename_new_local)
-            rename_old_xlsx_local.rename(rename_new_xlsx_local)
-            generated_create_xlsx = create_random_xlsx(
+            rename_xlsx_pair(rename_old_xlsx_local, rename_new_xlsx_local)
+            generated_create_xlsx = create_random_xlsx_pair(
                 create_xlsx_local,
                 f"{xlsx_seed_base}:create",
                 revision=REVISION_0,
@@ -187,25 +186,39 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
                 title="TC0049 mixed burst create workbook",
             )
             details["generated_create_xlsx_size"] = int(generated_create_xlsx["size_bytes"])
-            details["created_xlsx_validation_error"] = validate_xlsx(create_xlsx_local, REVISION_0)
+            details["created_xlsx_validation_error"] = validate_xlsx_pair(create_xlsx_local, REVISION_0)
 
             fixed_patterns = [
                 f"Uploading new file: {create_relative} ... done",
                 f"Uploading modified file: {modify_relative} ... done",
                 f"Deleting item from Microsoft OneDrive: {delete_relative}",
                 f"Uploading new file: {create_xlsx_relative} ... done",
+                f"Uploading new file: {large_xlsx_relative(create_xlsx_relative)} ... done",
                 f"Uploading modified file: {modify_xlsx_relative} ... done",
+                f"Uploading modified file: {large_xlsx_relative(modify_xlsx_relative)} ... done",
                 f"Deleting item from Microsoft OneDrive: {delete_xlsx_relative}",
+                f"Deleting item from Microsoft OneDrive: {large_xlsx_relative(delete_xlsx_relative)}",
             ]
             text_rename_move = [f"[M] Local item moved: {rename_old_relative} -> {rename_new_relative}", f"Moving {rename_old_relative} to {rename_new_relative}"]
             text_rename_recreate = [f"Deleting item from Microsoft OneDrive: {rename_old_relative}", f"Uploading new file: {rename_new_relative} ... done"]
-            xlsx_rename_move = [f"[M] Local item moved: {rename_old_xlsx_relative} -> {rename_new_xlsx_relative}", f"Moving {rename_old_xlsx_relative} to {rename_new_xlsx_relative}"]
-            xlsx_rename_recreate = [f"Deleting item from Microsoft OneDrive: {rename_old_xlsx_relative}", f"Uploading new file: {rename_new_xlsx_relative} ... done"]
+            xlsx_rename_groups = []
+            for old_xlsx_relative, new_xlsx_relative in (
+                (rename_old_xlsx_relative, rename_new_xlsx_relative),
+                (large_xlsx_relative(rename_old_xlsx_relative), large_xlsx_relative(rename_new_xlsx_relative)),
+            ):
+                xlsx_rename_groups.append([
+                    f"[M] Local item moved: {old_xlsx_relative} -> {new_xlsx_relative}",
+                    f"Moving {old_xlsx_relative} to {new_xlsx_relative}",
+                ])
+                xlsx_rename_groups.append([
+                    f"Deleting item from Microsoft OneDrive: {old_xlsx_relative}",
+                    f"Uploading new file: {new_xlsx_relative} ... done",
+                ])
             rename_groups = [
-                text_rename_move + xlsx_rename_move,
-                text_rename_move + xlsx_rename_recreate,
-                text_rename_recreate + xlsx_rename_move,
-                text_rename_recreate + xlsx_rename_recreate,
+                text_group + first_xlsx_group + second_xlsx_group
+                for text_group in (text_rename_move, text_rename_recreate)
+                for first_xlsx_group in xlsx_rename_groups[0:2]
+                for second_xlsx_group in xlsx_rename_groups[2:4]
             ]
             fixed_ok, rename_ok, matched_group, post_mutation_log_segment = self._wait_for_required_patterns_and_any_group(
                 monitor_stdout,
@@ -240,11 +253,11 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
         details["verify_rename_new_content"] = rename_new_verify.read_text(encoding="utf-8") if rename_new_verify.is_file() else ""
         details["verify_create_exists"] = create_verify.is_file()
         details["verify_create_content"] = create_verify.read_text(encoding="utf-8") if create_verify.is_file() else ""
-        details["verify_modify_xlsx_validation_error"] = (validate_xlsx(modify_xlsx_verify, REVISION_1) if modify_xlsx_verify.is_file() else "missing")
-        details["verify_delete_xlsx_exists"] = delete_xlsx_verify.exists()
-        details["verify_rename_old_xlsx_exists"] = rename_old_xlsx_verify.exists()
-        details["verify_rename_new_xlsx_validation_error"] = (validate_xlsx(rename_new_xlsx_verify, REVISION_0) if rename_new_xlsx_verify.is_file() else "missing")
-        details["verify_create_xlsx_validation_error"] = (validate_xlsx(create_xlsx_verify, REVISION_0) if create_xlsx_verify.is_file() else "missing")
+        details["verify_modify_xlsx_validation_error"] = (validate_xlsx_pair(modify_xlsx_verify, REVISION_1) if modify_xlsx_verify.is_file() else "missing")
+        details["verify_delete_xlsx_exists"] = xlsx_pair_any_exists(delete_xlsx_verify)
+        details["verify_rename_old_xlsx_exists"] = xlsx_pair_any_exists(rename_old_xlsx_verify)
+        details["verify_rename_new_xlsx_validation_error"] = (validate_xlsx_pair(rename_new_xlsx_verify, REVISION_0) if rename_new_xlsx_verify.is_file() else "missing")
+        details["verify_create_xlsx_validation_error"] = (validate_xlsx_pair(create_xlsx_verify, REVISION_0) if create_xlsx_verify.is_file() else "missing")
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
@@ -259,9 +272,9 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
             return self.fail_result(self.case_id, self.name, f"Remote verification did not preserve created file state: {create_relative}", artifacts, details)
         if details["verify_modify_xlsx_validation_error"]:
             return self.fail_result(self.case_id, self.name, f"Remote verification did not preserve modified XLSX revision: {modify_xlsx_relative}", artifacts, details)
-        if delete_xlsx_verify.exists():
+        if xlsx_pair_any_exists(delete_xlsx_verify):
             return self.fail_result(self.case_id, self.name, f"Remote verification still contains deleted XLSX: {delete_xlsx_relative}", artifacts, details)
-        if rename_old_xlsx_verify.exists() or details["verify_rename_new_xlsx_validation_error"]:
+        if xlsx_pair_any_exists(rename_old_xlsx_verify) or details["verify_rename_new_xlsx_validation_error"]:
             return self.fail_result(self.case_id, self.name, "Remote verification did not preserve renamed XLSX state correctly", artifacts, details)
         if details["verify_create_xlsx_validation_error"]:
             return self.fail_result(self.case_id, self.name, f"Remote verification did not preserve created XLSX state: {create_xlsx_relative}", artifacts, details)

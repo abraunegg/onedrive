@@ -8,7 +8,7 @@ from pathlib import Path
 from framework.context import E2EContext
 from framework.result import TestResult
 from framework.utils import reset_directory, write_text_file
-from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
+from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, copy_xlsx_pair, xlsx_pair_hashes, xlsx_pair_paths, xlsx_pair_backup_files, validate_xlsx_pair_backups, xlsx_pair_backup_hashes
 from testcases.safe_backup_case_base import SafeBackupCaseBase
 
 
@@ -55,7 +55,7 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
         remote_newer_text = "TC0073 newer remote replacement\n"
         write_text_file(seed_text, baseline_text)
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0073:{os.getpid()}"
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             seed_xlsx,
             xlsx_seed,
             revision=REVISION_0,
@@ -92,7 +92,7 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
             stdout_file=phase_files["initial"][0],
             stderr_file=phase_files["initial"][1],
         )
-        initial_xlsx_error = validate_xlsx(local_xlsx, REVISION_0)
+        initial_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_0)
         details.update(
             {
                 "seed_returncode": seed.returncode,
@@ -110,29 +110,35 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
 
         # Fork the Microsoft-settled workbook before creating local and remote revisions.
         updater_xlsx.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(local_xlsx, updater_xlsx)
+        copy_xlsx_pair(local_xlsx, updater_xlsx)
 
         time.sleep(2)
         write_text_file(local_text, local_conflict_text)
-        mutate_xlsx_revision(local_xlsx, REVISION_0, REVISION_1)
+        mutate_xlsx_pair_revision(local_xlsx, REVISION_0, REVISION_1)
         local_text_hash = self._hash_if_file(local_text)
-        local_xlsx_hash = self._hash_if_file(local_xlsx)
+        local_xlsx_hashes = xlsx_pair_hashes(local_xlsx, self._hash_if_file)
 
         existing_text_backup = self._device_safe_backup_name(local_text, 1)
-        existing_xlsx_backup = self._device_safe_backup_name(local_xlsx, 1)
+        existing_xlsx_backups = {
+            label: self._device_safe_backup_name(path, 1)
+            for label, path in zip(("small", "large"), xlsx_pair_paths(local_xlsx))
+        }
         existing_text_backup.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(local_text, existing_text_backup)
-        shutil.copy2(local_xlsx, existing_xlsx_backup)
-        existing_xlsx_error = validate_xlsx(existing_xlsx_backup, REVISION_1)
+        for source, destination in zip(xlsx_pair_paths(local_xlsx), existing_xlsx_backups.values()):
+            shutil.copy2(source, destination)
+        existing_xlsx_backup_groups = {label: [path] for label, path in existing_xlsx_backups.items()}
+        existing_xlsx_error = validate_xlsx_pair_backups(existing_xlsx_backup_groups, REVISION_1)
+        existing_xlsx_hashes = {label: self._hash_if_file(path) for label, path in existing_xlsx_backups.items()}
         if (
             self._hash_if_file(existing_text_backup) != local_text_hash
-            or self._hash_if_file(existing_xlsx_backup) != local_xlsx_hash
+            or existing_xlsx_hashes != local_xlsx_hashes
             or existing_xlsx_error
         ):
             details.update(
                 {
                     "existing_text_backup_hash": self._hash_if_file(existing_text_backup),
-                    "existing_xlsx_backup_hash": self._hash_if_file(existing_xlsx_backup),
+                    "existing_xlsx_backup_hashes": existing_xlsx_hashes,
                     "existing_xlsx_validation_error": existing_xlsx_error,
                 }
             )
@@ -145,7 +151,7 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
 
         time.sleep(2)
         write_text_file(updater_text, remote_newer_text)
-        mutate_xlsx_revision(updater_xlsx, REVISION_0, REVISION_2)
+        mutate_xlsx_pair_revision(updater_xlsx, REVISION_0, REVISION_2)
         update = self._run_phase(
             context,
             label="remote update",
@@ -170,11 +176,11 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
             stderr_file=phase_files["reconcile"][1],
         )
         text_backups = self._safe_backup_files_for(local_text)
-        xlsx_backups = self._safe_backup_files_for(local_xlsx)
+        xlsx_backups = xlsx_pair_backup_files(local_xlsx, self._safe_backup_files_for)
         combined = reconcile.stdout + "\n" + reconcile.stderr
         reuse_marker_count = combined.count("reusing existing preservation")
-        canonical_xlsx_error = validate_xlsx(local_xlsx, REVISION_2) if local_xlsx.is_file() else "Canonical XLSX is missing"
-        backup_xlsx_error = validate_xlsx(existing_xlsx_backup, REVISION_1) if existing_xlsx_backup.is_file() else "Existing XLSX safeBackup is missing"
+        canonical_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_2) if local_xlsx.is_file() else "Canonical XLSX is missing"
+        backup_xlsx_error = validate_xlsx_pair_backups(xlsx_backups, REVISION_1)
         details.update(
             {
                 "reconcile_returncode": reconcile.returncode,
@@ -182,9 +188,9 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
                 "canonical_text_content": self._text_if_file(local_text),
                 "canonical_xlsx_validation_error": canonical_xlsx_error,
                 "text_safe_backup_files": [str(p.relative_to(local_root)) for p in text_backups],
-                "xlsx_safe_backup_files": [str(p.relative_to(local_root)) for p in xlsx_backups],
+                "xlsx_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in xlsx_backups.items()},
                 "local_text_hash": local_text_hash,
-                "local_xlsx_hash": local_xlsx_hash,
+                "local_xlsx_hashes": local_xlsx_hashes,
                 "existing_xlsx_validation_error_after_reconcile": backup_xlsx_error,
             }
         )
@@ -196,7 +202,7 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
             stdout_file=phase_files["verify"][0],
             stderr_file=phase_files["verify"][1],
         )
-        verify_xlsx_error = validate_xlsx(verify_xlsx, REVISION_2) if verify_xlsx.is_file() else "Verification canonical XLSX is missing"
+        verify_xlsx_error = validate_xlsx_pair(verify_xlsx, REVISION_2) if verify_xlsx.is_file() else "Verification canonical XLSX is missing"
         details.update(
             {
                 "verify_returncode": verify.returncode,
@@ -231,9 +237,8 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
                 details=details,
             )
         if (
-            len(xlsx_backups) != 1
-            or xlsx_backups[0] != existing_xlsx_backup
-            or self._hash_if_file(xlsx_backups[0]) != local_xlsx_hash
+            any(len(paths) != 1 or paths[0] != existing_xlsx_backups[label] for label, paths in xlsx_backups.items())
+            or xlsx_pair_backup_hashes(xlsx_backups, self._hash_if_file) != local_xlsx_hashes
             or backup_xlsx_error
         ):
             return self.fail_result(

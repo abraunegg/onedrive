@@ -7,7 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, validate_xlsx_pair, unlink_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists, xlsx_pair_all_files
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -150,7 +150,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
 
         # Phase 1: seed initial remote state with passive TXT + real XLSX targets and anchor file
         write_text_file(local_target_path, initial_content)
-        initial_xlsx = create_random_xlsx(
+        initial_xlsx = create_random_xlsx_pair(
             local_xlsx_path,
             initial_xlsx_seed,
             revision=REVISION_0,
@@ -158,7 +158,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
             title="TC0038 initial delete/recreate workbook",
         )
         details["initial_xlsx_generated_size"] = int(initial_xlsx["size_bytes"])
-        details["initial_xlsx_validation_error"] = validate_xlsx(local_xlsx_path, REVISION_0)
+        details["initial_xlsx_validation_error"] = validate_xlsx_pair(local_xlsx_path, REVISION_0)
         write_text_file(local_anchor_path, anchor_content)
 
         phase1_command = [
@@ -192,11 +192,11 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
         # Phase 2: delete both target files and sync the deletions
         if local_target_path.exists():
             local_target_path.unlink()
-        if local_xlsx_path.exists():
-            local_xlsx_path.unlink()
+        if xlsx_pair_any_exists(local_xlsx_path):
+            unlink_xlsx_pair(local_xlsx_path)
 
         details["local_target_exists_after_delete"] = local_target_path.exists()
-        details["local_xlsx_exists_after_delete"] = local_xlsx_path.exists()
+        details["local_xlsx_exists_after_delete"] = xlsx_pair_any_exists(local_xlsx_path)
         details["local_anchor_exists_after_delete"] = local_anchor_path.is_file()
 
         if local_target_path.exists():
@@ -259,7 +259,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
 
         # Phase 3: recreate different files with the same names and sync again
         write_text_file(local_target_path, recreated_content)
-        recreated_xlsx = create_random_xlsx(
+        recreated_xlsx = create_random_xlsx_pair(
             local_xlsx_path,
             recreated_xlsx_seed,
             revision=REVISION_1,
@@ -267,10 +267,10 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
             title="TC0038 recreated delete/recreate workbook",
         )
         details["recreated_xlsx_generated_size"] = int(recreated_xlsx["size_bytes"])
-        details["recreated_xlsx_validation_error"] = validate_xlsx(local_xlsx_path, REVISION_1)
+        details["recreated_xlsx_validation_error"] = validate_xlsx_pair(local_xlsx_path, REVISION_1)
 
         details["local_target_exists_after_recreate"] = local_target_path.is_file()
-        details["local_xlsx_exists_after_recreate"] = local_xlsx_path.is_file()
+        details["local_xlsx_exists_after_recreate"] = xlsx_pair_all_files(local_xlsx_path)
         details["local_target_size_after_recreate"] = (
             local_target_path.stat().st_size if local_target_path.is_file() else -1
         )
@@ -285,7 +285,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
                 artifacts,
                 details,
             )
-        if not local_xlsx_path.is_file():
+        if not xlsx_pair_all_files(local_xlsx_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -350,7 +350,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
 
         details["verify_manifest"] = verify_manifest
         details["verified_target_exists"] = verify_target_path.is_file()
-        details["verified_xlsx_exists"] = verify_xlsx_path.is_file()
+        details["verified_xlsx_exists"] = xlsx_pair_all_files(verify_xlsx_path)
         details["verified_anchor_exists"] = verify_anchor_path.is_file()
 
         verified_target_content = (
@@ -359,7 +359,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
             else ""
         )
         details["verified_target_content"] = verified_target_content
-        verified_xlsx_validation_error = validate_xlsx(verify_xlsx_path, REVISION_1)
+        verified_xlsx_validation_error = validate_xlsx_pair(verify_xlsx_path, REVISION_1)
         details["verified_xlsx_validation_error"] = verified_xlsx_validation_error
 
         expected_manifest = [
@@ -367,6 +367,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
             anchor_relative,
             target_relative,
             xlsx_relative,
+            large_xlsx_relative(xlsx_relative),
         ]
         details["expected_manifest"] = expected_manifest
 
@@ -399,7 +400,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
                 details,
             )
 
-        if not verify_xlsx_path.is_file():
+        if not xlsx_pair_all_files(verify_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,

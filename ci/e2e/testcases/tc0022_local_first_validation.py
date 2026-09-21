@@ -16,7 +16,7 @@ from framework.utils import (
     write_onedrive_config,
     write_text_file,
 )
-from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
+from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, set_xlsx_pair_mtime, xlsx_pair_hashes, xlsx_pair_sizes, xlsx_pair_mtimes
 
 
 class TestCase0022LocalFirstValidation(E2ETestCase):
@@ -84,14 +84,14 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
 
         write_text_file(seed_text_file, text_seed_content)
         write_text_file(remote_update_text_file, text_remote_content)
-        generated_seed = create_random_xlsx(
+        generated_seed = create_random_xlsx_pair(
             seed_xlsx_file,
             xlsx_seed,
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0022 local_first baseline workbook",
         )
-        generated_remote = create_random_xlsx(
+        generated_remote = create_random_xlsx_pair(
             remote_update_xlsx_file,
             xlsx_seed,
             revision=REVISION_1,
@@ -186,15 +186,15 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
 
         baseline_text_content = local_text_file.read_text(encoding="utf-8") if local_text_file.is_file() else ""
         baseline_xlsx_validation_error = (
-            validate_xlsx(local_xlsx_file, REVISION_0)
+            validate_xlsx_pair(local_xlsx_file, REVISION_0)
             if local_xlsx_file.is_file()
             else "Local baseline XLSX is missing"
         )
         details["baseline_text_content"] = baseline_text_content
         details["baseline_xlsx_validation_error"] = baseline_xlsx_validation_error
         if local_xlsx_file.is_file():
-            details["baseline_xlsx_hash"] = compute_quickxor_hash_file(local_xlsx_file)
-            details["baseline_xlsx_size"] = local_xlsx_file.stat().st_size
+            details["baseline_xlsx_hashes"] = xlsx_pair_hashes(local_xlsx_file, compute_quickxor_hash_file)
+            details["baseline_xlsx_sizes"] = xlsx_pair_sizes(local_xlsx_file)
 
         remote_command = [
             context.onedrive_bin,
@@ -220,23 +220,23 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
 
         write_text_file(local_text_file, text_expected_local)
         local_xlsx_revision_error = ""
-        expected_xlsx_hash = ""
+        expected_xlsx_hashes = {}
         if local_xlsx_file.is_file() and not baseline_xlsx_validation_error:
-            mutate_xlsx_revision(local_xlsx_file, REVISION_0, REVISION_2)
-            local_xlsx_revision_error = validate_xlsx(local_xlsx_file, REVISION_2)
-            expected_xlsx_hash = compute_quickxor_hash_file(local_xlsx_file)
+            mutate_xlsx_pair_revision(local_xlsx_file, REVISION_0, REVISION_2)
+            local_xlsx_revision_error = validate_xlsx_pair(local_xlsx_file, REVISION_2)
+            expected_xlsx_hashes = xlsx_pair_hashes(local_xlsx_file, compute_quickxor_hash_file)
         else:
             local_xlsx_revision_error = baseline_xlsx_validation_error or "Unable to mutate missing local XLSX"
 
         now = time.time()
         os.utime(local_text_file, (now, now))
         if local_xlsx_file.exists():
-            os.utime(local_xlsx_file, (now, now))
+            set_xlsx_pair_mtime(local_xlsx_file, (now, now))
 
         details["local_xlsx_revision_error"] = local_xlsx_revision_error
-        details["expected_local_xlsx_hash"] = expected_xlsx_hash
+        details["expected_local_xlsx_hashes"] = expected_xlsx_hashes
         details["local_text_mtime_before_final_sync"] = local_text_file.stat().st_mtime if local_text_file.exists() else 0
-        details["local_xlsx_mtime_before_final_sync"] = local_xlsx_file.stat().st_mtime if local_xlsx_file.exists() else 0
+        details["local_xlsx_mtimes_before_final_sync"] = xlsx_pair_mtimes(local_xlsx_file)
 
         # Reuse the same local DB / delta state, but enable local_first.
         self._write_config(conf_local / "config", local_root, local_first=True)
@@ -280,17 +280,17 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         local_text_content = local_text_file.read_text(encoding="utf-8") if local_text_file.is_file() else ""
         remote_text_content = verify_text_file.read_text(encoding="utf-8") if verify_text_file.is_file() else ""
         local_xlsx_validation_error = (
-            validate_xlsx(local_xlsx_file, REVISION_2)
+            validate_xlsx_pair(local_xlsx_file, REVISION_2)
             if local_xlsx_file.is_file()
             else "Local XLSX is missing"
         )
         remote_xlsx_validation_error = (
-            validate_xlsx(verify_xlsx_file, REVISION_2)
+            validate_xlsx_pair(verify_xlsx_file, REVISION_2)
             if verify_xlsx_file.is_file()
             else "Remote verification XLSX is missing"
         )
-        local_xlsx_hash = compute_quickxor_hash_file(local_xlsx_file) if local_xlsx_file.is_file() else ""
-        remote_xlsx_hash = compute_quickxor_hash_file(verify_xlsx_file) if verify_xlsx_file.is_file() else ""
+        local_xlsx_hashes = xlsx_pair_hashes(local_xlsx_file, compute_quickxor_hash_file)
+        remote_xlsx_hashes = xlsx_pair_hashes(verify_xlsx_file, compute_quickxor_hash_file)
 
         details.update(
             {
@@ -303,8 +303,8 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                 "remote_text_content": remote_text_content,
                 "local_xlsx_validation_error": local_xlsx_validation_error,
                 "remote_xlsx_validation_error": remote_xlsx_validation_error,
-                "local_xlsx_hash": local_xlsx_hash,
-                "remote_xlsx_hash": remote_xlsx_hash,
+                "local_xlsx_hashes": local_xlsx_hashes,
+                "remote_xlsx_hashes": remote_xlsx_hashes,
             }
         )
         write_text_file(
@@ -391,7 +391,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                 details,
             )
 
-        if not expected_xlsx_hash or local_xlsx_hash != expected_xlsx_hash:
+        if not expected_xlsx_hashes or local_xlsx_hashes != expected_xlsx_hashes:
             return self.fail_result(
                 self.case_id,
                 self.name,

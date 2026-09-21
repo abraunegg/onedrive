@@ -8,7 +8,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, xlsx_pair_any_exists, xlsx_pair_all_files
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -169,7 +169,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         # Phase 1: seed original remote state with both payload classes.
         write_text_file(seed_source_txt_path, initial_content)
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             seed_source_xlsx_path,
             xlsx_seed,
             revision=REVISION_0,
@@ -221,7 +221,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
-        settled_validation_error = validate_xlsx(seed_source_xlsx_path, REVISION_0)
+        settled_validation_error = validate_xlsx_pair(seed_source_xlsx_path, REVISION_0)
         details["settled_validation_error"] = settled_validation_error
         if settled_validation_error:
             self._write_metadata(metadata_file, details)
@@ -266,7 +266,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
         # This is our remote-side move mechanism.
         seed_destination_txt_path.parent.mkdir(parents=True, exist_ok=True)
         seed_source_txt_path.rename(seed_destination_txt_path)
-        seed_source_xlsx_path.rename(seed_destination_xlsx_path)
+        rename_xlsx_pair(seed_source_xlsx_path, seed_destination_xlsx_path)
 
         details["seed_source_txt_exists_after_local_move"] = seed_source_txt_path.exists()
         details["seed_destination_txt_exists_after_local_move"] = seed_destination_txt_path.is_file()
@@ -274,7 +274,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
         details["seed_destination_xlsx_exists_after_local_move"] = seed_destination_xlsx_path.is_file()
         details["seed_anchor_exists_after_local_move"] = seed_anchor_path.is_file()
 
-        if seed_source_txt_path.exists() or seed_source_xlsx_path.exists():
+        if seed_source_txt_path.exists() or xlsx_pair_any_exists(seed_source_xlsx_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -284,7 +284,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
-        if not seed_destination_txt_path.is_file() or not seed_destination_xlsx_path.is_file():
+        if not seed_destination_txt_path.is_file() or not xlsx_pair_all_files(seed_destination_xlsx_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -344,8 +344,8 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         details["stale_source_txt_exists_after_reconcile"] = stale_source_txt_path.exists()
         details["stale_destination_txt_exists_after_reconcile"] = stale_destination_txt_path.is_file()
-        details["stale_source_xlsx_exists_after_reconcile"] = stale_source_xlsx_path.exists()
-        details["stale_destination_xlsx_exists_after_reconcile"] = stale_destination_xlsx_path.is_file()
+        details["stale_source_xlsx_exists_after_reconcile"] = xlsx_pair_any_exists(stale_source_xlsx_path)
+        details["stale_destination_xlsx_exists_after_reconcile"] = xlsx_pair_all_files(stale_destination_xlsx_path)
         details["stale_anchor_exists_after_reconcile"] = stale_anchor_path.is_file()
         details["stale_source_dir_files_after_reconcile"] = self._list_files_under(stale_source_dir)
 
@@ -357,8 +357,8 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
         details["stale_destination_txt_content"] = stale_destination_txt_content
 
         stale_destination_validation_error = (
-            validate_xlsx(stale_destination_xlsx_path, REVISION_0)
-            if stale_destination_xlsx_path.is_file()
+            validate_xlsx_pair(stale_destination_xlsx_path, REVISION_0)
+            if xlsx_pair_all_files(stale_destination_xlsx_path)
             else "Stale client XLSX is missing"
         )
         details["stale_destination_validation_error"] = stale_destination_validation_error
@@ -398,8 +398,8 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         details["verify_source_txt_exists"] = verify_source_txt_path.exists()
         details["verify_destination_txt_exists"] = verify_destination_txt_path.is_file()
-        details["verify_source_xlsx_exists"] = verify_source_xlsx_path.exists()
-        details["verify_destination_xlsx_exists"] = verify_destination_xlsx_path.is_file()
+        details["verify_source_xlsx_exists"] = xlsx_pair_any_exists(verify_source_xlsx_path)
+        details["verify_destination_xlsx_exists"] = xlsx_pair_all_files(verify_destination_xlsx_path)
         details["verify_anchor_exists"] = verify_anchor_path.is_file()
         details["verify_source_dir_files"] = self._list_files_under(verify_source_dir)
 
@@ -411,8 +411,8 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
         details["verify_destination_txt_content"] = verify_destination_txt_content
 
         verify_destination_validation_error = (
-            validate_xlsx(verify_destination_xlsx_path, REVISION_0)
-            if verify_destination_xlsx_path.is_file()
+            validate_xlsx_pair(verify_destination_xlsx_path, REVISION_0)
+            if xlsx_pair_all_files(verify_destination_xlsx_path)
             else "Verification XLSX is missing"
         )
         details["verify_destination_validation_error"] = verify_destination_validation_error
@@ -429,7 +429,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             )
 
         # Stale client assertions: existing-state client must reconcile both payload classes cleanly.
-        if stale_source_txt_path.exists() or stale_source_xlsx_path.exists():
+        if stale_source_txt_path.exists() or xlsx_pair_any_exists(stale_source_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -465,7 +465,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
-        if not stale_destination_xlsx_path.is_file():
+        if not xlsx_pair_all_files(stale_destination_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -493,7 +493,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             )
 
         # Verify assertions: fresh remote truth must also be correct for both payload classes.
-        if verify_source_txt_path.exists() or verify_source_xlsx_path.exists():
+        if verify_source_txt_path.exists() or xlsx_pair_any_exists(verify_source_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -529,7 +529,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
-        if not verify_destination_xlsx_path.is_file():
+        if not xlsx_pair_all_files(verify_destination_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,

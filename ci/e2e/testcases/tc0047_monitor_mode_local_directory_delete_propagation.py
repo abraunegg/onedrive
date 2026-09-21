@@ -6,7 +6,7 @@ import shutil
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, large_xlsx_relative
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 
@@ -63,7 +63,7 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
         write_text_file(delete_file1_local_path, "TC0047 delete file 1\n")
         write_text_file(delete_file2_local_path, "TC0047 delete file 2\n")
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0047:{os.getpid()}"
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             delete_xlsx_local_path,
             xlsx_seed,
             revision=REVISION_0,
@@ -91,7 +91,7 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
             "xlsx_seed": xlsx_seed,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_xlsx_size": int(generated["size_bytes"]),
-            "seed_xlsx_validation_error": validate_xlsx(delete_xlsx_local_path, REVISION_0),
+            "seed_xlsx_validation_error": validate_xlsx_pair(delete_xlsx_local_path, REVISION_0),
         }
 
         seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(conf_main)]
@@ -117,10 +117,13 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
 
             shutil.rmtree(delete_dir_local_path)
             groups = [
-                [f"Deleting item from Microsoft OneDrive: {delete_file1_relative}"],
-                [f"Deleting item from Microsoft OneDrive: {delete_file2_relative}"],
-                [f"Deleting item from Microsoft OneDrive: {delete_xlsx_relative}"],
                 [f"Deleting item from Microsoft OneDrive: {delete_dir_relative}"],
+                [
+                    f"Deleting item from Microsoft OneDrive: {delete_file1_relative}",
+                    f"Deleting item from Microsoft OneDrive: {delete_file2_relative}",
+                    f"Deleting item from Microsoft OneDrive: {delete_xlsx_relative}",
+                    f"Deleting item from Microsoft OneDrive: {large_xlsx_relative(delete_xlsx_relative)}",
+                ],
             ]
             mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
                 monitor_stdout,

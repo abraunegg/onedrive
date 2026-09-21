@@ -7,7 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, xlsx_pair_any_exists, xlsx_pair_all_files
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -127,7 +127,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         }
 
         write_text_file(old_txt_local_path, txt_content)
-        generated = create_random_xlsx(
+        generated = create_random_xlsx_pair(
             old_xlsx_local_path,
             xlsx_seed,
             revision=REVISION_0,
@@ -162,7 +162,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        settled_xlsx_validation_error = validate_xlsx(old_xlsx_local_path, REVISION_0)
+        settled_xlsx_validation_error = validate_xlsx_pair(old_xlsx_local_path, REVISION_0)
         details["settled_xlsx_validation_error"] = settled_xlsx_validation_error
         details["settled_txt_content"] = (
             old_txt_local_path.read_text(encoding="utf-8") if old_txt_local_path.is_file() else ""
@@ -189,14 +189,14 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             )
 
         old_txt_local_path.rename(new_txt_local_path)
-        old_xlsx_local_path.rename(new_xlsx_local_path)
+        rename_xlsx_pair(old_xlsx_local_path, new_xlsx_local_path)
 
         details["old_txt_exists_after_local_rename"] = old_txt_local_path.exists()
         details["new_txt_exists_after_local_rename"] = new_txt_local_path.is_file()
         details["old_xlsx_exists_after_local_rename"] = old_xlsx_local_path.exists()
         details["new_xlsx_exists_after_local_rename"] = new_xlsx_local_path.is_file()
 
-        if old_txt_local_path.exists() or old_xlsx_local_path.exists():
+        if old_txt_local_path.exists() or xlsx_pair_any_exists(old_xlsx_local_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -206,7 +206,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        if not new_txt_local_path.is_file() or not new_xlsx_local_path.is_file():
+        if not new_txt_local_path.is_file() or not xlsx_pair_all_files(new_xlsx_local_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -277,7 +277,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             verify_new_txt_path.read_text(encoding="utf-8") if verify_new_txt_path.is_file() else ""
         )
         verify_xlsx_validation_error = (
-            validate_xlsx(verify_new_xlsx_path, REVISION_0)
+            validate_xlsx_pair(verify_new_xlsx_path, REVISION_0)
             if verify_new_xlsx_path.is_file()
             else "Verification XLSX is missing"
         )
@@ -294,7 +294,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        if verify_old_txt_path.exists() or verify_old_xlsx_path.exists():
+        if verify_old_txt_path.exists() or xlsx_pair_any_exists(verify_old_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -303,7 +303,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        if not verify_new_txt_path.is_file() or not verify_new_xlsx_path.is_file():
+        if not verify_new_txt_path.is_file() or not xlsx_pair_all_files(verify_new_xlsx_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
