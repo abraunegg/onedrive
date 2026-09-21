@@ -203,11 +203,24 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
             stderr_file=phase_files["verify"][1],
         )
         verify_xlsx_error = validate_xlsx_pair(verify_xlsx, REVISION_2) if verify_xlsx.is_file() else "Verification canonical XLSX is missing"
+        remote_xlsx_backups = xlsx_pair_backup_files(verify_xlsx, self._safe_backup_files_for)
+        remote_xlsx_backup_error = validate_xlsx_pair_backups(remote_xlsx_backups, REVISION_1)
+        xlsx_backup_hash_error, xlsx_backup_hash_modes = self._xlsx_safe_backup_hash_contract(
+            reconcile_output=reconcile.stdout + "\n" + reconcile.stderr,
+            local_backups=xlsx_backups,
+            expected_original_hashes=local_xlsx_hashes,
+            remote_backups=remote_xlsx_backups,
+        )
         details.update(
             {
                 "verify_returncode": verify.returncode,
                 "verify_text_content": self._text_if_file(verify_text),
                 "verify_xlsx_validation_error": verify_xlsx_error,
+                "verify_xlsx_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_xlsx_backups.items()},
+                "verify_xlsx_safe_backup_hashes": xlsx_pair_backup_hashes(remote_xlsx_backups, self._hash_if_file),
+                "verify_xlsx_safe_backup_validation_error": remote_xlsx_backup_error,
+                "xlsx_safe_backup_hash_contract_error": xlsx_backup_hash_error,
+                "xlsx_safe_backup_hash_modes": xlsx_backup_hash_modes,
             }
         )
         self._write_metadata(metadata_file, details)
@@ -238,7 +251,6 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
             )
         if (
             any(len(paths) != 1 or paths[0] != existing_xlsx_backups[label] for label, paths in xlsx_backups.items())
-            or xlsx_pair_backup_hashes(xlsx_backups, self._hash_if_file) != local_xlsx_hashes
             or backup_xlsx_error
         ):
             return self.fail_result(
@@ -255,6 +267,18 @@ class TestCase0073SafeBackupExistingPreservationReuseValidation(SafeBackupCaseBa
         if verify.returncode != 0 or self._text_if_file(verify_text) != remote_newer_text or verify_xlsx_error:
             return self.fail_result(
                 reason=f"Fresh verification did not confirm newer remote TXT/XLSX canonical content: {verify_xlsx_error}",
+                artifacts=artifacts,
+                details=details,
+            )
+        if remote_xlsx_backup_error:
+            return self.fail_result(
+                reason=f"Fresh verification did not confirm the reused revision-1 XLSX safeBackup online: {remote_xlsx_backup_error}",
+                artifacts=artifacts,
+                details=details,
+            )
+        if xlsx_backup_hash_error:
+            return self.fail_result(
+                reason=f"Reused XLSX safeBackup preservation/hash contract failed: {xlsx_backup_hash_error}",
                 artifacts=artifacts,
                 details=details,
             )

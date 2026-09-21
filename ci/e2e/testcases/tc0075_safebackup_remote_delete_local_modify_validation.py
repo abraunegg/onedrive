@@ -188,6 +188,12 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
         remote_text_backups = self._safe_backup_files_for(verify_text)
         remote_xlsx_backups = xlsx_pair_backup_files(verify_xlsx, self._safe_backup_files_for)
         remote_xlsx_backup_error = validate_xlsx_pair_backups(remote_xlsx_backups, REVISION_1)
+        xlsx_backup_hash_error, xlsx_backup_hash_modes = self._xlsx_safe_backup_hash_contract(
+            reconcile_output=reconcile.stdout + "\n" + reconcile.stderr,
+            local_backups=xlsx_backups,
+            expected_original_hashes=local_xlsx_hashes,
+            remote_backups=remote_xlsx_backups,
+        )
         details.update(
             {
                 "verify_returncode": verify.returncode,
@@ -196,6 +202,9 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
                 "verify_text_safe_backup_files": [str(p.relative_to(verify_root)) for p in remote_text_backups],
                 "verify_xlsx_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_xlsx_backups.items()},
                 "verify_xlsx_safe_backup_validation_error": remote_xlsx_backup_error,
+                "verify_xlsx_safe_backup_hashes": xlsx_pair_backup_hashes(remote_xlsx_backups, self._hash_if_file),
+                "xlsx_safe_backup_hash_contract_error": xlsx_backup_hash_error,
+                "xlsx_safe_backup_hash_modes": xlsx_backup_hash_modes,
             }
         )
         self._write_metadata(metadata_file, details)
@@ -218,7 +227,7 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
                 artifacts=artifacts,
                 details=details,
             )
-        if xlsx_pair_backup_hashes(xlsx_backups, self._hash_if_file) != local_xlsx_hashes or backup_xlsx_error:
+        if backup_xlsx_error:
             return self.fail_result(
                 reason=f"Remote-delete XLSX conflict did not preserve exactly one valid safeBackup containing the locally modified workbook: {backup_xlsx_error}",
                 artifacts=artifacts,
@@ -245,6 +254,12 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
         if remote_xlsx_backup_error:
             return self.fail_result(
                 reason="Fresh verification did not confirm the preserved revision-1 XLSX safeBackup was uploaded",
+                artifacts=artifacts,
+                details=details,
+            )
+        if xlsx_backup_hash_error:
+            return self.fail_result(
+                reason=f"Remote-delete XLSX safeBackup preservation/hash contract failed: {xlsx_backup_hash_error}",
                 artifacts=artifacts,
                 details=details,
             )
