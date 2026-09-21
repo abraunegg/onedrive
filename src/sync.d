@@ -222,6 +222,8 @@ class SyncEngine {
 
 	// Flag that there were upload or download failures listed
 	bool syncFailures = false;
+	// Has the user already been notified that the number of online objects exceeds Microsoft's recommended limit
+	bool onlineObjectLimitWarningNotified = false;
 	// Is sync_list configured
 	bool syncListConfigured = false;
 	// Was --dry-run used?
@@ -2095,7 +2097,12 @@ class SyncEngine {
 			if (jsonItemsReceived >= 300000) {
 				// 'driveIdToQuery' should be the drive where the JSON responses came from
 				string objectsExceedLimitWarning = format("WARNING: The number of objects stored online in '%s' exceeds Microsoft OneDrive's recommended limit. This may cause unreliable application behaviour due to inconsistent or incomplete API responses. Immediate action is strongly advised to avoid data integrity issues.", driveIdToQuery);
-				addLogEntry(objectsExceedLimitWarning, ["info", "notify"]);
+				if (!onlineObjectLimitWarningNotified) {
+					addLogEntry(objectsExceedLimitWarning, ["info", "notify"]);
+					onlineObjectLimitWarningNotified = true;
+				} else {
+					addLogEntry(objectsExceedLimitWarning, ["info"]);
+				}
 			}
 
 			// Free up memory and items processed as it is pointless now having this data around
