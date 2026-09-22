@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import traceback
 from pathlib import Path
@@ -310,6 +311,7 @@ def main() -> int:
             sync_dir=context.default_sync_dir,
             log_dir=context.suite_cleanup_log_dir,
         )
+        shutil.rmtree(context.suite_cleanup_config_dir, ignore_errors=True)
 
         if not cleanup_ok:
             context.log(f"Suite cleanup FAILED: {cleanup_reason}")
