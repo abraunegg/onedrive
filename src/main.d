@@ -1626,7 +1626,7 @@ int main(string[] cliArgs) {
 					// Update elapsedTime post monitor loop actions
 					elapsedTime = Clock.currTime() - applicationStartTime;
 					
-					// Display monitor loop memory details
+					// Display monitor loop memory details before garbage collection
 					if (displayMemoryUsage) {
 						addLogEntry("Monitor Loop Count:   " ~ to!string(monitorLoopFullCount));
 
@@ -1634,30 +1634,44 @@ int main(string[] cliArgs) {
 						auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
 						addLogEntry("Timestamp:            " ~ to!string(timeStamp));
 						addLogEntry("Application Run Time: " ~ to!string(elapsedTime));
-						
+						addLogEntry("Memory usage before monitor-loop garbage collection");
+
 						// Display memory consumption details
 						displayMemoryUsageDetails();
 					}
-					
-					// Perform coarse GC cleanup for long-running monitor processes.
-					// This is intentionally time-gated and only runs at most once every 24 hours,
-					// after sync processing has completed and the client is idle.
+
+					// Perform garbage collection after every completed monitor loop, once all
+					// per-loop sync processing and CurlEngine cleanup has finished.
+					auto monitorLoopGcStartTime = MonoTime.currTime();
+					GC.collect();
+					auto monitorLoopGcDuration = MonoTime.currTime() - monitorLoopGcStartTime;
+
+					if (displayMemoryUsage) {
+						addLogEntry("Monitor-loop garbage collection duration: " ~ to!string(monitorLoopGcDuration));
+						addLogEntry("Memory usage after monitor-loop garbage collection");
+						displayMemoryUsageDetails();
+					}
+
+					// Retain the existing coarse heap minimization for long-running monitor
+					// processes. Garbage collection has already run above for this loop.
 					auto monitorGcCleanupTime = Clock.currTime();
 					if (lastMonitorGcCleanup == SysTime.min || (monitorGcCleanupTime - lastMonitorGcCleanup) >= dur!"hours"(24)) {
 						// Avoid running this during initial startup; only run after the application
 						// has been active for at least 24 hours.
 						if (elapsedTime >= dur!"hours"(24)) {
 							// Log what we are doing
-							addLogEntry("Performing scheduled monitor-mode memory cleanup after 24 hours of runtime");
-							// Perform GC actions
-							GC.collect();  // Perform Garbage Collection
-							GC.minimize(); // Return free memory to the operating system
+							addLogEntry("Performing scheduled monitor-mode memory minimization after 24 hours of runtime");
 
-							// When memory telemetry is enabled, record the immediate post-cleanup
-							// state so the effect of the scheduled GC/minimize operation can be
-							// distinguished from normal allocator/RSS high-water behaviour.
+							// Return free memory to the operating system
+							auto monitorGcMinimizeStartTime = MonoTime.currTime();
+							GC.minimize();
+							auto monitorGcMinimizeDuration = MonoTime.currTime() - monitorGcMinimizeStartTime;
+
+							// When memory telemetry is enabled, record the immediate post-minimize
+							// state separately from the per-loop GC telemetry above.
 							if (displayMemoryUsage) {
-								addLogEntry("Memory usage after scheduled monitor-mode memory cleanup");
+								addLogEntry("Scheduled monitor-mode memory minimization duration: " ~ to!string(monitorGcMinimizeDuration));
+								addLogEntry("Memory usage after scheduled monitor-mode memory minimization");
 								displayMemoryUsageDetails();
 							}
 
