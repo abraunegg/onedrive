@@ -279,10 +279,13 @@ class SyncEngine {
 	long processedCount;
 	// Are we creating a simulated /delta response? This is critically important in terms of how we 'update' the database
 	bool generatedSimulatedDeltaResponse = false;
-	// Are we processing a completed native tokenless /delta response for a Full Scan True Up?
-	// This is deliberately separate from generatedSimulatedDeltaResponse because native /delta
-	// processing must retain its normal filtering, move, restore and download behaviour.
-	bool nativeFullScanTrueUpResponse = false;
+	// Native Full Scan True Up presence tracking. The tokenless /delta response is
+	// authoritative for online presence, so keep only the database item IDs that
+	// have not yet been observed. Do not use persistent syncStatus writes for this
+	// native pathway.
+	bool nativeFullScanPresenceTrackingActive = false;
+	bool[string] nativeFullScanPresenceCandidates;
+	string[] nativeFullScanPresenceOrder;
 	// Did the most recent sync use an authoritative cleanup pass?
 	bool authoritativeCleanupPassUsedInLastSync = false;
 	// Store the latest DeltaLink
@@ -1535,31 +1538,22 @@ class SyncEngine {
 		// responses provide deletion tombstones since their supplied checkpoint, but
 		// a new tokenless enumeration establishes the current online baseline. Items
 		// deleted before that baseline may therefore be absent rather than returned as
-		// deleted objects. Reuse the existing syncStatus mark-and-sweep model used by
-		// generateDeltaResponse() to identify those absent database items.
+		// deleted objects. Track the original database IDs in memory and remove each ID
+		// as it is observed in the authoritative online response.
 		bool nativeFullScanTrueUp = false;
 		bool nativeFullScanEnumerationCompleted = false;
-		bool nativeFullScanSyncStatusDowngraded = false;
 		bool nativeFullScanReconciliationCompleted = false;
 		size_t nativeFullScanItemsExpectedToProcess = 0;
-		Item[] nativeFullScanDatabaseSnapshot;
 
-		// If local processing is interrupted after the scoped database records have
-		// been marked out-of-sync, restore their original syncStatus values and do not
-		// allow the candidate replacement deltaLink to be committed.
+		// Native Full Scan True Up keeps its presence state only in memory. If the
+		// authoritative enumeration or local processing does not complete, discard
+		// that state and prevent the candidate replacement deltaLink from being
+		// committed. No database rollback is required because syncStatus is untouched.
 		scope(exit) {
-			nativeFullScanTrueUpResponse = false;
-			if (nativeFullScanSyncStatusDowngraded && !nativeFullScanReconciliationCompleted) {
-				if (debugLogging) {
-					addLogEntry("Native Full Scan True Up did not complete; restoring prior database syncStatus values", ["debug"]);
-				}
-				foreach (databaseItem; nativeFullScanDatabaseSnapshot) {
-					Item currentDatabaseItem;
-					if (itemDB.selectById(databaseItem.driveId, databaseItem.id, currentDatabaseItem)) {
-						currentDatabaseItem.syncStatus = databaseItem.syncStatus;
-						itemDB.upsert(currentDatabaseItem);
-					}
-				}
+			nativeFullScanPresenceTrackingActive = false;
+			nativeFullScanPresenceCandidates = null;
+			nativeFullScanPresenceOrder = null;
+			if (nativeFullScanTrueUp && !nativeFullScanReconciliationCompleted) {
 				deltaLinkCache.driveId = null;
 				deltaLinkCache.itemId = null;
 				deltaLinkCache.latestDeltaLink = null;
@@ -1574,7 +1568,9 @@ class SyncEngine {
 		// Reset response-type flags
 		addLogEntry("Reset generatedSimulatedDeltaResponse as 'false'", ["debug"]);
 		generatedSimulatedDeltaResponse = false;
-		nativeFullScanTrueUpResponse = false;
+		nativeFullScanPresenceTrackingActive = false;
+		nativeFullScanPresenceCandidates = null;
+		nativeFullScanPresenceOrder = null;
 
 		// Reset Shared Folder Flags for 'sync_list' processing
 		sharedFolderDeltaGeneration = false;
@@ -1659,6 +1655,18 @@ class SyncEngine {
 		// the normal Graph /delta pathway rather than an already-authoritative
 		// generated response.
 		nativeFullScanTrueUp = appConfig.fullScanTrueUpRequired && !generatedSimulatedDeltaResponse;
+
+		// A native tokenless /delta response is authoritative for online presence.
+		// Snapshot only the IDs currently in the queried database subtree before the
+		// enumeration starts. As each online item is observed its ID is removed, so
+		// only genuinely absent historical IDs remain after a complete pass.
+		if (nativeFullScanTrueUp) {
+			addNativeFullScanPresenceCandidates(driveIdToQuery, itemIdToQuery);
+			nativeFullScanPresenceTrackingActive = true;
+			if (debugLogging) {
+				addLogEntry("Native Full Scan True Up database scope contains " ~ to!string(nativeFullScanPresenceCandidates.length) ~ " descendant item(s)", ["debug"]);
+			}
+		}
 
 		// What /delta query do we use?
 		if (!generatedSimulatedDeltaResponse) {
@@ -1983,31 +1991,22 @@ class SyncEngine {
 		// Cleanup deltaChanges as this is no longer needed
 		deltaChanges = null;
 
-		// Only after the complete native tokenless enumeration has reached its final
-		// deltaLink do we mark the exact queried database subtree out-of-sync. This
-		// avoids leaving persistent false 'N' flags while Graph paging is still active.
+		// Only a complete native tokenless enumeration may be used for absence
+		// reconciliation. Presence tracking itself is read-only with respect to the
+		// database, so an interrupted enumeration simply discards the in-memory set.
 		if (nativeFullScanTrueUp) {
 			if (nativeFullScanEnumerationCompleted && !exitHandlerTriggered) {
-				nativeFullScanDatabaseSnapshot = getChildren(driveIdToQuery, itemIdToQuery);
-				if (debugLogging) {
-					addLogEntry("Native Full Scan True Up database scope contains " ~ to!string(nativeFullScanDatabaseSnapshot.length) ~ " descendant item(s)", ["debug"]);
-				}
-				foreach (databaseItem; nativeFullScanDatabaseSnapshot) {
-					if (debugLogging) {addLogEntry("Downgrading native Full Scan True Up item as out-of-sync: " ~ databaseItem.id, ["debug"]);}
-					itemDB.downgradeSyncStatusFlag(databaseItem.driveId, databaseItem.id);
-				}
-				nativeFullScanSyncStatusDowngraded = true;
 				nativeFullScanItemsExpectedToProcess = jsonItemsToProcess.length;
-				nativeFullScanTrueUpResponse = true;
 			} else {
 				// The enumeration was interrupted or never produced a final checkpoint.
 				// Keep the previous database deltaLink and request another true-up pass.
+				nativeFullScanPresenceTrackingActive = false;
 				deltaLinkCache.driveId = null;
 				deltaLinkCache.itemId = null;
 				deltaLinkCache.latestDeltaLink = null;
 				latestDeltaLink = null;
 				if (debugLogging) {
-					addLogEntry("Native Full Scan True Up did not reach a complete authoritative checkpoint; syncStatus reconciliation was skipped", ["debug"]);
+					addLogEntry("Native Full Scan True Up did not reach a complete authoritative checkpoint; absence reconciliation was skipped", ["debug"]);
 				}
 			}
 		}
@@ -2114,7 +2113,7 @@ class SyncEngine {
 		}
 
 		// The current native response has now finished normal JSON processing.
-		nativeFullScanTrueUpResponse = false;
+		nativeFullScanPresenceTrackingActive = false;
 
 		// Keep the DriveDetailsCache array with unique entries only
 		DriveDetailsCache cachedOnlineDriveData;
@@ -2123,21 +2122,21 @@ class SyncEngine {
 			addOrUpdateOneDriveOnlineDetails(driveIdToQuery);
 		}
 
-		// Complete the native Full Scan True Up mark-and-sweep pass. Any scoped
-		// database item that remains syncStatus='N' was not observed in the completed
-		// current-state response. Queue it through the existing deletion array so that
-		// processDownloadActivities() applies the existing Recycle Bin, database
-		// cleanup and expected-local-effect behaviour before saving the new
-		// deltaLink.
-		if (nativeFullScanTrueUp && nativeFullScanSyncStatusDowngraded) {
+		// Complete the native Full Scan True Up presence reconciliation. Every ID
+		// still present in nativeFullScanPresenceCandidates belonged to the original
+		// database scope but was never observed in the completed authoritative online
+		// response. Only these genuinely absent items are materialised as complete
+		// Item records for the existing deletion workflow.
+		if (nativeFullScanTrueUp && nativeFullScanEnumerationCompleted) {
 			if (!exitHandlerTriggered && (processedCount == nativeFullScanItemsExpectedToProcess)) {
 				size_t nativeFullScanAbsentItemCount = 0;
-				foreach (databaseItem; nativeFullScanDatabaseSnapshot) {
-					Item currentDatabaseItem;
-					if (!itemDB.selectById(databaseItem.driveId, databaseItem.id, currentDatabaseItem)) {
+				foreach (itemId; nativeFullScanPresenceOrder) {
+					if ((itemId in nativeFullScanPresenceCandidates) is null) {
 						continue;
 					}
-					if (currentDatabaseItem.syncStatus != "N") {
+
+					Item currentDatabaseItem;
+					if (!itemDB.selectById(driveIdToQuery, itemId, currentDatabaseItem)) {
 						continue;
 					}
 
@@ -2163,7 +2162,7 @@ class SyncEngine {
 					addLogEntry("Native Full Scan True Up identified " ~ to!string(nativeFullScanAbsentItemCount) ~ " database item(s) no longer present online", ["verbose"]);
 				}
 				if (appConfig.fullScanTrueUpRequired) {
-					if (debugLogging) {addLogEntry("Unsetting fullScanTrueUpRequired after syncStatus reconciliation completed", ["debug"]);}
+					if (debugLogging) {addLogEntry("Unsetting fullScanTrueUpRequired after presence reconciliation completed", ["debug"]);}
 					appConfig.fullScanTrueUpRequired = false;
 				}
 				nativeFullScanReconciliationCompleted = true;
@@ -2234,6 +2233,14 @@ class SyncEngine {
 		// What is this item's id
 		if (hasId(onedriveJSONItem)) {
 			thisItemId = onedriveJSONItem["id"].str;
+
+			// During a native Full Scan True Up, online presence is tracked only in
+			// memory. Remove the item from the original database candidate set as soon
+			// as Graph proves that the ID exists online, independently of filtering or
+			// later local change handling.
+			if (nativeFullScanPresenceTrackingActive) {
+				nativeFullScanPresenceCandidates.remove(thisItemId);
+			}
 		}
 
 		// What is this item's name
@@ -2578,7 +2585,7 @@ class SyncEngine {
 				}
 				if (protectedByNoSync) {
 					if (verboseLogging) {addLogEntry("Ignoring online deletion for path protected by .nosync: " ~ protectedLocalPath, ["verbose"]);}
-					if ((nativeFullScanTrueUpResponse || generatedSimulatedDeltaResponse) && (existingDatabaseItem.syncStatus != "Y")) {
+					if (generatedSimulatedDeltaResponse && (existingDatabaseItem.syncStatus != "Y")) {
 						existingDatabaseItem.syncStatus = "Y";
 						itemDB.upsert(existingDatabaseItem);
 					}
@@ -3211,10 +3218,10 @@ class SyncEngine {
 					addLogEntry("Ignoring OneDrive item because the local path is protected by .nosync: " ~ noSyncDisplayPath, ["verbose"]);
 				}
 
-				// Current-state reconciliation can use syncStatus as a presence marker. A
-				// tracked object protected by .nosync is intentionally retained,
+				// Generated current-state reconciliation uses syncStatus as a presence
+				// marker. A tracked object protected by .nosync is intentionally retained,
 				// so do not allow it to remain marked as absent.
-				if ((nativeFullScanTrueUpResponse || generatedSimulatedDeltaResponse) && existingDBEntry && (existingDatabaseItem.syncStatus != "Y")) {
+				if (generatedSimulatedDeltaResponse && existingDBEntry && (existingDatabaseItem.syncStatus != "Y")) {
 					existingDatabaseItem.syncStatus = "Y";
 					itemDB.upsert(existingDatabaseItem);
 				}
@@ -3239,11 +3246,10 @@ class SyncEngine {
 					addLogEntry("Creating newDatabaseItem object using the provided JSON data", ["debug"]);
 				}
 
-				// During any authoritative current-state response that uses syncStatus as a
-				// mark-and-sweep presence flag, record an accepted existing item as seen
-				// before change, move or download handling. Online presence is independent
-				// of whether applying newer content locally later succeeds.
-				if ((nativeFullScanTrueUpResponse || generatedSimulatedDeltaResponse) && existingDBEntry) {
+				// Generated current-state responses use syncStatus as their existing
+				// mark-and-sweep presence flag. Native Full Scan True Up tracks presence
+				// separately in memory and does not write syncStatus for bookkeeping.
+				if (generatedSimulatedDeltaResponse && existingDBEntry) {
 					existingDatabaseItem.syncStatus = "Y";
 					itemDB.upsert(existingDatabaseItem);
 				}
@@ -12535,6 +12541,27 @@ class SyncEngine {
 		}
 	}
 
+
+	// Build the minimal database identity set required by native Full Scan True Up.
+	// The database query returns only id and type. Type is used only to recurse; the
+	// retained presence state contains item IDs and no other database metadata. The
+	// ordered ID list preserves the existing parent-before-child deletion ordering.
+	void addNativeFullScanPresenceCandidates(string driveId, string id) {
+		auto children = itemDB.selectChildItemIdentities(driveId, id);
+
+		// Preserve the same traversal order as getChildren(): append all direct
+		// children first, then append each child's descendants. processDeleteItems()
+		// relies on the resulting order when deleting or moving directory trees.
+		foreach (child; children) {
+			nativeFullScanPresenceCandidates[child.id] = true;
+			nativeFullScanPresenceOrder ~= child.id;
+		}
+		foreach (child; children) {
+			if (child.type != ItemType.file) {
+				addNativeFullScanPresenceCandidates(driveId, child.id);
+			}
+		}
+	}
 
 	// Get the children of an item id from the database
 	Item[] getChildren(string driveId, string id) {

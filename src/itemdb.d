@@ -80,6 +80,14 @@ struct Item {
 	string   relocParentId;
 }
 
+// Minimal database projection used only to walk a subtree for native Full Scan
+// True Up presence reconciliation. The caller retains only id; type is consumed
+// immediately to determine whether recursion is required.
+struct ChildItemIdentity {
+	string   id;
+	ItemType type;
+}
+
 // Construct an Item DB struct from a JSON driveItem
 Item makeDatabaseItem(JSONValue driveItem) {
 	
@@ -658,6 +666,46 @@ final class ItemDatabase {
 				// Handle errors appropriately
 				detailSQLErrorMessage(exception);
 			}
+		}
+	}
+
+	// Select only the fields required to enumerate the identity of a database
+	// subtree. Avoid SELECT * and buildItem() when native Full Scan True Up only
+	// needs to know which historical item IDs must be observed online.
+	ChildItemIdentity[] selectChildItemIdentities(const(char)[] driveId, const(char)[] id) {
+		synchronized(databaseLock) {
+			ChildItemIdentity[] items;
+			auto stmt = db.prepare("SELECT id, type FROM item WHERE driveId = ?1 AND parentId = ?2");
+			scope(exit) stmt.finalise();
+
+			try {
+				stmt.bind(1, driveId);
+				stmt.bind(2, id);
+				auto res = stmt.exec();
+
+				while (!res.empty) {
+					auto dbRow = res.front;
+					ChildItemIdentity item = {
+						id: dbRow[0].dup,
+					};
+
+					switch (dbRow[1]) {
+						case "file":   item.type = ItemType.file;   break;
+						case "dir":    item.type = ItemType.dir;    break;
+						case "remote": item.type = ItemType.remote; break;
+						case "root":   item.type = ItemType.root;   break;
+						default: assert(0, "Invalid item type");
+					}
+
+					items ~= item;
+					res.step();
+				}
+			} catch (SqliteException exception) {
+				detailSQLErrorMessage(exception);
+				items = [];
+			}
+
+			return items;
 		}
 	}
 
