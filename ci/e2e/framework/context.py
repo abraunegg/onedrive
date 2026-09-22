@@ -321,6 +321,8 @@ class E2EContext:
         return self.logs_dir / "_suite_cleanup"
 
     def bootstrap_suite_cleanup_config_dir(self) -> Path:
-        if self.suite_cleanup_config_dir.exists():
-            shutil.rmtree(self.suite_cleanup_config_dir)
-        return self.bootstrap_config_dir(self.suite_cleanup_config_dir)
+        self.prepare_minimal_config_dir(
+            self.suite_cleanup_config_dir,
+            'permanent_delete = "true"\n',
+        )
+        return self.suite_cleanup_config_dir / "refresh_token"

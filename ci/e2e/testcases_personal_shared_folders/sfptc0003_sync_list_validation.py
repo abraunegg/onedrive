@@ -104,6 +104,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 context.onedrive_bin,
                 "--sync",
                 "--verbose",
+                "--verbose",
                 "--download-only",
                 "--resync",
                 "--resync-auth",
@@ -377,6 +378,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 context.onedrive_bin,
                 "--sync",
                 "--verbose",
+                "--verbose",
                 "--confdir",
                 str(confdir),
             ]
@@ -416,6 +418,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 context.onedrive_bin,
                 "--sync",
                 "--verbose",
+                "--verbose",
                 "--confdir",
                 str(confdir),
             ]
@@ -437,6 +440,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             verify_command = [
                 context.onedrive_bin,
                 "--sync",
+                "--verbose",
                 "--verbose",
                 "--download-only",
                 "--resync",
@@ -572,6 +576,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
         cleanup_command = [
             context.onedrive_bin,
             "--sync",
+            "--verbose",
             "--verbose",
             "--download-only",
             "--confdir",

@@ -3,11 +3,15 @@ from __future__ import annotations
 import base64
 import os
 import random
+import shutil
 import zipfile
 from pathlib import Path
 
 
 DEFAULT_PAYLOAD_BYTES_PER_ROW = 24_000
+SESSION_UPLOAD_THRESHOLD_BYTES = 4 * 1024 * 1024
+SMALL_XLSX_PAYLOAD_ROWS = 32
+LARGE_XLSX_PAYLOAD_ROWS = 220
 REVISION_0 = "E2E-REVISION-0000"
 REVISION_1 = "E2E-REVISION-0001"
 REVISION_2 = "E2E-REVISION-0002"
@@ -114,6 +118,189 @@ def create_random_xlsx(
         "size_bytes": path.stat().st_size,
         "revision": revision,
     }
+
+
+def large_xlsx_path(path: Path) -> Path:
+    """Return the deterministic large-workbook companion path for a small XLSX fixture."""
+    return path.with_name(f"{path.stem}-large{path.suffix}")
+
+
+def large_xlsx_relative(relative: str) -> str:
+    relative_path = Path(relative)
+    return large_xlsx_path(relative_path).as_posix()
+
+
+def xlsx_pair_paths(path: Path) -> tuple[Path, Path]:
+    return path, large_xlsx_path(path)
+
+
+def create_random_xlsx_pair(
+    path: Path,
+    seed: str,
+    *,
+    revision: str = REVISION_0,
+    payload_rows: int = SMALL_XLSX_PAYLOAD_ROWS,
+    worksheet_name: str = "TimestampE2E",
+    title: str = "OneDrive E2E workbook",
+) -> dict[str, object]:
+    """Create valid XLSX fixtures on both sides of the 4 MiB upload boundary."""
+    large_path = large_xlsx_path(path)
+    # Keep the existing small fixture definition unchanged; the large companion is additive.
+    small = create_random_xlsx(
+        path,
+        seed,
+        revision=revision,
+        payload_rows=payload_rows,
+        worksheet_name=worksheet_name,
+        title=title,
+    )
+    large = create_random_xlsx(
+        large_path,
+        f"{seed}:large",
+        revision=revision,
+        payload_rows=LARGE_XLSX_PAYLOAD_ROWS,
+        worksheet_name=worksheet_name,
+        title=f"{title} (large)",
+    )
+
+    small_size = int(small["size_bytes"])
+    large_size = int(large["size_bytes"])
+    if small_size >= SESSION_UPLOAD_THRESHOLD_BYTES:
+        raise RuntimeError(
+            f"Small XLSX fixture unexpectedly reached the session-upload threshold: {small_size} bytes"
+        )
+    if large_size <= SESSION_UPLOAD_THRESHOLD_BYTES:
+        raise RuntimeError(
+            f"Large XLSX fixture did not exceed the session-upload threshold: {large_size} bytes"
+        )
+
+    result = dict(small)
+    result["small"] = small
+    result["large"] = large
+    result["large_size_bytes"] = large_size
+    return result
+
+
+def validate_xlsx_pair(path: Path, expected_revision: str) -> str:
+    errors: list[str] = []
+    for label, candidate in zip(("small", "large"), xlsx_pair_paths(path)):
+        error = validate_xlsx(candidate, expected_revision)
+        if error:
+            errors.append(f"{label}: {error}")
+            continue
+
+        size_bytes = candidate.stat().st_size
+        if label == "small" and size_bytes >= SESSION_UPLOAD_THRESHOLD_BYTES:
+            errors.append(
+                f"small: workbook crossed the 4 MiB simple-upload boundary ({size_bytes} bytes)"
+            )
+        if label == "large" and size_bytes <= SESSION_UPLOAD_THRESHOLD_BYTES:
+            errors.append(
+                f"large: workbook did not remain above the 4 MiB session-upload boundary ({size_bytes} bytes)"
+            )
+    return "; ".join(errors)
+
+
+def mutate_xlsx_pair_revision(path: Path, old_revision: str, new_revision: str) -> None:
+    for candidate in xlsx_pair_paths(path):
+        mutate_xlsx_revision(candidate, old_revision, new_revision)
+
+
+def rename_xlsx_pair(source: Path, destination: Path) -> None:
+    source.rename(destination)
+    large_xlsx_path(source).rename(large_xlsx_path(destination))
+
+
+def unlink_xlsx_pair(path: Path) -> None:
+    for candidate in xlsx_pair_paths(path):
+        if candidate.exists():
+            candidate.unlink()
+
+
+def copy_xlsx_pair(source: Path, destination: Path) -> None:
+    for source_candidate, destination_candidate in zip(xlsx_pair_paths(source), xlsx_pair_paths(destination)):
+        destination_candidate.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_candidate, destination_candidate)
+
+
+def set_xlsx_pair_mtime(path: Path, times: tuple[float, float]) -> None:
+    for candidate in xlsx_pair_paths(path):
+        os.utime(candidate, times)
+
+
+def xlsx_pair_backup_files(path: Path, finder) -> dict[str, list[Path]]:
+    small_path, large_path = xlsx_pair_paths(path)
+    large_backups = finder(large_path)
+    large_backup_set = set(large_backups)
+    small_backups = [
+        candidate
+        for candidate in finder(small_path)
+        if candidate not in large_backup_set
+    ]
+    return {
+        "small": small_backups,
+        "large": large_backups,
+    }
+
+
+def validate_xlsx_pair_backups(backups: dict[str, list[Path]], expected_revision: str) -> str:
+    errors: list[str] = []
+    for label in ("small", "large"):
+        files = backups.get(label, [])
+        if len(files) != 1:
+            errors.append(f"{label}: expected exactly one XLSX safeBackup, found {len(files)}")
+            continue
+        error = validate_xlsx(files[0], expected_revision)
+        if error:
+            errors.append(f"{label}: {error}")
+            continue
+
+        size_bytes = files[0].stat().st_size
+        if label == "small" and size_bytes >= SESSION_UPLOAD_THRESHOLD_BYTES:
+            errors.append(
+                f"small: safeBackup crossed the 4 MiB simple-upload boundary ({size_bytes} bytes)"
+            )
+        if label == "large" and size_bytes <= SESSION_UPLOAD_THRESHOLD_BYTES:
+            errors.append(
+                f"large: safeBackup did not remain above the 4 MiB session-upload boundary ({size_bytes} bytes)"
+            )
+    return "; ".join(errors)
+
+
+def xlsx_pair_backup_hashes(backups: dict[str, list[Path]], hash_function) -> dict[str, str]:
+    return {
+        label: hash_function(files[0]) if len(files) == 1 else ""
+        for label, files in backups.items()
+    }
+
+
+def xlsx_pair_hashes(path: Path, hash_function) -> dict[str, str]:
+    return {
+        label: hash_function(candidate) if candidate.is_file() else ""
+        for label, candidate in zip(("small", "large"), xlsx_pair_paths(path))
+    }
+
+
+def xlsx_pair_sizes(path: Path) -> dict[str, int]:
+    return {
+        label: candidate.stat().st_size if candidate.is_file() else -1
+        for label, candidate in zip(("small", "large"), xlsx_pair_paths(path))
+    }
+
+
+def xlsx_pair_mtimes(path: Path) -> dict[str, int]:
+    return {
+        label: int(candidate.stat().st_mtime) if candidate.is_file() else -1
+        for label, candidate in zip(("small", "large"), xlsx_pair_paths(path))
+    }
+
+
+def xlsx_pair_any_exists(path: Path) -> bool:
+    return any(candidate.exists() for candidate in xlsx_pair_paths(path))
+
+
+def xlsx_pair_all_files(path: Path) -> bool:
+    return all(candidate.is_file() for candidate in xlsx_pair_paths(path))
 
 
 def validate_xlsx(path: Path, expected_revision: str) -> str:

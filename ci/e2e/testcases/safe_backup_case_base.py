@@ -100,6 +100,81 @@ class SafeBackupCaseBase(E2ETestCase):
     def _hash_if_file(self, path: Path) -> str:
         return compute_quickxor_hash_file(path) if path.is_file() else ""
 
+    def _sharepoint_enrichment_redownload_observed(self, output: str, backup_path: Path) -> bool:
+        """Return true only when this exact backup was enriched and downloaded back locally."""
+        backup_name = backup_path.name
+        lines = output.splitlines()
+
+        for integrity_index, line in enumerate(lines):
+            if "Online file integrity failure for:" not in line or backup_name not in line:
+                continue
+
+            enrichment_seen = False
+            for later_line in lines[integrity_index + 1:]:
+                if (
+                    "Microsoft OneDrive modified your uploaded file via its SharePoint 'enrichment' feature"
+                    in later_line
+                ):
+                    enrichment_seen = True
+                    continue
+
+                if "Downloading file:" in later_line and backup_name in later_line and "... done" in later_line:
+                    return enrichment_seen
+
+                # Stop if processing has clearly moved on to another upload integrity result.
+                if "Online file integrity failure for:" in later_line and backup_name not in later_line:
+                    break
+
+        return False
+
+    def _xlsx_safe_backup_hash_contract(
+        self,
+        *,
+        reconcile_output: str,
+        local_backups: dict[str, list[Path]],
+        expected_original_hashes: dict[str, str],
+        remote_backups: dict[str, list[Path]],
+    ) -> tuple[str, dict[str, str]]:
+        """Validate exact preservation, except for proven SharePoint enrichment/re-download."""
+        errors: list[str] = []
+        modes: dict[str, str] = {}
+
+        for label in ("small", "large"):
+            local_files = local_backups.get(label, [])
+            remote_files = remote_backups.get(label, [])
+
+            if len(local_files) != 1:
+                modes[label] = "invalid-local-backup-count"
+                errors.append(f"{label}: expected exactly one local XLSX safeBackup, found {len(local_files)}")
+                continue
+
+            local_file = local_files[0]
+            local_hash = self._hash_if_file(local_file)
+
+            if self._sharepoint_enrichment_redownload_observed(reconcile_output, local_file):
+                modes[label] = "sharepoint-enriched-redownload"
+                if len(remote_files) != 1:
+                    errors.append(
+                        f"{label}: SharePoint enrichment/re-download was observed but fresh verification found "
+                        f"{len(remote_files)} remote XLSX safeBackups"
+                    )
+                    continue
+
+                remote_hash = self._hash_if_file(remote_files[0])
+                if not local_hash or local_hash != remote_hash:
+                    errors.append(
+                        f"{label}: SharePoint-enriched local safeBackup does not match the fresh remote download"
+                    )
+            else:
+                modes[label] = "exact-local-preservation"
+                expected_hash = expected_original_hashes.get(label, "")
+                if not expected_hash or local_hash != expected_hash:
+                    errors.append(
+                        f"{label}: local XLSX safeBackup does not retain the exact pre-conflict bytes"
+                    )
+
+        return "; ".join(errors), modes
+
     def _text_if_file(self, path: Path) -> str:
         return path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
 

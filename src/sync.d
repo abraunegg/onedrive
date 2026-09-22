@@ -3300,7 +3300,7 @@ class SyncEngine {
 						// or deleted locally while this /delta response was being processed. Capture
 						// pending local observations before deciding whether remote state should
 						// recreate the old path.
-						if (!exists(existingItemPath) && !generatedSimulatedDeltaResponse) {
+						if (!exists(existingItemPath) && !generatedSimulatedDeltaResponse && (existingDatabaseItem.eTag != newDatabaseItem.eTag)) {
 							bool pendingLocalDeparture = false;
 							if (capturePendingLocalChanges !is null) {
 								capturePendingLocalChanges("sync.known_directory_missing");
@@ -8742,22 +8742,82 @@ class SyncEngine {
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUploadReplace(localFilePath, targetDriveId, targetItemId);
 					uploadTransferEndTime = Clock.currTime();
 				} catch (OneDriveException exception) {
-					// HTTP request returned status code 403
-					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
-						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
-						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
+					bool resourceModifiedRecoveryHandled = false;
+					string graphErrorCode;
+					try {
+						graphErrorCode = exception.error["error"]["code"].str;
+					} catch (JSONException e) {
+						// Error response did not contain a Graph error code; use normal handling below.
 					}
-					// HTTP request returned status code 423
-					// Resolve https://github.com/abraunegg/onedrive/issues/36
-					if (exception.httpStatusCode == 423) {
-						// The file is currently checked out or locked for editing by another user
-						// We cant upload this file at this time
-						addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
-					} else {
-						// Handle all other HTTP status codes
-						// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-						// Display what the error is
-						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+
+					// A modified simple upload can race with a Microsoft-side metadata/eTag change
+					// between the fresh DriveItem query above and the replacement PUT. Only retry
+					// the specific resourceModified response when a second query proves that the
+					// same remote item still contains exactly the same bytes we already inspected.
+					if ((exception.httpStatusCode == 409) && (graphErrorCode == "resourceModified") && haveCurrentOnlineItemData) {
+						resourceModifiedRecoveryHandled = true;
+						try {
+							JSONValue refreshedOnlineJSONData = uploadFileOneDriveApiInstance.getPathDetailsById(targetDriveId, targetItemId);
+							if ((refreshedOnlineJSONData.type() == JSONType.object) && hasId(refreshedOnlineJSONData)) {
+								Item refreshedOnlineItemData = makeItem(refreshedOnlineJSONData);
+								bool comparableContentHash =
+									(!currentOnlineItemData.quickXorHash.empty && !refreshedOnlineItemData.quickXorHash.empty) ||
+									(!currentOnlineItemData.sha256Hash.empty && !refreshedOnlineItemData.sha256Hash.empty);
+								bool remoteContentUnchanged =
+									(currentOnlineItemData.id == targetItemId) &&
+									(refreshedOnlineItemData.id == targetItemId) &&
+									(currentOnlineItemData.parentId == refreshedOnlineItemData.parentId) &&
+									(currentOnlineItemData.name == refreshedOnlineItemData.name) &&
+									comparableContentHash &&
+									sameAppliedFileContent(currentOnlineItemData, refreshedOnlineItemData);
+
+								if (remoteContentUnchanged) {
+									if (debugLogging) {addLogEntry("Microsoft Graph returned resourceModified during modified simple upload, but the refreshed remote content identity is unchanged; retrying once: " ~ localFilePath, ["debug"]);}
+									try {
+										uploadTransferStartTime = Clock.currTime();
+										uploadResponse = uploadFileOneDriveApiInstance.simpleUploadReplace(localFilePath, targetDriveId, targetItemId);
+										uploadTransferEndTime = Clock.currTime();
+									} catch (OneDriveException retryException) {
+										displayOneDriveErrorMessage(retryException.msg, thisFunctionName);
+									} catch (FileException retryException) {
+										displayFileSystemErrorMessage(retryException.msg, thisFunctionName, localFilePath);
+									} catch (ErrnoException retryException) {
+										if ((retryException.errno == ENOENT) || (retryException.errno == ENOTDIR)) {
+											addLogEntry("File disappeared locally before modified upload retry: " ~ localFilePath);
+										} else {
+											displayFileSystemErrorMessage(retryException.msg, thisFunctionName, localFilePath);
+										}
+										uploadResponse = null;
+									}
+								} else {
+									displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+								}
+							} else {
+								displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+							}
+						} catch (OneDriveException refreshException) {
+							displayOneDriveErrorMessage(refreshException.msg, thisFunctionName);
+						}
+					}
+
+					if (!resourceModifiedRecoveryHandled) {
+						// HTTP request returned status code 403
+						if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
+							// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
+							addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
+						}
+						// HTTP request returned status code 423
+						// Resolve https://github.com/abraunegg/onedrive/issues/36
+						if (exception.httpStatusCode == 423) {
+							// The file is currently checked out or locked for editing by another user
+							// We cant upload this file at this time
+							addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
+						} else {
+							// Handle all other HTTP status codes
+							// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+							// Display what the error is
+							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+						}
 					}
 				} catch (FileException exception) {
 					// filesystem error

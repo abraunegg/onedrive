@@ -6,6 +6,7 @@ import time
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, rename_xlsx_pair, large_xlsx_relative
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 
@@ -13,7 +14,9 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
     case_id = "0053"
     name = "monitor mode rename then modify"
-    description = "Rename a file and then modify the renamed file under --monitor and validate the final remote state"
+    description = "Rename passive TXT and real XLSX files and then modify both under --monitor and validate the final remote state"
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
@@ -32,19 +35,33 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
         app_log_dir = case_log_dir / "app-logs"
 
         root_name = f"ZZ_E2E_TC0053_{context.run_id}_{os.getpid()}"
-        old_relative = f"{root_name}/before.txt"
-        new_relative = f"{root_name}/after.txt"
+        old_relative = f"{root_name}/before.xlsx"
+        new_relative = f"{root_name}/after.xlsx"
+        old_text_relative = f"{root_name}/before.txt"
+        new_text_relative = f"{root_name}/after.txt"
         old_local = sync_root / old_relative
         new_local = sync_root / new_relative
+        old_text_local = sync_root / old_text_relative
+        new_text_local = sync_root / new_text_relative
         old_verify = verify_root / old_relative
         new_verify = verify_root / new_relative
+        old_text_verify = verify_root / old_text_relative
+        new_text_verify = verify_root / new_text_relative
 
-        initial_content = "TC0053 initial content\n"
-        final_content = "TC0053 final content after rename then modify\n"
+        initial_text_content = "TC0053 initial passive TXT content\n"
+        final_text_content = "TC0053 final passive TXT content after rename then modify\n"
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0053:{os.getpid()}"
 
         context.prepare_minimal_config_dir(conf_main, self._build_config_text(sync_root, app_log_dir))
         context.prepare_minimal_config_dir(conf_verify, ("# tc0053 verify\n" f'sync_dir = "{verify_root}"\n' 'bypass_data_preservation = "true"\n'))
-        write_text_file(old_local, initial_content)
+        generated = create_random_xlsx_pair(
+            old_local,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0053 monitor rename then modify workbook",
+        )
+        write_text_file(old_text_local, initial_text_content)
 
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"
@@ -55,7 +72,7 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
         verify_manifest_file = state_dir / "verify_manifest.txt"
         metadata_file = state_dir / "metadata.txt"
         artifacts = [str(seed_stdout), str(seed_stderr), str(monitor_stdout), str(monitor_stderr), str(verify_stdout), str(verify_stderr), str(verify_manifest_file), str(metadata_file)]
-        details = {"root_name": root_name, "old_relative": old_relative, "new_relative": new_relative}
+        details = {"root_name": root_name, "old_relative": old_relative, "new_relative": new_relative, "old_text_relative": old_text_relative, "new_text_relative": new_text_relative, "xlsx_seed": xlsx_seed, "payload_rows": self.XLSX_PAYLOAD_ROWS, "generated_size": int(generated["size_bytes"])}
 
         seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(conf_main)]
         context.log(f"Executing Test Case {self.case_id} seed: {command_to_string(seed_command)}")
@@ -66,6 +83,17 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
         if seed_result.returncode != 0:
             self._write_metadata(metadata_file, details)
             return self.fail_result(self.case_id, self.name, f"Seed phase failed with status {seed_result.returncode}", artifacts, details)
+
+        settled_validation_error = validate_xlsx_pair(old_local, REVISION_0)
+        settled_text_content = old_text_local.read_text(encoding="utf-8") if old_text_local.is_file() else ""
+        details["settled_validation_error"] = settled_validation_error
+        details["settled_text_content"] = settled_text_content
+        if settled_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name, f"Seeded XLSX was invalid after initial sync: {settled_validation_error}", artifacts, details)
+        if settled_text_content != initial_text_content:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name, "Seeded passive TXT content changed during initial sync", artifacts, details)
 
         monitor_command = [context.onedrive_bin, "--display-running-config", "--monitor", "--verbose", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(conf_main)]
         context.log(f"Executing Test Case {self.case_id} monitor: {command_to_string(monitor_command)}")
@@ -78,14 +106,37 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
 
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
 
-            old_local.rename(new_local)
+            rename_xlsx_pair(old_local, new_local)
+            old_text_local.rename(new_text_local)
             time.sleep(1.0)
-            write_text_file(new_local, final_content)
-            groups = [
-                [f"[M] Local item moved: {old_relative} -> {new_relative}", f"Uploading modified file: {new_relative} ... done"],
-                [f"Moving {old_relative} to {new_relative}", f"Uploading modified file: {new_relative} ... done"],
-                [f"Deleting item from Microsoft OneDrive: {old_relative}", f"Uploading new file: {new_relative} ... done"],
+            mutate_xlsx_pair_revision(new_local, REVISION_0, REVISION_1)
+            write_text_file(new_text_local, final_text_content)
+            modified_validation_error = validate_xlsx_pair(new_local, REVISION_1)
+            details["modified_validation_error"] = modified_validation_error
+            if modified_validation_error:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name, f"Renamed XLSX mutation produced an invalid workbook: {modified_validation_error}", artifacts, details)
+            per_xlsx_variant_groups = []
+            for old_xlsx_relative, new_xlsx_relative in (
+                (old_relative, new_relative),
+                (large_xlsx_relative(old_relative), large_xlsx_relative(new_relative)),
+            ):
+                per_xlsx_variant_groups.append([
+                    [f"[M] Local item moved: {old_xlsx_relative} -> {new_xlsx_relative}", f"Uploading modified file: {new_xlsx_relative} ... done"],
+                    [f"Moving {old_xlsx_relative} to {new_xlsx_relative}", f"Uploading modified file: {new_xlsx_relative} ... done"],
+                    [f"Deleting item from Microsoft OneDrive: {old_xlsx_relative}", f"Uploading new file: {new_xlsx_relative} ... done"],
+                ])
+            xlsx_groups = [
+                small_group + large_group
+                for small_group in per_xlsx_variant_groups[0]
+                for large_group in per_xlsx_variant_groups[1]
             ]
+            text_groups = [
+                [f"[M] Local item moved: {old_text_relative} -> {new_text_relative}", f"Uploading modified file: {new_text_relative} ... done"],
+                [f"Moving {old_text_relative} to {new_text_relative}", f"Uploading modified file: {new_text_relative} ... done"],
+                [f"Deleting item from Microsoft OneDrive: {old_text_relative}", f"Uploading new file: {new_text_relative} ... done"],
+            ]
+            groups = [xlsx_group + text_group for xlsx_group in xlsx_groups for text_group in text_groups]
             mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
                 monitor_stdout,
                 start_offset=mutation_log_start_offset,
@@ -109,11 +160,22 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
         write_manifest(verify_manifest_file, verify_manifest)
         details["verify_old_exists"] = old_verify.exists()
         details["verify_new_exists"] = new_verify.is_file()
-        details["verify_new_content"] = new_verify.read_text(encoding="utf-8") if new_verify.is_file() else ""
+        details["verify_old_text_exists"] = old_text_verify.exists()
+        details["verify_new_text_exists"] = new_text_verify.is_file()
+        verify_text_content = new_text_verify.read_text(encoding="utf-8") if new_text_verify.is_file() else ""
+        details["verify_text_content"] = verify_text_content
+        verify_validation_error = (
+            validate_xlsx_pair(new_verify, REVISION_1)
+            if new_verify.is_file()
+            else "Verification XLSX is missing"
+        )
+        details["verify_validation_error"] = verify_validation_error
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
             return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
-        if old_verify.exists() or not new_verify.is_file() or details["verify_new_content"] != final_content:
-            return self.fail_result(self.case_id, self.name, "Remote verification did not preserve final rename-then-modify state correctly", artifacts, details)
+        if old_verify.exists() or old_text_verify.exists() or not new_verify.is_file() or not new_text_verify.is_file() or verify_validation_error:
+            return self.fail_result(self.case_id, self.name, f"Remote verification did not preserve final TXT/XLSX rename-then-modify state correctly: {verify_validation_error}", artifacts, details)
+        if verify_text_content != final_text_content:
+            return self.fail_result(self.case_id, self.name, "Remote verification passive TXT content did not match final rename-then-modify state", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

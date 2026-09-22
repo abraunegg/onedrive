@@ -7,6 +7,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, xlsx_pair_any_exists, xlsx_pair_all_files
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -18,6 +19,7 @@ from framework.utils import (
 
 
 class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
+    XLSX_PAYLOAD_ROWS = 32
     case_id = "0040"
     name = "nested tree rename and delete stress validation"
     description = (
@@ -84,12 +86,14 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
         original_parent_dir_relative = f"{root_name}/TreeAlpha"
         original_nested_dir_relative = f"{root_name}/TreeAlpha/Level1A"
         original_file_alpha_relative = f"{root_name}/TreeAlpha/Level1A/Level2A/file-alpha.txt"
+        original_file_alpha_xlsx_relative = f"{root_name}/TreeAlpha/Level1A/Level2A/file-alpha.xlsx"
         original_file_beta_relative = f"{root_name}/TreeAlpha/Level1A/Level2B/file-beta.txt"
         original_file_gamma_relative = f"{root_name}/TreeAlpha/Level1B/file-gamma.txt"
 
         renamed_parent_dir_relative = f"{root_name}/TreeOmega"
         renamed_nested_dir_relative = f"{root_name}/TreeOmega/Level1A_Renamed"
         renamed_file_alpha_relative = f"{root_name}/TreeOmega/Level1A_Renamed/Level2A/file-alpha.txt"
+        renamed_file_alpha_xlsx_relative = f"{root_name}/TreeOmega/Level1A_Renamed/Level2A/file-alpha.xlsx"
         deleted_file_beta_relative = f"{root_name}/TreeOmega/Level1A_Renamed/Level2B/file-beta.txt"
         renamed_file_gamma_relative = f"{root_name}/TreeOmega/Level1B/file-gamma-renamed.txt"
         new_file_delta_relative = f"{root_name}/TreeOmega/Level1A_Renamed/Level2B/new-delta.txt"
@@ -98,12 +102,14 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
         local_original_parent_dir_path = local_root / original_parent_dir_relative
         local_original_nested_dir_path = local_root / original_nested_dir_relative
         local_original_file_alpha_path = local_root / original_file_alpha_relative
+        local_original_file_alpha_xlsx_path = local_root / original_file_alpha_xlsx_relative
         local_original_file_beta_path = local_root / original_file_beta_relative
         local_original_file_gamma_path = local_root / original_file_gamma_relative
 
         local_renamed_parent_dir_path = local_root / renamed_parent_dir_relative
         local_renamed_nested_dir_path = local_root / renamed_nested_dir_relative
         local_renamed_file_alpha_path = local_root / renamed_file_alpha_relative
+        local_renamed_file_alpha_xlsx_path = local_root / renamed_file_alpha_xlsx_relative
         local_deleted_file_beta_path = local_root / deleted_file_beta_relative
         local_renamed_file_gamma_path = local_root / renamed_file_gamma_relative
         local_new_file_delta_path = local_root / new_file_delta_relative
@@ -112,12 +118,14 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
         verify_original_parent_dir_path = verify_root / original_parent_dir_relative
         verify_original_nested_dir_path = verify_root / original_nested_dir_relative
         verify_original_file_alpha_path = verify_root / original_file_alpha_relative
+        verify_original_file_alpha_xlsx_path = verify_root / original_file_alpha_xlsx_relative
         verify_original_file_beta_path = verify_root / original_file_beta_relative
         verify_original_file_gamma_path = verify_root / original_file_gamma_relative
 
         verify_renamed_parent_dir_path = verify_root / renamed_parent_dir_relative
         verify_renamed_nested_dir_path = verify_root / renamed_nested_dir_relative
         verify_renamed_file_alpha_path = verify_root / renamed_file_alpha_relative
+        verify_renamed_file_alpha_xlsx_path = verify_root / renamed_file_alpha_xlsx_relative
         verify_deleted_file_beta_path = verify_root / deleted_file_beta_relative
         verify_renamed_file_gamma_path = verify_root / renamed_file_gamma_relative
         verify_new_file_delta_path = verify_root / new_file_delta_relative
@@ -141,6 +149,7 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             "FILE GAMMA\n"
             "This file should be renamed before the second sync.\n"
         )
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0040:{os.getpid()}"
         new_file_delta_content = (
             "TC0040 nested tree rename and delete stress validation\n"
             "FILE DELTA\n"
@@ -178,11 +187,15 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
             "original_parent_dir_relative": original_parent_dir_relative,
             "original_nested_dir_relative": original_nested_dir_relative,
             "original_file_alpha_relative": original_file_alpha_relative,
+            "original_file_alpha_xlsx_relative": original_file_alpha_xlsx_relative,
             "original_file_beta_relative": original_file_beta_relative,
             "original_file_gamma_relative": original_file_gamma_relative,
             "renamed_parent_dir_relative": renamed_parent_dir_relative,
             "renamed_nested_dir_relative": renamed_nested_dir_relative,
             "renamed_file_alpha_relative": renamed_file_alpha_relative,
+            "renamed_file_alpha_xlsx_relative": renamed_file_alpha_xlsx_relative,
+            "xlsx_seed": xlsx_seed,
+            "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "deleted_file_beta_relative": deleted_file_beta_relative,
             "renamed_file_gamma_relative": renamed_file_gamma_relative,
             "new_file_delta_relative": new_file_delta_relative,
@@ -195,6 +208,14 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
         # Phase 1: seed the original nested tree
         write_text_file(local_anchor_path, anchor_content)
         write_text_file(local_original_file_alpha_path, file_alpha_content)
+        generated_xlsx = create_random_xlsx_pair(
+            local_original_file_alpha_xlsx_path,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0040 nested tree rename stress workbook",
+        )
+        details["generated_xlsx_size"] = int(generated_xlsx["size_bytes"])
         write_text_file(local_original_file_beta_path, file_beta_content)
         write_text_file(local_original_file_gamma_path, file_gamma_content)
 
@@ -226,6 +247,22 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
                 details,
             )
 
+        settled_xlsx_validation_error = (
+            validate_xlsx_pair(local_original_file_alpha_xlsx_path, REVISION_0)
+            if local_original_file_alpha_xlsx_path.is_file()
+            else "Seeded XLSX is missing after phase 1"
+        )
+        details["settled_xlsx_validation_error"] = settled_xlsx_validation_error
+        if settled_xlsx_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"seeded XLSX was invalid after phase 1: {settled_xlsx_validation_error}",
+                artifacts,
+                details,
+            )
+
         local_manifest_before_phase2 = build_manifest(local_root)
         write_manifest(local_manifest_before_phase2_file, local_manifest_before_phase2)
 
@@ -245,12 +282,19 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
         details["local_original_parent_dir_exists_after_mutation"] = local_original_parent_dir_path.exists()
         details["local_original_nested_dir_exists_after_mutation"] = local_original_nested_dir_path.exists()
         details["local_original_file_alpha_exists_after_mutation"] = local_original_file_alpha_path.exists()
+        details["local_original_file_alpha_xlsx_exists_after_mutation"] = xlsx_pair_any_exists(local_original_file_alpha_xlsx_path)
         details["local_original_file_beta_exists_after_mutation"] = local_original_file_beta_path.exists()
         details["local_original_file_gamma_exists_after_mutation"] = local_original_file_gamma_path.exists()
 
         details["local_renamed_parent_dir_exists_after_mutation"] = local_renamed_parent_dir_path.is_dir()
         details["local_renamed_nested_dir_exists_after_mutation"] = local_renamed_nested_dir_path.is_dir()
         details["local_renamed_file_alpha_exists_after_mutation"] = local_renamed_file_alpha_path.is_file()
+        details["local_renamed_file_alpha_xlsx_exists_after_mutation"] = xlsx_pair_all_files(local_renamed_file_alpha_xlsx_path)
+        details["local_renamed_file_alpha_xlsx_validation_error"] = (
+            validate_xlsx_pair(local_renamed_file_alpha_xlsx_path, REVISION_0)
+            if local_renamed_file_alpha_xlsx_path.is_file()
+            else "Renamed XLSX is missing after local mutation"
+        )
         details["local_deleted_file_beta_exists_after_mutation"] = local_deleted_file_beta_path.exists()
         details["local_renamed_file_gamma_exists_after_mutation"] = local_renamed_file_gamma_path.is_file()
         details["local_new_file_delta_exists_after_mutation"] = local_new_file_delta_path.is_file()
@@ -321,6 +365,16 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
                 self.case_id,
                 self.name,
                 "local alpha file is missing after parent and nested directory renames",
+                artifacts,
+                details,
+            )
+
+        if details["local_renamed_file_alpha_xlsx_validation_error"]:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "local XLSX descendant did not survive parent and nested directory renames as a valid workbook",
                 artifacts,
                 details,
             )
@@ -403,12 +457,19 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
         details["verify_original_parent_dir_exists"] = verify_original_parent_dir_path.exists()
         details["verify_original_nested_dir_exists"] = verify_original_nested_dir_path.exists()
         details["verify_original_file_alpha_exists"] = verify_original_file_alpha_path.exists()
+        details["verify_original_file_alpha_xlsx_exists"] = xlsx_pair_any_exists(verify_original_file_alpha_xlsx_path)
         details["verify_original_file_beta_exists"] = verify_original_file_beta_path.exists()
         details["verify_original_file_gamma_exists"] = verify_original_file_gamma_path.exists()
 
         details["verify_renamed_parent_dir_exists"] = verify_renamed_parent_dir_path.is_dir()
         details["verify_renamed_nested_dir_exists"] = verify_renamed_nested_dir_path.is_dir()
         details["verify_renamed_file_alpha_exists"] = verify_renamed_file_alpha_path.is_file()
+        details["verify_renamed_file_alpha_xlsx_exists"] = xlsx_pair_all_files(verify_renamed_file_alpha_xlsx_path)
+        details["verify_renamed_file_alpha_xlsx_validation_error"] = (
+            validate_xlsx_pair(verify_renamed_file_alpha_xlsx_path, REVISION_0)
+            if verify_renamed_file_alpha_xlsx_path.is_file()
+            else "Verification XLSX is missing"
+        )
         details["verify_deleted_file_beta_exists"] = verify_deleted_file_beta_path.exists()
         details["verify_renamed_file_gamma_exists"] = verify_renamed_file_gamma_path.is_file()
         details["verify_new_file_delta_exists"] = verify_new_file_delta_path.is_file()
@@ -480,6 +541,15 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
                 details,
             )
 
+        if xlsx_pair_any_exists(verify_original_file_alpha_xlsx_path):
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"verification still contains original XLSX path: {original_file_alpha_xlsx_relative}",
+                artifacts,
+                details,
+            )
+
         if verify_original_file_beta_path.exists():
             return self.fail_result(
                 self.case_id,
@@ -521,6 +591,15 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
                 self.case_id,
                 self.name,
                 f"verification is missing alpha file at renamed path: {renamed_file_alpha_relative}",
+                artifacts,
+                details,
+            )
+
+        if details["verify_renamed_file_alpha_xlsx_validation_error"]:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "verification is missing the renamed XLSX descendant or the workbook revision is invalid",
                 artifacts,
                 details,
             )

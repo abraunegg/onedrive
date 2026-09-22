@@ -9,9 +9,11 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, run_command, write_text_file
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists, xlsx_pair_all_files
 
 
 class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
+    XLSX_PAYLOAD_ROWS = 32
     case_id = "0060"
     name = "monitor mode local move without delete re-upload"
     description = (
@@ -92,6 +94,8 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
 
         file_source_relative = f"{root_name}/FileSource/move-me.txt"
         file_destination_relative = f"{root_name}/FileDestination/move-me.txt"
+        file_xlsx_source_relative = f"{root_name}/FileSource/move-me.xlsx"
+        file_xlsx_destination_relative = f"{root_name}/FileDestination/move-me.xlsx"
         file_destination_anchor_relative = f"{root_name}/FileDestination/anchor.txt"
 
         dir_source_relative = f"{root_name}/Pictures/2005"
@@ -106,6 +110,8 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
 
         file_source_path = sync_root / file_source_relative
         file_destination_path = sync_root / file_destination_relative
+        file_xlsx_source_path = sync_root / file_xlsx_source_relative
+        file_xlsx_destination_path = sync_root / file_xlsx_destination_relative
         file_destination_anchor_path = sync_root / file_destination_anchor_relative
         dir_source_path = sync_root / dir_source_relative
         dir_destination_path = sync_root / dir_destination_relative
@@ -113,9 +119,12 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
 
         file_destination_verify_path = verify_root / file_destination_relative
         file_source_verify_path = verify_root / file_source_relative
+        file_xlsx_destination_verify_path = verify_root / file_xlsx_destination_relative
+        file_xlsx_source_verify_path = verify_root / file_xlsx_source_relative
         dir_source_verify_path = verify_root / dir_source_relative
         dir_destination_verify_path = verify_root / dir_destination_relative
 
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0060:{os.getpid()}"
         file_content = (
             "TC0060 monitor local file move validation\n"
             "This file must be moved remotely, not deleted and re-uploaded.\n"
@@ -139,6 +148,13 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         )
 
         write_text_file(file_source_path, file_content)
+        generated_xlsx = create_random_xlsx_pair(
+            file_xlsx_source_path,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0060 no-delete-reupload move workbook",
+        )
         write_text_file(file_destination_anchor_path, file_anchor_content)
         write_text_file(dir_destination_parent_anchor_path, dir_anchor_content)
         for relative_path, content in dir_file_contents.items():
@@ -167,6 +183,11 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
             "root_name": root_name,
             "file_source_relative": file_source_relative,
             "file_destination_relative": file_destination_relative,
+            "file_xlsx_source_relative": file_xlsx_source_relative,
+            "file_xlsx_destination_relative": file_xlsx_destination_relative,
+            "xlsx_seed": xlsx_seed,
+            "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
+            "generated_xlsx_size": int(generated_xlsx["size_bytes"]),
             "dir_source_relative": dir_source_relative,
             "dir_destination_relative": dir_destination_relative,
             "dir_file_relative_paths": dir_file_relative_paths,
@@ -216,12 +237,30 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
                     details,
                 )
 
+            settled_xlsx_validation_error = (
+                validate_xlsx_pair(file_xlsx_source_path, REVISION_0)
+                if file_xlsx_source_path.is_file()
+                else "Seeded XLSX is missing after monitor initial sync"
+            )
+            details["settled_xlsx_validation_error"] = settled_xlsx_validation_error
+            if settled_xlsx_validation_error:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(
+                    self.case_id,
+                    self.name,
+                    f"seeded XLSX was invalid before local move: {settled_xlsx_validation_error}",
+                    artifacts,
+                    details,
+                )
+
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
             details["initial_sync_complete_count_before_moves"] = details.get("initial_sync_complete_count_before_mutation", 0)
 
             context.log(f"Test Case {self.case_id}: moving in-sync local file: {file_source_relative} -> {file_destination_relative}")
             file_destination_path.parent.mkdir(parents=True, exist_ok=True)
             file_source_path.rename(file_destination_path)
+            context.log(f"Test Case {self.case_id}: moving in-sync local XLSX: {file_xlsx_source_relative} -> {file_xlsx_destination_relative}")
+            rename_xlsx_pair(file_xlsx_source_path, file_xlsx_destination_path)
 
             context.log(f"Test Case {self.case_id}: moving in-sync local directory tree: {dir_source_relative} -> {dir_destination_relative}")
             dir_destination_path.parent.mkdir(parents=True, exist_ok=True)
@@ -229,12 +268,32 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
 
             details["file_source_exists_after_local_move"] = file_source_path.exists()
             details["file_destination_exists_after_local_move"] = file_destination_path.is_file()
+            details["file_xlsx_source_exists_after_local_move"] = xlsx_pair_any_exists(file_xlsx_source_path)
+            details["file_xlsx_destination_exists_after_local_move"] = xlsx_pair_all_files(file_xlsx_destination_path)
+            details["file_xlsx_destination_validation_error"] = (
+                validate_xlsx_pair(file_xlsx_destination_path, REVISION_0)
+                if xlsx_pair_all_files(file_xlsx_destination_path)
+                else "Moved local XLSX is missing"
+            )
+            if details["file_xlsx_destination_validation_error"]:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(
+                    self.case_id,
+                    self.name,
+                    "Local XLSX move did not preserve a valid workbook before monitor processing",
+                    artifacts,
+                    details,
+                )
             details["dir_source_exists_after_local_move"] = dir_source_path.exists()
             details["dir_destination_exists_after_local_move"] = dir_destination_path.is_dir()
 
             required_patterns = [
                 f"[M] Local item moved: ./{file_source_relative} -> ./{file_destination_relative}",
                 f"Moving ./{file_source_relative} to ./{file_destination_relative}",
+                f"[M] Local item moved: ./{file_xlsx_source_relative} -> ./{file_xlsx_destination_relative}",
+                f"Moving ./{file_xlsx_source_relative} to ./{file_xlsx_destination_relative}",
+                f"[M] Local item moved: ./{large_xlsx_relative(file_xlsx_source_relative)} -> ./{large_xlsx_relative(file_xlsx_destination_relative)}",
+                f"Moving ./{large_xlsx_relative(file_xlsx_source_relative)} to ./{large_xlsx_relative(file_xlsx_destination_relative)}",
                 f"[M] Local item moved: ./{dir_source_relative} -> ./{dir_destination_relative}",
                 f"Moving ./{dir_source_relative} to ./{dir_destination_relative}",
             ]
@@ -285,6 +344,13 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         details["expected_destination_dir_files"] = expected_destination_dir_files
         details["verify_file_source_exists"] = file_source_verify_path.exists()
         details["verify_file_destination_exists"] = file_destination_verify_path.is_file()
+        details["verify_file_xlsx_source_exists"] = xlsx_pair_any_exists(file_xlsx_source_verify_path)
+        details["verify_file_xlsx_destination_exists"] = xlsx_pair_all_files(file_xlsx_destination_verify_path)
+        details["verify_file_xlsx_destination_validation_error"] = (
+            validate_xlsx_pair(file_xlsx_destination_verify_path, REVISION_0)
+            if file_xlsx_destination_verify_path.is_file()
+            else "Verification XLSX is missing"
+        )
         details["verify_file_destination_content"] = (
             file_destination_verify_path.read_text(encoding="utf-8")
             if file_destination_verify_path.is_file()
@@ -344,11 +410,29 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
                 details,
             )
 
+        if xlsx_pair_any_exists(file_xlsx_source_verify_path):
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote verification still contains original XLSX move source: {file_xlsx_source_relative}",
+                artifacts,
+                details,
+            )
+
         if not file_destination_verify_path.is_file() or details["verify_file_destination_content"] != file_content:
             return self.fail_result(
                 self.case_id,
                 self.name,
                 "Remote verification did not preserve moved file at the destination path with expected content",
+                artifacts,
+                details,
+            )
+
+        if details["verify_file_xlsx_destination_validation_error"]:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Remote verification did not preserve the moved XLSX at the destination path with the expected revision",
                 artifacts,
                 details,
             )
