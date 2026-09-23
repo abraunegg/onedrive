@@ -12549,12 +12549,25 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 
+		// Use an explicit stack to preserve the existing traversal order without
+		// resizing the array being traversed or repeatedly copying subtrees.
+		struct PendingDirectory {
+			string driveId;
+			string id;
+		}
+		PendingDirectory[] pendingDirectories = [PendingDirectory(driveId, id)];
 		Item[] children;
-		children ~= itemDB.selectChildren(driveId, id);
-		foreach (Item child; children) {
-			if (child.type != ItemType.file) {
-				// recursively get the children of this child
-				children ~= getChildren(child.driveId, child.id);
+		while (pendingDirectories.length > 0) {
+			auto directory = pendingDirectories[$ - 1];
+			pendingDirectories.length--;
+			auto directChildren = itemDB.selectChildren(directory.driveId, directory.id);
+			children ~= directChildren;
+			// Reverse-push directories so their descendants retain the original
+			// left-to-right order after all direct siblings.
+			foreach_reverse (Item child; directChildren) {
+				if (child.type != ItemType.file) {
+					pendingDirectories ~= PendingDirectory(child.driveId, child.id);
+				}
 			}
 		}
 
