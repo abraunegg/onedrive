@@ -1376,34 +1376,32 @@ class SyncEngine {
 		if (debugLogging) {addLogEntry("Cleaning up all internal arrays used when processing data", ["debug"]);}
 
 		// Multi Dimensional Arrays
-		// Set per-sync arrays to null so their backing allocations are no longer
-		// retained by this long-lived SyncEngine instance between monitor loops.
-		idsToDelete = null;
-		idsFaked = null;
-		databaseItemsWhereContentHasChanged = null;
+		idsToDelete.length = 0;
+		idsFaked.length = 0;
+		databaseItemsWhereContentHasChanged.length = 0;
 
 		// JSON Items Arrays
-		jsonItemsToProcess = null;
-		fileJSONItemsToDownload = null;
-		jsonItemsToResumeUpload = null;
-		jsonItemsToResumeDownload = null;
+		jsonItemsToProcess = [];
+		fileJSONItemsToDownload = [];
+		jsonItemsToResumeUpload = [];
+		jsonItemsToResumeDownload = [];
 
 		// String Arrays
-		fileDownloadFailures = null;
-		recycleBinMoveFailures = null;
-		pathFakeDeletedArray = null;
-		pathsRenamed = null;
-		newLocalFilesToUploadToOneDrive = null;
-		fileUploadFailures = null;
-		posixViolationPaths = null;
-		businessSharedFoldersOnlineToSkip = null;
-		interruptedUploadsSessionFiles = null;
-		interruptedDownloadFiles = null;
-		pathsToCreateOnline = null;
-		databaseItemsToDeleteOnline = null;
-		pathsRetained = null;
-		syncListSkippedParentIds = null;
-		onenotePackageIdentifiers = null;
+		fileDownloadFailures = [];
+		recycleBinMoveFailures = [];
+		pathFakeDeletedArray = [];
+		pathsRenamed = [];
+		newLocalFilesToUploadToOneDrive = [];
+		fileUploadFailures = [];
+		posixViolationPaths = [];
+		businessSharedFoldersOnlineToSkip = [];
+		interruptedUploadsSessionFiles = [];
+		interruptedDownloadFiles = [];
+		pathsToCreateOnline = [];
+		databaseItemsToDeleteOnline = [];
+		pathsRetained = [];
+		syncListSkippedParentIds = [];
+		onenotePackageIdentifiers = [];
 
 		// Log completion of cleanup
 		if (debugLogging) {addLogEntry("Cleaning of internal arrays complete", ["debug"]);}
@@ -1552,7 +1550,7 @@ class SyncEngine {
 		scope(exit) {
 			nativeFullScanPresenceTrackingActive = false;
 			nativeFullScanPresenceCandidates = null;
-			nativeFullScanPresenceOrder = null;
+			nativeFullScanPresenceOrder = [];
 			if (nativeFullScanTrueUp && !nativeFullScanReconciliationCompleted) {
 				deltaLinkCache.driveId = null;
 				deltaLinkCache.itemId = null;
@@ -1570,7 +1568,7 @@ class SyncEngine {
 		generatedSimulatedDeltaResponse = false;
 		nativeFullScanPresenceTrackingActive = false;
 		nativeFullScanPresenceCandidates = null;
-		nativeFullScanPresenceOrder = null;
+		nativeFullScanPresenceOrder = [];
 
 		// Reset Shared Folder Flags for 'sync_list' processing
 		sharedFolderDeltaGeneration = false;
@@ -1856,7 +1854,7 @@ class SyncEngine {
 				}
 
 				// Clear up this data
-				jsonArrayToProcess = null;
+				jsonArrayToProcess = [];
 
 				// Is latestDeltaLink matching deltaChanges["@odata.deltaLink"].str ?
 				if ("@odata.deltaLink" in deltaChanges) {
@@ -1973,7 +1971,7 @@ class SyncEngine {
 				}
 
 				// Clear up this data
-				jsonArrayToProcess = null;
+				jsonArrayToProcess = [];
 
 				// To finish off the JSON processing items, this is needed to reflect this in the log
 				if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
@@ -3403,7 +3401,7 @@ class SyncEngine {
 				processDeleteItems();
 			}
 			// Cleanup array memory
-			idsToDelete = [];
+			idsToDelete.length = 0;
 		}
 
 		// Was exitHandlerTriggered flagged
@@ -5946,7 +5944,7 @@ class SyncEngine {
 
 		if (!dryRun) {
 			// Cleanup array memory
-			idsToDelete = [];
+			idsToDelete.length = 0;
 		}
 
 		// Display function processing time if configured to do so
@@ -6486,7 +6484,7 @@ class SyncEngine {
 				addLogEntry("Changed local items to upload to Microsoft OneDrive: " ~ to!string(databaseItemsWhereContentHasChanged.length));
 				processChangedLocalItemsToUpload();
 				// Cleanup array memory
-				databaseItemsWhereContentHasChanged = [];
+				databaseItemsWhereContentHasChanged.length = 0;
 			}
 		}
 

@@ -1363,8 +1363,7 @@ int main(string[] cliArgs) {
 			// entering the monitor loop. Rate-limit any subsequent acquisition attempt so
 			// frequent local filesystem activity cannot hammer the Graph endpoint.
 			MonoTime lastWebSocketAcquisitionAttempt = MonoTime.currTime();
-			SysTime lastMonitorGcCleanup = Clock.currTime();
-			
+
 			while (performFileSystemMonitoring) {
 				if (shutdownRequested()) {
 					addShutdownTelemetry("monitor loop detected shutdown request before processing new work");
@@ -1652,34 +1651,45 @@ int main(string[] cliArgs) {
 						displayMemoryUsageDetails();
 					}
 
-					// Retain the existing coarse heap minimization for long-running monitor
-					// processes. Garbage collection has already run above for this loop.
-					auto monitorGcCleanupTime = Clock.currTime();
-					if (lastMonitorGcCleanup == SysTime.min || (monitorGcCleanupTime - lastMonitorGcCleanup) >= dur!"hours"(24)) {
-						// Avoid running this during initial startup; only run after the application
-						// has been active for at least 24 hours.
-						if (elapsedTime >= dur!"hours"(24)) {
-							// Log what we are doing
-							addLogEntry("Performing scheduled monitor-mode memory minimization after 24 hours of runtime");
-
-							// Return free memory to the operating system
-							auto monitorGcMinimizeStartTime = MonoTime.currTime();
-							GC.minimize();
-							auto monitorGcMinimizeDuration = MonoTime.currTime() - monitorGcMinimizeStartTime;
-
-							// When memory telemetry is enabled, record the immediate post-minimize
-							// state separately from the per-loop GC telemetry above.
-							if (displayMemoryUsage) {
-								addLogEntry("Scheduled monitor-mode memory minimization duration: " ~ to!string(monitorGcMinimizeDuration));
-								addLogEntry("Memory usage after scheduled monitor-mode memory minimization");
-								displayMemoryUsageDetails();
-							}
-
-							// Update time gate
-							lastMonitorGcCleanup = monitorGcCleanupTime;
-						}
-					}
+					// Reclaim unused managed heap memory after every completed monitor loop.
+					//
+					// A 100K-object memory investigation confirmed that GC.collect()
+					// and GC.minimize() perform complementary operations. GC.collect()
+					// reclaims unreachable managed objects, while GC.minimize() attempts
+					// to return unused managed heap pages to the operating system.
+					//
+					// During testing with 101,494 OneDrive objects, post-collection live
+					// managed memory consistently returned to approximately 100 KB.
+					// However, without heap minimisation, the garbage collector retained
+					// substantial unused heap capacity and process RSS remained elevated.
+					//
+					// Large synchronisation operations and scheduled full scans can
+					// temporarily allocate significant amounts of managed memory.
+					// Performing heap minimisation after each completed monitor loop
+					// allows this unused memory to be returned promptly, rather than
+					// remaining resident throughout subsequent monitor iterations.
+					//
+					// Long-running testing also demonstrated that repeated minimisation
+					// incurs negligible overhead when no additional heap pages can be
+					// released. It is deliberately performed after synchronisation and
+					// associated resource cleanup have completed, avoiding interference
+					// with active file processing.
+					//
+					// IMPORTANT: Retain both GC.collect() and GC.minimize() on every
+					// completed monitor loop. Any proposed change to this behaviour
+					// must be validated against a large dataset, including scheduled
+					// full scans and post-scan RSS recovery. Small-scale testing alone
+					// is insufficient to establish equivalent memory behaviour.
 					
+					auto monitorGcMinimizeStartTime = MonoTime.currTime();
+					GC.minimize();
+					auto monitorGcMinimizeDuration = MonoTime.currTime() - monitorGcMinimizeStartTime;
+					if (displayMemoryUsage) {
+						addLogEntry("Monitor-loop heap minimization duration: " ~ to!string(monitorGcMinimizeDuration));
+						addLogEntry("Memory usage after monitor-loop heap minimization");
+						displayMemoryUsageDetails();
+					}
+
 					// Log that this loop is complete
 					if (debugLogging) {addLogEntry(loopStopOutputMessage, ["debug"]);}
 					
