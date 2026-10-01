@@ -279,10 +279,13 @@ class SyncEngine {
 	long processedCount;
 	// Are we creating a simulated /delta response? This is critically important in terms of how we 'update' the database
 	bool generatedSimulatedDeltaResponse = false;
-	// Are we processing a completed native tokenless /delta response for a Full Scan True Up?
-	// This is deliberately separate from generatedSimulatedDeltaResponse because native /delta
-	// processing must retain its normal filtering, move, restore and download behaviour.
-	bool nativeFullScanTrueUpResponse = false;
+	// Native Full Scan True Up presence tracking. The tokenless /delta response is
+	// authoritative for online presence, so keep only the database item IDs that
+	// have not yet been observed. Do not use persistent syncStatus writes for this
+	// native pathway.
+	bool nativeFullScanPresenceTrackingActive = false;
+	bool[string] nativeFullScanPresenceCandidates;
+	string[] nativeFullScanPresenceOrder;
 	// Did the most recent sync use an authoritative cleanup pass?
 	bool authoritativeCleanupPassUsedInLastSync = false;
 	// Store the latest DeltaLink
@@ -986,6 +989,9 @@ class SyncEngine {
 			}
 		}
 
+		// The account details have been copied into application state; release the temporary JSON response.
+		defaultOneDriveDriveDetails = null;
+
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		getDefaultDriveApiInstance.releaseCurlEngine();
 		getDefaultDriveApiInstance = null;
@@ -1059,6 +1065,9 @@ class SyncEngine {
 				throw new AccountDetailsException();
 			}
 		}
+
+		// The root details have been copied into application/database state; release the temporary JSON response.
+		defaultOneDriveRootDetails = null;
 
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		getDefaultRootApiInstance.releaseCurlEngine();
@@ -1373,34 +1382,32 @@ class SyncEngine {
 		if (debugLogging) {addLogEntry("Cleaning up all internal arrays used when processing data", ["debug"]);}
 
 		// Multi Dimensional Arrays
-		// Set per-sync arrays to null so their backing allocations are no longer
-		// retained by this long-lived SyncEngine instance between monitor loops.
-		idsToDelete = null;
-		idsFaked = null;
-		databaseItemsWhereContentHasChanged = null;
+		idsToDelete.length = 0;
+		idsFaked.length = 0;
+		databaseItemsWhereContentHasChanged.length = 0;
 
 		// JSON Items Arrays
-		jsonItemsToProcess = null;
-		fileJSONItemsToDownload = null;
-		jsonItemsToResumeUpload = null;
-		jsonItemsToResumeDownload = null;
+		jsonItemsToProcess = [];
+		fileJSONItemsToDownload = [];
+		jsonItemsToResumeUpload = [];
+		jsonItemsToResumeDownload = [];
 
 		// String Arrays
-		fileDownloadFailures = null;
-		recycleBinMoveFailures = null;
-		pathFakeDeletedArray = null;
-		pathsRenamed = null;
-		newLocalFilesToUploadToOneDrive = null;
-		fileUploadFailures = null;
-		posixViolationPaths = null;
-		businessSharedFoldersOnlineToSkip = null;
-		interruptedUploadsSessionFiles = null;
-		interruptedDownloadFiles = null;
-		pathsToCreateOnline = null;
-		databaseItemsToDeleteOnline = null;
-		pathsRetained = null;
-		syncListSkippedParentIds = null;
-		onenotePackageIdentifiers = null;
+		fileDownloadFailures = [];
+		recycleBinMoveFailures = [];
+		pathFakeDeletedArray = [];
+		pathsRenamed = [];
+		newLocalFilesToUploadToOneDrive = [];
+		fileUploadFailures = [];
+		posixViolationPaths = [];
+		businessSharedFoldersOnlineToSkip = [];
+		interruptedUploadsSessionFiles = [];
+		interruptedDownloadFiles = [];
+		pathsToCreateOnline = [];
+		databaseItemsToDeleteOnline = [];
+		pathsRetained = [];
+		syncListSkippedParentIds = [];
+		onenotePackageIdentifiers = [];
 
 		// Log completion of cleanup
 		if (debugLogging) {addLogEntry("Cleaning of internal arrays complete", ["debug"]);}
@@ -1498,6 +1505,9 @@ class SyncEngine {
 			forceExit();
 		}
 
+		// All required identifiers have been copied into single-directory state.
+		onlinePathData = null;
+
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -1535,31 +1545,22 @@ class SyncEngine {
 		// responses provide deletion tombstones since their supplied checkpoint, but
 		// a new tokenless enumeration establishes the current online baseline. Items
 		// deleted before that baseline may therefore be absent rather than returned as
-		// deleted objects. Reuse the existing syncStatus mark-and-sweep model used by
-		// generateDeltaResponse() to identify those absent database items.
+		// deleted objects. Track the original database IDs in memory and remove each ID
+		// as it is observed in the authoritative online response.
 		bool nativeFullScanTrueUp = false;
 		bool nativeFullScanEnumerationCompleted = false;
-		bool nativeFullScanSyncStatusDowngraded = false;
 		bool nativeFullScanReconciliationCompleted = false;
 		size_t nativeFullScanItemsExpectedToProcess = 0;
-		Item[] nativeFullScanDatabaseSnapshot;
 
-		// If local processing is interrupted after the scoped database records have
-		// been marked out-of-sync, restore their original syncStatus values and do not
-		// allow the candidate replacement deltaLink to be committed.
+		// Native Full Scan True Up keeps its presence state only in memory. If the
+		// authoritative enumeration or local processing does not complete, discard
+		// that state and prevent the candidate replacement deltaLink from being
+		// committed. No database rollback is required because syncStatus is untouched.
 		scope(exit) {
-			nativeFullScanTrueUpResponse = false;
-			if (nativeFullScanSyncStatusDowngraded && !nativeFullScanReconciliationCompleted) {
-				if (debugLogging) {
-					addLogEntry("Native Full Scan True Up did not complete; restoring prior database syncStatus values", ["debug"]);
-				}
-				foreach (databaseItem; nativeFullScanDatabaseSnapshot) {
-					Item currentDatabaseItem;
-					if (itemDB.selectById(databaseItem.driveId, databaseItem.id, currentDatabaseItem)) {
-						currentDatabaseItem.syncStatus = databaseItem.syncStatus;
-						itemDB.upsert(currentDatabaseItem);
-					}
-				}
+			nativeFullScanPresenceTrackingActive = false;
+			nativeFullScanPresenceCandidates = null;
+			nativeFullScanPresenceOrder = [];
+			if (nativeFullScanTrueUp && !nativeFullScanReconciliationCompleted) {
 				deltaLinkCache.driveId = null;
 				deltaLinkCache.itemId = null;
 				deltaLinkCache.latestDeltaLink = null;
@@ -1574,7 +1575,9 @@ class SyncEngine {
 		// Reset response-type flags
 		addLogEntry("Reset generatedSimulatedDeltaResponse as 'false'", ["debug"]);
 		generatedSimulatedDeltaResponse = false;
-		nativeFullScanTrueUpResponse = false;
+		nativeFullScanPresenceTrackingActive = false;
+		nativeFullScanPresenceCandidates = null;
+		nativeFullScanPresenceOrder = [];
 
 		// Reset Shared Folder Flags for 'sync_list' processing
 		sharedFolderDeltaGeneration = false;
@@ -1659,6 +1662,18 @@ class SyncEngine {
 		// the normal Graph /delta pathway rather than an already-authoritative
 		// generated response.
 		nativeFullScanTrueUp = appConfig.fullScanTrueUpRequired && !generatedSimulatedDeltaResponse;
+
+		// A native tokenless /delta response is authoritative for online presence.
+		// Snapshot only the IDs currently in the queried database subtree before the
+		// enumeration starts. As each online item is observed its ID is removed, so
+		// only genuinely absent historical IDs remain after a complete pass.
+		if (nativeFullScanTrueUp) {
+			addNativeFullScanPresenceCandidates(driveIdToQuery, itemIdToQuery);
+			nativeFullScanPresenceTrackingActive = true;
+			if (debugLogging) {
+				addLogEntry("Native Full Scan True Up database scope contains " ~ to!string(nativeFullScanPresenceCandidates.length) ~ " descendant item(s)", ["debug"]);
+			}
+		}
 
 		// What /delta query do we use?
 		if (!generatedSimulatedDeltaResponse) {
@@ -1848,7 +1863,7 @@ class SyncEngine {
 				}
 
 				// Clear up this data
-				jsonArrayToProcess = null;
+				jsonArrayToProcess = [];
 
 				// Is latestDeltaLink matching deltaChanges["@odata.deltaLink"].str ?
 				if ("@odata.deltaLink" in deltaChanges) {
@@ -1965,7 +1980,7 @@ class SyncEngine {
 				}
 
 				// Clear up this data
-				jsonArrayToProcess = null;
+				jsonArrayToProcess = [];
 
 				// To finish off the JSON processing items, this is needed to reflect this in the log
 				if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
@@ -1983,31 +1998,22 @@ class SyncEngine {
 		// Cleanup deltaChanges as this is no longer needed
 		deltaChanges = null;
 
-		// Only after the complete native tokenless enumeration has reached its final
-		// deltaLink do we mark the exact queried database subtree out-of-sync. This
-		// avoids leaving persistent false 'N' flags while Graph paging is still active.
+		// Only a complete native tokenless enumeration may be used for absence
+		// reconciliation. Presence tracking itself is read-only with respect to the
+		// database, so an interrupted enumeration simply discards the in-memory set.
 		if (nativeFullScanTrueUp) {
 			if (nativeFullScanEnumerationCompleted && !exitHandlerTriggered) {
-				nativeFullScanDatabaseSnapshot = getChildren(driveIdToQuery, itemIdToQuery);
-				if (debugLogging) {
-					addLogEntry("Native Full Scan True Up database scope contains " ~ to!string(nativeFullScanDatabaseSnapshot.length) ~ " descendant item(s)", ["debug"]);
-				}
-				foreach (databaseItem; nativeFullScanDatabaseSnapshot) {
-					if (debugLogging) {addLogEntry("Downgrading native Full Scan True Up item as out-of-sync: " ~ databaseItem.id, ["debug"]);}
-					itemDB.downgradeSyncStatusFlag(databaseItem.driveId, databaseItem.id);
-				}
-				nativeFullScanSyncStatusDowngraded = true;
 				nativeFullScanItemsExpectedToProcess = jsonItemsToProcess.length;
-				nativeFullScanTrueUpResponse = true;
 			} else {
 				// The enumeration was interrupted or never produced a final checkpoint.
 				// Keep the previous database deltaLink and request another true-up pass.
+				nativeFullScanPresenceTrackingActive = false;
 				deltaLinkCache.driveId = null;
 				deltaLinkCache.itemId = null;
 				deltaLinkCache.latestDeltaLink = null;
 				latestDeltaLink = null;
 				if (debugLogging) {
-					addLogEntry("Native Full Scan True Up did not reach a complete authoritative checkpoint; syncStatus reconciliation was skipped", ["debug"]);
+					addLogEntry("Native Full Scan True Up did not reach a complete authoritative checkpoint; absence reconciliation was skipped", ["debug"]);
 				}
 			}
 		}
@@ -2114,7 +2120,7 @@ class SyncEngine {
 		}
 
 		// The current native response has now finished normal JSON processing.
-		nativeFullScanTrueUpResponse = false;
+		nativeFullScanPresenceTrackingActive = false;
 
 		// Keep the DriveDetailsCache array with unique entries only
 		DriveDetailsCache cachedOnlineDriveData;
@@ -2123,21 +2129,21 @@ class SyncEngine {
 			addOrUpdateOneDriveOnlineDetails(driveIdToQuery);
 		}
 
-		// Complete the native Full Scan True Up mark-and-sweep pass. Any scoped
-		// database item that remains syncStatus='N' was not observed in the completed
-		// current-state response. Queue it through the existing deletion array so that
-		// processDownloadActivities() applies the existing Recycle Bin, database
-		// cleanup and expected-local-effect behaviour before saving the new
-		// deltaLink.
-		if (nativeFullScanTrueUp && nativeFullScanSyncStatusDowngraded) {
+		// Complete the native Full Scan True Up presence reconciliation. Every ID
+		// still present in nativeFullScanPresenceCandidates belonged to the original
+		// database scope but was never observed in the completed authoritative online
+		// response. Only these genuinely absent items are materialised as complete
+		// Item records for the existing deletion workflow.
+		if (nativeFullScanTrueUp && nativeFullScanEnumerationCompleted) {
 			if (!exitHandlerTriggered && (processedCount == nativeFullScanItemsExpectedToProcess)) {
 				size_t nativeFullScanAbsentItemCount = 0;
-				foreach (databaseItem; nativeFullScanDatabaseSnapshot) {
-					Item currentDatabaseItem;
-					if (!itemDB.selectById(databaseItem.driveId, databaseItem.id, currentDatabaseItem)) {
+				foreach (itemId; nativeFullScanPresenceOrder) {
+					if ((itemId in nativeFullScanPresenceCandidates) is null) {
 						continue;
 					}
-					if (currentDatabaseItem.syncStatus != "N") {
+
+					Item currentDatabaseItem;
+					if (!itemDB.selectById(driveIdToQuery, itemId, currentDatabaseItem)) {
 						continue;
 					}
 
@@ -2163,7 +2169,7 @@ class SyncEngine {
 					addLogEntry("Native Full Scan True Up identified " ~ to!string(nativeFullScanAbsentItemCount) ~ " database item(s) no longer present online", ["verbose"]);
 				}
 				if (appConfig.fullScanTrueUpRequired) {
-					if (debugLogging) {addLogEntry("Unsetting fullScanTrueUpRequired after syncStatus reconciliation completed", ["debug"]);}
+					if (debugLogging) {addLogEntry("Unsetting fullScanTrueUpRequired after presence reconciliation completed", ["debug"]);}
 					appConfig.fullScanTrueUpRequired = false;
 				}
 				nativeFullScanReconciliationCompleted = true;
@@ -2234,6 +2240,14 @@ class SyncEngine {
 		// What is this item's id
 		if (hasId(onedriveJSONItem)) {
 			thisItemId = onedriveJSONItem["id"].str;
+
+			// During a native Full Scan True Up, online presence is tracked only in
+			// memory. Remove the item from the original database candidate set as soon
+			// as Graph proves that the ID exists online, independently of filtering or
+			// later local change handling.
+			if (nativeFullScanPresenceTrackingActive) {
+				nativeFullScanPresenceCandidates.remove(thisItemId);
+			}
 		}
 
 		// What is this item's name
@@ -2578,7 +2592,7 @@ class SyncEngine {
 				}
 				if (protectedByNoSync) {
 					if (verboseLogging) {addLogEntry("Ignoring online deletion for path protected by .nosync: " ~ protectedLocalPath, ["verbose"]);}
-					if ((nativeFullScanTrueUpResponse || generatedSimulatedDeltaResponse) && (existingDatabaseItem.syncStatus != "Y")) {
+					if (generatedSimulatedDeltaResponse && (existingDatabaseItem.syncStatus != "Y")) {
 						existingDatabaseItem.syncStatus = "Y";
 						itemDB.upsert(existingDatabaseItem);
 					}
@@ -3211,10 +3225,10 @@ class SyncEngine {
 					addLogEntry("Ignoring OneDrive item because the local path is protected by .nosync: " ~ noSyncDisplayPath, ["verbose"]);
 				}
 
-				// Current-state reconciliation can use syncStatus as a presence marker. A
-				// tracked object protected by .nosync is intentionally retained,
+				// Generated current-state reconciliation uses syncStatus as a presence
+				// marker. A tracked object protected by .nosync is intentionally retained,
 				// so do not allow it to remain marked as absent.
-				if ((nativeFullScanTrueUpResponse || generatedSimulatedDeltaResponse) && existingDBEntry && (existingDatabaseItem.syncStatus != "Y")) {
+				if (generatedSimulatedDeltaResponse && existingDBEntry && (existingDatabaseItem.syncStatus != "Y")) {
 					existingDatabaseItem.syncStatus = "Y";
 					itemDB.upsert(existingDatabaseItem);
 				}
@@ -3239,11 +3253,10 @@ class SyncEngine {
 					addLogEntry("Creating newDatabaseItem object using the provided JSON data", ["debug"]);
 				}
 
-				// During any authoritative current-state response that uses syncStatus as a
-				// mark-and-sweep presence flag, record an accepted existing item as seen
-				// before change, move or download handling. Online presence is independent
-				// of whether applying newer content locally later succeeds.
-				if ((nativeFullScanTrueUpResponse || generatedSimulatedDeltaResponse) && existingDBEntry) {
+				// Generated current-state responses use syncStatus as their existing
+				// mark-and-sweep presence flag. Native Full Scan True Up tracks presence
+				// separately in memory and does not write syncStatus for bookkeeping.
+				if (generatedSimulatedDeltaResponse && existingDBEntry) {
 					existingDatabaseItem.syncStatus = "Y";
 					itemDB.upsert(existingDatabaseItem);
 				}
@@ -3397,7 +3410,7 @@ class SyncEngine {
 				processDeleteItems();
 			}
 			// Cleanup array memory
-			idsToDelete = [];
+			idsToDelete.length = 0;
 		}
 
 		// Was exitHandlerTriggered flagged
@@ -4103,6 +4116,7 @@ class SyncEngine {
 		// Validate the online parent response before reading required fields from it.
 		if ((onlineParentData.type() != JSONType.object) || (!hasId(onlineParentData)) || (!hasParentReferenceDriveId(onlineParentData))) {
 			addLogEntry("WARNING: Unable to create Shared Folder database records because the Microsoft OneDrive API returned a malformed parent response: " ~ sanitiseJSONItem(onlineParentData));
+			onlineParentData = null;
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			onlineParentOneDriveApiInstance.releaseCurlEngine();
 			onlineParentOneDriveApiInstance = null;
@@ -4220,6 +4234,9 @@ class SyncEngine {
 
 		// Save item
 		itemDB.upsert(sharedFolderDatabaseTie);
+
+		// The database item now owns the required scalar/string state.
+		onlineParentData = null;
 
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		onlineParentOneDriveApiInstance.releaseCurlEngine();
@@ -5119,6 +5136,9 @@ class SyncEngine {
 						downloadFailed = true;
 					}
 
+					// downloadById() has consumed the resumable hash metadata.
+					onlineHash = null;
+
 					// OneDrive API Instance Cleanup - shutdown API and return the CurlEngine
 					// to the pool on both successful and handled-failure paths. Do not leave
 					// native HTTP ownership dependent on a later GC/finalizer cycle.
@@ -5940,7 +5960,7 @@ class SyncEngine {
 
 		if (!dryRun) {
 			// Cleanup array memory
-			idsToDelete = [];
+			idsToDelete.length = 0;
 		}
 
 		// Display function processing time if configured to do so
@@ -6273,6 +6293,10 @@ class SyncEngine {
 			uploadLastModifiedTimeApiInstance = null;
 		}
 
+		// The request and response JSON values are no longer required after this operation.
+		data = null;
+		response = null;
+
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -6480,7 +6504,7 @@ class SyncEngine {
 				addLogEntry("Changed local items to upload to Microsoft OneDrive: " ~ to!string(databaseItemsWhereContentHasChanged.length));
 				processChangedLocalItemsToUpload();
 				// Cleanup array memory
-				databaseItemsWhereContentHasChanged = [];
+				databaseItemsWhereContentHasChanged.length = 0;
 			}
 		}
 
@@ -7935,6 +7959,9 @@ class SyncEngine {
 			}
 		}
 
+		// All path information required from the online response has been copied into local/database state.
+		onlinePathData = null;
+
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		onlinePathOneDriveApiInstance.releaseCurlEngine();
 		onlinePathOneDriveApiInstance = null;
@@ -8108,9 +8135,11 @@ class SyncEngine {
 				// Yes
 				if (debugLogging) {addLogEntry("Creating DB item from online API response: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);}
 				dbItem = makeItem(fileDetailsFromOneDrive);
+				fileDetailsFromOneDrive = null;
 			} else {
 				// No
 				addLogEntry("Unable to upload this modified file at this point in time: " ~ localFilePath);
+				fileDetailsFromOneDrive = null;
 				return;
 			}
 		}
@@ -8429,6 +8458,9 @@ class SyncEngine {
 				}
 			}
 		}
+
+		// The upload response has been fully applied to database/local state.
+		uploadResponse = null;
 
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -8987,6 +9019,9 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			getCurrentDriveQuotaApiInstance.releaseCurlEngine();
 			getCurrentDriveQuotaApiInstance = null;
+			// Quota query failed; no JSON response needs to remain live.
+			currentDriveQuota = null;
+
 			return result;
 		}
 
@@ -9103,6 +9138,8 @@ class SyncEngine {
 					if (verboseLogging) {addLogEntry("WARNING: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);}
 				}
 			}
+			// All quota values have been copied into scalar state.
+			quota = null;
 		} else {
 			// When valid quota details are not fetched
 			if (verboseLogging) {addLogEntry("Failed to fetch or query quota details for OneDrive Drive ID: " ~ driveId, ["verbose"]);}
@@ -9114,6 +9151,9 @@ class SyncEngine {
 
 		// Return result
 		result ~= [to!string(quotaRestricted), to!string(quotaAvailable), to!string(quotaRemainingOnline)];
+
+		// The quota response is no longer required once scalar/result state has been built.
+		currentDriveQuota = null;
 
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -10774,7 +10814,8 @@ class SyncEngine {
 
 			// That set of returned objects - did we find the folder?
 			if (directoryFoundOnline) {
-				// We found the folder, no need to continue searching nextLink data
+				// We found the folder, no need to retain the containing page or continue searching.
+				topLevelChildren = null;
 				break;
 			}
 
@@ -10784,7 +10825,13 @@ class SyncEngine {
 				// Update nextLink to next changeSet bundle
 				if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
 				nextLink = topLevelChildren["@odata.nextLink"].str;
-			} else break;
+				// The current page is no longer required; retain only the nextLink string.
+				topLevelChildren = null;
+			} else {
+				// The final page is no longer required.
+				topLevelChildren = null;
+				break;
+			}
 
 			// Sleep for a while to avoid busy-waiting
 			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
@@ -12536,6 +12583,27 @@ class SyncEngine {
 	}
 
 
+	// Build the minimal database identity set required by native Full Scan True Up.
+	// The database query returns only id and type. Type is used only to recurse; the
+	// retained presence state contains item IDs and no other database metadata. The
+	// ordered ID list preserves the existing parent-before-child deletion ordering.
+	void addNativeFullScanPresenceCandidates(string driveId, string id) {
+		auto children = itemDB.selectChildItemIdentities(driveId, id);
+
+		// Preserve the same traversal order as getChildren(): append all direct
+		// children first, then append each child's descendants. processDeleteItems()
+		// relies on the resulting order when deleting or moving directory trees.
+		foreach (child; children) {
+			nativeFullScanPresenceCandidates[child.id] = true;
+			nativeFullScanPresenceOrder ~= child.id;
+		}
+		foreach (child; children) {
+			if (child.type != ItemType.file) {
+				addNativeFullScanPresenceCandidates(driveId, child.id);
+			}
+		}
+	}
+
 	// Get the children of an item id from the database
 	Item[] getChildren(string driveId, string id) {
 		// Function Start Time
@@ -13063,6 +13131,9 @@ class SyncEngine {
 			outputDriveId = inputDriveId;
 		}
 
+		// The required driveId string has been extracted; the JSON response is no longer needed.
+		remoteDriveDetails = null;
+
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -13245,6 +13316,8 @@ class SyncEngine {
 				// Must force exit here, allow logging to be done
 				forceExit();
 			}
+			// pathData is no longer required once the search item identifiers have been extracted.
+			pathData = null;
 		} else {
 			// When setSingleDirectoryScope() was called, the following were set to the correct items, even if the path was remote:
 			// - singleDirectoryScopeDriveId
@@ -13362,6 +13435,8 @@ class SyncEngine {
 					// Add driveData JSON data to array
 					if (verboseLogging) {addLogEntry("Adding OneDrive root details for processing", ["verbose"]);}
 					childrenData ~= rootData;
+					// childrenData now owns the reference required for the generated response.
+					rootData = null;
 				}
 			}
 
@@ -13375,6 +13450,8 @@ class SyncEngine {
 
 			// add the responded 'driveData' to the childrenData to process later
 			childrenData ~= driveData;
+			// childrenData now owns the reference required for the generated response.
+			driveData = null;
 		} else {
 			// driveData is an invalid JSON object
 			addLogEntry("CODING TO DO: The query of OneDrive API to getPathDetailsById generated an invalid JSON response - thus we cant build our own /delta simulated response ... how to handle?");
@@ -13416,6 +13493,7 @@ class SyncEngine {
 			// The child listing must contain the expected collection array.
 			if (!hasValidValueArray(topLevelChildren)) {
 				if (debugLogging) {addLogEntry("Unable to continue generated /delta traversal because the response does not contain a valid value array", ["debug"]);}
+				topLevelChildren = null;
 				break;
 			}
 
@@ -13458,6 +13536,8 @@ class SyncEngine {
 								// add the grandchild to the array
 								childrenData ~= grandChild;
 							}
+							// Drop the temporary recursive result once its elements are retained by childrenData.
+							grandChildrenData = [];
 						}
 					}
 
@@ -13495,7 +13575,13 @@ class SyncEngine {
 				// Update nextLink to next changeSet bundle
 				if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
 				nextLink = topLevelChildren["@odata.nextLink"].str;
-			} else break;
+				// The current page has been copied into childrenData; retain only the nextLink string.
+				topLevelChildren = null;
+			} else {
+				// The final page has also been copied into childrenData.
+				topLevelChildren = null;
+				break;
+			}
 
 			// Sleep for a while to avoid busy-waiting
 			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
@@ -13514,6 +13600,8 @@ class SyncEngine {
 						"@odata.context": JSONValue("https://graph.microsoft.com/v1.0/$metadata#Collection(driveItem)"),
 						"value": JSONValue(childrenData.array)
 						];
+		// The returned JSONValue now retains the generated array; drop the temporary array alias.
+		childrenData = [];
 
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
@@ -13627,6 +13715,8 @@ class SyncEngine {
 									// add the grandchild to the array
 									thisLevelChildrenData ~= grandChild;
 								}
+								// Drop the temporary recursive result once its elements are retained by thisLevelChildrenData.
+								grandChildrenData = [];
 							}
 						}
 					}
@@ -13638,7 +13728,13 @@ class SyncEngine {
 					// Update nextLink to next changeSet bundle
 					nextLink = thisLevelChildren["@odata.nextLink"].str;
 					if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
-				} else break;
+					// The current page has been copied into thisLevelChildrenData; retain only nextLink.
+					thisLevelChildren = null;
+				} else {
+					// The final page has also been copied into thisLevelChildrenData.
+					thisLevelChildren = null;
+					break;
+				}
 
 			} else {
 				// Invalid JSON response when querying this level children
@@ -13664,6 +13760,9 @@ class SyncEngine {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
+
+		// Release any remaining page response before returning the aggregate result.
+		thisLevelChildren = null;
 
 		// return response
 		return thisLevelChildrenData;
@@ -13885,6 +13984,7 @@ class SyncEngine {
 						topLevelChildren = queryOneDriveForSpecificPath.listChildren(parentDetails.driveId, parentDetails.id, nextLink);
 						if (!hasValidValueArray(topLevelChildren)) {
 							if (debugLogging) {addLogEntry("Unable to query remote path because the child response does not contain a valid value array", ["debug"]);}
+							topLevelChildren = null;
 							break;
 						}
 						// Process each child
@@ -13924,7 +14024,8 @@ class SyncEngine {
 						}
 
 						if (directoryFoundOnline) {
-							// We found the folder, no need to continue searching nextLink data
+							// We found the folder; the containing page is no longer required.
+							topLevelChildren = null;
 							break;
 						}
 
@@ -13934,7 +14035,11 @@ class SyncEngine {
 							// Update nextLink to next changeSet bundle
 							if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
 							nextLink = topLevelChildren["@odata.nextLink"].str;
-						} else break;
+							topLevelChildren = null;
+						} else {
+							topLevelChildren = null;
+							break;
+						}
 
 						// Sleep for a while to avoid busy-waiting
 						Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
@@ -13976,6 +14081,8 @@ class SyncEngine {
 								saveItem(createByIdAPIResponse);
 								// Set getPathDetailsAPIResponse to createByIdAPIResponse
 								getPathDetailsAPIResponse = createByIdAPIResponse;
+								// The return value now retains the created object.
+								createByIdAPIResponse = null;
 							} catch (OneDriveException e) {
 								// 409 - API Race Condition
 								if (e.httpStatusCode == 409) {
@@ -13994,10 +14101,16 @@ class SyncEngine {
 							// Save item to the database
 							saveItem(fakeResponse);
 						}
+						// The create request payload is no longer required.
+						newDriveItem = null;
+						createByIdAPIResponse = null;
 					}
 				}
 			}
 		}
+
+		// Release any page response left by an interrupted traversal.
+		topLevelChildren = null;
 
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		queryOneDriveForSpecificPath.releaseCurlEngine();
@@ -18808,6 +18921,9 @@ class SyncEngine {
 			auto app = appender!string();
 			toJSON(app, sanitisedJSONItem);
 
+			// The output string is now independent of the deep-copy JSON tree.
+			sanitisedJSONItem = null;
+
 			// Return sanitised JSON string for logging output
 			return app.data;
 
@@ -18884,6 +19000,7 @@ class SyncEngine {
 		}
 
 		bool websocketNotificationUrlObtained = false;
+		JSONValue endpointResponse;
 
 		// Create a new API Instance for this thread and initialise it
 		OneDriveApi queryWebsocketURLApiInstance;
@@ -18892,7 +19009,7 @@ class SyncEngine {
 
 		// Try and query Websocket Notification URL
 		try {
-			JSONValue endpointResponse = queryWebsocketURLApiInstance.obtainWebSocketNotificationURL();
+			endpointResponse = queryWebsocketURLApiInstance.obtainWebSocketNotificationURL();
 
 			// Was a valid JSON response with the required endpoint fields provided?
 			if ((endpointResponse.type() == JSONType.object) && (("notificationUrl" in endpointResponse) != null) && (("expirationDateTime" in endpointResponse) != null)) {
@@ -18952,6 +19069,9 @@ class SyncEngine {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
+
+		// Runtime configuration now owns the required endpoint strings.
+		endpointResponse = null;
 
 		return websocketNotificationUrlObtained;
 	}
@@ -19029,6 +19149,9 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		queryPathDetailsOnline.releaseCurlEngine();
 		queryPathDetailsOnline = null;
+
+		// The requested item has been processed; release the API JSON response.
+		onlinePathData = null;
 
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {

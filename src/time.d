@@ -213,43 +213,43 @@ void displaySystemTimeValidationDetails(ApplicationConfig appConfig) {
 
 	addLogEntry();
 	addLogEntry("---------------- Runtime System Time Validation -----------------");
-	addLogEntry("System time validation enabled               = " ~ to!string(!appConfig.getValueBool("disable_time_check")));
-	addLogEntry("System time validation state                 = " ~ appConfig.getSystemTimeStateString());
-	addLogEntry("System time validation reason                = " ~ appConfig.systemTimeStateReason);
+	addLogEntry("System time validation enabled                = " ~ to!string(!appConfig.getValueBool("disable_time_check")));
+	addLogEntry("System time validation state                  = " ~ appConfig.getSystemTimeStateString());
+	addLogEntry("System time validation reason                 = " ~ appConfig.systemTimeStateReason);
 
 	if (appConfig.getValueBool("disable_time_check")) {
-		addLogEntry("System time authority                        = not used for time validation");
-		addLogEntry("Local UTC estimate                           = not available");
-		addLogEntry("Microsoft service UTC                        = not available");
-		addLogEntry("Observed clock difference                    = not available");
-		addLogEntry("Effective clock skew                         = not available");
-		addLogEntry("Round-trip time                              = not applicable");
-		addLogEntry("Estimated measurement uncertainty            = not applicable");
+		addLogEntry("System time authority                         = not used for time validation");
+		addLogEntry("Local UTC estimate                            = not available");
+		addLogEntry("Microsoft service UTC                         = not available");
+		addLogEntry("Observed clock difference                     = not available");
+		addLogEntry("Effective clock skew                          = not available");
+		addLogEntry("Round-trip time                               = not applicable");
+		addLogEntry("Estimated measurement uncertainty             = not applicable");
 	} else {
-		addLogEntry("System time authority                        = " ~ (appConfig.systemTimeAuthority.length ? appConfig.systemTimeAuthority : "not available"));
-		addLogEntry("Last time validation UTC                     = " ~ formatRuntimeTimeValue(appConfig.systemTimeLastCheckedUtc));
-		addLogEntry("Local UTC estimate                           = " ~ formatRuntimeTimeValue(appConfig.systemTimeLocalEstimateUtc));
-		addLogEntry("Microsoft service UTC                        = " ~ formatRuntimeTimeValue(appConfig.systemTimeRemoteReferenceUtc));
+		addLogEntry("System time authority                         = " ~ (appConfig.systemTimeAuthority.length ? appConfig.systemTimeAuthority : "not available"));
+		addLogEntry("Last time validation UTC                      = " ~ formatRuntimeTimeValue(appConfig.systemTimeLastCheckedUtc));
+		addLogEntry("Local UTC estimate                            = " ~ formatRuntimeTimeValue(appConfig.systemTimeLocalEstimateUtc));
+		addLogEntry("Microsoft service UTC                         = " ~ formatRuntimeTimeValue(appConfig.systemTimeRemoteReferenceUtc));
 
 		if (appConfig.systemTimeState == SystemTimeState.authorityUnavailable || appConfig.systemTimeState == SystemTimeState.unknown) {
-			addLogEntry("Observed clock difference                    = not available");
-			addLogEntry("Effective clock skew                         = not available");
-			addLogEntry("Round-trip time                              = " ~ to!string(appConfig.systemTimeRoundTripMilliseconds) ~ " ms");
-			addLogEntry("Estimated measurement uncertainty            = not available");
+			addLogEntry("Observed clock difference                     = not available");
+			addLogEntry("Effective clock skew                          = not available");
+			addLogEntry("Round-trip time                               = " ~ to!string(appConfig.systemTimeRoundTripMilliseconds) ~ " ms");
+			addLogEntry("Estimated measurement uncertainty             = not available");
 		} else {
-			addLogEntry("Observed clock difference                    = " ~ formatSignedSeconds(appConfig.systemTimeObservedOffsetMilliseconds) ~ " seconds (local minus Microsoft)");
-			addLogEntry("Effective clock skew                         = " ~ formatUnsignedSeconds(appConfig.systemTimeEffectiveSkewMilliseconds) ~ " seconds");
-			addLogEntry("Round-trip time                              = " ~ to!string(appConfig.systemTimeRoundTripMilliseconds) ~ " ms");
-			addLogEntry("Estimated measurement uncertainty            = +/-" ~ formatUnsignedSeconds(appConfig.systemTimeUncertaintyMilliseconds) ~ " seconds");
+			addLogEntry("Observed clock difference                     = " ~ formatSignedSeconds(appConfig.systemTimeObservedOffsetMilliseconds) ~ " seconds (local minus Microsoft)");
+			addLogEntry("Effective clock skew                          = " ~ formatUnsignedSeconds(appConfig.systemTimeEffectiveSkewMilliseconds) ~ " seconds");
+			addLogEntry("Round-trip time                               = " ~ to!string(appConfig.systemTimeRoundTripMilliseconds) ~ " ms");
+			addLogEntry("Estimated measurement uncertainty             = +/-" ~ formatUnsignedSeconds(appConfig.systemTimeUncertaintyMilliseconds) ~ " seconds");
 		}
 	}
 
-	addLogEntry("System time sync blocking active             = " ~ to!string(appConfig.systemTimeSyncBlocked));
-	addLogEntry("System time revalidation required            = " ~ to!string(appConfig.systemTimeRevalidationRequired));
-	addLogEntry("Time warning threshold                       = > " ~ formatUnsignedSeconds(TIME_WARNING_THRESHOLD_MS) ~ " seconds");
-	addLogEntry("Time blocking threshold                      = > " ~ formatUnsignedSeconds(TIME_BLOCKING_THRESHOLD_MS) ~ " seconds (confirmed)");
-	addLogEntry("Maximum accepted time-probe RTT              = " ~ formatUnsignedSeconds(TIME_MAX_ACCEPTABLE_RTT_MS) ~ " seconds");
-	addLogEntry("Periodic time revalidation interval          = " ~ to!string(TIME_PERIODIC_REVALIDATION_INTERVAL_SECONDS) ~ " seconds");
+	addLogEntry("System time sync blocking active              = " ~ to!string(appConfig.systemTimeSyncBlocked));
+	addLogEntry("System time revalidation required             = " ~ to!string(appConfig.systemTimeRevalidationRequired));
+	addLogEntry("Time warning threshold                        = > " ~ formatUnsignedSeconds(TIME_WARNING_THRESHOLD_MS) ~ " seconds");
+	addLogEntry("Time blocking threshold                       = > " ~ formatUnsignedSeconds(TIME_BLOCKING_THRESHOLD_MS) ~ " seconds (confirmed)");
+	addLogEntry("Maximum accepted time-probe RTT               = " ~ formatUnsignedSeconds(TIME_MAX_ACCEPTABLE_RTT_MS) ~ " seconds");
+	addLogEntry("Periodic time revalidation interval           = " ~ to!string(TIME_PERIODIC_REVALIDATION_INTERVAL_SECONDS) ~ " seconds");
 	addLogEntry("-----------------------------------------------------------------");
 	addLogEntry();
 }
