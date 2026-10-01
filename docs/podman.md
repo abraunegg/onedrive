@@ -81,7 +81,7 @@ The 'onedrive' Docker container requires 2 podman volumes to operate:
 *    Config Volume
 *    Data Volume
 
-The first volume is the configuration volume that stores all the applicable application configuration + current runtime state. In a non-containerised environment, this normally resides in `~/.config/onedrive` - in a containerised environment this is stored in the volume tagged as `/onedrive/conf`
+The first volume is the configuration volume that stores all the applicable application configuration + current runtime state. In a non-containerised environment, this normally resides in `~/.config/onedrive` - in a containerised environment this is stored in the volume tagged as `/onedrive/conf`. When the container is running in the default `--monitor` mode, this volume also contains the machine-readable runtime status file `/onedrive/conf/monitor-status.json`.
 
 The second volume is the data volume, where all your data from Microsoft OneDrive is stored locally. This volume is mapped to an actual directory point on your local filesystem and this is stored in the volume tagged as `/onedrive/data`
 
@@ -185,17 +185,40 @@ podman ps -f name=onedrive
 podman logs onedrive
 ```
 
-#### 6.3 Stop running 'onedrive' container
+#### 6.3 Inspect machine-readable monitor runtime status
+
+When the container is running in the default monitor mode, the client publishes its current operational state to:
+
+```text
+/onedrive/conf/monitor-status.json
+```
+
+The file can be inspected without contacting Microsoft OneDrive or starting another synchronisation operation:
+
+```bash
+podman exec onedrive cat /onedrive/conf/monitor-status.json
+```
+
+For service-readiness use cases, `sync.initial_successful_sync_completed` becomes `true` only after the current monitor process instance completes a successful synchronisation cycle. The most recent operational cycle result is available in `sync.last_cycle.result`.
+
+> [!IMPORTANT]
+> `monitor-status.json` reports the operational state of the running monitor process. `--display-sync-status` answers a different question by performing a point-in-time local-versus-remote data-convergence assessment. In one-way modes these two results can legitimately differ.
+
+The status file is removed during an orderly monitor shutdown. An abnormal process termination can leave the last status file behind, so external tooling should evaluate `pid`, `instance_id` and `updated_at` rather than treating file existence alone as definitive liveness. All timestamps are UTC.
+
+See [Machine-readable monitor runtime status](./usage.md#machine-readable-monitor-runtime-status) for full details.
+
+#### 6.4 Stop running 'onedrive' container
 ```bash
 podman stop onedrive
 ```
 
-#### 6.4 Start 'onedrive' container
+#### 6.5 Start 'onedrive' container
 ```bash
 podman start onedrive
 ```
 
-#### 6.5 Remove 'onedrive' container
+#### 6.6 Remove 'onedrive' container
 ```bash
 podman rm -f onedrive
 ```
