@@ -841,7 +841,8 @@ final class ItemDatabase {
 	// returns true if an item id is in the database
 	bool idInLocalDatabase(const(string) driveId, const(string) id) {
 		synchronized(databaseLock) {
-			auto p = db.prepare(selectItemByIdStmt);
+			// Existence checks do not need to materialise a full Item row.
+			auto p = db.prepare("SELECT 1 FROM item WHERE driveId = ?1 AND id = ?2 LIMIT 1");
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
 			try {
 				p.bind(1, driveId);
@@ -1107,7 +1108,11 @@ final class ItemDatabase {
 			string anchorCandidateItemId;
 
 			// DB Statements
-			auto s = db.prepare("SELECT * FROM item WHERE driveId = ?1 AND id = ?2");
+			// Path reconstruction needs only seven fields. Database structure is
+			// validated at startup; the timestamp is retained here so corrupt
+			// database records still trigger the existing fatal error path.
+			auto s = db.prepare("SELECT id, name, type, mtime, parentId, relocDriveId, relocParentId "
+			                    ~ "FROM item WHERE driveId = ?1 AND id = ?2");
 			auto s2 = db.prepare("SELECT driveId, id FROM item WHERE remoteDriveId = ?1 AND remoteId = ?2");
 
 			scope(exit) {
@@ -1123,7 +1128,36 @@ final class ItemDatabase {
 					auto r = s.exec();
 
 					if (!r.empty) {
-						item = buildItem(r);
+						// Do not construct a full Item (or duplicate hashes, tags and
+						// remote metadata) for each ancestor of every computed path.
+						// Keep the same type, timestamp and relocation checks as buildItem().
+						auto dbRow = r.front;
+						assert(dbRow.length == 7, "Unexpected computePath projection width");
+						item.id = dbRow[0].dup;
+						item.name = dbRow[1].dup;
+						switch (dbRow[2]) {
+							case "file":   item.type = ItemType.file;   break;
+							case "dir":    item.type = ItemType.dir;    break;
+							case "remote": item.type = ItemType.remote; break;
+							case "root":   item.type = ItemType.root;   break;
+							default: assert(0, "Invalid item type");
+						}
+						item.parentId = dbRow[4].dup;
+						item.relocDriveId = dbRow[5].dup;
+						item.relocParentId = dbRow[6].dup;
+
+						string dbMtime = dbRow[3].dup;
+						if (!parseUTCDateTime(dbMtime, item.mtime)) {
+							addLogEntry();
+							addLogEntry("FATAL: The DB record mtime entry is not a valid ISO timestamp entry. Please attempt a --resync to fix the local database.");
+							addLogEntry("FATAL: Invalid DB mtime value: " ~ dbMtime);
+							addLogEntry("FATAL: DB item driveId: " ~ driveId);
+							addLogEntry("FATAL: DB item id: " ~ item.id);
+							addLogEntry("FATAL: DB item name: " ~ item.name);
+							addLogEntry("FATAL: DB item parentId: " ~ item.parentId);
+							addLogEntry();
+							forceExit();
+						}
 
 						// Track the highest non-root row we encounter
 						if (item.type != ItemType.root) {

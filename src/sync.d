@@ -989,6 +989,9 @@ class SyncEngine {
 			}
 		}
 
+		// The account details have been copied into application state; release the temporary JSON response.
+		defaultOneDriveDriveDetails = null;
+
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		getDefaultDriveApiInstance.releaseCurlEngine();
 		getDefaultDriveApiInstance = null;
@@ -1062,6 +1065,9 @@ class SyncEngine {
 				throw new AccountDetailsException();
 			}
 		}
+
+		// The root details have been copied into application/database state; release the temporary JSON response.
+		defaultOneDriveRootDetails = null;
 
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		getDefaultRootApiInstance.releaseCurlEngine();
@@ -1498,6 +1504,9 @@ class SyncEngine {
 			addLogEntry();
 			forceExit();
 		}
+
+		// All required identifiers have been copied into single-directory state.
+		onlinePathData = null;
 
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -4107,6 +4116,7 @@ class SyncEngine {
 		// Validate the online parent response before reading required fields from it.
 		if ((onlineParentData.type() != JSONType.object) || (!hasId(onlineParentData)) || (!hasParentReferenceDriveId(onlineParentData))) {
 			addLogEntry("WARNING: Unable to create Shared Folder database records because the Microsoft OneDrive API returned a malformed parent response: " ~ sanitiseJSONItem(onlineParentData));
+			onlineParentData = null;
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			onlineParentOneDriveApiInstance.releaseCurlEngine();
 			onlineParentOneDriveApiInstance = null;
@@ -4224,6 +4234,9 @@ class SyncEngine {
 
 		// Save item
 		itemDB.upsert(sharedFolderDatabaseTie);
+
+		// The database item now owns the required scalar/string state.
+		onlineParentData = null;
 
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		onlineParentOneDriveApiInstance.releaseCurlEngine();
@@ -5122,6 +5135,9 @@ class SyncEngine {
 						if (verboseLogging) {addLogEntry("Download failed (local file system error): " ~ newItemPath, ["verbose"]);}
 						downloadFailed = true;
 					}
+
+					// downloadById() has consumed the resumable hash metadata.
+					onlineHash = null;
 
 					// OneDrive API Instance Cleanup - shutdown API and return the CurlEngine
 					// to the pool on both successful and handled-failure paths. Do not leave
@@ -6276,6 +6292,10 @@ class SyncEngine {
 			uploadLastModifiedTimeApiInstance.releaseCurlEngine();
 			uploadLastModifiedTimeApiInstance = null;
 		}
+
+		// The request and response JSON values are no longer required after this operation.
+		data = null;
+		response = null;
 
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -7939,6 +7959,9 @@ class SyncEngine {
 			}
 		}
 
+		// All path information required from the online response has been copied into local/database state.
+		onlinePathData = null;
+
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		onlinePathOneDriveApiInstance.releaseCurlEngine();
 		onlinePathOneDriveApiInstance = null;
@@ -8112,9 +8135,11 @@ class SyncEngine {
 				// Yes
 				if (debugLogging) {addLogEntry("Creating DB item from online API response: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);}
 				dbItem = makeItem(fileDetailsFromOneDrive);
+				fileDetailsFromOneDrive = null;
 			} else {
 				// No
 				addLogEntry("Unable to upload this modified file at this point in time: " ~ localFilePath);
+				fileDetailsFromOneDrive = null;
 				return;
 			}
 		}
@@ -8433,6 +8458,9 @@ class SyncEngine {
 				}
 			}
 		}
+
+		// The upload response has been fully applied to database/local state.
+		uploadResponse = null;
 
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -8991,6 +9019,9 @@ class SyncEngine {
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			getCurrentDriveQuotaApiInstance.releaseCurlEngine();
 			getCurrentDriveQuotaApiInstance = null;
+			// Quota query failed; no JSON response needs to remain live.
+			currentDriveQuota = null;
+
 			return result;
 		}
 
@@ -9107,6 +9138,8 @@ class SyncEngine {
 					if (verboseLogging) {addLogEntry("WARNING: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);}
 				}
 			}
+			// All quota values have been copied into scalar state.
+			quota = null;
 		} else {
 			// When valid quota details are not fetched
 			if (verboseLogging) {addLogEntry("Failed to fetch or query quota details for OneDrive Drive ID: " ~ driveId, ["verbose"]);}
@@ -9118,6 +9151,9 @@ class SyncEngine {
 
 		// Return result
 		result ~= [to!string(quotaRestricted), to!string(quotaAvailable), to!string(quotaRemainingOnline)];
+
+		// The quota response is no longer required once scalar/result state has been built.
+		currentDriveQuota = null;
 
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
@@ -10778,7 +10814,8 @@ class SyncEngine {
 
 			// That set of returned objects - did we find the folder?
 			if (directoryFoundOnline) {
-				// We found the folder, no need to continue searching nextLink data
+				// We found the folder, no need to retain the containing page or continue searching.
+				topLevelChildren = null;
 				break;
 			}
 
@@ -10788,7 +10825,13 @@ class SyncEngine {
 				// Update nextLink to next changeSet bundle
 				if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
 				nextLink = topLevelChildren["@odata.nextLink"].str;
-			} else break;
+				// The current page is no longer required; retain only the nextLink string.
+				topLevelChildren = null;
+			} else {
+				// The final page is no longer required.
+				topLevelChildren = null;
+				break;
+			}
 
 			// Sleep for a while to avoid busy-waiting
 			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
@@ -13088,6 +13131,9 @@ class SyncEngine {
 			outputDriveId = inputDriveId;
 		}
 
+		// The required driveId string has been extracted; the JSON response is no longer needed.
+		remoteDriveDetails = null;
+
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
@@ -13270,6 +13316,8 @@ class SyncEngine {
 				// Must force exit here, allow logging to be done
 				forceExit();
 			}
+			// pathData is no longer required once the search item identifiers have been extracted.
+			pathData = null;
 		} else {
 			// When setSingleDirectoryScope() was called, the following were set to the correct items, even if the path was remote:
 			// - singleDirectoryScopeDriveId
@@ -13387,6 +13435,8 @@ class SyncEngine {
 					// Add driveData JSON data to array
 					if (verboseLogging) {addLogEntry("Adding OneDrive root details for processing", ["verbose"]);}
 					childrenData ~= rootData;
+					// childrenData now owns the reference required for the generated response.
+					rootData = null;
 				}
 			}
 
@@ -13400,6 +13450,8 @@ class SyncEngine {
 
 			// add the responded 'driveData' to the childrenData to process later
 			childrenData ~= driveData;
+			// childrenData now owns the reference required for the generated response.
+			driveData = null;
 		} else {
 			// driveData is an invalid JSON object
 			addLogEntry("CODING TO DO: The query of OneDrive API to getPathDetailsById generated an invalid JSON response - thus we cant build our own /delta simulated response ... how to handle?");
@@ -13441,6 +13493,7 @@ class SyncEngine {
 			// The child listing must contain the expected collection array.
 			if (!hasValidValueArray(topLevelChildren)) {
 				if (debugLogging) {addLogEntry("Unable to continue generated /delta traversal because the response does not contain a valid value array", ["debug"]);}
+				topLevelChildren = null;
 				break;
 			}
 
@@ -13483,6 +13536,8 @@ class SyncEngine {
 								// add the grandchild to the array
 								childrenData ~= grandChild;
 							}
+							// Drop the temporary recursive result once its elements are retained by childrenData.
+							grandChildrenData = [];
 						}
 					}
 
@@ -13520,7 +13575,13 @@ class SyncEngine {
 				// Update nextLink to next changeSet bundle
 				if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
 				nextLink = topLevelChildren["@odata.nextLink"].str;
-			} else break;
+				// The current page has been copied into childrenData; retain only the nextLink string.
+				topLevelChildren = null;
+			} else {
+				// The final page has also been copied into childrenData.
+				topLevelChildren = null;
+				break;
+			}
 
 			// Sleep for a while to avoid busy-waiting
 			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
@@ -13539,6 +13600,8 @@ class SyncEngine {
 						"@odata.context": JSONValue("https://graph.microsoft.com/v1.0/$metadata#Collection(driveItem)"),
 						"value": JSONValue(childrenData.array)
 						];
+		// The returned JSONValue now retains the generated array; drop the temporary array alias.
+		childrenData = [];
 
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
@@ -13652,6 +13715,8 @@ class SyncEngine {
 									// add the grandchild to the array
 									thisLevelChildrenData ~= grandChild;
 								}
+								// Drop the temporary recursive result once its elements are retained by thisLevelChildrenData.
+								grandChildrenData = [];
 							}
 						}
 					}
@@ -13663,7 +13728,13 @@ class SyncEngine {
 					// Update nextLink to next changeSet bundle
 					nextLink = thisLevelChildren["@odata.nextLink"].str;
 					if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
-				} else break;
+					// The current page has been copied into thisLevelChildrenData; retain only nextLink.
+					thisLevelChildren = null;
+				} else {
+					// The final page has also been copied into thisLevelChildrenData.
+					thisLevelChildren = null;
+					break;
+				}
 
 			} else {
 				// Invalid JSON response when querying this level children
@@ -13689,6 +13760,9 @@ class SyncEngine {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
+
+		// Release any remaining page response before returning the aggregate result.
+		thisLevelChildren = null;
 
 		// return response
 		return thisLevelChildrenData;
@@ -13910,6 +13984,7 @@ class SyncEngine {
 						topLevelChildren = queryOneDriveForSpecificPath.listChildren(parentDetails.driveId, parentDetails.id, nextLink);
 						if (!hasValidValueArray(topLevelChildren)) {
 							if (debugLogging) {addLogEntry("Unable to query remote path because the child response does not contain a valid value array", ["debug"]);}
+							topLevelChildren = null;
 							break;
 						}
 						// Process each child
@@ -13949,7 +14024,8 @@ class SyncEngine {
 						}
 
 						if (directoryFoundOnline) {
-							// We found the folder, no need to continue searching nextLink data
+							// We found the folder; the containing page is no longer required.
+							topLevelChildren = null;
 							break;
 						}
 
@@ -13959,7 +14035,11 @@ class SyncEngine {
 							// Update nextLink to next changeSet bundle
 							if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
 							nextLink = topLevelChildren["@odata.nextLink"].str;
-						} else break;
+							topLevelChildren = null;
+						} else {
+							topLevelChildren = null;
+							break;
+						}
 
 						// Sleep for a while to avoid busy-waiting
 						Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
@@ -14001,6 +14081,8 @@ class SyncEngine {
 								saveItem(createByIdAPIResponse);
 								// Set getPathDetailsAPIResponse to createByIdAPIResponse
 								getPathDetailsAPIResponse = createByIdAPIResponse;
+								// The return value now retains the created object.
+								createByIdAPIResponse = null;
 							} catch (OneDriveException e) {
 								// 409 - API Race Condition
 								if (e.httpStatusCode == 409) {
@@ -14019,10 +14101,16 @@ class SyncEngine {
 							// Save item to the database
 							saveItem(fakeResponse);
 						}
+						// The create request payload is no longer required.
+						newDriveItem = null;
+						createByIdAPIResponse = null;
 					}
 				}
 			}
 		}
+
+		// Release any page response left by an interrupted traversal.
+		topLevelChildren = null;
 
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		queryOneDriveForSpecificPath.releaseCurlEngine();
@@ -18833,6 +18921,9 @@ class SyncEngine {
 			auto app = appender!string();
 			toJSON(app, sanitisedJSONItem);
 
+			// The output string is now independent of the deep-copy JSON tree.
+			sanitisedJSONItem = null;
+
 			// Return sanitised JSON string for logging output
 			return app.data;
 
@@ -18909,6 +19000,7 @@ class SyncEngine {
 		}
 
 		bool websocketNotificationUrlObtained = false;
+		JSONValue endpointResponse;
 
 		// Create a new API Instance for this thread and initialise it
 		OneDriveApi queryWebsocketURLApiInstance;
@@ -18917,7 +19009,7 @@ class SyncEngine {
 
 		// Try and query Websocket Notification URL
 		try {
-			JSONValue endpointResponse = queryWebsocketURLApiInstance.obtainWebSocketNotificationURL();
+			endpointResponse = queryWebsocketURLApiInstance.obtainWebSocketNotificationURL();
 
 			// Was a valid JSON response with the required endpoint fields provided?
 			if ((endpointResponse.type() == JSONType.object) && (("notificationUrl" in endpointResponse) != null) && (("expirationDateTime" in endpointResponse) != null)) {
@@ -18977,6 +19069,9 @@ class SyncEngine {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
+
+		// Runtime configuration now owns the required endpoint strings.
+		endpointResponse = null;
 
 		return websocketNotificationUrlObtained;
 	}
@@ -19054,6 +19149,9 @@ class SyncEngine {
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		queryPathDetailsOnline.releaseCurlEngine();
 		queryPathDetailsOnline = null;
+
+		// The requested item has been processed; release the API JSON response.
+		onlinePathData = null;
 
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {

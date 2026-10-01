@@ -1625,30 +1625,22 @@ int main(string[] cliArgs) {
 					// Update elapsedTime post monitor loop actions
 					elapsedTime = Clock.currTime() - applicationStartTime;
 					
-					// Display monitor loop memory details before garbage collection
+					// Display monitor-loop memory telemetry before garbage collection.
 					if (displayMemoryUsage) {
+						// Loop counter
 						addLogEntry("Monitor Loop Count:   " ~ to!string(monitorLoopFullCount));
 
 						// Get the current time in the local timezone
 						auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
 						addLogEntry("Timestamp:            " ~ to!string(timeStamp));
 						addLogEntry("Application Run Time: " ~ to!string(elapsedTime));
+						
+						// Display memory consumption details while all telemetry is still pre-GC.
 						addLogEntry("Memory usage before monitor-loop garbage collection");
-
-						// Display memory consumption details
 						displayMemoryUsageDetails();
-					}
 
-					// Perform garbage collection after every completed monitor loop, once all
-					// per-loop sync processing and CurlEngine cleanup has finished.
-					auto monitorLoopGcStartTime = MonoTime.currTime();
-					GC.collect();
-					auto monitorLoopGcDuration = MonoTime.currTime() - monitorLoopGcStartTime;
-
-					if (displayMemoryUsage) {
-						addLogEntry("Monitor-loop garbage collection duration: " ~ to!string(monitorLoopGcDuration));
-						addLogEntry("Memory usage after monitor-loop garbage collection");
-						displayMemoryUsageDetails();
+						// Ensure the logging worker has written and released
+						flushPendingLogEntries();
 					}
 
 					// Reclaim unused managed heap memory after every completed monitor loop.
@@ -1681,13 +1673,18 @@ int main(string[] cliArgs) {
 					// full scans and post-scan RSS recovery. Small-scale testing alone
 					// is insufficient to establish equivalent memory behaviour.
 					
-					auto monitorGcMinimizeStartTime = MonoTime.currTime();
+					// Keep collection and heap minimisation adjacent. Do not allocate, format,
+					// log or inspect memory between these two operations.
+					GC.collect();
 					GC.minimize();
-					auto monitorGcMinimizeDuration = MonoTime.currTime() - monitorGcMinimizeStartTime;
+
+					// Report the final post-minimisation state only after both GC operations
+					// have completed. displayMemoryUsageDetails() retains the established
+					// Linux, FreeBSD and OpenBSD RSS implementations in util.d.
 					if (displayMemoryUsage) {
-						addLogEntry("Monitor-loop heap minimization duration: " ~ to!string(monitorGcMinimizeDuration));
-						addLogEntry("Memory usage after monitor-loop heap minimization");
+						addLogEntry("Memory usage after monitor-loop heap collection and minimisation");
 						displayMemoryUsageDetails();
+						flushPendingLogEntries();
 					}
 
 					// Log that this loop is complete
