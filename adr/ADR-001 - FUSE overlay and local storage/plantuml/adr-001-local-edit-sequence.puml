@@ -1,0 +1,25 @@
+@startuml
+title Hydrated Edit -> Existing Local Change / Upload Path
+actor User
+participant Application as App
+participant FUSE as Fuse
+folder "Physical sync_dir" as Disk
+participant "Existing inotify /\nlocal reconciliation" as Local
+participant "Existing sync engine" as Sync
+cloud "Microsoft Graph" as Graph
+database "Item DB" as DB
+
+User -> App : edit / save hydrated file
+App -> Fuse : write / rename / replace / close
+Fuse -> Disk : operate on physical backing content
+Disk -> Local : filesystem event(s)
+Local -> Sync : existing local change processing
+Sync -> Graph : existing upload / rename / delete
+Graph --> Sync : remote result
+Sync -> DB : existing metadata update
+note over Fuse,Local
+Architectural target: no special FUSE upload engine.
+This path must be proven by prototype testing,
+including editor atomic-save behaviour.
+end note
+@enduml
