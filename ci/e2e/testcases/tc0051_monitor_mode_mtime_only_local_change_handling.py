@@ -7,13 +7,19 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, compute_quickxor_hash_file, reset_directory, run_command, write_text_file
+from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 
 
 class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBase):
     case_id = "0051"
-    name = "monitor mode mtime-only local change handling"
-    description = "Touch an existing local file under --monitor without changing content and validate that no new upload occurs"
+    name = "monitor mode mtime-only Microsoft file change handling"
+    description = (
+        "Touch an existing local XLSX under --monitor without changing workbook content and validate "
+        "that no new upload occurs, including after any Microsoft-side workbook enrichment"
+    )
+
+    XLSX_PAYLOAD_ROWS = 80
 
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
@@ -34,15 +40,10 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
         app_log_dir = case_log_dir / "app-logs"
 
         root_name = f"ZZ_E2E_TC0051_{context.run_id}_{os.getpid()}"
-        relative_path = f"{root_name}/mtime-only.txt"
+        relative_path = f"{root_name}/mtime-only.xlsx"
         local_file_path = sync_root / relative_path
         verify_initial_file_path = verify_initial_root / relative_path
         verify_final_file_path = verify_final_root / relative_path
-
-        initial_content = (
-            "TC0051 monitor mode mtime-only local change handling\n"
-            "This file content must remain unchanged; only the local mtime is updated.\n"
-        )
 
         extra_config_lines = ['force_session_upload = "true"']
         context.prepare_minimal_config_dir(
@@ -66,8 +67,14 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             ),
         )
 
-        write_text_file(local_file_path, initial_content)
-        initial_local_hash = compute_quickxor_hash_file(local_file_path)
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0051:{os.getpid()}"
+        generated = create_random_xlsx(
+            local_file_path,
+            xlsx_seed,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0051 monitor mtime-only workbook",
+        )
+        initial_generated_hash = compute_quickxor_hash_file(local_file_path)
 
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"
@@ -98,7 +105,9 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
         details: dict[str, object] = {
             "root_name": root_name,
             "relative_path": relative_path,
-            "initial_local_hash": initial_local_hash,
+            "xlsx_seed": xlsx_seed,
+            "generated_size": int(generated["size_bytes"]),
+            "initial_generated_hash": initial_generated_hash,
         }
 
         seed_command = [
@@ -129,6 +138,24 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
                 details,
             )
 
+        settled_validation_error = validate_xlsx(local_file_path, REVISION_0)
+        details["settled_validation_error"] = settled_validation_error
+        if settled_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Seeded XLSX was invalid after initial sync: {settled_validation_error}",
+                artifacts,
+                details,
+            )
+
+        settled_local_hash = compute_quickxor_hash_file(local_file_path)
+        settled_local_size = local_file_path.stat().st_size
+        details["settled_local_hash"] = settled_local_hash
+        details["settled_local_size"] = settled_local_size
+        details["microsoft_changed_seed_bytes"] = settled_local_hash != initial_generated_hash
+
         verify_initial_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -155,21 +182,44 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
 
         verify_initial_manifest = build_manifest(verify_initial_root)
         write_manifest(verify_initial_manifest_file, verify_initial_manifest)
+        details["verify_initial_manifest"] = verify_initial_manifest
 
         if verify_initial_result.returncode != 0 or not verify_initial_file_path.is_file():
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Initial remote verification failed before monitor mtime-only negative validation",
+                "Initial remote verification failed before monitor mtime-only validation",
                 artifacts,
                 details,
             )
 
+        verify_initial_validation_error = validate_xlsx(verify_initial_file_path, REVISION_0)
         baseline_verified_mtime = int(verify_initial_file_path.stat().st_mtime)
+        verify_initial_hash = compute_quickxor_hash_file(verify_initial_file_path)
+        details["verify_initial_validation_error"] = verify_initial_validation_error
         details["baseline_verified_mtime"] = baseline_verified_mtime
-        details["verify_initial_hash"] = compute_quickxor_hash_file(verify_initial_file_path)
-        details["verify_initial_content"] = verify_initial_file_path.read_text(encoding="utf-8")
+        details["verify_initial_hash"] = verify_initial_hash
+
+        if verify_initial_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Initial remote XLSX validation failed: {verify_initial_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if verify_initial_hash != settled_local_hash:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Initial remote XLSX hash did not match the settled post-upload local workbook",
+                artifacts,
+                details,
+            )
 
         monitor_command = [
             context.onedrive_bin,
@@ -200,6 +250,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
 
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
 
+            local_hash_before_touch = compute_quickxor_hash_file(local_file_path)
             local_mtime_before_touch = int(local_file_path.stat().st_mtime)
             touched_epoch = max(int(time.time()), local_mtime_before_touch, baseline_verified_mtime) + 120
             os.utime(local_file_path, (touched_epoch, touched_epoch))
@@ -207,17 +258,18 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             local_hash_after_touch = compute_quickxor_hash_file(local_file_path)
             local_mtime_after_touch = int(local_file_path.stat().st_mtime)
 
+            details["local_hash_before_touch"] = local_hash_before_touch
             details["local_mtime_before_touch"] = local_mtime_before_touch
             details["local_mtime_after_touch"] = local_mtime_after_touch
             details["touched_epoch"] = touched_epoch
             details["local_hash_after_touch"] = local_hash_after_touch
 
-            if local_hash_after_touch != initial_local_hash:
+            if local_hash_before_touch != settled_local_hash or local_hash_after_touch != settled_local_hash:
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(
                     self.case_id,
                     self.name,
-                    "Local file hash changed after mtime-only touch",
+                    "Local XLSX content changed during the mtime-only monitor stimulus",
                     artifacts,
                     details,
                 )
@@ -252,6 +304,9 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
         finally:
             self._shutdown_monitor_process(process, details)
 
+        post_monitor_validation_error = validate_xlsx(local_file_path, REVISION_0)
+        details["post_monitor_validation_error"] = post_monitor_validation_error
+
         verify_final_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -278,15 +333,10 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
 
         verify_final_manifest = build_manifest(verify_final_root)
         write_manifest(verify_final_manifest_file, verify_final_manifest)
-
+        details["verify_final_manifest"] = verify_final_manifest
         details["verify_final_file_exists"] = verify_final_file_path.is_file()
         details["verify_final_hash"] = (
             compute_quickxor_hash_file(verify_final_file_path)
-            if verify_final_file_path.is_file()
-            else ""
-        )
-        details["verify_final_content"] = (
-            verify_final_file_path.read_text(encoding="utf-8")
             if verify_final_file_path.is_file()
             else ""
         )
@@ -295,8 +345,22 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             if verify_final_file_path.is_file()
             else -1
         )
+        details["verify_final_validation_error"] = (
+            validate_xlsx(verify_final_file_path, REVISION_0)
+            if verify_final_file_path.is_file()
+            else "final XLSX file is missing"
+        )
 
         self._write_metadata(metadata_file, details)
+
+        if post_monitor_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Local XLSX became invalid during monitor mtime-only handling: {post_monitor_validation_error}",
+                artifacts,
+                details,
+            )
 
         if verify_final_result.returncode != 0:
             return self.fail_result(
@@ -311,25 +375,25 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Remote verification is missing mtime-only file: {relative_path}",
+                f"Remote verification is missing mtime-only XLSX: {relative_path}",
                 artifacts,
                 details,
             )
 
-        if details["verify_final_hash"] != initial_local_hash:
+        if details["verify_final_validation_error"]:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Remote file hash changed after mtime-only local touch",
+                f"Final remote XLSX validation failed: {details['verify_final_validation_error']}",
                 artifacts,
                 details,
             )
 
-        if details["verify_final_content"] != initial_content:
+        if details["verify_final_hash"] != settled_local_hash:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Remote file content changed after mtime-only local touch",
+                "Remote XLSX content changed after mtime-only local touch",
                 artifacts,
                 details,
             )
@@ -347,7 +411,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Monitor mode uploaded the file after an mtime-only local touch",
+                "Monitor mode uploaded the XLSX after an mtime-only local touch",
                 artifacts,
                 details,
             )

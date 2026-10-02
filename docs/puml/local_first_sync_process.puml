@@ -1,30 +1,39 @@
 @startuml
-title Local-First Sync Flow (--local-first)
+title Local-First Synchronisation Order (~--local-first)
 
 start
+:Validate authentication, service reachability\nand system time safety gates;
+note right
+  Operating context:
+  ~--sync ~--local-first or ~--monitor ~--local-first.
 
-:Step 1 - Scan local files;
-:Detect local changes:
-- New files or folders
-- Modified files
-- Deleted files;
+  ~--local-first changes reconciliation order.
+  It does NOT mean that a local file may blindly
+  overwrite an independently changed online file.
+end note
 
-:Apply local changes to OneDrive:
-- Upload new files or folders
-- Update modified files
-- Delete files or folders on OneDrive;
+:Process known database state against\nthe local filesystem first;
+note right
+  Detect and action locally modified or deleted
+  objects that were previously tracked.
+end note
 
-:Step 2 - Scan OneDrive (online);
-:Detect online-only changes:
-- New files or folders
-- Modified files
-- Deleted files;
+:Scan local filesystem for new data;
+:Upload eligible new local files / directories;
+note right
+  Modified tracked files still fetch current online
+  metadata before replacement. If a genuine or
+  unresolved online conflict exists, local data is
+  preserved before conflict resolution continues.
+end note
 
-:Apply online changes to local:
-- Download missing files or folders
-- Update outdated local files
-- Delete local files or folders
-  that were deleted online;
+:Reconcile Microsoft OneDrive online state;
+note right
+  Remote reconciliation still applies after
+  the local pass. ~--local-first changes ordering;
+  it does not disable conflict protection.
+end note
 
+:Apply remaining online changes locally;
 stop
 @enduml

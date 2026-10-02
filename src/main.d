@@ -116,11 +116,6 @@ version (OpenBSD) {
 }
 
 
-// What other constant variables do we require?
-// A mandatory --resync is an application configuration/state condition.
-// Use the traditional EX_CONFIG status value so callers can distinguish it from a generic failure.
-const int EXIT_RESYNC_REQUIRED = 78;
-
 // Class objects
 ApplicationConfig appConfig;
 OneDriveWebhook oneDriveWebhook;
@@ -2328,7 +2323,7 @@ void processResyncDatabaseRemoval(string databaseFilePathToRemove) {
 	if (debugLogging) {addLogEntry("Testing if we have exclusive access to local database file", ["debug"]);}
 	
 	// Are we the only running instance? Test that we can open the database file path
-	itemDB = new ItemDatabase(databaseFilePathToRemove);
+	itemDB = new ItemDatabase(databaseFilePathToRemove, appConfig.getValueBool("resync"));
 	
 	// did we successfully initialise the database class?
 	if (!itemDB.isDatabaseInitialised()) {

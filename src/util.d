@@ -54,6 +54,10 @@ __gshared bool exitHandlerTriggered = false;
 // Global flag to indicate file transfers are occurring
 __gshared bool fileTransferInProgress = false;
 
+// Application exit code used when the local state requires a mandatory --resync.
+// Use the traditional EX_CONFIG status value so callers can distinguish it from a generic failure.
+const int EXIT_RESYNC_REQUIRED = 78;
+
 // util module variable
 ulong previousRSS;
 
@@ -2491,7 +2495,7 @@ string formatETA(int eta) {
 }
 
 // Force Exit due to failure
-void forceExit() {
+void forceExit(int exitCode = EXIT_FAILURE) {
 	// Allow any logging complete before we force exit
 	Thread.sleep(dur!("msecs")(500));
 	// Shutdown logging, which also flushes all logging buffers
@@ -2499,7 +2503,7 @@ void forceExit() {
 	// Setup signal handling for the exit scope
 	setupExitScopeSignalHandler();
 	// Force Exit
-	_exit(EXIT_FAILURE);
+	_exit(exitCode);
 }
 
 // Get the current PID of the application

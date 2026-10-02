@@ -222,6 +222,8 @@ class SyncEngine {
 
 	// Flag that there were upload or download failures listed
 	bool syncFailures = false;
+	// Has the user already been notified that the number of online objects exceeds Microsoft's recommended limit
+	bool onlineObjectLimitWarningNotified = false;
 	// Is sync_list configured
 	bool syncListConfigured = false;
 	// Was --dry-run used?
@@ -2095,7 +2097,12 @@ class SyncEngine {
 			if (jsonItemsReceived >= 300000) {
 				// 'driveIdToQuery' should be the drive where the JSON responses came from
 				string objectsExceedLimitWarning = format("WARNING: The number of objects stored online in '%s' exceeds Microsoft OneDrive's recommended limit. This may cause unreliable application behaviour due to inconsistent or incomplete API responses. Immediate action is strongly advised to avoid data integrity issues.", driveIdToQuery);
-				addLogEntry(objectsExceedLimitWarning, ["info", "notify"]);
+				if (!onlineObjectLimitWarningNotified) {
+					addLogEntry(objectsExceedLimitWarning, ["info", "notify"]);
+					onlineObjectLimitWarningNotified = true;
+				} else {
+					addLogEntry(objectsExceedLimitWarning, ["info"]);
+				}
 			}
 
 			// Free up memory and items processed as it is pointless now having this data around
@@ -3293,7 +3300,7 @@ class SyncEngine {
 						// or deleted locally while this /delta response was being processed. Capture
 						// pending local observations before deciding whether remote state should
 						// recreate the old path.
-						if (!exists(existingItemPath) && !generatedSimulatedDeltaResponse) {
+						if (!exists(existingItemPath) && !generatedSimulatedDeltaResponse && (existingDatabaseItem.eTag != newDatabaseItem.eTag)) {
 							bool pendingLocalDeparture = false;
 							if (capturePendingLocalChanges !is null) {
 								capturePendingLocalChanges("sync.known_directory_missing");
@@ -8380,6 +8387,11 @@ class SyncEngine {
 								// --upload-only being used
 								// we are not downloading a file, warn that file differences will exist
 								addLogEntry("WARNING: The file uploaded to Microsoft OneDrive has been modified through its SharePoint 'enrichment' process and no longer matches your local version.");
+								// When also using --local-first, keep the online/database timestamp aligned with the authoritative local file
+								if (appConfig.getValueBool("local_first")) {
+									addLogEntry("WARNING: The online metadata will now be modified to match your local file which will create a new file version.");
+									uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);
+								}
 								addLogEntry("WARNING: Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.");
 							}
 						} else {
@@ -8637,9 +8649,53 @@ class SyncEngine {
 				localModifiedTime.fracSecs = Duration.zero;
 				onlineModifiedTime.fracSecs = Duration.zero;
 
+				// The timestamp alone cannot prove that the online item changed after our last
+				// successful sync. A local replacement may deliberately preserve an older mtime.
+				// Only trust the stored eTag as a baseline when the freshly queried DriveItem is
+				// the same object represented by this database row and both eTags are usable.
+				//
+				// OneDrive Business Shared Files are stored locally as remote items. Their DB row
+				// uses driveId/id for the synthetic local shared-file hierarchy, while uploads and
+				// fresh metadata queries target remoteDriveId/remoteId. The row's eTag is populated
+				// from that authoritative remote target, so identity must be checked against the
+				// remote fields before that eTag can be trusted as the historical baseline.
+				string databaseBaselineDriveId = dbItem.driveId;
+				string databaseBaselineItemId = dbItem.id;
+				if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
+					databaseBaselineDriveId = dbItem.remoteDriveId;
+					databaseBaselineItemId = dbItem.remoteId;
+				}
+
+				bool onlineObjectMatchesDatabaseIdentity =
+					!databaseBaselineDriveId.empty &&
+					!databaseBaselineItemId.empty &&
+					(targetDriveId == databaseBaselineDriveId) &&
+					(targetItemId == databaseBaselineItemId) &&
+					hasId(currentOnlineJSONData) &&
+					(currentOnlineJSONData["id"].str == databaseBaselineItemId);
+				bool onlineUnchangedSinceLastSync =
+					onlineObjectMatchesDatabaseIdentity &&
+					hasETag(currentOnlineJSONData) &&
+					!currentOnlineJSONData["eTag"].str.empty &&
+					!dbItem.eTag.empty &&
+					(currentOnlineJSONData["eTag"].str == dbItem.eTag);
+				bool trustDatabaseBaseline =
+					onlineUnchangedSinceLastSync &&
+					!appConfig.getValueBool("resync");
+
 				// Which file is newer? If local is newer, it will be uploaded as a modified file in the correct manner
-				if (localModifiedTime < onlineModifiedTime) {
-					// Online File is actually newer than the locally modified file
+				if ((localModifiedTime < onlineModifiedTime) && trustDatabaseBaseline) {
+					// The online item is timestamp-newer, but its eTag still matches the last-known
+					// database baseline. The remote content has therefore not changed since the last
+					// sync, so continue with the normal modified-file upload despite the older mtime.
+					if (debugLogging) {
+						addLogEntry("Online eTag matches database eTag; treating as local modification despite older local timestamp: " ~ localFilePath, ["debug"]);
+					}
+				}
+
+				if ((localModifiedTime < onlineModifiedTime) && !trustDatabaseBaseline) {
+					// Online File is actually newer than the locally modified file, or we cannot
+					// safely prove that the online item is unchanged from our database baseline.
 					if (debugLogging) {
 						addLogEntry("currentOnlineJSONData: " ~ to!string(currentOnlineJSONData), ["debug"]);
 						addLogEntry("currentOnlineItemData: " ~ to!string(currentOnlineItemData), ["debug"]);
@@ -8686,22 +8742,82 @@ class SyncEngine {
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUploadReplace(localFilePath, targetDriveId, targetItemId);
 					uploadTransferEndTime = Clock.currTime();
 				} catch (OneDriveException exception) {
-					// HTTP request returned status code 403
-					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
-						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
-						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
+					bool resourceModifiedRecoveryHandled = false;
+					string graphErrorCode;
+					try {
+						graphErrorCode = exception.error["error"]["code"].str;
+					} catch (JSONException e) {
+						// Error response did not contain a Graph error code; use normal handling below.
 					}
-					// HTTP request returned status code 423
-					// Resolve https://github.com/abraunegg/onedrive/issues/36
-					if (exception.httpStatusCode == 423) {
-						// The file is currently checked out or locked for editing by another user
-						// We cant upload this file at this time
-						addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
-					} else {
-						// Handle all other HTTP status codes
-						// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-						// Display what the error is
-						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+
+					// A modified simple upload can race with a Microsoft-side metadata/eTag change
+					// between the fresh DriveItem query above and the replacement PUT. Only retry
+					// the specific resourceModified response when a second query proves that the
+					// same remote item still contains exactly the same bytes we already inspected.
+					if ((exception.httpStatusCode == 409) && (graphErrorCode == "resourceModified") && haveCurrentOnlineItemData) {
+						resourceModifiedRecoveryHandled = true;
+						try {
+							JSONValue refreshedOnlineJSONData = uploadFileOneDriveApiInstance.getPathDetailsById(targetDriveId, targetItemId);
+							if ((refreshedOnlineJSONData.type() == JSONType.object) && hasId(refreshedOnlineJSONData)) {
+								Item refreshedOnlineItemData = makeItem(refreshedOnlineJSONData);
+								bool comparableContentHash =
+									(!currentOnlineItemData.quickXorHash.empty && !refreshedOnlineItemData.quickXorHash.empty) ||
+									(!currentOnlineItemData.sha256Hash.empty && !refreshedOnlineItemData.sha256Hash.empty);
+								bool remoteContentUnchanged =
+									(currentOnlineItemData.id == targetItemId) &&
+									(refreshedOnlineItemData.id == targetItemId) &&
+									(currentOnlineItemData.parentId == refreshedOnlineItemData.parentId) &&
+									(currentOnlineItemData.name == refreshedOnlineItemData.name) &&
+									comparableContentHash &&
+									sameAppliedFileContent(currentOnlineItemData, refreshedOnlineItemData);
+
+								if (remoteContentUnchanged) {
+									if (debugLogging) {addLogEntry("Microsoft Graph returned resourceModified during modified simple upload, but the refreshed remote content identity is unchanged; retrying once: " ~ localFilePath, ["debug"]);}
+									try {
+										uploadTransferStartTime = Clock.currTime();
+										uploadResponse = uploadFileOneDriveApiInstance.simpleUploadReplace(localFilePath, targetDriveId, targetItemId);
+										uploadTransferEndTime = Clock.currTime();
+									} catch (OneDriveException retryException) {
+										displayOneDriveErrorMessage(retryException.msg, thisFunctionName);
+									} catch (FileException retryException) {
+										displayFileSystemErrorMessage(retryException.msg, thisFunctionName, localFilePath);
+									} catch (ErrnoException retryException) {
+										if ((retryException.errno == ENOENT) || (retryException.errno == ENOTDIR)) {
+											addLogEntry("File disappeared locally before modified upload retry: " ~ localFilePath);
+										} else {
+											displayFileSystemErrorMessage(retryException.msg, thisFunctionName, localFilePath);
+										}
+										uploadResponse = null;
+									}
+								} else {
+									displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+								}
+							} else {
+								displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+							}
+						} catch (OneDriveException refreshException) {
+							displayOneDriveErrorMessage(refreshException.msg, thisFunctionName);
+						}
+					}
+
+					if (!resourceModifiedRecoveryHandled) {
+						// HTTP request returned status code 403
+						if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
+							// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
+							addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
+						}
+						// HTTP request returned status code 423
+						// Resolve https://github.com/abraunegg/onedrive/issues/36
+						if (exception.httpStatusCode == 423) {
+							// The file is currently checked out or locked for editing by another user
+							// We cant upload this file at this time
+							addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
+						} else {
+							// Handle all other HTTP status codes
+							// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+							// Display what the error is
+							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+						}
 					}
 				} catch (FileException exception) {
 					// filesystem error
@@ -18677,12 +18793,20 @@ class SyncEngine {
 				return "JSON Validation Failed: JSON data from OneDrive API contains invalid UTF-8 characters";
 			}
 
-			// Redact PII in JSON before serialisation
-			redactPII(onedriveJSONItem);
+			// JSONValue object and array payloads are reference-backed. A simple value copy
+			// would therefore still allow redactPII() to mutate the caller's live JSON data.
+			// Serialise and parse the item to create an independent deep copy before any
+			// diagnostic redaction is applied. Logging must never alter sync state.
+			auto sourceJSON = appender!string();
+			toJSON(sourceJSON, onedriveJSONItem);
+			JSONValue sanitisedJSONItem = parseJSON(sourceJSON.data);
 
-			// Try and serialise the JSON into a string
+			// Redact PII only in the independent copy used for logging output
+			redactPII(sanitisedJSONItem);
+
+			// Try and serialise the sanitised copy into a string
 			auto app = appender!string();
-			toJSON(app, onedriveJSONItem);
+			toJSON(app, sanitisedJSONItem);
 
 			// Return sanitised JSON string for logging output
 			return app.data;

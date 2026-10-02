@@ -7,17 +7,26 @@ from pathlib import Path
 from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
+from framework.utils import (
+    command_to_string,
+    compute_quickxor_hash_file,
+    reset_directory,
+    run_command,
+    write_onedrive_config,
+    write_text_file,
+)
+from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
 
 
 class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCase):
     case_id = "0029"
-    name = "local_first upload_only timestamp preservation validation"
+    name = "local_first upload_only Microsoft file timestamp preservation validation"
     description = (
-        "Validate that --local-first --upload-only uploads local content without "
-        "rewriting local file timestamps from Microsoft API response data"
+        "Validate with a real XLSX workbook that --local-first --upload-only uploads local content "
+        "without rewriting local file timestamps from Microsoft API response data"
     )
 
+    XLSX_PAYLOAD_ROWS = 80
     FIXED_MTIME_INITIAL = 1577882096  # 2020-01-01 12:34:56 UTC
     FIXED_MTIME_UPDATED = 1577968496  # 2020-01-02 12:34:56 UTC
 
@@ -45,7 +54,8 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
     def _assert_local_file_state(
         self,
         path: Path,
-        expected_content: str,
+        expected_revision: str,
+        expected_hash: str,
         expected_mtime: int,
         phase_name: str,
         artifacts: list[str],
@@ -60,19 +70,31 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
                 details,
             )
 
-        actual_content = path.read_text(encoding="utf-8")
+        validation_error = validate_xlsx(path, expected_revision)
+        actual_hash = compute_quickxor_hash_file(path)
         actual_mtime = int(path.stat().st_mtime)
 
-        details[f"{phase_name}_actual_content"] = actual_content
+        details[f"{phase_name}_validation_error"] = validation_error
+        details[f"{phase_name}_actual_hash"] = actual_hash
         details[f"{phase_name}_actual_mtime"] = actual_mtime
-        details[f"{phase_name}_expected_content"] = expected_content
+        details[f"{phase_name}_expected_revision"] = expected_revision
+        details[f"{phase_name}_expected_hash"] = expected_hash
         details[f"{phase_name}_expected_mtime"] = expected_mtime
 
-        if actual_content != expected_content:
+        if validation_error:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"{phase_name} changed the local file content unexpectedly",
+                f"{phase_name} left an invalid XLSX workbook: {validation_error}",
+                artifacts,
+                details,
+            )
+
+        if actual_hash != expected_hash:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"{phase_name} changed the local XLSX content unexpectedly",
                 artifacts,
                 details,
             )
@@ -153,17 +175,9 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         self._write_config(conf_dir / "config", sync_root)
 
         root_name = f"ZZ_E2E_TC0029_{context.run_id}_{os.getpid()}"
-        relative_file = f"{root_name}/timestamp-probe.txt"
+        relative_file = f"{root_name}/timestamp-probe.xlsx"
         local_file = sync_root / relative_file
-
-        initial_content = (
-            "TC0029 initial content\n"
-            "This file is uploaded with --upload-only --local-first.\n"
-        )
-        updated_content = (
-            "TC0029 updated content\n"
-            "This file is uploaded again with a newer local timestamp.\n"
-        )
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0029:{os.getpid()}"
 
         phase1_stdout = case_log_dir / "phase1_initial_upload_stdout.log"
         phase1_stderr = case_log_dir / "phase1_initial_upload_stderr.log"
@@ -185,10 +199,19 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         details: dict[str, object] = {
             "root_name": root_name,
             "relative_file": relative_file,
+            "xlsx_seed": xlsx_seed,
         }
 
-        # Phase 1: create the initial file, set a fixed local timestamp, and upload it.
-        write_text_file(local_file, initial_content)
+        # Phase 1: create a real Microsoft XLSX file, set a fixed local timestamp, and upload it.
+        generated = create_random_xlsx(
+            local_file,
+            xlsx_seed,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0029 upload-only timestamp preservation workbook",
+        )
+        initial_hash = compute_quickxor_hash_file(local_file)
+        details["generated_size"] = int(generated["size_bytes"])
+        details["initial_hash"] = initial_hash
         self._set_file_mtime(local_file, self.FIXED_MTIME_INITIAL)
         phase1_before = self._file_stat_snapshot(local_file)
 
@@ -244,7 +267,8 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
 
         failure = self._assert_local_file_state(
             local_file,
-            initial_content,
+            REVISION_0,
+            initial_hash,
             self.FIXED_MTIME_INITIAL,
             "Initial upload phase",
             artifacts,
@@ -257,9 +281,23 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
             )
             return failure
 
-        # Phase 2: modify the local file, set a newer fixed local timestamp, and upload again.
+        # Phase 2: mutate the real XLSX content, set a newer fixed local timestamp, and upload again.
         time.sleep(2)
-        write_text_file(local_file, updated_content)
+        mutate_xlsx_revision(local_file, REVISION_0, REVISION_1)
+        updated_hash = compute_quickxor_hash_file(local_file)
+        details["updated_hash"] = updated_hash
+        if updated_hash == initial_hash:
+            write_text_file(
+                metadata_file,
+                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+            )
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "XLSX revision mutation did not change the local workbook content",
+                artifacts,
+                details,
+            )
         self._set_file_mtime(local_file, self.FIXED_MTIME_UPDATED)
         phase2_before = self._file_stat_snapshot(local_file)
 
@@ -313,7 +351,8 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
 
         failure = self._assert_local_file_state(
             local_file,
-            updated_content,
+            REVISION_1,
+            updated_hash,
             self.FIXED_MTIME_UPDATED,
             "Modified upload phase",
             artifacts,
@@ -380,7 +419,8 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
 
         failure = self._assert_local_file_state(
             local_file,
-            updated_content,
+            REVISION_1,
+            updated_hash,
             self.FIXED_MTIME_UPDATED,
             "No-op sync phase",
             artifacts,

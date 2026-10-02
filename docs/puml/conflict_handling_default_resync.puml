@@ -1,27 +1,60 @@
 @startuml
+title Default Remote-First Conflict Handling with ~--resync
 start
-note left: Operational Mode 'onedrive -s --resync'
+
+:Begin remote-first reconciliation with ~--resync;
+note right
+  Operating mode:
+  onedrive ~--sync ~--resync
+
+  ~--resync intentionally discards the previous application
+  sync database. The client therefore loses the historical
+  last-applied baseline that would normally help prove whether
+  an existing local file changed independently.
+end note
+
 :Discard previous local sync database state;
-:Query OneDrive and rebuild authoritative online state;
-if (Online item is a file and same pathname exists locally?) then (yes)
-  note left: There is no prior DB baseline after --resync
-  :Compare local content hash with online content hash;
-  if (Hashes match?) then (yes)
-    :Reconcile metadata and rebuild DB record;
-    note left: --resync by itself does NOT create a safeBackup
+:Enumerate current Microsoft OneDrive state and rebuild identity baseline;
+
+if (Online file maps to an existing local pathname?) then (yes)
+  :Compare existing local content with online content;
+  if (Content already matches?) then (yes)
+    :Reconcile timestamp / metadata and rebuild DB record;
+    note right
+      NO safeBackup is required simply because ~--resync was used.
+      If the local and online bytes already match, there is no unique
+      local content to preserve and no reason to replace identical data.
+    end note
   else (no)
-    :Download online replacement to <canonical>.partial;
-    :Validate HTTP result, size and file hash;
-    :Create and verify safeBackup copy of local file;
-    note left: Canonical pathname remains present\nuntil validated replacement commit
-    :Recheck canonical did not change;
-    :Atomically promote validated .partial to canonical pathname;
+    :Download online replacement into private .partial staging file;
+    :Validate downloaded content;
+    :Create and verify safeBackup copy of differing local content;
+    note right
+      LOCAL DATA LOSS PREVENTION
+
+      The previous DB baseline no longer exists, so the client cannot
+      use history to prove that the differing local bytes are disposable.
+      Conservative preservation protects the local file before the
+      authoritative online replacement is committed.
+    end note
+    if (Preservation fails?) then (yes)
+      :Reject replacement; retain local canonical file;
+      stop
+    endif
+    :Recheck canonical stability;
+    :Atomically promote validated online replacement;
+    :Apply online timestamp and rebuild DB state;
   endif
 else (no)
-  :Download/create online item as required;
+  :Create / download online item normally;
 endif
-:Perform database consistency and integrity check;
-:Scan local filesystem for new data to upload;
-note left: A created safeBackup may be uploaded here\nunless excluded by skip_file
+
+:Run local database/filesystem consistency pass;
+:Scan for new local data when uploads are enabled;
+note right
+  A safeBackup created during rebuild may subsequently be discovered
+  as new local data and uploaded unless excluded through skip_file.
+end note
+:Perform final online true-up where applicable;
 stop
 @enduml

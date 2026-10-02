@@ -1,56 +1,80 @@
 @startuml
+title Modified Local File Upload Flow
 start
-partition "Upload Modified File" {
-  :Initialize API Instance;
-  :Check for Dry Run;
-  if (Is Dry Run?) then (yes)
-    :Create Fake Response;
-  else (no)
-    :Get Current Online Data;
-    if (Error Fetching Data) then (yes)
-      :Handle Errors;
-      if (Retryable Error?) then (yes)
-        :Retry Fetching Data;
-        detach
+
+note right
+  This path is reached after a tracked local file has been identified
+  as modified. Under ~--local-first it may run before the general
+  online reconciliation pass, but local-first does not authorise a
+  blind overwrite of independently changed online content.
+end note
+
+:Resolve canonical or remote/shared target DriveItem identity;
+:Fetch latest online metadata and eTag where possible;
+:Read local file size and choose provisional upload method;
+
+if (~--upload-only + ~--local-first or force_session_upload?) then (yes)
+  :Force upload-session path;
+endif
+
+if (Current online metadata is available?) then (yes)
+  :Evaluate current online state against\nlocal file and last applied DB baseline;
+  note right
+    CONFLICT-PROTECTION BOUNDARY
+
+    The client checks current online state before local bytes are
+    allowed to replace the online canonical file. The exact proof
+    used to classify a genuine online change belongs to reconciliation
+    policy, not to simple-versus-session upload transport.
+  end note
+  if (Online conflict requires preserving local version?) then (yes)
+    :Create verified independent safeBackup copy;
+    note right
+      LOCAL DATA LOSS PREVENTION
+
+      Preserve the local modification before conflict resolution.
+      This prevents a genuine online change from causing the local
+      user's different content to be silently discarded.
+    end note
+    if (Preservation succeeds?) then (yes)
+      :Upload safeBackup as a new file;
+      note right
+        The preserved local version becomes an independent online file,
+        while the original online canonical item is left untouched.
+      end note
+      if (~--upload-only?) then (yes)
+        :Retain canonical local file;
+        note right
+          In upload-only operation the client does not download the
+          conflicting online canonical version back over the local path.
+        end note
       else (no)
-        :Log and Display Error;
-      endif
-    endif
-    if (filesize > 0 and valid latest online data) then (yes)
-      if (is online file newer) then (yes)
-        :Log that online is newer; 
-        :Perform safe backup;
-        note left: Local data loss prevention
-        :Upload renamed local file as new file;
-      endif
-    endif
-    :Determine Upload Method;
-    if (Use Simple Upload?) then (yes)
-      :Perform Simple Upload;
-      if (Upload Error) then (yes)
-        :Handle Upload Errors and Retries;
-        if (Retryable Upload Error?) then (yes)
-          :Retry Upload;
-          detach
-        else (no)
-          :Log and Display Upload Error;
-        endif
+        :Apply current online canonical file via\ntransactional download;
+        note right
+          In bidirectional operation the current online canonical can
+          now be applied locally because the differing local version
+          has been safely preserved first.
+        end note
       endif
     else (no)
-      :Create Upload Session;
-      :Perform Upload via Session;
-      if (Session Upload Error) then (yes)
-        :Handle Session Upload Errors and Retries;
-        if (Retryable Session Error?) then (yes)
-          :Retry Session Upload;
-          detach
-        else (no)
-          :Log and Display Session Error;
-        endif
-      endif
+      :Preservation failed; keep original local data;
+      note right
+        Required preservation failed, so the original local file must
+        not be used to overwrite the conflicting online canonical item.
+      end note
     endif
+    :Do not overwrite online canonical with original local file;
+    stop
   endif
-  :Finalize;
-}
+endif
+
+if (Zero-byte or simple-upload-sized file?) then (yes)
+  :simpleUploadReplace();
+else (no)
+  :Create resumable upload session using current eTag;
+  :Upload file fragments / resume as required;
+endif
+
+:Return upload response to higher-level\npost-upload integrity / timestamp reconciliation;
 stop
 @enduml

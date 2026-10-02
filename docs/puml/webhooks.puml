@@ -1,25 +1,47 @@
 @startuml
+title Webhook Remote-Change Notification Architecture
 
 skinparam SequenceBoxBackgroundColor<<Internal>> AliceBlue
 
-box "Linux System"<<Internal>>
-  participant ClientApp as "OneDrive Client for Linux\n(webhook listener 127.0.0.1:8888)"
-  participant Nginx
+box "Linux host"<<Internal>>
+  participant "OneDrive Client\nWebhook module" as Client
+  participant "Reverse proxy\n(e.g. nginx)" as Proxy
 end box
+participant "Firewall / Router" as Firewall
+participant "Microsoft Graph API" as Graph
 
-participant Firewall as "Firewall | Router"
-participant GraphAPI as "Microsoft Graph API"
+== Listener and subscription ==
+Client -> Client: Listen on configured webhook_listening_host / port
+Client -> Graph: Create subscription with webhook_public_url
+Graph -> Firewall: Validation request containing validationToken
+Firewall -> Proxy: Forward HTTPS request
+Proxy -> Client: Proxy validation request
+Client --> Proxy: Echo validationToken
+Proxy --> Graph: HTTPS validation response
+Graph --> Client: Subscription creation response\n(id + expiration)
 
-ClientApp -> GraphAPI: HTTPS POST /v1.0/subscriptions
-GraphAPI -> ClientApp: Subscription details response (HTTPS)
+== Change notification ==
+Graph -> Firewall: HTTPS change notification
+Firewall -> Proxy: Forward HTTPS request
+Proxy -> Client: Proxy notification
+Client -> Client: Validate / record notification signal
+Client --> Proxy: HTTP acknowledgement
+Proxy --> Graph: HTTPS acknowledgement
+Client -> Client: Wake monitor loop / trigger online reconciliation
 
-== Subscription Notification ==
-GraphAPI -> Firewall: HTTPS Notification (port 443)
-Firewall -> Nginx: Port forwarding to Nginx (port 443)
+== Subscription lifecycle ==
+loop Before expiry / after recoverable failure
+  Client -> Graph: Renew existing subscription
+  alt Subscription no longer exists
+    Graph --> Client: Not found
+    Client -> Graph: Recreate subscription
+    Graph --> Client: New subscription metadata
+  else Renewal succeeds
+    Graph --> Client: Updated expiration
+  end
+end
 
-alt Request for /webhooks/onedrive
-    Nginx -> ClientApp: Proxy notification to http://127.0.0.1:8888
-    ClientApp -> Nginx: Response
-    Nginx -> GraphAPI: Return proxied response (HTTPS)
+opt Client shutdown
+  Client -> Graph: Delete active subscription
 end
 @enduml

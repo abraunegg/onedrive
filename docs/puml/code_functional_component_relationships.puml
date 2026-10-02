@@ -1,78 +1,115 @@
 @startuml
-!define DATABASE_ENTITY(x) entity x
-component main {
-}
-component config {
-}
-component log {
-}
-component curlEngine {
-}
-component util {
-}
-component onedrive {
-}
-component syncEngine {
-}
-component itemdb {
-}
-component clientSideFiltering {
-}
-component monitor {
-}
-component sqlite {
-}
-component qxor {
+title OneDrive Client for Linux - Functional Code Component Relationships
+
+skinparam componentStyle rectangle
+
+package "Application orchestration" {
+  component "main.d\n(main)" as main
+  component "config.d\n(config)" as config
+  component "log.d\n(log)" as log
+  component "time.d\n(time)" as time
 }
 
-DATABASE_ENTITY("Database")
+package "Synchronisation and local state" {
+  component "sync.d\n(syncEngine)" as sync
+  component "monitor.d\n(monitor)" as monitor
+  component "clientSideFiltering.d\n(clientSideFiltering)" as filter
+  component "itemdb.d\n(itemdb)" as itemdb
+  component "sqlite.d\n(sqlite)" as sqlite
+  component "xattr.d\n(xattr)" as xattr
+  database "items.sqlite3" as db
+}
+
+package "Microsoft / network integration" {
+  component "onedrive.d\n(onedrive)" as onedrive
+  component "curlEngine.d\n(curlEngine)" as curl
+  component "localAuth.d\n(localAuth)" as localAuth
+  component "webhook.d\n(webhook)" as webhook
+  component "socketio.d\n(socketio)" as socketio
+  component "curlWebsockets.d\n(curlWebsockets)" as curlws
+  component "intune.d\n(intune)" as intune
+}
+
+package "Shared utilities" {
+  component "util.d\n(util)" as util
+  component "qxor.d\n(qxor)" as qxor
+}
 
 main --> config
 main --> log
-main --> curlEngine
-main --> util
+main --> time
 main --> onedrive
-main --> syncEngine
+main --> sync
 main --> itemdb
-main --> clientSideFiltering
+main --> filter
 main --> monitor
+main --> webhook
+main --> socketio
+main --> intune
+main --> curl
+main --> util
 
 config --> log
 config --> util
 
-clientSideFiltering --> config
-clientSideFiltering --> util
-clientSideFiltering --> log
+time --> config
+time --> log
+time --> util
 
-syncEngine --> config
-syncEngine --> log
-syncEngine --> util
-syncEngine --> onedrive
-syncEngine --> itemdb
-syncEngine --> clientSideFiltering
+filter --> config
+filter --> log
+filter --> util
 
-util --> log
-util --> config
-util --> qxor
-util --> curlEngine
-
-sqlite --> log
-sqlite -> "Database" : uses
-
-onedrive --> config
-onedrive --> log
-onedrive --> util
-onedrive --> curlEngine
+sync --> config
+sync --> log
+sync --> util
+sync --> onedrive
+sync --> itemdb
+sync --> filter
+sync --> xattr
 
 monitor --> config
-monitor --> util
 monitor --> log
-monitor --> clientSideFiltering
-monitor .> syncEngine : inotify event
+monitor --> util
+monitor --> filter
+main .> monitor : collects inotify events
+main .> sync : applies local/remote changes
 
 itemdb --> sqlite
 itemdb --> util
 itemdb --> log
+sqlite --> log
+sqlite --> util
+sqlite --> db : reads / writes
 
-curlEngine --> log
+onedrive --> config
+onedrive --> log
+onedrive --> util
+onedrive --> curl
+onedrive --> localAuth
+onedrive --> intune
+
+localAuth --> config
+localAuth --> log
+
+webhook --> config
+webhook --> onedrive
+webhook --> log
+webhook --> util
+
+socketio --> config
+socketio --> log
+socketio --> util
+socketio --> curlws
+curlws --> log
+
+intune --> log
+
+curl --> log
+curl --> util
+
+util --> log
+util --> config
+util --> qxor
+util --> curl
 @enduml

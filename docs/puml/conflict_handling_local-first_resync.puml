@@ -1,31 +1,71 @@
 @startuml
+title Local-First Conflict Handling with ~--resync
 start
-note left: Operational Mode 'onedrive --sync --local-first --resync'
+
+:Begin local-first reconciliation with ~--resync;
+note right
+  Operating mode:
+  onedrive ~--sync ~--local-first ~--resync
+
+  Two behaviours interact:
+  - ~--local-first asks the client to evaluate local intent first
+  - ~--resync discards the previous last-applied DB baseline
+
+  Therefore same-path differing content must be handled conservatively;
+  the client has no historical DB state with which to prove which side
+  changed after the previous successful synchronisation.
+end note
+
 :Discard previous local sync database state;
-:Query OneDrive API and create new database root objects;
-:Scan local filesystem for potential new items;
+:Initialise required online root / drive identities;
+:Scan local filesystem before normal online reconciliation;
+
 repeat
-  :For each local file candidate;
-  if (Same pathname exists online?) then (yes)
-    :Compare local and online file content;
+  :Take next local file candidate;
+  :Check whether same logical target already exists online;
+  if (No online item exists?) then (yes)
+    :Upload as new local file;
+  else (no)
+    :Compare local content with online content;
     if (Content matches?) then (yes)
-      :Save online identity in rebuilt DB;
-      note left: No safeBackup is created for identical bytes
+      :Bind online identity / metadata to rebuilt DB state;
+      note right
+        Identical bytes need no safeBackup. The database identity can be
+        rebuilt directly because preserving another copy would add no value.
+      end note
     else (no)
-      :Compare local and online modified times;
-      if (Local is at least as new?) then (yes)
-        :Upload local file as modified content;
-      else (no)
-        :Create and verify safeBackup copy of local file;
+      note right
+        There is no trusted pre-resync baseline for this pathname.
+        Different local and online content therefore represents an
+        ambiguous conflict that requires conservative handling.
+      end note
+      :Evaluate local versus current online state;
+      if (Local version is selected for upload?) then (yes)
+        :Upload as modified content;
+      else (online conflict)
+        :Create and verify independent safeBackup copy;
+        note right
+          LOCAL DATA LOSS PREVENTION
+
+          Preserve the differing local bytes before the online canonical
+          version is allowed to remain authoritative for this pathname.
+        end note
         :Upload safeBackup as a new file;
-        :Apply newer online canonical file in bidirectional mode;
+        if (Not ~--upload-only?) then (yes)
+          :Apply current online canonical file transactionally;
+          note right
+            Bidirectional result:
+            - local content survives as safeBackup
+            - current online canonical becomes canonical locally
+          end note
+        else (upload-only)
+          :Retain local canonical path after preservation;
+        endif
       endif
     endif
-  else (no)
-    :Upload new local file;
   endif
-repeat while
-:Query OneDrive /delta API for remaining online changes;
-:Reconcile downloads transactionally;
+repeat while (More local candidates?) is (yes)
+
+:Reconcile remaining Microsoft OneDrive online state;
 stop
 @enduml
