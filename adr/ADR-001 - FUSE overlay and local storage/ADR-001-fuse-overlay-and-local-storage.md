@@ -1,201 +1,218 @@
 # ADR-001: FUSE Overlay, Authoritative Namespace and Local Storage
 
-**Status:** Proposed\
-**Feature:** On-Demand Files\
-**Configuration flag:** `on_demand`\
-**Scope:** FUSE namespace presentation, database authority, hydration
-state, physical storage, existing sync-engine integration, local change
-detection, lifecycle and recovery\
+**Status:** Proposed  
+**Feature:** On-Demand Files  
+**Configuration flag:** `on_demand`  
+**Default:** `on_demand = "false"`  
+**Scope:** FUSE namespace presentation, database authority, hydration state, physical storage, synchronisation and monitor integration, local change detection, lifecycle and recovery  
 **Target:** `implement-on-demand-capability`
 
-> This ADR defines the intended architecture and safety invariants for
-> the on-demand filesystem. It deliberately separates the architectural
-> direction from mechanisms that still require prototype validation.
+> This ADR defines the intended architecture and safety invariants for on-demand support. It distinguishes architectural decisions from implementation mechanisms that still require prototype validation. Where this ADR says **must**, the behaviour is an architectural invariant. Where it says **to validate** or **open decision**, implementation evidence is still required.
 
-------------------------------------------------------------------------
+---
 
 ## 1. Context
 
-The existing `onedrive` client maintains an item database containing the
-online OneDrive state known to the client and synchronises selected
-content into a normal local `sync_dir`, normally:
+The existing `onedrive` client maintains an item database representing the eligible online OneDrive state known to the client and synchronises content into a normal local `sync_dir`, normally:
 
-``` text
+```text
 ~/OneDrive
 ```
 
-or a path explicitly configured by the user.
+or a user-configured path.
 
-On-demand support must allow the complete eligible online namespace to
-be visible at `sync_dir` without requiring every remote file to consume
-local storage.
+On-demand support must allow the complete eligible online namespace to be visible at that same `sync_dir` without requiring every remote file to consume local storage.
 
-The feature must retain the existing synchronisation engine. It must not
-introduce a second implementation of remote change processing,
-downloading, uploading, conflict handling or local change detection.
+The feature must retain the existing synchronisation engine and its normal operating modes. It must not create a second implementation of Microsoft Graph change processing, downloads, uploads, conflict handling, local change processing or `--monitor`.
 
 The core model is:
 
-> **The item database is the authoritative namespace presented by
-> FUSE.**
+> **The item database is the authoritative namespace presented by FUSE.**
 
-The database should continue to contain the complete eligible online
-state as it does today. On-demand support extends that state with
-sufficient information to determine whether file content is currently
-hydrated locally.
+The database continues to represent the complete eligible online namespace. On-demand support extends the database state so the client can distinguish items whose content is physically resident from items represented only by remote metadata.
 
-FUSE then presents the filesystem namespace from database state.
+FUSE presents the namespace from that database state:
 
-For a hydrated item, the FUSE entry is backed by real physical content
-in the existing `sync_dir`.
+- a **hydrated** file has real physical backing content in `sync_dir`;
+- a **cloud-only** file exists in the FUSE namespace because it exists in the authoritative database, but no complete physical file content is required underneath the mount.
 
-For a cloud-only item, the FUSE entry exists because the database says
-it exists, even though no physical file content is present underneath
-the mount.
+The physical filesystem is therefore not a second source of namespace truth. It is the backing store for hydrated content and a source of evidence about local changes.
 
-When `on_demand = "false"`, existing behaviour must remain
-unchanged.
+When:
 
-------------------------------------------------------------------------
+```ini
+on_demand = "false"
+```
+
+the existing client behaviour remains unchanged.
+
+When:
+
+```ini
+on_demand = "true"
+```
+
+on-demand changes **when file content is materialised locally and how the namespace is presented**. It does not replace the existing synchronisation lifecycle.
+
+---
 
 ## 2. Decision
 
 When `on_demand = "true"`:
 
-1.  The existing item database remains the complete client-side
-    representation of the eligible online OneDrive namespace.
-2.  The database gains explicit hydration state for applicable items.
-3.  FUSE is mounted over the existing `sync_dir`.
-4.  FUSE builds and maintains the visible filesystem namespace from the
-    item database.
-5.  A database item marked as not hydrated is presented as a cloud-only
-    filesystem entry without requiring physical file content.
-6.  A hydrated database item is presented at the same namespace location
-    and backed by its real file content in the physical `sync_dir`.
-7.  The existing remote synchronisation engine continues to enumerate
-    and process Microsoft Graph changes.
-8.  In on-demand mode, eligible remote files that would normally be
-    queued for immediate download are instead recorded in the database
-    as cloud-only and are not placed on the normal download queue.
-9.  FUSE observes filesystem access. Content access to a cloud-only file
-    requests hydration.
-10. Hydration uses the existing download machinery.
-11. After hydration completes safely, database hydration state is
-    updated and FUSE services the file from physical content.
-12. Once physical content exists, normal local filesystem change
-    detection should continue to use the existing inotify/local-change
-    pipeline wherever possible.
-13. Normal uploads remain owned by the existing synchronisation engine
-    rather than by FUSE.
-14. On clean shutdown, FUSE is unmounted and the existing physical files
-    in `sync_dir` become directly visible.
-15. On restart, local physical changes are reconciled through the
-    existing startup/synchronisation logic before the authoritative FUSE
-    view is safely re-established.
+1. The item database remains the complete client-side representation of the eligible online OneDrive namespace.
+2. The database gains explicit stable hydration state for applicable file items.
+3. FUSE is mounted over the existing configured `sync_dir`.
+4. FUSE builds/presents its visible namespace from the item database.
+5. Cloud-only database items are visible without physical placeholder files.
+6. Hydrated database items are backed by real physical content in the existing `sync_dir`.
+7. The existing sync engine continues to process Microsoft Graph changes.
+8. The existing `--monitor` mode remains available and continues to monitor online and local change.
+9. Remote monitoring continues across the entire eligible online namespace, whether individual files are hydrated or cloud-only.
+10. Local filesystem monitoring applies to physical resident content. A cloud-only file has no physical content to monitor locally.
+11. In on-demand mode, ordinary eligible remote files that would otherwise be downloaded are recorded as cloud-only and are not placed on the normal content download queue unless policy requires local content.
+12. FUSE observes user/application filesystem operations. A content-requiring operation against a cloud-only file requests hydration.
+13. Hydration uses the existing download machinery.
+14. Only after valid physical content has been safely materialised is stable database state changed to hydrated.
+15. Once hydrated, local edits should flow through the existing physical filesystem, inotify/local-change and upload path wherever possible.
+16. FUSE does not become a separate upload or Graph synchronisation engine.
+17. User deletion and dehydration are different operations and must never be inferred from physical absence alone.
+18. On clean shutdown, FUSE is unmounted and physical hydrated content in `sync_dir` becomes directly visible.
+19. On restart, physical local changes are reconciled safely and the authoritative FUSE namespace is rebuilt from database state.
 
-------------------------------------------------------------------------
+---
 
-## 3. Architecture overview
+## 3. Architecture and authority boundaries
 
-``` plantuml
-@startuml
-title ADR-001 - On-demand architecture
+![On-demand architecture and authority boundaries](images/adr-001-architecture-overview.png)
 
-skinparam componentStyle rectangle
-skinparam shadowing false
+PlantUML source: [`plantuml/adr-001-architecture-overview.puml`](plantuml/adr-001-architecture-overview.puml)
 
-actor User
+The authority boundaries are deliberately narrow:
 
-rectangle "User-visible sync_dir\n~/OneDrive" as View
-component "FUSE presentation layer" as Fuse
-database "Item database\nAUTHORITATIVE FUSE NAMESPACE\n+ hydration state" as DB
-component "Existing sync engine" as Sync
-component "Existing download path" as Download
-component "Existing local change processing\n(inotify / reconciliation)" as Local
-folder "Physical sync_dir\nhydrated content only" as Disk
-cloud "Microsoft OneDrive /\nMicrosoft Graph" as Graph
+| Component | Authority / responsibility |
+| --- | --- |
+| Microsoft OneDrive / Microsoft Graph | Remote service state and remote content |
+| Existing sync engine | Synchronisation decisions, Graph interaction, existing upload/download/conflict behaviour |
+| Item database | **Authoritative namespace presented by FUSE**, remote identity/metadata and stable hydration state |
+| Physical `sync_dir` | Backing content for hydrated items and evidence of local physical change |
+| FUSE | Namespace presentation, filesystem access mediation and demand signal for hydration |
+| Existing inotify/local reconciliation | Local change detection for content that physically exists |
 
-User --> View : browse / open / edit
-View --> Fuse
-Fuse --> DB : namespace + metadata\nhydration lookup
-Fuse --> Disk : hydrated file I/O
-Fuse --> Sync : request hydration\nwhen content required
+The key distinction is:
 
-Graph <--> Sync : existing Graph processing
-Sync --> DB : create/update/delete\nremote namespace state
-Sync --> Download : existing download queue/path
-Download --> Disk : validated local content
-Download --> DB : hydration transition\nonly after success
+> **Database authority governs namespace presentation. It does not authorise destruction or overwriting of contradictory unsynchronised physical content.**
 
-Disk --> Local : filesystem changes
-Local --> Sync : existing upload/change path
-Sync --> Graph : upload local changes
+---
 
-note right of DB
-The database defines what FUSE presents.
-Physical absence alone does not mean deletion.
-end note
+## 4. `on_demand` is orthogonal to normal synchronisation and `--monitor`
 
-note bottom of Fuse
-FUSE is a presentation/access layer.
-It is not a second sync engine.
-end note
-@enduml
+This is a foundational design requirement.
+
+`on_demand` is **not** an alternative to `--monitor`, a special sync mode, or a replacement event loop.
+
+It is a storage/presentation capability that changes whether eligible remote content is immediately materialised.
+
+The following combinations are conceptually valid:
+
+```text
+on_demand=false + single sync
+on_demand=false + --monitor
+on_demand=true  + single sync
+on_demand=true  + --monitor
 ```
 
-### Authority boundaries
+The meaning of `--monitor` does not change: the client continues monitoring Microsoft OneDrive for remote changes and the local filesystem for local changes.
 
-  -----------------------------------------------------------------------
-  Component                           Authority / responsibility
-  ----------------------------------- -----------------------------------
-  Microsoft OneDrive / Graph          Remote service state and remote
-                                      file content
+What changes is the **scope of physical local monitoring**, because cloud-only content has no local backing file to observe.
 
-  Existing sync engine                Synchronisation decisions and Graph
-                                      interaction
+![on_demand and monitor orthogonality](images/adr-001-monitor-orthogonality.png)
 
-  Item database                       **Authoritative namespace presented
-                                      by FUSE**, remote identity/metadata
-                                      and hydration state
+PlantUML source: [`plantuml/adr-001-monitor-orthogonality.puml`](plantuml/adr-001-monitor-orthogonality.puml)
 
-  Physical `sync_dir`                 Local backing content for hydrated
-                                      items
+### 4.1 Remote monitoring
 
-  FUSE                                Namespace presentation and demand
-                                      signal for content access
+Remote Graph/delta monitoring continues across the **entire eligible online namespace**.
 
-  inotify / existing local            Detection of local changes to
-  reconciliation                      physical hydrated content
-  -----------------------------------------------------------------------
+For a cloud-only item, remote change processing can:
 
-------------------------------------------------------------------------
+- update its database metadata;
+- rename or move its database namespace location;
+- remove the database item after a genuine remote deletion;
+- alter future policy decisions; and
+- cause FUSE to present the updated state.
 
-## 4. Database as the authoritative FUSE namespace
+None of those operations inherently require downloading file content.
 
-FUSE must not independently discover its namespace by merging a
-filesystem scan with database entries.
+### 4.2 Local monitoring
 
-The namespace FUSE presents is derived from the database.
+Local monitoring applies to content that physically exists.
 
-Conceptually, if the database contains:
+For a hydrated file:
 
-``` text
+```text
+physical content exists
+        |
+        v
+existing inotify / local reconciliation can observe change
+```
+
+For a cloud-only file:
+
+```text
+database item exists
+hydrated = false
+physical content absent
+        |
+        v
+there is no local file content for inotify to monitor
+```
+
+This is expected, not a monitoring gap. The item remains represented through remote monitoring + database state + FUSE.
+
+### 4.3 Hydration changes monitoring applicability
+
+When a cloud-only file is hydrated, real physical content appears and becomes eligible for normal local monitoring.
+
+When a safely synchronised hydrated file is deliberately dehydrated, the physical content disappears and there is no longer local content to monitor.
+
+This does **not** mean the item ceases to be monitored. It moves back to remote/database-only representation until it is hydrated again.
+
+### 4.4 Implementation caution
+
+The architecture does not require creating and destroying one inotify watch for every file hydration transition.
+
+The existing watch model must first be examined and experimentally validated. If the client already watches physical directory trees, the desired implementation is to preserve that model and allow resident files to naturally appear/disappear beneath those watched directories.
+
+The implementation must not redesign local monitoring unless testing demonstrates that the existing mechanism cannot safely observe operations routed through the FUSE overlay.
+
+---
+
+## 5. Database as the authoritative FUSE namespace
+
+FUSE must not independently construct the OneDrive namespace by treating the physical filesystem and database as competing sources.
+
+The namespace presented by FUSE is derived from the item database.
+
+For example, if the database contains:
+
+```text
 Documents/
-    report.pdf       hydrated=true
-    budget.xlsx      hydrated=false
+    report.pdf       HYDRATED
+    budget.xlsx      CLOUD_ONLY
 
 Photos/
-    holiday.jpg      hydrated=true
-    archive.zip      hydrated=false
+    holiday.jpg      HYDRATED
+    archive.zip      CLOUD_ONLY
 
 Projects/
-    plan.docx        hydrated=false
-    notes.txt        hydrated=true
+    plan.docx        CLOUD_ONLY
+    notes.txt        HYDRATED
 ```
 
-then FUSE presents:
+FUSE presents:
 
-``` text
+```text
 ~/OneDrive/
 ├── Documents/
 │   ├── report.pdf
@@ -208,11 +225,9 @@ then FUSE presents:
     └── notes.txt
 ```
 
-regardless of whether the cloud-only items have physical files.
+The physical directory contains only resident content:
 
-The physical directory contains only hydrated content:
-
-``` text
+```text
 ~/OneDrive/
 ├── Documents/
 │   └── report.pdf
@@ -222,291 +237,249 @@ The physical directory contains only hydrated content:
     └── notes.txt
 ```
 
-When FUSE is unmounted, only those real files are visible through the
-operating system. The cloud-only entries remain represented in the
-database and remotely in OneDrive.
+![Visibility with and without FUSE](images/adr-001-shutdown-visibility.png)
 
-### Consequence
+PlantUML source: [`plantuml/adr-001-shutdown-visibility.puml`](plantuml/adr-001-shutdown-visibility.puml)
 
-The physical directory is **not** the source from which FUSE decides
-whether a remote namespace item exists.
+When FUSE is absent, cloud-only items are not locally visible as filesystem entries. They have not been deleted. They remain represented in the database and online.
 
-The database is.
+### 5.1 Directories
 
-The physical directory answers a different question:
+Directories require explicit design attention.
 
-> Does this database item currently have local backing content, and has
-> that local content changed?
+The database already represents the online hierarchy and therefore determines which eligible directories FUSE presents, including directories whose descendants are entirely cloud-only.
 
-------------------------------------------------------------------------
+A physical directory may exist because one or more descendants are hydrated, because a local unsynchronised item exists, or because existing client behaviour requires it.
 
-## 5. Hydration state
+The implementation must not assume that every FUSE-visible directory requires a corresponding physical directory.
 
-The database schema requires new state indicating whether applicable
-file content is hydrated.
+Conversely, a physical directory containing unsynchronised local content must never be removed merely because the current database view has no hydrated remote child beneath it.
 
-The exact schema is a later implementation decision, but the
-architecture requires a distinction equivalent to:
+---
 
-``` text
-hydrated = false
-hydrated = true
+## 6. Stable hydration state versus transient operations
+
+The database schema requires explicit state describing whether file content is stably resident.
+
+The architectural stable states are equivalent to:
+
+```text
+CLOUD_ONLY
+HYDRATED
 ```
 
-A boolean may ultimately be sufficient, or implementation work may
-demonstrate that a richer state model is required for transient
-operations such as hydration in progress, dehydration in progress,
-failure or dirty local content.
+The exact database representation remains an implementation decision. A boolean may be sufficient for stable state, but the design must not misuse that boolean to represent every transient operation.
 
-The architectural requirement is therefore **explicit hydration state**,
-not specifically a single boolean column.
+Examples of transient conditions include:
 
-### State ownership
-
-Hydration state must not be casually toggled by multiple independent
-components.
-
-A transition to hydrated should occur only when valid physical content
-has been successfully materialised.
-
-A transition to cloud-only should occur only when removal of local
-backing content has been proven safe.
-
-------------------------------------------------------------------------
-
-## 6. Remote synchronisation in on-demand mode
-
-The existing sync engine remains responsible for processing remote
-changes.
-
-The important on-demand change occurs where remote content would
-normally be queued for download.
-
-### Existing behaviour
-
-``` plantuml
-@startuml
-title Normal remote item processing
-
-start
-:Remote item discovered / changed;
-:Update item database;
-if (Should content be local?) then (yes)
-  :Queue existing download;
-  :Download and validate;
-  :Physical file exists;
-else (no)
-  :Existing filtering behaviour;
-endif
-stop
-@enduml
+```text
+hydration requested
+hydration in progress
+dehydration in progress
+download validation in progress
+local content dirty / awaiting upload
+operation failed / recovery required
 ```
 
-### On-demand behaviour
+![Stable hydration state and transient operations](images/adr-001-state-machine.png)
 
-``` plantuml
-@startuml
-title Remote item processing with on-demand enabled
+PlantUML source: [`plantuml/adr-001-state-machine.puml`](plantuml/adr-001-state-machine.puml)
 
-start
-:Remote item discovered / changed;
-:Apply existing eligibility / filtering rules;
-:Update authoritative item database;
+### 6.1 Stable-state rules
 
-if (Must item be immediately local?) then (yes)
-  :Use existing download path;
-  :Validate physical content;
-  :Mark hydrated;
-else (no)
-  :Do NOT queue normal content download;
-  :Record item as cloud-only / not hydrated;
-  :FUSE namespace reflects database state;
-endif
+A stable transition to `HYDRATED` occurs only after:
 
-stop
-@enduml
-```
+1. the correct item has been downloaded;
+2. content has passed the existing validation requirements;
+3. valid final backing content exists at the intended physical location; and
+4. the transition can survive restart/recovery.
 
-The intent is to make the smallest safe change to the existing
-remote-processing pipeline:
+A stable transition to `CLOUD_ONLY` occurs only after:
 
-> **In on-demand mode, eligible content that does not currently need to
-> be local is represented in the database instead of automatically
-> entering the download queue.**
+1. local content is proven safe to remove;
+2. no unsynchronised local change would be lost;
+3. policy permits dehydration;
+4. the physical removal has completed safely; and
+5. restart/recovery cannot misinterpret the transition as user deletion.
 
-This allows the existing Graph enumeration, metadata processing,
-filtering, item identity and database logic to remain in use.
+### 6.2 Dirty state is not hydration state
 
-------------------------------------------------------------------------
+A hydrated file can also be locally modified.
 
-## 7. FUSE namespace updates
+That is not a third presentation state equivalent to cloud-only/hydrated. It is synchronisation state associated with resident content.
 
-FUSE must reflect database namespace changes produced by the sync
-engine.
+A dirty/unsynchronised file must be preserved and is not eligible for automatic dehydration.
 
-Examples include:
+### 6.3 Pin/`always_local` is policy, not hydration state
 
--   new remote item;
--   remote rename;
--   remote move;
--   remote deletion;
--   metadata change;
--   hydration transition;
--   future pin/always-local transition.
+`always_local` expresses a retention requirement.
 
-The implementation mechanism remains open. Possible approaches include
-FUSE resolving current state from the database on demand, explicit
-invalidation/notification from the engine, an in-process cache with
-invalidation, or a combination.
+It can cause a cloud-only item to hydrate and can prevent a hydrated item from being dehydrated, but it should not be conflated with whether bytes currently exist on disk.
 
-The architectural requirement is:
+---
 
-> FUSE-visible namespace state must converge on the authoritative item
-> database and must not maintain an independent competing namespace.
+## 7. Remote processing: preserve the engine, change materialisation
 
-------------------------------------------------------------------------
+The implementation principle is:
 
-## 8. Hydration on user access
+> **Do not replace working synchronisation paths. Change when content is materialised.**
 
-FUSE listens for filesystem operations against the namespace.
+Remote enumeration, delta processing, filtering, item identity and database maintenance remain in the existing engine.
 
-Operations that only inspect namespace/metadata should not automatically
-hydrate content.
+The important on-demand decision occurs at or before the point where an eligible remote file would normally enter the content download queue.
 
-When an operation genuinely requires file content and the database says
-the item is cloud-only, FUSE requests hydration through the existing
-engine/download path.
+![Remote processing decision](images/adr-001-remote-processing.png)
 
-``` plantuml
-@startuml
-title Cloud-only file open and hydration
+PlantUML source: [`plantuml/adr-001-remote-processing.puml`](plantuml/adr-001-remote-processing.puml)
 
-actor User
-participant "Application" as App
-participant "FUSE" as Fuse
-database "Item DB" as DB
-participant "Existing sync/download engine" as Engine
-participant "Microsoft Graph" as Graph
-participant "Physical sync_dir" as Disk
+### 7.1 Normal mode
 
-User -> App : Open file
-App -> Fuse : open(path)
-Fuse -> DB : Resolve item + hydration state
-DB --> Fuse : item exists, hydrated=false
+With `on_demand = "false"`, existing logic is unchanged.
 
-Fuse -> Engine : Request hydration(item identity)
-Engine -> Graph : Existing download request
-Graph --> Engine : File content
-Engine -> Disk : Write using existing safe download path
-Engine -> Engine : Validate completed download
-Engine -> DB : Set hydrated state
-DB --> Engine : committed
-Engine --> Fuse : Hydration complete
+### 7.2 On-demand mode
 
-Fuse -> Disk : Open/read physical content
-Disk --> Fuse : bytes
-Fuse --> App : file access
-App --> User : content available
-@enduml
-```
+With `on_demand = "true"`:
 
-### Hydration requirements
+1. remote metadata is processed normally;
+2. existing eligibility/filtering rules are applied;
+3. the authoritative DB item is created/updated;
+4. if policy requires local content, the existing download path is used;
+5. otherwise, the item remains cloud-only and is not placed on the ordinary content download queue;
+6. FUSE presents it from DB metadata.
+
+The on-demand decision should therefore be as narrow as practical. It should not fork the entire remote synchronisation pipeline.
+
+---
+
+## 8. FUSE namespace update model
+
+FUSE must reflect authoritative DB changes for:
+
+- new remote items;
+- rename;
+- move;
+- delete;
+- relevant metadata changes;
+- hydration state transitions;
+- future `always_local` effects.
+
+FUSE must not maintain an independent namespace that can diverge from the DB.
+
+The exact update mechanism remains open. Candidate approaches include:
+
+- resolving current DB state during lookup/readdir;
+- explicit in-process notification/invalidation;
+- a bounded FUSE-side cache with strict invalidation;
+- FUSE kernel cache invalidation APIs where appropriate; or
+- a combination.
+
+The chosen mechanism must be evaluated for very large namespaces. On-demand support should not turn every filesystem operation into an unnecessarily expensive full database traversal.
+
+---
+
+## 9. Hydration on content demand
+
+Namespace visibility alone must not hydrate a file.
+
+A content-requiring operation against a cloud-only item requests hydration.
+
+![Cloud-only open and hydration](images/adr-001-hydration-sequence.png)
+
+PlantUML source: [`plantuml/adr-001-hydration-sequence.puml`](plantuml/adr-001-hydration-sequence.puml)
+
+### 9.1 What should not inherently hydrate
+
+Operations such as these should normally be satisfiable from DB/FUSE metadata:
+
+- directory enumeration;
+- pathname lookup;
+- ordinary stat/attribute queries;
+- existence checks.
+
+The exact FUSE callback-to-hydration boundary must be tested against real file managers and applications.
+
+### 9.2 What requires content
+
+An operation that genuinely needs bytes must either:
+
+- read already hydrated physical content; or
+- request hydration and wait/fail according to defined filesystem semantics.
+
+### 9.3 Hydration requirements
 
 Hydration must:
 
--   identify the correct remote item;
--   reuse existing download logic wherever practical;
--   avoid exposing partial content as complete;
--   handle network failure;
--   handle insufficient disk space;
--   handle remote change during hydration;
--   coordinate simultaneous requests for the same item;
--   update hydration state only after safe completion; and
--   return an appropriate filesystem error if hydration cannot complete.
+- use the correct remote item identity;
+- reuse the existing download path wherever practical;
+- avoid exposing incomplete content as complete;
+- coordinate simultaneous opens of the same cloud-only item;
+- handle network failure;
+- handle disk-full conditions;
+- handle remote changes during hydration;
+- preserve existing validation behaviour;
+- materialise final backing content atomically where possible;
+- commit stable `HYDRATED` state only after safe materialisation; and
+- return an appropriate filesystem error when hydration cannot complete.
 
-FUSE must not implement a separate Microsoft Graph download stack.
+FUSE must not implement an independent Microsoft Graph downloader.
 
-------------------------------------------------------------------------
+---
 
-## 9. Hydrated local edits and the existing inotify path
+## 10. Hydrated edits and existing local-change processing
 
-Once hydrated, a file is real physical content underneath the FUSE
-mount.
+Once hydrated, a file is real physical content.
 
-The intended architecture is that ordinary user modifications continue
-through the existing local-change pipeline.
+The intended path for an ordinary edit is:
 
-``` plantuml
-@startuml
-title Hydrated file edit and existing upload path
+![Hydrated edit and existing upload path](images/adr-001-local-edit-sequence.png)
 
-actor User
-participant "Application" as App
-participant "FUSE" as Fuse
-folder "Physical sync_dir" as Disk
-participant "Existing inotify /\nlocal change processing" as Notify
-participant "Existing sync engine" as Sync
-cloud "Microsoft Graph" as Graph
-database "Item DB" as DB
+PlantUML source: [`plantuml/adr-001-local-edit-sequence.puml`](plantuml/adr-001-local-edit-sequence.puml)
 
-User -> App : Edit hydrated file
-App -> Fuse : write / rename / save
-Fuse -> Disk : Apply operation to physical content
-Disk -> Notify : Filesystem change event
-Notify -> Sync : Existing local change processing
-Sync -> Graph : Existing upload/update
-Graph --> Sync : Remote result
-Sync -> DB : Update metadata/state
-@enduml
-```
+The architectural target is:
 
-This is an important architectural objective:
+> **No special FUSE upload engine.**
 
-> **FUSE should not create a special on-demand upload engine. Once
-> content is physical, normal local change detection and synchronisation
-> should continue to operate through the existing engine wherever
-> possible.**
+FUSE mediates the filesystem operation; the physical backing content changes; the existing local-change machinery observes the physical change; the existing sync engine performs the upload/update.
 
-### Prototype requirement: inotify
+### 10.1 This must be proven, not assumed
 
-This behaviour must be experimentally proven.
+Mounting FUSE over `sync_dir` changes pathname resolution and may affect where watches are attached and which events are emitted.
 
-Mounting FUSE over `sync_dir` changes pathname resolution, and the exact
-behaviour of watches and events against the underlying physical
-directory must not be assumed.
+The physical-overlay prototype must establish:
 
-Stage 2 testing must establish:
+- where current inotify watches are attached;
+- whether FUSE-routed writes generate the required events against the physical backing tree;
+- behaviour for direct write-in-place;
+- behaviour for editor atomic-save patterns (temporary file + rename);
+- create/delete/rename/move events;
+- whether hydration writes themselves generate events that must be suppressed/recognised;
+- whether watch setup must occur before or after the mount;
+- whether watches survive mount lifecycle changes; and
+- whether the existing monitor code can continue without architectural redesign.
 
--   where the existing inotify watches are attached;
--   whether operations performed through FUSE produce the required
-    events on the underlying physical tree;
--   whether the client can distinguish its own hydration writes from
-    user changes;
--   whether mount timing affects existing watches; and
--   whether any watch must be established against the underlying
-    directory through a different access mechanism.
+If the prototype disproves the intended path, the ADR must be revised before introducing a second local-change pipeline.
 
-If existing inotify semantics cannot be preserved safely, the ADR must
-be revised before introducing a parallel local-change mechanism.
+---
 
-------------------------------------------------------------------------
+## 11. Underlying physical `sync_dir` access
 
-## 10. Underlying physical directory access
+FUSE is mounted over the configured `sync_dir`.
 
-Mounting FUSE over `sync_dir` means normal path lookup at that path
-enters FUSE.
+After mounting, ordinary pathname lookup through `sync_dir` enters FUSE. The existing engine nevertheless needs direct access to physical backing content for:
 
-The existing sync engine still needs access to the real backing files
-underneath the mount for downloads, uploads, metadata operations and
-reconciliation.
+- download materialisation;
+- upload reads;
+- metadata operations;
+- rename/move/delete;
+- startup reconciliation;
+- local scanning;
+- conflict handling.
 
-### Proposed mechanism to validate
+### 11.1 Proposed mechanism to validate
 
-Before mounting FUSE, retain a handle/file descriptor to the physical
-`sync_dir` and use directory-relative operations where appropriate, for
-example:
+Before mounting FUSE, retain a directory handle/file descriptor to the physical `sync_dir` and use directory-relative operations where appropriate:
 
-``` text
+```text
 openat()
 fstatat()
 mkdirat()
@@ -514,590 +487,602 @@ unlinkat()
 renameat()
 ```
 
-This remains a **prototype hypothesis**, not a final architectural
-commitment.
+This is a **prototype hypothesis**, not yet a final architectural decision.
 
-The prototype must determine:
+Testing must establish:
 
--   whether retained directory access remains valid after mount;
--   how much current path-based D code would require adaptation;
--   atomic rename/replacement behaviour;
--   symlink and traversal safety;
--   avoidance of recursion back into FUSE;
--   Linux behaviour;
--   FreeBSD behaviour; and
--   whether a simpler mechanism can provide the same safety.
+- retained access after mount;
+- compatibility with existing D filesystem abstractions;
+- atomic rename/replacement;
+- symlink and traversal safety;
+- recursion avoidance;
+- interaction with inotify;
+- Linux behaviour;
+- FreeBSD behaviour;
+- recovery after FUSE failure.
 
-------------------------------------------------------------------------
+The objective is not to force the entire codebase onto `*at()` APIs if a simpler safe abstraction exists. The objective is to guarantee that the engine can distinguish **the user-visible FUSE path** from **the physical backing tree** without maintaining a second user-visible directory.
 
-## 11. Local state versus namespace authority
+---
 
-Saying that the database is authoritative for FUSE does **not** mean the
-database may erase contradictory physical evidence.
+## 12. Local state versus namespace authority
+
+The DB being authoritative for FUSE does not mean stale DB metadata overrides local physical evidence.
 
 Example:
 
-1.  `report.pdf` is hydrated.
-2.  The client stops.
-3.  The user edits the physical `report.pdf`.
-4.  The database still contains metadata from before that edit.
-5.  The client restarts.
+1. `report.pdf` is hydrated.
+2. `onedrive` stops and FUSE is unmounted.
+3. The user edits physical `report.pdf`.
+4. The DB still reflects the previous remote state.
+5. `onedrive` restarts.
 
-The correct response is not to overwrite the local file merely because
-the database is the FUSE namespace authority.
+The DB still establishes that `report.pdf` belongs in the FUSE namespace.
 
-The database determines that `report.pdf` belongs in the namespace.
+The physical filesystem establishes that resident local content changed and requires reconciliation.
 
-The physical filesystem provides evidence that its local backing content
-changed and requires normal reconciliation.
+The correct behaviour is therefore to preserve and process the local change, not overwrite it merely because the DB is authoritative for namespace presentation.
 
-Therefore:
+This is especially important because clean shutdown intentionally exposes hydrated physical files for ordinary offline access.
 
-> **Database authority governs namespace presentation. It does not
-> override unsynchronised local content.**
+---
 
-This distinction is central to data preservation.
+## 13. Cloud-only absence is never local deletion
 
-------------------------------------------------------------------------
+This is a release-blocking invariant.
 
-## 12. Critical invariant: cloud-only is not deletion
-
-A database-known item with `hydrated=false` is intentionally absent from
-the physical filesystem.
-
-Its absence must never be interpreted as a local deletion.
-
-``` text
-DB item exists + hydrated=false + no physical file
-                         =
-                 expected cloud-only state
+```text
+DB item exists
+stable hydration state = CLOUD_ONLY
+no physical backing file
 ```
 
-not:
+means:
 
-``` text
-missing physical file
-        =
-local deletion request
+```text
+EXPECTED ON-DEMAND STATE
 ```
 
-This is a release-blocking safety property.
+It does not mean:
 
-------------------------------------------------------------------------
-
-## 13. Local deletion of a hydrated item
-
-A user deleting a hydrated file through the FUSE view is different from
-dehydration.
-
-### User deletion
-
-The user intends the item itself to be deleted.
-
-The operation must enter the existing local deletion/synchronisation
-path and eventually affect the remote item according to existing
-behaviour and configuration.
-
-### Dehydration
-
-The user or policy intends only to remove local file content while
-retaining the remote item.
-
-The database namespace entry remains.
-
-These two operations must have separate state transitions and must never
-be inferred solely from physical-file absence.
-
-------------------------------------------------------------------------
-
-## 14. Dehydration boundary
-
-Dehydration removes physical backing content while preserving the
-database item and remote object.
-
-A file must not be dehydrated when it is:
-
--   locally modified and unsynchronised;
--   being uploaded;
--   being hydrated/downloaded;
--   unsafe to remove while in active use;
--   required by future `always_local` policy; or
--   not proven to have a valid remote copy.
-
-The safe conceptual transition is:
-
-``` text
-hydrated database item
-        +
-valid synced physical content
-        |
-safety checks
-        |
-remove physical backing content
-        |
-commit hydration state = false
-        |
-FUSE namespace entry remains
+```text
+USER DELETED FILE
 ```
 
-The exact ordering must be designed to survive a crash between steps.
+The existing local scan/deletion logic must therefore become hydration-aware wherever physical absence is currently meaningful.
 
-Manual "free up space", cache limits and automatic expiry are later
-policy layers.
+The implementation must identify every path that can infer deletion from local absence and prove that cloud-only state cannot enter that path incorrectly.
 
-Automatic expiry must be disabled by default.
+---
 
-------------------------------------------------------------------------
+## 14. User deletion and dehydration are separate operations
 
-## 15. `always_local`
+### 14.1 User deletion
 
-The architecture must support a future `sync_list`-style policy
-describing content that should always remain hydrated.
+The user intends the item itself to be removed.
+
+The operation must enter existing local deletion/synchronisation semantics and ultimately affect the remote item according to normal configuration and safety rules.
+
+### 14.2 Dehydration
+
+The user or policy intends only to remove local content.
+
+The DB namespace item remains. The remote object remains. FUSE continues to present the item as cloud-only.
+
+The two operations must have different explicit transitions.
+
+Physical-file absence alone can never distinguish them.
+
+---
+
+## 15. Dehydration safety boundary
+
+Dehydration is permitted only when local backing content can be removed without data loss.
+
+A file must not be automatically dehydrated when it is:
+
+- locally modified or unsynchronised;
+- uploading;
+- hydrating/downloading;
+- subject to unresolved conflict;
+- unsafe to remove while actively used;
+- required by `always_local`;
+- not proven to have a valid remote copy; or
+- in any ambiguous state.
 
 Conceptually:
 
-``` text
+```text
+HYDRATED
+   |
+verify remote/local safety
+   |
+begin dehydration
+   |
+remove physical backing safely
+   |
+commit stable CLOUD_ONLY state
+   |
+FUSE namespace remains
+```
+
+Crash-safe ordering must be designed explicitly.
+
+Manual free-up-space, cache limits and expiry are policies layered above this primitive.
+
+Automatic expiry must be **opt-in and disabled by default**.
+
+---
+
+## 16. `always_local`
+
+A future `sync_list`-style `always_local` policy identifies items/paths that should remain resident.
+
+Conceptually:
+
+```text
 always_local match
-       |
-       +-- cloud-only -> request hydration
-       |
-       +-- hydrated -> retain local content
-       |
-       +-- automatic dehydration -> prohibited
+    |
+    +-- CLOUD_ONLY -> hydrate
+    |
+    +-- HYDRATED -> retain
+    |
+    +-- automatic dehydration -> prohibited
 ```
 
-Matching syntax, precedence and interaction with `sync_list` remain
-separate design decisions.
+`always_local` does not define namespace membership independently of the existing eligibility/filtering model.
 
-------------------------------------------------------------------------
+Its exact syntax and precedence against:
 
-## 16. Startup lifecycle
+- `sync_list`;
+- skip rules;
+- account/drive scope;
+- shared-folder behaviour; and
+- other existing filtering
 
-A proposed high-level startup sequence is:
+require a separate decision.
 
-``` plantuml
-@startuml
-title On-demand startup lifecycle
+---
 
-start
-:Start onedrive;
-:Load configuration;
-:Open / validate item database;
-:Inspect physical sync_dir;
-:Detect/recover stale FUSE mount if required;
-:Reconcile local physical changes safely;
-:Establish underlying-directory access;
-:Start FUSE;
-:FUSE presents namespace from item DB;
-:Start / continue normal sync and monitor processing;
-stop
-@enduml
-```
+## 17. Startup, reconciliation and monitor lifecycle
 
-The exact ordering remains subject to prototype testing, especially
-around:
+![Startup and recovery lifecycle](images/adr-001-startup-recovery.png)
 
--   first local reconciliation;
--   first remote delta;
--   mount visibility;
--   inotify watch establishment; and
--   stale database state after the client has been stopped.
+PlantUML source: [`plantuml/adr-001-startup-recovery.puml`](plantuml/adr-001-startup-recovery.puml)
 
-------------------------------------------------------------------------
+The exact ordering still requires prototype validation, but the lifecycle must satisfy these properties:
 
-## 17. Clean shutdown and crash recovery
+1. configuration and DB are validated;
+2. stale FUSE state is detected/recovered safely;
+3. physical local content can be inspected without accidentally traversing the new FUSE namespace;
+4. offline local changes are preserved/reconciled;
+5. local monitoring is attached to the correct physical backing tree;
+6. FUSE becomes visible at `sync_dir`;
+7. normal sync or `--monitor` operation continues;
+8. remote monitoring updates the entire eligible DB namespace;
+9. local monitoring processes only physically resident content.
 
-### Clean shutdown
+### 17.1 First-run / enabling on-demand on an existing sync
+
+An existing user may enable `on_demand` when `sync_dir` already contains a fully or partially synchronised tree.
+
+Those existing physical files must not be unnecessarily redownloaded or discarded.
+
+The initial enablement path must reconcile DB records with existing physical content and establish appropriate hydration state before cloud-only decisions are made.
+
+### 17.2 Disabling on-demand
+
+Disabling `on_demand` must not silently imply deletion of cloud-only items.
+
+The transition back to conventional full-local behaviour needs an explicit implementation policy, likely requiring eligible cloud-only content to be materialised using the existing download engine before conventional semantics are considered fully restored.
+
+This transition requires its own implementation/testing decision; it must not be left implicit.
+
+---
+
+## 18. Clean shutdown and crash recovery
+
+### 18.1 Clean shutdown
 
 The client should:
 
-1.  stop accepting new FUSE operations;
-2.  complete or safely cancel in-flight hydration/filesystem work;
-3.  stop the FUSE session;
-4.  unmount FUSE;
-5.  release FUSE resources; and
-6.  reveal the original physical `sync_dir`.
+1. stop accepting new FUSE work;
+2. safely complete/cancel in-flight hydration/dehydration operations;
+3. quiesce relevant filesystem activity;
+4. stop the FUSE session;
+5. unmount FUSE;
+6. release FUSE resources;
+7. leave hydrated physical files directly accessible.
 
-Hydrated files remain ordinary accessible files.
+Cloud-only entries cease to be visible locally while FUSE is absent, but remain in DB/OneDrive.
 
-Cloud-only items disappear from the filesystem view while FUSE is absent
-but remain in the database and online.
+### 18.2 Crash
 
-### Crash recovery
+A process crash must not make hydrated data dependent on FUSE.
 
-A crash must not make hydrated data dependent on FUSE.
+Startup recovery must be able to distinguish:
 
-On restart:
+- valid hydrated physical content;
+- incomplete temporary download content;
+- stable cloud-only DB state;
+- stale mount state;
+- physical changes made while the client was absent;
+- a crash between physical storage transition and DB state commit.
 
-``` text
-detect mount state
-      |
-recover stale/unusable mount safely
-      |
-inspect physical hydrated content
-      |
-reconcile local changes
-      |
-re-establish FUSE
-      |
-rebuild visible namespace from database
-```
+Recovery must favour preservation when state is ambiguous.
 
-Recovery must never require destructive deletion of the physical
-`sync_dir`.
+---
 
-------------------------------------------------------------------------
-
-## 18. Remote change behaviour
+## 19. Remote change semantics
 
 ### New remote file
 
-Existing sync processing creates/updates the database item.
-
-In on-demand mode, if no policy requires immediate local content:
-
-``` text
-database item created
-hydrated = false
-no normal download queued
-FUSE presents entry
-```
+Create/update the authoritative DB item. In on-demand mode, leave it cloud-only unless policy requires immediate hydration.
 
 ### Remote change to cloud-only file
 
-Update database metadata/state. No content download is required merely
-to update the namespace.
+Update DB metadata/state. Do not download content merely to reflect namespace change.
 
 ### Remote change to hydrated file
 
-Use existing synchronisation logic to determine whether local content
-should be updated, including existing conflict behaviour.
+Use existing sync/conflict behaviour to update or reconcile physical content.
 
 ### Remote rename/move
 
-Update the authoritative database namespace. FUSE must reflect the new
-path. Any physical hydrated backing content must be moved consistently
-using safe existing/local mechanisms.
+Update the authoritative DB namespace. If the item is hydrated, keep physical backing content consistent without creating a second namespace truth.
 
-### Remote deletion
+### Remote delete
 
-Remove/update the authoritative database item according to existing
-deletion/conflict rules. FUSE removes the namespace entry.
+Apply existing remote deletion/conflict semantics to the DB and any physical backing content. Remove the FUSE namespace entry.
 
-Remote deletion must never be confused with dehydration.
+Remote deletion is not dehydration.
 
-------------------------------------------------------------------------
+---
 
-## 19. FUSE3 foundation
+## 20. Local operation semantics to validate
 
-Recovered groundwork contains D FUSE bindings using FUSE2-style callback
-signatures while the project build configuration targets FUSE3.
+FUSE exposes more than `open()` and `read()`. Production readiness requires defined behaviour for at least:
 
-The bindings must therefore be reconciled with the supported FUSE3 API
-before production integration.
+- create;
+- open;
+- read;
+- write;
+- truncate;
+- fsync/flush/release;
+- rename;
+- replace;
+- move;
+- unlink;
+- mkdir/rmdir;
+- stat/getattr;
+- chmod/permissions where applicable;
+- timestamps;
+- extended attributes if relevant;
+- symlinks if supported by existing client semantics;
+- file locking expectations;
+- concurrent readers/writers.
 
-This is an appropriate isolated implementation task.
+Special attention is required for applications that save by writing a new temporary file and atomically renaming it over the original.
 
-Updating bindings does not itself decide database state, hydration
-semantics or engine integration.
+---
 
-------------------------------------------------------------------------
+## 21. FUSE caching and consistency
 
-## 20. Architectural invariants
+FUSE and the kernel may cache attributes, directory entries and content.
 
-**INV-001 --- Disabled means existing behaviour.**\
-`on_demand = "false"` retains current non-FUSE behaviour.
+Because the DB can change due to remote monitoring while no local filesystem operation occurs, cache policy must not allow stale namespace state to persist indefinitely.
 
-**INV-002 --- Database is the FUSE namespace authority.**\
-FUSE presents eligible items because they exist in the item database,
-not because placeholder files exist physically.
+The implementation must define:
 
-**INV-003 --- `sync_dir` remains the user-facing path.**\
-No second visible OneDrive directory is introduced.
+- attribute cache duration;
+- entry cache duration;
+- negative lookup caching;
+- invalidation after DB rename/move/delete;
+- invalidation after hydration/dehydration;
+- behaviour when remote monitor updates metadata while a file is open.
 
-**INV-004 --- Hydrated means real local backing content.**\
-Hydrated files remain accessible when FUSE is absent.
+Aggressive caching may improve performance for large accounts, but correctness and timely convergence with the authoritative DB take precedence.
 
-**INV-005 --- Cloud-only physical absence is not deletion.**\
-`hydrated=false` plus no physical file is an expected state.
+---
 
-**INV-006 --- FUSE is not a sync engine.**\
-Graph operations, download/upload policy and conflict processing remain
-owned by the existing engine.
+## 22. FUSE3 foundation
 
-**INV-007 --- Hydration uses the existing download path.**\
-FUSE requests content; it does not implement an independent Graph
-downloader.
+Recovered groundwork contains D bindings with FUSE2-style callback signatures while the build configuration targets FUSE3.
 
-**INV-008 --- Hydrated edits use the existing local-change path wherever
-possible.**\
-FUSE must not introduce a parallel upload engine unless prototype
-evidence proves existing change detection cannot be retained.
+The bindings must be reconciled with the supported FUSE3 API before production integration.
 
-**INV-009 --- Unsynchronised local data wins over reclamation.**\
-No dehydration/cache/expiry mechanism may discard dirty local content.
+This is an appropriate isolated contribution because it establishes infrastructure without deciding higher-level synchronisation semantics.
 
-**INV-010 --- Ambiguity favours preservation.**\
+Binding work should include:
+
+- callback signature correctness;
+- lifecycle/session handling;
+- multithreading assumptions;
+- error propagation;
+- supported platform/build behaviour;
+- minimal mount/unmount tests.
+
+---
+
+## 23. Architectural invariants
+
+**INV-001 — Disabled means existing behaviour.**  
+`on_demand = "false"` retains current non-FUSE behaviour unless the user is explicitly transitioning from a previously cloud-only on-demand state.
+
+**INV-002 — `on_demand` is orthogonal to `--monitor`.**  
+On-demand does not disable or replace normal monitor mode, Graph delta processing or local change processing.
+
+**INV-003 — Remote monitoring covers the entire eligible namespace.**  
+Cloud-only items remain monitored remotely and represented through DB/FUSE.
+
+**INV-004 — Local monitoring applies to resident content.**  
+A cloud-only file has no physical content for inotify to observe; once hydrated, it becomes eligible for the existing local monitoring path.
+
+**INV-005 — Database is the FUSE namespace authority.**  
+FUSE presents eligible items because they exist in the DB, not because placeholder files exist physically.
+
+**INV-006 — `sync_dir` remains the user-facing path.**  
+No second user-visible OneDrive directory is introduced.
+
+**INV-007 — Hydrated means valid real local backing content.**  
+Stable hydrated state cannot be committed before valid physical content exists.
+
+**INV-008 — Cloud-only physical absence is expected, not deletion.**  
+No physical file is required for a cloud-only DB item.
+
+**INV-009 — FUSE is not a sync engine.**  
+Graph operations, download/upload policy and conflict processing remain owned by the existing engine.
+
+**INV-010 — Hydration reuses the existing download path.**  
+FUSE requests content; it does not create an independent Graph downloader.
+
+**INV-011 — Hydrated edits use existing local-change processing wherever technically possible.**  
+A parallel FUSE upload engine is not introduced without evidence that the existing path cannot be retained.
+
+**INV-012 — Unsynchronised local data wins over reclamation.**  
+No dehydration/cache/expiry operation may discard dirty local content.
+
+**INV-013 — Ambiguity favours preservation.**  
 If state cannot be proven safe, preserve physical content.
 
-**INV-011 --- Namespace enumeration must not cause mass hydration.**\
-Directory listing and ordinary metadata lookup do not inherently
-download file content.
+**INV-014 — Namespace enumeration does not cause mass hydration.**  
+Browsing and ordinary metadata operations must not inherently download file content.
 
-**INV-012 --- User deletion and dehydration are distinct operations.**\
-Removing local backing content must not imply deletion of the remote
-namespace item.
+**INV-015 — User deletion and dehydration are distinct.**  
+Physical removal for storage reclamation must not become a remote delete.
 
-**INV-013 --- Hydration state changes only after the corresponding
-storage transition is safe.**\
-Database state must not claim hydrated content exists before valid
-content is available, or claim cloud-only state before local removal is
-safely complete.
+**INV-016 — Stable hydration state follows safe storage transition.**  
+The DB must not claim bytes exist before they safely exist, or claim cloud-only state before safe local removal.
 
-------------------------------------------------------------------------
+**INV-017 — FUSE loss does not remove hydrated data.**  
+Unmount/crash reveals or preserves physical resident content.
 
-## 21. Initial implementation stages
+**INV-018 — FUSE maintains no competing namespace truth.**  
+Caches may accelerate presentation but must converge on authoritative DB state.
 
-### Stage 1 --- FUSE3 foundation
+---
 
--   update/reconcile FUSE bindings;
--   create the on-demand/FUSE lifecycle object;
--   connect lifecycle to `on_demand`;
--   keep feature disabled by default.
+## 24. Implementation stages
 
-### Stage 2 --- Physical overlay and local-change prototype
+### Stage 1 — FUSE3 foundation
 
-Using a disposable directory:
+- reconcile/update bindings;
+- lifecycle object;
+- mount/unmount;
+- `on_demand` flag integration;
+- disabled by default.
 
--   mount FUSE over existing physical content;
--   expose real files;
--   test read/write/create/rename/delete;
--   prove content survives unmount;
--   prove safe access to the underlying directory;
--   prove or disprove existing inotify behaviour;
--   test clean and forced termination.
+### Stage 2 — Physical overlay + local monitoring prototype
+
+Using disposable content:
+
+- mount over existing physical tree;
+- expose real files;
+- read/write/create/rename/delete;
+- editor atomic-save patterns;
+- underlying direct engine access;
+- inotify event behaviour;
+- clean shutdown;
+- forced termination/stale mount recovery.
 
 **No Graph hydration required.**
 
-### Stage 3 --- Database-authoritative namespace
+### Stage 3 — DB-authoritative read-only namespace
 
--   expose namespace directly from item database;
--   introduce minimum hydration state;
--   present cloud-only entries without physical placeholders;
--   update namespace after DB create/rename/move/delete;
--   prove physical absence of cloud-only items cannot generate local
-    deletion.
+- expose DB namespace;
+- minimum stable hydration state;
+- cloud-only entries without placeholders;
+- directory representation;
+- DB rename/move/delete reflected in FUSE;
+- enumeration does not hydrate;
+- cloud-only absence cannot generate deletion.
 
-### Stage 4 --- Sync-engine on-demand decision
+### Stage 4 — Sync-engine materialisation decision
 
--   retain existing remote enumeration and DB update paths;
--   intercept the point where eligible content would normally enter the
-    download queue;
--   leave ordinary on-demand items cloud-only;
--   retain immediate download for policy cases that require local
-    content.
+- preserve existing remote pipeline;
+- intercept ordinary download decision;
+- commit cloud-only state instead of queueing content;
+- preserve immediate hydration for policy-required local items;
+- validate with normal sync and `--monitor`.
 
-### Stage 5 --- Hydration on content access
+### Stage 5 — Demand hydration
 
--   request hydration from FUSE;
--   reuse existing download path;
--   coordinate concurrent requests;
--   handle network/disk failures;
--   atomically transition hydration state.
+- FUSE content demand;
+- existing download path;
+- concurrent request coordination;
+- network/disk failure;
+- crash recovery;
+- atomic stable-state transition.
 
-### Stage 6 --- Full mutation semantics
+### Stage 6 — Full local mutation semantics
 
-Validate:
+- create/write/truncate;
+- rename/move/replace;
+- delete;
+- local edits while client stopped;
+- inotify behaviour;
+- existing upload path;
+- conflict behaviour.
 
--   write/save;
--   create;
--   truncate;
--   rename;
--   move;
--   delete;
--   local edits while client is stopped;
--   remote changes to hydrated items;
--   conflict handling.
+### Stage 7 — Dehydration primitive
 
-### Stage 7 --- Retention policy
+- safe manual transition;
+- open/in-use protection;
+- dirty-file protection;
+- crash-safe ordering;
+- deletion/dehydration distinction.
 
-After correctness:
+### Stage 8 — Retention policy
 
--   `always_local`;
--   manual free-up-space;
--   optional cache limit;
--   optional expiry-based dehydration.
+- `always_local`;
+- free-up-space;
+- optional cache-size limit;
+- optional expiry policy, disabled by default.
 
-### Stage 8 --- Desktop integration
+### Stage 9 — Desktop integration
 
-Only after filesystem correctness:
+- status representation;
+- thumbnails;
+- file-manager behaviour;
+- usability enhancements.
 
--   status representation;
--   thumbnails;
--   file-manager-specific behaviour;
--   additional usability integration.
+---
 
-------------------------------------------------------------------------
+## 25. Validation strategy
 
-## 22. Validation strategy
+This feature has a high data-loss impact if state transitions are wrong. Testing must include happy paths, regression coverage and deliberate fault injection.
 
-This feature has a high data-loss impact if state transitions are wrong.
-Testing must therefore include both normal E2E behaviour and deliberate
-fault injection.
+### 25.1 Overlay tests
 
-### Prototype tests
+Prove mount/unmount, direct backing-tree access, physical persistence, FUSE3 callbacks, inotify behaviour and stale-mount recovery.
 
-Before Graph integration, prove:
+### 25.2 DB/FUSE tests
 
--   overlay mount/unmount;
--   underlying directory access;
--   physical persistence;
--   inotify behaviour;
--   FUSE3 callback behaviour;
--   stale mount recovery.
+Prove DB create/rename/move/delete presentation, cloud-only entries without placeholders, directory behaviour, cache invalidation and non-hydrating enumeration.
 
-### Database/FUSE tests
+### 25.3 Monitor tests
 
-Prove:
+Run `on_demand = "true"` with `--monitor` and prove simultaneously:
 
--   DB item appears in FUSE;
--   DB rename/move updates FUSE;
--   DB deletion removes FUSE entry;
--   `hydrated=false` requires no physical placeholder;
--   cloud-only absence is never treated as deletion;
--   enumeration does not hydrate.
+- remote cloud-only changes update DB/FUSE without content download;
+- remote hydrated changes follow existing sync behaviour;
+- local hydrated changes enter existing inotify/upload processing;
+- cloud-only files generate no false local deletion;
+- hydration causes the physical file to become locally monitorable;
+- dehydration removes only local monitoring applicability, not remote monitoring.
 
-### Hydration tests
+### 25.4 Hydration tests
 
-Prove:
+Prove first access, concurrent opens, failed download, disk full, remote mutation during download, process termination, validation and correct stable DB transition.
 
--   first content access hydrates;
--   multiple concurrent opens do not produce duplicate/corrupt
-    downloads;
--   failed hydration leaves cloud-only state safe;
--   disk-full leaves state safe;
--   process termination during hydration is recoverable;
--   completed hydration results in valid physical content and correct DB
-    state.
+### 25.5 Offline/client-stopped tests
 
-### Local edit tests
+With FUSE absent, modify/create/rename/delete hydrated physical content, restart the client and prove safe reconciliation before/while the FUSE namespace is re-established.
 
-Prove:
+### 25.6 Scale tests
 
--   save through FUSE reaches physical content;
--   expected inotify/local-change event occurs;
--   existing upload path processes the change;
--   client restart detects edits made while FUSE/client was absent.
+Validate large DB-backed namespaces without mass hydration and without pathological lookup/readdir/database overhead.
 
-### Account coverage
+### 25.7 Account coverage
 
 At minimum:
 
--   OneDrive Personal;
--   OneDrive Business;
--   SharePoint where applicable;
--   shared folders where applicable.
+- OneDrive Personal;
+- OneDrive Business;
+- SharePoint where applicable;
+- shared folders where applicable.
 
-------------------------------------------------------------------------
+Platform coverage must include supported Linux environments and FreeBSD where FUSE/on-demand is intended to be supported.
 
-## 23. Open decisions
+---
 
-1.  What exact DB schema represents hydration state safely?
-2.  Is a boolean sufficient at rest, with transient state held
-    elsewhere, or is a richer persisted state required?
-3.  How should FUSE observe/receive DB namespace changes?
-4.  Is retained-directory access plus `*at()` the correct
-    underlying-filesystem mechanism?
-5.  Does existing inotify behave correctly when writes are routed
-    through FUSE to the hidden physical tree?
-6.  At what point in startup should inotify and FUSE be established?
-7.  How are concurrent hydration requests serialised?
-8.  What is the crash-safe ordering for hydration-state commits?
-9.  What is the crash-safe ordering for dehydration?
-10. Which existing configuration combinations are initially unsupported?
-11. What Linux/FreeBSD differences require abstraction?
-12. Which file-manager probes should count as true content demand?
-13. How should thumbnail generation work without mass hydration?
-14. How should `always_local` interact with `sync_list` and exclusions?
+## 26. Open decisions
 
-These are deliberate design/prototype questions.
+1. What exact DB schema stores stable hydration state?
+2. Is a boolean sufficient for stable state while transient operations remain elsewhere?
+3. Which transient operations must survive process restart?
+4. How does FUSE receive/invalidate DB namespace changes?
+5. What FUSE/kernel cache policy is appropriate?
+6. Is retained-directory access plus `*at()` the correct backing-tree mechanism?
+7. Does existing inotify reliably observe all FUSE-routed mutation patterns?
+8. At what startup point should backing-tree watches and FUSE mount be established?
+9. How are concurrent hydration requests serialised?
+10. What is the crash-safe commit ordering for hydration?
+11. What is the crash-safe commit ordering for dehydration?
+12. What exact operation constitutes content demand?
+13. How should thumbnail generation avoid unintended hydration?
+14. How should disabling `on_demand` materialise existing cloud-only items?
+15. How does `always_local` interact with existing filters and `sync_list`?
+16. Which configuration combinations require initial rejection?
+17. What Linux/FreeBSD differences require abstraction?
+18. How are physical directories managed when all remote descendants are cloud-only?
+19. How are local-only unsynchronised items represented before Graph assigns remote identity?
+20. How should FUSE behave if the DB is temporarily unavailable or inconsistent?
 
-------------------------------------------------------------------------
+---
 
-## 24. Contributor guidance
+## 27. Contributor guidance
 
-The purpose of this ADR is to give contributors a concrete architectural
-target without prematurely dictating mechanisms that have not been
-proven.
+This ADR is intended to provide a concrete target without pretending every low-level mechanism is already proven.
 
-A proposed change should identify:
+A contribution should identify:
 
--   which implementation stage it addresses;
--   which invariants it preserves;
--   any invariant it believes should change;
--   prototype/test evidence;
--   intentionally unsupported behaviour; and
--   any architectural assumption disproven by implementation.
+- the implementation stage it addresses;
+- invariants it preserves;
+- assumptions it relies on;
+- tests performed;
+- intentionally unsupported behaviour;
+- any architecture assumption disproven by prototype evidence.
 
-If experimental work demonstrates that an assumption in this ADR is
-wrong, the correct outcome is to update the ADR and design consciously
-rather than hide the contradiction in implementation code.
+If implementation evidence contradicts this ADR, the architecture should be changed consciously before code establishes an accidental alternative design.
 
-------------------------------------------------------------------------
+Small PRs are preferred where they can be independently built and tested. In particular, FUSE3 binding correction and the physical overlay/inotify prototype are separable from later DB/hydration integration.
 
-## 25. Decision summary
+---
 
-The architecture is:
+## 28. Decision summary
 
-``` text
+The feature changes **materialisation**, not the ownership of synchronisation.
+
+```text
 Microsoft Graph
-      |
-      v
-existing sync engine
-      |
-      v
+       |
+       v
+existing sync / --monitor engine
+       |
+       v
 ITEM DATABASE
 authoritative FUSE namespace
-+ hydration state
-      |
-      v
-FUSE presentation at sync_dir
-      |
-      +---- cloud-only item -> namespace/metadata only
-      |
-      +---- hydrated item --> physical backing content
-                                  |
-                                  v
-                          existing local change
-                          detection / inotify
-                                  |
-                                  v
-                          existing sync engine
-                                  |
-                                  v
-                           Microsoft Graph
++ stable hydration state
+       |
+       v
+FUSE at existing sync_dir
+       |
+       +---- CLOUD_ONLY -> namespace/metadata only
+       |
+       +---- HYDRATED --> physical backing content
+                              |
+                              v
+                     existing local monitoring
+                     inotify / reconciliation
+                              |
+                              v
+                     existing sync engine
+                              |
+                              v
+                       Microsoft Graph
 ```
 
-The key implementation principle is:
+`on_demand` and `--monitor` coexist.
 
-> **Do not replace working synchronisation paths. Change when content is
-> materialised.**
+Remote monitoring continues across the whole eligible online namespace.
 
-Remote enumeration and database maintenance continue through the
-existing engine.
+Local monitoring naturally applies only to content that exists physically.
 
-In on-demand mode, ordinary eligible remote items stop at the
-authoritative database instead of automatically entering the download
-queue.
+The database determines what FUSE presents.
 
-FUSE presents those database items.
+The existing engine continues to determine how OneDrive is synchronised.
 
-When the user actually requires cloud-only content, FUSE requests
-hydration through the existing download machinery.
+FUSE determines when user access requires cloud-only content to become physical.
 
-Once hydrated, the file becomes normal physical content and should
-return to the existing local-change/inotify/upload path.
-
-This preserves the existing engine as the centre of synchronisation
-while adding on-demand storage as a controlled change in **when file
-content exists locally**.
+Once content is physical, the design aims to return immediately to the mature local-change and upload paths that already exist in the client.
