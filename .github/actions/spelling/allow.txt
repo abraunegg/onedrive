@@ -6,6 +6,7 @@ aarch
 abraunegg
 accrights
 accrightslen
+actime
 adamdruppe
 ADand
 addrepo
@@ -57,6 +58,8 @@ beffdb
 bhref
 bindir
 bir
+bitfields
+bitmanip
 blargh
 bmap
 bools
@@ -66,6 +69,7 @@ bsftc
 Btrfs
 btw
 buflen
+bufvec
 bugzilla
 builddir
 buildfiles
@@ -169,8 +173,10 @@ estr
 eventfd
 evt
 execinfo
+execv
 exitsig
 extattr
+fargs
 fasynchronous
 fbc
 fcf
@@ -200,6 +206,7 @@ fsyncdir
 fullchain
 fullscan
 fusefs
+fusermount
 gdc
 gdk
 gerror
@@ -335,6 +342,7 @@ lpdw
 lpfn
 lrwxrwxrwx
 lsb
+lseek
 lsqlite
 ltmain
 Lyncredible
@@ -350,6 +358,7 @@ mkdb
 mkdirat
 mno
 mnt
+modtime
 monitorable
 mountopts
 mountpoint
@@ -404,6 +413,7 @@ noarch
 nobj
 nodelay
 nof
+noflush
 nolan
 nomount
 nonseekable
@@ -443,6 +453,7 @@ ofonedrive
 oldlenp
 oldp
 onbinarymessage
+ondemand
 onedrive
 onenote
 onetoc
@@ -454,6 +465,7 @@ openat
 opensuse
 outp
 overallocated
+paalkr
 pacman
 paddr
 pamac
@@ -483,6 +495,7 @@ pollhandle
 postfields
 postfieldsize
 postun
+pread
 prefork
 preinit
 preun
@@ -496,6 +509,7 @@ pthread
 pthreads
 publicsuffix
 puml
+pwrite
 Pwy
 pycache
 qewrqwerwqer
@@ -540,6 +554,7 @@ rlc
 rlim
 rlimit
 robertschulze
+rofd
 rpaths
 rpcing
 rpmbuild
