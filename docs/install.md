@@ -118,6 +118,16 @@ If you need to build the client from source, follow this high-level process:
 >
 > You only need 1 compiler installed. You do not need to install DMD, LDC and GDC. Please *pick* the most applicable compiler for your distribution.
 
+#### FUSE3 and On-Demand Support
+
+The client uses **FUSE3** to provide on-demand file functionality. FUSE3 is an optional build dependency and is detected automatically when running `configure`.
+
+If compatible FUSE3 development libraries are available, on-demand support is compiled into the client automatically. No additional `configure` option is required.
+
+If FUSE3 development libraries are not available, the client will still compile and operate normally, but on-demand functionality will not be included in the resulting binary. If `on_demand = "true"` is subsequently configured, the option will be ignored because the required capability was not available when the client was compiled.
+
+The older FUSE 2.x API is not sufficient for this functionality. On-demand support specifically requires a compatible **FUSE3** implementation and development libraries.
+
 #### Installing DMD Compiler
 To install the DMD Compiler, this can be achieved in the following manner:
 ```text
@@ -140,6 +150,9 @@ curl -fsS https://dlang.org/install.sh | bash -s ldc
 You will need at least GDC version 15. If your distribution's repositories include a suitable version, you can install it from there. Common names for the GDC package are listed on the [GDC website](https://www.gdcproject.org/downloads#linux-distribution-packages). If the package is unavailable or its version is too old, you can try building it from source following [these instructions](https://wiki.dlang.org/GDC/Installation).
 
 ### Install Build Dependencies (By Distribution)
+
+> [!NOTE]
+> FUSE3 development libraries listed in the distribution-specific dependencies below are required for **on-demand functionality**. If FUSE3 is unavailable, `configure` will automatically disable on-demand support and the remainder of the client can still be compiled normally.
 
 #### Arch Linux | Manjaro Linux
 ```text
@@ -315,6 +328,17 @@ pkg_add libnotify
 ```
 > [!NOTE]
 > Install the required OpenBSD packages as 'root' unless you have installed 'sudo'
+
+> [!IMPORTANT]
+> **On-demand functionality is not currently supported on OpenBSD.**
+>
+> OpenBSD provides kernel FUSE support and a userspace FUSE library; however, the FUSE interface provided by OpenBSD currently conforms to the **FUSE 2.6 API**. The on-demand implementation in this client is built against **FUSE3** and requires FUSE3-compatible development libraries and interfaces.
+>
+> As a result, the OpenBSD build will automatically compile the client **without on-demand support**. This does not affect normal OneDrive synchronisation or monitoring functionality on OpenBSD.
+>
+> Setting `on_demand = "true"` in the configuration file on an OpenBSD build where FUSE3 support was unavailable at compile time will not enable the feature; the option will be ignored.
+>
+> Supporting OpenBSD on-demand functionality would require a separate compatibility implementation for OpenBSD's FUSE API. This is not currently implemented.
 
 
 #### Raspbian - ARMHF and ARM64

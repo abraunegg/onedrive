@@ -875,6 +875,15 @@ class ApplicationConfig {
 
 	// Return a given bool value based on the provided key
 	bool getValueBool(string key) {
+		// on_demand is a compile-time capability. If FUSE3 was unavailable
+		// when the client was built, an on_demand=true configuration entry
+		// is intentionally ignored and behaves as disabled.
+		version (OnDemand) {
+			// On-demand support is available in this build.
+		} else {
+			if (key == "on_demand") return false;
+		}
+
 		auto p = key in boolValues;
 		if (p) {
 			return *p;
@@ -1778,7 +1787,11 @@ class ApplicationConfig {
 		
 		// Config Options as per 'config' file
 		addLogEntry("Config option 'sync_dir'                      = " ~ getValueString("sync_dir"));
-		addLogEntry("Config option 'on_demand'                    = " ~ to!string(getValueBool("on_demand")));
+		version (OnDemand) {
+			addLogEntry("Config option 'on_demand'                    = " ~ to!string(getValueBool("on_demand")));
+		} else {
+			addLogEntry("Compile time on-demand support               = false");
+		}
 		
 		// authentication
 		addLogEntry("Config option 'use_intune_sso'                = " ~ to!string(getValueBool("use_intune_sso")));

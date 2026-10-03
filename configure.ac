@@ -337,30 +337,22 @@ AC_SUBST([dynamic_linker_LIBS])
 
 dnl
 dnl FUSE Support for 'on-demand' support
-
-AC_ARG_ENABLE([fuse],
-  AS_HELP_STRING([--disable-fuse],[Disable FUSE on-demand support (default: enabled)]),
-  [enable_fuse=$enableval],
-  [enable_fuse=yes])
-
+dnl Automatically enable on-demand support when FUSE3 development files are available.
+dnl A missing FUSE3 dependency must not prevent the normal client from building.
 have_fuse=no
-
-AS_IF([test "x$enable_fuse" = "xyes"], [
-  PKG_PROG_PKG_CONFIG
-
-  # Require FUSE3 by default
-  PKG_CHECK_MODULES([FUSE], [fuse3], [
-    have_fuse=yes
-    AC_DEFINE([HAVE_FUSE], [1], [Define if FUSE support is enabled])
-  ], [
-	AC_MSG_ERROR([libfuse3 development files not found. Please install fuse3-devel (Red Hat | Fedora | CentOS), libfuse3-dev (Debian | Ubuntu), fuse3 (Arch | Manjaro) or rerun with --disable-fuse])
-  ])
+PKG_PROG_PKG_CONFIG
+PKG_CHECK_MODULES([FUSE], [fuse3], [
+  have_fuse=yes
+], [
+  have_fuse=no
+  FUSE_CFLAGS=""
+  FUSE_LIBS=""
+  AC_MSG_NOTICE([libfuse3 development files not found; on-demand support will not be compiled or available for use])
 ])
 
-AM_CONDITIONAL([BUILD_FUSE], [test "x$have_fuse" = "xyes"])
+AC_SUBST([ON_DEMAND], [$have_fuse])
 AC_SUBST([FUSE_CFLAGS])
 AC_SUBST([FUSE_LIBS])
-
 
 dnl
 dnl Completion support

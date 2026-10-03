@@ -28,6 +28,7 @@ ICON_SOURCE_SVG     = contrib/images/$(ICON_TARGET_SVG)
 ICON_APP_SOURCE_SVG = contrib/images/$(ICON_APP_TARGET_SVG)
 
 NOTIFICATIONS = @NOTIFICATIONS@
+ON_DEMAND = @ON_DEMAND@
 HAVE_SYSTEMD = @HAVE_SYSTEMD@
 systemduserunitdir = @systemduserunitdir@
 systemdsystemunitdir = @systemdsystemunitdir@
@@ -60,6 +61,10 @@ ifeq ($(NOTIFICATIONS),yes)
 GUI_NOTIFICATIONS = $(addprefix $(VERSION_DCFLAG)=,NoPragma NoGdk Notifications)
 endif
 
+ifeq ($(ON_DEMAND),yes)
+ON_DEMAND_SUPPORT = $(addprefix $(VERSION_DCFLAG)=,OnDemand)
+endif
+
 system_unit_files = contrib/systemd/onedrive@.service
 user_unit_files = contrib/systemd/onedrive.service
 
@@ -88,16 +93,16 @@ SOURCES = \
 	src/sqlite.d \
 	src/clientSideFiltering.d \
 	src/monitor.d \
-	src/ondemand.d \
 	src/arsd/cgi.d \
 	src/xattr.d \
 	src/intune.d \
 	src/socketio.d \
 	src/curlWebsockets.d \
-	src/localAuth.d \
-	src/c/fuse/common.d \
-	src/c/fuse/fuse.d \
-	src/fused/fuse.d
+	src/localAuth.d
+
+ifeq ($(ON_DEMAND),yes)
+SOURCES += src/ondemand.d src/c/fuse/common.d src/c/fuse/fuse.d src/fused/fuse.d
+endif
 
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
@@ -120,7 +125,7 @@ onedrive: $(SOURCES)
 	else \
 		echo $(version) > version ; \
 	fi
-	$(DC) -J. $(GUI_NOTIFICATIONS) $(DCFLAGS) $(FUSE_CFLAGS) $^ $(addprefix $(LINKER_DCFLAG),$(all_libs)) $(OUTPUT_DCFLAG)$@
+	$(DC) -J. $(GUI_NOTIFICATIONS) $(ON_DEMAND_SUPPORT) $(DCFLAGS) $(FUSE_CFLAGS) $^ $(addprefix $(LINKER_DCFLAG),$(all_libs)) $(OUTPUT_DCFLAG)$@
 
 
 install: all
