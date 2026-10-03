@@ -12,6 +12,8 @@ module fused.fuse;
 /* reexport stat_t */
 public import core.sys.posix.fcntl;
 public import core.sys.posix.utime;
+public import core.sys.posix.time : timespec;
+public import c.fuse.fuse : fuse_config;
 
 import std.algorithm;
 import std.array;
@@ -61,7 +63,6 @@ private void attach()
  */
 private auto call(alias fn)()
 {
-    attach();
     auto t = cast(Operations*) fuse_get_context().private_data;
     try
     {
@@ -70,11 +71,13 @@ private auto call(alias fn)()
     catch (FuseException fe)
     {
         /* errno is used to indicate an error to libfuse */
+        stderr.writefln("[FUSE-DEBUG] callback FuseException errno=%s", fe.errno);
         errno.errno = fe.errno;
         return -fe.errno;
     }
     catch (Exception e)
     {
+        stderr.writefln("[FUSE-DEBUG] callback exception: %s", e.msg);
         (*t).exception(e);
         return -errno.EIO;
     }
@@ -101,25 +104,30 @@ extern(System)
             })();
     }
 
-    private int dfuse_getattr(const char*  path, stat_t* st)
+    private int dfuse_getattr(const char*  path, stat_t* st, fuse_file_info* fi)
     {
-        return call!(
+        auto dPath = path is null ? null : path[0..path.strlen];
+        stderr.writefln("[FUSE-DEBUG] dfuse_getattr path='%s'", dPath);
+        int rc = call!(
             (Operations t)
             {
-                t.getattr(path[0..path.strlen], *st);
+                t.getattr(dPath, *st);
                 return 0;
             })();
+        stderr.writefln("[FUSE-DEBUG] dfuse_getattr return=%s", rc);
+        return rc;
     }
 
     private int dfuse_readdir(const char* path, void* buf,
-            fuse_fill_dir_t filler, off_t offset, fuse_file_info* fi)
+            fuse_fill_dir_t filler, off_t offset, fuse_file_info* fi,
+            fuse_readdir_flags flags)
     {
         return call!(
             (Operations t)
             {
                 foreach(file; t.readdir(path[0..path.strlen]))
                 {
-                    filler(buf, cast(char*) toStringz(file), null, 0);
+                    filler(buf, toStringz(file), null, 0, cast(fuse_fill_dir_flags) 0);
                 }
                 return 0;
             })();
@@ -176,7 +184,7 @@ extern(System)
             })();
     }
 
-    private int dfuse_write(const char* path, char* data, size_t size,
+    private int dfuse_write(const char* path, const char* data, size_t size,
                             off_t offset, fuse_file_info* fi)
     {
         static assert(ulong.max >= size_t.max);
@@ -185,13 +193,13 @@ extern(System)
         return call!(
             (Operations t)
             {
-                auto bdata = cast(ubyte*) data;
+                auto bdata = cast(const(ubyte)*) data;
                 return t.write(path[0..path.strlen], bdata[0..size],
                     to!ulong(offset));
             })();
     }
 
-    private int dfuse_truncate(const char* path, off_t length)
+    private int dfuse_truncate(const char* path, off_t length, fuse_file_info* fi)
     {
         static assert(ulong.max >= off_t.max);
         return call!(
@@ -244,16 +252,19 @@ extern(System)
             })();
     }
 
-    private int dfuse_rename(const char* orig, const char* dest) {
+    private int dfuse_rename(const char* orig, const char* dest, uint flags) {
         return call!(
             (Operations t)
             {
+                // The scaffold does not implement rename flags yet.
+                if (flags != 0)
+                    throw new FuseException(errno.EINVAL);
                 t.rename(orig[0..orig.strlen], dest[0..dest.strlen]);
                 return 0;
             })();
     }
 
-    private int dfuse_chmod(const char* path, mode_t mode) {
+    private int dfuse_chmod(const char* path, mode_t mode, fuse_file_info* fi) {
         return call!(
             (Operations t)
             {
@@ -263,17 +274,30 @@ extern(System)
         )();
     }
 
-    private int dfuse_utime(const char* path, utimbuf* time) {
+    private int dfuse_utimens(const char* path, const(timespec)* tv,
+            fuse_file_info* fi) {
         return call!(
             (Operations t)
             {
-                t.utime(path[0 .. path.strlen], time);
+                // Preserve the scaffold's existing second-resolution Operations API.
+                // UTIME_NOW/UTIME_OMIT are not required for the current read-only proof.
+                if (tv is null)
+                {
+                    t.utime(path[0 .. path.strlen], null);
+                }
+                else
+                {
+                    utimbuf times;
+                    times.actime = tv[0].tv_sec;
+                    times.modtime = tv[1].tv_sec;
+                    t.utime(path[0 .. path.strlen], &times);
+                }
                 return 0;
             }
-        );
+        )();
     }
 
-    private int dfuse_symlink(const char* target, char* link) {
+    private int dfuse_symlink(const char* target, const char* link) {
         return call!(
             (Operations t)
             {
@@ -283,7 +307,7 @@ extern(System)
         );
     }
 
-    private int dfuse_chown(const char* path, uid_t uid, gid_t gid) {
+    private int dfuse_chown(const char* path, uid_t uid, gid_t gid, fuse_file_info* fi) {
         return call!(
             (Operations t)
             {
@@ -293,9 +317,8 @@ extern(System)
         );
     }
 
-    private void* dfuse_init(fuse_conn_info* conn)
+    private void* dfuse_init(fuse_conn_info* conn, fuse_config* cfg)
     {
-        attach();
         auto t = cast(Operations*) fuse_get_context().private_data;
         (*t).initialize();
         return t;
@@ -303,12 +326,8 @@ extern(System)
 
     private void dfuse_destroy(void* data)
     {
-        /* this is an ugly hack at the moment. We need to somehow detach all
-           threads from the runtime because after fuse_main finishes the pthreads
-           are joined. We circumvent that problem by just exiting while our
-           threads still run. */
-        import core.stdc.stdlib : exit;
-        exit(0);
+        // libfuse3 has completed filesystem teardown. The scaffold runs FUSE
+        // in its forked child, so allow fuse_main() to return normally.
     }
 } /* extern(C) */
 
@@ -535,29 +554,18 @@ public:
 
     void mount(Operations ops, const string mountpoint, string[] mountopts)
     {
-        string [] args = [this.fsname];
-
-        args ~= mountpoint;
-
-        if(mountopts.length > 0)
-        {
+        // Build only the arguments parsed by fuse_new(); mountpoint is supplied
+        // separately to fuse_mount().
+        // Enable libfuse protocol diagnostics for the scaffold. This is
+        // intentionally diagnostic-only: no callback or lifecycle semantics
+        // are changed.
+        string[] args = [this.fsname, "-d"];
+        if (mountopts.length > 0)
             args ~= format("-o%s", mountopts.join(","));
-        }
-
-        if(this.foreground)
-        {
-            args ~= "-f";
-        }
-
-        if(!this.threaded)
-        {
-            args ~= "-s";
-        }
 
         debug writefln("fuse arguments s=(%s)", args);
 
         fuse_operations fops;
-
         fops.init = &dfuse_init;
         fops.access = &dfuse_access;
         fops.getattr = &dfuse_getattr;
@@ -575,24 +583,33 @@ public:
         fops.rmdir = &dfuse_rmdir;
         fops.rename = &dfuse_rename;
         fops.chmod = &dfuse_chmod;
-        fops.utime = &dfuse_utime;
+        fops.utimens = &dfuse_utimens;
         fops.symlink = &dfuse_symlink;
         fops.chown = &dfuse_chown;
 
-        /* Create c-style arguments from a string[] array. */
-        auto cargs = array(map!(a => toStringz(a))(args));
-        int length = cast(int) cargs.length;
-        static if(length.max < cargs.length.max)
-        {
-            /* This is an unsafe cast that we need to do for C compat.
-               enforce, unlike assert, will be checked in optimised builds as well. */
-            import std.exception : enforce;
-            enforce(length >= 0);
-            enforce(length == cargs.length);
-        }
+        auto cargs = array(map!(a => cast(char*) toStringz(a))(args)) ~ null;
+        fuse_args fargs = fuse_args(cast(int) args.length, cargs.ptr, 0);
+
+        stderr.writeln("[FUSE-DEBUG] creating explicit libfuse3 session");
+        auto f = fuse_new_31(&fargs, &fops, fuse_operations.sizeof, &ops);
+        if (f is null)
+            throw new Exception("fuse_new_31 failed");
+
+        scope(exit) fuse_destroy(f);
+
+        stderr.writefln("[FUSE-DEBUG] mounting explicit libfuse3 session at '%s'", mountpoint);
+        if (fuse_mount(f, toStringz(mountpoint)) != 0)
+            throw new Exception("fuse_mount failed");
+
+        scope(exit) fuse_unmount(f);
 
         this.pid = thisProcessID();
-        fuse_main(length, cast(char**) cargs.ptr, &fops, &ops);
+        stderr.writeln("[FUSE-DEBUG] entering explicit fuse_loop request loop");
+        int fuseResult = fuse_loop(f);
+        stderr.writefln("[FUSE-DEBUG] explicit fuse_loop exited result=%s", fuseResult);
+
+        if (fuseResult != 0)
+            throw new Exception("fuse_loop failed");
     }
 
     void exit()

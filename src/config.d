@@ -420,6 +420,8 @@ class ApplicationConfig {
 		boolValues["disable_upload_validation"] = false;
 		// Do we enable logging?
 		boolValues["enable_logging"] = false;
+		// Experimental FUSE overlay scaffold; disabled by default
+		boolValues["on_demand"] = false;
 		// Do we force HTTP 1.1 for connections to the OneDrive API
 		// - By default we use the curl library default, which should be HTTP2 for most operations governed by the OneDrive API
 		boolValues["force_http_11"] = false;
@@ -1776,6 +1778,7 @@ class ApplicationConfig {
 		
 		// Config Options as per 'config' file
 		addLogEntry("Config option 'sync_dir'                      = " ~ getValueString("sync_dir"));
+		addLogEntry("Config option 'on_demand'                    = " ~ to!string(getValueBool("on_demand")));
 		
 		// authentication
 		addLogEntry("Config option 'use_intune_sso'                = " ~ to!string(getValueBool("use_intune_sso")));
@@ -2451,6 +2454,12 @@ class ApplicationConfig {
 		// --sync and --monitor cannot be used together
 		if ((getValueBool("synchronize")) && (getValueBool("monitor"))) {
 			addLogEntry("ERROR: --sync and --monitor cannot be used together. Only use one of these options, not both at the same time");
+			operationalConflictDetected = true;
+		}
+
+		// on_demand cannot be used with --sync
+		if ((getValueBool("on_demand")) && (getValueBool("synchronize"))) {
+			addLogEntry("ERROR: The 'on_demand' configuration option cannot be used with --sync. On-demand operation requires --monitor");
 			operationalConflictDetected = true;
 		}
 		
