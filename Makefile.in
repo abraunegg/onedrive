@@ -88,6 +88,7 @@ SOURCES = \
 	src/sqlite.d \
 	src/clientSideFiltering.d \
 	src/monitor.d \
+	src/ondemand.d \
 	src/arsd/cgi.d \
 	src/xattr.d \
 	src/intune.d \
