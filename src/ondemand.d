@@ -10,7 +10,7 @@ module ondemand;
 import fused.fuse;
 
 import core.stdc.errno : errno;
-import core.sys.posix.fcntl : open, O_RDONLY, O_WRONLY, O_CREAT, O_EXCL, O_DIRECTORY;
+import core.sys.posix.fcntl : open, O_RDONLY, O_WRONLY, O_CREAT, O_EXCL;
 import core.sys.posix.signal : kill, signal, SIGINT, SIGTERM, SIGKILL;
 import core.sys.posix.sys.stat : stat, lstat, mkdir, chmod, stat_t, mode_t;
 import core.sys.posix.sys.wait : waitpid, WNOHANG;
@@ -238,10 +238,10 @@ public:
         if (running) return;
 
         // Capture the physical directory BEFORE FUSE covers the pathname.
-        physicalDirectoryFd = .open(toStringz(syncDirectory), O_RDONLY | O_DIRECTORY);
-        if (physicalDirectoryFd < 0) {
-            throw new OnDemandException("Unable to open physical sync_dir before FUSE mount: " ~ syncDirectory);
-        }
+		physicalDirectoryFd = .open(toStringz(syncDirectory), O_RDONLY);
+		if (physicalDirectoryFd < 0) {
+			throw new OnDemandException("Unable to open physical sync_dir before FUSE mount: " ~ syncDirectory);
+		}
 
         // Build every exec argument before fork(). The child of this already
         // multi-threaded process must do no D runtime/libfuse work before exec.
