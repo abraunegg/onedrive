@@ -139,7 +139,7 @@ extern (System)
         int allocated;
     }
 
-    fuse* fuse_new_31(fuse_args* args, const(fuse_operations)* op,
+    fuse* fuse_new(fuse_args* args, const(fuse_operations)* op,
         size_t op_size, void* private_data);
     int fuse_mount(fuse* f, const(char)* mountpoint);
     int fuse_loop(fuse* f);
