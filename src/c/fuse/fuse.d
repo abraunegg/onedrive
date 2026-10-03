@@ -17,6 +17,7 @@ import core.sys.posix.sys.statvfs;
 import core.sys.posix.sys.types;
 import core.sys.posix.fcntl;
 import core.sys.posix.time;
+import core.sys.posix.dlfcn : dlopen, dlsym, RTLD_NOW;
 
 extern (System)
 {
@@ -139,8 +140,6 @@ extern (System)
         int allocated;
     }
 
-    fuse* fuse_new(fuse_args* args, const(fuse_operations)* op,
-        size_t op_size, void* private_data);
     int fuse_mount(fuse* f, const(char)* mountpoint);
     int fuse_loop(fuse* f);
     void fuse_unmount(fuse* f);
@@ -149,6 +148,36 @@ extern (System)
     fuse_context* fuse_get_context();
     int fuse_main_real(int argc, char** argv, const(fuse_operations)* op,
         size_t op_size, void* private_data);
+}
+
+
+alias fuse_new_fn = extern(System) fuse* function(fuse_args* args,
+    const(fuse_operations)* op, size_t op_size, void* private_data);
+
+private __gshared void* fuseLibraryHandle;
+private __gshared fuse_new_fn fuseNewFunction;
+
+fuse* fuse_new_compat(fuse_args* args, const(fuse_operations)* op,
+    size_t op_size, void* private_data)
+{
+    if (fuseNewFunction is null) {
+        if (fuseLibraryHandle is null) {
+            fuseLibraryHandle = dlopen("libfuse3.so.3", RTLD_NOW);
+            if (fuseLibraryHandle is null)
+                fuseLibraryHandle = dlopen("libfuse3.so", RTLD_NOW);
+        }
+
+        if (fuseLibraryHandle !is null) {
+            fuseNewFunction = cast(fuse_new_fn) dlsym(fuseLibraryHandle, "fuse_new");
+            if (fuseNewFunction is null)
+                fuseNewFunction = cast(fuse_new_fn) dlsym(fuseLibraryHandle, "fuse_new_31");
+        }
+    }
+
+    if (fuseNewFunction is null)
+        return null;
+
+    return fuseNewFunction(args, op, op_size, private_data);
 }
 
 int fuse_main(int argc, char** argv, const(fuse_operations)* op, void* private_data)

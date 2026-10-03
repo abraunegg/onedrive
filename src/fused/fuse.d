@@ -591,9 +591,9 @@ public:
         fuse_args fargs = fuse_args(cast(int) args.length, cargs.ptr, 0);
 
         stderr.writeln("[FUSE-DEBUG] creating explicit libfuse3 session");
-        auto f = fuse_new(&fargs, &fops, fuse_operations.sizeof, &ops);
+        auto f = fuse_new_compat(&fargs, &fops, fuse_operations.sizeof, &ops);
         if (f is null)
-            throw new Exception("fuse_new failed");
+            throw new Exception("Unable to resolve a compatible libfuse3 fuse_new entry point");
 
         scope(exit) fuse_destroy(f);
 
