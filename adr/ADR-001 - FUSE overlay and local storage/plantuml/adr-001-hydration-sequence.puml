@@ -1,0 +1,33 @@
+@startuml
+title Cloud-Only Open -> Demand Hydration
+actor User
+participant Application as App
+participant FUSE as Fuse
+database "Item DB" as DB
+participant "Existing sync/download engine" as Engine
+cloud "Microsoft Graph" as Graph
+participant "Physical sync_dir" as Disk
+
+User -> App : open/read file
+App -> Fuse : content-requiring operation
+Fuse -> DB : resolve item + stable hydration state
+DB --> Fuse : exists; CLOUD_ONLY
+
+Fuse -> Engine : request hydration(item identity)
+note right of Engine
+Transient "hydrating" coordination may be
+in memory or persisted if crash recovery
+requires it. It is not the stable hydrated state.
+end note
+Engine -> Graph : existing download request
+Graph --> Engine : content stream
+Engine -> Disk : existing safe temporary/download path
+Engine -> Engine : validate completed content
+Engine -> Disk : atomically materialise final backing file
+Engine -> DB : commit HYDRATED
+DB --> Engine : committed
+Engine --> Fuse : hydration complete
+Fuse -> Disk : open/read backing content
+Disk --> Fuse : bytes
+Fuse --> App : success
+@enduml
