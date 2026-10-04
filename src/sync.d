@@ -1539,6 +1539,8 @@ class SyncEngine {
 		JSONValue deltaChanges;
 		long responseBundleCount;
 		long jsonItemsReceived = 0;
+		long nativeDeltaItemsSubmittedForProcessing = 0;
+		long nativeDeltaBatchesProcessed = 0;
 
 		// A scheduled Full Scan True Up deliberately starts a new native /delta
 		// enumeration without the previously stored deltaLink. Incremental /delta
@@ -1857,13 +1859,31 @@ class SyncEngine {
 				foreach (onedriveJSONItem; jsonArrayToProcess) {
 					// increment change count for this item
 					changeCount++;
+
+					// Track how many ordinary JSON items are submitted for phase-two
+					// reconciliation. Native /delta now drains these in bounded batches
+					// during enumeration, so jsonItemsToProcess.length is no longer the
+					// total submitted count once enumeration has progressed.
+					size_t queuedJSONItemsBeforeProcessing = jsonItemsToProcess.length;
+
 					// Process the received OneDrive object item JSON for this JSON bundle
 					// This will determine its initial applicability and perform some initial processing on the JSON if required
 					processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);
+
+					if (jsonItemsToProcess.length > queuedJSONItemsBeforeProcessing) {
+						nativeDeltaItemsSubmittedForProcessing += cast(long)(jsonItemsToProcess.length - queuedJSONItemsBeforeProcessing);
+					}
 				}
 
-				// Clear up this data
+				// Clear the page-local array alias before draining any complete
+				// reconciliation batches. deltaChanges still owns the current Graph page
+				// until the page has been completely handled below.
 				jsonArrayToProcess = [];
+
+				// Native /delta only: turn the existing 500-item database batch into a
+				// real JSON lifetime boundary. Only complete batches are drained here so
+				// the first-stage processing of the entire Graph page remains unchanged.
+				processNativeDeltaJSONItemsInBoundedBatches(nativeDeltaBatchesProcessed, false);
 
 				// Is latestDeltaLink matching deltaChanges["@odata.deltaLink"].str ?
 				if ("@odata.deltaLink" in deltaChanges) {
@@ -1903,6 +1923,11 @@ class SyncEngine {
 
 			// Cleanup deltaChanges as this is no longer needed
 			deltaChanges = null;
+
+			// Drain the final partial native /delta batch only after enumeration has
+			// ended. For normal small incremental responses (<500 applicable items)
+			// this preserves the existing enumerate-then-reconcile ordering exactly.
+			processNativeDeltaJSONItemsInBoundedBatches(nativeDeltaBatchesProcessed, true);
 		} else {
 			// Why are we generating a /delta response
 			if (debugLogging) {
@@ -2003,7 +2028,7 @@ class SyncEngine {
 		// database, so an interrupted enumeration simply discards the in-memory set.
 		if (nativeFullScanTrueUp) {
 			if (nativeFullScanEnumerationCompleted && !exitHandlerTriggered) {
-				nativeFullScanItemsExpectedToProcess = jsonItemsToProcess.length;
+				nativeFullScanItemsExpectedToProcess = cast(size_t)nativeDeltaItemsSubmittedForProcessing;
 			} else {
 				// The enumeration was interrupted or never produced a final checkpoint.
 				// Keep the previous database deltaLink and request another true-up pass.
@@ -2018,13 +2043,16 @@ class SyncEngine {
 			}
 		}
 
-		// We have JSON items received from the OneDrive API
+		// We have JSON items received from the OneDrive API. Generated responses still
+		// retain their complete queue here; native /delta has already drained complete
+		// bounded batches during enumeration.
+		long jsonItemsSubmittedForFurtherProcessing = generatedSimulatedDeltaResponse
+			? cast(long)jsonItemsToProcess.length
+			: nativeDeltaItemsSubmittedForProcessing;
 		if (debugLogging) {
 			addLogEntry("Number of JSON Objects received from OneDrive API:                 " ~ to!string(jsonItemsReceived), ["debug"]);
-			addLogEntry("Number of JSON Objects already processed (root and deleted items): " ~ to!string((jsonItemsReceived - jsonItemsToProcess.length)), ["debug"]);
-			// We should have now at least processed all the JSON items as returned by the /delta call
-			// Additionally, we should have a new array, that now contains all the JSON items we need to process that are non 'root' or deleted items
-			addLogEntry("Number of JSON items submitted for further processing is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
+			addLogEntry("Number of JSON Objects already processed (root and deleted items): " ~ to!string((jsonItemsReceived - jsonItemsSubmittedForFurtherProcessing)), ["debug"]);
+			addLogEntry("Number of JSON items submitted for further processing is: " ~ to!string(jsonItemsSubmittedForFurtherProcessing), ["debug"]);
 		}
 
 		// Are there items to process?
@@ -2114,8 +2142,22 @@ class SyncEngine {
 			// Free up memory and items processed as it is pointless now having this data around
 			jsonItemsToProcess = [];
 		} else {
-			if (!appConfig.suppressLoggingOutput) {
+			// Native /delta may have already processed all applicable JSON in bounded
+			// batches, leaving an intentionally empty queue at this point.
+			if ((jsonItemsSubmittedForFurtherProcessing == 0) && (!appConfig.suppressLoggingOutput)) {
 				addLogEntry("No changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
+			}
+		}
+
+		// Preserve the existing large-account warning for native /delta now that the
+		// account-wide JSON queue is no longer present at this point.
+		if ((!generatedSimulatedDeltaResponse) && (nativeDeltaItemsSubmittedForProcessing > 0) && (jsonItemsReceived >= 300000)) {
+			string objectsExceedLimitWarning = format("WARNING: The number of objects stored online in '%s' exceeds Microsoft OneDrive's recommended limit. This may cause unreliable application behaviour due to inconsistent or incomplete API responses. Immediate action is strongly advised to avoid data integrity issues.", driveIdToQuery);
+			if (!onlineObjectLimitWarningNotified) {
+				addLogEntry(objectsExceedLimitWarning, ["info", "notify"]);
+				onlineObjectLimitWarningNotified = true;
+			} else {
+				addLogEntry(objectsExceedLimitWarning, ["info"]);
 			}
 		}
 
@@ -2184,6 +2226,55 @@ class SyncEngine {
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+	}
+
+
+	// Drain native /delta JSON items in bounded batches while enumeration is still
+	// in progress. Generated /children responses deliberately do not use this path.
+	//
+	// Complete 500-item batches are processed only after the current Graph page has
+	// finished its existing first-stage processing. The final partial batch is
+	// drained after native enumeration ends. This preserves the existing
+	// processJSONItemsInBatch() reconciliation logic, transaction boundary, download
+	// deferral and deltaLink commit semantics while preventing jsonItemsToProcess
+	// from growing with the total number of online objects.
+	void processNativeDeltaJSONItemsInBoundedBatches(ref long batchesProcessed, bool flushRemainder) {
+		enum size_t batchSize = 500;
+
+		while ((jsonItemsToProcess.length >= batchSize) || (flushRemainder && !jsonItemsToProcess.empty)) {
+			size_t batchItemCount = (jsonItemsToProcess.length >= batchSize) ? batchSize : jsonItemsToProcess.length;
+			JSONValue[] batchOfJSONItems = jsonItemsToProcess[0 .. batchItemCount];
+
+			batchesProcessed++;
+
+			// Process this batch using the same database transaction boundary used by
+			// the existing post-enumeration reconciliation path.
+			itemDB.beginTransaction();
+			scope(failure) itemDB.rollbackTransaction();
+
+			// Total batch count is not known until native /delta enumeration completes.
+			processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, 0);
+
+			itemDB.commitTransaction();
+			itemDB.performCheckpoint("PASSIVE");
+
+			// Preserve only the unprocessed tail. Use a fresh bounded array so the
+			// processed backing store cannot keep prior JSONValue references reachable.
+			JSONValue[] remainingJSONItems = [];
+			if (jsonItemsToProcess.length > batchItemCount) {
+				remainingJSONItems = jsonItemsToProcess[batchItemCount .. $].dup;
+			}
+
+			batchOfJSONItems = [];
+			jsonItemsToProcess = [];
+			if (!remainingJSONItems.empty) {
+				jsonItemsToProcess = remainingJSONItems;
+			}
+
+			if (exitHandlerTriggered) {
+				break;
+			}
 		}
 	}
 
@@ -2702,7 +2793,11 @@ class SyncEngine {
 			// To show this is the processing for this particular item, start off with this breaker line
 			if (debugLogging) {
 				addLogEntry(debugLogBreakType1, ["debug"]);
-				addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of JSON Item Batch " ~ to!string(batchGroup) ~ " of " ~ to!string(batchCount), ["debug"]);
+				if (batchCount > 0) {
+					addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of JSON Item Batch " ~ to!string(batchGroup) ~ " of " ~ to!string(batchCount), ["debug"]);
+				} else {
+					addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of native /delta JSON Item Batch " ~ to!string(batchGroup), ["debug"]);
+				}
 				addLogEntry("Raw JSON OneDrive Item (Batched Item): " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 			}
 
