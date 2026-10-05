@@ -337,15 +337,6 @@ class OneDriveApi {
 			tenantId = "common";
 		}
 
-		// Did the user specify a 'drive_id' ?
-		if (!appConfig.getValueString("drive_id").empty) {
-			// Update base URL's
-			driveUrl = driveByIdUrl ~ appConfig.getValueString("drive_id");
-			itemByIdUrl = driveUrl ~ "/items";
-			itemByPathUrl = driveUrl ~ "/root:/";
-			
-		}
-
 		// Configure the authentication scope
 		if (appConfig.getValueBool("read_only_auth_scope")) {
 			// read-only authentication scopes has been requested
@@ -509,6 +500,15 @@ class OneDriveApi {
 			// Default - all other entries
 			default:
 				if (!appConfig.apiWasInitialised) addLogEntry("Unknown Azure AD Endpoint request - using Global Azure AD Endpoints");
+		}
+
+		// Apply a configured 'drive_id' after endpoint selection so national-cloud
+		// endpoint setup cannot overwrite the explicitly configured drive target.
+		if (!appConfig.getValueString("drive_id").empty) {
+			// Update base URL's
+			driveUrl = driveByIdUrl ~ appConfig.getValueString("drive_id");
+			itemByIdUrl = driveUrl ~ "/items";
+			itemByPathUrl = driveUrl ~ "/root:/";
 		}
 
 		// Has the application been authenticated?
