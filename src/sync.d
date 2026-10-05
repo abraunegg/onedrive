@@ -2,6 +2,7 @@
 module syncEngine;
 
 // What does this module require to function?
+import core.memory : GC;
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.stdc.errno : ENOENT, ENOTDIR;
 import core.thread;
@@ -1207,6 +1208,10 @@ class SyncEngine {
 
 		// Fetch the API response of /delta to track changes that were performed online
 		fetchOneDriveDeltaAPIResponse();
+		
+		// Reclaim objects released by the completed online enumeration and
+		// reconciliation phase before beginning deferred download processing.
+		GC.collect();
 
 		// Process any download activities or cleanup actions
 		processDownloadActivities();
