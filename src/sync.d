@@ -1928,6 +1928,13 @@ class SyncEngine {
 			// ended. For normal small incremental responses (<500 applicable items)
 			// this preserves the existing enumerate-then-reconcile ordering exactly.
 			processNativeDeltaJSONItemsInBoundedBatches(nativeDeltaBatchesProcessed, true);
+
+			// Native /delta applicable items have already been reconciled incrementally
+			// while enumeration was in progress. Preserve the previous user-facing
+			// processing visibility as a completion message using the independent total.
+			if ((!appConfig.suppressLoggingOutput) && (nativeDeltaItemsSubmittedForProcessing > 0)) {
+				addLogEntry("Processed " ~ to!string(nativeDeltaItemsSubmittedForProcessing) ~ " applicable JSON items received from Microsoft OneDrive");
+			}
 		} else {
 			// Why are we generating a /delta response
 			if (debugLogging) {
