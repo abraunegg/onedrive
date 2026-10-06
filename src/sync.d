@@ -1546,6 +1546,8 @@ class SyncEngine {
 		long jsonItemsReceived = 0;
 		long nativeDeltaItemsSubmittedForProcessing = 0;
 		long nativeDeltaBatchesProcessed = 0;
+		long generatedDeltaItemsSubmittedForProcessing = 0;
+		long generatedDeltaBatchesProcessed = 0;
 
 		// A scheduled Full Scan True Up deliberately starts a new native /delta
 		// enumeration without the previously stored deltaLink. Incremental /delta
@@ -1888,7 +1890,7 @@ class SyncEngine {
 				// Native /delta only: turn the existing 500-item database batch into a
 				// real JSON lifetime boundary. Only complete batches are drained here so
 				// the first-stage processing of the entire Graph page remains unchanged.
-				processNativeDeltaJSONItemsInBoundedBatches(nativeDeltaBatchesProcessed, false);
+				processJSONItemsInBoundedBatches(nativeDeltaBatchesProcessed, false);
 
 				// Is latestDeltaLink matching deltaChanges["@odata.deltaLink"].str ?
 				if ("@odata.deltaLink" in deltaChanges) {
@@ -1932,7 +1934,7 @@ class SyncEngine {
 			// Drain the final partial native /delta batch only after enumeration has
 			// ended. For normal small incremental responses (<500 applicable items)
 			// this preserves the existing enumerate-then-reconcile ordering exactly.
-			processNativeDeltaJSONItemsInBoundedBatches(nativeDeltaBatchesProcessed, true);
+			processJSONItemsInBoundedBatches(nativeDeltaBatchesProcessed, true);
 
 			// Native /delta applicable items have already been reconciled incrementally
 			// while enumeration was in progress. Preserve the previous user-facing
@@ -1984,52 +1986,30 @@ class SyncEngine {
 				// At this point we have either calculated the shared folder path, or not and can attempt to generate a /delta response from that path entry online
 			}
 
-			// Generate the simulated /delta response
+			// Generate the simulated /delta view by walking /children, but feed each
+			// accepted item directly into bounded reconciliation rather than retaining
+			// an account-wide synthetic JSON response.
 			//
-			// The generated /delta response however contains zero deleted JSON items, so the only way that we can track this, is if the object was in sync
-			// we have the object in the database, thus, what we need to do is for every DB object in the tree of items, flag 'syncStatus' as 'N', then when we process
-			// the returned JSON items from the API, we flag the item as back in sync, then we can cleanup any out-of-sync items
-			//
-			// The flagging of the local database items to 'N' is handled within the generateDeltaResponse() function
-			//
-			// When these JSON items are then processed, if the item exists online, and is in the DB, and that the values match, the DB item is flipped back to 'Y'
-			// This then allows the application to look for any remaining 'N' values, and delete these as no longer needed locally
-			deltaChanges = generateDeltaResponse(pathToQuery);
+			// The generated response contains zero deleted JSON items, so the existing
+			// authoritative syncStatus workflow is preserved: generateDeltaResponse()
+			// first marks the database subtree out-of-sync, observed online items are
+			// restored as they are reconciled, and any remaining items are cleaned up
+			// only after the authoritative traversal has completed.
+			generateDeltaResponse(pathToQuery, jsonItemsReceived, generatedDeltaItemsSubmittedForProcessing, generatedDeltaBatchesProcessed, responseBundleCount);
 
-			// deltaChanges must be a valid JSON object containing a value array
-			if (hasValidValueArray(deltaChanges)) {
-				// How many changes were returned?
-				long nrChanges = deltaChanges["value"].array.length;
-				int changeCount = 0;
-				if (debugLogging) {addLogEntry("API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["debug"]);}
-				// Update the count of items received
-				jsonItemsReceived = jsonItemsReceived + nrChanges;
+			// Drain the final partial generated-response batch only after the complete
+			// authoritative /children traversal has finished.
+			processJSONItemsInBoundedBatches(generatedDeltaBatchesProcessed, true);
 
-				// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
-				auto jsonArrayToProcess = deltaChanges["value"].array;
-				jsonItemsToProcess.reserve(jsonItemsToProcess.length + cast(size_t)nrChanges);
-				foreach (onedriveJSONItem; jsonArrayToProcess) {
-					// increment change count for this item
-					changeCount++;
-					// Process the received OneDrive object item JSON for this JSON bundle
-					// When we generate a /delta response .. there is no currentDeltaLink value
-					processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);
-				}
+			if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
 
-				// Clear up this data
-				jsonArrayToProcess = [];
-
-				// To finish off the JSON processing items, this is needed to reflect this in the log
-				if (debugLogging) {addLogEntry(debugLogBreakType1, ["debug"]);}
-
-				// Log that we have finished generating our self generated /delta response
-				if (!appConfig.suppressLoggingOutput) {
-					addLogEntry("Finished processing self generated /delta JSON response from the OneDrive API");
-				}
+			if (!appConfig.suppressLoggingOutput) {
+				addLogEntry("Finished processing self generated /delta JSON response from the OneDrive API");
 			}
 
-			// Cleanup deltaChanges as this is no longer needed
-			deltaChanges = null;
+			if ((!appConfig.suppressLoggingOutput) && (generatedDeltaItemsSubmittedForProcessing > 0)) {
+				addLogEntry("Processed " ~ to!string(generatedDeltaItemsSubmittedForProcessing) ~ " applicable JSON items received from Microsoft OneDrive");
+			}
 		}
 
 		// Cleanup deltaChanges as this is no longer needed
@@ -2055,11 +2035,11 @@ class SyncEngine {
 			}
 		}
 
-		// We have JSON items received from the OneDrive API. Generated responses still
-		// retain their complete queue here; native /delta has already drained complete
-		// bounded batches during enumeration.
+		// Both native /delta and generated /children now reconcile applicable JSON
+		// incrementally, so use their independent submitted-item counters rather than
+		// the bounded carry queue length.
 		long jsonItemsSubmittedForFurtherProcessing = generatedSimulatedDeltaResponse
-			? cast(long)jsonItemsToProcess.length
+			? generatedDeltaItemsSubmittedForProcessing
 			: nativeDeltaItemsSubmittedForProcessing;
 		if (debugLogging) {
 			addLogEntry("Number of JSON Objects received from OneDrive API:                 " ~ to!string(jsonItemsReceived), ["debug"]);
@@ -2154,8 +2134,8 @@ class SyncEngine {
 			// Free up memory and items processed as it is pointless now having this data around
 			jsonItemsToProcess = [];
 		} else {
-			// Native /delta may have already processed all applicable JSON in bounded
-			// batches, leaving an intentionally empty queue at this point.
+			// Bounded enumeration may have already processed all applicable JSON, leaving
+			// an intentionally empty queue at this point.
 			if ((jsonItemsSubmittedForFurtherProcessing == 0) && (!appConfig.suppressLoggingOutput)) {
 				addLogEntry("No changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
 			}
@@ -2164,6 +2144,18 @@ class SyncEngine {
 		// Preserve the existing large-account warning for native /delta now that the
 		// account-wide JSON queue is no longer present at this point.
 		if ((!generatedSimulatedDeltaResponse) && (nativeDeltaItemsSubmittedForProcessing > 0) && (jsonItemsReceived >= 300000)) {
+			string objectsExceedLimitWarning = format("WARNING: The number of objects stored online in '%s' exceeds Microsoft OneDrive's recommended limit. This may cause unreliable application behaviour due to inconsistent or incomplete API responses. Immediate action is strongly advised to avoid data integrity issues.", driveIdToQuery);
+			if (!onlineObjectLimitWarningNotified) {
+				addLogEntry(objectsExceedLimitWarning, ["info", "notify"]);
+				onlineObjectLimitWarningNotified = true;
+			} else {
+				addLogEntry(objectsExceedLimitWarning, ["info"]);
+			}
+		}
+
+		// Preserve the same warning for generated /children now that its account-wide
+		// JSON queue has also been removed.
+		if (generatedSimulatedDeltaResponse && (generatedDeltaItemsSubmittedForProcessing > 0) && (jsonItemsReceived >= 300000)) {
 			string objectsExceedLimitWarning = format("WARNING: The number of objects stored online in '%s' exceeds Microsoft OneDrive's recommended limit. This may cause unreliable application behaviour due to inconsistent or incomplete API responses. Immediate action is strongly advised to avoid data integrity issues.", driveIdToQuery);
 			if (!onlineObjectLimitWarningNotified) {
 				addLogEntry(objectsExceedLimitWarning, ["info", "notify"]);
@@ -2242,16 +2234,33 @@ class SyncEngine {
 	}
 
 
-	// Drain native /delta JSON items in bounded batches while enumeration is still
-	// in progress. Generated /children responses deliberately do not use this path.
+
+	// Submit one item from a generated /children enumeration into the same bounded
+	// reconciliation path used by native /delta. The generated traversal has already
+	// applied client-side filtering, so this preserves the existing generated-response
+	// processing semantics without retaining an account-wide synthetic JSON response.
+	void processGeneratedDeltaJSONItemBounded(JSONValue onedriveJSONItem, ref long jsonItemsReceived, ref long itemsSubmittedForProcessing, ref long batchesProcessed, long responseBundleCount) {
+		jsonItemsReceived++;
+		size_t queuedJSONItemsBeforeProcessing = jsonItemsToProcess.length;
+
+		processDeltaJSONItem(onedriveJSONItem, jsonItemsReceived, cast(int)jsonItemsReceived, responseBundleCount, singleDirectoryScope);
+
+		if (jsonItemsToProcess.length > queuedJSONItemsBeforeProcessing) {
+			itemsSubmittedForProcessing += cast(long)(jsonItemsToProcess.length - queuedJSONItemsBeforeProcessing);
+		}
+
+		processJSONItemsInBoundedBatches(batchesProcessed, false);
+	}
+
+	// Drain JSON items in bounded batches while online enumeration is still in progress.
 	//
-	// Complete 500-item batches are processed only after the current Graph page has
-	// finished its existing first-stage processing. The final partial batch is
-	// drained after native enumeration ends. This preserves the existing
+	// Complete 500-item batches are processed as enumeration progresses. The final
+	// partial batch is drained only after the authoritative enumeration ends. This
+	// preserves the existing
 	// processJSONItemsInBatch() reconciliation logic, transaction boundary, download
 	// deferral and deltaLink commit semantics while preventing jsonItemsToProcess
 	// from growing with the total number of online objects.
-	void processNativeDeltaJSONItemsInBoundedBatches(ref long batchesProcessed, bool flushRemainder) {
+	void processJSONItemsInBoundedBatches(ref long batchesProcessed, bool flushRemainder) {
 		enum size_t batchSize = 500;
 
 		while ((jsonItemsToProcess.length >= batchSize) || (flushRemainder && !jsonItemsToProcess.empty)) {
@@ -2265,7 +2274,7 @@ class SyncEngine {
 			itemDB.beginTransaction();
 			scope(failure) itemDB.rollbackTransaction();
 
-			// Total batch count is not known until native /delta enumeration completes.
+			// Total batch count is not known until enumeration completes.
 			processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, 0);
 
 			itemDB.commitTransaction();
@@ -2322,7 +2331,11 @@ class SyncEngine {
 		if (debugLogging) {
 			addLogEntry(debugLogBreakType1, ["debug"]);
 			jsonProcessingStartTime = MonoTime.currTime();
-			addLogEntry("Processing OneDrive Item " ~ to!string(changeCount) ~ " of " ~ to!string(nrChanges) ~ " from API Response Bundle " ~ to!string(responseBundleCount), ["debug"]);
+			if (generatedSimulatedDeltaResponse) {
+				addLogEntry("Processing generated /children OneDrive Item " ~ to!string(changeCount) ~ " from API Response Bundle " ~ to!string(responseBundleCount), ["debug"]);
+			} else {
+				addLogEntry("Processing OneDrive Item " ~ to!string(changeCount) ~ " of " ~ to!string(nrChanges) ~ " from API Response Bundle " ~ to!string(responseBundleCount), ["debug"]);
+			}
 		}
 
 		// Issue #3336 - Convert driveId to lowercase
@@ -2808,7 +2821,7 @@ class SyncEngine {
 				if (batchCount > 0) {
 					addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of JSON Item Batch " ~ to!string(batchGroup) ~ " of " ~ to!string(batchCount), ["debug"]);
 				} else {
-					addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of native /delta JSON Item Batch " ~ to!string(batchGroup), ["debug"]);
+					addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of bounded JSON Item Batch " ~ to!string(batchGroup), ["debug"]);
 				}
 				addLogEntry("Raw JSON OneDrive Item (Batched Item): " ~ sanitiseJSONItem(onedriveJSONItem), ["debug"]);
 			}
@@ -12690,6 +12703,47 @@ class SyncEngine {
 	}
 
 
+	// Mark the existing generated-response database subtree out-of-sync without
+	// retaining an account-wide Item[] snapshot. This preserves the traversal order
+	// used by getChildren(), but only materialises direct-child id/type projections
+	// for the directory currently being visited.
+	void downgradeGeneratedDeltaDatabaseSubtree(string driveId, string id) {
+		struct PendingDirectory {
+			string driveId;
+			string id;
+		}
+
+		PendingDirectory[] pendingDirectories = [PendingDirectory(driveId, id)];
+
+		while (pendingDirectories.length > 0) {
+			auto directory = pendingDirectories[$ - 1];
+			pendingDirectories.length--;
+
+			auto directChildren = itemDB.selectChildItemIdentities(directory.driveId, directory.id);
+
+			// Match getChildren() ordering: process all direct siblings before descending
+			// into their child directories.
+			foreach (child; directChildren) {
+				if (debugLogging) {addLogEntry("Downgrading item as out-of-sync: " ~ child.id, ["debug"]);}
+				itemDB.downgradeSyncStatusFlag(directory.driveId, child.id);
+			}
+
+			// Reverse-push directories so the subsequent depth-first walk retains the
+			// same left-to-right ordering as getChildren().
+			foreach_reverse (child; directChildren) {
+				if (child.type != ItemType.file) {
+					pendingDirectories ~= PendingDirectory(directory.driveId, child.id);
+				}
+			}
+
+			// The direct-child projection is no longer required once its IDs have been
+			// downgraded and any child directories have been queued.
+			directChildren = [];
+		}
+
+		pendingDirectories = [];
+	}
+
 	// Build the minimal database identity set required by native Full Scan True Up.
 	// The database query returns only id and type. Type is used only to recurse; the
 	// retained presence state contains item IDs and no other database metadata. The
@@ -13355,7 +13409,7 @@ class SyncEngine {
 	// The same technique can also be used when we are using --single-directory. The parent objects up to the single directory target can be added,
 	// then once the target of the --single-directory request is hit, all of the children of that path can be queried, giving a much more focused
 	// JSON response which can then be processed, negating the need to continuously traverse the tree and 'exclude' items
-	JSONValue generateDeltaResponse(string pathToQuery = null) {
+	void generateDeltaResponse(string pathToQuery, ref long jsonItemsReceived, ref long generatedDeltaItemsSubmittedForProcessing, ref long generatedDeltaBatchesProcessed, long responseBundleCount) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -13367,9 +13421,6 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 
-		// JSON value which will be responded with
-		JSONValue selfGeneratedDeltaResponse;
-
 		// Function variables
 		bool remotePathObject = false;
 		Item searchItem;
@@ -13377,14 +13428,13 @@ class SyncEngine {
 		JSONValue driveData;
 		JSONValue pathData;
 		JSONValue topLevelChildren;
-		JSONValue[] childrenData;
 		string nextLink;
 		OneDriveApi generateDeltaResponseOneDriveApiInstance;
 
 		// Check if exitHandlerTriggered is true
 		if (exitHandlerTriggered) {
 			// exitHandlerTriggered triggered
-			return selfGeneratedDeltaResponse;
+			return;
 		}
 
 		// Was a path to query passed in?
@@ -13463,35 +13513,26 @@ class SyncEngine {
 		// Downgrade ONLY files associated with this driveId and idToQuery
 		if (debugLogging) {addLogEntry("Downgrading all children for this searchItem.driveId (" ~ searchItem.driveId ~ ") and searchItem.id (" ~ searchItem.id ~ ") to an out-of-sync state", ["debug"]);}
 
-		Item[] drivePathChildren = getChildren(searchItem.driveId, searchItem.id);
-		if (count(drivePathChildren) > 0) {
-			// Flag the entire set of children within a single transaction. Each item flagged here
-			// would otherwise be committed individually, and as 'synchronous' is FULL that
-			// requires a flush to physical media per item. For a shared folder containing many
-			// thousands of items this dominates the time taken to generate the /delta response.
-			//
-			// This is safe for the same reasons as the batched processing of received items: no
-			// network activity is performed here, the loop is sequential, and the change is
-			// reconstructible, as this only flags existing records as requiring re-validation.
-			// https://github.com/abraunegg/onedrive/issues/3788
+		// Preserve the existing generated-response mark-and-sweep semantics, but do not
+		// materialise the complete database subtree as full Item records. Walk the same
+		// subtree using the minimal id/type projection already used by native Full Scan
+		// True Up and downgrade each row as it is encountered.
+		//
+		// All rows are still marked out-of-sync before any online /children enumeration
+		// begins. Keep the downgrade writes in one transaction for the same reason as
+		// before: synchronous=FULL must not flush one transaction per item (#3788).
+		{
 			itemDB.beginTransaction();
 
 			// If flagging these items throws, discard the partial set rather than leaving the
-			// transaction open
+			// transaction open. Keep this failure guard scoped to this transaction only.
 			scope(failure) itemDB.rollbackTransaction();
 
-			// Children to process and flag as out-of-sync
-			foreach (drivePathChild; drivePathChildren) {
-				// Flag any object in the database as out-of-sync for this driveId & and object id
-				if (debugLogging) {addLogEntry("Downgrading item as out-of-sync: " ~ drivePathChild.id, ["debug"]);}
-				itemDB.downgradeSyncStatusFlag(drivePathChild.driveId, drivePathChild.id);
-			}
+			downgradeGeneratedDeltaDatabaseSubtree(searchItem.driveId, searchItem.id);
 
-			// Commit the flagged items to the database
+			// Commit the flagged items to the database.
 			itemDB.commitTransaction();
 		}
-		// Clear DB response array
-		drivePathChildren = [];
 
 		// Get drive details for the provided driveId
 		try {
@@ -13517,7 +13558,7 @@ class SyncEngine {
 				generateDeltaResponseOneDriveApiInstance = null;
 
 				// Return the generated JSON response
-				return selfGeneratedDeltaResponse;
+				return;
 			} else {
 				// Default operation if not 408,429,503,504 errors
 				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
@@ -13552,25 +13593,21 @@ class SyncEngine {
 						// Display what the error is
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
-					// Add driveData JSON data to array
+					// Submit the drive root directly into bounded generated-response processing.
 					if (verboseLogging) {addLogEntry("Adding OneDrive root details for processing", ["verbose"]);}
-					childrenData ~= rootData;
-					// childrenData now owns the reference required for the generated response.
+					processGeneratedDeltaJSONItemBounded(rootData, jsonItemsReceived, generatedDeltaItemsSubmittedForProcessing, generatedDeltaBatchesProcessed, responseBundleCount);
 					rootData = null;
 				}
 			}
 
-			// Add driveData JSON data to array
+			// Submit the queried parent directly into bounded generated-response processing.
 			if (verboseLogging) {addLogEntry("Adding OneDrive parent folder details for processing", ["verbose"]);}
 
-			// What 'driveData' are we adding?
 			if (debugLogging) {
-				addLogEntry("Adding this 'driveData' to childrenData = " ~ to!string(driveData), ["debug"]);
+				addLogEntry("Submitting this 'driveData' for bounded processing = " ~ to!string(driveData), ["debug"]);
 			}
 
-			// add the responded 'driveData' to the childrenData to process later
-			childrenData ~= driveData;
-			// childrenData now owns the reference required for the generated response.
+			processGeneratedDeltaJSONItemBounded(driveData, jsonItemsReceived, generatedDeltaItemsSubmittedForProcessing, generatedDeltaBatchesProcessed, responseBundleCount);
 			driveData = null;
 		} else {
 			// driveData is an invalid JSON object
@@ -13630,61 +13667,39 @@ class SyncEngine {
 				// Check for any Client Side Filtering here ... we should skip querying the OneDrive API for 'folders' that we are going to just process and skip anyway.
 				// This avoids needless calls to the OneDrive API, and potentially speeds up this process.
 				if (!checkJSONAgainstClientSideFiltering(child)) {
-					// add this child to the array of objects
-					childrenData ~= child;
-					// is this child a folder?
-					if (isItemFolder(child)) {
-						// We have to query this folders children if childCount > 0
-						if (child["folder"]["childCount"].integer > 0){
-							// This child folder has children
-							string childIdToQuery = child["id"].str;
-							string childDriveToQuery = child["parentReference"]["driveId"].str;
-							auto childParentPath = child["parentReference"]["path"].str.split(":");
-							string folderPathToScan = childParentPath[1] ~ "/" ~ child["name"].str;
-
-							string pathForLogging;
-							// Are we in a --single-directory situation? If we are, the path we are using for logging needs to use the input path as a base
-							if (singleDirectoryScope) {
-								pathForLogging = appConfig.getValueString("single_directory") ~ "/" ~ child["name"].str;
-							} else {
-								pathForLogging = child["name"].str;
-							}
-
-							// Query the children of this item
-							JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery, folderPathToScan, pathForLogging);
-							foreach (grandChild; grandChildrenData.array) {
-								// add the grandchild to the array
-								childrenData ~= grandChild;
-							}
-							// Drop the temporary recursive result once its elements are retained by childrenData.
-							grandChildrenData = [];
-						}
-					}
-
-					// As we are generating a /delta response we need to check if this 'child' JSON is a 'remoteItem' and then handle appropriately
-					// Is this a remote folder JSON ?
+					// Generated-response shared-folder records must exist before this item is
+					// reconciled, matching the state that previously existed before the full
+					// synthetic response was processed.
 					if (isItemRemote(child)) {
-						// Check account type
 						if (appConfig.accountType == "personal") {
-							// The folder is a remote item ... OneDrive Personal Shared Folder
 							if (debugLogging) {addLogEntry("The JSON data indicates this is most likely a OneDrive Personal Shared Folder Link added by 'Add shortcut to My files'", ["debug"]);}
-							// It is a 'remote' JSON item denoting a potential shared folder
-							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 							createRequiredSharedFolderDatabaseRecords(child);
 						}
 
-						if (appConfig.accountType == "business") {
-							// The folder is a remote item ... OneDrive Business Shared Folder
+						if ((appConfig.accountType == "business") && appConfig.getValueBool("sync_business_shared_items")) {
 							if (debugLogging) {addLogEntry("The JSON data indicates this is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);}
-
-							// Is Shared Business Folder Syncing actually enabled?
-							if (appConfig.getValueBool("sync_business_shared_items")) {
-								// Shared Business Folder Syncing IS enabled
-								// It is a 'remote' JSON item denoting a potential shared folder
-								// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
-								createRequiredSharedFolderDatabaseRecords(child);
-							}
+							createRequiredSharedFolderDatabaseRecords(child);
 						}
+					}
+
+					// Preserve the existing depth-first generated-response order, but submit
+					// the item immediately instead of appending it to an account-wide array.
+					processGeneratedDeltaJSONItemBounded(child, jsonItemsReceived, generatedDeltaItemsSubmittedForProcessing, generatedDeltaBatchesProcessed, responseBundleCount);
+
+					if (isItemFolder(child) && (child["folder"]["childCount"].integer > 0)) {
+						string childIdToQuery = child["id"].str;
+						string childDriveToQuery = child["parentReference"]["driveId"].str;
+						auto childParentPath = child["parentReference"]["path"].str.split(":");
+						string folderPathToScan = childParentPath[1] ~ "/" ~ child["name"].str;
+
+						string pathForLogging;
+						if (singleDirectoryScope) {
+							pathForLogging = appConfig.getValueString("single_directory") ~ "/" ~ child["name"].str;
+						} else {
+							pathForLogging = child["name"].str;
+						}
+
+						queryForChildren(childDriveToQuery, childIdToQuery, folderPathToScan, pathForLogging, jsonItemsReceived, generatedDeltaItemsSubmittedForProcessing, generatedDeltaBatchesProcessed, responseBundleCount);
 					}
 				}
 			}
@@ -13695,10 +13710,10 @@ class SyncEngine {
 				// Update nextLink to next changeSet bundle
 				if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
 				nextLink = topLevelChildren["@odata.nextLink"].str;
-				// The current page has been copied into childrenData; retain only the nextLink string.
+				// The current page has been submitted; retain only the nextLink string.
 				topLevelChildren = null;
 			} else {
-				// The final page has also been copied into childrenData.
+				// The final page has also been submitted.
 				topLevelChildren = null;
 				break;
 			}
@@ -13715,14 +13730,6 @@ class SyncEngine {
 			}
 		}
 
-		// Craft response from all returned JSON elements
-		selfGeneratedDeltaResponse = [
-						"@odata.context": JSONValue("https://graph.microsoft.com/v1.0/$metadata#Collection(driveItem)"),
-						"value": JSONValue(childrenData.array)
-						];
-		// The returned JSONValue now retains the generated array; drop the temporary array alias.
-		childrenData = [];
-
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
 		generateDeltaResponseOneDriveApiInstance = null;
@@ -13733,12 +13740,11 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 
-		// Return the generated JSON response
-		return selfGeneratedDeltaResponse;
+		return;
 	}
 
 	// Query the OneDrive API for the specified child id for any children objects
-	JSONValue[] queryForChildren(string driveId, string idToQuery, string childParentPath, string pathForLogging) {
+	void queryForChildren(string driveId, string idToQuery, string childParentPath, string pathForLogging, ref long jsonItemsReceived, ref long generatedDeltaItemsSubmittedForProcessing, ref long generatedDeltaBatchesProcessed, long responseBundleCount) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -13752,7 +13758,6 @@ class SyncEngine {
 
 		// function variables
 		JSONValue thisLevelChildren;
-		JSONValue[] thisLevelChildrenData;
 		string nextLink;
 
 		// Create new OneDrive API Instance
@@ -13818,26 +13823,17 @@ class SyncEngine {
 					// Check for any Client Side Filtering here ... we should skip querying the OneDrive API for 'folders' that we are going to just process and skip anyway.
 					// This avoids needless calls to the OneDrive API, and potentially speeds up this process.
 					if (!checkJSONAgainstClientSideFiltering(child)) {
-						// add this child to the array of objects
-						thisLevelChildrenData ~= child;
-						// is this child a folder?
-						if (isItemFolder(child)){
-							// We have to query this folders children if childCount > 0
-							if (child["folder"]["childCount"].integer > 0){
-								// This child folder has children
-								string childIdToQuery = child["id"].str;
-								string childDriveToQuery = child["parentReference"]["driveId"].str;
-								auto grandchildParentPath = child["parentReference"]["path"].str.split(":");
-								string folderPathToScan = grandchildParentPath[1] ~ "/" ~ child["name"].str;
-								string newLoggingPath = pathForLogging ~ "/" ~ child["name"].str;
-								JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery, folderPathToScan, newLoggingPath);
-								foreach (grandChild; grandChildrenData.array) {
-									// add the grandchild to the array
-									thisLevelChildrenData ~= grandChild;
-								}
-								// Drop the temporary recursive result once its elements are retained by thisLevelChildrenData.
-								grandChildrenData = [];
-							}
+						// Preserve the existing depth-first traversal order while submitting each
+						// item directly into bounded generated-response processing.
+						processGeneratedDeltaJSONItemBounded(child, jsonItemsReceived, generatedDeltaItemsSubmittedForProcessing, generatedDeltaBatchesProcessed, responseBundleCount);
+
+						if (isItemFolder(child) && (child["folder"]["childCount"].integer > 0)) {
+							string childIdToQuery = child["id"].str;
+							string childDriveToQuery = child["parentReference"]["driveId"].str;
+							auto grandchildParentPath = child["parentReference"]["path"].str.split(":");
+							string folderPathToScan = grandchildParentPath[1] ~ "/" ~ child["name"].str;
+							string newLoggingPath = pathForLogging ~ "/" ~ child["name"].str;
+							queryForChildren(childDriveToQuery, childIdToQuery, folderPathToScan, newLoggingPath, jsonItemsReceived, generatedDeltaItemsSubmittedForProcessing, generatedDeltaBatchesProcessed, responseBundleCount);
 						}
 					}
 				}
@@ -13848,10 +13844,10 @@ class SyncEngine {
 					// Update nextLink to next changeSet bundle
 					nextLink = thisLevelChildren["@odata.nextLink"].str;
 					if (debugLogging) {addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);}
-					// The current page has been copied into thisLevelChildrenData; retain only nextLink.
+					// The current page has been submitted; retain only nextLink.
 					thisLevelChildren = null;
 				} else {
-					// The final page has also been copied into thisLevelChildrenData.
+					// The final page has also been submitted.
 					thisLevelChildren = null;
 					break;
 				}
@@ -13884,8 +13880,7 @@ class SyncEngine {
 		// Release any remaining page response before returning the aggregate result.
 		thisLevelChildren = null;
 
-		// return response
-		return thisLevelChildrenData;
+		return;
 	}
 
 	// Query the OneDrive API for the child objects for this element
