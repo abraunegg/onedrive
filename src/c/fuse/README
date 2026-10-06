@@ -1,0 +1,8 @@
+The files in this directory have been obtained from the following place:
+
+c/fuse/fuse.d
+c/fuse/common.d
+
+	https://github.com/seeseemelk/fuse-d
+	License: Boost Software License - Version 1.0 - August 17th, 2003
+	See https://github.com/seeseemelk/fuse-d/blob/master/LICENSE

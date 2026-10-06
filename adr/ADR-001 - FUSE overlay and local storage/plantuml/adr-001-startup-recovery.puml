@@ -1,0 +1,24 @@
+@startuml
+title Startup, Monitor and Recovery Lifecycle
+start
+:Start onedrive;
+:Load configuration;
+:Open / validate item database;
+:Inspect/reconcile physical sync_dir;
+:Detect and safely recover stale FUSE state;
+:Establish direct access to physical backing tree;
+:Establish/validate local monitoring for resident content;
+:Mount FUSE over configured sync_dir;
+:FUSE presents authoritative DB namespace;
+:Run normal sync / --monitor processing;
+
+fork
+  :Remote Graph/delta monitoring;
+  :Update entire eligible DB namespace;
+fork again
+  :Local monitoring;
+  :Observe hydrated physical content only;
+end fork
+
+stop
+@enduml

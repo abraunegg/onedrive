@@ -1,0 +1,27 @@
+@startuml
+title Stable Hydration State and Transient Operations
+skinparam shadowing false
+
+state "CLOUD_ONLY\nDB namespace exists\nno complete physical content" as Cloud
+state "HYDRATING\ntransient operation" as Hydrating
+state "HYDRATED\nDB namespace exists\nvalid physical content exists" as Hydrated
+state "DEHYDRATING\ntransient operation" as Dehydrating
+state "LOCAL CHANGE\nphysical content must be preserved" as Dirty
+
+[*] --> Cloud : remote item recorded\non-demand, no local requirement
+Cloud --> Hydrating : content demand / always_local
+Hydrating --> Hydrated : validated content materialised\nthen stable DB state committed
+Hydrating --> Cloud : failure / cancellation\nno valid final backing file
+
+Hydrated --> Dirty : user/local modification
+Dirty --> Hydrated : existing sync completes\nremote/local state reconciled
+
+Hydrated --> Dehydrating : explicit/policy request\nonly after safety checks
+Dehydrating --> Cloud : physical removal safe\nthen stable DB state committed
+Dehydrating --> Hydrated : abort/failure\npreserve content
+
+note right of Dirty
+Dirty is not a candidate for
+automatic dehydration.
+end note
+@enduml

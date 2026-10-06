@@ -1,0 +1,36 @@
+@startuml
+title on_demand and --monitor are orthogonal
+skinparam shadowing false
+top to bottom direction
+
+rectangle "onedrive process" {
+  component "Existing sync engine" as Sync
+  component "Remote monitor\nGraph delta / online change" as Remote
+  component "Local monitor\ninotify / local reconciliation" as Local
+  database "Item DB\nentire eligible online namespace" as DB
+  component "FUSE" as Fuse
+  folder "Physical files\nhydrated subset only" as Disk
+}
+
+cloud "Microsoft OneDrive" as Graph
+
+Graph <--> Remote : all eligible online changes
+Remote --> Sync
+Sync --> DB : namespace / metadata updates
+DB --> Fuse : authoritative presentation
+Fuse --> Disk : content I/O only when hydrated
+Disk --> Local : local events only for\nphysically resident content
+Local --> Sync
+Sync --> Graph : existing upload path
+
+note right of Remote
+Runs normally with --monitor.
+on_demand does not disable or replace it.
+end note
+
+note right of Local
+Cloud-only files have no physical inode/content
+to monitor locally. They remain represented
+through remote state + DB + FUSE.
+end note
+@enduml

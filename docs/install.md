@@ -118,6 +118,16 @@ If you need to build the client from source, follow this high-level process:
 >
 > You only need 1 compiler installed. You do not need to install DMD, LDC and GDC. Please *pick* the most applicable compiler for your distribution.
 
+#### FUSE3 and On-Demand Support
+
+The client uses **FUSE3** to provide on-demand file functionality. FUSE3 is an optional build dependency and is detected automatically when running `configure`.
+
+If compatible FUSE3 development libraries are available, on-demand support is compiled into the client automatically. No additional `configure` option is required.
+
+If FUSE3 development libraries are not available, the client will still compile and operate normally, but on-demand functionality will not be included in the resulting binary. If `on_demand = "true"` is subsequently configured, the option will be ignored because the required capability was not available when the client was compiled.
+
+The older FUSE 2.x API is not sufficient for this functionality. On-demand support specifically requires a compatible **FUSE3** implementation and development libraries.
+
 #### Installing DMD Compiler
 To install the DMD Compiler, this can be achieved in the following manner:
 ```text
@@ -141,9 +151,12 @@ You will need at least GDC version 15. If your distribution's repositories inclu
 
 ### Install Build Dependencies (By Distribution)
 
+> [!NOTE]
+> FUSE3 development libraries listed in the distribution-specific dependencies below are required for **on-demand functionality**. If FUSE3 is unavailable, `configure` will automatically disable on-demand support and the remainder of the client can still be compiled normally.
+
 #### Arch Linux | Manjaro Linux
 ```text
-sudo pacman -S git make pkg-config curl sqlite dbus ldc
+sudo pacman -S git make pkg-config curl sqlite dbus fuse3 ldc
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -159,7 +172,7 @@ CentOS 7.x and RHEL 7.x reached End of Life status on June 30th 2024 and is no l
 #### CentOS Stream 8 | CentOS Stream 9 | CentOS Stream 10
 ```text
 sudo dnf groupinstall 'Development Tools'
-sudo dnf install libcurl-devel sqlite-devel dbus-devel
+sudo dnf install libcurl-devel sqlite-devel dbus-devel fuse3-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:
@@ -176,7 +189,7 @@ Debian 10 reached the end of its five-year LTS window on September 10th 2022 and
 #### Debian 11 | Debian 12 | Debian 13 | Linux Mint Debian Edition 6 | Linux Mint Debian Edition 7 - x86_64
  ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev libfuse3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:
@@ -190,7 +203,7 @@ sudo apt install libnotify-dev
 
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev libfuse3-dev
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -203,7 +216,7 @@ sudo apt install libnotify-dev
 
 ```text
 sudo dnf group install development-tools
-sudo dnf install libcurl-devel sqlite-devel dbus-devel
+sudo dnf install libcurl-devel sqlite-devel dbus-devel fuse3-devel
 ```
 Before running the dmd install you need to check for the option 'use-keyboxd' in your gnupg common.conf file and comment it out while running the install.
 ```text
@@ -232,7 +245,7 @@ sudo dnf install libnotify-devel
 > For FreeBSD it is advisable to use the distribution provided 'ldc' package to ensure compiler consistency.
 
 ```text
-pkg install bash bash-completion gmake pkgconf autoconf automake logrotate libinotify git sqlite3 ldc
+pkg install bash bash-completion gmake pkgconf autoconf automake logrotate libinotify git sqlite3 ldc fusefs-libs3
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -247,7 +260,7 @@ sudo emerge --onlydeps net-misc/onedrive
 #### MX Linux 25
  ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev libfuse3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:
@@ -258,7 +271,7 @@ sudo apt install libnotify-dev
 #### OpenSUSE Leap | OpenSUSE Tumbleweed
 ```text
 sudo zypper refresh
-sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static dbus-1-devel
+sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static dbus-1-devel fuse3-devel
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -316,6 +329,17 @@ pkg_add libnotify
 > [!NOTE]
 > Install the required OpenBSD packages as 'root' unless you have installed 'sudo'
 
+> [!IMPORTANT]
+> **On-demand functionality is not currently supported on OpenBSD.**
+>
+> OpenBSD provides kernel FUSE support and a userspace FUSE library; however, the FUSE interface provided by OpenBSD currently conforms to the **FUSE 2.6 API**. The on-demand implementation in this client is built against **FUSE3** and requires FUSE3-compatible development libraries and interfaces.
+>
+> As a result, the OpenBSD build will automatically compile the client **without on-demand support**. This does not affect normal OneDrive synchronisation or monitoring functionality on OpenBSD.
+>
+> Setting `on_demand = "true"` in the configuration file on an OpenBSD build where FUSE3 support was unavailable at compile time will not enable the feature; the option will be ignored.
+>
+> Supporting OpenBSD on-demand functionality would require a separate compatibility implementation for OpenBSD's FUSE API. This is not currently implemented.
+
 
 #### Raspbian - ARMHF and ARM64
 > [!CAUTION]
@@ -329,7 +353,7 @@ pkg_add libnotify
 
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev libfuse3-dev
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -340,7 +364,7 @@ sudo apt install libnotify-dev
 
 ```text
 sudo dnf groupinstall 'Development Tools'
-sudo dnf install libcurl-devel sqlite-devel dbus-devel
+sudo dnf install libcurl-devel sqlite-devel dbus-devel fuse3-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:
@@ -371,7 +395,7 @@ Ubuntu 20.x LTS reached the end of its five-year LTS window on May 31th 2025 and
 
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev libfuse3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For GUI notifications the following is also necessary:

@@ -335,6 +335,24 @@ esac
 
 AC_SUBST([dynamic_linker_LIBS])
 
+dnl
+dnl FUSE Support for 'on-demand' support
+dnl Automatically enable on-demand support when FUSE3 development files are available.
+dnl A missing FUSE3 dependency must not prevent the normal client from building.
+have_fuse=no
+PKG_PROG_PKG_CONFIG
+PKG_CHECK_MODULES([FUSE], [fuse3], [
+  have_fuse=yes
+], [
+  have_fuse=no
+  FUSE_CFLAGS=""
+  FUSE_LIBS=""
+  AC_MSG_NOTICE([libfuse3 development files not found; on-demand support will not be compiled or available for use])
+])
+
+AC_SUBST([ON_DEMAND], [$have_fuse])
+AC_SUBST([FUSE_CFLAGS])
+AC_SUBST([FUSE_LIBS])
 
 dnl
 dnl Completion support
