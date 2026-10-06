@@ -1756,16 +1756,16 @@ class ApplicationConfig {
 		}
 		
 		// Display application version
-		addLogEntry("Application version                          = " ~ applicationVersion);
-		addLogEntry("Compiled with                                = " ~ compilerDetails());
-		addLogEntry("Curl version                                 = " ~ getCurlVersionString());
+		addLogEntry("Application version                           = " ~ applicationVersion);
+		addLogEntry("Compiled with                                 = " ~ compilerDetails());
+		addLogEntry("Curl version                                  = " ~ getCurlVersionString());
 		
 		// Display all of the pertinent configuration options
-		addLogEntry("User Application Config path                 = " ~ configDirName);
-		addLogEntry("System Application Config path               = " ~ systemConfigDirName);
+		addLogEntry("User Application Config path                  = " ~ configDirName);
+		addLogEntry("System Application Config path                = " ~ systemConfigDirName);
 		
 		// Does a config file exist or are we using application defaults
-		addLogEntry("Applicable Application 'config' location     = " ~ applicableConfigFilePath);
+		addLogEntry("Applicable Application 'config' location      = " ~ applicableConfigFilePath);
 		
 		string configFileStatusMessage;
 		if (exists(applicableConfigFilePath)) {

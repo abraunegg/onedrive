@@ -1397,8 +1397,7 @@ int main(string[] cliArgs) {
 			// entering the monitor loop. Rate-limit any subsequent acquisition attempt so
 			// frequent local filesystem activity cannot hammer the Graph endpoint.
 			MonoTime lastWebSocketAcquisitionAttempt = MonoTime.currTime();
-			SysTime lastMonitorGcCleanup = Clock.currTime();
-			
+
 			while (performFileSystemMonitoring) {
 				if (shutdownRequested()) {
 					addShutdownTelemetry("monitor loop detected shutdown request before processing new work");
@@ -1660,8 +1659,9 @@ int main(string[] cliArgs) {
 					// Update elapsedTime post monitor loop actions
 					elapsedTime = Clock.currTime() - applicationStartTime;
 					
-					// Display monitor loop memory details
+					// Display monitor-loop memory telemetry before garbage collection.
 					if (displayMemoryUsage) {
+						// Loop counter
 						addLogEntry("Monitor Loop Count:   " ~ to!string(monitorLoopFullCount));
 
 						// Get the current time in the local timezone
@@ -1669,37 +1669,58 @@ int main(string[] cliArgs) {
 						addLogEntry("Timestamp:            " ~ to!string(timeStamp));
 						addLogEntry("Application Run Time: " ~ to!string(elapsedTime));
 						
-						// Display memory consumption details
+						// Display memory consumption details while all telemetry is still pre-GC.
+						addLogEntry("Memory usage before monitor-loop garbage collection");
 						displayMemoryUsageDetails();
-					}
-					
-					// Perform coarse GC cleanup for long-running monitor processes.
-					// This is intentionally time-gated and only runs at most once every 24 hours,
-					// after sync processing has completed and the client is idle.
-					auto monitorGcCleanupTime = Clock.currTime();
-					if (lastMonitorGcCleanup == SysTime.min || (monitorGcCleanupTime - lastMonitorGcCleanup) >= dur!"hours"(24)) {
-						// Avoid running this during initial startup; only run after the application
-						// has been active for at least 24 hours.
-						if (elapsedTime >= dur!"hours"(24)) {
-							// Log what we are doing
-							addLogEntry("Performing scheduled monitor-mode memory cleanup after 24 hours of runtime");
-							// Perform GC actions
-							GC.collect();  // Perform Garbage Collection
-							GC.minimize(); // Return free memory to the operating system
 
-							// When memory telemetry is enabled, record the immediate post-cleanup
-							// state so the effect of the scheduled GC/minimize operation can be
-							// distinguished from normal allocator/RSS high-water behaviour.
-							if (displayMemoryUsage) {
-								addLogEntry("Memory usage after scheduled monitor-mode memory cleanup");
-								displayMemoryUsageDetails();
-							}
-
-							// Update time gate
-							lastMonitorGcCleanup = monitorGcCleanupTime;
-						}
+						// Ensure the logging worker has written and released
+						flushPendingLogEntries();
 					}
+
+					// Reclaim unused managed heap memory after every completed monitor loop.
+					//
+					// A 100K-object memory investigation confirmed that GC.collect()
+					// and GC.minimize() perform complementary operations. GC.collect()
+					// reclaims unreachable managed objects, while GC.minimize() attempts
+					// to return unused managed heap pages to the operating system.
+					//
+					// During testing with 101,494 OneDrive objects, post-collection live
+					// managed memory consistently returned to approximately 100 KB.
+					// However, without heap minimisation, the garbage collector retained
+					// substantial unused heap capacity and process RSS remained elevated.
+					//
+					// Large synchronisation operations and scheduled full scans can
+					// temporarily allocate significant amounts of managed memory.
+					// Performing heap minimisation after each completed monitor loop
+					// allows this unused memory to be returned promptly, rather than
+					// remaining resident throughout subsequent monitor iterations.
+					//
+					// Long-running testing also demonstrated that repeated minimisation
+					// incurs negligible overhead when no additional heap pages can be
+					// released. It is deliberately performed after synchronisation and
+					// associated resource cleanup have completed, avoiding interference
+					// with active file processing.
+					//
+					// IMPORTANT: Retain both GC.collect() and GC.minimize() on every
+					// completed monitor loop. Any proposed change to this behaviour
+					// must be validated against a large dataset, including scheduled
+					// full scans and post-scan RSS recovery. Small-scale testing alone
+					// is insufficient to establish equivalent memory behaviour.
 					
+					// Keep collection and heap minimisation adjacent. Do not allocate, format,
+					// log or inspect memory between these two operations.
+					GC.collect();
+					GC.minimize();
+
+					// Report the final post-minimisation state only after both GC operations
+					// have completed. displayMemoryUsageDetails() retains the established
+					// Linux, FreeBSD and OpenBSD RSS implementations in util.d.
+					if (displayMemoryUsage) {
+						addLogEntry("Memory usage after monitor-loop heap collection and minimisation");
+						displayMemoryUsageDetails();
+						flushPendingLogEntries();
+					}
+
 					// Log that this loop is complete
 					if (debugLogging) {addLogEntry(loopStopOutputMessage, ["debug"]);}
 					
