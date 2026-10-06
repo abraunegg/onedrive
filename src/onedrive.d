@@ -1223,6 +1223,7 @@ class OneDriveApi {
 		if (("webUrl" in defaultRootDetails) && (defaultRootDetails["webUrl"].type == JSONType.string)) {
 			ownOneDriveWebUrl = defaultRootDetails["webUrl"].str;
 		}
+		defaultRootDetails = null;
 
 		JSONValue defaultDriveDetails = getDefaultDriveDetails();
 		if (("owner" in defaultDriveDetails) &&
@@ -1240,6 +1241,9 @@ class OneDriveApi {
 				ownEmail = defaultDriveDetails["owner"]["user"]["email"].str;
 			}
 		}
+
+		// Required owner metadata has been copied into strings.
+		defaultDriveDetails = null;
 
 		string searchQueryString = buildBusinessSharedItemsSearchQuery(ownOneDriveWebUrl, ownDisplayName, ownEmail);
 
@@ -1285,7 +1289,11 @@ class OneDriveApi {
 
 			moreResultsAvailable = false;
 
-			if (!("value" in searchResponse)) break;
+			if (!("value" in searchResponse)) {
+				searchRequest = null;
+				searchResponse = null;
+				break;
+			}
 
 			foreach (searchResult; searchResponse["value"].array) {
 				if (!("hitsContainers" in searchResult)) continue;
@@ -1324,6 +1332,9 @@ class OneDriveApi {
 				}
 			}
 
+			// This search page has been fully normalised into candidateItems.
+			searchRequest = null;
+			searchResponse = null;
 			from += pageSize;
 		}
 
@@ -1344,6 +1355,10 @@ class OneDriveApi {
 			addLogEntry("Microsoft Graph Search API candidate item count: " ~ to!string(candidateItems.length), ["debug"]);
 			addLogEntry("Microsoft Graph Search API normalised shared item count: " ~ to!string(sharedItems.length), ["debug"]);
 		}
+
+		// The return object now retains the normalised result array.
+		candidateItems = [];
+		sharedItems = [];
 
 		return sharedWithMeCompatibleResponse;
 	}
