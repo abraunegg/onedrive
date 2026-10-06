@@ -81,11 +81,42 @@ Before reading this document, please ensure you are running application version 
 ## Important Notes
 
 ### Memory Usage
-Starting with version 2.5.x, the application has been completely rewritten. It is crucial to understand the memory requirements to ensure the application runs smoothly on your system.
 
-During a `--resync` or full online scan, the OneDrive Client may use approximately 1GB of memory for every 100,000 objects stored online. This is because the client retrieves data for all objects via the OneDrive API before processing them locally. Once this process completes, the memory is freed. To avoid performance issues, ensure your system has sufficient available memory. If the system starts using swap space due to insufficient free memory, this can significantly slow down the application and impact overall performance.
+The amount of memory used by the OneDrive Client depends on several factors, including the number of objects stored online, the type of synchronisation being performed, the amount of metadata returned by Microsoft OneDrive, configured filtering rules, and any concurrent upload or download activity.
 
-To avoid potential system instability or the client being terminated by your Out-Of-Memory (OOM) process monitors, please ensure your system has sufficient memory allocated or configure adequate swap space.
+Starting with version 2.5.12, large online enumerations are processed using bounded working sets rather than retaining the complete set of retrieved objects in memory before processing begins. This significantly reduces the memory required for large OneDrive accounts during operations such as an initial synchronisation, `--resync`, Full Scan reconciliation and other authoritative online scans.
+
+In monitor mode, the application also performs managed-memory collection and heap minimisation after each completed monitor loop. This allows temporary objects created during synchronisation to be reclaimed promptly and unused managed heap capacity to be returned to the operating system where possible.
+
+> [!IMPORTANT]
+> Resident Set Size (RSS) does not directly represent the amount of application data that is currently in use.
+>
+> The D runtime, system allocator, SQLite, curl and other native libraries may retain previously allocated memory for later reuse. As a result, RSS may remain above its initial value even after temporary synchronisation data has been released.
+>
+> For a long-running monitor process, the important behaviour is that memory reaches a bounded working level and is subsequently reused, rather than increasing continuously after each synchronisation or Full Scan.
+
+The previous guidance for early 2.5.x releases that suggested allowing approximately **1 GB of memory for every 100,000 OneDrive objects** is no longer applicable to version 2.5.12 and later.
+
+As part of the version 2.5.12 memory and large-account validation, the client was repeatedly tested against a fixed dataset containing **101,494 OneDrive objects**. In these controlled tests, both the normal Microsoft Graph `/delta` pathway and the generated `/children` pathway demonstrated bounded memory behaviour over repeated authoritative scans rather than memory usage increasing in proportion to each scan.
+
+These results are validation data rather than a guaranteed memory requirement. Actual memory consumption will vary depending on platform, compiler/runtime, account contents, enabled features and workload.
+
+When diagnosing memory behaviour, the developer option:
+
+```text
+display_memory = "true"
+```
+
+can be enabled to display memory information at each monitor-loop collection boundary.
+
+The reported values include:
+
+- `usedSize` — managed heap memory currently containing live allocations.
+- `freeSize` — managed heap capacity currently reserved and available for reuse.
+- `allocatedInCurrentThread` — a cumulative allocation counter. This value will continually increase while the application runs and **does not represent current memory usage**.
+- `Resident Set Size (RSS)` — memory currently resident in the process according to the operating system, including managed and native allocations.
+
+When investigating a suspected memory issue, trends across multiple monitor loops and Full Scans are more meaningful than any individual RSS reading.
 
 ### Guidelines for Local File and Folder Naming in the Synchronisation Directory
 To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adhere strictly to the prescribed naming conventions for your files and folders within the sync directory. The guidelines detailed below are designed to preempt potential sync failures by aligning with Microsoft Windows Naming Conventions, coupled with specific OneDrive restrictions.
