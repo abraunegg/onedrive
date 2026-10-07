@@ -2803,6 +2803,7 @@ class OneDriveApi {
 		SysTime retryTime;
 		bool retrySuccess = false;
 		bool transientError = false;
+		bool retryTriggeredBy429 = false;
 		bool sslVerifyPeerDisabled = false;
 
 		while (!retrySuccess) {
@@ -2814,8 +2815,14 @@ class OneDriveApi {
 				// re-try log entry & clock time
 				retryTime = Clock.currTime();
 				retryTime.fracSecs = Duration.zero;
-				addLogEntry("Retrying the respective Microsoft Graph API call for Internal Thread ID: " ~ to!string(curlEngine.internalThreadId) ~ " (Timestamp: " ~ to!string(retryTime) ~ ") ...");
+				if (!retryTriggeredBy429 || verboseLogging) {
+					addLogEntry("Retrying the respective Microsoft Graph API call for Internal Thread ID: " ~ to!string(curlEngine.internalThreadId) ~ " (Timestamp: " ~ to!string(retryTime) ~ ") ...");
+				}
 			}
+
+			// Reset the 429 retry marker before attempting the next request. If this
+			// attempt is throttled, the exception handler below will set it again.
+			retryTriggeredBy429 = false;
 
 			try {
 				response.reset();
@@ -3067,7 +3074,13 @@ class OneDriveApi {
 						if (exception.httpStatusCode == 408) {
 							addLogEntry("Handling a Microsoft Graph API HTTP 408 Response Code (Request Time Out) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
 						} else {
-							addLogEntry("Handling a Microsoft Graph API HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
+							// HTTP 429 is an expected, retryable throttling response. Keep the
+							// detail available in verbose/debug modes without alarming users
+							// during normal application operation.
+							if (verboseLogging) {
+								addLogEntry("Handling a Microsoft Graph API HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId), ["verbose"]);
+							}
+							retryTriggeredBy429 = true;
 						}
 						// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
 						thisBackOffInterval = response.getRetryAfterValue();
