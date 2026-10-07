@@ -17,6 +17,7 @@ Before reading this document, please ensure you are running application version 
   - [Understanding OneDrive Client for Linux Operational Modes](#understanding-onedrive-client-for-linux-operational-modes)
     - [Standalone Synchronisation Operational Mode (Standalone Mode)](#standalone-synchronisation-operational-mode-standalone-mode)
     - [Ongoing Synchronisation Operational Mode (Monitor Mode)](#ongoing-synchronisation-operational-mode-monitor-mode)
+      - [Machine-readable monitor runtime status](#machine-readable-monitor-runtime-status)
 - [Using the OneDrive Client for Linux to synchronise your data](#using-the-onedrive-client-for-linux-to-synchronise-your-data)
   - [Client Documentation](#client-documentation)
   - [Increasing application logging level](#increasing-application-logging-level)
@@ -80,11 +81,42 @@ Before reading this document, please ensure you are running application version 
 ## Important Notes
 
 ### Memory Usage
-Starting with version 2.5.x, the application has been completely rewritten. It is crucial to understand the memory requirements to ensure the application runs smoothly on your system.
 
-During a `--resync` or full online scan, the OneDrive Client may use approximately 1GB of memory for every 100,000 objects stored online. This is because the client retrieves data for all objects via the OneDrive API before processing them locally. Once this process completes, the memory is freed. To avoid performance issues, ensure your system has sufficient available memory. If the system starts using swap space due to insufficient free memory, this can significantly slow down the application and impact overall performance.
+The amount of memory used by the OneDrive Client depends on several factors, including the number of objects stored online, the type of synchronisation being performed, the amount of metadata returned by Microsoft OneDrive, configured filtering rules, and any concurrent upload or download activity.
 
-To avoid potential system instability or the client being terminated by your Out-Of-Memory (OOM) process monitors, please ensure your system has sufficient memory allocated or configure adequate swap space.
+Starting with version 2.5.12, large online enumerations are processed using bounded working sets rather than retaining the complete set of retrieved objects in memory before processing begins. This significantly reduces the memory required for large OneDrive accounts during operations such as an initial synchronisation, `--resync`, Full Scan reconciliation and other authoritative online scans.
+
+In monitor mode, the application also performs managed-memory collection and heap minimisation after each completed monitor loop. This allows temporary objects created during synchronisation to be reclaimed promptly and unused managed heap capacity to be returned to the operating system where possible.
+
+> [!IMPORTANT]
+> Resident Set Size (RSS) does not directly represent the amount of application data that is currently in use.
+>
+> The D runtime, system allocator, SQLite, curl and other native libraries may retain previously allocated memory for later reuse. As a result, RSS may remain above its initial value even after temporary synchronisation data has been released.
+>
+> For a long-running monitor process, the important behaviour is that memory reaches a bounded working level and is subsequently reused, rather than increasing continuously after each synchronisation or Full Scan.
+
+The previous guidance for early 2.5.x releases that suggested allowing approximately **1 GB of memory for every 100,000 OneDrive objects** is no longer applicable to version 2.5.12 and later.
+
+As part of the version 2.5.12 memory and large-account validation, the client was repeatedly tested against a fixed dataset containing **101,494 OneDrive objects**. In these controlled tests, both the normal Microsoft Graph `/delta` pathway and the generated `/children` pathway demonstrated bounded memory behaviour over repeated authoritative scans rather than memory usage increasing in proportion to each scan.
+
+These results are validation data rather than a guaranteed memory requirement. Actual memory consumption will vary depending on platform, compiler/runtime, account contents, enabled features and workload.
+
+When diagnosing memory behaviour, the developer option:
+
+```text
+display_memory = "true"
+```
+
+can be enabled to display memory information at each monitor-loop collection boundary.
+
+The reported values include:
+
+- `usedSize` — managed heap memory currently containing live allocations.
+- `freeSize` — managed heap capacity currently reserved and available for reuse.
+- `allocatedInCurrentThread` — a cumulative allocation counter. This value will continually increase while the application runs and **does not represent current memory usage**.
+- `Resident Set Size (RSS)` — memory currently resident in the process according to the operating system, including managed and native allocations.
+
+When investigating a suspected memory issue, trends across multiple monitor loops and Full Scans are more meaningful than any individual RSS reading.
 
 ### Guidelines for Local File and Folder Naming in the Synchronisation Directory
 To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adhere strictly to the prescribed naming conventions for your files and folders within the sync directory. The guidelines detailed below are designed to preempt potential sync failures by aligning with Microsoft Windows Naming Conventions, coupled with specific OneDrive restrictions.
@@ -771,6 +803,112 @@ Performing a database consistency and integrity check on locally stored data
 means the client is validating its local database state against the local filesystem. It does not, by itself, mean that the client is performing an online full-scan true-up.
 
 The configuration option `monitor_fullscan_frequency` only controls the scheduled online full-scan true-up cadence in `--monitor` mode. An online full-scan true-up is when the client deliberately does not use the stored Microsoft Graph `/delta` link for that pass and instead performs a broader online reconciliation pass. The database consistency check and local filesystem scan may still occur during normal monitor sync cycles.
+
+##### Machine-readable monitor runtime status
+
+When `--monitor` is running, the client publishes a small machine-readable JSON status document in the same application state directory as the `items.sqlite3` database:
+
+```text
+monitor-status.json
+```
+
+For a default user configuration this is normally:
+
+```text
+~/.config/onedrive/monitor-status.json
+```
+
+For an alternate configuration directory, the file is created alongside the `items.sqlite3` used by that configuration. The resolved status-file location is also displayed by the application's runtime configuration output.
+
+This capability is enabled by default through:
+
+```text
+monitor_status = "true"
+```
+
+and can be disabled with:
+
+```text
+monitor_status = "false"
+```
+
+The file is a **runtime observability interface**. It publishes state the monitor process already knows; creating or updating it does not perform an additional Microsoft Graph request, database reconciliation or filesystem scan. It is independent of `display_memory` and does not require verbose or debug logging.
+
+A typical status document while a monitor cycle is running resembles:
+
+```json
+{
+    "application": "onedrive",
+    "conditions": {
+        "onedrive_reachability": "reachable",
+        "system_time": "TIME_OK"
+    },
+    "instance_id": "1027995-2026-10-01T21:43:16.2285174Z",
+    "mode": {
+        "download_only": false,
+        "monitor": true,
+        "monitor_interval_seconds": 300,
+        "upload_only": false
+    },
+    "pid": 1027995,
+    "process": {
+        "current_cycle_started_at": "2026-10-01T21:43:26.9855399Z",
+        "last_loop_completed_at": "",
+        "monitor_loop": 1,
+        "runtime_seconds": 10,
+        "started_at": "2026-10-01T21:43:16.2285174Z",
+        "state": "syncing"
+    },
+    "schema_version": 1,
+    "sync": {
+        "initial_successful_sync_completed": false,
+        "last_cycle": {
+            "completed_at": "",
+            "download_failures": 0,
+            "duration_seconds": 0,
+            "recycle_bin_failures": 0,
+            "result": "never_run",
+            "started_at": "",
+            "upload_failures": 0
+        },
+        "last_successful_sync_at": "",
+        "successful_cycle_count": 0
+    },
+    "updated_at": "2026-10-01T21:43:26.9855405Z"
+}
+```
+
+The key fields are:
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | Version of the JSON status schema. Consumers should use this when validating compatibility. |
+| `pid` / `instance_id` | Identity of the monitor process instance that owns the status document. |
+| `mode` | Relevant operating-mode values, including `download_only`, `upload_only` and the scheduled monitor interval. |
+| `process.state` | Current monitor runtime state. During active reconciliation this is `syncing`; after a successful completed cycle this is `idle`; a non-successful completed cycle is represented as `degraded`. |
+| `process.monitor_loop` | Current scheduled monitor-loop number. |
+| `process.current_cycle_started_at` | UTC timestamp for the currently running scheduled monitor cycle, or an empty string when no cycle is active. |
+| `process.last_loop_completed_at` | UTC timestamp for the most recently completed scheduled monitor cycle. |
+| `sync.initial_successful_sync_completed` | Becomes `true` after this process instance completes its first successful monitor synchronisation cycle. This is particularly useful as a service-readiness signal. |
+| `sync.successful_cycle_count` | Number of successfully completed monitor synchronisation cycles for the current process instance. |
+| `sync.last_successful_sync_at` | UTC timestamp of the most recent successful cycle. |
+| `sync.last_cycle.result` | Result of the most recently completed scheduled cycle. Values include `success`, `partial_failure`, `service_unreachable`, `time_unsafe`, `interrupted` and `never_run`. |
+| `sync.last_cycle.*_failures` | Counts of failed downloads, uploads and local Recycle Bin moves recorded for the most recently completed cycle. Detailed failed paths remain in the normal application output/log rather than being duplicated into the JSON status file. |
+| `conditions.onedrive_reachability` | Current known Microsoft OneDrive reachability state, such as `reachable`, `unreachable` or `unknown` during very early startup. |
+| `conditions.system_time` | The application's canonical system-time validation state, for example `TIME_OK`. |
+| `updated_at` | UTC timestamp when the status document was last published. |
+
+> [!IMPORTANT]
+> `monitor-status.json` and `--display-sync-status` answer different questions.
+>
+> * `monitor-status.json` reports the operational state and outcome of the running `--monitor` process.
+> * `--display-sync-status` performs a separate read-only point-in-time assessment of whether Microsoft OneDrive and the configured local filesystem scope are currently converged.
+>
+> For example, a `--download-only` monitor can have `sync.initial_successful_sync_completed = true` and a most recent cycle result of `success`, while `--display-sync-status` reports `NOT IN SYNC` because additional local-only files exist. Both results are correct: the monitor successfully completed all work permitted by its configured operating mode, while the local and remote data states are not identical.
+
+All status timestamps are emitted in UTC and use a trailing `Z`. This is deliberate so monitoring systems can compare timestamps without ambiguity across hosts, containers and daylight-saving transitions. Human-facing tools should convert the UTC timestamp into the viewer's local timezone when displaying it.
+
+The status file is written with restrictive permissions and replaced atomically so readers see a complete old or new document rather than partially-written JSON. On an orderly `--monitor` shutdown the file is removed. A hard termination such as `SIGKILL`, a process crash or loss of power can leave the last file behind, so external tooling should not treat file existence alone as definitive liveness after an abnormal termination; use the process identity and timestamps as well.
 
 Two common errors can occur when using monitor mode:
 *   Initialisation failure
@@ -1838,6 +1976,8 @@ If any items failed to sync, the following will be displayed:
 Sync with Microsoft OneDrive has completed, however there are items that failed to sync.
 ```
 A file list of failed upload or download items will also be listed to allow you to determine your next steps.
+
+When running in `--monitor` mode with `monitor_status = "true"`, the same cycle outcome is also reflected in `monitor-status.json`. A clean cycle is recorded as `sync.last_cycle.result = "success"`; cycles containing failed transfers are recorded as `partial_failure` together with the applicable failure counts. See [Machine-readable monitor runtime status](#machine-readable-monitor-runtime-status).
 
 In order to fix the upload or download failures, you may need to:
 *   Review the application output to determine what happened

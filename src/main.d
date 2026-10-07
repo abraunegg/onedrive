@@ -14,6 +14,7 @@ import std.conv;
 import std.datetime;
 import std.file;
 import std.getopt;
+import std.json;
 import std.net.curl: CurlException;
 import std.parallelism;
 import std.path;
@@ -145,9 +146,212 @@ bool sigtermHandlerTriggered = false;
 int terminationSignal = 0;
 int requestedExitCode = EXIT_SUCCESS;
 
+// Machine-readable monitor runtime status. This is intentionally a publication
+// layer only: all values come from state the monitor process already owns.
+// No additional Microsoft Graph, database or filesystem reconciliation work is
+// performed to populate <confdir>/monitor-status.json.
+struct MonitorRuntimeStatus {
+	bool enabled = false;
+	string instanceId;
+	string processState = "starting";
+	SysTime processStartedAt = SysTime.min;
+	MonoTime processStartedMonotonic;
+	ulong monitorLoopCount = 0;
+	SysTime lastLoopCompletedAt = SysTime.min;
+	bool initialSuccessfulSyncCompleted = false;
+	ulong successfulCycleCount = 0;
+	SysTime lastSuccessfulSyncAt = SysTime.min;
+	SysTime currentCycleStartedAt = SysTime.min;
+	MonoTime currentCycleStartedMonotonic;
+	SysTime lastCycleStartedAt = SysTime.min;
+	SysTime lastCycleCompletedAt = SysTime.min;
+	long lastCycleDurationSeconds = 0;
+	string lastCycleResult = "never_run";
+	ulong downloadFailures = 0;
+	ulong uploadFailures = 0;
+	ulong recycleBinFailures = 0;
+	string oneDriveReachability = "unknown";
+	string systemTimeState = "unknown";
+}
+
+MonitorRuntimeStatus monitorRuntimeStatus;
+bool monitorStatusWriteErrorReported = false;
+
+string monitorStatusTimestamp(SysTime value) {
+	return value == SysTime.min ? "" : value.toUTC().toISOExtString();
+}
+
+string monitorStatusFilePath() {
+	// Use the actual application-state directory so the status file always sits
+	// beside items.sqlite3, including non-default --confdir/state layouts.
+	return buildNormalizedPath(buildPath(dirName(appConfig.databaseFilePath), "monitor-status.json"));
+}
+
+void removeMonitorStatusFileIfPresent() {
+	foreach (path; [monitorStatusFilePath(), monitorStatusFilePath() ~ ".tmp"]) {
+		try {
+			if (exists(path)) remove(path);
+		} catch (FileException e) {
+			addLogEntry("WARNING: Unable to remove monitor status file '" ~ path ~ "': " ~ e.msg);
+		}
+	}
+}
+
+void writeMonitorStatusFile() {
+	if (!monitorRuntimeStatus.enabled) return;
+
+	// Always publish the canonical system-time state currently held by appConfig.
+	// The early startup snapshot can legitimately begin as TIME_UNKNOWN, but any
+	// later write must not retain that stale value after validation has completed.
+	monitorRuntimeStatus.systemTimeState = appConfig.getSystemTimeStateString();
+
+	auto nowUtc = Clock.currTime(UTC());
+	long runtimeSeconds = (MonoTime.currTime() - monitorRuntimeStatus.processStartedMonotonic).total!"seconds"();
+	string currentCycleStartedAt = monitorStatusTimestamp(monitorRuntimeStatus.currentCycleStartedAt);
+
+	JSONValue statusDocument = [
+		"schema_version": JSONValue(1),
+		"application": JSONValue("onedrive"),
+		"pid": JSONValue(cast(long)getpid()),
+		"instance_id": JSONValue(monitorRuntimeStatus.instanceId),
+		"mode": JSONValue([
+			"monitor": JSONValue(true),
+			"download_only": JSONValue(appConfig.getValueBool("download_only")),
+			"upload_only": JSONValue(appConfig.getValueBool("upload_only")),
+			"monitor_interval_seconds": JSONValue(appConfig.getValueLong("monitor_interval"))
+		]),
+		"process": JSONValue([
+			"state": JSONValue(monitorRuntimeStatus.processState),
+			"started_at": JSONValue(monitorStatusTimestamp(monitorRuntimeStatus.processStartedAt)),
+			"runtime_seconds": JSONValue(runtimeSeconds),
+			"monitor_loop": JSONValue(cast(long)monitorRuntimeStatus.monitorLoopCount),
+			"current_cycle_started_at": JSONValue(currentCycleStartedAt),
+			"last_loop_completed_at": JSONValue(monitorStatusTimestamp(monitorRuntimeStatus.lastLoopCompletedAt))
+		]),
+		"sync": JSONValue([
+			"initial_successful_sync_completed": JSONValue(monitorRuntimeStatus.initialSuccessfulSyncCompleted),
+			"successful_cycle_count": JSONValue(cast(long)monitorRuntimeStatus.successfulCycleCount),
+			"last_successful_sync_at": JSONValue(monitorStatusTimestamp(monitorRuntimeStatus.lastSuccessfulSyncAt)),
+			"last_cycle": JSONValue([
+				"started_at": JSONValue(monitorStatusTimestamp(monitorRuntimeStatus.lastCycleStartedAt)),
+				"completed_at": JSONValue(monitorStatusTimestamp(monitorRuntimeStatus.lastCycleCompletedAt)),
+				"result": JSONValue(monitorRuntimeStatus.lastCycleResult),
+				"duration_seconds": JSONValue(monitorRuntimeStatus.lastCycleDurationSeconds),
+				"download_failures": JSONValue(cast(long)monitorRuntimeStatus.downloadFailures),
+				"upload_failures": JSONValue(cast(long)monitorRuntimeStatus.uploadFailures),
+				"recycle_bin_failures": JSONValue(cast(long)monitorRuntimeStatus.recycleBinFailures)
+			])
+		]),
+		"conditions": JSONValue([
+			"onedrive_reachability": JSONValue(monitorRuntimeStatus.oneDriveReachability),
+			"system_time": JSONValue(monitorRuntimeStatus.systemTimeState)
+		]),
+		"updated_at": JSONValue(nowUtc.toISOExtString())
+	];
+
+	string statusPath = monitorStatusFilePath();
+	string temporaryStatusPath = statusPath ~ ".tmp";
+
+	try {
+		std.file.write(temporaryStatusPath, toJSON(statusDocument, true) ~ "\n");
+		temporaryStatusPath.setAttributes(appConfig.returnSecureFilePermission());
+		rename(temporaryStatusPath, statusPath);
+		monitorStatusWriteErrorReported = false;
+	} catch (FileException e) {
+		// Runtime status must never interfere with synchronisation. Report the first
+		// write failure, then avoid repeating the same warning every monitor cycle.
+		if (!monitorStatusWriteErrorReported) {
+			addLogEntry("WARNING: Unable to update monitor runtime status file '" ~ statusPath ~ "': " ~ e.msg);
+			monitorStatusWriteErrorReported = true;
+		}
+		try {
+			if (exists(temporaryStatusPath)) remove(temporaryStatusPath);
+		} catch (FileException cleanupException) {
+			if (debugLogging) addLogEntry("Unable to clean temporary monitor status file: " ~ cleanupException.msg, ["debug"]);
+		}
+	}
+}
+
+void initialiseMonitorRuntimeStatus(SysTime applicationStartedAt, MonoTime applicationStartedMonotonic) {
+	monitorRuntimeStatus.enabled = appConfig.getValueBool("monitor_status");
+	if (!monitorRuntimeStatus.enabled) {
+		removeMonitorStatusFileIfPresent();
+		return;
+	}
+
+	auto nowUtc = Clock.currTime(UTC());
+	monitorRuntimeStatus.processStartedAt = applicationStartedAt.toUTC();
+	monitorRuntimeStatus.processStartedMonotonic = applicationStartedMonotonic;
+	monitorRuntimeStatus.instanceId = to!string(getpid()) ~ "-" ~ monitorRuntimeStatus.processStartedAt.toISOExtString();
+	monitorRuntimeStatus.processState = "starting";
+	monitorRuntimeStatus.lastCycleResult = "never_run";
+	monitorRuntimeStatus.oneDriveReachability = "unknown";
+	monitorRuntimeStatus.systemTimeState = appConfig.getSystemTimeStateString();
+	writeMonitorStatusFile();
+}
+
+void beginMonitorRuntimeStatusCycle(ulong monitorLoopCount) {
+	if (!monitorRuntimeStatus.enabled) return;
+
+	monitorRuntimeStatus.monitorLoopCount = monitorLoopCount;
+	monitorRuntimeStatus.processState = "syncing";
+	monitorRuntimeStatus.currentCycleStartedAt = Clock.currTime(UTC());
+	monitorRuntimeStatus.currentCycleStartedMonotonic = MonoTime.currTime();
+	writeMonitorStatusFile();
+}
+
+void completeMonitorRuntimeStatusCycle(
+	string result,
+	string oneDriveReachability,
+	string systemTimeState,
+	ulong downloadFailures,
+	ulong uploadFailures,
+	ulong recycleBinFailures
+) {
+	if (!monitorRuntimeStatus.enabled) return;
+
+	auto completedAt = Clock.currTime(UTC());
+	long durationSeconds = 0;
+	if (monitorRuntimeStatus.currentCycleStartedAt != SysTime.min) {
+		durationSeconds = (MonoTime.currTime() - monitorRuntimeStatus.currentCycleStartedMonotonic).total!"seconds"();
+	}
+
+	monitorRuntimeStatus.lastLoopCompletedAt = completedAt;
+	monitorRuntimeStatus.lastCycleStartedAt = monitorRuntimeStatus.currentCycleStartedAt;
+	monitorRuntimeStatus.lastCycleCompletedAt = completedAt;
+	monitorRuntimeStatus.lastCycleDurationSeconds = durationSeconds;
+	monitorRuntimeStatus.lastCycleResult = result;
+	monitorRuntimeStatus.downloadFailures = downloadFailures;
+	monitorRuntimeStatus.uploadFailures = uploadFailures;
+	monitorRuntimeStatus.recycleBinFailures = recycleBinFailures;
+	monitorRuntimeStatus.oneDriveReachability = oneDriveReachability;
+	monitorRuntimeStatus.systemTimeState = systemTimeState;
+	monitorRuntimeStatus.currentCycleStartedAt = SysTime.min;
+	monitorRuntimeStatus.processState = (result == "success") ? "idle" : "degraded";
+
+	if (result == "success") {
+		monitorRuntimeStatus.successfulCycleCount++;
+		monitorRuntimeStatus.initialSuccessfulSyncCompleted = true;
+		monitorRuntimeStatus.lastSuccessfulSyncAt = completedAt;
+	}
+
+	writeMonitorStatusFile();
+}
+
+void completeMonitorRuntimeStatusShutdown() {
+	if (!monitorRuntimeStatus.enabled) return;
+
+	// monitor-status.json represents a currently running --monitor process.
+	// Remove it during orderly shutdown so external consumers cannot mistake
+	// completed process state for a live monitor instance.
+	removeMonitorStatusFileIfPresent();
+	monitorRuntimeStatus.enabled = false;
+}
+
 int main(string[] cliArgs) {
 	// Application Start Time - used during monitor loop to detail how long it has been running for
 	auto applicationStartTime = Clock.currTime();
+	auto applicationStartMonotonic = MonoTime.currTime();
 	// Disable buffering on stdout - this is needed so that when we are using plain write() it will go to the terminal without flushing
 	stdout.setvbuf(0, _IONBF);
 	
@@ -286,6 +490,13 @@ int main(string[] cliArgs) {
 	
 	// Update the current runtime application configuration (default or 'config' file read in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
+
+	// A monitor invocation owns its runtime status file from this point onward. Write
+	// the startup state before authentication/sync-engine setup so stale readiness from
+	// any previous process instance cannot survive a failed replacement startup.
+	if (appConfig.getValueBool("monitor")) {
+		initialiseMonitorRuntimeStatus(applicationStartTime, applicationStartMonotonic);
+	}
 	
 	// Set the default thread pool value based on configuration or maximum logical CPUs
 	setDefaultApplicationThreads();
@@ -689,12 +900,14 @@ int main(string[] cliArgs) {
 	}
 	MicrosoftServiceProbeResult startupServiceProbe = probeMicrosoftService(appConfig);
 	online = startupServiceProbe.reachable;
+	if (monitorRuntimeStatus.enabled) monitorRuntimeStatus.oneDriveReachability = online ? "reachable" : "unreachable";
 	
 	// If we are not 'online' - how do we handle this situation?
 	if (!online) {
 		// Record that authoritative service time could not be obtained. This is not
 		// itself proof that the local system clock is invalid.
 		validateSystemTime(appConfig, startupServiceProbe, true, false);
+		if (monitorRuntimeStatus.enabled) writeMonitorStatusFile();
 
 		// We are unable to initialise the OneDrive API as we are not online
 		if (!appConfig.getValueBool("monitor")) {
@@ -713,6 +926,7 @@ int main(string[] cliArgs) {
 			// Run the re-try of Internet connectivity test and retain the successful
 			// observation so it can immediately be used for time validation.
 			online = retryInternetConnectivityTest(appConfig, startupServiceProbe);
+			if (monitorRuntimeStatus.enabled) monitorRuntimeStatus.oneDriveReachability = online ? "reachable" : "unreachable";
 		}
 	}
 
@@ -721,6 +935,7 @@ int main(string[] cliArgs) {
 	if (online) {
 		validateSystemTime(appConfig, startupServiceProbe);
 		displaySystemTimeValidationDetails(appConfig);
+		if (monitorRuntimeStatus.enabled) writeMonitorStatusFile();
 
 		if (!appConfig.systemTimeAllowsSync()) {
 			if (!appConfig.getValueBool("monitor")) {
@@ -744,7 +959,9 @@ int main(string[] cliArgs) {
 				}
 				startupServiceProbe = probeMicrosoftService(appConfig);
 				online = startupServiceProbe.reachable;
+				if (monitorRuntimeStatus.enabled) monitorRuntimeStatus.oneDriveReachability = online ? "reachable" : "unreachable";
 				validateSystemTime(appConfig, startupServiceProbe);
+				if (monitorRuntimeStatus.enabled) writeMonitorStatusFile();
 
 				if (!online) {
 					addLogEntry("Microsoft OneDrive service is not reachable while waiting for system time recovery; time validation will be retried.");
@@ -1363,8 +1580,7 @@ int main(string[] cliArgs) {
 			// entering the monitor loop. Rate-limit any subsequent acquisition attempt so
 			// frequent local filesystem activity cannot hammer the Graph endpoint.
 			MonoTime lastWebSocketAcquisitionAttempt = MonoTime.currTime();
-			SysTime lastMonitorGcCleanup = Clock.currTime();
-			
+
 			while (performFileSystemMonitoring) {
 				if (shutdownRequested()) {
 					addShutdownTelemetry("monitor loop detected shutdown request before processing new work");
@@ -1518,6 +1734,16 @@ int main(string[] cliArgs) {
 					}
 					SysTime startFunctionProcessingTime = Clock.currTime();
 					if (debugLogging) {addLogEntry("Start Monitor Loop Time:        " ~ to!string(startFunctionProcessingTime), ["debug"]);}
+
+					// Snapshot monitor-cycle state only. This does not perform any additional
+					// sync, database or Microsoft Graph work.
+					beginMonitorRuntimeStatusCycle(monitorLoopFullCount);
+					string monitorCycleResult = "unknown";
+					string monitorCycleOneDriveReachability = "unknown";
+					string monitorCycleSystemTimeState = appConfig.getSystemTimeStateString();
+					ulong monitorCycleDownloadFailures = 0;
+					ulong monitorCycleUploadFailures = 0;
+					ulong monitorCycleRecycleBinFailures = 0;
 					
 					// Do we perform any monitor console logging output suppression?
 					// 'monitor_log_frequency' controls how often, in a non-verbose application output mode, how often 
@@ -1561,10 +1787,12 @@ int main(string[] cliArgs) {
 						monitorServiceProbe = probeMicrosoftService(appConfig);
 					}
 					if (monitorServiceProbe.reachable) {
+						monitorCycleOneDriveReachability = "reachable";
 						if (!monitorLoopServiceProbeTimeValidated) {
 							validateSystemTime(appConfig, monitorServiceProbe);
 						}
 
+						monitorCycleSystemTimeState = appConfig.getSystemTimeStateString();
 						if (appConfig.systemTimeAllowsSync()) {
 							// Starting a sync - we are online and the process-visible clock is safe
 							addLogEntry("Starting a sync with Microsoft OneDrive");
@@ -1594,6 +1822,23 @@ int main(string[] cliArgs) {
 								addLogEntry("Current synchronisation cycle was suspended because system time is not currently safe.");
 							}
 
+							// Capture the failure counters before cleanupArrays() clears per-cycle state.
+							monitorCycleDownloadFailures = cast(ulong)syncEngineInstance.fileDownloadFailures.length;
+							monitorCycleUploadFailures = cast(ulong)syncEngineInstance.fileUploadFailures.length;
+							monitorCycleRecycleBinFailures = cast(ulong)syncEngineInstance.recycleBinMoveFailures.length;
+							monitorCycleSystemTimeState = appConfig.getSystemTimeStateString();
+
+							if (exitHandlerTriggered) {
+								monitorCycleResult = "interrupted";
+							} else if (!appConfig.systemTimeAllowsSync()) {
+								monitorCycleResult = "time_unsafe";
+							} else if (syncEngineInstance.syncFailures || (monitorCycleDownloadFailures > 0) ||
+								(monitorCycleUploadFailures > 0) || (monitorCycleRecycleBinFailures > 0)) {
+								monitorCycleResult = "partial_failure";
+							} else {
+								monitorCycleResult = "success";
+							}
+
 							// Cleanup sync process arrays
 							syncEngineInstance.cleanupArrays();
 
@@ -1601,12 +1846,17 @@ int main(string[] cliArgs) {
 							if (debugLogging) {addLogEntry("Merge contents of WAL and SHM files into main database file", ["debug"]);}
 							itemDB.performCheckpoint("PASSIVE");
 						} else {
+							monitorCycleSystemTimeState = appConfig.getSystemTimeStateString();
+							monitorCycleResult = "time_unsafe";
 							addLogEntry("OneDrive synchronisation is suspended because system time is not currently safe. The monitor process will remain running and revalidate time on the next monitor cycle.");
 						}
 					} else {
 						// Not online. Preserve any previously-latched blocking state while recording
 						// that a fresh authoritative time observation is currently unavailable.
+						monitorCycleOneDriveReachability = "unreachable";
 						validateSystemTime(appConfig, monitorServiceProbe, true, false);
+						monitorCycleSystemTimeState = appConfig.getSystemTimeStateString();
+						monitorCycleResult = "service_unreachable";
 						addLogEntry("Microsoft OneDrive service is not reachable at this time. Will re-try on next sync attempt.");
 					}
 					
@@ -1626,8 +1876,9 @@ int main(string[] cliArgs) {
 					// Update elapsedTime post monitor loop actions
 					elapsedTime = Clock.currTime() - applicationStartTime;
 					
-					// Display monitor loop memory details
+					// Display monitor-loop memory telemetry before garbage collection.
 					if (displayMemoryUsage) {
+						// Loop counter
 						addLogEntry("Monitor Loop Count:   " ~ to!string(monitorLoopFullCount));
 
 						// Get the current time in the local timezone
@@ -1635,37 +1886,70 @@ int main(string[] cliArgs) {
 						addLogEntry("Timestamp:            " ~ to!string(timeStamp));
 						addLogEntry("Application Run Time: " ~ to!string(elapsedTime));
 						
-						// Display memory consumption details
+						// Display memory consumption details while all telemetry is still pre-GC.
+						addLogEntry("Memory usage before monitor-loop garbage collection");
 						displayMemoryUsageDetails();
-					}
-					
-					// Perform coarse GC cleanup for long-running monitor processes.
-					// This is intentionally time-gated and only runs at most once every 24 hours,
-					// after sync processing has completed and the client is idle.
-					auto monitorGcCleanupTime = Clock.currTime();
-					if (lastMonitorGcCleanup == SysTime.min || (monitorGcCleanupTime - lastMonitorGcCleanup) >= dur!"hours"(24)) {
-						// Avoid running this during initial startup; only run after the application
-						// has been active for at least 24 hours.
-						if (elapsedTime >= dur!"hours"(24)) {
-							// Log what we are doing
-							addLogEntry("Performing scheduled monitor-mode memory cleanup after 24 hours of runtime");
-							// Perform GC actions
-							GC.collect();  // Perform Garbage Collection
-							GC.minimize(); // Return free memory to the operating system
 
-							// When memory telemetry is enabled, record the immediate post-cleanup
-							// state so the effect of the scheduled GC/minimize operation can be
-							// distinguished from normal allocator/RSS high-water behaviour.
-							if (displayMemoryUsage) {
-								addLogEntry("Memory usage after scheduled monitor-mode memory cleanup");
-								displayMemoryUsageDetails();
-							}
-
-							// Update time gate
-							lastMonitorGcCleanup = monitorGcCleanupTime;
-						}
+						// Ensure the logging worker has written and released
+						flushPendingLogEntries();
 					}
+
+					// Reclaim unused managed heap memory after every completed monitor loop.
+					//
+					// A 100K-object memory investigation confirmed that GC.collect()
+					// and GC.minimize() perform complementary operations. GC.collect()
+					// reclaims unreachable managed objects, while GC.minimize() attempts
+					// to return unused managed heap pages to the operating system.
+					//
+					// During testing with 101,494 OneDrive objects, post-collection live
+					// managed memory consistently returned to approximately 100 KB.
+					// However, without heap minimisation, the garbage collector retained
+					// substantial unused heap capacity and process RSS remained elevated.
+					//
+					// Large synchronisation operations and scheduled full scans can
+					// temporarily allocate significant amounts of managed memory.
+					// Performing heap minimisation after each completed monitor loop
+					// allows this unused memory to be returned promptly, rather than
+					// remaining resident throughout subsequent monitor iterations.
+					//
+					// Long-running testing also demonstrated that repeated minimisation
+					// incurs negligible overhead when no additional heap pages can be
+					// released. It is deliberately performed after synchronisation and
+					// associated resource cleanup have completed, avoiding interference
+					// with active file processing.
+					//
+					// IMPORTANT: Retain both GC.collect() and GC.minimize() on every
+					// completed monitor loop. Any proposed change to this behaviour
+					// must be validated against a large dataset, including scheduled
+					// full scans and post-scan RSS recovery. Small-scale testing alone
+					// is insufficient to establish equivalent memory behaviour.
 					
+					// Publish one completed-cycle snapshot after scheduled synchronisation work
+					// has finished. Keep this before the monitor-loop GC boundary so temporary
+					// JSON publication allocations can be reclaimed during the same loop.
+					completeMonitorRuntimeStatusCycle(
+						monitorCycleResult,
+						monitorCycleOneDriveReachability,
+						monitorCycleSystemTimeState,
+						monitorCycleDownloadFailures,
+						monitorCycleUploadFailures,
+						monitorCycleRecycleBinFailures
+					);
+
+					// Keep collection and heap minimisation adjacent. Do not allocate, format,
+					// log or inspect memory between these two operations.
+					GC.collect();
+					GC.minimize();
+
+					// Report the final post-minimisation state only after both GC operations
+					// have completed. displayMemoryUsageDetails() retains the established
+					// Linux, FreeBSD and OpenBSD RSS implementations in util.d.
+					if (displayMemoryUsage) {
+						addLogEntry("Memory usage after monitor-loop heap collection and minimisation");
+						displayMemoryUsageDetails();
+						flushPendingLogEntries();
+					}
+
 					// Log that this loop is complete
 					if (debugLogging) {addLogEntry(loopStopOutputMessage, ["debug"]);}
 					
@@ -2323,7 +2607,7 @@ void processResyncDatabaseRemoval(string databaseFilePathToRemove) {
 	if (debugLogging) {addLogEntry("Testing if we have exclusive access to local database file", ["debug"]);}
 	
 	// Are we the only running instance? Test that we can open the database file path
-	itemDB = new ItemDatabase(databaseFilePathToRemove);
+	itemDB = new ItemDatabase(databaseFilePathToRemove, appConfig.getValueBool("resync"));
 	
 	// did we successfully initialise the database class?
 	if (!itemDB.isDatabaseInitialised()) {
@@ -2786,6 +3070,9 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 
 			addShutdownTelemetry("performSynchronisedExitProcess entered by scope: " ~ caller);
 			addShutdownTelemetry("planned final exit code: " ~ to!string(requestedExitCode) ~ ", termination signal: " ~ to!string(terminationSignal));
+
+			// Remove monitor runtime status before configuration/state objects are destroyed.
+			completeMonitorRuntimeStatusShutdown();
 
 			// Remove Desktop integration
 			if (performFileSystemMonitoring && appConfig !is null) {

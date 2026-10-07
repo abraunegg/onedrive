@@ -80,6 +80,14 @@ struct Item {
 	string   relocParentId;
 }
 
+// Minimal database projection used only to walk a subtree for native Full Scan
+// True Up presence reconciliation. The caller retains only id; type is consumed
+// immediately to determine whether recursion is required.
+struct ChildItemIdentity {
+	string   id;
+	ItemType type;
+}
+
 // Construct an Item DB struct from a JSON driveItem
 Item makeDatabaseItem(JSONValue driveItem) {
 	
@@ -232,7 +240,7 @@ final class ItemDatabase {
 	bool databaseInitialised = false;
 	private Object databaseLock;
 	
-	this(string filename) {
+	this(string filename, bool resyncRequested = false) {
 		// Initialise the database monitor used to serialise all database access
 		databaseLock = new Object();
 		
@@ -294,15 +302,24 @@ final class ItemDatabase {
 		// Validate the physical item table before preparing or executing any normal
 		// synchronisation queries. PRAGMA user_version alone does not prove that
 		// the table has the column names and positions buildItem() expects.
-		string schemaMismatchReason;
-		if (!validateItemDatabaseShape(schemaMismatchReason)) {
-			addLogEntry();
-			addLogEntry("FATAL: The local item database schema does not match the schema expected by this version of the application.", ["info", "notify"]);
-			addLogEntry("Database schema mismatch: " ~ schemaMismatchReason);
-			addLogEntry("A --resync is required to rebuild the local item database.");
-			addLogEntry("Re-run the client with '--resync' appended to your normal '--sync' or '--monitor' command.");
-			addLogEntry();
-			forceExit(EXIT_RESYNC_REQUIRED);
+		//
+		// When --resync has been explicitly requested, main.d opens the existing
+		// database here only to confirm exclusive access before deleting it. In that
+		// specific path the database contents are about to be discarded, so physical
+		// schema validation must not prevent the requested recovery operation.
+		if (!resyncRequested) {
+			string schemaMismatchReason;
+			if (!validateItemDatabaseShape(schemaMismatchReason)) {
+				addLogEntry();
+				addLogEntry("FATAL: The local item database schema does not match the schema expected by this version of the application.", ["info", "notify"]);
+				addLogEntry("Database schema mismatch: " ~ schemaMismatchReason);
+				addLogEntry("A --resync is required to rebuild the local item database.");
+				addLogEntry("Re-run the client with '--resync' appended to your normal '--sync' or '--monitor' command.");
+				addLogEntry();
+				forceExit(EXIT_RESYNC_REQUIRED);
+			}
+		} else {
+			if (debugLogging) {addLogEntry("Skipping physical item database schema validation because --resync has been requested", ["debug"]);}
 		}
 		
 		// What is the threadsafe value
@@ -652,6 +669,46 @@ final class ItemDatabase {
 		}
 	}
 
+	// Select only the fields required to enumerate the identity of a database
+	// subtree. Avoid SELECT * and buildItem() when native Full Scan True Up only
+	// needs to know which historical item IDs must be observed online.
+	ChildItemIdentity[] selectChildItemIdentities(const(char)[] driveId, const(char)[] id) {
+		synchronized(databaseLock) {
+			ChildItemIdentity[] items;
+			auto stmt = db.prepare("SELECT id, type FROM item WHERE driveId = ?1 AND parentId = ?2");
+			scope(exit) stmt.finalise();
+
+			try {
+				stmt.bind(1, driveId);
+				stmt.bind(2, id);
+				auto res = stmt.exec();
+
+				while (!res.empty) {
+					auto dbRow = res.front;
+					ChildItemIdentity item = {
+						id: dbRow[0].dup,
+					};
+
+					switch (dbRow[1]) {
+						case "file":   item.type = ItemType.file;   break;
+						case "dir":    item.type = ItemType.dir;    break;
+						case "remote": item.type = ItemType.remote; break;
+						case "root":   item.type = ItemType.root;   break;
+						default: assert(0, "Invalid item type");
+					}
+
+					items ~= item;
+					res.step();
+				}
+			} catch (SqliteException exception) {
+				detailSQLErrorMessage(exception);
+				items = [];
+			}
+
+			return items;
+		}
+	}
+
 	Item[] selectChildren(const(char)[] driveId, const(char)[] id) {
 		synchronized(databaseLock) {
 			Item[] items;
@@ -784,7 +841,8 @@ final class ItemDatabase {
 	// returns true if an item id is in the database
 	bool idInLocalDatabase(const(string) driveId, const(string) id) {
 		synchronized(databaseLock) {
-			auto p = db.prepare(selectItemByIdStmt);
+			// Existence checks do not need to materialise a full Item row.
+			auto p = db.prepare("SELECT 1 FROM item WHERE driveId = ?1 AND id = ?2 LIMIT 1");
 			scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
 			try {
 				p.bind(1, driveId);
@@ -1050,7 +1108,11 @@ final class ItemDatabase {
 			string anchorCandidateItemId;
 
 			// DB Statements
-			auto s = db.prepare("SELECT * FROM item WHERE driveId = ?1 AND id = ?2");
+			// Path reconstruction needs only seven fields. Database structure is
+			// validated at startup; the timestamp is retained here so corrupt
+			// database records still trigger the existing fatal error path.
+			auto s = db.prepare("SELECT id, name, type, mtime, parentId, relocDriveId, relocParentId "
+			                    ~ "FROM item WHERE driveId = ?1 AND id = ?2");
 			auto s2 = db.prepare("SELECT driveId, id FROM item WHERE remoteDriveId = ?1 AND remoteId = ?2");
 
 			scope(exit) {
@@ -1066,7 +1128,36 @@ final class ItemDatabase {
 					auto r = s.exec();
 
 					if (!r.empty) {
-						item = buildItem(r);
+						// Do not construct a full Item (or duplicate hashes, tags and
+						// remote metadata) for each ancestor of every computed path.
+						// Keep the same type, timestamp and relocation checks as buildItem().
+						auto dbRow = r.front;
+						assert(dbRow.length == 7, "Unexpected computePath projection width");
+						item.id = dbRow[0].dup;
+						item.name = dbRow[1].dup;
+						switch (dbRow[2]) {
+							case "file":   item.type = ItemType.file;   break;
+							case "dir":    item.type = ItemType.dir;    break;
+							case "remote": item.type = ItemType.remote; break;
+							case "root":   item.type = ItemType.root;   break;
+							default: assert(0, "Invalid item type");
+						}
+						item.parentId = dbRow[4].dup;
+						item.relocDriveId = dbRow[5].dup;
+						item.relocParentId = dbRow[6].dup;
+
+						string dbMtime = dbRow[3].dup;
+						if (!parseUTCDateTime(dbMtime, item.mtime)) {
+							addLogEntry();
+							addLogEntry("FATAL: The DB record mtime entry is not a valid ISO timestamp entry. Please attempt a --resync to fix the local database.");
+							addLogEntry("FATAL: Invalid DB mtime value: " ~ dbMtime);
+							addLogEntry("FATAL: DB item driveId: " ~ driveId);
+							addLogEntry("FATAL: DB item id: " ~ item.id);
+							addLogEntry("FATAL: DB item name: " ~ item.name);
+							addLogEntry("FATAL: DB item parentId: " ~ item.parentId);
+							addLogEntry();
+							forceExit();
+						}
 
 						// Track the highest non-root row we encounter
 						if (item.type != ItemType.root) {

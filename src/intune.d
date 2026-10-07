@@ -364,6 +364,8 @@ BrokerCallResult call_broker_method(string methodName, string requestJson, int t
 		if (try_parse_json_response(jsonResponse, parsed)) {
 			result.responseIsJson = true;
 			result.parsedJson = parsed;
+			// BrokerCallResult now retains the parsed response.
+			parsed = null;
 		}
 	}
 

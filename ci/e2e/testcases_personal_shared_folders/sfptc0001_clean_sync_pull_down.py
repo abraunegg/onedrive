@@ -17,7 +17,7 @@ from testcases_personal_shared_folders.shared_folder_common import (
 class SharedFolderPersonalTestCase0001CleanSyncPullDown(E2ETestCase):
     case_id = "sfptc0001"
     name = "personal shared folders clean sync pull down"
-    description = "Validate that --sync --verbose pulls down the preserved Personal Account shared-folder topology without ghost folders"
+    description = "Validate that --sync --verbose --verbose pulls down the preserved Personal Account shared-folder topology without ghost folders"
 
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
@@ -42,6 +42,7 @@ class SharedFolderPersonalTestCase0001CleanSyncPullDown(E2ETestCase):
         command = [
             context.onedrive_bin,
             "--sync",
+            "--verbose",
             "--verbose",
             "--resync",
             "--resync-auth",

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import traceback
 from pathlib import Path
@@ -92,6 +93,8 @@ from testcases.tc0076_safebackup_resync_content_conflict_validation import TestC
 from testcases.tc0077_timestamp_authority_validation import TestCase0077TimestampAuthorityValidation
 from testcases.tc0078_monitor_mode_rename_to_invalid_name import TestCase0078MonitorModeRenameToInvalidName
 from testcases.tc0079_display_sync_status_validation import TestCase0079DisplaySyncStatusValidation
+from testcases.tc0080_monitor_remote_directory_rename_reconciliation import TestCase0080MonitorRemoteDirectoryRenameReconciliation
+from testcases.tc0081_historical_database_upgrade_validation import TestCase0081HistoricalDatabaseUpgradeValidation
 
 
 def build_test_suite() -> list:
@@ -175,6 +178,8 @@ def build_test_suite() -> list:
         TestCase0077TimestampAuthorityValidation(),
         TestCase0078MonitorModeRenameToInvalidName(),
         TestCase0079DisplaySyncStatusValidation(),
+        TestCase0080MonitorRemoteDirectoryRenameReconciliation(),
+        TestCase0081HistoricalDatabaseUpgradeValidation(),
     ]
 
 
@@ -306,6 +311,7 @@ def main() -> int:
             sync_dir=context.default_sync_dir,
             log_dir=context.suite_cleanup_log_dir,
         )
+        shutil.rmtree(context.suite_cleanup_config_dir, ignore_errors=True)
 
         if not cleanup_ok:
             context.log(f"Suite cleanup FAILED: {cleanup_reason}")

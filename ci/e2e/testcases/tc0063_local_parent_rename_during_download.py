@@ -11,6 +11,7 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
+from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, copy_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair
 
 
 class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
@@ -23,6 +24,8 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
 
     TARGET_RELATIVE = "Documents/divers/jeux intéressants.odt"
     NOTES_RELATIVE = "Documents/divers/Notes/dummy.txt"
+    XLSX_RELATIVE = "Documents/divers/Notes/real-workbook.xlsx"
+    XLSX_PAYLOAD_ROWS = 32
 
     def _write_config(self, config_path: Path, sync_dir: Path, *, local_first: bool = False) -> None:
         content = (
@@ -208,6 +211,11 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
         root_name = f"ZZ_E2E_TC0063_{context.run_id}_{os.getpid()}"
         target_relative = f"{root_name}/{self.TARGET_RELATIVE}"
         notes_relative = f"{root_name}/{self.NOTES_RELATIVE}"
+        xlsx_relative = f"{root_name}/{self.XLSX_RELATIVE}"
+        seed_xlsx = seed_root / xlsx_relative
+        local_xlsx = local_root / xlsx_relative
+        remote_update_xlsx = remote_update_root / xlsx_relative
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0063:{os.getpid()}"
 
         reset_directory(seed_root)
         reset_directory(local_root)
@@ -215,6 +223,13 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
 
         self._write_large_file(seed_root / target_relative, size_mb=48, fill_byte=b"A")
         write_text_file(seed_root / notes_relative, "TC0063 baseline Notes content\n")
+        generated_xlsx = create_random_xlsx_pair(
+            seed_xlsx,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0063 parent rename during download workbook",
+        )
         self._write_large_file(remote_update_root / target_relative, size_mb=80, fill_byte=b"B")
         write_text_file(remote_update_root / notes_relative, "TC0063 baseline Notes content\n")
 
@@ -289,6 +304,31 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
         if initial_download_result.returncode != 0:
             return self.fail_result(self.case_id, self.name, f"Initial download failed with status {initial_download_result.returncode}", artifacts, {"initial_download_returncode": initial_download_result.returncode})
 
+        initial_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_0)
+        if initial_xlsx_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Initial download did not establish a valid Microsoft-settled XLSX pair: {initial_xlsx_error}",
+                artifacts,
+                {"initial_download_returncode": initial_download_result.returncode, "initial_xlsx_validation_error": initial_xlsx_error},
+            )
+
+        # Start the XLSX remote update from the bytes Microsoft actually returned. This preserves
+        # any SharePoint enrichment in the package while changing only the deterministic revision
+        # marker, avoiding false byte-identity assumptions for documentLibrary targets.
+        copy_xlsx_pair(local_xlsx, remote_update_xlsx)
+        mutate_xlsx_pair_revision(remote_update_xlsx, REVISION_0, REVISION_1)
+        remote_update_xlsx_error = validate_xlsx_pair(remote_update_xlsx, REVISION_1)
+        if remote_update_xlsx_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Prepared remote-update XLSX pair is invalid: {remote_update_xlsx_error}",
+                artifacts,
+                {"remote_update_xlsx_validation_error": remote_update_xlsx_error},
+            )
+
         # Remote-side content change: the local DB remains from the initial download, and the
         # reproduction sync below is a normal local_first sync, matching the reported user config.
         remote_update_command = [
@@ -346,6 +386,13 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
             "root_name": root_name,
             "target_relative": target_relative,
             "notes_relative": notes_relative,
+            "xlsx_relative": xlsx_relative,
+            "xlsx_seed": xlsx_seed,
+            "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
+            "generated_xlsx_size": int(generated_xlsx["size_bytes"]),
+            "generated_large_xlsx_size": int(generated_xlsx["large_size_bytes"]),
+            "initial_xlsx_validation_error": initial_xlsx_error,
+            "remote_update_xlsx_validation_error": remote_update_xlsx_error,
             "seed_returncode": seed_result.returncode,
             "initial_download_returncode": initial_download_result.returncode,
             "remote_update_returncode": remote_update_result.returncode,

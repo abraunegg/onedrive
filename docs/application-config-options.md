@@ -47,6 +47,7 @@ Before reading this document, please ensure you are running application version 
   - [monitor_fullscan_frequency](#monitor_fullscan_frequency)
   - [monitor_interval](#monitor_interval)
   - [monitor_log_frequency](#monitor_log_frequency)
+  - [monitor_status](#monitor_status)
   - [no_remote_delete](#no_remote_delete)
   - [notify_file_actions](#notify_file_actions)
   - [notify_monitor_start](#notify_monitor_start)
@@ -773,6 +774,42 @@ Sync with Microsoft OneDrive is complete
 
 > [!NOTE]
 > If verbose application output is being used (`--verbose`), then this configuration setting has zero effect, as application verbose output takes priority over application output suppression.
+
+### monitor_status
+_**Description:**_ This configuration option controls whether `--monitor` mode publishes a local machine-readable runtime status file named `monitor-status.json`. The file is stored in the same application state directory as `items.sqlite3` and is intended for local observability tools, service supervisors, container orchestration and other automation that needs to understand the state of the running monitor process without parsing normal human-readable log output.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ True
+
+_**Config Example:**_ `monitor_status = "true"` or `monitor_status = "false"`
+
+_**CLI Option Use:**_ *None - this is a config file option only*
+
+When enabled, the client creates and maintains:
+
+```text
+<application-state-directory>/monitor-status.json
+```
+
+For the default configuration this is normally:
+
+```text
+~/.config/onedrive/monitor-status.json
+```
+
+The status document contains operational state already known by the running client, including the process/instance identity, configured monitor interval, current monitor state, monitor loop count, whether an initial successful synchronisation has completed, the most recent monitor-cycle result, transfer-failure counts, Microsoft OneDrive reachability and the current system-time validation state.
+
+> [!IMPORTANT]
+> `monitor-status.json` is an operational runtime-status interface. It does **not** perform an additional Microsoft Graph query, database reconciliation or filesystem scan, and it does not replace `--display-sync-status`. Use `--display-sync-status` when you need a point-in-time assessment of whether the local and remote data states are converged.
+
+> [!NOTE]
+> The file is created only for `--monitor` operation. It is written with restrictive file permissions and updated using atomic replacement so readers do not observe a partially-written JSON document. On an orderly monitor shutdown the status file and its temporary file are removed. An abnormal termination such as `SIGKILL`, process crash or power failure can leave the last status file behind; consumers should therefore use fields such as `pid`, `instance_id` and `updated_at` when evaluating potentially stale state.
+
+> [!NOTE]
+> All timestamps in `monitor-status.json` are emitted in UTC using ISO-8601/RFC-3339-style notation with a trailing `Z`. Monitoring or presentation tools should convert these timestamps to the desired local timezone for human display.
+
+For a detailed description of the runtime status fields and their relationship to `--display-sync-status`, see [Machine-readable monitor runtime status](./usage.md#machine-readable-monitor-runtime-status).
 
 ### no_remote_delete
 _**Description:**_ This configuration option controls whether local file and folder deletes are actioned on Microsoft OneDrive.

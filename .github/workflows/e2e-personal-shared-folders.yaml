@@ -129,59 +129,11 @@ jobs:
       - name: Build markdown summary
         id: summary
         run: |
-          set -euo pipefail
-
-          primary_results="artifacts/e2e-personal-shared-folders/results.json"
-          gate_results="artifacts/e2e-personal-shared-folders/gate.json"
-          if [ -f "$primary_results" ]; then
-            f="$primary_results"
-          else
-            f="$(find artifacts/e2e-personal-shared-folders \
-              -path '*/debug-rerun/*' -prune -o \
-              -name results.json -type f -print | head -n 1 || true)"
-          fi
-          if [ -z "$f" ] || [ ! -f "$f" ]; then
-            echo "md=⚠️ Personal Shared Folder E2E ran but results.json was not found." >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          debug_recovered="false"
-          if [ -f "$gate_results" ]; then
-            debug_recovered="$(jq -r '.recovered_by_debug_rerun // false' "$gate_results")"
-            effective_results="$(jq -r '.effective_results // empty' "$gate_results")"
-            if [ "$debug_recovered" = "true" ] && [ -n "$effective_results" ]; then
-              candidate="artifacts/e2e-personal-shared-folders/${effective_results#ci/e2e/out/}"
-              if [ -f "$candidate" ]; then
-                f="$candidate"
-              fi
-            fi
-          fi
-
-          total=$(jq -r '.cases | length' "$f")
-          passed=$(jq -r '[.cases[] | select(.status=="pass")] | length' "$f")
-          failed=$(jq -r '[.cases[] | select(.status=="fail")] | length' "$f")
-
-          failures=$(jq -r '.cases[]
-            | select(.status=="fail")
-            | "- Test Case \(.id // "????"): \(.name) — \(.reason // "no reason provided")"' "$f" || true)
-
-          md="## Personal Account Shared Folder Testing\n"
-          md+="**${total}** Test Cases Run  \n"
-          md+="**${passed}** Test Cases Passed  \n"
-          md+="**${failed}** Test Cases Failed  \n\n"
-
-          if [ "$debug_recovered" = "true" ]; then
-            md+="⚠️ Primary run had transient failure(s), but all failed case(s) passed during debug rerun. Treating workflow as passed.  \n\n"
-          fi
-
-          if [ "$failed" -gt 0 ] && [ -n "$failures" ]; then
-            md+="### Personal Shared Folder Test Failures\n"
-            md+="$failures\n"
-          fi
-
-          echo "md<<EOF" >> "$GITHUB_OUTPUT"
-          echo -e "$md" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          python3 ci/e2e/build_pr_summary.py \
+            --artifact-dir artifacts/e2e-personal-shared-folders \
+            --default-target personal-shared-folders \
+            --heading "Personal Account Shared Folder Testing" \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Find PR associated with this commit
         id: pr

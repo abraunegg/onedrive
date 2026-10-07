@@ -8,9 +8,11 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists, xlsx_pair_all_files
 
 
 class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
+    XLSX_PAYLOAD_ROWS = 32
     case_id = "0061"
     name = "remote move into skip_dir removes stale local source files"
     description = (
@@ -146,6 +148,15 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             path.replace(dcim_relative, archive_2025_relative, 1): content
             for path, content in moved_source_files.items()
         }
+        xlsx_source_relative = f"{dcim_relative}/move-real-workbook.xlsx"
+        xlsx_destination_relative = xlsx_source_relative.replace(dcim_relative, archive_2025_relative, 1)
+        xlsx_source_path = linux_sync_root / xlsx_source_relative
+        xlsx_destination_path = linux_sync_root / xlsx_destination_relative
+        mutator_xlsx_source_path = mutator_sync_root / xlsx_source_relative
+        mutator_xlsx_destination_path = mutator_sync_root / xlsx_destination_relative
+        verify_xlsx_source_path = verify_sync_root / xlsx_source_relative
+        verify_xlsx_destination_path = verify_sync_root / xlsx_destination_relative
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0061:{os.getpid()}"
 
         context.prepare_minimal_config_dir(
             linux_conf,
@@ -162,6 +173,13 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
 
         for relative_path, content in source_files.items():
             write_text_file(linux_sync_root / relative_path, content)
+        generated_xlsx = create_random_xlsx_pair(
+            xlsx_source_path,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0061 remote move into skip_dir workbook",
+        )
 
         phase_files = {
             "seed": (case_log_dir / "phase1_linux_seed_stdout.log", case_log_dir / "phase1_linux_seed_stderr.log"),
@@ -194,6 +212,14 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             "moved_source_files": sorted(moved_source_files),
             "retained_source_files": sorted(retained_source_files),
             "moved_files": sorted(moved_files),
+            "xlsx_source_relative": xlsx_source_relative,
+            "xlsx_large_source_relative": large_xlsx_relative(xlsx_source_relative),
+            "xlsx_destination_relative": xlsx_destination_relative,
+            "xlsx_large_destination_relative": large_xlsx_relative(xlsx_destination_relative),
+            "xlsx_seed": xlsx_seed,
+            "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
+            "generated_xlsx_size": int(generated_xlsx["size_bytes"]),
+            "generated_large_xlsx_size": int(generated_xlsx["large_size_bytes"]),
             "linux_sync_root": str(linux_sync_root),
             "mutator_sync_root": str(mutator_sync_root),
             "verify_sync_root": str(verify_sync_root),
@@ -236,6 +262,20 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         details["linux_source_files_exist_after_seed"] = {
             relative: (linux_sync_root / relative).is_file() for relative in source_files
         }
+        details["linux_xlsx_validation_error_after_seed"] = (
+            validate_xlsx_pair(xlsx_source_path, REVISION_0)
+            if xlsx_pair_all_files(xlsx_source_path)
+            else "Seeded XLSX pair is missing after phase 1"
+        )
+        if details["linux_xlsx_validation_error_after_seed"]:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Linux seed phase did not leave a valid XLSX pair: {details['linux_xlsx_validation_error_after_seed']}",
+                artifacts,
+                details,
+            )
 
         # Phase 2: create an unfiltered second-client view of the remote tree.
         # This represents the machine / OneDrive endpoint that will perform the move.
@@ -271,6 +311,20 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             if not source_path.is_file():
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(self.case_id, self.name, f"Mutator did not download expected source before move: {source_relative}", artifacts, details)
+        details["mutator_xlsx_validation_error_after_download"] = (
+            validate_xlsx_pair(mutator_xlsx_source_path, REVISION_0)
+            if xlsx_pair_all_files(mutator_xlsx_source_path)
+            else "Mutator did not download the expected XLSX pair before move"
+        )
+        if details["mutator_xlsx_validation_error_after_download"]:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Mutator XLSX baseline is invalid before move: {details['mutator_xlsx_validation_error_after_download']}",
+                artifacts,
+                details,
+            )
 
         # Phase 2b: create only the destination archive directory before
         # starting monitor. This is important because monitor/inotify must have
@@ -304,6 +358,9 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             if (mutator_sync_root / moved_relative).exists():
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(self.case_id, self.name, f"Mutator destination file unexpectedly exists before monitor move: {moved_relative}", artifacts, details)
+        if xlsx_pair_any_exists(mutator_xlsx_destination_path):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name, f"Mutator XLSX destination unexpectedly exists before monitor move: {xlsx_destination_relative}", artifacts, details)
 
         # Phase 3: run the mutator as a real synced endpoint in --monitor mode,
         # then move the local files while monitor is active. This avoids the
@@ -380,16 +437,51 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                 if not per_file_processed:
                     break
 
+            xlsx_move_processed = False
+            if all(move_results.get(relative, False) for relative in sorted(moved_source_files)):
+                context.log(
+                    f"Test Case {self.case_id}: mutator monitor moving local XLSX pair: "
+                    f"{xlsx_source_relative} -> {xlsx_destination_relative}"
+                )
+                mutator_xlsx_destination_path.parent.mkdir(parents=True, exist_ok=True)
+                rename_xlsx_pair(mutator_xlsx_source_path, mutator_xlsx_destination_path)
+                xlsx_required_patterns = [
+                    f"[M] Local item moved: ./{xlsx_source_relative} -> ./{xlsx_destination_relative}",
+                    f"Moving ./{xlsx_source_relative} to ./{xlsx_destination_relative}",
+                    f"[M] Local item moved: ./{large_xlsx_relative(xlsx_source_relative)} -> ./{large_xlsx_relative(xlsx_destination_relative)}",
+                    f"Moving ./{large_xlsx_relative(xlsx_source_relative)} to ./{large_xlsx_relative(xlsx_destination_relative)}",
+                ]
+                required_move_patterns.extend(xlsx_required_patterns)
+                xlsx_move_processed, xlsx_move_segment = self._wait_for_stdout_growth_patterns(
+                    phase_files["mutator_monitor"][0],
+                    start_offset=current_log_offset,
+                    required_patterns=xlsx_required_patterns,
+                    timeout_seconds=180,
+                )
+                mutator_post_move_log_segment += xlsx_move_segment
+
             details["mutator_source_files_exist_after_local_move"] = {
                 relative: (mutator_sync_root / relative).exists() for relative in source_files
             }
             details["mutator_destination_files_exist_after_local_move"] = {
                 relative: (mutator_sync_root / relative).is_file() for relative in moved_files
             }
+            details["mutator_xlsx_source_exists_after_local_move"] = xlsx_pair_any_exists(mutator_xlsx_source_path)
+            details["mutator_xlsx_destination_exists_after_local_move"] = xlsx_pair_all_files(mutator_xlsx_destination_path)
+            details["mutator_xlsx_destination_validation_error"] = (
+                validate_xlsx_pair(mutator_xlsx_destination_path, REVISION_0)
+                if xlsx_pair_all_files(mutator_xlsx_destination_path)
+                else "Moved XLSX pair is missing after local move"
+            )
             details["mutator_required_move_patterns"] = required_move_patterns
             details["mutator_per_file_move_results"] = move_results
+            details["mutator_xlsx_move_processed"] = xlsx_move_processed
 
-            mutator_move_processed = all(move_results.get(relative, False) for relative in sorted(moved_source_files))
+            mutator_move_processed = (
+                all(move_results.get(relative, False) for relative in sorted(moved_source_files))
+                and xlsx_move_processed
+                and not details["mutator_xlsx_destination_validation_error"]
+            )
             details["mutator_move_processed"] = mutator_move_processed
             details["mutator_post_move_bad_markers"] = self._contains_bad_monitor_move_side_effects(mutator_post_move_log_segment)
             details["mutator_post_move_log_segment_length"] = len(mutator_post_move_log_segment)
@@ -487,7 +579,15 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                 ),
                 "archive_download_logged_in_reconcile": any(
                     self._monitor_output_contains(reconcile_combined, f"Downloading file: {moved_relative}")
-                    for moved_relative in moved_files
+                    for moved_relative in [*moved_files, xlsx_destination_relative, large_xlsx_relative(xlsx_destination_relative)]
+                ),
+                "linux_xlsx_source_exists_after_reconcile": xlsx_pair_any_exists(xlsx_source_path),
+                "linux_xlsx_destination_exists_after_reconcile": xlsx_pair_any_exists(xlsx_destination_path),
+                "verify_xlsx_source_exists": xlsx_pair_any_exists(verify_xlsx_source_path),
+                "verify_xlsx_destination_validation_error": (
+                    validate_xlsx_pair(verify_xlsx_destination_path, REVISION_0)
+                    if xlsx_pair_all_files(verify_xlsx_destination_path)
+                    else "Remote truth is missing the moved XLSX pair"
                 ),
             }
         )
@@ -515,6 +615,18 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                 failures.append(f"Linux skip client still contains stale moved source file after remote move into skip_dir: {source_relative}")
             if source_relative in verify_manifest or (verify_sync_root / source_relative).exists():
                 failures.append(f"Remote truth still contains old moved source file after move: {source_relative}")
+
+        if details["linux_xlsx_source_exists_after_reconcile"]:
+            failures.append(f"Linux skip client still contains stale moved XLSX source after remote move into skip_dir: {xlsx_source_relative}")
+        if details["verify_xlsx_source_exists"]:
+            failures.append(f"Remote truth still contains old moved XLSX source after move: {xlsx_source_relative}")
+        if details["linux_xlsx_destination_exists_after_reconcile"]:
+            failures.append(f"Linux skip client downloaded skipped XLSX destination unexpectedly: {xlsx_destination_relative}")
+        if details["verify_xlsx_destination_validation_error"]:
+            failures.append(
+                "Remote truth is missing or contains an invalid moved XLSX pair: "
+                f"{details['verify_xlsx_destination_validation_error']}"
+            )
 
         for retained_relative, expected_content in retained_source_files.items():
             linux_retained_path = linux_sync_root / retained_relative

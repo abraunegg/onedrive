@@ -10,13 +10,16 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, unlink_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
 
 class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
     case_id = "0043"
     name = "monitor mode local delete propagation"
-    description = "Delete a local file under --monitor and validate the remote delete occurs as expected"
+    description = "Delete passive TXT and real XLSX files under --monitor and validate both remote deletes occur as expected"
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
         write_text_file(
@@ -96,18 +99,22 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
         root_name = f"ZZ_E2E_TC0043_{context.run_id}_{os.getpid()}"
         keep_relative = f"{root_name}/anchor.txt"
         delete_relative = f"{root_name}/delete-me.txt"
+        delete_xlsx_relative = f"{root_name}/delete-me.xlsx"
 
         keep_local_path = sync_root / keep_relative
         delete_local_path = sync_root / delete_relative
+        delete_xlsx_local_path = sync_root / delete_xlsx_relative
 
         keep_verify_path = verify_root / keep_relative
         delete_verify_path = verify_root / delete_relative
+        delete_xlsx_verify_path = verify_root / delete_xlsx_relative
 
         keep_content = "TC0043 anchor\n"
         delete_content = (
             "TC0043 monitor mode local delete propagation\n"
             "This file should be removed while --monitor is active.\n"
         )
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0043:{os.getpid()}"
 
         context.bootstrap_config_dir(conf_main)
         write_text_file(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
@@ -148,6 +155,9 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
             "root_name": root_name,
             "keep_relative": keep_relative,
             "delete_relative": delete_relative,
+            "delete_xlsx_relative": delete_xlsx_relative,
+            "xlsx_seed": xlsx_seed,
+            "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "sync_root": str(sync_root),
             "verify_root": str(verify_root),
             "conf_main": str(conf_main),
@@ -156,6 +166,15 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
 
         write_text_file(keep_local_path, keep_content)
         write_text_file(delete_local_path, delete_content)
+        generated = create_random_xlsx_pair(
+            delete_xlsx_local_path,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0043 monitor local delete workbook",
+        )
+        details["generated_xlsx_size"] = int(generated["size_bytes"])
+        details["seed_xlsx_validation_error"] = validate_xlsx_pair(delete_xlsx_local_path, REVISION_0)
 
         seed_command = [
             context.onedrive_bin,
@@ -220,14 +239,19 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
 
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
 
-            context.log(f"Test Case {self.case_id}: deleting local file while monitor is running: {delete_relative}")
+            context.log(f"Test Case {self.case_id}: deleting local files while monitor is running: {delete_relative}, {delete_xlsx_relative}")
             if delete_local_path.exists():
                 delete_local_path.unlink()
+            if xlsx_pair_any_exists(delete_xlsx_local_path):
+                unlink_xlsx_pair(delete_xlsx_local_path)
 
             details["local_deleted_exists_after_unlink"] = delete_local_path.exists()
+            details["local_deleted_xlsx_exists_after_unlink"] = xlsx_pair_any_exists(delete_xlsx_local_path)
 
             required_patterns = [
                 f"Deleting item from Microsoft OneDrive: {delete_relative}",
+                f"Deleting item from Microsoft OneDrive: {delete_xlsx_relative}",
+                f"Deleting item from Microsoft OneDrive: {large_xlsx_relative(delete_xlsx_relative)}",
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
@@ -269,6 +293,7 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
 
         details["verify_keep_exists"] = keep_verify_path.is_file()
         details["verify_deleted_exists"] = delete_verify_path.exists()
+        details["verify_deleted_xlsx_exists"] = xlsx_pair_any_exists(delete_xlsx_verify_path)
 
         self._write_metadata(metadata_file, details)
 
@@ -294,7 +319,16 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Remote verification still contains deleted file: {delete_relative}",
+                f"Remote verification still contains deleted passive TXT file: {delete_relative}",
+                artifacts,
+                details,
+            )
+
+        if xlsx_pair_any_exists(delete_xlsx_verify_path):
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote verification still contains deleted XLSX file: {delete_xlsx_relative}",
                 artifacts,
                 details,
             )
