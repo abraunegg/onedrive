@@ -24,10 +24,12 @@ PKG_PROG_PKG_CONFIG
 AC_SUBST([PACKAGE_DATE])
 
 dnl Determine D compiler
-dnl Check for supported D compilers in preference order. OpenBSD installs
-dnl GCC's D frontend as egdc, so keep it as the final GDC fallback.
+dnl Check for supported D compilers in preference order. Prefer LDC's native
+dnl ldc2 driver, then its DMD-compatible ldmd2 wrapper. DMD and GDC remain
+dnl supported fallbacks. OpenBSD installs GCC's D frontend as egdc, so keep it
+dnl as the final GDC fallback.
 dnl Furthermore, set DC_TYPE and export compiler-specific flags into Makefile.
-AC_CHECK_PROGS([DC], [dmd ldmd2 ldc2 gdmd gdc egdc], NOT_FOUND)
+AC_CHECK_PROGS([DC], [ldc2 ldmd2 dmd gdmd gdc egdc], NOT_FOUND)
 DC_TYPE=
 case $(basename $DC) in
         *ldc2*) DC_TYPE=ldc ;;
