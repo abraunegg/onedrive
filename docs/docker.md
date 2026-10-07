@@ -112,7 +112,7 @@ The 'onedrive' Docker container requires 2 docker volumes to operate:
 *    Config Volume
 *    Data Volume
 
-The first volume is the configuration volume that stores all the applicable application configuration + current runtime state. In a non-containerised environment, this normally resides in `~/.config/onedrive` - in a containerised environment this is stored in the volume tagged as `/onedrive/conf`
+The first volume is the configuration volume that stores all the applicable application configuration + current runtime state. In a non-containerised environment, this normally resides in `~/.config/onedrive` - in a containerised environment this is stored in the volume tagged as `/onedrive/conf`. When the container is running in the default `--monitor` mode, this volume also contains the machine-readable runtime status file `/onedrive/conf/monitor-status.json`.
 
 The second volume is the data volume, where all your data from Microsoft OneDrive is stored locally. This volume is mapped to an actual directory point on your local filesystem and this is stored in the volume tagged as `/onedrive/data`
 
@@ -206,17 +206,52 @@ docker ps -f name=onedrive
 docker logs onedrive
 ```
 
-#### 7.3 Stop running 'onedrive' container
+#### 7.3 Inspect machine-readable monitor runtime status
+
+When the container is running in the default monitor mode, the client publishes its current operational state to:
+
+```text
+/onedrive/conf/monitor-status.json
+```
+
+This file is stored in the persistent configuration volume and can be inspected from the running container without contacting Microsoft OneDrive or starting another synchronisation operation:
+
+```bash
+docker exec onedrive cat /onedrive/conf/monitor-status.json
+```
+
+The JSON includes the current process/instance identity, monitor loop number, whether the initial successful synchronisation has completed, the most recent cycle result, failed-transfer counts, Microsoft OneDrive reachability and the current system-time validation state.
+
+For service-readiness use cases, the field:
+
+```text
+sync.initial_successful_sync_completed
+```
+
+is specifically useful because it becomes `true` only after the current monitor process instance completes a successful synchronisation cycle. The most recent operational result is available in:
+
+```text
+sync.last_cycle.result
+```
+
+> [!IMPORTANT]
+> Do not treat `--display-sync-status` as an equivalent container readiness or liveness signal. `--display-sync-status` performs a separate read-only data-convergence assessment and can legitimately report `NOT IN SYNC` in one-way modes such as `--download-only` or `--upload-only` even when the monitor has successfully completed all work permitted by that configuration. For container/process observability, consume `monitor-status.json`; use `--display-sync-status` when you specifically need to assess local-versus-remote data convergence.
+
+The status file is removed during an orderly monitor shutdown. An abnormal process termination can leave the last status file in the persistent configuration volume, so external health tooling should also evaluate fields such as `pid`, `instance_id` and `updated_at` rather than assuming that file existence alone proves that the process is live. All timestamps are UTC; convert them to the desired local timezone only for human presentation.
+
+See [Machine-readable monitor runtime status](./usage.md#machine-readable-monitor-runtime-status) for the full field description and [monitor_status](./application-config-options.md#monitor_status) for configuration details.
+
+#### 7.4 Stop running 'onedrive' container
 ```bash
 docker stop onedrive
 ```
 
-#### 7.4 Start 'onedrive' container
+#### 7.5 Start 'onedrive' container
 ```bash
 docker start onedrive
 ```
 
-#### 7.5 Remove 'onedrive' container
+#### 7.6 Remove 'onedrive' container
 ```bash
 docker rm -f onedrive
 ```
@@ -302,6 +337,8 @@ services:
 > [!IMPORTANT]
 > Before you run the container using your compose file you must first authenticate the client following [step 6](https://github.com/abraunegg/onedrive/blob/master/docs/docker.md#6-first-run-of-docker-container-under-docker-and-performing-authorisation) above.
 > Failure to perform this step before running your container using your compose file will see your container detail that an invalid response uri was entered.
+
+When Compose or another orchestration layer needs to gate a dependent service on the OneDrive monitor becoming ready, prefer consuming `/onedrive/conf/monitor-status.json` and evaluating `sync.initial_successful_sync_completed` rather than repeatedly invoking `--display-sync-status`. The status file is a lightweight publication of state already known by the monitor process and does not generate additional Microsoft Graph or filesystem reconciliation work.
 
 ### Editing the running configuration and using a 'config' file
 The 'onedrive' client should run in default configuration, however you can change this default configuration by placing a custom config file in the `onedrive_conf` docker volume. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  

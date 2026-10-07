@@ -410,6 +410,9 @@ class ApplicationConfig {
 		boolValues["check_nosync"] = false;
 		// Do we wish to download only?
 		boolValues["download_only"] = false;
+		// Publish machine-readable monitor runtime status to <confdir>/monitor-status.json
+		// Enabled by default so monitor observability is available without additional configuration.
+		boolValues["monitor_status"] = true;
 		// Do we disable notifications?
 		boolValues["disable_notifications"] = false;
 		// Do we bypass all the download validation? 
@@ -1745,16 +1748,16 @@ class ApplicationConfig {
 		}
 		
 		// Display application version
-		addLogEntry("Application version                          = " ~ applicationVersion);
-		addLogEntry("Compiled with                                = " ~ compilerDetails());
-		addLogEntry("Curl version                                 = " ~ getCurlVersionString());
+		addLogEntry("Application version                           = " ~ applicationVersion);
+		addLogEntry("Compiled with                                 = " ~ compilerDetails());
+		addLogEntry("Curl version                                  = " ~ getCurlVersionString());
 		
 		// Display all of the pertinent configuration options
-		addLogEntry("User Application Config path                 = " ~ configDirName);
-		addLogEntry("System Application Config path               = " ~ systemConfigDirName);
+		addLogEntry("User Application Config path                  = " ~ configDirName);
+		addLogEntry("System Application Config path                = " ~ systemConfigDirName);
 		
 		// Does a config file exist or are we using application defaults
-		addLogEntry("Applicable Application 'config' location     = " ~ applicableConfigFilePath);
+		addLogEntry("Applicable Application 'config' location      = " ~ applicableConfigFilePath);
 		
 		string configFileStatusMessage;
 		if (exists(applicableConfigFilePath)) {
@@ -1770,6 +1773,7 @@ class ApplicationConfig {
 		// If using the 'system' directory, (/etc/onedrive) for the config file, these should always live in the 'users' home directory
 		addLogEntry("Applicable 'sync_list' location               = " ~ syncListFilePath);
 		addLogEntry("Applicable 'items.sqlite3' location           = " ~ databaseFilePath);
+		addLogEntry("Applicable 'monitor-status.json' location      = " ~ buildNormalizedPath(buildPath(dirName(databaseFilePath), "monitor-status.json")));
 		
 		// Is config option drive_id configured?
 		addLogEntry("Config option 'drive_id'                      = " ~ getValueString("drive_id"));
@@ -1799,6 +1803,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'monitor_log_frequency'         = " ~ to!string(getValueLong("monitor_log_frequency")));
 		addLogEntry("Config option 'monitor_fullscan_frequency'    = " ~ to!string(getValueLong("monitor_fullscan_frequency")));
 		addLogEntry("Config option 'monitor_authoritative_sync'    = " ~ getValueString("monitor_authoritative_sync"));
+		addLogEntry("Config option 'monitor_status'                = " ~ to!string(getValueBool("monitor_status")));
 		addLogEntry("Config option 'disable_websocket_support'     = " ~ to!string(getValueBool("disable_websocket_support")));
 		addLogEntry("Config option 'disable_time_check'            = " ~ to!string(getValueBool("disable_time_check")));
 		

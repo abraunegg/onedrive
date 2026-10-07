@@ -337,15 +337,6 @@ class OneDriveApi {
 			tenantId = "common";
 		}
 
-		// Did the user specify a 'drive_id' ?
-		if (!appConfig.getValueString("drive_id").empty) {
-			// Update base URL's
-			driveUrl = driveByIdUrl ~ appConfig.getValueString("drive_id");
-			itemByIdUrl = driveUrl ~ "/items";
-			itemByPathUrl = driveUrl ~ "/root:/";
-			
-		}
-
 		// Configure the authentication scope
 		if (appConfig.getValueBool("read_only_auth_scope")) {
 			// read-only authentication scopes has been requested
@@ -509,6 +500,15 @@ class OneDriveApi {
 			// Default - all other entries
 			default:
 				if (!appConfig.apiWasInitialised) addLogEntry("Unknown Azure AD Endpoint request - using Global Azure AD Endpoints");
+		}
+
+		// Apply a configured 'drive_id' after endpoint selection so national-cloud
+		// endpoint setup cannot overwrite the explicitly configured drive target.
+		if (!appConfig.getValueString("drive_id").empty) {
+			// Update base URL's
+			driveUrl = driveByIdUrl ~ appConfig.getValueString("drive_id");
+			itemByIdUrl = driveUrl ~ "/items";
+			itemByPathUrl = driveUrl ~ "/root:/";
 		}
 
 		// Has the application been authenticated?
@@ -1223,6 +1223,7 @@ class OneDriveApi {
 		if (("webUrl" in defaultRootDetails) && (defaultRootDetails["webUrl"].type == JSONType.string)) {
 			ownOneDriveWebUrl = defaultRootDetails["webUrl"].str;
 		}
+		defaultRootDetails = null;
 
 		JSONValue defaultDriveDetails = getDefaultDriveDetails();
 		if (("owner" in defaultDriveDetails) &&
@@ -1240,6 +1241,9 @@ class OneDriveApi {
 				ownEmail = defaultDriveDetails["owner"]["user"]["email"].str;
 			}
 		}
+
+		// Required owner metadata has been copied into strings.
+		defaultDriveDetails = null;
 
 		string searchQueryString = buildBusinessSharedItemsSearchQuery(ownOneDriveWebUrl, ownDisplayName, ownEmail);
 
@@ -1285,7 +1289,11 @@ class OneDriveApi {
 
 			moreResultsAvailable = false;
 
-			if (!("value" in searchResponse)) break;
+			if (!("value" in searchResponse)) {
+				searchRequest = null;
+				searchResponse = null;
+				break;
+			}
 
 			foreach (searchResult; searchResponse["value"].array) {
 				if (!("hitsContainers" in searchResult)) continue;
@@ -1324,6 +1332,9 @@ class OneDriveApi {
 				}
 			}
 
+			// This search page has been fully normalised into candidateItems.
+			searchRequest = null;
+			searchResponse = null;
 			from += pageSize;
 		}
 
@@ -1344,6 +1355,10 @@ class OneDriveApi {
 			addLogEntry("Microsoft Graph Search API candidate item count: " ~ to!string(candidateItems.length), ["debug"]);
 			addLogEntry("Microsoft Graph Search API normalised shared item count: " ~ to!string(sharedItems.length), ["debug"]);
 		}
+
+		// The return object now retains the normalised result array.
+		candidateItems = [];
+		sharedItems = [];
 
 		return sharedWithMeCompatibleResponse;
 	}
@@ -2788,6 +2803,7 @@ class OneDriveApi {
 		SysTime retryTime;
 		bool retrySuccess = false;
 		bool transientError = false;
+		bool retryTriggeredBy429 = false;
 		bool sslVerifyPeerDisabled = false;
 
 		while (!retrySuccess) {
@@ -2799,8 +2815,14 @@ class OneDriveApi {
 				// re-try log entry & clock time
 				retryTime = Clock.currTime();
 				retryTime.fracSecs = Duration.zero;
-				addLogEntry("Retrying the respective Microsoft Graph API call for Internal Thread ID: " ~ to!string(curlEngine.internalThreadId) ~ " (Timestamp: " ~ to!string(retryTime) ~ ") ...");
+				if (!retryTriggeredBy429 || verboseLogging) {
+					addLogEntry("Retrying the respective Microsoft Graph API call for Internal Thread ID: " ~ to!string(curlEngine.internalThreadId) ~ " (Timestamp: " ~ to!string(retryTime) ~ ") ...");
+				}
 			}
+
+			// Reset the 429 retry marker before attempting the next request. If this
+			// attempt is throttled, the exception handler below will set it again.
+			retryTriggeredBy429 = false;
 
 			try {
 				response.reset();
@@ -3052,7 +3074,13 @@ class OneDriveApi {
 						if (exception.httpStatusCode == 408) {
 							addLogEntry("Handling a Microsoft Graph API HTTP 408 Response Code (Request Time Out) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
 						} else {
-							addLogEntry("Handling a Microsoft Graph API HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
+							// HTTP 429 is an expected, retryable throttling response. Keep the
+							// detail available in verbose/debug modes without alarming users
+							// during normal application operation.
+							if (verboseLogging) {
+								addLogEntry("Handling a Microsoft Graph API HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId), ["verbose"]);
+							}
+							retryTriggeredBy429 = true;
 						}
 						// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
 						thisBackOffInterval = response.getRetryAfterValue();

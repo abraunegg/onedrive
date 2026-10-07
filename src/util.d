@@ -789,10 +789,17 @@ MicrosoftServiceProbeResult probeMicrosoftService(ApplicationConfig appConfig, b
 	
 	// Exit scope to ensure cleanup http object
 	scope(exit) {
-		// Shut http down http object
-		http.shutdown();
+		try {
+			if (!http.isStopped) {
+				// Shut http down http object
+				http.shutdown();
+			}
+		} finally {
+			// Destroy, however we cant set to null
+			object.destroy(http);
+		}
 	}
-
+	
 	// Capture both clocks immediately around the request. Realtime is required for
 	// comparison with Microsoft's wall-clock Date value; monotonic time is required
 	// for reliable RTT measurement even if the system clock is adjusted mid-request.
@@ -1468,6 +1475,9 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 		addLogEntry("JSON Message: " ~ to!string(errorMessage), ["debug"]);
 	}
 	
+	// The parsed error object is no longer required once all display fields have been extracted.
+	errorMessage = null;
+
 	// Close out logging with an empty line, so that in console output, and logging output this becomes clear
 	addLogEntry();
 }
@@ -1748,6 +1758,8 @@ JSONValue getLatestReleaseDetails() {
 		"latestTag": JSONValue(latestTag),
 		"publishedDate": JSONValue(publishedDate)
 	];
+	// versionDetails owns the extracted scalar values; release the GitHub response tree.
+	githubLatest = null;
 	
 	// return JSON
 	return versionDetails;
@@ -1802,6 +1814,8 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 		"versionTag": JSONValue(thisVersion),
 		"publishedDate": JSONValue(publishedDate)
 	];
+	// versionDetails owns the extracted scalar values; release the GitHub response tree.
+	githubDetails = null;
 	
 	// return JSON
 	return versionDetails;
@@ -1815,6 +1829,8 @@ void checkApplicationVersion() {
 	SysTime publishedDate = SysTime.fromISOExtString(latestVersionDetails["publishedDate"].str).toUTC();
 	SysTime releaseGracePeriod = publishedDate;
 	SysTime currentTime = Clock.currTime().toUTC();
+	// Required version metadata has been extracted into scalar values.
+	latestVersionDetails = null;
 	
 	// drop fraction seconds
 	publishedDate.fracSecs = Duration.zero;
@@ -1847,6 +1863,7 @@ void checkApplicationVersion() {
 			// go get this running version details
 			JSONValue thisVersionDetails = getCurrentVersionDetails(applicationVersion);
 			SysTime thisVersionPublishedDate = SysTime.fromISOExtString(thisVersionDetails["publishedDate"].str).toUTC();
+			thisVersionDetails = null;
 			thisVersionPublishedDate.fracSecs = Duration.zero;
 			if (debugLogging) {addLogEntry("thisVersionPublishedDate: " ~ to!string(thisVersionPublishedDate), ["debug"]);}
 			
