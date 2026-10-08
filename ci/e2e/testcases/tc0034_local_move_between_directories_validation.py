@@ -8,6 +8,7 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, xlsx_pair_any_exists, xlsx_pair_all_files
+from framework.pdf import create_random_pdf_pair, validate_pdf_pair, rename_pdf_pair, pdf_pair_any_exists, pdf_pair_all_files
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -22,7 +23,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
     case_id = "0034"
     name = "local move between directories validation"
     description = (
-        "Validate that moving passive TXT and real XLSX files from one directory to another "
+        "Validate that moving passive TXT, real XLSX and real PDF files from one directory to another "
         "is correctly propagated to remote state"
     )
 
@@ -81,18 +82,24 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
         destination_txt_relative = f"{root_name}/DestinationDirectory/move-me.txt"
         source_xlsx_relative = f"{root_name}/SourceDirectory/move-me.xlsx"
         destination_xlsx_relative = f"{root_name}/DestinationDirectory/move-me.xlsx"
+        source_pdf_relative = f"{root_name}/SourceDirectory/move-me.pdf"
+        destination_pdf_relative = f"{root_name}/DestinationDirectory/move-me.pdf"
         anchor_relative = f"{root_name}/DestinationDirectory/anchor.txt"
 
         local_source_txt_path = local_root / source_txt_relative
         local_destination_txt_path = local_root / destination_txt_relative
         local_source_xlsx_path = local_root / source_xlsx_relative
         local_destination_xlsx_path = local_root / destination_xlsx_relative
+        local_source_pdf_path = local_root / source_pdf_relative
+        local_destination_pdf_path = local_root / destination_pdf_relative
         local_anchor_path = local_root / anchor_relative
 
         verify_source_txt_path = verify_root / source_txt_relative
         verify_destination_txt_path = verify_root / destination_txt_relative
         verify_source_xlsx_path = verify_root / source_xlsx_relative
         verify_destination_xlsx_path = verify_root / destination_xlsx_relative
+        verify_source_pdf_path = verify_root / source_pdf_relative
+        verify_destination_pdf_path = verify_root / destination_pdf_relative
         verify_anchor_path = verify_root / anchor_relative
 
         initial_content = (
@@ -100,6 +107,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
             "This content must survive the directory move unchanged.\n"
         )
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0034:{os.getpid()}"
+        pdf_seed = f"{xlsx_seed}:pdf"
         anchor_content = (
             "TC0034 destination directory anchor\n"
             "This ensures the destination directory exists before the move.\n"
@@ -131,12 +139,15 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
             "destination_txt_relative": destination_txt_relative,
             "source_xlsx_relative": source_xlsx_relative,
             "destination_xlsx_relative": destination_xlsx_relative,
+            "source_pdf_relative": source_pdf_relative,
+            "destination_pdf_relative": destination_pdf_relative,
             "anchor_relative": anchor_relative,
             "main_conf_dir": str(conf_main),
             "verify_conf_dir": str(conf_verify),
             "local_root": str(local_root),
             "verify_root": str(verify_root),
             "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
@@ -150,6 +161,9 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
             title="TC0034 local move between directories workbook",
         )
         details["generated_size"] = int(generated["size_bytes"])
+        generated_pdf = create_random_pdf_pair(local_source_pdf_path, pdf_seed, revision=REVISION_0, title="TC0034 local move PDF")
+        details["generated_pdf_size"] = int(generated_pdf["size_bytes"])
+        details["generated_large_pdf_size"] = int(generated_pdf["large_size_bytes"])
         write_text_file(local_anchor_path, anchor_content)
 
         phase1_command = [
@@ -195,7 +209,9 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
             )
 
         settled_validation_error = validate_xlsx_pair(local_source_xlsx_path, REVISION_0)
+        settled_pdf_validation_error = validate_pdf_pair(local_source_pdf_path, REVISION_0)
         details["settled_validation_error"] = settled_validation_error
+        details["settled_pdf_validation_error"] = settled_pdf_validation_error
         if settled_validation_error:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
@@ -206,10 +222,19 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 details,
             )
 
+        if settled_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name,
+                f"seeded PDF was invalid after initial sync: {settled_pdf_validation_error}",
+                artifacts, details,
+            )
+
         # Phase 2: move both files locally between directories without renaming them.
         local_destination_txt_path.parent.mkdir(parents=True, exist_ok=True)
         local_source_txt_path.rename(local_destination_txt_path)
         rename_xlsx_pair(local_source_xlsx_path, local_destination_xlsx_path)
+        rename_pdf_pair(local_source_pdf_path, local_destination_pdf_path)
 
         details["local_source_txt_exists_after_move"] = local_source_txt_path.exists()
         details["local_destination_txt_exists_after_move"] = local_destination_txt_path.is_file()
@@ -217,7 +242,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
         details["local_destination_xlsx_exists_after_move"] = local_destination_xlsx_path.is_file()
         details["local_anchor_exists_after_move"] = local_anchor_path.is_file()
 
-        if local_source_txt_path.exists() or xlsx_pair_any_exists(local_source_xlsx_path):
+        if local_source_txt_path.exists() or xlsx_pair_any_exists(local_source_xlsx_path) or pdf_pair_any_exists(local_source_pdf_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -227,7 +252,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 details,
             )
 
-        if not local_destination_txt_path.is_file() or not xlsx_pair_all_files(local_destination_xlsx_path):
+        if not local_destination_txt_path.is_file() or not xlsx_pair_all_files(local_destination_xlsx_path) or not pdf_pair_all_files(local_destination_pdf_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -290,6 +315,8 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
         details["verify_destination_txt_exists"] = verify_destination_txt_path.is_file()
         details["verify_source_xlsx_exists"] = xlsx_pair_any_exists(verify_source_xlsx_path)
         details["verify_destination_xlsx_exists"] = xlsx_pair_all_files(verify_destination_xlsx_path)
+        details["verify_source_pdf_exists"] = pdf_pair_any_exists(verify_source_pdf_path)
+        details["verify_destination_pdf_exists"] = pdf_pair_all_files(verify_destination_pdf_path)
         details["verify_anchor_exists"] = verify_anchor_path.is_file()
 
         verify_destination_txt_content = (
@@ -304,7 +331,13 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
             if xlsx_pair_all_files(verify_destination_xlsx_path)
             else "Verification XLSX is missing"
         )
+        verify_pdf_validation_error = (
+            validate_pdf_pair(verify_destination_pdf_path, REVISION_0)
+            if pdf_pair_all_files(verify_destination_pdf_path)
+            else "Verification PDF is missing"
+        )
         details["verify_destination_validation_error"] = verify_destination_validation_error
+        details["verify_pdf_validation_error"] = verify_pdf_validation_error
 
         self._write_metadata(metadata_file, details)
 
@@ -317,7 +350,7 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 details,
             )
 
-        if verify_source_txt_path.exists() or xlsx_pair_any_exists(verify_source_xlsx_path):
+        if verify_source_txt_path.exists() or xlsx_pair_any_exists(verify_source_xlsx_path) or pdf_pair_any_exists(verify_source_pdf_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -344,6 +377,13 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 details,
             )
 
+        if not pdf_pair_all_files(verify_destination_pdf_path):
+            return self.fail_result(
+                self.case_id, self.name,
+                f"remote verification is missing moved PDF at destination path: {destination_pdf_relative}",
+                artifacts, details,
+            )
+
         if not xlsx_pair_all_files(verify_destination_xlsx_path):
             return self.fail_result(
                 self.case_id,
@@ -351,6 +391,13 @@ class TestCase0034LocalMoveBetweenDirectoriesValidation(E2ETestCase):
                 f"remote verification is missing moved XLSX at destination path: {destination_xlsx_relative}",
                 artifacts,
                 details,
+            )
+
+        if verify_pdf_validation_error:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"moved PDF is invalid or stale after remote verification: {verify_pdf_validation_error}",
+                artifacts, details,
             )
 
         if verify_destination_validation_error:

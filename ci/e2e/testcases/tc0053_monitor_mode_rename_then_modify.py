@@ -5,6 +5,7 @@ import time
 
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
+from framework.pdf import REVISION_0 as PDF_REVISION_0, REVISION_1 as PDF_REVISION_1, create_random_pdf_pair, large_pdf_relative, mutate_pdf_pair_revision, rename_pdf_pair, validate_pdf_pair
 from framework.result import TestResult
 from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, rename_xlsx_pair, large_xlsx_relative
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
@@ -14,7 +15,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
     case_id = "0053"
     name = "monitor mode rename then modify"
-    description = "Rename passive TXT and real XLSX files and then modify both under --monitor and validate the final remote state"
+    description = "Rename passive TXT plus real XLSX/PDF files and then modify them under --monitor and validate the final remote state"
 
     XLSX_PAYLOAD_ROWS = 32
 
@@ -39,18 +40,25 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
         new_relative = f"{root_name}/after.xlsx"
         old_text_relative = f"{root_name}/before.txt"
         new_text_relative = f"{root_name}/after.txt"
+        old_pdf_relative = f"{root_name}/before.pdf"
+        new_pdf_relative = f"{root_name}/after.pdf"
         old_local = sync_root / old_relative
         new_local = sync_root / new_relative
         old_text_local = sync_root / old_text_relative
         new_text_local = sync_root / new_text_relative
+        old_pdf_local = sync_root / old_pdf_relative
+        new_pdf_local = sync_root / new_pdf_relative
         old_verify = verify_root / old_relative
         new_verify = verify_root / new_relative
         old_text_verify = verify_root / old_text_relative
         new_text_verify = verify_root / new_text_relative
+        old_pdf_verify = verify_root / old_pdf_relative
+        new_pdf_verify = verify_root / new_pdf_relative
 
         initial_text_content = "TC0053 initial passive TXT content\n"
         final_text_content = "TC0053 final passive TXT content after rename then modify\n"
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0053:{os.getpid()}"
+        pdf_seed = f"{xlsx_seed}:pdf"
 
         context.prepare_minimal_config_dir(conf_main, self._build_config_text(sync_root, app_log_dir))
         context.prepare_minimal_config_dir(conf_verify, ("# tc0053 verify\n" f'sync_dir = "{verify_root}"\n' 'bypass_data_preservation = "true"\n'))
@@ -60,6 +68,12 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0053 monitor rename then modify workbook",
+        )
+        generated_pdf = create_random_pdf_pair(
+            old_pdf_local,
+            pdf_seed,
+            revision=PDF_REVISION_0,
+            title="TC0053 monitor rename then modify PDF",
         )
         write_text_file(old_text_local, initial_text_content)
 
@@ -72,7 +86,7 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
         verify_manifest_file = state_dir / "verify_manifest.txt"
         metadata_file = state_dir / "metadata.txt"
         artifacts = [str(seed_stdout), str(seed_stderr), str(monitor_stdout), str(monitor_stderr), str(verify_stdout), str(verify_stderr), str(verify_manifest_file), str(metadata_file)]
-        details = {"root_name": root_name, "old_relative": old_relative, "new_relative": new_relative, "old_text_relative": old_text_relative, "new_text_relative": new_text_relative, "xlsx_seed": xlsx_seed, "payload_rows": self.XLSX_PAYLOAD_ROWS, "generated_size": int(generated["size_bytes"])}
+        details = {"root_name": root_name, "old_relative": old_relative, "new_relative": new_relative, "old_text_relative": old_text_relative, "new_text_relative": new_text_relative, "old_pdf_relative": old_pdf_relative, "new_pdf_relative": new_pdf_relative, "xlsx_seed": xlsx_seed, "pdf_seed": pdf_seed, "payload_rows": self.XLSX_PAYLOAD_ROWS, "generated_size": int(generated["size_bytes"]), "generated_pdf_small_size": int(generated_pdf["small_size_bytes"]), "generated_pdf_large_size": int(generated_pdf["large_size_bytes"])}
 
         seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(conf_main)]
         context.log(f"Executing Test Case {self.case_id} seed: {command_to_string(seed_command)}")
@@ -85,12 +99,17 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
             return self.fail_result(self.case_id, self.name, f"Seed phase failed with status {seed_result.returncode}", artifacts, details)
 
         settled_validation_error = validate_xlsx_pair(old_local, REVISION_0)
+        settled_pdf_validation_error = validate_pdf_pair(old_pdf_local, PDF_REVISION_0)
         settled_text_content = old_text_local.read_text(encoding="utf-8") if old_text_local.is_file() else ""
         details["settled_validation_error"] = settled_validation_error
+        details["settled_pdf_validation_error"] = settled_pdf_validation_error
         details["settled_text_content"] = settled_text_content
         if settled_validation_error:
             self._write_metadata(metadata_file, details)
             return self.fail_result(self.case_id, self.name, f"Seeded XLSX was invalid after initial sync: {settled_validation_error}", artifacts, details)
+        if settled_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name, f"Seeded PDF was invalid after initial sync: {settled_pdf_validation_error}", artifacts, details)
         if settled_text_content != initial_text_content:
             self._write_metadata(metadata_file, details)
             return self.fail_result(self.case_id, self.name, "Seeded passive TXT content changed during initial sync", artifacts, details)
@@ -107,15 +126,22 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
 
             rename_xlsx_pair(old_local, new_local)
+            rename_pdf_pair(old_pdf_local, new_pdf_local)
             old_text_local.rename(new_text_local)
             time.sleep(1.0)
             mutate_xlsx_pair_revision(new_local, REVISION_0, REVISION_1)
+            mutate_pdf_pair_revision(new_pdf_local, PDF_REVISION_0, PDF_REVISION_1)
             write_text_file(new_text_local, final_text_content)
             modified_validation_error = validate_xlsx_pair(new_local, REVISION_1)
             details["modified_validation_error"] = modified_validation_error
+            modified_pdf_validation_error = validate_pdf_pair(new_pdf_local, PDF_REVISION_1)
+            details["modified_pdf_validation_error"] = modified_pdf_validation_error
             if modified_validation_error:
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(self.case_id, self.name, f"Renamed XLSX mutation produced an invalid workbook: {modified_validation_error}", artifacts, details)
+            if modified_pdf_validation_error:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name, f"Renamed PDF mutation produced an invalid document: {modified_pdf_validation_error}", artifacts, details)
             per_xlsx_variant_groups = []
             for old_xlsx_relative, new_xlsx_relative in (
                 (old_relative, new_relative),
@@ -131,12 +157,32 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
                 for small_group in per_xlsx_variant_groups[0]
                 for large_group in per_xlsx_variant_groups[1]
             ]
+            per_pdf_variant_groups = []
+            for old_pdf_variant, new_pdf_variant in (
+                (old_pdf_relative, new_pdf_relative),
+                (large_pdf_relative(old_pdf_relative), large_pdf_relative(new_pdf_relative)),
+            ):
+                per_pdf_variant_groups.append([
+                    [f"[M] Local item moved: {old_pdf_variant} -> {new_pdf_variant}", f"Uploading modified file: {new_pdf_variant} ... done"],
+                    [f"Moving {old_pdf_variant} to {new_pdf_variant}", f"Uploading modified file: {new_pdf_variant} ... done"],
+                    [f"Deleting item from Microsoft OneDrive: {old_pdf_variant}", f"Uploading new file: {new_pdf_variant} ... done"],
+                ])
+            pdf_groups = [
+                small_group + large_group
+                for small_group in per_pdf_variant_groups[0]
+                for large_group in per_pdf_variant_groups[1]
+            ]
             text_groups = [
                 [f"[M] Local item moved: {old_text_relative} -> {new_text_relative}", f"Uploading modified file: {new_text_relative} ... done"],
                 [f"Moving {old_text_relative} to {new_text_relative}", f"Uploading modified file: {new_text_relative} ... done"],
                 [f"Deleting item from Microsoft OneDrive: {old_text_relative}", f"Uploading new file: {new_text_relative} ... done"],
             ]
-            groups = [xlsx_group + text_group for xlsx_group in xlsx_groups for text_group in text_groups]
+            groups = [
+                xlsx_group + pdf_group + text_group
+                for xlsx_group in xlsx_groups
+                for pdf_group in pdf_groups
+                for text_group in text_groups
+            ]
             mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(
                 monitor_stdout,
                 start_offset=mutation_log_start_offset,
@@ -162,6 +208,8 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
         details["verify_new_exists"] = new_verify.is_file()
         details["verify_old_text_exists"] = old_text_verify.exists()
         details["verify_new_text_exists"] = new_text_verify.is_file()
+        details["verify_old_pdf_exists"] = old_pdf_verify.exists()
+        details["verify_new_pdf_exists"] = new_pdf_verify.is_file()
         verify_text_content = new_text_verify.read_text(encoding="utf-8") if new_text_verify.is_file() else ""
         details["verify_text_content"] = verify_text_content
         verify_validation_error = (
@@ -170,12 +218,18 @@ class TestCase0053MonitorModeRenameThenModify(MonitorModeTestCaseBase):
             else "Verification XLSX is missing"
         )
         details["verify_validation_error"] = verify_validation_error
+        verify_pdf_validation_error = (
+            validate_pdf_pair(new_pdf_verify, PDF_REVISION_1)
+            if new_pdf_verify.is_file()
+            else "Verification PDF is missing"
+        )
+        details["verify_pdf_validation_error"] = verify_pdf_validation_error
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
             return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
-        if old_verify.exists() or old_text_verify.exists() or not new_verify.is_file() or not new_text_verify.is_file() or verify_validation_error:
-            return self.fail_result(self.case_id, self.name, f"Remote verification did not preserve final TXT/XLSX rename-then-modify state correctly: {verify_validation_error}", artifacts, details)
+        if old_verify.exists() or old_text_verify.exists() or old_pdf_verify.exists() or not new_verify.is_file() or not new_text_verify.is_file() or not new_pdf_verify.is_file() or verify_validation_error or verify_pdf_validation_error:
+            return self.fail_result(self.case_id, self.name, f"Remote verification did not preserve final TXT/XLSX/PDF rename-then-modify state correctly: XLSX={verify_validation_error}, PDF={verify_pdf_validation_error}", artifacts, details)
         if verify_text_content != final_text_content:
             return self.fail_result(self.case_id, self.name, "Remote verification passive TXT content did not match final rename-then-modify state", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

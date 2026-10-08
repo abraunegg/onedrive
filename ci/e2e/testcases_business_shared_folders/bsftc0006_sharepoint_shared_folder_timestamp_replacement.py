@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -16,6 +17,16 @@ from framework.utils import (
     reset_directory,
     run_command,
     write_text_file,
+)
+from framework.pdf import (
+    LARGE_PDF_IMAGE_HEIGHT,
+    LARGE_PDF_IMAGE_WIDTH,
+    REVISION_0 as PDF_REVISION_0,
+    REVISION_1 as PDF_REVISION_1,
+    REVISION_2 as PDF_REVISION_2,
+    create_random_pdf,
+    mutate_pdf_revision,
+    validate_pdf,
 )
 from framework.xlsx import (
     REVISION_0,
@@ -36,7 +47,7 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
     case_id = "bsftc0006"
     name = "SharePoint-backed Business Shared Folder timestamp-preserving replacement"
     description = (
-        "Validate timestamp-preserving XLSX replacement and genuine remote-conflict handling "
+        "Validate timestamp-preserving XLSX and PDF replacement plus genuine remote-conflict handling "
         "inside the preserved SharePoint-backed Business Shared Folder topology without modifying "
         "any pre-existing fixture object"
     )
@@ -55,6 +66,10 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
     SMALL_FILENAME = "timestamp-preserving-small.xlsx"
     LARGE_FILENAME = "timestamp-preserving-session.xlsx"
     CONFLICT_FILENAME = "genuine-remote-conflict.xlsx"
+
+    SMALL_PDF_FILENAME = "timestamp-preserving-small.pdf"
+    LARGE_PDF_FILENAME = "timestamp-preserving-session.pdf"
+    CONFLICT_PDF_FILENAME = "genuine-remote-conflict.pdf"
 
     GUARD_MARKER = (
         "Online eTag matches database eTag; treating as local modification despite older local timestamp"
@@ -128,6 +143,14 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
             )
             if path.is_file()
         )
+
+    @staticmethod
+    def _sha256_file(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
 
     @staticmethod
     def _rewrite_cloned_config(config_dir: Path, sync_root: Path) -> None:
@@ -645,6 +668,342 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                 f"{remote_backup_error}"
             )
 
+    def _create_pdf_replacement(
+        self,
+        canonical_path: Path,
+        work_dir: Path,
+        *,
+        old_revision: str,
+        new_revision: str,
+        replacement_epoch: int,
+    ) -> tuple[Path, str, str]:
+        replacement_source = work_dir / f"{canonical_path.name}.{new_revision}.source"
+        shutil.copy2(canonical_path, replacement_source)
+        mutate_pdf_revision(replacement_source, old_revision, new_revision)
+        os.utime(replacement_source, (replacement_epoch, replacement_epoch))
+        shutil.copy2(replacement_source, canonical_path)
+        replacement_hash = compute_quickxor_hash_file(canonical_path)
+        replacement_sha256 = self._sha256_file(canonical_path)
+        return replacement_source, replacement_hash, replacement_sha256
+
+    def _exercise_pdf_timestamp_preserving_replacement(
+        self,
+        context: E2EContext,
+        config_dir: Path,
+        sync_root: Path,
+        work_dir: Path,
+        log_dir: Path,
+        relative_file: Path,
+        artifacts: list[str],
+        details: dict[str, object],
+        scenario_id: str,
+    ) -> None:
+        canonical = sync_root / relative_file
+        if not canonical.is_file():
+            raise CaseFailure(f"{scenario_id}: seeded PDF is missing: {canonical}")
+
+        validation_error = validate_pdf(canonical, PDF_REVISION_0)
+        if validation_error:
+            raise CaseFailure(f"{scenario_id}: seeded PDF failed validation: {validation_error}")
+
+        baseline_hash = compute_quickxor_hash_file(canonical)
+        baseline_sha256 = self._sha256_file(canonical)
+        baseline_mtime = int(canonical.stat().st_mtime)
+        baseline_size = canonical.stat().st_size
+        replacement_epoch = max(1, baseline_mtime - 3600)
+
+        replacement_source, replacement_hash, replacement_sha256 = self._create_pdf_replacement(
+            canonical,
+            work_dir,
+            old_revision=PDF_REVISION_0,
+            new_revision=PDF_REVISION_1,
+            replacement_epoch=replacement_epoch,
+        )
+        artifacts.append(str(replacement_source))
+
+        scenario_details = {
+            "baseline_hash": baseline_hash,
+            "baseline_sha256": baseline_sha256,
+            "baseline_mtime": baseline_mtime,
+            "baseline_size": baseline_size,
+            "replacement_hash": replacement_hash,
+            "replacement_sha256": replacement_sha256,
+            "replacement_mtime": int(canonical.stat().st_mtime),
+            "replacement_source": str(replacement_source),
+            "db_row_before_upload": self._capture_unique_item_row(config_dir, canonical.name),
+        }
+        details[scenario_id] = scenario_details
+
+        if replacement_sha256 == baseline_sha256:
+            raise CaseFailure(f"{scenario_id}: PDF replacement did not change content")
+        if int(canonical.stat().st_mtime) >= baseline_mtime:
+            raise CaseFailure(f"{scenario_id}: failed to establish an older replacement mtime")
+
+        result = self._run_logged(
+            context,
+            f"{scenario_id}_replacement",
+            self._sync_command(context, config_dir, debug=True),
+            log_dir,
+            artifacts,
+        )
+        scenario_details["replacement_returncode"] = result.returncode
+        output = result.stdout + "\n" + result.stderr
+        relative_text = relative_file.as_posix()
+        modified_marker = f"Uploading modified file: {relative_text} ... done"
+        safe_backups = self._safe_backup_files_for(canonical)
+
+        scenario_details["guard_marker_seen"] = self.GUARD_MARKER in output
+        scenario_details["conflict_marker_seen"] = self.CONFLICT_MARKER in output
+        scenario_details["modified_upload_seen"] = modified_marker in output
+        scenario_details["safe_backup_files"] = [
+            str(path.relative_to(sync_root)) for path in safe_backups
+        ]
+        scenario_details["db_row_after_upload"] = self._capture_unique_item_row(config_dir, canonical.name)
+
+        if result.returncode != 0:
+            raise CaseFailure(f"{scenario_id}: replacement sync failed with status {result.returncode}")
+        if modified_marker not in output:
+            raise CaseFailure(f"{scenario_id}: successful modified-file upload was not observed")
+        if self.CONFLICT_MARKER in output:
+            raise CaseFailure(f"{scenario_id}: incorrectly entered the newer-online conflict path")
+        if safe_backups:
+            raise CaseFailure(f"{scenario_id}: incorrectly created a safeBackup")
+        if self.GUARD_MARKER not in output:
+            raise CaseFailure(
+                f"{scenario_id}: unchanged-eTag older-mtime guard was not exercised"
+            )
+
+        post_validation_error = validate_pdf(canonical, PDF_REVISION_1)
+        if post_validation_error:
+            raise CaseFailure(
+                f"{scenario_id}: canonical PDF did not retain revision 1 after upload/reconciliation: "
+                f"{post_validation_error}"
+            )
+        if self._sha256_file(canonical) != replacement_sha256:
+            raise CaseFailure(
+                f"{scenario_id}: canonical PDF bytes changed unexpectedly after upload/reconciliation"
+            )
+
+        noop_result = self._run_logged(
+            context,
+            f"{scenario_id}_noop",
+            self._sync_command(context, config_dir, debug=True),
+            log_dir,
+            artifacts,
+        )
+        scenario_details["noop_returncode"] = noop_result.returncode
+        noop_output = noop_result.stdout + "\n" + noop_result.stderr
+        scenario_details["noop_reupload_seen"] = modified_marker in noop_output
+
+        if noop_result.returncode != 0:
+            raise CaseFailure(f"{scenario_id}: no-op stability sync failed with status {noop_result.returncode}")
+        if modified_marker in noop_output:
+            raise CaseFailure(f"{scenario_id}: no-op sync attempted to upload the PDF again")
+
+    def _exercise_pdf_genuine_remote_conflict(
+        self,
+        context: E2EContext,
+        layout,
+        config_dir: Path,
+        sync_root: Path,
+        relative_file: Path,
+        artifacts: list[str],
+        details: dict[str, object],
+    ) -> None:
+        scenario_id = "SF-PDF-0003"
+        canonical = sync_root / relative_file
+        if not canonical.is_file():
+            raise CaseFailure(f"{scenario_id}: seeded conflict PDF is missing")
+
+        baseline_validation_error = validate_pdf(canonical, PDF_REVISION_0)
+        if baseline_validation_error:
+            raise CaseFailure(
+                f"{scenario_id}: seeded conflict PDF failed validation: {baseline_validation_error}"
+            )
+
+        baseline_mtime = int(canonical.stat().st_mtime)
+        baseline_hash = compute_quickxor_hash_file(canonical)
+        baseline_sha256 = self._sha256_file(canonical)
+
+        mutator_root = layout.work_dir / "sf-pdf-0003-mutator-syncroot"
+        mutator_conf = layout.work_dir / "sf-pdf-0003-mutator-conf"
+        mutator_log_dir = layout.log_dir / "SF-PDF-0003-mutator"
+        reset_directory(mutator_log_dir)
+        self._clone_client_state(sync_root, config_dir, mutator_root, mutator_conf)
+
+        mutator_file = mutator_root / relative_file
+        mutate_pdf_revision(mutator_file, PDF_REVISION_0, PDF_REVISION_1)
+        mutator_sha256 = self._sha256_file(mutator_file)
+        newer_epoch = max(int(time.time()), baseline_mtime) + 120
+        os.utime(mutator_file, (newer_epoch, newer_epoch))
+
+        mutator_result = self._run_logged(
+            context,
+            "SF-PDF-0003_mutator_upload",
+            self._sync_command(
+                context,
+                mutator_conf,
+                upload_only=True,
+                debug=True,
+            ),
+            mutator_log_dir,
+            artifacts,
+        )
+        if mutator_result.returncode != 0:
+            raise CaseFailure(
+                f"{scenario_id}: independent mutator upload failed with status {mutator_result.returncode}"
+            )
+
+        verify_root, verify_conf, verify_result = self._fresh_verify(
+            context,
+            layout,
+            "sf-pdf-0003-remote-change-verify",
+            artifacts,
+        )
+        if verify_result.returncode != 0:
+            raise CaseFailure(
+                f"{scenario_id}: independent remote-change verification failed with status "
+                f"{verify_result.returncode}"
+            )
+
+        verified_remote_file = verify_root / relative_file
+        remote_validation_error = validate_pdf(verified_remote_file, PDF_REVISION_1)
+        if remote_validation_error:
+            raise CaseFailure(
+                f"{scenario_id}: remote mutation was not independently observed: {remote_validation_error}"
+            )
+        if self._sha256_file(verified_remote_file) != mutator_sha256:
+            raise CaseFailure(
+                f"{scenario_id}: independently downloaded remote PDF differs from mutator bytes"
+            )
+
+        stale_db_row = self._capture_unique_item_row(config_dir, canonical.name)
+        mutator_db_row = self._capture_unique_item_row(mutator_conf, canonical.name)
+        verifier_db_row = self._capture_unique_item_row(verify_conf, canonical.name)
+
+        replacement_source = layout.work_dir / "SF-PDF-0003-local-replacement-source.pdf"
+        shutil.copy2(canonical, replacement_source)
+        mutate_pdf_revision(replacement_source, PDF_REVISION_0, PDF_REVISION_2)
+        older_epoch = max(1, baseline_mtime - 3600)
+        os.utime(replacement_source, (older_epoch, older_epoch))
+        shutil.copy2(replacement_source, canonical)
+        artifacts.append(str(replacement_source))
+
+        replacement_hash = compute_quickxor_hash_file(canonical)
+        replacement_sha256 = self._sha256_file(canonical)
+        if replacement_sha256 == baseline_sha256:
+            raise CaseFailure(f"{scenario_id}: stale local replacement did not change content")
+        if int(canonical.stat().st_mtime) >= baseline_mtime:
+            raise CaseFailure(f"{scenario_id}: failed to establish an older stale local replacement")
+
+        conflict_log_dir = layout.log_dir / "SF-PDF-0003-conflict"
+        reset_directory(conflict_log_dir)
+        conflict_result = self._run_logged(
+            context,
+            "SF-PDF-0003_local_first_conflict",
+            self._sync_command(
+                context,
+                config_dir,
+                local_first=True,
+                debug=True,
+            ),
+            conflict_log_dir,
+            artifacts,
+        )
+        conflict_output = conflict_result.stdout + "\n" + conflict_result.stderr
+        safe_backups = self._safe_backup_files_for(canonical)
+
+        scenario_details = {
+            "baseline_hash": baseline_hash,
+            "baseline_sha256": baseline_sha256,
+            "baseline_mtime": baseline_mtime,
+            "replacement_hash": replacement_hash,
+            "replacement_sha256": replacement_sha256,
+            "mutator_sha256": mutator_sha256,
+            "stale_db_row_before_conflict": stale_db_row,
+            "mutator_db_row_after_remote_change": mutator_db_row,
+            "verifier_db_row_after_remote_change": verifier_db_row,
+            "conflict_returncode": conflict_result.returncode,
+            "guard_marker_seen": self.GUARD_MARKER in conflict_output,
+            "conflict_marker_seen": self.CONFLICT_MARKER in conflict_output,
+            "safe_backup_files": [str(path.relative_to(sync_root)) for path in safe_backups],
+        }
+        details[scenario_id] = scenario_details
+
+        if conflict_result.returncode != 0:
+            raise CaseFailure(
+                f"{scenario_id}: local-first conflict sync failed with status {conflict_result.returncode}"
+            )
+        if self.GUARD_MARKER in conflict_output:
+            raise CaseFailure(
+                f"{scenario_id}: unchanged-eTag guard fired despite a genuine independent online change"
+            )
+        if self.CONFLICT_MARKER not in conflict_output:
+            raise CaseFailure(
+                f"{scenario_id}: guarded modified-upload branch did not enter the expected newer-online conflict path"
+            )
+        if len(safe_backups) != 1:
+            raise CaseFailure(
+                f"{scenario_id}: expected exactly one local safeBackup; found {len(safe_backups)}"
+            )
+
+        canonical_validation_error = validate_pdf(canonical, PDF_REVISION_1)
+        if canonical_validation_error:
+            raise CaseFailure(
+                f"{scenario_id}: canonical file did not retain the genuine remote revision: "
+                f"{canonical_validation_error}"
+            )
+        if self._sha256_file(canonical) != mutator_sha256:
+            raise CaseFailure(
+                f"{scenario_id}: canonical PDF did not retain the exact genuine remote content"
+            )
+
+        backup_validation_error = validate_pdf(safe_backups[0], PDF_REVISION_2)
+        if backup_validation_error:
+            raise CaseFailure(
+                f"{scenario_id}: safeBackup did not preserve the stale local replacement: "
+                f"{backup_validation_error}"
+            )
+        if self._sha256_file(safe_backups[0]) != replacement_sha256:
+            raise CaseFailure(
+                f"{scenario_id}: safeBackup PDF did not preserve the exact stale local bytes"
+            )
+
+        final_verify_root, _, final_verify_result = self._fresh_verify(
+            context,
+            layout,
+            "sf-pdf-0003-final-verify",
+            artifacts,
+        )
+        if final_verify_result.returncode != 0:
+            raise CaseFailure(
+                f"{scenario_id}: final independent verification failed with status "
+                f"{final_verify_result.returncode}"
+            )
+
+        remote_canonical = final_verify_root / relative_file
+        remote_canonical_error = validate_pdf(remote_canonical, PDF_REVISION_1)
+        if remote_canonical_error:
+            raise CaseFailure(
+                f"{scenario_id}: remote canonical revision was not preserved: {remote_canonical_error}"
+            )
+        if self._sha256_file(remote_canonical) != mutator_sha256:
+            raise CaseFailure(
+                f"{scenario_id}: independently downloaded canonical PDF differs from remote mutation bytes"
+            )
+
+        remote_backup = final_verify_root / safe_backups[0].relative_to(sync_root)
+        remote_backup_error = validate_pdf(remote_backup, PDF_REVISION_2)
+        if remote_backup_error:
+            raise CaseFailure(
+                f"{scenario_id}: preserved safeBackup was not independently observable online: "
+                f"{remote_backup_error}"
+            )
+        if self._sha256_file(remote_backup) != replacement_sha256:
+            raise CaseFailure(
+                f"{scenario_id}: independently downloaded safeBackup PDF differs from preserved local bytes"
+            )
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -723,10 +1082,22 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
             small_relative = self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.SMALL_FILENAME
             large_relative = self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.LARGE_FILENAME
             conflict_relative = self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.CONFLICT_FILENAME
+            small_pdf_relative = (
+                self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.SMALL_PDF_FILENAME
+            )
+            large_pdf_relative = (
+                self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.LARGE_PDF_FILENAME
+            )
+            conflict_pdf_relative = (
+                self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.CONFLICT_PDF_FILENAME
+            )
 
             small_path = sync_root / small_relative
             large_path = sync_root / large_relative
             conflict_path = sync_root / conflict_relative
+            small_pdf_path = sync_root / small_pdf_relative
+            large_pdf_path = sync_root / large_pdf_relative
+            conflict_pdf_path = sync_root / conflict_pdf_relative
 
             small_generated = create_random_xlsx(
                 small_path,
@@ -746,16 +1117,42 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                 payload_rows=self.SMALL_XLSX_PAYLOAD_ROWS,
                 title="BSFTC0006 genuine remote conflict",
             )
+            small_pdf_generated = create_random_pdf(
+                small_pdf_path,
+                f"{context.run_id}:{self.case_id}:pdf-small",
+                title="BSFTC0006 PDF small timestamp-preserving replacement",
+            )
+            large_pdf_generated = create_random_pdf(
+                large_pdf_path,
+                f"{context.run_id}:{self.case_id}:pdf-large",
+                image_width=LARGE_PDF_IMAGE_WIDTH,
+                image_height=LARGE_PDF_IMAGE_HEIGHT,
+                title="BSFTC0006 PDF session timestamp-preserving replacement",
+            )
+            conflict_pdf_generated = create_random_pdf(
+                conflict_pdf_path,
+                f"{context.run_id}:{self.case_id}:pdf-conflict",
+                title="BSFTC0006 PDF genuine remote conflict",
+            )
 
             details["generated_sizes"] = {
                 "small": int(small_generated["size_bytes"]),
                 "large": int(large_generated["size_bytes"]),
                 "conflict": int(conflict_generated["size_bytes"]),
             }
+            details["generated_pdf_sizes"] = {
+                "small": int(small_pdf_generated["size_bytes"]),
+                "large": int(large_pdf_generated["size_bytes"]),
+                "conflict": int(conflict_pdf_generated["size_bytes"]),
+            }
             if int(small_generated["size_bytes"]) > self.SESSION_THRESHOLD_BYTES:
                 raise CaseFailure("small XLSX unexpectedly exceeded the 4 MiB session threshold")
             if int(large_generated["size_bytes"]) <= self.SESSION_THRESHOLD_BYTES:
                 raise CaseFailure("large XLSX did not exceed the 4 MiB session threshold")
+            if int(small_pdf_generated["size_bytes"]) >= self.SESSION_THRESHOLD_BYTES:
+                raise CaseFailure("small PDF unexpectedly exceeded the 4 MiB session threshold")
+            if int(large_pdf_generated["size_bytes"]) <= self.SESSION_THRESHOLD_BYTES:
+                raise CaseFailure("large PDF did not exceed the 4 MiB session threshold")
 
             seed_result = self._run_logged(
                 context,
@@ -767,7 +1164,7 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
             details["seed_returncode"] = seed_result.returncode
             if seed_result.returncode != 0:
                 raise CaseFailure(
-                    f"test-owned XLSX seed upload failed with status {seed_result.returncode}"
+                    f"test-owned XLSX/PDF seed upload failed with status {seed_result.returncode}"
                 )
 
             for seeded_path in (small_path, large_path, conflict_path):
@@ -776,11 +1173,22 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                     raise CaseFailure(
                         f"seeded XLSX was invalid after SharePoint reconciliation ({seeded_path.name}): {error}"
                     )
+            for seeded_path in (small_pdf_path, large_pdf_path, conflict_pdf_path):
+                error = validate_pdf(seeded_path, PDF_REVISION_0)
+                if error:
+                    raise CaseFailure(
+                        f"seeded PDF was invalid after SharePoint reconciliation ({seeded_path.name}): {error}"
+                    )
 
             details["seed_db_rows"] = {
                 self.SMALL_FILENAME: self._capture_unique_item_row(config_dir, self.SMALL_FILENAME),
                 self.LARGE_FILENAME: self._capture_unique_item_row(config_dir, self.LARGE_FILENAME),
                 self.CONFLICT_FILENAME: self._capture_unique_item_row(config_dir, self.CONFLICT_FILENAME),
+                self.SMALL_PDF_FILENAME: self._capture_unique_item_row(config_dir, self.SMALL_PDF_FILENAME),
+                self.LARGE_PDF_FILENAME: self._capture_unique_item_row(config_dir, self.LARGE_PDF_FILENAME),
+                self.CONFLICT_PDF_FILENAME: self._capture_unique_item_row(
+                    config_dir, self.CONFLICT_PDF_FILENAME
+                ),
             }
 
             replacement_work_dir = layout.work_dir / "replacement-sources"
@@ -808,6 +1216,28 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                 details,
                 "SF-0002",
             )
+            self._exercise_pdf_timestamp_preserving_replacement(
+                context,
+                config_dir,
+                sync_root,
+                replacement_work_dir,
+                main_log_dir,
+                small_pdf_relative,
+                artifacts,
+                details,
+                "SF-PDF-0001",
+            )
+            self._exercise_pdf_timestamp_preserving_replacement(
+                context,
+                config_dir,
+                sync_root,
+                replacement_work_dir,
+                main_log_dir,
+                large_pdf_relative,
+                artifacts,
+                details,
+                "SF-PDF-0002",
+            )
 
             verify_root, _, verify_result = self._fresh_verify(
                 context,
@@ -826,6 +1256,23 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                         f"remote replacement revision was not independently observed for "
                         f"{relative_file.name}: {error}"
                     )
+            for relative_file, scenario_id in (
+                (small_pdf_relative, "SF-PDF-0001"),
+                (large_pdf_relative, "SF-PDF-0002"),
+            ):
+                remote_pdf = verify_root / relative_file
+                error = validate_pdf(remote_pdf, PDF_REVISION_1)
+                if error:
+                    raise CaseFailure(
+                        f"remote PDF replacement revision was not independently observed for "
+                        f"{relative_file.name}: {error}"
+                    )
+                expected_sha256 = str(details[scenario_id]["replacement_sha256"])
+                if self._sha256_file(remote_pdf) != expected_sha256:
+                    raise CaseFailure(
+                        f"remote PDF replacement bytes differ from the uploaded replacement for "
+                        f"{relative_file.name}"
+                    )
 
             self._exercise_genuine_remote_conflict(
                 context,
@@ -833,6 +1280,15 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                 config_dir,
                 sync_root,
                 conflict_relative,
+                artifacts,
+                details,
+            )
+            self._exercise_pdf_genuine_remote_conflict(
+                context,
+                layout,
+                config_dir,
+                sync_root,
+                conflict_pdf_relative,
                 artifacts,
                 details,
             )

@@ -11,6 +11,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, build_typed_manifest, write_manifest
 from framework.result import TestResult
+from framework.pdf import REVISION_0 as PDF_REVISION_0, REVISION_1 as PDF_REVISION_1, create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, large_pdf_relative, unlink_pdf_pair
 from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, large_xlsx_relative, unlink_xlsx_pair
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
@@ -461,12 +462,19 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         for relative, content in files.items():
             write_text_file(mutator_root / relative, content)
         xlsx_relative = f"{root_name}/incoming/{source_name}/top-level.xlsx"
+        pdf_relative = f"{root_name}/incoming/{source_name}/top-level.pdf"
         create_random_xlsx_pair(
             mutator_root / xlsx_relative,
             f"{root_name}:{source_name}:xlsx",
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0065 sync_list moved-directory workbook",
+        )
+        create_random_pdf_pair(
+            mutator_root / pdf_relative,
+            f"{root_name}:{source_name}:pdf",
+            revision=PDF_REVISION_0,
+            title="TC0065 sync_list moved-directory PDF",
         )
         (mutator_root / root_name / "incoming" / source_name / "EmptyChild").mkdir(
             parents=True, exist_ok=True
@@ -669,6 +677,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         )
         xlsx_source_relative = f"{source_relative}/top-level.xlsx"
         xlsx_destination_relative = xlsx_source_relative.replace(source_relative, destination_relative, 1)
+        pdf_source_relative = f"{source_relative}/top-level.pdf"
+        pdf_destination_relative = pdf_source_relative.replace(source_relative, destination_relative, 1)
 
         phase_files = {
             "seed": (
@@ -717,6 +727,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             "destination_relative": destination_relative,
             "xlsx_source_relative": xlsx_source_relative,
             "xlsx_destination_relative": xlsx_destination_relative,
+            "pdf_source_relative": pdf_source_relative,
+            "pdf_destination_relative": pdf_destination_relative,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "mutator_items_db": str(conf_mutator / "items.sqlite3"),
             "validator_items_db": str(conf_validator / "items.sqlite3"),
@@ -788,9 +800,13 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             )
         )
         initial_xlsx_error = validate_xlsx_pair(validator_root / xlsx_source_relative, REVISION_0)
+        initial_pdf_error = validate_pdf_pair(validator_root / pdf_source_relative, PDF_REVISION_0)
         details["validator_initial_xlsx_validation_error"] = initial_xlsx_error
+        details["validator_initial_pdf_validation_error"] = initial_pdf_error
         if initial_xlsx_error:
             failures.append(f"initial validator XLSX invalid: {initial_xlsx_error}")
+        if initial_pdf_error:
+            failures.append(f"initial validator PDF invalid: {initial_pdf_error}")
 
         if failures:
             self._write_metadata(metadata_file, details)
@@ -926,9 +942,13 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             )
         )
         validator_xlsx_error = validate_xlsx_pair(validator_root / xlsx_destination_relative, REVISION_0)
+        validator_pdf_error = validate_pdf_pair(validator_root / pdf_destination_relative, PDF_REVISION_0)
         details["validator_moved_xlsx_validation_error"] = validator_xlsx_error
+        details["validator_moved_pdf_validation_error"] = validator_pdf_error
         if validator_xlsx_error:
             failures.append(f"validator moved XLSX invalid: {validator_xlsx_error}")
+        if validator_pdf_error:
+            failures.append(f"validator moved PDF invalid: {validator_pdf_error}")
 
         verify_result = self._run_phase(
             context=context,
@@ -967,9 +987,13 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             )
         )
         verify_xlsx_error = validate_xlsx_pair(verify_root / xlsx_destination_relative, REVISION_0)
+        verify_pdf_error = validate_pdf_pair(verify_root / pdf_destination_relative, PDF_REVISION_0)
         details["verify_moved_xlsx_validation_error"] = verify_xlsx_error
+        details["verify_moved_pdf_validation_error"] = verify_pdf_error
         if verify_xlsx_error:
             failures.append(f"remote truth moved XLSX invalid: {verify_xlsx_error}")
+        if verify_pdf_error:
+            failures.append(f"remote truth moved PDF invalid: {verify_pdf_error}")
 
         self._write_metadata(metadata_file, details)
         return failures, artifacts, details
@@ -1032,6 +1056,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         original_child = f"{parent_source}/Nested"
         xlsx_source = f"{parent_source}/top-level.xlsx"
         xlsx_destination = f"{parent_destination}/top-level.xlsx"
+        pdf_source = f"{parent_source}/top-level.pdf"
+        pdf_destination = f"{parent_destination}/top-level.pdf"
 
         self._prepare_client_config(
             context, conf_mutator, mutator_root,
@@ -1108,6 +1134,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             "initial_observer_path": original_child,
             "xlsx_source": xlsx_source,
             "xlsx_destination": xlsx_destination,
+            "pdf_source": pdf_source,
+            "pdf_destination": pdf_destination,
             "expected_manifest": expected_manifest,
             "sync_list": [f"/{root_name}"],
             "observer_data_preservation_enabled": True,
@@ -1145,10 +1173,15 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                     f"extra {sorted(set(manifest) - set(typed_expected))}"
                 )
             xlsx_path = root / (xlsx_source if original else xlsx_destination)
+            pdf_path = root / (pdf_source if original else pdf_destination)
             xlsx_error = validate_xlsx_pair(xlsx_path, REVISION_0)
+            pdf_error = validate_pdf_pair(pdf_path, PDF_REVISION_0)
             details[f"{label}_xlsx_validation_error"] = xlsx_error
+            details[f"{label}_pdf_validation_error"] = pdf_error
             if xlsx_error:
                 failures.append(f"{label}: XLSX pair failed structural/revision validation: {xlsx_error}")
+            if pdf_error:
+                failures.append(f"{label}: PDF pair failed structural/revision validation: {pdf_error}")
             backups = self._nested_safe_backups(root / root_name)
             details[f"{label}_safe_backups"] = backups
             if backups:
@@ -1452,6 +1485,10 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         files_first_xlsx_source = f"{files_first_source}/workbook.xlsx"
         whole_xlsx_destination = f"{whole_destination}/workbook.xlsx"
         files_first_xlsx_destination = f"{files_first_destination}/workbook.xlsx"
+        whole_pdf_source = f"{whole_source}/document.pdf"
+        files_first_pdf_source = f"{files_first_source}/document.pdf"
+        whole_pdf_destination = f"{whole_destination}/document.pdf"
+        files_first_pdf_destination = f"{files_first_destination}/document.pdf"
         create_random_xlsx_pair(
             mutator_root / whole_xlsx_source,
             f"{root_name}:whole:xlsx",
@@ -1465,6 +1502,18 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0065 files-first lifecycle workbook",
+        )
+        create_random_pdf_pair(
+            mutator_root / whole_pdf_source,
+            f"{root_name}:whole:pdf",
+            revision=PDF_REVISION_0,
+            title="TC0065 whole-directory lifecycle PDF",
+        )
+        create_random_pdf_pair(
+            mutator_root / files_first_pdf_source,
+            f"{root_name}:files-first:pdf",
+            revision=PDF_REVISION_0,
+            title="TC0065 files-first lifecycle PDF",
         )
 
         phase_names = [
@@ -1509,6 +1558,10 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             "whole_xlsx_destination": whole_xlsx_destination,
             "files_first_xlsx_source": files_first_xlsx_source,
             "files_first_xlsx_destination": files_first_xlsx_destination,
+            "whole_pdf_source": whole_pdf_source,
+            "whole_pdf_destination": whole_pdf_destination,
+            "files_first_pdf_source": files_first_pdf_source,
+            "files_first_pdf_destination": files_first_pdf_destination,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "sync_list": [f"/{root_name}"],
         }
@@ -1565,6 +1618,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             details[f"validator_initial_{label}_xlsx_validation_error"] = error
             if error:
                 failures.append(f"initial validator {label} XLSX invalid: {error}")
+        for label, relative in (("whole", whole_pdf_source), ("files_first", files_first_pdf_source)):
+            error = validate_pdf_pair(validator_root / relative, PDF_REVISION_0)
+            details[f"validator_initial_{label}_pdf_validation_error"] = error
+            if error:
+                failures.append(f"initial validator {label} PDF invalid: {error}")
         if failures:
             self._write_metadata(metadata_file, details)
             return failures, artifacts, details
@@ -1678,6 +1736,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 details[f"validator_moved_{label}_xlsx_validation_error"] = error
                 if error:
                     failures.append(f"validator moved {label} XLSX invalid: {error}")
+            for label, relative in (("whole", whole_pdf_destination), ("files_first", files_first_pdf_destination)):
+                error = validate_pdf_pair(validator_root / relative, PDF_REVISION_0)
+                details[f"validator_moved_{label}_pdf_validation_error"] = error
+                if error:
+                    failures.append(f"validator moved {label} PDF invalid: {error}")
             if failures:
                 self._write_metadata(metadata_file, details)
                 return failures, artifacts, details
@@ -1702,12 +1765,19 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 REVISION_0,
                 REVISION_1,
             )
+            mutate_pdf_pair_revision(
+                mutator_root / files_first_pdf_destination,
+                PDF_REVISION_0,
+                PDF_REVISION_1,
+            )
 
             modify_patterns = [
                 f"Uploading modified file: ./{whole_modified_relative} ... done",
                 f"Uploading modified file: ./{files_first_modified_relative} ... done",
                 f"Uploading modified file: ./{files_first_xlsx_destination} ... done",
                 f"Uploading modified file: ./{large_xlsx_relative(files_first_xlsx_destination)} ... done",
+                f"Uploading modified file: ./{files_first_pdf_destination} ... done",
+                f"Uploading modified file: ./{large_pdf_relative(files_first_pdf_destination)} ... done",
             ]
             modify_processed, modify_segment = self._wait_for_stdout_growth_patterns(
                 phase_files["phase3_mutator_monitor"][0],
@@ -1758,6 +1828,14 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 failures.append(f"validator whole XLSX changed unexpectedly after post-move modification: {whole_xlsx_error}")
             if files_first_xlsx_error:
                 failures.append(f"validator files-first XLSX did not receive post-move revision: {files_first_xlsx_error}")
+            whole_pdf_error = validate_pdf_pair(validator_root / whole_pdf_destination, PDF_REVISION_0)
+            files_first_pdf_error = validate_pdf_pair(validator_root / files_first_pdf_destination, PDF_REVISION_1)
+            details["validator_postmodify_whole_pdf_validation_error"] = whole_pdf_error
+            details["validator_postmodify_files_first_pdf_validation_error"] = files_first_pdf_error
+            if whole_pdf_error:
+                failures.append(f"validator whole PDF changed unexpectedly after post-move modification: {whole_pdf_error}")
+            if files_first_pdf_error:
+                failures.append(f"validator files-first PDF did not receive post-move revision: {files_first_pdf_error}")
             if failures:
                 self._write_metadata(metadata_file, details)
                 return failures, artifacts, details
@@ -1850,6 +1928,31 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             details["mutator_files_first_xlsx_delete_log_segment_length"] = len(xlsx_delete_segment)
             if not xlsx_delete_processed:
                 failures.append("mutator monitor did not propagate both files-first XLSX deletions")
+                self._write_metadata(metadata_file, details)
+                return failures, artifacts, details
+
+            pdf_delete_start = self._prepare_monitor_for_local_mutation(
+                process,
+                phase_files["phase3_mutator_monitor"][0],
+                details,
+            )
+            unlink_pdf_pair(mutator_root / files_first_pdf_destination)
+            pdf_delete_patterns = [
+                f"Deleting item from Microsoft OneDrive: ./{files_first_pdf_destination}",
+                f"Deleting item from Microsoft OneDrive: ./{large_pdf_relative(files_first_pdf_destination)}",
+            ]
+            pdf_delete_processed, pdf_delete_segment = self._wait_for_stdout_growth_patterns(
+                phase_files["phase3_mutator_monitor"][0],
+                start_offset=pdf_delete_start,
+                required_patterns=pdf_delete_patterns,
+                timeout_seconds=180,
+            )
+            for relative in (files_first_pdf_destination, large_pdf_relative(files_first_pdf_destination)):
+                files_first_file_results[relative] = pdf_delete_processed
+            details["mutator_files_first_pdf_delete_patterns"] = pdf_delete_patterns
+            details["mutator_files_first_pdf_delete_log_segment_length"] = len(pdf_delete_segment)
+            if not pdf_delete_processed:
+                failures.append("mutator monitor did not propagate both files-first PDF deletions")
                 self._write_metadata(metadata_file, details)
                 return failures, artifacts, details
 

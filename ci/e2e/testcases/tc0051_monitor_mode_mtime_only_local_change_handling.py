@@ -5,6 +5,7 @@ import time
 
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
+from framework.pdf import REVISION_0 as PDF_REVISION_0, create_random_pdf_pair, large_pdf_relative, pdf_pair_hashes, pdf_pair_mtimes, pdf_pair_sizes, set_pdf_pair_mtime, validate_pdf_pair
 from framework.result import TestResult
 from framework.utils import command_to_string, compute_quickxor_hash_file, reset_directory, run_command, write_text_file
 from framework.xlsx import REVISION_0, create_random_xlsx, validate_xlsx
@@ -15,7 +16,7 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
     case_id = "0051"
     name = "monitor mode mtime-only Microsoft file change handling"
     description = (
-        "Touch an existing local XLSX under --monitor without changing workbook content and validate "
+        "Touch existing local XLSX and PDF files under --monitor without changing content and validate "
         "that no new upload occurs, including after any Microsoft-side workbook enrichment"
     )
 
@@ -41,9 +42,13 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
 
         root_name = f"ZZ_E2E_TC0051_{context.run_id}_{os.getpid()}"
         relative_path = f"{root_name}/mtime-only.xlsx"
+        pdf_relative_path = f"{root_name}/mtime-only.pdf"
         local_file_path = sync_root / relative_path
         verify_initial_file_path = verify_initial_root / relative_path
         verify_final_file_path = verify_final_root / relative_path
+        local_pdf_path = sync_root / pdf_relative_path
+        verify_initial_pdf_path = verify_initial_root / pdf_relative_path
+        verify_final_pdf_path = verify_final_root / pdf_relative_path
 
         extra_config_lines = ['force_session_upload = "true"']
         context.prepare_minimal_config_dir(
@@ -73,6 +78,13 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             xlsx_seed,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0051 monitor mtime-only workbook",
+        )
+        pdf_seed = f"{xlsx_seed}:pdf"
+        generated_pdf = create_random_pdf_pair(
+            local_pdf_path,
+            pdf_seed,
+            revision=PDF_REVISION_0,
+            title="TC0051 monitor mtime-only document",
         )
         initial_generated_hash = compute_quickxor_hash_file(local_file_path)
 
@@ -107,6 +119,10 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             "relative_path": relative_path,
             "xlsx_seed": xlsx_seed,
             "generated_size": int(generated["size_bytes"]),
+            "pdf_relative_path": pdf_relative_path,
+            "pdf_seed": pdf_seed,
+            "generated_pdf_size": int(generated_pdf["small_size_bytes"]),
+            "generated_large_pdf_size": int(generated_pdf["large_size_bytes"]),
             "initial_generated_hash": initial_generated_hash,
         }
 
@@ -149,12 +165,25 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
                 artifacts,
                 details,
             )
+        settled_pdf_validation_error = validate_pdf_pair(local_pdf_path, PDF_REVISION_0)
+        details["settled_pdf_validation_error"] = settled_pdf_validation_error
+        if settled_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Seeded PDF pair was invalid after initial sync: {settled_pdf_validation_error}",
+                artifacts, details,
+            )
 
         settled_local_hash = compute_quickxor_hash_file(local_file_path)
         settled_local_size = local_file_path.stat().st_size
         details["settled_local_hash"] = settled_local_hash
         details["settled_local_size"] = settled_local_size
         details["microsoft_changed_seed_bytes"] = settled_local_hash != initial_generated_hash
+        settled_pdf_hashes = pdf_pair_hashes(local_pdf_path, compute_quickxor_hash_file)
+        settled_pdf_sizes = pdf_pair_sizes(local_pdf_path)
+        details["settled_pdf_hashes"] = settled_pdf_hashes
+        details["settled_pdf_sizes"] = settled_pdf_sizes
 
         verify_initial_command = [
             context.onedrive_bin,
@@ -192,6 +221,19 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
                 "Initial remote verification failed before monitor mtime-only validation",
                 artifacts,
                 details,
+            )
+        verify_initial_pdf_error = validate_pdf_pair(verify_initial_pdf_path, PDF_REVISION_0)
+        verify_initial_pdf_hashes = pdf_pair_hashes(verify_initial_pdf_path, compute_quickxor_hash_file)
+        baseline_pdf_mtimes = pdf_pair_mtimes(verify_initial_pdf_path)
+        details["verify_initial_pdf_validation_error"] = verify_initial_pdf_error
+        details["verify_initial_pdf_hashes"] = verify_initial_pdf_hashes
+        details["baseline_pdf_mtimes"] = baseline_pdf_mtimes
+        if verify_initial_pdf_error or verify_initial_pdf_hashes != settled_pdf_hashes:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Initial remote PDF verification failed: {verify_initial_pdf_error or 'content hash mismatch'}",
+                artifacts, details,
             )
 
         verify_initial_validation_error = validate_xlsx(verify_initial_file_path, REVISION_0)
@@ -252,17 +294,29 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
 
             local_hash_before_touch = compute_quickxor_hash_file(local_file_path)
             local_mtime_before_touch = int(local_file_path.stat().st_mtime)
-            touched_epoch = max(int(time.time()), local_mtime_before_touch, baseline_verified_mtime) + 120
+            local_pdf_hashes_before_touch = pdf_pair_hashes(local_pdf_path, compute_quickxor_hash_file)
+            local_pdf_mtimes_before_touch = pdf_pair_mtimes(local_pdf_path)
+            touched_epoch = max(
+                int(time.time()), local_mtime_before_touch, baseline_verified_mtime,
+                *local_pdf_mtimes_before_touch.values(), *baseline_pdf_mtimes.values(),
+            ) + 120
             os.utime(local_file_path, (touched_epoch, touched_epoch))
+            set_pdf_pair_mtime(local_pdf_path, (touched_epoch, touched_epoch))
 
             local_hash_after_touch = compute_quickxor_hash_file(local_file_path)
             local_mtime_after_touch = int(local_file_path.stat().st_mtime)
+            local_pdf_hashes_after_touch = pdf_pair_hashes(local_pdf_path, compute_quickxor_hash_file)
+            local_pdf_mtimes_after_touch = pdf_pair_mtimes(local_pdf_path)
 
             details["local_hash_before_touch"] = local_hash_before_touch
             details["local_mtime_before_touch"] = local_mtime_before_touch
             details["local_mtime_after_touch"] = local_mtime_after_touch
             details["touched_epoch"] = touched_epoch
             details["local_hash_after_touch"] = local_hash_after_touch
+            details["local_pdf_hashes_before_touch"] = local_pdf_hashes_before_touch
+            details["local_pdf_hashes_after_touch"] = local_pdf_hashes_after_touch
+            details["local_pdf_mtimes_before_touch"] = local_pdf_mtimes_before_touch
+            details["local_pdf_mtimes_after_touch"] = local_pdf_mtimes_after_touch
 
             if local_hash_before_touch != settled_local_hash or local_hash_after_touch != settled_local_hash:
                 self._write_metadata(metadata_file, details)
@@ -273,9 +327,18 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
                     artifacts,
                     details,
                 )
+            if local_pdf_hashes_before_touch != settled_pdf_hashes or local_pdf_hashes_after_touch != settled_pdf_hashes:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(
+                    self.case_id, self.name,
+                    "Local PDF content changed during the mtime-only monitor stimulus",
+                    artifacts, details,
+                )
 
             required_patterns = [
                 f"Processing: {relative_path}",
+                f"Processing: {pdf_relative_path}",
+                f"Processing: {large_pdf_relative(pdf_relative_path)}",
                 "The file has not changed",
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
@@ -297,6 +360,10 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
                 post_mutation_log_segment,
                 f"Uploading modified file: {relative_path} ... done",
             )
+            details["monitor_reported_pdf_upload"] = any(
+                self._monitor_output_contains(post_mutation_log_segment, f"Uploading modified file: {relative} ... done")
+                for relative in (pdf_relative_path, large_pdf_relative(pdf_relative_path))
+            )
             details["monitor_reported_local_change_event"] = self._monitor_output_contains(
                 post_mutation_log_segment,
                 f"[M] Local file changed: {relative_path}",
@@ -306,6 +373,8 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
 
         post_monitor_validation_error = validate_xlsx(local_file_path, REVISION_0)
         details["post_monitor_validation_error"] = post_monitor_validation_error
+        post_monitor_pdf_validation_error = validate_pdf_pair(local_pdf_path, PDF_REVISION_0)
+        details["post_monitor_pdf_validation_error"] = post_monitor_pdf_validation_error
 
         verify_final_command = [
             context.onedrive_bin,
@@ -350,6 +419,10 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
             if verify_final_file_path.is_file()
             else "final XLSX file is missing"
         )
+        details["verify_final_pdf_validation_error"] = validate_pdf_pair(verify_final_pdf_path, PDF_REVISION_0)
+        details["verify_final_pdf_hashes"] = pdf_pair_hashes(verify_final_pdf_path, compute_quickxor_hash_file)
+        details["verify_final_pdf_sizes"] = pdf_pair_sizes(verify_final_pdf_path)
+        details["verify_final_pdf_mtimes"] = pdf_pair_mtimes(verify_final_pdf_path)
 
         self._write_metadata(metadata_file, details)
 
@@ -360,6 +433,12 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
                 f"Local XLSX became invalid during monitor mtime-only handling: {post_monitor_validation_error}",
                 artifacts,
                 details,
+            )
+        if post_monitor_pdf_validation_error:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Local PDF became invalid during monitor mtime-only handling: {post_monitor_pdf_validation_error}",
+                artifacts, details,
             )
 
         if verify_final_result.returncode != 0:
@@ -397,6 +476,24 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
                 artifacts,
                 details,
             )
+        if details["verify_final_pdf_validation_error"]:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Final remote PDF validation failed: {details['verify_final_pdf_validation_error']}",
+                artifacts, details,
+            )
+        if details["verify_final_pdf_hashes"] != settled_pdf_hashes or details["verify_final_pdf_sizes"] != settled_pdf_sizes:
+            return self.fail_result(
+                self.case_id, self.name,
+                "Remote PDF content changed after mtime-only local touch",
+                artifacts, details,
+            )
+        if details["verify_final_pdf_mtimes"] != baseline_pdf_mtimes:
+            return self.fail_result(
+                self.case_id, self.name,
+                "Remote PDF mtime changed after mtime-only local touch; expected no new upload",
+                artifacts, details,
+            )
 
         if details["final_verified_mtime"] != details["baseline_verified_mtime"]:
             return self.fail_result(
@@ -414,6 +511,12 @@ class TestCase0051MonitorModeMtimeOnlyLocalChangeHandling(MonitorModeTestCaseBas
                 "Monitor mode uploaded the XLSX after an mtime-only local touch",
                 artifacts,
                 details,
+            )
+        if details["monitor_reported_pdf_upload"]:
+            return self.fail_result(
+                self.case_id, self.name,
+                "Monitor mode uploaded a PDF after an mtime-only local touch",
+                artifacts, details,
             )
 
         return self.pass_result(self.case_id, self.name, artifacts, details)

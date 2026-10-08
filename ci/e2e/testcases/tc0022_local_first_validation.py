@@ -17,13 +17,14 @@ from framework.utils import (
     write_text_file,
 )
 from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, set_xlsx_pair_mtime, xlsx_pair_hashes, xlsx_pair_sizes, xlsx_pair_mtimes
+from framework.pdf import create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, set_pdf_pair_mtime, pdf_pair_hashes, pdf_pair_sizes, pdf_pair_mtimes
 
 
 class TestCase0022LocalFirstValidation(E2ETestCase):
     case_id = "0022"
     name = "local_first validation"
     description = (
-        "Validate with passive text and real XLSX payloads that local_first treats local content "
+        "Validate with passive text, real XLSX and real PDF payloads that local_first treats local content "
         "as the source of truth during a conflict"
     )
 
@@ -61,6 +62,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         root_name = f"ZZ_E2E_TC0022_{context.run_id}_{os.getpid()}"
         text_relative = f"{root_name}/conflict.txt"
         xlsx_relative = f"{root_name}/conflict.xlsx"
+        pdf_relative = f"{root_name}/conflict.pdf"
 
         seed_text_file = seed_root / text_relative
         local_text_file = local_root / text_relative
@@ -68,14 +70,19 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         verify_text_file = verify_root / text_relative
 
         seed_xlsx_file = seed_root / xlsx_relative
+        seed_pdf_file = seed_root / pdf_relative
         local_xlsx_file = local_root / xlsx_relative
+        local_pdf_file = local_root / pdf_relative
         remote_update_xlsx_file = remote_update_root / xlsx_relative
+        remote_update_pdf_file = remote_update_root / pdf_relative
         verify_xlsx_file = verify_root / xlsx_relative
+        verify_pdf_file = verify_root / pdf_relative
 
         text_seed_content = "base\n"
         text_remote_content = "remote wins unless local_first applies\n"
         text_expected_local = "local wins because local_first is enabled\n"
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0022:{os.getpid()}"
+        pdf_seed = f"{xlsx_seed}:pdf"
 
         reset_directory(seed_root)
         reset_directory(local_root)
@@ -98,6 +105,8 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0022 local_first baseline workbook",
         )
+        generated_seed_pdf = create_random_pdf_pair(seed_pdf_file, pdf_seed, revision=REVISION_0, title="TC0022 local_first baseline PDF")
+        generated_remote_pdf = create_random_pdf_pair(remote_update_pdf_file, pdf_seed, revision=REVISION_1, title="TC0022 local_first baseline PDF")
 
         context.bootstrap_config_dir(conf_seed)
         self._write_config(conf_seed / "config", seed_root)
@@ -142,10 +151,14 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             "root_name": root_name,
             "text_relative": text_relative,
             "xlsx_relative": xlsx_relative,
+            "pdf_relative": pdf_relative,
             "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_seed_xlsx_size": int(generated_seed["size_bytes"]),
             "generated_remote_update_xlsx_size": int(generated_remote["size_bytes"]),
+            "generated_seed_pdf_size": int(generated_seed_pdf["size_bytes"]),
+            "generated_remote_update_pdf_size": int(generated_remote_pdf["size_bytes"]),
         }
 
         seed_command = [
@@ -190,11 +203,20 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             if local_xlsx_file.is_file()
             else "Local baseline XLSX is missing"
         )
+        baseline_pdf_validation_error = (
+            validate_pdf_pair(local_pdf_file, REVISION_0)
+            if local_pdf_file.is_file()
+            else "Local baseline PDF is missing"
+        )
         details["baseline_text_content"] = baseline_text_content
         details["baseline_xlsx_validation_error"] = baseline_xlsx_validation_error
+        details["baseline_pdf_validation_error"] = baseline_pdf_validation_error
         if local_xlsx_file.is_file():
             details["baseline_xlsx_hashes"] = xlsx_pair_hashes(local_xlsx_file, compute_quickxor_hash_file)
             details["baseline_xlsx_sizes"] = xlsx_pair_sizes(local_xlsx_file)
+        if local_pdf_file.is_file():
+            details["baseline_pdf_hashes"] = pdf_pair_hashes(local_pdf_file, compute_quickxor_hash_file)
+            details["baseline_pdf_sizes"] = pdf_pair_sizes(local_pdf_file)
 
         remote_command = [
             context.onedrive_bin,
@@ -228,15 +250,29 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         else:
             local_xlsx_revision_error = baseline_xlsx_validation_error or "Unable to mutate missing local XLSX"
 
+        local_pdf_revision_error = ""
+        expected_pdf_hashes = {}
+        if local_pdf_file.is_file() and not baseline_pdf_validation_error:
+            mutate_pdf_pair_revision(local_pdf_file, REVISION_0, REVISION_2)
+            local_pdf_revision_error = validate_pdf_pair(local_pdf_file, REVISION_2)
+            expected_pdf_hashes = pdf_pair_hashes(local_pdf_file, compute_quickxor_hash_file)
+        else:
+            local_pdf_revision_error = baseline_pdf_validation_error or "Unable to mutate missing local PDF"
+
         now = time.time()
         os.utime(local_text_file, (now, now))
         if local_xlsx_file.exists():
             set_xlsx_pair_mtime(local_xlsx_file, (now, now))
+        if local_pdf_file.exists():
+            set_pdf_pair_mtime(local_pdf_file, (now, now))
 
         details["local_xlsx_revision_error"] = local_xlsx_revision_error
         details["expected_local_xlsx_hashes"] = expected_xlsx_hashes
+        details["local_pdf_revision_error"] = local_pdf_revision_error
+        details["expected_local_pdf_hashes"] = expected_pdf_hashes
         details["local_text_mtime_before_final_sync"] = local_text_file.stat().st_mtime if local_text_file.exists() else 0
         details["local_xlsx_mtimes_before_final_sync"] = xlsx_pair_mtimes(local_xlsx_file)
+        details["local_pdf_mtimes_before_final_sync"] = pdf_pair_mtimes(local_pdf_file)
 
         # Reuse the same local DB / delta state, but enable local_first.
         self._write_config(conf_local / "config", local_root, local_first=True)
@@ -291,6 +327,18 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         )
         local_xlsx_hashes = xlsx_pair_hashes(local_xlsx_file, compute_quickxor_hash_file)
         remote_xlsx_hashes = xlsx_pair_hashes(verify_xlsx_file, compute_quickxor_hash_file)
+        local_pdf_validation_error = (
+            validate_pdf_pair(local_pdf_file, REVISION_2)
+            if local_pdf_file.is_file()
+            else "Local PDF is missing"
+        )
+        remote_pdf_validation_error = (
+            validate_pdf_pair(verify_pdf_file, REVISION_2)
+            if verify_pdf_file.is_file()
+            else "Remote verification PDF is missing"
+        )
+        local_pdf_hashes = pdf_pair_hashes(local_pdf_file, compute_quickxor_hash_file)
+        remote_pdf_hashes = pdf_pair_hashes(verify_pdf_file, compute_quickxor_hash_file)
 
         details.update(
             {
@@ -305,6 +353,10 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                 "remote_xlsx_validation_error": remote_xlsx_validation_error,
                 "local_xlsx_hashes": local_xlsx_hashes,
                 "remote_xlsx_hashes": remote_xlsx_hashes,
+                "local_pdf_validation_error": local_pdf_validation_error,
+                "remote_pdf_validation_error": remote_pdf_validation_error,
+                "local_pdf_hashes": local_pdf_hashes,
+                "remote_pdf_hashes": remote_pdf_hashes,
             }
         )
         write_text_file(
@@ -346,6 +398,9 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                 details,
             )
 
+        if baseline_pdf_validation_error:
+            return self.fail_result(self.case_id, self.name, f"Downloaded PDF baseline is not a valid revision-0 document: {baseline_pdf_validation_error}", artifacts, details)
+
         if local_xlsx_revision_error:
             return self.fail_result(
                 self.case_id,
@@ -354,6 +409,9 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                 artifacts,
                 details,
             )
+
+        if local_pdf_revision_error:
+            return self.fail_result(self.case_id, self.name, f"Unable to establish the local revision-2 PDF conflict payload: {local_pdf_revision_error}", artifacts, details)
 
         if local_text_content != text_expected_local:
             return self.fail_result(
@@ -391,6 +449,11 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                 details,
             )
 
+        if local_pdf_validation_error:
+            return self.fail_result(self.case_id, self.name, f"Local PDF was not retained after conflict resolution: {local_pdf_validation_error}", artifacts, details)
+        if remote_pdf_validation_error:
+            return self.fail_result(self.case_id, self.name, f"Remote PDF did not converge to the local source-of-truth revision: {remote_pdf_validation_error}", artifacts, details)
+
         if not expected_xlsx_hashes or local_xlsx_hashes != expected_xlsx_hashes:
             return self.fail_result(
                 self.case_id,
@@ -399,5 +462,8 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                 artifacts,
                 details,
             )
+
+        if not expected_pdf_hashes or local_pdf_hashes != expected_pdf_hashes or remote_pdf_hashes != expected_pdf_hashes:
+            return self.fail_result(self.case_id, self.name, "PDF content was not retained byte-for-byte after conflict resolution with local_first enabled", artifacts, details)
 
         return self.pass_result(self.case_id, self.name, artifacts, details)

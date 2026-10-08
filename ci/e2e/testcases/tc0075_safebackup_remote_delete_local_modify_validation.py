@@ -5,6 +5,7 @@ from pathlib import Path
 
 from framework.context import E2EContext
 from framework.result import TestResult
+from framework.pdf import REVISION_0 as PDF_REVISION_0, REVISION_1 as PDF_REVISION_1, create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, unlink_pdf_pair, pdf_pair_hashes, pdf_pair_backup_files, validate_pdf_pair_backups, pdf_pair_backup_hashes, pdf_pair_any_exists
 from framework.utils import reset_directory, write_text_file
 from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, unlink_xlsx_pair, xlsx_pair_hashes, xlsx_pair_backup_files, validate_xlsx_pair_backups, xlsx_pair_backup_hashes, xlsx_pair_any_exists
 from testcases.safe_backup_case_base import SafeBackupCaseBase
@@ -14,7 +15,7 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
     case_id = "0075"
     name = "safeBackup remote-delete local-modification validation"
     description = (
-        "Validate with passive TXT and real XLSX payloads the intentional destructive safeBackup workflow "
+        "Validate with passive TXT plus real XLSX and PDF payloads the intentional destructive safeBackup workflow "
         "where tracked files are deleted online after being independently modified locally"
     )
 
@@ -43,10 +44,11 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
         root_name = f"ZZ_E2E_TC0075_{context.run_id}_{os.getpid()}"
         text_relative = f"{root_name}/deleted-online.txt"
         xlsx_relative = f"{root_name}/deleted-online.xlsx"
-        seed_text, seed_xlsx = seed_root / text_relative, seed_root / xlsx_relative
-        local_text, local_xlsx = local_root / text_relative, local_root / xlsx_relative
-        deleter_text, deleter_xlsx = deleter_root / text_relative, deleter_root / xlsx_relative
-        verify_text, verify_xlsx = verify_root / text_relative, verify_root / xlsx_relative
+        pdf_relative = f"{root_name}/deleted-online.pdf"
+        seed_text, seed_xlsx, seed_pdf = seed_root / text_relative, seed_root / xlsx_relative, seed_root / pdf_relative
+        local_text, local_xlsx, local_pdf = local_root / text_relative, local_root / xlsx_relative, local_root / pdf_relative
+        deleter_text, deleter_xlsx, deleter_pdf = deleter_root / text_relative, deleter_root / xlsx_relative, deleter_root / pdf_relative
+        verify_text, verify_xlsx, verify_pdf = verify_root / text_relative, verify_root / xlsx_relative, verify_root / pdf_relative
 
         baseline_text = "TC0075 baseline content before remote deletion\n"
         local_modified_text = "TC0075 locally modified content that must survive the remote deletion\n"
@@ -59,6 +61,13 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0075 remote delete local modification workbook",
         )
+        pdf_seed = f"{xlsx_seed}:pdf"
+        generated_pdf = create_random_pdf_pair(
+            seed_pdf,
+            pdf_seed,
+            revision=PDF_REVISION_0,
+            title="TC0075 remote delete local modification PDF",
+        )
 
         phase_names = ("seed", "local_baseline", "deleter_baseline", "remote_delete", "reconcile", "verify")
         phase_files = {name: (logs / f"{name}_stdout.log", logs / f"{name}_stderr.log") for name in phase_names}
@@ -68,9 +77,13 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
             "root_name": root_name,
             "text_relative": text_relative,
             "xlsx_relative": xlsx_relative,
+            "pdf_relative": pdf_relative,
             "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_xlsx_size": int(generated["size_bytes"]),
+            "generated_pdf_size": int(generated_pdf["size_bytes"]),
+            "generated_large_pdf_size": int(generated_pdf["large_size_bytes"]),
         }
 
         seed = self._run_phase(
@@ -105,12 +118,16 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
         )
         local_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_0)
         deleter_xlsx_error = validate_xlsx_pair(deleter_xlsx, REVISION_0)
+        local_pdf_error = validate_pdf_pair(local_pdf, PDF_REVISION_0)
+        deleter_pdf_error = validate_pdf_pair(deleter_pdf, PDF_REVISION_0)
         details.update(
             {
                 "local_baseline_returncode": local_baseline.returncode,
                 "deleter_baseline_returncode": deleter_baseline.returncode,
                 "local_baseline_xlsx_validation_error": local_xlsx_error,
                 "deleter_baseline_xlsx_validation_error": deleter_xlsx_error,
+                "local_baseline_pdf_validation_error": local_pdf_error,
+                "deleter_baseline_pdf_validation_error": deleter_pdf_error,
             }
         )
         if (
@@ -120,21 +137,26 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
             or self._text_if_file(deleter_text) != baseline_text
             or local_xlsx_error
             or deleter_xlsx_error
+            or local_pdf_error
+            or deleter_pdf_error
         ):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
-                reason=f"Failed to establish tracked TXT/XLSX baselines before remote-delete conflict: {local_xlsx_error or deleter_xlsx_error}",
+                reason=f"Failed to establish tracked TXT/XLSX/PDF baselines before remote-delete conflict: XLSX={local_xlsx_error or deleter_xlsx_error}; PDF={local_pdf_error or deleter_pdf_error}",
                 artifacts=artifacts,
                 details=details,
             )
 
         write_text_file(local_text, local_modified_text)
         mutate_xlsx_pair_revision(local_xlsx, REVISION_0, REVISION_1)
+        mutate_pdf_pair_revision(local_pdf, PDF_REVISION_0, PDF_REVISION_1)
         local_text_hash = self._hash_if_file(local_text)
         local_xlsx_hashes = xlsx_pair_hashes(local_xlsx, self._hash_if_file)
+        local_pdf_hashes = pdf_pair_hashes(local_pdf, self._hash_if_file)
 
         deleter_text.unlink()
         unlink_xlsx_pair(deleter_xlsx)
+        unlink_pdf_pair(deleter_pdf)
         remote_delete = self._run_phase(
             context,
             label="propagate remote delete",
@@ -153,27 +175,34 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
 
         reconcile = self._run_phase(
             context,
-            label="reconcile remote deletion against locally modified TXT/XLSX files",
+            label="reconcile remote deletion against locally modified TXT/XLSX/PDF files",
             command=self._single_directory_command(context, root_name=root_name, config_dir=conf_local, mode="sync", verbose_count=2),
             stdout_file=phase_files["reconcile"][0],
             stderr_file=phase_files["reconcile"][1],
         )
         text_backups = self._safe_backup_files_for(local_text)
         xlsx_backups = xlsx_pair_backup_files(local_xlsx, self._safe_backup_files_for)
+        pdf_backups = pdf_pair_backup_files(local_pdf, self._safe_backup_files_for)
         partials = self._partial_files_under(local_root / root_name)
         backup_xlsx_error = validate_xlsx_pair_backups(xlsx_backups, REVISION_1)
+        backup_pdf_error = validate_pdf_pair_backups(pdf_backups, PDF_REVISION_1)
         details.update(
             {
                 "reconcile_returncode": reconcile.returncode,
                 "canonical_text_exists_after_reconcile": local_text.exists(),
                 "canonical_xlsx_exists_after_reconcile": xlsx_pair_any_exists(local_xlsx),
+                "canonical_pdf_exists_after_reconcile": pdf_pair_any_exists(local_pdf),
                 "local_text_modified_hash": local_text_hash,
                 "local_xlsx_modified_hashes": local_xlsx_hashes,
+                "local_pdf_modified_hashes": local_pdf_hashes,
                 "text_safe_backup_files": [str(p.relative_to(local_root)) for p in text_backups],
                 "text_safe_backup_hashes": [self._hash_if_file(p) for p in text_backups],
                 "xlsx_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in xlsx_backups.items()},
                 "xlsx_safe_backup_hashes": xlsx_pair_backup_hashes(xlsx_backups, self._hash_if_file),
                 "xlsx_safe_backup_validation_error": backup_xlsx_error,
+                "pdf_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in pdf_backups.items()},
+                "pdf_safe_backup_hashes": pdf_pair_backup_hashes(pdf_backups, self._hash_if_file),
+                "pdf_safe_backup_validation_error": backup_pdf_error,
                 "partial_files": [str(p.relative_to(local_root)) for p in partials],
             }
         )
@@ -187,24 +216,38 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
         )
         remote_text_backups = self._safe_backup_files_for(verify_text)
         remote_xlsx_backups = xlsx_pair_backup_files(verify_xlsx, self._safe_backup_files_for)
+        remote_pdf_backups = pdf_pair_backup_files(verify_pdf, self._safe_backup_files_for)
         remote_xlsx_backup_error = validate_xlsx_pair_backups(remote_xlsx_backups, REVISION_1)
+        remote_pdf_backup_error = validate_pdf_pair_backups(remote_pdf_backups, PDF_REVISION_1)
         xlsx_backup_hash_error, xlsx_backup_hash_modes = self._xlsx_safe_backup_hash_contract(
             reconcile_output=reconcile.stdout + "\n" + reconcile.stderr,
             local_backups=xlsx_backups,
             expected_original_hashes=local_xlsx_hashes,
             remote_backups=remote_xlsx_backups,
         )
+        pdf_backup_hash_error, pdf_backup_hash_modes = self._pdf_safe_backup_hash_contract(
+            reconcile_output=reconcile.stdout + "\n" + reconcile.stderr,
+            local_backups=pdf_backups,
+            expected_original_hashes=local_pdf_hashes,
+            remote_backups=remote_pdf_backups,
+        )
         details.update(
             {
                 "verify_returncode": verify.returncode,
                 "verify_text_canonical_exists": verify_text.exists(),
                 "verify_xlsx_canonical_exists": xlsx_pair_any_exists(verify_xlsx),
+                "verify_pdf_canonical_exists": pdf_pair_any_exists(verify_pdf),
                 "verify_text_safe_backup_files": [str(p.relative_to(verify_root)) for p in remote_text_backups],
                 "verify_xlsx_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_xlsx_backups.items()},
                 "verify_xlsx_safe_backup_validation_error": remote_xlsx_backup_error,
                 "verify_xlsx_safe_backup_hashes": xlsx_pair_backup_hashes(remote_xlsx_backups, self._hash_if_file),
                 "xlsx_safe_backup_hash_contract_error": xlsx_backup_hash_error,
                 "xlsx_safe_backup_hash_modes": xlsx_backup_hash_modes,
+                "verify_pdf_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_pdf_backups.items()},
+                "verify_pdf_safe_backup_validation_error": remote_pdf_backup_error,
+                "verify_pdf_safe_backup_hashes": pdf_pair_backup_hashes(remote_pdf_backups, self._hash_if_file),
+                "pdf_safe_backup_hash_contract_error": pdf_backup_hash_error,
+                "pdf_safe_backup_hash_modes": pdf_backup_hash_modes,
             }
         )
         self._write_metadata(metadata_file, details)
@@ -215,7 +258,7 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
                 artifacts=artifacts,
                 details=details,
             )
-        if local_text.exists() or xlsx_pair_any_exists(local_xlsx):
+        if local_text.exists() or xlsx_pair_any_exists(local_xlsx) or pdf_pair_any_exists(local_pdf):
             return self.fail_result(
                 reason="One or more canonical local files remained present even though the authoritative online items were deleted",
                 artifacts=artifacts,
@@ -233,13 +276,19 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
                 artifacts=artifacts,
                 details=details,
             )
+        if backup_pdf_error:
+            return self.fail_result(
+                reason=f"Remote-delete PDF conflict did not preserve exactly one valid safeBackup containing the locally modified document: {backup_pdf_error}",
+                artifacts=artifacts,
+                details=details,
+            )
         if partials:
             return self.fail_result(
                 reason="Remote-delete conflict left an unexpected .partial file",
                 artifacts=artifacts,
                 details=details,
             )
-        if verify.returncode != 0 or verify_text.exists() or xlsx_pair_any_exists(verify_xlsx):
+        if verify.returncode != 0 or verify_text.exists() or xlsx_pair_any_exists(verify_xlsx) or pdf_pair_any_exists(verify_pdf):
             return self.fail_result(
                 reason="Fresh verification did not confirm that both canonical online files remain deleted",
                 artifacts=artifacts,
@@ -257,9 +306,21 @@ class TestCase0075SafeBackupRemoteDeleteLocalModifyValidation(SafeBackupCaseBase
                 artifacts=artifacts,
                 details=details,
             )
+        if remote_pdf_backup_error:
+            return self.fail_result(
+                reason="Fresh verification did not confirm the preserved revision-1 PDF safeBackup was uploaded",
+                artifacts=artifacts,
+                details=details,
+            )
         if xlsx_backup_hash_error:
             return self.fail_result(
                 reason=f"Remote-delete XLSX safeBackup preservation/hash contract failed: {xlsx_backup_hash_error}",
+                artifacts=artifacts,
+                details=details,
+            )
+        if pdf_backup_hash_error:
+            return self.fail_result(
+                reason=f"Remote-delete PDF safeBackup preservation/hash contract failed: {pdf_backup_hash_error}",
                 artifacts=artifacts,
                 details=details,
             )

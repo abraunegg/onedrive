@@ -7,6 +7,7 @@ from pathlib import Path
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
+from framework.pdf import REVISION_0 as PDF_REVISION_0, create_random_pdf_pair, validate_pdf_pair, rename_pdf_pair, large_pdf_relative, pdf_pair_any_exists, pdf_pair_all_files
 from framework.result import TestResult
 from framework.utils import command_to_string, run_command, write_text_file
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists, xlsx_pair_all_files
@@ -96,6 +97,8 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         file_destination_relative = f"{root_name}/FileDestination/move-me.txt"
         file_xlsx_source_relative = f"{root_name}/FileSource/move-me.xlsx"
         file_xlsx_destination_relative = f"{root_name}/FileDestination/move-me.xlsx"
+        file_pdf_source_relative = f"{root_name}/FileSource/move-me.pdf"
+        file_pdf_destination_relative = f"{root_name}/FileDestination/move-me.pdf"
         file_destination_anchor_relative = f"{root_name}/FileDestination/anchor.txt"
 
         dir_source_relative = f"{root_name}/Pictures/2005"
@@ -112,6 +115,8 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         file_destination_path = sync_root / file_destination_relative
         file_xlsx_source_path = sync_root / file_xlsx_source_relative
         file_xlsx_destination_path = sync_root / file_xlsx_destination_relative
+        file_pdf_source_path = sync_root / file_pdf_source_relative
+        file_pdf_destination_path = sync_root / file_pdf_destination_relative
         file_destination_anchor_path = sync_root / file_destination_anchor_relative
         dir_source_path = sync_root / dir_source_relative
         dir_destination_path = sync_root / dir_destination_relative
@@ -121,10 +126,13 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
         file_source_verify_path = verify_root / file_source_relative
         file_xlsx_destination_verify_path = verify_root / file_xlsx_destination_relative
         file_xlsx_source_verify_path = verify_root / file_xlsx_source_relative
+        file_pdf_destination_verify_path = verify_root / file_pdf_destination_relative
+        file_pdf_source_verify_path = verify_root / file_pdf_source_relative
         dir_source_verify_path = verify_root / dir_source_relative
         dir_destination_verify_path = verify_root / dir_destination_relative
 
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0060:{os.getpid()}"
+        pdf_seed = f"{xlsx_seed}:pdf"
         file_content = (
             "TC0060 monitor local file move validation\n"
             "This file must be moved remotely, not deleted and re-uploaded.\n"
@@ -154,6 +162,12 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0060 no-delete-reupload move workbook",
+        )
+        generated_pdf = create_random_pdf_pair(
+            file_pdf_source_path,
+            pdf_seed,
+            revision=PDF_REVISION_0,
+            title="TC0060 no-delete-reupload move PDF",
         )
         write_text_file(file_destination_anchor_path, file_anchor_content)
         write_text_file(dir_destination_parent_anchor_path, dir_anchor_content)
@@ -185,9 +199,14 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
             "file_destination_relative": file_destination_relative,
             "file_xlsx_source_relative": file_xlsx_source_relative,
             "file_xlsx_destination_relative": file_xlsx_destination_relative,
+            "file_pdf_source_relative": file_pdf_source_relative,
+            "file_pdf_destination_relative": file_pdf_destination_relative,
             "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_xlsx_size": int(generated_xlsx["size_bytes"]),
+            "generated_pdf_small_size": int(generated_pdf["small_size_bytes"]),
+            "generated_pdf_large_size": int(generated_pdf["large_size_bytes"]),
             "dir_source_relative": dir_source_relative,
             "dir_destination_relative": dir_destination_relative,
             "dir_file_relative_paths": dir_file_relative_paths,
@@ -252,6 +271,21 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
                     artifacts,
                     details,
                 )
+            settled_pdf_validation_error = (
+                validate_pdf_pair(file_pdf_source_path, PDF_REVISION_0)
+                if file_pdf_source_path.is_file()
+                else "Seeded PDF is missing after monitor initial sync"
+            )
+            details["settled_pdf_validation_error"] = settled_pdf_validation_error
+            if settled_pdf_validation_error:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(
+                    self.case_id,
+                    self.name,
+                    f"seeded PDF was invalid before local move: {settled_pdf_validation_error}",
+                    artifacts,
+                    details,
+                )
 
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
             details["initial_sync_complete_count_before_moves"] = details.get("initial_sync_complete_count_before_mutation", 0)
@@ -261,6 +295,8 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
             file_source_path.rename(file_destination_path)
             context.log(f"Test Case {self.case_id}: moving in-sync local XLSX: {file_xlsx_source_relative} -> {file_xlsx_destination_relative}")
             rename_xlsx_pair(file_xlsx_source_path, file_xlsx_destination_path)
+            context.log(f"Test Case {self.case_id}: moving in-sync local PDF: {file_pdf_source_relative} -> {file_pdf_destination_relative}")
+            rename_pdf_pair(file_pdf_source_path, file_pdf_destination_path)
 
             context.log(f"Test Case {self.case_id}: moving in-sync local directory tree: {dir_source_relative} -> {dir_destination_relative}")
             dir_destination_path.parent.mkdir(parents=True, exist_ok=True)
@@ -275,12 +311,28 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
                 if xlsx_pair_all_files(file_xlsx_destination_path)
                 else "Moved local XLSX is missing"
             )
+            details["file_pdf_source_exists_after_local_move"] = pdf_pair_any_exists(file_pdf_source_path)
+            details["file_pdf_destination_exists_after_local_move"] = pdf_pair_all_files(file_pdf_destination_path)
+            details["file_pdf_destination_validation_error"] = (
+                validate_pdf_pair(file_pdf_destination_path, PDF_REVISION_0)
+                if pdf_pair_all_files(file_pdf_destination_path)
+                else "Moved local PDF is missing"
+            )
             if details["file_xlsx_destination_validation_error"]:
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(
                     self.case_id,
                     self.name,
                     "Local XLSX move did not preserve a valid workbook before monitor processing",
+                    artifacts,
+                    details,
+                )
+            if details["file_pdf_destination_validation_error"]:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(
+                    self.case_id,
+                    self.name,
+                    "Local PDF move did not preserve a valid document before monitor processing",
                     artifacts,
                     details,
                 )
@@ -294,6 +346,10 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
                 f"Moving ./{file_xlsx_source_relative} to ./{file_xlsx_destination_relative}",
                 f"[M] Local item moved: ./{large_xlsx_relative(file_xlsx_source_relative)} -> ./{large_xlsx_relative(file_xlsx_destination_relative)}",
                 f"Moving ./{large_xlsx_relative(file_xlsx_source_relative)} to ./{large_xlsx_relative(file_xlsx_destination_relative)}",
+                f"[M] Local item moved: ./{file_pdf_source_relative} -> ./{file_pdf_destination_relative}",
+                f"Moving ./{file_pdf_source_relative} to ./{file_pdf_destination_relative}",
+                f"[M] Local item moved: ./{large_pdf_relative(file_pdf_source_relative)} -> ./{large_pdf_relative(file_pdf_destination_relative)}",
+                f"Moving ./{large_pdf_relative(file_pdf_source_relative)} to ./{large_pdf_relative(file_pdf_destination_relative)}",
                 f"[M] Local item moved: ./{dir_source_relative} -> ./{dir_destination_relative}",
                 f"Moving ./{dir_source_relative} to ./{dir_destination_relative}",
             ]
@@ -350,6 +406,13 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
             validate_xlsx_pair(file_xlsx_destination_verify_path, REVISION_0)
             if file_xlsx_destination_verify_path.is_file()
             else "Verification XLSX is missing"
+        )
+        details["verify_file_pdf_source_exists"] = pdf_pair_any_exists(file_pdf_source_verify_path)
+        details["verify_file_pdf_destination_exists"] = pdf_pair_all_files(file_pdf_destination_verify_path)
+        details["verify_file_pdf_destination_validation_error"] = (
+            validate_pdf_pair(file_pdf_destination_verify_path, PDF_REVISION_0)
+            if file_pdf_destination_verify_path.is_file()
+            else "Verification PDF is missing"
         )
         details["verify_file_destination_content"] = (
             file_destination_verify_path.read_text(encoding="utf-8")
@@ -418,6 +481,14 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
                 artifacts,
                 details,
             )
+        if pdf_pair_any_exists(file_pdf_source_verify_path):
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote verification still contains original PDF move source: {file_pdf_source_relative}",
+                artifacts,
+                details,
+            )
 
         if not file_destination_verify_path.is_file() or details["verify_file_destination_content"] != file_content:
             return self.fail_result(
@@ -433,6 +504,14 @@ class TestCase0060MonitorModeLocalMoveNoDeleteReupload(MonitorModeTestCaseBase):
                 self.case_id,
                 self.name,
                 "Remote verification did not preserve the moved XLSX at the destination path with the expected revision",
+                artifacts,
+                details,
+            )
+        if details["verify_file_pdf_destination_validation_error"]:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Remote verification did not preserve the moved PDF at the destination path with the expected revision",
                 artifacts,
                 details,
             )

@@ -10,6 +10,13 @@ from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists
+from framework.pdf import (
+    REVISION_0 as PDF_REVISION_0,
+    create_random_pdf_pair,
+    validate_pdf_pair,
+    large_pdf_relative,
+    pdf_pair_any_exists,
+)
 
 
 class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCaseBase):
@@ -177,6 +184,7 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
         renames: list[tuple[str, str]],
         expected_files: dict[str, str],
         expected_xlsx_revisions: dict[str, str],
+        expected_pdf_revisions: dict[str, str],
         stdout_file: Path,
         stderr_file: Path,
         app_log_dir: Path,
@@ -237,6 +245,19 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
                     if validation_error:
                         state_ok = False
                         last_reason = f"subject renamed XLSX validation failed for {relative}: {validation_error}"
+                        break
+
+            if state_ok:
+                for relative, expected_revision in expected_pdf_revisions.items():
+                    path = subject_root / relative
+                    if not path.is_file():
+                        state_ok = False
+                        last_reason = f"subject renamed tree is missing expected PDF: {relative}"
+                        break
+                    validation_error = validate_pdf_pair(path, expected_revision)
+                    if validation_error:
+                        state_ok = False
+                        last_reason = f"subject renamed PDF validation failed for {relative}: {validation_error}"
                         break
 
             if state_ok and websocket_signal_count <= websocket_signal_count_before:
@@ -417,6 +438,10 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
         xlsx_expected_relative = f"{root_name}/Quarterly Reports - Renamed/2025/Q4/forecast.xlsx"
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0080:{os.getpid()}"
         expected_xlsx_revisions = {xlsx_expected_relative: REVISION_0}
+        pdf_source_relative = f"{root_name}/Quarterly Reports/2025/Q4/forecast.pdf"
+        pdf_expected_relative = f"{root_name}/Quarterly Reports - Renamed/2025/Q4/forecast.pdf"
+        pdf_seed = f"{xlsx_seed}:pdf"
+        expected_pdf_revisions = {pdf_expected_relative: PDF_REVISION_0}
 
         context.prepare_minimal_config_dir(
             conf_subject,
@@ -439,6 +464,12 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0080 remote populated-directory rename workbook",
+        )
+        generated_pdf = create_random_pdf_pair(
+            subject_root / pdf_source_relative,
+            pdf_seed,
+            revision=PDF_REVISION_0,
+            title="TC0080 remote populated-directory rename PDF",
         )
 
         phase_files = {
@@ -499,6 +530,11 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
             "xlsx_seed": xlsx_seed,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_xlsx_size": int(generated_xlsx["size_bytes"]),
+            "pdf_source_relative": pdf_source_relative,
+            "pdf_expected_relative": pdf_expected_relative,
+            "pdf_seed": pdf_seed,
+            "generated_pdf_small_size": int(generated_pdf["small_size_bytes"]),
+            "generated_pdf_large_size": int(generated_pdf["large_size_bytes"]),
             "subject_websocket_enabled_by_config": True,
             "subject_monitor_interval": 300,
             "subject_monitor_fullscan_frequency": 0,
@@ -549,6 +585,22 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
                 self.case_id,
                 self.name,
                 f"subject XLSX baseline is invalid after seed: {subject_seed_xlsx_validation_error}",
+                artifacts,
+                details,
+            )
+
+        subject_seed_pdf_validation_error = (
+            validate_pdf_pair(subject_root / pdf_source_relative, PDF_REVISION_0)
+            if (subject_root / pdf_source_relative).is_file()
+            else "Subject PDF is missing after seed"
+        )
+        details["subject_seed_pdf_validation_error"] = subject_seed_pdf_validation_error
+        if subject_seed_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"subject PDF baseline is invalid after seed: {subject_seed_pdf_validation_error}",
                 artifacts,
                 details,
             )
@@ -621,6 +673,22 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
                 self.case_id,
                 self.name,
                 f"mutator XLSX baseline is invalid: {mutator_xlsx_validation_error}",
+                artifacts,
+                details,
+            )
+
+        mutator_pdf_validation_error = (
+            validate_pdf_pair(mutator_root / pdf_source_relative, PDF_REVISION_0)
+            if (mutator_root / pdf_source_relative).is_file()
+            else "Mutator PDF is missing after baseline download"
+        )
+        details["mutator_pdf_validation_error"] = mutator_pdf_validation_error
+        if mutator_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"mutator PDF baseline is invalid: {mutator_pdf_validation_error}",
                 artifacts,
                 details,
             )
@@ -813,11 +881,28 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
                     details,
                 )
 
+            mutator_post_rename_pdf_error = (
+                validate_pdf_pair(mutator_root / pdf_expected_relative, PDF_REVISION_0)
+                if (mutator_root / pdf_expected_relative).is_file()
+                else "Mutator PDF is missing after directory rename"
+            )
+            details["mutator_post_rename_pdf_validation_error"] = mutator_post_rename_pdf_error
+            if mutator_post_rename_pdf_error:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(
+                    self.case_id,
+                    self.name,
+                    f"mutator PDF was invalid after local directory rename: {mutator_post_rename_pdf_error}",
+                    artifacts,
+                    details,
+                )
+
             remote_rename_reconciled, remote_rename_failure = self._wait_for_subject_renames(
                 subject_root=subject_root,
                 renames=renames,
                 expected_files=expected_after,
                 expected_xlsx_revisions=expected_xlsx_revisions,
+                expected_pdf_revisions=expected_pdf_revisions,
                 stdout_file=phase_files["subject_monitor"][0],
                 stderr_file=phase_files["subject_monitor"][1],
                 app_log_dir=subject_app_logs,
@@ -1052,17 +1137,47 @@ class TestCase0080MonitorRemoteDirectoryRenameReconciliation(MonitorModeTestCase
                 f"remote truth final XLSX validation failed for {xlsx_expected_relative}: {verify_final_xlsx_error}"
             )
 
+        subject_final_pdf_error = (
+            validate_pdf_pair(subject_root / pdf_expected_relative, PDF_REVISION_0)
+            if (subject_root / pdf_expected_relative).is_file()
+            else "Subject final PDF is missing"
+        )
+        verify_final_pdf_error = (
+            validate_pdf_pair(verify_root / pdf_expected_relative, PDF_REVISION_0)
+            if (verify_root / pdf_expected_relative).is_file()
+            else "Remote truth final PDF is missing"
+        )
+        details["subject_final_pdf_validation_error"] = subject_final_pdf_error
+        details["verify_final_pdf_validation_error"] = verify_final_pdf_error
+        if subject_final_pdf_error:
+            failures.append(
+                f"subject final PDF validation failed for {pdf_expected_relative}: {subject_final_pdf_error}"
+            )
+        if verify_final_pdf_error:
+            failures.append(
+                f"remote truth final PDF validation failed for {pdf_expected_relative}: {verify_final_pdf_error}"
+            )
+
         if xlsx_pair_any_exists(subject_root / xlsx_source_relative):
             failures.append(f"subject retained stale old-path XLSX: {xlsx_source_relative}")
         if xlsx_pair_any_exists(verify_root / xlsx_source_relative):
             failures.append(f"remote truth contains stale old-path XLSX: {xlsx_source_relative}")
+        if pdf_pair_any_exists(subject_root / pdf_source_relative):
+            failures.append(f"subject retained stale old-path PDF: {pdf_source_relative}")
+        if pdf_pair_any_exists(verify_root / pdf_source_relative):
+            failures.append(f"remote truth contains stale old-path PDF: {pdf_source_relative}")
 
         old_paths = set(source_files) - {f"{root_name}/control.txt"}
         for relative in old_paths:
             if relative in verify_manifest or (verify_root / relative).exists():
                 failures.append(f"remote truth contains stale old-path file: {relative}")
 
-        expected_manifest_files = set(expected_after) | {xlsx_expected_relative, large_xlsx_relative(xlsx_expected_relative)}
+        expected_manifest_files = set(expected_after) | {
+            xlsx_expected_relative,
+            large_xlsx_relative(xlsx_expected_relative),
+            pdf_expected_relative,
+            large_pdf_relative(pdf_expected_relative),
+        }
         actual_subject_files = {
             entry for entry in subject_manifest if (subject_root / entry).is_file()
         }

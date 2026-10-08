@@ -9,6 +9,7 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, xlsx_pair_any_exists, xlsx_pair_all_files
+from framework.pdf import create_random_pdf_pair, validate_pdf_pair, rename_pdf_pair, pdf_pair_any_exists, pdf_pair_all_files
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -23,7 +24,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
     case_id = "0032"
     name = "remote rename reconciliation"
     description = (
-        "Validate that a stale local client correctly reconciles remote-side passive TXT and real XLSX file renames "
+        "Validate that a stale local client correctly reconciles remote-side passive TXT plus real XLSX/PDF file renames "
         "without leaving stale local leftovers"
     )
 
@@ -85,27 +86,36 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
         new_txt_relative = f"{root_name}/remote-renamed-name.txt"
         old_xlsx_relative = f"{root_name}/remote-original-name.xlsx"
         new_xlsx_relative = f"{root_name}/remote-renamed-name.xlsx"
+        old_pdf_relative = f"{root_name}/remote-original-name.pdf"
+        new_pdf_relative = f"{root_name}/remote-renamed-name.pdf"
 
         seed_old_txt_path = seed_root / old_txt_relative
         seed_new_txt_path = seed_root / new_txt_relative
         seed_old_xlsx_path = seed_root / old_xlsx_relative
         seed_new_xlsx_path = seed_root / new_xlsx_relative
+        seed_old_pdf_path = seed_root / old_pdf_relative
+        seed_new_pdf_path = seed_root / new_pdf_relative
 
         stale_old_txt_path = stale_root / old_txt_relative
         stale_new_txt_path = stale_root / new_txt_relative
         stale_old_xlsx_path = stale_root / old_xlsx_relative
         stale_new_xlsx_path = stale_root / new_xlsx_relative
+        stale_old_pdf_path = stale_root / old_pdf_relative
+        stale_new_pdf_path = stale_root / new_pdf_relative
 
         verify_old_txt_path = verify_root / old_txt_relative
         verify_new_txt_path = verify_root / new_txt_relative
         verify_old_xlsx_path = verify_root / old_xlsx_relative
         verify_new_xlsx_path = verify_root / new_xlsx_relative
+        verify_old_pdf_path = verify_root / old_pdf_relative
+        verify_new_pdf_path = verify_root / new_pdf_relative
 
         txt_content = (
             "TC0032 remote rename reconciliation\n"
             "This passive text file is renamed remotely and must reconcile locally.\n"
         )
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0032:{os.getpid()}"
+        pdf_seed = f"{xlsx_seed}:pdf"
 
         seed_stdout = case_log_dir / "phase1_seed_stdout.log"
         seed_stderr = case_log_dir / "phase1_seed_stderr.log"
@@ -139,6 +149,8 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             "new_txt_relative": new_txt_relative,
             "old_xlsx_relative": old_xlsx_relative,
             "new_xlsx_relative": new_xlsx_relative,
+            "old_pdf_relative": old_pdf_relative,
+            "new_pdf_relative": new_pdf_relative,
             "seed_root": str(seed_root),
             "stale_root": str(stale_root),
             "verify_root": str(verify_root),
@@ -146,6 +158,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             "stale_conf_dir": str(conf_stale),
             "verify_conf_dir": str(conf_verify),
             "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
@@ -159,6 +172,9 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             title="TC0032 remote rename reconciliation workbook",
         )
         details["generated_xlsx_size"] = int(generated["size_bytes"])
+        generated_pdf = create_random_pdf_pair(seed_old_pdf_path, pdf_seed, revision=REVISION_0, title="TC0032 remote rename reconciliation PDF")
+        details["generated_pdf_size"] = int(generated_pdf["size_bytes"])
+        details["generated_large_pdf_size"] = int(generated_pdf["large_size_bytes"])
 
         seed_command = [
             context.onedrive_bin,
@@ -188,8 +204,10 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
         settled_txt_content = seed_old_txt_path.read_text(encoding="utf-8") if seed_old_txt_path.is_file() else ""
         settled_xlsx_validation_error = validate_xlsx_pair(seed_old_xlsx_path, REVISION_0)
+        settled_pdf_validation_error = validate_pdf_pair(seed_old_pdf_path, REVISION_0)
         details["settled_txt_content"] = settled_txt_content
         details["settled_xlsx_validation_error"] = settled_xlsx_validation_error
+        details["settled_pdf_validation_error"] = settled_pdf_validation_error
 
         if settled_txt_content != txt_content:
             self._write_metadata(metadata_file, details)
@@ -211,6 +229,16 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
+        if settled_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"seeded PDF was invalid after initial sync: {settled_pdf_validation_error}",
+                artifacts,
+                details,
+            )
+
         # Snapshot the synchronised local + config/db state to create a stale client.
         if conf_stale.exists():
             shutil.rmtree(conf_stale)
@@ -227,8 +255,10 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
         details["stale_snapshot_new_txt_exists_before_reconcile"] = stale_new_txt_path.exists()
         details["stale_snapshot_old_xlsx_exists_before_reconcile"] = stale_old_xlsx_path.is_file()
         details["stale_snapshot_new_xlsx_exists_before_reconcile"] = stale_new_xlsx_path.exists()
+        details["stale_snapshot_old_pdf_exists_before_reconcile"] = stale_old_pdf_path.is_file()
+        details["stale_snapshot_new_pdf_exists_before_reconcile"] = stale_new_pdf_path.exists()
 
-        if not stale_old_txt_path.is_file() or not stale_old_xlsx_path.is_file():
+        if not stale_old_txt_path.is_file() or not stale_old_xlsx_path.is_file() or not stale_old_pdf_path.is_file():
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -249,7 +279,9 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             )
 
         stale_snapshot_xlsx_validation_error = validate_xlsx_pair(stale_old_xlsx_path, REVISION_0)
+        stale_snapshot_pdf_validation_error = validate_pdf_pair(stale_old_pdf_path, REVISION_0)
         details["stale_snapshot_xlsx_validation_error"] = stale_snapshot_xlsx_validation_error
+        details["stale_snapshot_pdf_validation_error"] = stale_snapshot_pdf_validation_error
         if stale_snapshot_xlsx_validation_error:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
@@ -260,11 +292,22 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
+        if stale_snapshot_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"stale snapshot PDF was invalid before reconciliation: {stale_snapshot_pdf_validation_error}",
+                artifacts,
+                details,
+            )
+
         # Phase 2: perform both renames through the seed client.
         seed_old_txt_path.rename(seed_new_txt_path)
         rename_xlsx_pair(seed_old_xlsx_path, seed_new_xlsx_path)
+        rename_pdf_pair(seed_old_pdf_path, seed_new_pdf_path)
 
-        if seed_old_txt_path.exists() or xlsx_pair_any_exists(seed_old_xlsx_path):
+        if seed_old_txt_path.exists() or xlsx_pair_any_exists(seed_old_xlsx_path) or pdf_pair_any_exists(seed_old_pdf_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -274,7 +317,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if not seed_new_txt_path.is_file() or not xlsx_pair_all_files(seed_new_xlsx_path):
+        if not seed_new_txt_path.is_file() or not xlsx_pair_all_files(seed_new_xlsx_path) or not pdf_pair_all_files(seed_new_pdf_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -336,14 +379,22 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
         details["stale_new_txt_exists_after_reconcile"] = stale_new_txt_path.is_file()
         details["stale_old_xlsx_exists_after_reconcile"] = stale_old_xlsx_path.exists()
         details["stale_new_xlsx_exists_after_reconcile"] = stale_new_xlsx_path.is_file()
+        details["stale_old_pdf_exists_after_reconcile"] = stale_old_pdf_path.exists()
+        details["stale_new_pdf_exists_after_reconcile"] = stale_new_pdf_path.is_file()
         stale_new_txt_content = stale_new_txt_path.read_text(encoding="utf-8") if stale_new_txt_path.is_file() else ""
         stale_new_xlsx_validation_error = (
             validate_xlsx_pair(stale_new_xlsx_path, REVISION_0)
             if stale_new_xlsx_path.is_file()
             else "Stale client XLSX is missing"
         )
+        stale_new_pdf_validation_error = (
+            validate_pdf_pair(stale_new_pdf_path, REVISION_0)
+            if stale_new_pdf_path.is_file()
+            else "Stale client PDF is missing"
+        )
         details["stale_new_txt_content"] = stale_new_txt_content
         details["stale_new_xlsx_validation_error"] = stale_new_xlsx_validation_error
+        details["stale_new_pdf_validation_error"] = stale_new_pdf_validation_error
 
         if stale_sync_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -382,14 +433,22 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
         details["verify_new_txt_exists"] = verify_new_txt_path.is_file()
         details["verify_old_xlsx_exists"] = verify_old_xlsx_path.exists()
         details["verify_new_xlsx_exists"] = verify_new_xlsx_path.is_file()
+        details["verify_old_pdf_exists"] = verify_old_pdf_path.exists()
+        details["verify_new_pdf_exists"] = verify_new_pdf_path.is_file()
         verify_new_txt_content = verify_new_txt_path.read_text(encoding="utf-8") if verify_new_txt_path.is_file() else ""
         verify_new_xlsx_validation_error = (
             validate_xlsx_pair(verify_new_xlsx_path, REVISION_0)
             if verify_new_xlsx_path.is_file()
             else "Verification XLSX is missing"
         )
+        verify_new_pdf_validation_error = (
+            validate_pdf_pair(verify_new_pdf_path, REVISION_0)
+            if verify_new_pdf_path.is_file()
+            else "Verification PDF is missing"
+        )
         details["verify_new_txt_content"] = verify_new_txt_content
         details["verify_new_xlsx_validation_error"] = verify_new_xlsx_validation_error
+        details["verify_new_pdf_validation_error"] = verify_new_pdf_validation_error
 
         self._write_metadata(metadata_file, details)
 
@@ -402,7 +461,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if stale_old_txt_path.exists() or xlsx_pair_any_exists(stale_old_xlsx_path):
+        if stale_old_txt_path.exists() or xlsx_pair_any_exists(stale_old_xlsx_path) or pdf_pair_any_exists(stale_old_pdf_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -411,7 +470,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if not stale_new_txt_path.is_file() or not xlsx_pair_all_files(stale_new_xlsx_path):
+        if not stale_new_txt_path.is_file() or not xlsx_pair_all_files(stale_new_xlsx_path) or not pdf_pair_all_files(stale_new_pdf_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -438,7 +497,16 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if verify_old_txt_path.exists() or xlsx_pair_any_exists(verify_old_xlsx_path):
+        if stale_new_pdf_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"stale client renamed PDF is invalid or stale after reconciliation: {stale_new_pdf_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if verify_old_txt_path.exists() or xlsx_pair_any_exists(verify_old_xlsx_path) or pdf_pair_any_exists(verify_old_pdf_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -447,7 +515,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if not verify_new_txt_path.is_file() or not xlsx_pair_all_files(verify_new_xlsx_path):
+        if not verify_new_txt_path.is_file() or not xlsx_pair_all_files(verify_new_xlsx_path) or not pdf_pair_all_files(verify_new_pdf_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -470,6 +538,15 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
                 self.case_id,
                 self.name,
                 f"fresh remote verification returned an invalid or stale XLSX workbook: {verify_new_xlsx_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if verify_new_pdf_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"fresh remote verification returned an invalid or stale PDF document: {verify_new_pdf_validation_error}",
                 artifacts,
                 details,
             )

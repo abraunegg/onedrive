@@ -8,6 +8,7 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, xlsx_pair_any_exists, xlsx_pair_all_files
+from framework.pdf import create_random_pdf_pair, validate_pdf_pair, rename_pdf_pair, pdf_pair_any_exists, pdf_pair_all_files
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -22,7 +23,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
     case_id = "0030"
     name = "local rename propagation validation"
     description = (
-        "Validate that renaming passive TXT and real XLSX files locally is correctly propagated to remote state"
+        "Validate that renaming passive TXT, real XLSX and real PDF files locally is correctly propagated to remote state"
     )
 
     XLSX_PAYLOAD_ROWS = 32
@@ -80,17 +81,22 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         new_txt_relative = f"{root_name}/renamed-file.txt"
         old_xlsx_relative = f"{root_name}/original-name.xlsx"
         new_xlsx_relative = f"{root_name}/renamed-file.xlsx"
+        old_pdf_relative = f"{root_name}/original-name.pdf"
+        new_pdf_relative = f"{root_name}/renamed-file.pdf"
 
         old_txt_local_path = local_root / old_txt_relative
         new_txt_local_path = local_root / new_txt_relative
         old_xlsx_local_path = local_root / old_xlsx_relative
         new_xlsx_local_path = local_root / new_xlsx_relative
+        old_pdf_local_path = local_root / old_pdf_relative
+        new_pdf_local_path = local_root / new_pdf_relative
 
         txt_content = (
             "TC0030 local rename propagation validation\n"
             "This passive text content must survive the rename operation unchanged.\n"
         )
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0030:{os.getpid()}"
+        pdf_seed = f"{xlsx_seed}:pdf"
 
         phase1_stdout = case_log_dir / "phase1_seed_stdout.log"
         phase1_stderr = case_log_dir / "phase1_seed_stderr.log"
@@ -118,11 +124,14 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             "new_txt_relative": new_txt_relative,
             "old_xlsx_relative": old_xlsx_relative,
             "new_xlsx_relative": new_xlsx_relative,
+            "old_pdf_relative": old_pdf_relative,
+            "new_pdf_relative": new_pdf_relative,
             "main_conf_dir": str(conf_main),
             "verify_conf_dir": str(conf_verify),
             "local_root": str(local_root),
             "verify_root": str(verify_root),
             "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
@@ -135,6 +144,14 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             title="TC0030 local rename propagation workbook",
         )
         details["generated_xlsx_size"] = int(generated["size_bytes"])
+        generated_pdf = create_random_pdf_pair(
+            old_pdf_local_path,
+            pdf_seed,
+            revision=REVISION_0,
+            title="TC0030 local rename propagation PDF",
+        )
+        details["generated_pdf_size"] = int(generated_pdf["size_bytes"])
+        details["generated_large_pdf_size"] = int(generated_pdf["large_size_bytes"])
 
         phase1_command = [
             context.onedrive_bin,
@@ -163,7 +180,9 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             )
 
         settled_xlsx_validation_error = validate_xlsx_pair(old_xlsx_local_path, REVISION_0)
+        settled_pdf_validation_error = validate_pdf_pair(old_pdf_local_path, REVISION_0)
         details["settled_xlsx_validation_error"] = settled_xlsx_validation_error
+        details["settled_pdf_validation_error"] = settled_pdf_validation_error
         details["settled_txt_content"] = (
             old_txt_local_path.read_text(encoding="utf-8") if old_txt_local_path.is_file() else ""
         )
@@ -188,15 +207,26 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
+        if settled_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"seeded PDF was invalid after initial sync: {settled_pdf_validation_error}",
+                artifacts,
+                details,
+            )
+
         old_txt_local_path.rename(new_txt_local_path)
         rename_xlsx_pair(old_xlsx_local_path, new_xlsx_local_path)
+        rename_pdf_pair(old_pdf_local_path, new_pdf_local_path)
 
         details["old_txt_exists_after_local_rename"] = old_txt_local_path.exists()
         details["new_txt_exists_after_local_rename"] = new_txt_local_path.is_file()
         details["old_xlsx_exists_after_local_rename"] = old_xlsx_local_path.exists()
         details["new_xlsx_exists_after_local_rename"] = new_xlsx_local_path.is_file()
 
-        if old_txt_local_path.exists() or xlsx_pair_any_exists(old_xlsx_local_path):
+        if old_txt_local_path.exists() or xlsx_pair_any_exists(old_xlsx_local_path) or pdf_pair_any_exists(old_pdf_local_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -206,7 +236,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        if not new_txt_local_path.is_file() or not xlsx_pair_all_files(new_xlsx_local_path):
+        if not new_txt_local_path.is_file() or not xlsx_pair_all_files(new_xlsx_local_path) or not pdf_pair_all_files(new_pdf_local_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -268,6 +298,8 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
         verify_new_txt_path = verify_root / new_txt_relative
         verify_old_xlsx_path = verify_root / old_xlsx_relative
         verify_new_xlsx_path = verify_root / new_xlsx_relative
+        verify_old_pdf_path = verify_root / old_pdf_relative
+        verify_new_pdf_path = verify_root / new_pdf_relative
 
         details["verify_old_txt_exists"] = verify_old_txt_path.exists()
         details["verify_new_txt_exists"] = verify_new_txt_path.is_file()
@@ -281,7 +313,13 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
             if verify_new_xlsx_path.is_file()
             else "Verification XLSX is missing"
         )
+        verify_pdf_validation_error = (
+            validate_pdf_pair(verify_new_pdf_path, REVISION_0)
+            if verify_new_pdf_path.is_file()
+            else "Verification PDF is missing"
+        )
         details["verify_xlsx_validation_error"] = verify_xlsx_validation_error
+        details["verify_pdf_validation_error"] = verify_pdf_validation_error
 
         self._write_metadata(metadata_file, details)
 
@@ -294,7 +332,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        if verify_old_txt_path.exists() or xlsx_pair_any_exists(verify_old_xlsx_path):
+        if verify_old_txt_path.exists() or xlsx_pair_any_exists(verify_old_xlsx_path) or pdf_pair_any_exists(verify_old_pdf_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -303,7 +341,7 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 details,
             )
 
-        if not verify_new_txt_path.is_file() or not xlsx_pair_all_files(verify_new_xlsx_path):
+        if not verify_new_txt_path.is_file() or not xlsx_pair_all_files(verify_new_xlsx_path) or not pdf_pair_all_files(verify_new_pdf_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -326,6 +364,15 @@ class TestCase0030LocalRenamePropagationValidation(E2ETestCase):
                 self.case_id,
                 self.name,
                 f"remote verification returned an invalid or stale XLSX workbook: {verify_xlsx_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if verify_pdf_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"remote verification returned an invalid or stale PDF document: {verify_pdf_validation_error}",
                 artifacts,
                 details,
             )
