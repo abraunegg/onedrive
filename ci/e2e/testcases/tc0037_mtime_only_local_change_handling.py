@@ -438,10 +438,13 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         )
         same_hash_marker = "The local item has the same hash value as the item online"
         correcting_timestamp_marker = "correcting online timestamp"
+        online_apply_guard_marker = "ONLINE_APPLY_GUARD timestamp PATCH response changed file content identity"
 
         details["phase3_detected_content_unchanged_marker"] = content_unchanged_marker in phase3_combined_output
         details["phase3_detected_same_hash_marker"] = same_hash_marker in phase3_combined_output
         details["phase3_detected_correcting_timestamp_marker"] = correcting_timestamp_marker in phase3_combined_output
+        details["phase3_detected_online_apply_guard_marker"] = online_apply_guard_marker in phase3_combined_output
+        details["phase3_detected_xlsx_content_upload"] = f"Uploading modified file: {relative_path}" in phase3_combined_output
 
         if phase3_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -522,10 +525,31 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             return False, f"{scenario_id} final remote PDF validation failed: {final_pdf_validation_error}", details
         if verify_final_manifest != expected_manifest:
             return False, f"{scenario_id} final remote verification manifest did not match expected structure", details
-        if final_verified_hash != local_hash_after_touch:
-            return False, f"{scenario_id} final verified XLSX hash changed during an mtime-only operation", details
-        if final_verified_size != settled_local_size:
-            return False, f"{scenario_id} final verified XLSX size changed during an mtime-only operation", details
+        # SharePoint can rewrite an Office package as part of the fileSystemInfo
+        # timestamp PATCH itself. When that happens master deliberately reports
+        # ONLINE_APPLY_GUARD and preserves the already-applied local baseline so
+        # the newly changed remote content is reconciled normally. The logical
+        # workbook revision must remain valid, but byte identity is no longer an
+        # invariant for the SharePoint XLSX. PDF remains byte-for-byte stable.
+        xlsx_changed_during_timestamp_patch = final_verified_hash != local_hash_after_touch
+        details["xlsx_changed_during_timestamp_patch"] = xlsx_changed_during_timestamp_patch
+        if context.e2e_target == "sharepoint" and xlsx_changed_during_timestamp_patch:
+            # The normal (non-debug) E2E run cannot require the debug-only
+            # ONLINE_APPLY_GUARD log line. Instead prove the client classified
+            # this as same-content mtime handling and did not upload new XLSX
+            # bytes; the fresh verifier then confirms the same logical revision.
+            if details["phase3_detected_xlsx_content_upload"]:
+                return (
+                    False,
+                    f"{scenario_id} unexpectedly uploaded XLSX content during an mtime-only SharePoint reconciliation",
+                    details,
+                )
+        else:
+            if final_verified_hash != local_hash_after_touch:
+                return False, f"{scenario_id} final verified XLSX hash changed during an mtime-only operation", details
+            if final_verified_size != settled_local_size:
+                return False, f"{scenario_id} final verified XLSX size changed during an mtime-only operation", details
+
         if final_verified_pdf_hash != local_pdf_hash_after_touch:
             return False, f"{scenario_id} final verified PDF hash changed during an mtime-only operation", details
         if final_verified_pdf_size != settled_pdf_size:

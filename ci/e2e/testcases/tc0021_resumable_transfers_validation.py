@@ -2492,8 +2492,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"pdf_seed={pdf_seed}",
                     f"generated_size={generated_size}",
                     f"generated_revision={self.PDF_REVISION_0}",
-                    f"image_width={generated['width']}",
-                    f"image_height={generated['height']}",
+                    f"image_width={generated['image_width']}",
+                    f"image_height={generated['image_height']}",
                 ]
             )
             + "\n",

@@ -1,1038 +1,716 @@
 from __future__ import annotations
 
-
-
 import os
-
 import time
-
 from pathlib import Path
 
-
-
 from framework.base import E2ETestCase
-
 from framework.context import E2EContext
-
 from framework.manifest import build_manifest, write_manifest
-
 from framework.result import TestResult
-
 from framework.utils import (
-
     command_to_string,
-
     compute_quickxor_hash_file,
-
     reset_directory,
-
     run_command,
-
     write_onedrive_config,
-
     write_text_file,
-
 )
-
 from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, set_xlsx_pair_mtime, xlsx_pair_hashes, xlsx_pair_sizes, xlsx_pair_mtimes
-
 from framework.pdf import create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, set_pdf_pair_mtime, pdf_pair_hashes, pdf_pair_sizes, pdf_pair_mtimes
-
-from framework.image import create_random_image_set, mutate_image_set_revision, validate_image_set, set_image_set_mtime, image_set_hashes, image_set_sizes, image_set_mtimes
-
-
-
+from framework.image import (
+    create_random_image_set,
+    mutate_image_set_revision,
+    validate_image_set,
+    set_image_set_mtime,
+    image_set_hashes,
+    image_set_sizes,
+    image_set_mtimes,
+)
 
 
 class TestCase0022LocalFirstValidation(E2ETestCase):
-
     case_id = "0022"
-
     name = "local_first validation"
-
     description = (
-
-        "Validate with passive text, real XLSX and real PDF payloads that local_first treats local content "
-
-        "as the source of truth during a conflict"
-
+        "Validate with passive text, real XLSX/PDF payloads and an isolated real PNG/JPEG image-set scenario "
+        "that local_first treats local content as the source of truth during a conflict"
     )
-
-
 
     XLSX_PAYLOAD_ROWS = 32
 
-
-
     def _write_config(self, config_path: Path, sync_dir: Path, local_first: bool = False) -> None:
-
         content = (
-
             "# tc0022 config\n"
-
             f'sync_dir = "{sync_dir}"\n'
-
         )
-
         if local_first:
-
             content += 'local_first = "true"\n'
-
         write_onedrive_config(config_path, content)
 
 
+    def _run_image_local_first_scenario(
+        self,
+        context: E2EContext,
+        case_work_dir: Path,
+        case_log_dir: Path,
+        state_dir: Path,
+        artifacts: list[str],
+    ) -> tuple[bool, str, dict[str, object]]:
+        """Exercise local_first with real PNG/JPEG fixtures independently of Office enrichment."""
+        scenario_work_dir = case_work_dir / "image-local-first"
+        scenario_log_dir = case_log_dir / "image-local-first"
+        scenario_state_dir = state_dir / "image-local-first"
 
-    def run(self, context: E2EContext) -> TestResult:
+        seed_root = scenario_work_dir / "seedroot"
+        local_root = scenario_work_dir / "localroot"
+        remote_update_root = scenario_work_dir / "remoteupdateroot"
+        verify_root = scenario_work_dir / "verifyroot"
+        conf_seed = scenario_work_dir / "conf-seed"
+        conf_local = scenario_work_dir / "conf-local"
+        conf_remote = scenario_work_dir / "conf-remote"
+        conf_verify = scenario_work_dir / "conf-verify"
 
-        layout = self.prepare_case_layout(
+        for path in [
+            scenario_work_dir, scenario_log_dir, scenario_state_dir,
+            seed_root, local_root, remote_update_root, verify_root,
+        ]:
+            reset_directory(path)
 
-            context,
-
-            case_dir_name="tc0022",
-
-            ensure_refresh_token=True,
-
-        )
-
-        case_work_dir = layout.work_dir
-
-        case_log_dir = layout.log_dir
-
-        state_dir = layout.state_dir
-
-
-
-        seed_root = case_work_dir / "seedroot"
-
-        local_root = case_work_dir / "localroot"
-
-        remote_update_root = case_work_dir / "remoteupdateroot"
-
-        verify_root = case_work_dir / "verifyroot"
-
-
-
-        conf_seed = case_work_dir / "conf-seed"
-
-        conf_local = case_work_dir / "conf-local"
-
-        conf_remote = case_work_dir / "conf-remote"
-
-        conf_verify = case_work_dir / "conf-verify"
-
-
-
-        root_name = f"ZZ_E2E_TC0022_{context.run_id}_{os.getpid()}"
-
-        text_relative = f"{root_name}/conflict.txt"
-
-        xlsx_relative = f"{root_name}/conflict.xlsx"
-
-        pdf_relative = f"{root_name}/conflict.pdf"
-
+        root_name = f"ZZ_E2E_TC0022_IMAGE_{context.run_id}_{os.getpid()}"
         image_relative = f"{root_name}/conflict.png"
-
-
-
-        seed_text_file = seed_root / text_relative
-
-        local_text_file = local_root / text_relative
-
-        remote_update_text_file = remote_update_root / text_relative
-
-        verify_text_file = verify_root / text_relative
-
-
-
-        seed_xlsx_file = seed_root / xlsx_relative
-
-        seed_pdf_file = seed_root / pdf_relative
-
         seed_image_file = seed_root / image_relative
-
-        local_xlsx_file = local_root / xlsx_relative
-
-        local_pdf_file = local_root / pdf_relative
-
         local_image_file = local_root / image_relative
-
-        remote_update_xlsx_file = remote_update_root / xlsx_relative
-
-        remote_update_pdf_file = remote_update_root / pdf_relative
-
         remote_update_image_file = remote_update_root / image_relative
-
-        verify_xlsx_file = verify_root / xlsx_relative
-
-        verify_pdf_file = verify_root / pdf_relative
-
         verify_image_file = verify_root / image_relative
+        image_seed = f"{context.run_id}:{context.e2e_target}:TC0022:image:{os.getpid()}"
 
-
-
-        text_seed_content = "base\n"
-
-        text_remote_content = "remote wins unless local_first applies\n"
-
-        text_expected_local = "local wins because local_first is enabled\n"
-
-        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0022:{os.getpid()}"
-
-        pdf_seed = f"{xlsx_seed}:pdf"
-
-        image_seed = f"{xlsx_seed}:image"
-
-
-
-        reset_directory(seed_root)
-
-        reset_directory(local_root)
-
-        reset_directory(remote_update_root)
-
-        reset_directory(verify_root)
-
-
-
-        write_text_file(seed_text_file, text_seed_content)
-
-        write_text_file(remote_update_text_file, text_remote_content)
-
-        generated_seed = create_random_xlsx_pair(
-
-            seed_xlsx_file,
-
-            xlsx_seed,
-
-            revision=REVISION_0,
-
-            payload_rows=self.XLSX_PAYLOAD_ROWS,
-
-            title="TC0022 local_first baseline workbook",
-
+        generated_seed = create_random_image_set(
+            seed_image_file, image_seed, revision=REVISION_0, title="TC0022 local_first baseline images"
+        )
+        generated_remote = create_random_image_set(
+            remote_update_image_file, image_seed, revision=REVISION_1, title="TC0022 local_first baseline images"
         )
 
-        generated_remote = create_random_xlsx_pair(
+        for conf_dir, sync_root, local_first in [
+            (conf_seed, seed_root, False),
+            (conf_local, local_root, False),
+            (conf_remote, remote_update_root, False),
+            (conf_verify, verify_root, False),
+        ]:
+            context.bootstrap_config_dir(conf_dir)
+            self._write_config(conf_dir / "config", sync_root, local_first=local_first)
 
-            remote_update_xlsx_file,
+        seed_stdout = scenario_log_dir / "seed_stdout.log"
+        seed_stderr = scenario_log_dir / "seed_stderr.log"
+        download_stdout = scenario_log_dir / "download_stdout.log"
+        download_stderr = scenario_log_dir / "download_stderr.log"
+        remote_stdout = scenario_log_dir / "remote_update_stdout.log"
+        remote_stderr = scenario_log_dir / "remote_update_stderr.log"
+        final_stdout = scenario_log_dir / "final_sync_stdout.log"
+        final_stderr = scenario_log_dir / "final_sync_stderr.log"
+        verify_stdout = scenario_log_dir / "verify_stdout.log"
+        verify_stderr = scenario_log_dir / "verify_stderr.log"
+        metadata_file = scenario_state_dir / "metadata.txt"
 
-            xlsx_seed,
-
-            revision=REVISION_1,
-
-            payload_rows=self.XLSX_PAYLOAD_ROWS,
-
-            title="TC0022 local_first baseline workbook",
-
-        )
-
-        generated_seed_pdf = create_random_pdf_pair(seed_pdf_file, pdf_seed, revision=REVISION_0, title="TC0022 local_first baseline PDF")
-
-        generated_remote_pdf = create_random_pdf_pair(remote_update_pdf_file, pdf_seed, revision=REVISION_1, title="TC0022 local_first baseline PDF")
-
-        generated_seed_image = create_random_image_set(seed_image_file, image_seed, revision=REVISION_0, title="TC0022 local_first baseline images")
-
-        generated_remote_image = create_random_image_set(remote_update_image_file, image_seed, revision=REVISION_1, title="TC0022 local_first baseline images")
-
-
-
-        context.bootstrap_config_dir(conf_seed)
-
-        self._write_config(conf_seed / "config", seed_root)
-
-
-
-        context.bootstrap_config_dir(conf_local)
-
-        self._write_config(conf_local / "config", local_root)
-
-
-
-        context.bootstrap_config_dir(conf_remote)
-
-        self._write_config(conf_remote / "config", remote_update_root)
-
-
-
-        context.bootstrap_config_dir(conf_verify)
-
-        self._write_config(conf_verify / "config", verify_root)
-
-
-
-        seed_stdout = case_log_dir / "seed_stdout.log"
-
-        seed_stderr = case_log_dir / "seed_stderr.log"
-
-        download_stdout = case_log_dir / "download_stdout.log"
-
-        download_stderr = case_log_dir / "download_stderr.log"
-
-        remote_stdout = case_log_dir / "remote_update_stdout.log"
-
-        remote_stderr = case_log_dir / "remote_update_stderr.log"
-
-        final_stdout = case_log_dir / "final_sync_stdout.log"
-
-        final_stderr = case_log_dir / "final_sync_stderr.log"
-
-        verify_stdout = case_log_dir / "verify_stdout.log"
-
-        verify_stderr = case_log_dir / "verify_stderr.log"
-
-        remote_manifest_file = state_dir / "remote_verify_manifest.txt"
-
-        metadata_file = state_dir / "metadata.txt"
-
-
-
-        artifacts = [
-
-            str(seed_stdout),
-
-            str(seed_stderr),
-
-            str(download_stdout),
-
-            str(download_stderr),
-
-            str(remote_stdout),
-
-            str(remote_stderr),
-
-            str(final_stdout),
-
-            str(final_stderr),
-
-            str(verify_stdout),
-
-            str(verify_stderr),
-
-            str(remote_manifest_file),
-
-            str(metadata_file),
-
+        scenario_artifacts = [
+            str(seed_stdout), str(seed_stderr), str(download_stdout), str(download_stderr),
+            str(remote_stdout), str(remote_stderr), str(final_stdout), str(final_stderr),
+            str(verify_stdout), str(verify_stderr), str(metadata_file),
         ]
+        artifacts.extend(scenario_artifacts)
 
-        details: dict[str, object] = {
-
-            "root_name": root_name,
-
-            "text_relative": text_relative,
-
-            "xlsx_relative": xlsx_relative,
-
-            "pdf_relative": pdf_relative,
-
-            "image_relative": image_relative,
-
-            "xlsx_seed": xlsx_seed,
-
-            "pdf_seed": pdf_seed,
-
-            "image_seed": image_seed,
-
-            "payload_rows": self.XLSX_PAYLOAD_ROWS,
-
-            "generated_seed_xlsx_size": int(generated_seed["size_bytes"]),
-
-            "generated_remote_update_xlsx_size": int(generated_remote["size_bytes"]),
-
-            "generated_seed_pdf_size": int(generated_seed_pdf["size_bytes"]),
-
-            "generated_remote_update_pdf_size": int(generated_remote_pdf["size_bytes"]),
-
-            "generated_seed_image_sizes": {k: int(v) for k, v in generated_seed_image.items() if k.endswith("_size_bytes")},
-
-            "generated_remote_update_image_sizes": {k: int(v) for k, v in generated_remote_image.items() if k.endswith("_size_bytes")},
-
-        }
-
-
+        def run_phase(label: str, command: list[str], stdout_path: Path, stderr_path: Path):
+            context.log(f"Executing Test Case {self.case_id} image {label}: {command_to_string(command)}")
+            result = run_command(command, cwd=context.repo_root)
+            write_text_file(stdout_path, result.stdout)
+            write_text_file(stderr_path, result.stderr)
+            return result
 
         seed_command = [
-
-            context.onedrive_bin,
-
-            "--display-running-config",
-
-            "--sync",
-
-            "--upload-only",
-
-            "--verbose",
-
-            "--resync",
-
-            "--resync-auth",
-
-            "--single-directory",
-
-            root_name,
-
-            "--confdir",
-
-            str(conf_seed),
-
+            context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose",
+            "--resync", "--resync-auth", "--single-directory", root_name, "--confdir", str(conf_seed),
         ]
-
-        context.log(f"Executing Test Case {self.case_id} seed: {command_to_string(seed_command)}")
-
-        seed_result = run_command(seed_command, cwd=context.repo_root)
-
-        write_text_file(seed_stdout, seed_result.stdout)
-
-        write_text_file(seed_stderr, seed_result.stderr)
-
-
+        seed_result = run_phase("seed", seed_command, seed_stdout, seed_stderr)
 
         download_command = [
-
-            context.onedrive_bin,
-
-            "--display-running-config",
-
-            "--sync",
-
-            "--verbose",
-
-            "--download-only",
-
-            "--resync",
-
-            "--resync-auth",
-
-            "--single-directory",
-
-            root_name,
-
-            "--confdir",
-
-            str(conf_local),
-
+            context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose",
+            "--resync", "--resync-auth", "--single-directory", root_name, "--confdir", str(conf_local),
         ]
+        download_result = run_phase("download", download_command, download_stdout, download_stderr)
 
-        context.log(f"Executing Test Case {self.case_id} download: {command_to_string(download_command)}")
-
-        download_result = run_command(download_command, cwd=context.repo_root)
-
-        write_text_file(download_stdout, download_result.stdout)
-
-        write_text_file(download_stderr, download_result.stderr)
-
-
-
-        baseline_text_content = local_text_file.read_text(encoding="utf-8") if local_text_file.is_file() else ""
-
-        baseline_xlsx_validation_error = (
-
-            validate_xlsx_pair(local_xlsx_file, REVISION_0)
-
-            if local_xlsx_file.is_file()
-
-            else "Local baseline XLSX is missing"
-
+        baseline_validation_error = (
+            validate_image_set(local_image_file, REVISION_0)
+            if local_image_file.is_file()
+            else "Downloaded image set is missing"
         )
-
-        baseline_pdf_validation_error = (
-
-            validate_pdf_pair(local_pdf_file, REVISION_0)
-
-            if local_pdf_file.is_file()
-
-            else "Local baseline PDF is missing"
-
+        baseline_hashes = (
+            image_set_hashes(local_image_file, compute_quickxor_hash_file)
+            if local_image_file.is_file()
+            else {}
         )
-
-        details["baseline_text_content"] = baseline_text_content
-
-        baseline_image_validation_error = (validate_image_set(local_image_file, REVISION_0) if local_image_file.is_file() else "Downloaded image set is missing")
-
-        details["baseline_xlsx_validation_error"] = baseline_xlsx_validation_error
-
-        details["baseline_pdf_validation_error"] = baseline_pdf_validation_error
-
-        details["baseline_image_validation_error"] = baseline_image_validation_error
-
-        if local_xlsx_file.is_file():
-
-            details["baseline_xlsx_hashes"] = xlsx_pair_hashes(local_xlsx_file, compute_quickxor_hash_file)
-
-            details["baseline_xlsx_sizes"] = xlsx_pair_sizes(local_xlsx_file)
-
-        if local_pdf_file.is_file():
-
-            details["baseline_pdf_hashes"] = pdf_pair_hashes(local_pdf_file, compute_quickxor_hash_file)
-
-            details["baseline_pdf_sizes"] = pdf_pair_sizes(local_pdf_file)
-
-        if local_image_file.is_file():
-
-            details["baseline_image_hashes"] = image_set_hashes(local_image_file, compute_quickxor_hash_file)
-
-            details["baseline_image_sizes"] = image_set_sizes(local_image_file)
-
-
 
         remote_command = [
-
-            context.onedrive_bin,
-
-            "--display-running-config",
-
-            "--sync",
-
-            "--upload-only",
-
-            "--verbose",
-
-            "--resync",
-
-            "--resync-auth",
-
-            "--single-directory",
-
-            root_name,
-
-            "--confdir",
-
-            str(conf_remote),
-
+            context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose",
+            "--resync", "--resync-auth", "--single-directory", root_name, "--confdir", str(conf_remote),
         ]
-
-        context.log(f"Executing Test Case {self.case_id} remote update: {command_to_string(remote_command)}")
-
-        remote_result = run_command(remote_command, cwd=context.repo_root)
-
-        write_text_file(remote_stdout, remote_result.stdout)
-
-        write_text_file(remote_stderr, remote_result.stderr)
-
-
-
-        # Ensure both local edits are definitively later than the remote updates.
-
-        # This is critical so the final sync actually exercises local_first.
+        remote_result = run_phase("remote update", remote_command, remote_stdout, remote_stderr)
 
         time.sleep(2)
-
-
-
-        write_text_file(local_text_file, text_expected_local)
-
-        local_xlsx_revision_error = ""
-
-        expected_xlsx_hashes = {}
-
-        if local_xlsx_file.is_file() and not baseline_xlsx_validation_error:
-
-            mutate_xlsx_pair_revision(local_xlsx_file, REVISION_0, REVISION_2)
-
-            local_xlsx_revision_error = validate_xlsx_pair(local_xlsx_file, REVISION_2)
-
-            expected_xlsx_hashes = xlsx_pair_hashes(local_xlsx_file, compute_quickxor_hash_file)
-
-        else:
-
-            local_xlsx_revision_error = baseline_xlsx_validation_error or "Unable to mutate missing local XLSX"
-
-
-
-        local_pdf_revision_error = ""
-
-        expected_pdf_hashes = {}
-
-        local_image_revision_error = ""
-
-        expected_image_hashes = {}
-
-        if local_pdf_file.is_file() and not baseline_pdf_validation_error:
-
-            mutate_pdf_pair_revision(local_pdf_file, REVISION_0, REVISION_2)
-
-            local_pdf_revision_error = validate_pdf_pair(local_pdf_file, REVISION_2)
-
-            expected_pdf_hashes = pdf_pair_hashes(local_pdf_file, compute_quickxor_hash_file)
-
-        else:
-
-            local_pdf_revision_error = baseline_pdf_validation_error or "Unable to mutate missing local PDF"
-
-
-
-        if local_image_file.is_file() and not baseline_image_validation_error:
-
+        local_revision_error = ""
+        expected_local_hashes: dict[str, str] = {}
+        if local_image_file.is_file() and not baseline_validation_error:
             mutate_image_set_revision(local_image_file, REVISION_0, REVISION_2)
-
-            local_image_revision_error = validate_image_set(local_image_file, REVISION_2)
-
-            expected_image_hashes = image_set_hashes(local_image_file, compute_quickxor_hash_file)
-
-        else:
-
-            local_image_revision_error = baseline_image_validation_error or "Unable to mutate missing local image set"
-
-
-
-        now = time.time()
-
-        os.utime(local_text_file, (now, now))
-
-        if local_xlsx_file.exists():
-
-            set_xlsx_pair_mtime(local_xlsx_file, (now, now))
-
-        if local_pdf_file.exists():
-
-            set_pdf_pair_mtime(local_pdf_file, (now, now))
-
-        if local_image_file.exists():
-
+            local_revision_error = validate_image_set(local_image_file, REVISION_2)
+            expected_local_hashes = image_set_hashes(local_image_file, compute_quickxor_hash_file)
+            now = time.time()
             set_image_set_mtime(local_image_file, (now, now))
-
-
-
-        details["local_xlsx_revision_error"] = local_xlsx_revision_error
-
-        details["expected_local_xlsx_hashes"] = expected_xlsx_hashes
-
-        details["local_pdf_revision_error"] = local_pdf_revision_error
-
-        details["expected_local_pdf_hashes"] = expected_pdf_hashes
-
-        details["local_text_mtime_before_final_sync"] = local_text_file.stat().st_mtime if local_text_file.exists() else 0
-
-        details["local_xlsx_mtimes_before_final_sync"] = xlsx_pair_mtimes(local_xlsx_file)
-
-        details["local_pdf_mtimes_before_final_sync"] = pdf_pair_mtimes(local_pdf_file)
-
-
-
-        # Reuse the same local DB / delta state, but enable local_first.
+        else:
+            local_revision_error = baseline_validation_error or "Unable to mutate missing local image set"
 
         self._write_config(conf_local / "config", local_root, local_first=True)
-
-
-
         final_command = [
-
-            context.onedrive_bin,
-
-            "--display-running-config",
-
-            "--sync",
-
-            "--verbose",
-
-            "--single-directory",
-
-            root_name,
-
-            "--confdir",
-
-            str(conf_local),
-
+            context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+            "--single-directory", root_name, "--confdir", str(conf_local),
         ]
-
-        context.log(f"Executing Test Case {self.case_id} final sync: {command_to_string(final_command)}")
-
-        final_result = run_command(final_command, cwd=context.repo_root)
-
-        write_text_file(final_stdout, final_result.stdout)
-
-        write_text_file(final_stderr, final_result.stderr)
-
-
+        final_result = run_phase("final sync", final_command, final_stdout, final_stderr)
 
         verify_command = [
-
-            context.onedrive_bin,
-
-            "--display-running-config",
-
-            "--sync",
-
-            "--verbose",
-
-            "--download-only",
-
-            "--resync",
-
-            "--resync-auth",
-
-            "--single-directory",
-
-            root_name,
-
-            "--confdir",
-
-            str(conf_verify),
-
+            context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose",
+            "--resync", "--resync-auth", "--single-directory", root_name, "--confdir", str(conf_verify),
         ]
+        verify_result = run_phase("verify", verify_command, verify_stdout, verify_stderr)
 
-        context.log(f"Executing Test Case {self.case_id} verify: {command_to_string(verify_command)}")
-
-        verify_result = run_command(verify_command, cwd=context.repo_root)
-
-        write_text_file(verify_stdout, verify_result.stdout)
-
-        write_text_file(verify_stderr, verify_result.stderr)
-
-
-
-        remote_manifest = build_manifest(verify_root)
-
-        write_manifest(remote_manifest_file, remote_manifest)
-
-
-
-        local_text_content = local_text_file.read_text(encoding="utf-8") if local_text_file.is_file() else ""
-
-        remote_text_content = verify_text_file.read_text(encoding="utf-8") if verify_text_file.is_file() else ""
-
-        local_xlsx_validation_error = (
-
-            validate_xlsx_pair(local_xlsx_file, REVISION_2)
-
-            if local_xlsx_file.is_file()
-
-            else "Local XLSX is missing"
-
-        )
-
-        remote_xlsx_validation_error = (
-
-            validate_xlsx_pair(verify_xlsx_file, REVISION_2)
-
-            if verify_xlsx_file.is_file()
-
-            else "Remote verification XLSX is missing"
-
-        )
-
-        local_xlsx_hashes = xlsx_pair_hashes(local_xlsx_file, compute_quickxor_hash_file)
-
-        remote_xlsx_hashes = xlsx_pair_hashes(verify_xlsx_file, compute_quickxor_hash_file)
-
-        local_pdf_validation_error = (
-
-            validate_pdf_pair(local_pdf_file, REVISION_2)
-
-            if local_pdf_file.is_file()
-
-            else "Local PDF is missing"
-
-        )
-
-        remote_pdf_validation_error = (
-
-            validate_pdf_pair(verify_pdf_file, REVISION_2)
-
-            if verify_pdf_file.is_file()
-
-            else "Remote verification PDF is missing"
-
-        )
-
-        local_pdf_hashes = pdf_pair_hashes(local_pdf_file, compute_quickxor_hash_file)
-
-        remote_pdf_hashes = pdf_pair_hashes(verify_pdf_file, compute_quickxor_hash_file)
-        local_image_validation_error = (
+        local_validation_error = (
             validate_image_set(local_image_file, REVISION_2)
             if local_image_file.is_file()
             else "Local image set is missing"
         )
-        remote_image_validation_error = (
+        remote_validation_error = (
             validate_image_set(verify_image_file, REVISION_2)
             if verify_image_file.is_file()
             else "Remote verification image set is missing"
         )
-        local_image_hashes = image_set_hashes(local_image_file, compute_quickxor_hash_file)
-        remote_image_hashes = image_set_hashes(verify_image_file, compute_quickxor_hash_file)
+        local_hashes = image_set_hashes(local_image_file, compute_quickxor_hash_file) if local_image_file.is_file() else {}
+        remote_hashes = image_set_hashes(verify_image_file, compute_quickxor_hash_file) if verify_image_file.is_file() else {}
 
-
-
-        details.update(
-
-            {
-
-                "seed_returncode": seed_result.returncode,
-
-                "download_returncode": download_result.returncode,
-
-                "remote_returncode": remote_result.returncode,
-
-                "final_returncode": final_result.returncode,
-
-                "verify_returncode": verify_result.returncode,
-
-                "local_text_content": local_text_content,
-
-                "remote_text_content": remote_text_content,
-
-                "local_xlsx_validation_error": local_xlsx_validation_error,
-
-                "remote_xlsx_validation_error": remote_xlsx_validation_error,
-
-                "local_xlsx_hashes": local_xlsx_hashes,
-
-                "remote_xlsx_hashes": remote_xlsx_hashes,
-
-                "local_pdf_validation_error": local_pdf_validation_error,
-
-                "remote_pdf_validation_error": remote_pdf_validation_error,
-
-                "local_pdf_hashes": local_pdf_hashes,
-
-                "remote_pdf_hashes": remote_pdf_hashes,
-
-                "local_image_validation_error": local_image_validation_error,
-
-                "remote_image_validation_error": remote_image_validation_error,
-
-                "local_image_hashes": local_image_hashes,
-
-                "remote_image_hashes": remote_image_hashes,
-
-            }
-
-        )
-
+        details: dict[str, object] = {
+            "root_name": root_name,
+            "image_relative": image_relative,
+            "image_seed": image_seed,
+            "generated_seed_image_sizes": {k: int(v) for k, v in generated_seed.items() if k.endswith("_size_bytes")},
+            "generated_remote_update_image_sizes": {k: int(v) for k, v in generated_remote.items() if k.endswith("_size_bytes")},
+            "seed_returncode": seed_result.returncode,
+            "download_returncode": download_result.returncode,
+            "remote_returncode": remote_result.returncode,
+            "final_returncode": final_result.returncode,
+            "verify_returncode": verify_result.returncode,
+            "baseline_validation_error": baseline_validation_error,
+            "baseline_hashes": baseline_hashes,
+            "local_revision_error": local_revision_error,
+            "expected_local_hashes": expected_local_hashes,
+            "local_validation_error": local_validation_error,
+            "remote_validation_error": remote_validation_error,
+            "local_hashes": local_hashes,
+            "remote_hashes": remote_hashes,
+            "local_mtimes": image_set_mtimes(local_image_file) if local_image_file.is_file() else {},
+            "local_sizes": image_set_sizes(local_image_file) if local_image_file.is_file() else {},
+        }
         write_text_file(
-
             metadata_file,
-
             "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
-
         )
-
-
 
         for label, rc in [
-
             ("seed", seed_result.returncode),
-
             ("download", download_result.returncode),
-
             ("remote update", remote_result.returncode),
-
             ("final sync", final_result.returncode),
-
             ("verify", verify_result.returncode),
-
         ]:
-
             if rc != 0:
+                return False, f"Image local_first {label} phase failed with status {rc}", details
 
+        if baseline_validation_error:
+            return False, f"Downloaded image baseline is invalid: {baseline_validation_error}", details
+        if local_revision_error:
+            return False, f"Unable to establish local revision-2 image conflict payload: {local_revision_error}", details
+        if local_validation_error:
+            return False, f"Local image set was not retained after local_first conflict: {local_validation_error}", details
+        if remote_validation_error:
+            return False, f"Remote image set did not converge to local revision-2 content: {remote_validation_error}", details
+        if not expected_local_hashes or local_hashes != expected_local_hashes or remote_hashes != expected_local_hashes:
+            return False, "PNG/JPEG content was not retained byte-for-byte after local_first conflict resolution", details
+
+        return True, "Image local_first scenario passed", details
+
+    def run(self, context: E2EContext) -> TestResult:
+        layout = self.prepare_case_layout(
+            context,
+            case_dir_name="tc0022",
+            ensure_refresh_token=True,
+        )
+        case_work_dir = layout.work_dir
+        case_log_dir = layout.log_dir
+        state_dir = layout.state_dir
+
+        seed_root = case_work_dir / "seedroot"
+        local_root = case_work_dir / "localroot"
+        remote_update_root = case_work_dir / "remoteupdateroot"
+        verify_root = case_work_dir / "verifyroot"
+
+        conf_seed = case_work_dir / "conf-seed"
+        conf_local = case_work_dir / "conf-local"
+        conf_remote = case_work_dir / "conf-remote"
+        conf_verify = case_work_dir / "conf-verify"
+
+        root_name = f"ZZ_E2E_TC0022_{context.run_id}_{os.getpid()}"
+        text_relative = f"{root_name}/conflict.txt"
+        xlsx_relative = f"{root_name}/conflict.xlsx"
+        pdf_relative = f"{root_name}/conflict.pdf"
+
+        seed_text_file = seed_root / text_relative
+        local_text_file = local_root / text_relative
+        remote_update_text_file = remote_update_root / text_relative
+        verify_text_file = verify_root / text_relative
+
+        seed_xlsx_file = seed_root / xlsx_relative
+        seed_pdf_file = seed_root / pdf_relative
+        local_xlsx_file = local_root / xlsx_relative
+        local_pdf_file = local_root / pdf_relative
+        remote_update_xlsx_file = remote_update_root / xlsx_relative
+        remote_update_pdf_file = remote_update_root / pdf_relative
+        verify_xlsx_file = verify_root / xlsx_relative
+        verify_pdf_file = verify_root / pdf_relative
+
+        text_seed_content = "base\n"
+        text_remote_content = "remote wins unless local_first applies\n"
+        text_expected_local = "local wins because local_first is enabled\n"
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0022:{os.getpid()}"
+        pdf_seed = f"{xlsx_seed}:pdf"
+
+        reset_directory(seed_root)
+        reset_directory(local_root)
+        reset_directory(remote_update_root)
+        reset_directory(verify_root)
+
+        write_text_file(seed_text_file, text_seed_content)
+        write_text_file(remote_update_text_file, text_remote_content)
+        generated_seed = create_random_xlsx_pair(
+            seed_xlsx_file,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0022 local_first baseline workbook",
+        )
+        generated_remote = create_random_xlsx_pair(
+            remote_update_xlsx_file,
+            xlsx_seed,
+            revision=REVISION_1,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0022 local_first baseline workbook",
+        )
+        generated_seed_pdf = create_random_pdf_pair(seed_pdf_file, pdf_seed, revision=REVISION_0, title="TC0022 local_first baseline PDF")
+        generated_remote_pdf = create_random_pdf_pair(remote_update_pdf_file, pdf_seed, revision=REVISION_1, title="TC0022 local_first baseline PDF")
+
+        context.bootstrap_config_dir(conf_seed)
+        self._write_config(conf_seed / "config", seed_root)
+
+        context.bootstrap_config_dir(conf_local)
+        self._write_config(conf_local / "config", local_root)
+
+        context.bootstrap_config_dir(conf_remote)
+        self._write_config(conf_remote / "config", remote_update_root)
+
+        context.bootstrap_config_dir(conf_verify)
+        self._write_config(conf_verify / "config", verify_root)
+
+        seed_stdout = case_log_dir / "seed_stdout.log"
+        seed_stderr = case_log_dir / "seed_stderr.log"
+        download_stdout = case_log_dir / "download_stdout.log"
+        download_stderr = case_log_dir / "download_stderr.log"
+        remote_stdout = case_log_dir / "remote_update_stdout.log"
+        remote_stderr = case_log_dir / "remote_update_stderr.log"
+        final_stdout = case_log_dir / "final_sync_stdout.log"
+        final_stderr = case_log_dir / "final_sync_stderr.log"
+        verify_stdout = case_log_dir / "verify_stdout.log"
+        verify_stderr = case_log_dir / "verify_stderr.log"
+        remote_manifest_file = state_dir / "remote_verify_manifest.txt"
+        metadata_file = state_dir / "metadata.txt"
+
+        artifacts = [
+            str(seed_stdout),
+            str(seed_stderr),
+            str(download_stdout),
+            str(download_stderr),
+            str(remote_stdout),
+            str(remote_stderr),
+            str(final_stdout),
+            str(final_stderr),
+            str(verify_stdout),
+            str(verify_stderr),
+            str(remote_manifest_file),
+            str(metadata_file),
+        ]
+        details: dict[str, object] = {
+            "root_name": root_name,
+            "text_relative": text_relative,
+            "xlsx_relative": xlsx_relative,
+            "pdf_relative": pdf_relative,
+            "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
+            "payload_rows": self.XLSX_PAYLOAD_ROWS,
+            "generated_seed_xlsx_size": int(generated_seed["size_bytes"]),
+            "generated_remote_update_xlsx_size": int(generated_remote["size_bytes"]),
+            "generated_seed_pdf_size": int(generated_seed_pdf["size_bytes"]),
+            "generated_remote_update_pdf_size": int(generated_remote_pdf["size_bytes"]),
+        }
+
+        seed_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--upload-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_seed),
+        ]
+        context.log(f"Executing Test Case {self.case_id} seed: {command_to_string(seed_command)}")
+        seed_result = run_command(seed_command, cwd=context.repo_root)
+        write_text_file(seed_stdout, seed_result.stdout)
+        write_text_file(seed_stderr, seed_result.stderr)
+
+        download_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--download-only",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_local),
+        ]
+        context.log(f"Executing Test Case {self.case_id} download: {command_to_string(download_command)}")
+        download_result = run_command(download_command, cwd=context.repo_root)
+        write_text_file(download_stdout, download_result.stdout)
+        write_text_file(download_stderr, download_result.stderr)
+
+        baseline_text_content = local_text_file.read_text(encoding="utf-8") if local_text_file.is_file() else ""
+        baseline_xlsx_validation_error = (
+            validate_xlsx_pair(local_xlsx_file, REVISION_0)
+            if local_xlsx_file.is_file()
+            else "Local baseline XLSX is missing"
+        )
+        baseline_pdf_validation_error = (
+            validate_pdf_pair(local_pdf_file, REVISION_0)
+            if local_pdf_file.is_file()
+            else "Local baseline PDF is missing"
+        )
+        details["baseline_text_content"] = baseline_text_content
+        details["baseline_xlsx_validation_error"] = baseline_xlsx_validation_error
+        details["baseline_pdf_validation_error"] = baseline_pdf_validation_error
+        if local_xlsx_file.is_file():
+            details["baseline_xlsx_hashes"] = xlsx_pair_hashes(local_xlsx_file, compute_quickxor_hash_file)
+            details["baseline_xlsx_sizes"] = xlsx_pair_sizes(local_xlsx_file)
+        if local_pdf_file.is_file():
+            details["baseline_pdf_hashes"] = pdf_pair_hashes(local_pdf_file, compute_quickxor_hash_file)
+            details["baseline_pdf_sizes"] = pdf_pair_sizes(local_pdf_file)
+
+        remote_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--upload-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_remote),
+        ]
+        context.log(f"Executing Test Case {self.case_id} remote update: {command_to_string(remote_command)}")
+        remote_result = run_command(remote_command, cwd=context.repo_root)
+        write_text_file(remote_stdout, remote_result.stdout)
+        write_text_file(remote_stderr, remote_result.stderr)
+
+        # Ensure both local edits are definitively later than the remote updates.
+        # This is critical so the final sync actually exercises local_first.
+        time.sleep(2)
+
+        write_text_file(local_text_file, text_expected_local)
+        local_xlsx_revision_error = ""
+        expected_xlsx_hashes = {}
+        if local_xlsx_file.is_file() and not baseline_xlsx_validation_error:
+            mutate_xlsx_pair_revision(local_xlsx_file, REVISION_0, REVISION_2)
+            local_xlsx_revision_error = validate_xlsx_pair(local_xlsx_file, REVISION_2)
+            expected_xlsx_hashes = xlsx_pair_hashes(local_xlsx_file, compute_quickxor_hash_file)
+        else:
+            local_xlsx_revision_error = baseline_xlsx_validation_error or "Unable to mutate missing local XLSX"
+
+        local_pdf_revision_error = ""
+        expected_pdf_hashes = {}
+        if local_pdf_file.is_file() and not baseline_pdf_validation_error:
+            mutate_pdf_pair_revision(local_pdf_file, REVISION_0, REVISION_2)
+            local_pdf_revision_error = validate_pdf_pair(local_pdf_file, REVISION_2)
+            expected_pdf_hashes = pdf_pair_hashes(local_pdf_file, compute_quickxor_hash_file)
+        else:
+            local_pdf_revision_error = baseline_pdf_validation_error or "Unable to mutate missing local PDF"
+
+        now = time.time()
+        os.utime(local_text_file, (now, now))
+        if local_xlsx_file.exists():
+            set_xlsx_pair_mtime(local_xlsx_file, (now, now))
+        if local_pdf_file.exists():
+            set_pdf_pair_mtime(local_pdf_file, (now, now))
+
+        details["local_xlsx_revision_error"] = local_xlsx_revision_error
+        details["expected_local_xlsx_hashes"] = expected_xlsx_hashes
+        details["local_pdf_revision_error"] = local_pdf_revision_error
+        details["expected_local_pdf_hashes"] = expected_pdf_hashes
+        details["local_text_mtime_before_final_sync"] = local_text_file.stat().st_mtime if local_text_file.exists() else 0
+        details["local_xlsx_mtimes_before_final_sync"] = xlsx_pair_mtimes(local_xlsx_file)
+        details["local_pdf_mtimes_before_final_sync"] = pdf_pair_mtimes(local_pdf_file)
+
+        # Reuse the same local DB / delta state, but enable local_first.
+        self._write_config(conf_local / "config", local_root, local_first=True)
+
+        final_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_local),
+        ]
+        context.log(f"Executing Test Case {self.case_id} final sync: {command_to_string(final_command)}")
+        final_result = run_command(final_command, cwd=context.repo_root)
+        write_text_file(final_stdout, final_result.stdout)
+        write_text_file(final_stderr, final_result.stderr)
+
+        verify_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--download-only",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            root_name,
+            "--confdir",
+            str(conf_verify),
+        ]
+        context.log(f"Executing Test Case {self.case_id} verify: {command_to_string(verify_command)}")
+        verify_result = run_command(verify_command, cwd=context.repo_root)
+        write_text_file(verify_stdout, verify_result.stdout)
+        write_text_file(verify_stderr, verify_result.stderr)
+
+        remote_manifest = build_manifest(verify_root)
+        write_manifest(remote_manifest_file, remote_manifest)
+
+        local_text_content = local_text_file.read_text(encoding="utf-8") if local_text_file.is_file() else ""
+        remote_text_content = verify_text_file.read_text(encoding="utf-8") if verify_text_file.is_file() else ""
+        local_xlsx_validation_error = (
+            validate_xlsx_pair(local_xlsx_file, REVISION_2)
+            if local_xlsx_file.is_file()
+            else "Local XLSX is missing"
+        )
+        remote_xlsx_validation_error = (
+            validate_xlsx_pair(verify_xlsx_file, REVISION_2)
+            if verify_xlsx_file.is_file()
+            else "Remote verification XLSX is missing"
+        )
+        local_xlsx_hashes = xlsx_pair_hashes(local_xlsx_file, compute_quickxor_hash_file)
+        remote_xlsx_hashes = xlsx_pair_hashes(verify_xlsx_file, compute_quickxor_hash_file)
+        local_pdf_validation_error = (
+            validate_pdf_pair(local_pdf_file, REVISION_2)
+            if local_pdf_file.is_file()
+            else "Local PDF is missing"
+        )
+        remote_pdf_validation_error = (
+            validate_pdf_pair(verify_pdf_file, REVISION_2)
+            if verify_pdf_file.is_file()
+            else "Remote verification PDF is missing"
+        )
+        local_pdf_hashes = pdf_pair_hashes(local_pdf_file, compute_quickxor_hash_file)
+        remote_pdf_hashes = pdf_pair_hashes(verify_pdf_file, compute_quickxor_hash_file)
+
+        details.update(
+            {
+                "seed_returncode": seed_result.returncode,
+                "download_returncode": download_result.returncode,
+                "remote_returncode": remote_result.returncode,
+                "final_returncode": final_result.returncode,
+                "verify_returncode": verify_result.returncode,
+                "local_text_content": local_text_content,
+                "remote_text_content": remote_text_content,
+                "local_xlsx_validation_error": local_xlsx_validation_error,
+                "remote_xlsx_validation_error": remote_xlsx_validation_error,
+                "local_xlsx_hashes": local_xlsx_hashes,
+                "remote_xlsx_hashes": remote_xlsx_hashes,
+                "local_pdf_validation_error": local_pdf_validation_error,
+                "remote_pdf_validation_error": remote_pdf_validation_error,
+                "local_pdf_hashes": local_pdf_hashes,
+                "remote_pdf_hashes": remote_pdf_hashes,
+            }
+        )
+        write_text_file(
+            metadata_file,
+            "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+        )
+
+        for label, rc in [
+            ("seed", seed_result.returncode),
+            ("download", download_result.returncode),
+            ("remote update", remote_result.returncode),
+            ("final sync", final_result.returncode),
+            ("verify", verify_result.returncode),
+        ]:
+            if rc != 0:
                 return self.fail_result(
-
                     self.case_id,
-
                     self.name,
-
                     f"{label} phase failed with status {rc}",
-
                     artifacts,
-
                     details,
-
                 )
 
-
-
         if baseline_text_content != text_seed_content:
-
             return self.fail_result(
-
                 self.case_id,
-
                 self.name,
-
                 "Downloaded passive-text baseline did not match the remote seed",
-
                 artifacts,
-
                 details,
-
             )
-
-
 
         if baseline_xlsx_validation_error:
-
             return self.fail_result(
-
                 self.case_id,
-
                 self.name,
-
                 f"Downloaded XLSX baseline is not a valid revision-0 workbook: {baseline_xlsx_validation_error}",
-
                 artifacts,
-
                 details,
-
             )
-
-
 
         if baseline_pdf_validation_error:
-
             return self.fail_result(self.case_id, self.name, f"Downloaded PDF baseline is not a valid revision-0 document: {baseline_pdf_validation_error}", artifacts, details)
 
-        if baseline_image_validation_error:
-
-            return self.fail_result(self.case_id, self.name, f"Downloaded image-set baseline is not valid revision-0 content: {baseline_image_validation_error}", artifacts, details)
-
-
-
         if local_xlsx_revision_error:
-
             return self.fail_result(
-
                 self.case_id,
-
                 self.name,
-
                 f"Unable to establish the local revision-2 XLSX conflict payload: {local_xlsx_revision_error}",
-
                 artifacts,
-
                 details,
-
             )
-
-
 
         if local_pdf_revision_error:
-
             return self.fail_result(self.case_id, self.name, f"Unable to establish the local revision-2 PDF conflict payload: {local_pdf_revision_error}", artifacts, details)
 
-        if local_image_revision_error:
-
-            return self.fail_result(self.case_id, self.name, f"Unable to establish the local revision-2 image-set conflict payload: {local_image_revision_error}", artifacts, details)
-
-
-
         if local_text_content != text_expected_local:
-
             return self.fail_result(
-
                 self.case_id,
-
                 self.name,
-
                 "Local passive-text content was not retained after conflict resolution with local_first enabled",
-
                 artifacts,
-
                 details,
-
             )
-
-
 
         if remote_text_content != text_expected_local:
-
             return self.fail_result(
-
                 self.case_id,
-
                 self.name,
-
                 "Remote passive-text content did not converge to the local source-of-truth content",
-
                 artifacts,
-
                 details,
-
             )
-
-
 
         if local_xlsx_validation_error:
-
             return self.fail_result(
-
                 self.case_id,
-
                 self.name,
-
                 f"Local XLSX was not retained after conflict resolution: {local_xlsx_validation_error}",
-
                 artifacts,
-
                 details,
-
             )
-
-
 
         if remote_xlsx_validation_error:
-
             return self.fail_result(
-
                 self.case_id,
-
                 self.name,
-
                 f"Remote XLSX did not converge to the local source-of-truth revision: {remote_xlsx_validation_error}",
-
                 artifacts,
-
                 details,
-
             )
-
-
 
         if local_pdf_validation_error:
-
             return self.fail_result(self.case_id, self.name, f"Local PDF was not retained after conflict resolution: {local_pdf_validation_error}", artifacts, details)
-
         if remote_pdf_validation_error:
-
             return self.fail_result(self.case_id, self.name, f"Remote PDF did not converge to the local source-of-truth revision: {remote_pdf_validation_error}", artifacts, details)
 
-        if local_image_validation_error:
-
-            return self.fail_result(self.case_id, self.name, f"Local image set was not retained after conflict resolution: {local_image_validation_error}", artifacts, details)
-
-        if remote_image_validation_error:
-
-            return self.fail_result(self.case_id, self.name, f"Remote image set did not converge to the local source-of-truth revision: {remote_image_validation_error}", artifacts, details)
-
-
-
-        if not expected_xlsx_hashes or local_xlsx_hashes != expected_xlsx_hashes:
-
+        if not expected_xlsx_hashes:
             return self.fail_result(
-
                 self.case_id,
-
                 self.name,
-
-                "Local XLSX content was not retained after conflict resolution with local_first enabled",
-
+                "Unable to establish expected local XLSX conflict hashes",
                 artifacts,
-
                 details,
-
             )
 
-
+        # Office files can be rewritten by SharePoint/OneDrive Business after a
+        # successful upload while preserving the logical workbook revision. For
+        # those account types the local_first contract is revision-2 convergence,
+        # not byte identity with the pre-upload package. Personal OneDrive does
+        # not perform that Office enrichment, so retain the exact-byte assertion.
+        if context.e2e_target in {"business", "sharepoint"}:
+            details["microsoft_enriched_local_first_xlsx"] = local_xlsx_hashes != expected_xlsx_hashes
+            if local_xlsx_hashes != remote_xlsx_hashes:
+                return self.fail_result(
+                    self.case_id,
+                    self.name,
+                    "XLSX did not converge to one authoritative revision-2 package after local_first conflict resolution",
+                    artifacts,
+                    details,
+                )
+        elif local_xlsx_hashes != expected_xlsx_hashes or remote_xlsx_hashes != expected_xlsx_hashes:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "XLSX content was not retained byte-for-byte after conflict resolution with local_first enabled",
+                artifacts,
+                details,
+            )
 
         if not expected_pdf_hashes or local_pdf_hashes != expected_pdf_hashes or remote_pdf_hashes != expected_pdf_hashes:
-
-            return self.fail_result(self.case_id, self.name, "PDF content hashes did not converge to the expected local source-of-truth revision", artifacts, details)
-
-        if not expected_image_hashes or local_image_hashes != expected_image_hashes or remote_image_hashes != expected_image_hashes:
-
-            return self.fail_result(self.case_id, self.name, "Image-set content hashes did not converge to the expected local source-of-truth revision", artifacts, details)
-
             return self.fail_result(self.case_id, self.name, "PDF content was not retained byte-for-byte after conflict resolution with local_first enabled", artifacts, details)
 
-
+        image_passed, image_message, image_details = self._run_image_local_first_scenario(
+            context, case_work_dir, case_log_dir, state_dir, artifacts
+        )
+        details["image_local_first"] = image_details
+        details["image_local_first_message"] = image_message
+        write_text_file(
+            metadata_file,
+            "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+        )
+        if not image_passed:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                image_message,
+                artifacts,
+                details,
+            )
 
         return self.pass_result(self.case_id, self.name, artifacts, details)
-
