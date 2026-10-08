@@ -9,6 +9,7 @@ from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, validate_xlsx_pair, unlink_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists, xlsx_pair_all_files
 from framework.pdf import create_random_pdf_pair, validate_pdf_pair, unlink_pdf_pair, large_pdf_relative, pdf_pair_any_exists, pdf_pair_all_files
+from framework.image import create_random_image_set, validate_image_set, unlink_image_set, image_set_any_exists, image_set_all_files, image_set_relatives
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -23,7 +24,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
     case_id = "0038"
     name = "delete and recreate with same name validation"
     description = (
-        "Validate that deleting passive TXT, real XLSX and real PDF files, syncing those deletions, then "
+        "Validate that deleting passive TXT, real XLSX, real PDF and real PNG/JPEG image files, syncing those deletions, then "
         "recreating different files with the same names correctly results in the final remote "
         "and local state without stale item-id or state database issues"
     )
@@ -85,16 +86,19 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
         target_relative = f"{root_name}/same-name-target.txt"
         xlsx_relative = f"{root_name}/same-name-target.xlsx"
         pdf_relative = f"{root_name}/same-name-target.pdf"
+        image_relative = f"{root_name}/same-name-target.png"
         anchor_relative = f"{root_name}/anchor.txt"
 
         local_target_path = local_root / target_relative
         local_xlsx_path = local_root / xlsx_relative
         local_pdf_path = local_root / pdf_relative
+        local_image_path = local_root / image_relative
         local_anchor_path = local_root / anchor_relative
 
         verify_target_path = verify_root / target_relative
         verify_xlsx_path = verify_root / xlsx_relative
         verify_pdf_path = verify_root / pdf_relative
+        verify_image_path = verify_root / image_relative
         verify_anchor_path = verify_root / anchor_relative
 
         initial_content = (
@@ -115,6 +119,8 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
         recreated_xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0038:recreated:{os.getpid()}"
         initial_pdf_seed = f"{initial_xlsx_seed}:pdf"
         recreated_pdf_seed = f"{recreated_xlsx_seed}:pdf"
+        initial_image_seed = f"{initial_xlsx_seed}:image"
+        recreated_image_seed = f"{recreated_xlsx_seed}:image"
 
         phase1_stdout = case_log_dir / "phase1_seed_stdout.log"
         phase1_stderr = case_log_dir / "phase1_seed_stderr.log"
@@ -145,11 +151,14 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
             "target_relative": target_relative,
             "xlsx_relative": xlsx_relative,
             "pdf_relative": pdf_relative,
+            "image_relative": image_relative,
             "anchor_relative": anchor_relative,
             "initial_xlsx_seed": initial_xlsx_seed,
             "recreated_xlsx_seed": recreated_xlsx_seed,
             "initial_pdf_seed": initial_pdf_seed,
             "recreated_pdf_seed": recreated_pdf_seed,
+            "initial_image_seed": initial_image_seed,
+            "recreated_image_seed": recreated_image_seed,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "main_conf_dir": str(conf_main),
             "verify_conf_dir": str(conf_verify),
@@ -168,9 +177,12 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
         )
         details["initial_xlsx_generated_size"] = int(initial_xlsx["size_bytes"])
         initial_pdf = create_random_pdf_pair(local_pdf_path, initial_pdf_seed, revision=REVISION_0, title="TC0038 initial PDF")
+        initial_images = create_random_image_set(local_image_path, initial_image_seed, revision=REVISION_0, title="TC0038 initial images")
         details["initial_pdf_generated_size"] = int(initial_pdf["size_bytes"])
         details["initial_pdf_large_size"] = int(initial_pdf["large_size_bytes"])
+        details["initial_image_generated_sizes"] = {k: int(v) for k, v in initial_images.items() if k.endswith("_size_bytes")}
         details["initial_pdf_validation_error"] = validate_pdf_pair(local_pdf_path, REVISION_0)
+        details["initial_image_validation_error"] = validate_image_set(local_image_path, REVISION_0)
         details["initial_xlsx_validation_error"] = validate_xlsx_pair(local_xlsx_path, REVISION_0)
         write_text_file(local_anchor_path, anchor_content)
 
@@ -209,10 +221,13 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
             unlink_xlsx_pair(local_xlsx_path)
         if pdf_pair_any_exists(local_pdf_path):
             unlink_pdf_pair(local_pdf_path)
+        if image_set_any_exists(local_image_path):
+            unlink_image_set(local_image_path)
 
         details["local_target_exists_after_delete"] = local_target_path.exists()
         details["local_xlsx_exists_after_delete"] = xlsx_pair_any_exists(local_xlsx_path)
         details["local_pdf_exists_after_delete"] = pdf_pair_any_exists(local_pdf_path)
+        details["local_image_exists_after_delete"] = image_set_any_exists(local_image_path)
         details["local_anchor_exists_after_delete"] = local_anchor_path.is_file()
 
         if local_target_path.exists():
@@ -225,7 +240,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
                 details,
             )
 
-        if local_xlsx_path.exists() or pdf_pair_any_exists(local_pdf_path):
+        if local_xlsx_path.exists() or pdf_pair_any_exists(local_pdf_path) or image_set_any_exists(local_image_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
@@ -284,14 +299,18 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
         )
         details["recreated_xlsx_generated_size"] = int(recreated_xlsx["size_bytes"])
         recreated_pdf = create_random_pdf_pair(local_pdf_path, recreated_pdf_seed, revision=REVISION_1, title="TC0038 recreated PDF")
+        recreated_images = create_random_image_set(local_image_path, recreated_image_seed, revision=REVISION_1, title="TC0038 recreated images")
         details["recreated_pdf_generated_size"] = int(recreated_pdf["size_bytes"])
         details["recreated_pdf_large_size"] = int(recreated_pdf["large_size_bytes"])
+        details["recreated_image_generated_sizes"] = {k: int(v) for k, v in recreated_images.items() if k.endswith("_size_bytes")}
         details["recreated_pdf_validation_error"] = validate_pdf_pair(local_pdf_path, REVISION_1)
+        details["recreated_image_validation_error"] = validate_image_set(local_image_path, REVISION_1)
         details["recreated_xlsx_validation_error"] = validate_xlsx_pair(local_xlsx_path, REVISION_1)
 
         details["local_target_exists_after_recreate"] = local_target_path.is_file()
         details["local_xlsx_exists_after_recreate"] = xlsx_pair_all_files(local_xlsx_path)
         details["local_pdf_exists_after_recreate"] = pdf_pair_all_files(local_pdf_path)
+        details["local_image_exists_after_recreate"] = image_set_all_files(local_image_path)
         details["local_target_size_after_recreate"] = (
             local_target_path.stat().st_size if local_target_path.is_file() else -1
         )
@@ -306,12 +325,12 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
                 artifacts,
                 details,
             )
-        if not xlsx_pair_all_files(local_xlsx_path) or not pdf_pair_all_files(local_pdf_path):
+        if not xlsx_pair_all_files(local_xlsx_path) or not pdf_pair_all_files(local_pdf_path) or not image_set_all_files(local_image_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "local XLSX/PDF target does not exist immediately after recreate",
+                "local XLSX/PDF/image target does not exist immediately after recreate",
                 artifacts,
                 details,
             )
@@ -373,6 +392,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
         details["verified_target_exists"] = verify_target_path.is_file()
         details["verified_xlsx_exists"] = xlsx_pair_all_files(verify_xlsx_path)
         details["verified_pdf_exists"] = pdf_pair_all_files(verify_pdf_path)
+        details["verified_image_exists"] = image_set_all_files(verify_image_path)
         details["verified_anchor_exists"] = verify_anchor_path.is_file()
 
         verified_target_content = (
@@ -383,8 +403,10 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
         details["verified_target_content"] = verified_target_content
         verified_xlsx_validation_error = validate_xlsx_pair(verify_xlsx_path, REVISION_1)
         verified_pdf_validation_error = validate_pdf_pair(verify_pdf_path, REVISION_1)
+        verified_image_validation_error = validate_image_set(verify_image_path, REVISION_1)
         details["verified_xlsx_validation_error"] = verified_xlsx_validation_error
         details["verified_pdf_validation_error"] = verified_pdf_validation_error
+        details["verified_image_validation_error"] = verified_image_validation_error
 
         expected_manifest = sorted([
             root_name,
@@ -394,6 +416,7 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
             large_xlsx_relative(xlsx_relative),
             pdf_relative,
             large_pdf_relative(pdf_relative),
+            *image_set_relatives(image_relative).values(),
         ])
         details["expected_manifest"] = expected_manifest
 
@@ -426,6 +449,13 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
                 details,
             )
 
+        if not image_set_all_files(verify_image_path):
+            return self.fail_result(
+                self.case_id, self.name,
+                f"remote verification is missing recreated image set: {image_relative}",
+                artifacts, details,
+            )
+
         if not pdf_pair_all_files(verify_pdf_path):
             return self.fail_result(
                 self.case_id, self.name,
@@ -449,6 +479,13 @@ class TestCase0038DeleteAndRecreateWithSameNameValidation(E2ETestCase):
                 "verified file content did not match the recreated content after delete/recreate cycle",
                 artifacts,
                 details,
+            )
+
+        if verified_image_validation_error:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"verified image set is invalid or does not contain recreated revision {REVISION_1}: {verified_image_validation_error}",
+                artifacts, details,
             )
 
         if verified_pdf_validation_error:

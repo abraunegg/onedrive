@@ -9,6 +9,7 @@ from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair
 from framework.pdf import create_random_pdf_pair, validate_pdf_pair
+from framework.image import create_random_image_set, validate_image_set, image_set_any_exists, image_set_all_files
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -24,7 +25,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
     name = "remote directory rename reconciliation"
     description = (
         "Validate that a second client with existing local and database state correctly reconciles a remote "
-        "directory rename containing passive TXT content, a real XLSX workbook and a real PDF document"
+        "directory rename containing passive TXT content, a real XLSX workbook, a real PDF document and a real PNG/JPEG image set"
     )
 
     XLSX_PAYLOAD_ROWS = 32
@@ -109,10 +110,12 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         source_file_1_relative = f"{source_dir_relative}/top-level.xlsx"
         source_pdf_relative = f"{source_dir_relative}/top-level.pdf"
+        source_image_relative = f"{source_dir_relative}/top-level.png"
         source_file_2_relative = f"{source_dir_relative}/Nested/child.txt"
         source_text_relative = f"{source_dir_relative}/top-level.txt"
         renamed_file_1_relative = f"{renamed_dir_relative}/top-level.xlsx"
         renamed_pdf_relative = f"{renamed_dir_relative}/top-level.pdf"
+        renamed_image_relative = f"{renamed_dir_relative}/top-level.png"
         renamed_file_2_relative = f"{renamed_dir_relative}/Nested/child.txt"
         renamed_text_relative = f"{renamed_dir_relative}/top-level.txt"
 
@@ -127,19 +130,23 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         validator_source_file_1 = validator_root / source_file_1_relative
         validator_source_pdf = validator_root / source_pdf_relative
+        validator_source_image = validator_root / source_image_relative
         validator_source_file_2 = validator_root / source_file_2_relative
         validator_source_text = validator_root / source_text_relative
         validator_renamed_file_1 = validator_root / renamed_file_1_relative
         validator_renamed_pdf = validator_root / renamed_pdf_relative
+        validator_renamed_image = validator_root / renamed_image_relative
         validator_renamed_file_2 = validator_root / renamed_file_2_relative
         validator_renamed_text = validator_root / renamed_text_relative
 
         verify_source_file_1 = verify_root / source_file_1_relative
         verify_source_pdf = verify_root / source_pdf_relative
+        verify_source_image = verify_root / source_image_relative
         verify_source_file_2 = verify_root / source_file_2_relative
         verify_source_text = verify_root / source_text_relative
         verify_renamed_file_1 = verify_root / renamed_file_1_relative
         verify_renamed_pdf = verify_root / renamed_pdf_relative
+        verify_renamed_image = verify_root / renamed_image_relative
         verify_renamed_file_2 = verify_root / renamed_file_2_relative
         verify_renamed_text = verify_root / renamed_text_relative
 
@@ -147,6 +154,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         text_content = "top\n"
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0033:{os.getpid()}"
         pdf_seed = f"{xlsx_seed}:pdf"
+        image_seed = f"{xlsx_seed}:image"
 
         phase1_seed_stdout = case_log_dir / "phase1_seed_stdout.log"
         phase1_seed_stderr = case_log_dir / "phase1_seed_stderr.log"
@@ -188,10 +196,12 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             "renamed_dir_relative": renamed_dir_relative,
             "source_file_1_relative": source_file_1_relative,
             "source_pdf_relative": source_pdf_relative,
+            "source_image_relative": source_image_relative,
             "source_file_2_relative": source_file_2_relative,
             "source_text_relative": source_text_relative,
             "renamed_file_1_relative": renamed_file_1_relative,
             "renamed_pdf_relative": renamed_pdf_relative,
+            "renamed_image_relative": renamed_image_relative,
             "renamed_file_2_relative": renamed_file_2_relative,
             "renamed_text_relative": renamed_text_relative,
             "seeder_conf_dir": str(conf_seeder),
@@ -202,6 +212,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             "verify_root": str(verify_root),
             "xlsx_seed": xlsx_seed,
             "pdf_seed": pdf_seed,
+            "image_seed": image_seed,
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
@@ -217,6 +228,8 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         generated_pdf = create_random_pdf_pair(seeder_root / source_pdf_relative, pdf_seed, revision=REVISION_0, title="TC0033 remote directory rename PDF")
         details["generated_pdf_size"] = int(generated_pdf["size_bytes"])
         details["generated_large_pdf_size"] = int(generated_pdf["large_size_bytes"])
+        generated_images = create_random_image_set(seeder_root / source_image_relative, image_seed, revision=REVISION_0, title="TC0033 remote directory rename images")
+        details["generated_image_sizes"] = {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")}
         write_text_file(seeder_root / source_file_2_relative, file2_content)
         write_text_file(seeder_root / source_text_relative, text_content)
 
@@ -295,6 +308,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         details["validator_initial_source_dir_exists"] = validator_source_dir.is_dir()
         details["validator_initial_source_file_1_exists"] = validator_source_file_1.is_file()
         details["validator_initial_source_pdf_exists"] = validator_source_pdf.is_file()
+        details["validator_initial_source_image_exists"] = image_set_all_files(validator_source_image)
         details["validator_initial_source_file_2_exists"] = validator_source_file_2.is_file()
         details["validator_initial_source_text_exists"] = validator_source_text.is_file()
         details["validator_initial_renamed_dir_exists"] = validator_renamed_dir.exists()
@@ -335,6 +349,16 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 self.case_id,
                 self.name,
                 f"validator failed to download original PDF: {source_pdf_relative}",
+                artifacts,
+                details,
+            )
+
+        if not image_set_all_files(validator_source_image):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"validator failed to download original image set: {source_image_relative}",
                 artifacts,
                 details,
             )
@@ -527,10 +551,12 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         details["verify_renamed_dir_exists"] = verify_renamed_dir.exists()
         details["verify_source_file_1_exists"] = verify_source_file_1.exists()
         details["verify_source_pdf_exists"] = verify_source_pdf.exists()
+        details["verify_source_image_exists"] = image_set_any_exists(verify_source_image)
         details["verify_source_file_2_exists"] = verify_source_file_2.exists()
         details["verify_source_text_exists"] = verify_source_text.exists()
         details["verify_renamed_file_1_exists"] = verify_renamed_file_1.exists()
         details["verify_renamed_pdf_exists"] = verify_renamed_pdf.exists()
+        details["verify_renamed_image_exists"] = image_set_all_files(verify_renamed_image)
         details["verify_renamed_file_2_exists"] = verify_renamed_file_2.exists()
         details["verify_renamed_text_exists"] = verify_renamed_text.exists()
 
@@ -549,6 +575,11 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             if verify_renamed_pdf.is_file()
             else "Verification PDF is missing"
         )
+        verify_new_image_validation_error = (
+            validate_image_set(verify_renamed_image, REVISION_0)
+            if image_set_all_files(verify_renamed_image)
+            else "Verification image set is missing"
+        )
         verify_new_file_2_content = (
             verify_renamed_file_2.read_text(encoding="utf-8")
             if verify_renamed_file_2.is_file()
@@ -561,6 +592,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         )
         details["verify_renamed_file_1_validation_error"] = verify_new_file_1_validation_error
         details["verify_renamed_pdf_validation_error"] = verify_new_pdf_validation_error
+        details["verify_renamed_image_validation_error"] = verify_new_image_validation_error
         details["verify_renamed_file_2_content"] = verify_new_file_2_content
         details["verify_renamed_text_content"] = verify_new_text_content
 
@@ -579,6 +611,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             verify_source_dir.exists()
             or verify_source_file_1.exists()
             or verify_source_pdf.exists()
+            or image_set_any_exists(verify_source_image)
             or verify_source_file_2.exists()
             or verify_source_text.exists()
         ):
@@ -631,6 +664,16 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
+        if not image_set_all_files(verify_renamed_image):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"remote verification is missing renamed image set: {renamed_image_relative}",
+                artifacts,
+                details,
+            )
+
         if not verify_renamed_pdf.is_file():
             self._write_metadata(metadata_file, details)
             return self.fail_result(
@@ -667,6 +710,16 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 self.case_id,
                 self.name,
                 f"remote verification renamed top-level XLSX was invalid or stale: {verify_new_file_1_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if verify_new_image_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"remote verification renamed image set was invalid or stale: {verify_new_image_validation_error}",
                 artifacts,
                 details,
             )
@@ -730,10 +783,12 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         details["validator_renamed_dir_exists_after_reconcile"] = validator_renamed_dir.exists()
         details["validator_source_file_1_exists_after_reconcile"] = validator_source_file_1.exists()
         details["validator_source_pdf_exists_after_reconcile"] = validator_source_pdf.exists()
+        details["validator_source_image_exists_after_reconcile"] = image_set_any_exists(validator_source_image)
         details["validator_source_file_2_exists_after_reconcile"] = validator_source_file_2.exists()
         details["validator_source_text_exists_after_reconcile"] = validator_source_text.exists()
         details["validator_renamed_file_1_exists_after_reconcile"] = validator_renamed_file_1.exists()
         details["validator_renamed_pdf_exists_after_reconcile"] = validator_renamed_pdf.exists()
+        details["validator_renamed_image_exists_after_reconcile"] = image_set_all_files(validator_renamed_image)
         details["validator_renamed_file_2_exists_after_reconcile"] = validator_renamed_file_2.exists()
         details["validator_renamed_text_exists_after_reconcile"] = validator_renamed_text.exists()
 
@@ -752,6 +807,11 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             if validator_renamed_pdf.is_file()
             else "Validator PDF is missing"
         )
+        validator_new_image_validation_error = (
+            validate_image_set(validator_renamed_image, REVISION_0)
+            if image_set_all_files(validator_renamed_image)
+            else "Validator image set is missing"
+        )
         validator_new_file_2_content = (
             validator_renamed_file_2.read_text(encoding="utf-8")
             if validator_renamed_file_2.is_file()
@@ -764,6 +824,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         )
         details["validator_renamed_file_1_validation_error"] = validator_new_file_1_validation_error
         details["validator_renamed_pdf_validation_error"] = validator_new_pdf_validation_error
+        details["validator_renamed_image_validation_error"] = validator_new_image_validation_error
         details["validator_renamed_file_2_content"] = validator_new_file_2_content
         details["validator_renamed_text_content"] = validator_new_text_content
 
@@ -782,6 +843,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
             validator_source_dir.exists()
             or validator_source_file_1.exists()
             or validator_source_pdf.exists()
+            or image_set_any_exists(validator_source_image)
             or validator_source_file_2.exists()
             or validator_source_text.exists()
         ):
@@ -829,6 +891,16 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
+        if not image_set_all_files(validator_renamed_image):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"validator reconcile is missing renamed image set: {renamed_image_relative}",
+                artifacts,
+                details,
+            )
+
         if not validator_renamed_pdf.is_file():
             return self.fail_result(
                 self.case_id,
@@ -861,6 +933,16 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 self.case_id,
                 self.name,
                 f"validator renamed top-level XLSX was invalid or stale after reconciliation: {validator_new_file_1_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if validator_new_image_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"validator reconcile renamed image set was invalid or stale: {validator_new_image_validation_error}",
                 artifacts,
                 details,
             )

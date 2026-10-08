@@ -8,6 +8,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.pdf import create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, large_pdf_relative, pdf_pair_hashes, pdf_pair_sizes, pdf_pair_all_files
+from framework.image import create_random_image_set, mutate_image_set_revision, validate_image_set, image_set_relatives, image_set_hashes, image_set_sizes, image_set_all_files
 from framework.result import TestResult
 from framework.utils import (
     command_to_string,
@@ -23,7 +24,7 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
     case_id = "0042"
     name = "monitor mode local modify upload"
     description = (
-        "Modify existing passive-text plus real XLSX and PDF files under --monitor and validate all updates propagate"
+        "Modify existing passive-text plus real XLSX/PDF and PNG/JPEG files under --monitor and validate all updates propagate"
     )
 
     XLSX_PAYLOAD_ROWS = 32
@@ -66,6 +67,7 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
         text_relative = f"{root_name}/modify-me.txt"
         xlsx_relative = f"{root_name}/modify-me.xlsx"
         pdf_relative = f"{root_name}/modify-me.pdf"
+        image_relative = f"{root_name}/modify-me.png"
 
         local_text_path = sync_root / text_relative
         verify_text_path = verify_root / text_relative
@@ -73,6 +75,8 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
         verify_xlsx_path = verify_root / xlsx_relative
         local_pdf_path = sync_root / pdf_relative
         verify_pdf_path = verify_root / pdf_relative
+        local_image_path = sync_root / image_relative
+        verify_image_path = verify_root / image_relative
 
         initial_text_content = (
             "TC0042 monitor mode local modify upload\n"
@@ -85,6 +89,7 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
         )
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0042:{os.getpid()}"
         pdf_seed = f"{xlsx_seed}:pdf"
+        image_seed = f"{xlsx_seed}:image"
 
         context.bootstrap_config_dir(conf_main)
         write_text_file(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
@@ -137,24 +142,30 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
             title="TC0042 monitor local modification PDF",
         )
         initial_generated_pdf_hashes = pdf_pair_hashes(local_pdf_path, compute_quickxor_hash_file)
+        generated_images = create_random_image_set(local_image_path, image_seed, revision=REVISION_0, title="TC0042 monitor local modification images")
+        initial_generated_image_hashes = image_set_hashes(local_image_path, compute_quickxor_hash_file)
 
         details: dict[str, object] = {
             "root_name": root_name,
             "text_relative": text_relative,
             "xlsx_relative": xlsx_relative,
             "pdf_relative": pdf_relative,
+            "image_relative": image_relative,
             "sync_root": str(sync_root),
             "verify_root": str(verify_root),
             "conf_main": str(conf_main),
             "conf_verify": str(conf_verify),
             "xlsx_seed": xlsx_seed,
             "pdf_seed": pdf_seed,
+            "image_seed": image_seed,
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_xlsx_size": int(generated["size_bytes"]),
             "initial_generated_xlsx_hashes": initial_generated_xlsx_hashes,
             "generated_pdf_size": int(generated_pdf["size_bytes"]),
             "generated_large_pdf_size": int(generated_pdf["large_size_bytes"]),
             "initial_generated_pdf_hashes": initial_generated_pdf_hashes,
+            "generated_image_sizes": {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")},
+            "initial_generated_image_hashes": initial_generated_image_hashes,
         }
 
         seed_command = [
@@ -197,8 +208,14 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
             if local_pdf_path.is_file()
             else "Seeded PDF is missing"
         )
+        settled_image_validation_error = (
+            validate_image_set(local_image_path, REVISION_0)
+            if image_set_all_files(local_image_path)
+            else "Seeded image set is missing"
+        )
         details["settled_xlsx_validation_error"] = settled_xlsx_validation_error
         details["settled_pdf_validation_error"] = settled_pdf_validation_error
+        details["settled_image_validation_error"] = settled_image_validation_error
         if settled_xlsx_validation_error:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
@@ -208,6 +225,9 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
                 artifacts,
                 details,
             )
+        if settled_image_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name, f"Seeded image set was invalid after initial sync: {settled_image_validation_error}", artifacts, details)
         if settled_pdf_validation_error:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
@@ -235,6 +255,10 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
         details["settled_pdf_hashes"] = settled_pdf_hashes
         details["settled_pdf_sizes"] = pdf_pair_sizes(local_pdf_path)
         details["microsoft_changed_seed_pdf_bytes"] = {label: settled_pdf_hashes[label] != initial_generated_pdf_hashes[label] for label in settled_pdf_hashes}
+        settled_image_hashes = image_set_hashes(local_image_path, compute_quickxor_hash_file)
+        details["settled_image_hashes"] = settled_image_hashes
+        details["settled_image_sizes"] = image_set_sizes(local_image_path)
+        details["microsoft_changed_seed_image_bytes"] = {label: settled_image_hashes[label] != initial_generated_image_hashes[label] for label in settled_image_hashes}
 
         monitor_command = [
             context.onedrive_bin,
@@ -272,12 +296,13 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
 
             context.log(
-                f"Test Case {self.case_id}: modifying passive-text, XLSX and PDF files while monitor is running"
+                f"Test Case {self.case_id}: modifying passive-text, XLSX, PDF and image files while monitor is running"
             )
             time.sleep(1.5)
             write_text_file(local_text_path, modified_text_content)
             mutate_xlsx_pair_revision(local_xlsx_path, REVISION_0, REVISION_1)
             mutate_pdf_pair_revision(local_pdf_path, REVISION_0, REVISION_1)
+            mutate_image_set_revision(local_image_path, REVISION_0, REVISION_1)
 
             modified_xlsx_validation_error = validate_xlsx_pair(local_xlsx_path, REVISION_1)
             modified_xlsx_hashes = xlsx_pair_hashes(local_xlsx_path, compute_quickxor_hash_file)
@@ -290,6 +315,11 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
             details["modified_pdf_validation_error"] = modified_pdf_validation_error
             details["modified_pdf_hashes"] = modified_pdf_hashes
             details["local_pdf_exists_after_modify"] = pdf_pair_all_files(local_pdf_path)
+            modified_image_validation_error = validate_image_set(local_image_path, REVISION_1)
+            modified_image_hashes = image_set_hashes(local_image_path, compute_quickxor_hash_file)
+            details["modified_image_validation_error"] = modified_image_validation_error
+            details["modified_image_hashes"] = modified_image_hashes
+            details["local_image_exists_after_modify"] = image_set_all_files(local_image_path)
 
             if modified_xlsx_validation_error:
                 self._write_metadata(metadata_file, details)
@@ -329,12 +359,21 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
                     details,
                 )
 
+            if modified_image_validation_error:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name, f"Local image mutation produced invalid content: {modified_image_validation_error}", artifacts, details)
+            if any(modified_image_hashes[label] == settled_image_hashes[label] for label in modified_image_hashes):
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name, "Local image revision mutation did not change file content", artifacts, details)
+
+            image_relatives = image_set_relatives(image_relative)
             required_patterns = [
                 f"Uploading modified file: {text_relative} ... done",
                 f"Uploading modified file: {xlsx_relative} ... done",
                 f"Uploading modified file: {large_xlsx_relative(xlsx_relative)} ... done",
                 f"Uploading modified file: {pdf_relative} ... done",
                 f"Uploading modified file: {large_pdf_relative(pdf_relative)} ... done",
+                *[f"Uploading modified file: {relative} ... done" for relative in image_relatives.values()],
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
@@ -393,6 +432,10 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
         details["verify_pdf_exists"] = pdf_pair_all_files(verify_pdf_path)
         details["verify_pdf_validation_error"] = verify_pdf_validation_error
         details["verify_pdf_hashes"] = pdf_pair_hashes(verify_pdf_path, compute_quickxor_hash_file)
+        verify_image_validation_error = (validate_image_set(verify_image_path, REVISION_1) if image_set_all_files(verify_image_path) else "Verification image set is missing")
+        details["verify_image_exists"] = image_set_all_files(verify_image_path)
+        details["verify_image_validation_error"] = verify_image_validation_error
+        details["verify_image_hashes"] = image_set_hashes(verify_image_path, compute_quickxor_hash_file)
 
         self._write_metadata(metadata_file, details)
 
@@ -409,7 +452,7 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "Monitor did not process passive-text, XLSX and PDF modifications within the expected time",
+                "Monitor did not process passive-text, XLSX, PDF and image modifications within the expected time",
                 artifacts,
                 details,
             )
@@ -431,6 +474,9 @@ class TestCase0042MonitorModeLocalModifyUpload(MonitorModeTestCaseBase):
                 artifacts,
                 details,
             )
+
+        if verify_image_validation_error:
+            return self.fail_result(self.case_id, self.name, f"Remote verification returned an invalid or stale image set: {verify_image_validation_error}", artifacts, details)
 
         if verify_pdf_validation_error:
             return self.fail_result(

@@ -12,6 +12,7 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, build_typed_manifest, write_manifest
 from framework.result import TestResult
 from framework.pdf import REVISION_0 as PDF_REVISION_0, REVISION_1 as PDF_REVISION_1, create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, large_pdf_relative, unlink_pdf_pair
+from framework.image import REVISION_0 as IMAGE_REVISION_0, REVISION_1 as IMAGE_REVISION_1, create_random_image_set, mutate_image_set_revision, validate_image_set, image_set_relatives, unlink_image_set
 from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, large_xlsx_relative, unlink_xlsx_pair
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
@@ -463,6 +464,7 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             write_text_file(mutator_root / relative, content)
         xlsx_relative = f"{root_name}/incoming/{source_name}/top-level.xlsx"
         pdf_relative = f"{root_name}/incoming/{source_name}/top-level.pdf"
+        image_relative = f"{root_name}/incoming/{source_name}/top-level.png"
         create_random_xlsx_pair(
             mutator_root / xlsx_relative,
             f"{root_name}:{source_name}:xlsx",
@@ -475,6 +477,12 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             f"{root_name}:{source_name}:pdf",
             revision=PDF_REVISION_0,
             title="TC0065 sync_list moved-directory PDF",
+        )
+        create_random_image_set(
+            mutator_root / image_relative,
+            f"{root_name}:{source_name}:image",
+            revision=IMAGE_REVISION_0,
+            title="TC0065 sync_list moved-directory images",
         )
         (mutator_root / root_name / "incoming" / source_name / "EmptyChild").mkdir(
             parents=True, exist_ok=True
@@ -679,6 +687,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         xlsx_destination_relative = xlsx_source_relative.replace(source_relative, destination_relative, 1)
         pdf_source_relative = f"{source_relative}/top-level.pdf"
         pdf_destination_relative = pdf_source_relative.replace(source_relative, destination_relative, 1)
+        image_source_relative = f"{source_relative}/top-level.png"
+        image_destination_relative = image_source_relative.replace(source_relative, destination_relative, 1)
 
         phase_files = {
             "seed": (
@@ -729,6 +739,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             "xlsx_destination_relative": xlsx_destination_relative,
             "pdf_source_relative": pdf_source_relative,
             "pdf_destination_relative": pdf_destination_relative,
+            "image_source_relative": image_source_relative,
+            "image_destination_relative": image_destination_relative,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "mutator_items_db": str(conf_mutator / "items.sqlite3"),
             "validator_items_db": str(conf_validator / "items.sqlite3"),
@@ -801,12 +813,16 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         )
         initial_xlsx_error = validate_xlsx_pair(validator_root / xlsx_source_relative, REVISION_0)
         initial_pdf_error = validate_pdf_pair(validator_root / pdf_source_relative, PDF_REVISION_0)
+        initial_image_error = validate_image_set(validator_root / image_source_relative, IMAGE_REVISION_0)
         details["validator_initial_xlsx_validation_error"] = initial_xlsx_error
         details["validator_initial_pdf_validation_error"] = initial_pdf_error
+        details["validator_initial_image_validation_error"] = initial_image_error
         if initial_xlsx_error:
             failures.append(f"initial validator XLSX invalid: {initial_xlsx_error}")
         if initial_pdf_error:
             failures.append(f"initial validator PDF invalid: {initial_pdf_error}")
+        if initial_image_error:
+            failures.append(f"initial validator image set invalid: {initial_image_error}")
 
         if failures:
             self._write_metadata(metadata_file, details)
@@ -943,12 +959,16 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         )
         validator_xlsx_error = validate_xlsx_pair(validator_root / xlsx_destination_relative, REVISION_0)
         validator_pdf_error = validate_pdf_pair(validator_root / pdf_destination_relative, PDF_REVISION_0)
+        validator_image_error = validate_image_set(validator_root / image_destination_relative, IMAGE_REVISION_0)
         details["validator_moved_xlsx_validation_error"] = validator_xlsx_error
         details["validator_moved_pdf_validation_error"] = validator_pdf_error
+        details["validator_moved_image_validation_error"] = validator_image_error
         if validator_xlsx_error:
             failures.append(f"validator moved XLSX invalid: {validator_xlsx_error}")
         if validator_pdf_error:
             failures.append(f"validator moved PDF invalid: {validator_pdf_error}")
+        if validator_image_error:
+            failures.append(f"validator moved image set invalid: {validator_image_error}")
 
         verify_result = self._run_phase(
             context=context,
@@ -988,12 +1008,16 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         )
         verify_xlsx_error = validate_xlsx_pair(verify_root / xlsx_destination_relative, REVISION_0)
         verify_pdf_error = validate_pdf_pair(verify_root / pdf_destination_relative, PDF_REVISION_0)
+        verify_image_error = validate_image_set(verify_root / image_destination_relative, IMAGE_REVISION_0)
         details["verify_moved_xlsx_validation_error"] = verify_xlsx_error
         details["verify_moved_pdf_validation_error"] = verify_pdf_error
+        details["verify_moved_image_validation_error"] = verify_image_error
         if verify_xlsx_error:
             failures.append(f"remote truth moved XLSX invalid: {verify_xlsx_error}")
         if verify_pdf_error:
             failures.append(f"remote truth moved PDF invalid: {verify_pdf_error}")
+        if verify_image_error:
+            failures.append(f"remote truth moved image set invalid: {verify_image_error}")
 
         self._write_metadata(metadata_file, details)
         return failures, artifacts, details
@@ -1058,6 +1082,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         xlsx_destination = f"{parent_destination}/top-level.xlsx"
         pdf_source = f"{parent_source}/top-level.pdf"
         pdf_destination = f"{parent_destination}/top-level.pdf"
+        image_source = f"{parent_source}/top-level.png"
+        image_destination = f"{parent_destination}/top-level.png"
 
         self._prepare_client_config(
             context, conf_mutator, mutator_root,
@@ -1136,6 +1162,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             "xlsx_destination": xlsx_destination,
             "pdf_source": pdf_source,
             "pdf_destination": pdf_destination,
+            "image_source": image_source,
+            "image_destination": image_destination,
             "expected_manifest": expected_manifest,
             "sync_list": [f"/{root_name}"],
             "observer_data_preservation_enabled": True,
@@ -1174,14 +1202,19 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 )
             xlsx_path = root / (xlsx_source if original else xlsx_destination)
             pdf_path = root / (pdf_source if original else pdf_destination)
+            image_path = root / (image_source if original else image_destination)
             xlsx_error = validate_xlsx_pair(xlsx_path, REVISION_0)
             pdf_error = validate_pdf_pair(pdf_path, PDF_REVISION_0)
+            image_error = validate_image_set(image_path, IMAGE_REVISION_0)
             details[f"{label}_xlsx_validation_error"] = xlsx_error
             details[f"{label}_pdf_validation_error"] = pdf_error
+            details[f"{label}_image_validation_error"] = image_error
             if xlsx_error:
                 failures.append(f"{label}: XLSX pair failed structural/revision validation: {xlsx_error}")
             if pdf_error:
                 failures.append(f"{label}: PDF pair failed structural/revision validation: {pdf_error}")
+            if image_error:
+                failures.append(f"{label}: image set failed structural/revision validation: {image_error}")
             backups = self._nested_safe_backups(root / root_name)
             details[f"{label}_safe_backups"] = backups
             if backups:
@@ -1489,6 +1522,10 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         files_first_pdf_source = f"{files_first_source}/document.pdf"
         whole_pdf_destination = f"{whole_destination}/document.pdf"
         files_first_pdf_destination = f"{files_first_destination}/document.pdf"
+        whole_image_source = f"{whole_source}/image.png"
+        files_first_image_source = f"{files_first_source}/image.png"
+        whole_image_destination = f"{whole_destination}/image.png"
+        files_first_image_destination = f"{files_first_destination}/image.png"
         create_random_xlsx_pair(
             mutator_root / whole_xlsx_source,
             f"{root_name}:whole:xlsx",
@@ -1515,6 +1552,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             revision=PDF_REVISION_0,
             title="TC0065 files-first lifecycle PDF",
         )
+        create_random_image_set(mutator_root / whole_image_source, f"{root_name}:whole:image", revision=IMAGE_REVISION_0, title="TC0065 whole-directory lifecycle images")
+        create_random_image_set(mutator_root / files_first_image_source, f"{root_name}:files-first:image", revision=IMAGE_REVISION_0, title="TC0065 files-first lifecycle images")
 
         phase_names = [
             "phase1_seed",
@@ -1562,6 +1601,10 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             "whole_pdf_destination": whole_pdf_destination,
             "files_first_pdf_source": files_first_pdf_source,
             "files_first_pdf_destination": files_first_pdf_destination,
+            "whole_image_source": whole_image_source,
+            "whole_image_destination": whole_image_destination,
+            "files_first_image_source": files_first_image_source,
+            "files_first_image_destination": files_first_image_destination,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "sync_list": [f"/{root_name}"],
         }
@@ -1623,6 +1666,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             details[f"validator_initial_{label}_pdf_validation_error"] = error
             if error:
                 failures.append(f"initial validator {label} PDF invalid: {error}")
+        for label, relative in (("whole", whole_image_source), ("files_first", files_first_image_source)):
+            error = validate_image_set(validator_root / relative, IMAGE_REVISION_0)
+            details[f"validator_initial_{label}_image_validation_error"] = error
+            if error:
+                failures.append(f"initial validator {label} image set invalid: {error}")
         if failures:
             self._write_metadata(metadata_file, details)
             return failures, artifacts, details
@@ -1741,6 +1789,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 details[f"validator_moved_{label}_pdf_validation_error"] = error
                 if error:
                     failures.append(f"validator moved {label} PDF invalid: {error}")
+            for label, relative in (("whole", whole_image_destination), ("files_first", files_first_image_destination)):
+                error = validate_image_set(validator_root / relative, IMAGE_REVISION_0)
+                details[f"validator_moved_{label}_image_validation_error"] = error
+                if error:
+                    failures.append(f"validator moved {label} image set invalid: {error}")
             if failures:
                 self._write_metadata(metadata_file, details)
                 return failures, artifacts, details
@@ -1770,6 +1823,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 PDF_REVISION_0,
                 PDF_REVISION_1,
             )
+            mutate_image_set_revision(
+                mutator_root / files_first_image_destination,
+                IMAGE_REVISION_0,
+                IMAGE_REVISION_1,
+            )
 
             modify_patterns = [
                 f"Uploading modified file: ./{whole_modified_relative} ... done",
@@ -1778,6 +1836,7 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 f"Uploading modified file: ./{large_xlsx_relative(files_first_xlsx_destination)} ... done",
                 f"Uploading modified file: ./{files_first_pdf_destination} ... done",
                 f"Uploading modified file: ./{large_pdf_relative(files_first_pdf_destination)} ... done",
+                *[f"Uploading modified file: ./{relative} ... done" for relative in image_set_relatives(files_first_image_destination).values()],
             ]
             modify_processed, modify_segment = self._wait_for_stdout_growth_patterns(
                 phase_files["phase3_mutator_monitor"][0],
@@ -1836,6 +1895,14 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 failures.append(f"validator whole PDF changed unexpectedly after post-move modification: {whole_pdf_error}")
             if files_first_pdf_error:
                 failures.append(f"validator files-first PDF did not receive post-move revision: {files_first_pdf_error}")
+            whole_image_error = validate_image_set(validator_root / whole_image_destination, IMAGE_REVISION_0)
+            files_first_image_error = validate_image_set(validator_root / files_first_image_destination, IMAGE_REVISION_1)
+            details["validator_postmodify_whole_image_validation_error"] = whole_image_error
+            details["validator_postmodify_files_first_image_validation_error"] = files_first_image_error
+            if whole_image_error:
+                failures.append(f"validator whole image set changed unexpectedly after post-move modification: {whole_image_error}")
+            if files_first_image_error:
+                failures.append(f"validator files-first image set did not receive post-move revision: {files_first_image_error}")
             if failures:
                 self._write_metadata(metadata_file, details)
                 return failures, artifacts, details
@@ -1953,6 +2020,31 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             details["mutator_files_first_pdf_delete_log_segment_length"] = len(pdf_delete_segment)
             if not pdf_delete_processed:
                 failures.append("mutator monitor did not propagate both files-first PDF deletions")
+                self._write_metadata(metadata_file, details)
+                return failures, artifacts, details
+
+            image_delete_start = self._prepare_monitor_for_local_mutation(
+                process,
+                phase_files["phase3_mutator_monitor"][0],
+                details,
+            )
+            unlink_image_set(mutator_root / files_first_image_destination)
+            image_delete_patterns = [
+                f"Deleting item from Microsoft OneDrive: ./{relative}"
+                for relative in image_set_relatives(files_first_image_destination).values()
+            ]
+            image_delete_processed, image_delete_segment = self._wait_for_stdout_growth_patterns(
+                phase_files["phase3_mutator_monitor"][0],
+                start_offset=image_delete_start,
+                required_patterns=image_delete_patterns,
+                timeout_seconds=180,
+            )
+            for relative in image_set_relatives(files_first_image_destination).values():
+                files_first_file_results[relative] = image_delete_processed
+            details["mutator_files_first_image_delete_patterns"] = image_delete_patterns
+            details["mutator_files_first_image_delete_log_segment_length"] = len(image_delete_segment)
+            if not image_delete_processed:
+                failures.append("mutator monitor did not propagate all files-first image deletions")
                 self._write_metadata(metadata_file, details)
                 return failures, artifacts, details
 

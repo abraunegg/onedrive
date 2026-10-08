@@ -25,13 +25,14 @@ from framework.pdf import (
     create_random_pdf,
     validate_pdf,
 )
+from framework.image import create_random_image_set, validate_image_set, image_set_hashes, image_set_sizes, image_set_mtimes, set_image_set_mtime, image_set_relatives, image_set_all_files
 
 
 class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
     case_id = "0037"
     name = "mtime-only Microsoft file change handling"
     description = (
-        "Validate mtime-only local XLSX and PDF changes across initial simple upload, automatic "
+        "Validate mtime-only local XLSX/PDF and PNG/JPEG image changes across initial simple upload, automatic "
         "session upload for files larger than 4 MiB, and forced session upload behaviour "
         "without changing workbook content"
     )
@@ -134,6 +135,7 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         root_name = f"ZZ_E2E_TC0037_{scenario_id}_{context.run_id}_{os.getpid()}"
         relative_path = f"{root_name}/mtime-only.xlsx"
         pdf_relative_path = f"{root_name}/mtime-only.pdf"
+        image_relative_path = f"{root_name}/mtime-only.png"
 
         local_file_path = local_root / relative_path
         local_pdf_path = local_root / pdf_relative_path
@@ -141,12 +143,16 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         verify_initial_pdf_path = verify_initial_root / pdf_relative_path
         verify_final_file_path = verify_final_root / relative_path
         verify_final_pdf_path = verify_final_root / pdf_relative_path
+        local_image_path = local_root / image_relative_path
+        verify_initial_image_path = verify_initial_root / image_relative_path
+        verify_final_image_path = verify_final_root / image_relative_path
 
-        expected_manifest = [
+        expected_manifest = sorted([
             root_name,
             pdf_relative_path,
             relative_path,
-        ]
+            *image_set_relatives(image_relative_path).values(),
+        ])
 
         phase1_stdout = scenario_log_dir / "phase1_seed_stdout.log"
         phase1_stderr = scenario_log_dir / "phase1_seed_stderr.log"
@@ -194,12 +200,21 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             image_height=LARGE_PDF_IMAGE_HEIGHT if pdf_is_large else SMALL_PDF_IMAGE_HEIGHT,
             title=f"TC0037 {scenario_id} mtime-only PDF",
         )
+        generated_images = create_random_image_set(
+            local_image_path,
+            f"{xlsx_seed}:image",
+            revision=REVISION_0,
+            title=f"TC0037 {scenario_id} mtime-only images",
+        )
         initial_generated_hash = compute_quickxor_hash_file(local_file_path)
         initial_generated_pdf_hash = compute_quickxor_hash_file(local_pdf_path)
         initial_generated_size = local_file_path.stat().st_size
         initial_generated_pdf_size = local_pdf_path.stat().st_size
+        initial_generated_image_hashes = image_set_hashes(local_image_path, compute_quickxor_hash_file)
+        initial_generated_image_sizes = image_set_sizes(local_image_path)
         uses_session_upload = self._scenario_uses_session_upload(initial_generated_size, force_session_upload)
         pdf_uses_session_upload = self._scenario_uses_session_upload(initial_generated_pdf_size, force_session_upload)
+        image_uses_session_upload = {k: self._scenario_uses_session_upload(v, force_session_upload) for k, v in initial_generated_image_sizes.items()}
 
         details: dict[str, object] = {
             "scenario_id": scenario_id,
@@ -210,15 +225,20 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             "xlsx_seed": xlsx_seed,
             "pdf_seed": pdf_seed,
             "pdf_relative_path": pdf_relative_path,
+            "image_relative_path": image_relative_path,
             "generated_size": int(generated["size_bytes"]),
             "generated_pdf_size": int(generated_pdf["size_bytes"]),
+            "generated_image_sizes": {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")},
             "initial_generated_hash": initial_generated_hash,
             "initial_generated_pdf_hash": initial_generated_pdf_hash,
             "initial_generated_size": initial_generated_size,
             "initial_generated_pdf_size": initial_generated_pdf_size,
+            "initial_generated_image_hashes": initial_generated_image_hashes,
+            "initial_generated_image_sizes": initial_generated_image_sizes,
             "force_session_upload": force_session_upload,
             "uses_session_upload": uses_session_upload,
             "pdf_uses_session_upload": pdf_uses_session_upload,
+            "image_uses_session_upload": image_uses_session_upload,
             "main_conf_dir": str(conf_main),
             "verify_initial_conf_dir": str(conf_verify_initial),
             "verify_final_conf_dir": str(conf_verify_final),
@@ -264,11 +284,16 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
 
         settled_validation_error = validate_xlsx(local_file_path, REVISION_0)
         settled_pdf_validation_error = validate_pdf(local_pdf_path, REVISION_0)
+        settled_image_validation_error = validate_image_set(local_image_path, REVISION_0)
         details["settled_validation_error"] = settled_validation_error
         details["settled_pdf_validation_error"] = settled_pdf_validation_error
+        details["settled_image_validation_error"] = settled_image_validation_error
         if settled_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} seeded XLSX was invalid after initial sync: {settled_validation_error}", details
+        if settled_image_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} seeded image set was invalid after initial sync: {settled_image_validation_error}", details
         if settled_pdf_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} seeded PDF was invalid after initial sync: {settled_pdf_validation_error}", details
@@ -279,12 +304,18 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         settled_pdf_size = local_pdf_path.stat().st_size
         settled_local_mtime = int(local_file_path.stat().st_mtime)
         settled_pdf_mtime = int(local_pdf_path.stat().st_mtime)
+        settled_image_hashes = image_set_hashes(local_image_path, compute_quickxor_hash_file)
+        settled_image_sizes = image_set_sizes(local_image_path)
+        settled_image_mtimes = image_set_mtimes(local_image_path)
         details["settled_local_hash"] = settled_local_hash
         details["settled_local_size"] = settled_local_size
         details["settled_local_mtime"] = settled_local_mtime
         details["settled_pdf_hash"] = settled_pdf_hash
         details["settled_pdf_size"] = settled_pdf_size
         details["settled_pdf_mtime"] = settled_pdf_mtime
+        details["settled_image_hashes"] = settled_image_hashes
+        details["settled_image_sizes"] = settled_image_sizes
+        details["settled_image_mtimes"] = settled_image_mtimes
         details["microsoft_changed_seed_bytes"] = settled_local_hash != initial_generated_hash
         details["microsoft_changed_pdf_seed_bytes"] = settled_pdf_hash != initial_generated_pdf_hash
 
@@ -310,6 +341,7 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         details["verify_initial_manifest"] = verify_initial_manifest
         details["verify_initial_file_exists"] = verify_initial_file_path.is_file()
         details["verify_initial_pdf_exists"] = verify_initial_pdf_path.is_file()
+        details["verify_initial_image_exists"] = image_set_all_files(verify_initial_image_path)
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -318,18 +350,25 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         if not verify_initial_file_path.is_file():
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} initial remote verification is missing expected file: {relative_path}", details
+        if not image_set_all_files(verify_initial_image_path):
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} initial remote verification is missing expected image set: {image_relative_path}", details
         if not verify_initial_pdf_path.is_file():
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} initial remote verification is missing expected PDF: {pdf_relative_path}", details
 
         baseline_validation_error = validate_xlsx(verify_initial_file_path, REVISION_0)
         baseline_pdf_validation_error = validate_pdf(verify_initial_pdf_path, REVISION_0)
+        baseline_image_validation_error = validate_image_set(verify_initial_image_path, REVISION_0)
         baseline_verified_hash = compute_quickxor_hash_file(verify_initial_file_path)
         baseline_verified_size = verify_initial_file_path.stat().st_size
         baseline_verified_mtime = int(verify_initial_file_path.stat().st_mtime)
         baseline_verified_pdf_hash = compute_quickxor_hash_file(verify_initial_pdf_path)
         baseline_verified_pdf_size = verify_initial_pdf_path.stat().st_size
         baseline_verified_pdf_mtime = int(verify_initial_pdf_path.stat().st_mtime)
+        baseline_verified_image_hashes = image_set_hashes(verify_initial_image_path, compute_quickxor_hash_file)
+        baseline_verified_image_sizes = image_set_sizes(verify_initial_image_path)
+        baseline_verified_image_mtimes = image_set_mtimes(verify_initial_image_path)
 
         details["baseline_validation_error"] = baseline_validation_error
         details["baseline_pdf_validation_error"] = baseline_pdf_validation_error
@@ -339,10 +378,17 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         details["baseline_verified_pdf_hash"] = baseline_verified_pdf_hash
         details["baseline_verified_pdf_size"] = baseline_verified_pdf_size
         details["baseline_verified_pdf_mtime"] = baseline_verified_pdf_mtime
+        details["baseline_image_validation_error"] = baseline_image_validation_error
+        details["baseline_verified_image_hashes"] = baseline_verified_image_hashes
+        details["baseline_verified_image_sizes"] = baseline_verified_image_sizes
+        details["baseline_verified_image_mtimes"] = baseline_verified_image_mtimes
 
         if baseline_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} initial remote XLSX validation failed: {baseline_validation_error}", details
+        if baseline_image_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} initial remote image validation failed: {baseline_image_validation_error}", details
         if baseline_pdf_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} initial remote PDF validation failed: {baseline_pdf_validation_error}", details
@@ -358,6 +404,9 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         if baseline_verified_pdf_hash != settled_pdf_hash:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} initial remote verification hash did not match the settled post-upload PDF", details
+        if baseline_verified_image_hashes != settled_image_hashes or baseline_verified_image_sizes != settled_image_sizes:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} initial remote image content did not match the settled post-upload image set", details
         if baseline_verified_pdf_size != settled_pdf_size:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} initial remote verification size did not match the settled post-upload PDF", details
@@ -368,6 +417,8 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         local_pdf_hash_before_touch = compute_quickxor_hash_file(local_pdf_path)
         local_mtime_before_touch = int(local_file_path.stat().st_mtime)
         local_pdf_mtime_before_touch = int(local_pdf_path.stat().st_mtime)
+        local_image_hashes_before_touch = image_set_hashes(local_image_path, compute_quickxor_hash_file)
+        local_image_mtimes_before_touch = image_set_mtimes(local_image_path)
 
         touched_epoch = max(
             int(time.time()),
@@ -375,14 +426,18 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             local_pdf_mtime_before_touch,
             baseline_verified_mtime,
             baseline_verified_pdf_mtime,
+            *baseline_verified_image_mtimes.values(),
         ) + 120
         os.utime(local_file_path, (touched_epoch, touched_epoch))
         os.utime(local_pdf_path, (touched_epoch, touched_epoch))
+        set_image_set_mtime(local_image_path, (touched_epoch, touched_epoch))
 
         local_hash_after_touch = compute_quickxor_hash_file(local_file_path)
         local_pdf_hash_after_touch = compute_quickxor_hash_file(local_pdf_path)
         local_mtime_after_touch = int(local_file_path.stat().st_mtime)
         local_pdf_mtime_after_touch = int(local_pdf_path.stat().st_mtime)
+        local_image_hashes_after_touch = image_set_hashes(local_image_path, compute_quickxor_hash_file)
+        local_image_mtimes_after_touch = image_set_mtimes(local_image_path)
 
         details["local_hash_before_touch"] = local_hash_before_touch
         details["local_hash_after_touch"] = local_hash_after_touch
@@ -392,6 +447,10 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         details["local_pdf_hash_after_touch"] = local_pdf_hash_after_touch
         details["local_pdf_mtime_before_touch"] = local_pdf_mtime_before_touch
         details["local_pdf_mtime_after_touch"] = local_pdf_mtime_after_touch
+        details["local_image_hashes_before_touch"] = local_image_hashes_before_touch
+        details["local_image_hashes_after_touch"] = local_image_hashes_after_touch
+        details["local_image_mtimes_before_touch"] = local_image_mtimes_before_touch
+        details["local_image_mtimes_after_touch"] = local_image_mtimes_after_touch
         details["touched_epoch"] = touched_epoch
 
         if local_hash_after_touch != local_hash_before_touch:
@@ -400,6 +459,12 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         if local_mtime_after_touch <= local_mtime_before_touch:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} local XLSX mtime did not advance after touch", details
+        if local_image_hashes_after_touch != local_image_hashes_before_touch:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} local image hashes changed after mtime-only touch", details
+        if any(local_image_mtimes_after_touch[k] <= local_image_mtimes_before_touch[k] for k in local_image_mtimes_before_touch):
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} local image mtimes did not advance after touch", details
         if local_pdf_hash_after_touch != local_pdf_hash_before_touch:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} local PDF hash changed after mtime-only touch", details
@@ -443,11 +508,16 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
 
         post_touch_validation_error = validate_xlsx(local_file_path, REVISION_0)
         post_touch_pdf_validation_error = validate_pdf(local_pdf_path, REVISION_0)
+        post_touch_image_validation_error = validate_image_set(local_image_path, REVISION_0)
         details["post_touch_validation_error"] = post_touch_validation_error
         details["post_touch_pdf_validation_error"] = post_touch_pdf_validation_error
+        details["post_touch_image_validation_error"] = post_touch_image_validation_error
         if post_touch_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} local XLSX became invalid during mtime-only reconciliation: {post_touch_validation_error}", details
+        if post_touch_image_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} local image set became invalid during mtime-only reconciliation: {post_touch_image_validation_error}", details
         if post_touch_pdf_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} local PDF became invalid during mtime-only reconciliation: {post_touch_pdf_validation_error}", details
@@ -474,6 +544,7 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         details["verify_final_manifest"] = verify_final_manifest
         details["verify_final_file_exists"] = verify_final_file_path.is_file()
         details["verify_final_pdf_exists"] = verify_final_pdf_path.is_file()
+        details["verify_final_image_exists"] = image_set_all_files(verify_final_image_path)
 
         if phase4_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -481,18 +552,25 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         if not verify_final_file_path.is_file():
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} final remote verification is missing expected file: {relative_path}", details
+        if not image_set_all_files(verify_final_image_path):
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} final remote verification is missing expected image set: {image_relative_path}", details
         if not verify_final_pdf_path.is_file():
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} final remote verification is missing expected PDF: {pdf_relative_path}", details
 
         final_validation_error = validate_xlsx(verify_final_file_path, REVISION_0)
         final_pdf_validation_error = validate_pdf(verify_final_pdf_path, REVISION_0)
+        final_image_validation_error = validate_image_set(verify_final_image_path, REVISION_0)
         final_verified_hash = compute_quickxor_hash_file(verify_final_file_path)
         final_verified_size = verify_final_file_path.stat().st_size
         final_verified_mtime = int(verify_final_file_path.stat().st_mtime)
         final_verified_pdf_hash = compute_quickxor_hash_file(verify_final_pdf_path)
         final_verified_pdf_size = verify_final_pdf_path.stat().st_size
         final_verified_pdf_mtime = int(verify_final_pdf_path.stat().st_mtime)
+        final_verified_image_hashes = image_set_hashes(verify_final_image_path, compute_quickxor_hash_file)
+        final_verified_image_sizes = image_set_sizes(verify_final_image_path)
+        final_verified_image_mtimes = image_set_mtimes(verify_final_image_path)
 
         details["final_validation_error"] = final_validation_error
         details["final_pdf_validation_error"] = final_pdf_validation_error
@@ -502,10 +580,16 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         details["final_verified_pdf_hash"] = final_verified_pdf_hash
         details["final_verified_pdf_size"] = final_verified_pdf_size
         details["final_verified_pdf_mtime"] = final_verified_pdf_mtime
+        details["final_image_validation_error"] = final_image_validation_error
+        details["final_verified_image_hashes"] = final_verified_image_hashes
+        details["final_verified_image_sizes"] = final_verified_image_sizes
+        details["final_verified_image_mtimes"] = final_verified_image_mtimes
         self._write_metadata(metadata_file, details)
 
         if final_validation_error:
             return False, f"{scenario_id} final remote XLSX validation failed: {final_validation_error}", details
+        if final_image_validation_error:
+            return False, f"{scenario_id} final remote image validation failed: {final_image_validation_error}", details
         if final_pdf_validation_error:
             return False, f"{scenario_id} final remote PDF validation failed: {final_pdf_validation_error}", details
         if verify_final_manifest != expected_manifest:
@@ -514,6 +598,10 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             return False, f"{scenario_id} final verified XLSX hash changed during an mtime-only operation", details
         if final_verified_size != settled_local_size:
             return False, f"{scenario_id} final verified XLSX size changed during an mtime-only operation", details
+        if final_verified_image_hashes != local_image_hashes_after_touch:
+            return False, f"{scenario_id} final verified image hashes changed during an mtime-only operation", details
+        if final_verified_image_sizes != settled_image_sizes:
+            return False, f"{scenario_id} final verified image sizes changed during an mtime-only operation", details
         if final_verified_pdf_hash != local_pdf_hash_after_touch:
             return False, f"{scenario_id} final verified PDF hash changed during an mtime-only operation", details
         if final_verified_pdf_size != settled_pdf_size:
@@ -558,6 +646,14 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
                     details,
                 )
 
+        for key, final_mtime in final_verified_image_mtimes.items():
+            if image_uses_session_upload[key]:
+                if abs(final_mtime - touched_epoch) > 2:
+                    return False, f"{scenario_id} final {key} remote mtime {final_mtime} did not match touched local timestamp {touched_epoch} within tolerance", details
+            else:
+                if final_mtime <= baseline_verified_image_mtimes[key]:
+                    return False, f"{scenario_id} final {key} remote mtime {final_mtime} did not advance beyond baseline {baseline_verified_image_mtimes[key]}", details
+
         return True, f"{scenario_id} passed", details
 
     def run(self, context: E2EContext) -> TestResult:
@@ -576,25 +672,25 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         scenarios = [
             {
                 "scenario_id": "MT-0001",
-                "scenario_name": "small XLSX/PDF with default simple-upload seed behaviour",
+                "scenario_name": "small XLSX/PDF plus PNG/JPEG image set with default simple-upload seed behaviour",
                 "payload_rows": self.SMALL_XLSX_PAYLOAD_ROWS,
                 "force_session_upload": False,
             },
             {
                 "scenario_id": "MT-0002",
-                "scenario_name": "large XLSX/PDF greater than 4 MiB with automatic session-upload seed behaviour",
+                "scenario_name": "large XLSX/PDF plus PNG/JPEG image set greater than 4 MiB with automatic session-upload seed behaviour",
                 "payload_rows": self.LARGE_XLSX_PAYLOAD_ROWS,
                 "force_session_upload": False,
             },
             {
                 "scenario_id": "MT-0003",
-                "scenario_name": "small XLSX/PDF with force_session_upload enabled",
+                "scenario_name": "small XLSX/PDF plus PNG/JPEG image set with force_session_upload enabled",
                 "payload_rows": self.SMALL_XLSX_PAYLOAD_ROWS,
                 "force_session_upload": True,
             },
             {
                 "scenario_id": "MT-0004",
-                "scenario_name": "large XLSX/PDF greater than 4 MiB with force_session_upload enabled",
+                "scenario_name": "large XLSX/PDF plus PNG/JPEG image set greater than 4 MiB with force_session_upload enabled",
                 "payload_rows": self.LARGE_XLSX_PAYLOAD_ROWS,
                 "force_session_upload": True,
             },
@@ -648,7 +744,7 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"{len(failed_scenarios)} of {len(scenarios)} mtime-only XLSX/PDF scenarios failed: {', '.join(failed_scenarios)}",
+                f"{len(failed_scenarios)} of {len(scenarios)} mtime-only XLSX/PDF/image scenarios failed: {', '.join(failed_scenarios)}",
                 artifacts,
                 details,
             )

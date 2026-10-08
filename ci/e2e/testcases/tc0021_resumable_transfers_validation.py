@@ -24,6 +24,7 @@ from framework.xlsx import (
     validate_xlsx,
 )
 from framework.pdf import create_random_pdf, mutate_pdf_revision, validate_pdf
+from framework.image import create_random_png, mutate_png_revision, validate_png
 
 
 @dataclass
@@ -39,7 +40,7 @@ class ScenarioResult:
 class TestCase0021ResumableTransfersValidation(E2ETestCase):
     case_id = "0021"
     name = "resumable transfers validation"
-    description = "Validate resumable transfers, source identity, and modified multi-fragment XLSX/PDF upload-session replacement"
+    description = "Validate resumable transfers, source identity, and modified multi-fragment XLSX/PDF/PNG upload-session replacement"
 
     LARGE_FILE_SIZE = 100 * 1024 * 1024
     INTERRUPT_THRESHOLD_PERCENT = 15.0
@@ -59,6 +60,12 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
     PDF_IMAGE_HEIGHT = 4600
     PDF_REVISION_0 = REVISION_0
     PDF_REVISION_1 = REVISION_1
+
+    PNG_MIN_SIZE_BYTES = 2 * XLSX_FRAGMENT_SIZE_BYTES
+    PNG_IMAGE_WIDTH = 2700
+    PNG_IMAGE_HEIGHT = 2700
+    PNG_REVISION_0 = REVISION_0
+    PNG_REVISION_1 = REVISION_1
 
     # Use 10 MB/s to deliberately slow both upload and download so the 15% threshold
     # is reached with ample time to deliver SIGINT before the transfer can complete.
@@ -2863,6 +2870,488 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         return self._scenario_pass(scenario_id, description, artifacts, details)
 
+    def _run_modified_png_session_replacement_scenario(
+        self,
+        context: E2EContext,
+        root_name: str,
+        scenario_work_dir: Path,
+        scenario_log_dir: Path,
+        scenario_state_dir: Path,
+    ) -> ScenarioResult:
+        scenario_id = "RT-0004I"
+        description = "modified multi-fragment PNG upload session replacement"
+
+        sync_root = scenario_work_dir / "syncroot"
+        verify_root = scenario_work_dir / "verifyroot"
+        conf_dir = scenario_work_dir / "conf"
+        verify_conf_dir = scenario_work_dir / "verify-conf"
+        app_log_dir = scenario_log_dir / "app-logs"
+        verify_app_log_dir = scenario_log_dir / "verify-app-logs"
+
+        reset_directory(sync_root)
+        reset_directory(verify_root)
+        reset_directory(conf_dir)
+        reset_directory(verify_conf_dir)
+        context.bootstrap_config_dir(conf_dir)
+        context.bootstrap_config_dir(verify_conf_dir)
+
+        self._write_config(
+            conf_dir / "config",
+            sync_root,
+            app_log_dir,
+            extra_config_lines=['file_fragment_size = "10"'],
+        )
+        self._write_config(
+            verify_conf_dir / "config",
+            verify_root,
+            verify_app_log_dir,
+            extra_config_lines=['file_fragment_size = "10"'],
+        )
+
+        app_log_file = self._phase_app_log_file(app_log_dir)
+        verify_app_log_file = self._phase_app_log_file(verify_app_log_dir)
+
+        relative_path = f"{root_name}/{scenario_id}/session-replacement.png"
+        local_file = sync_root / relative_path
+        verify_file = verify_root / relative_path
+        png_seed = f"{context.run_id}:{context.e2e_target}:{scenario_id}:{os.getpid()}"
+
+        seed_stdout = scenario_log_dir / "seed_stdout.log"
+        seed_stderr = scenario_log_dir / "seed_stderr.log"
+        modify_stdout = scenario_log_dir / "modify_stdout.log"
+        modify_stderr = scenario_log_dir / "modify_stderr.log"
+        verify_stdout = scenario_log_dir / "verify_stdout.log"
+        verify_stderr = scenario_log_dir / "verify_stderr.log"
+        metadata_file = scenario_state_dir / "metadata.txt"
+        pre_modify_state_file = scenario_state_dir / "pre_modify_state.txt"
+        post_modify_state_file = scenario_state_dir / "post_modify_state.txt"
+        session_guid_file = scenario_state_dir / "session_guid_sequence.txt"
+        verify_manifest_file = scenario_state_dir / "verify_manifest.txt"
+
+        artifacts = [
+            str(seed_stdout),
+            str(seed_stderr),
+            str(modify_stdout),
+            str(modify_stderr),
+            str(verify_stdout),
+            str(verify_stderr),
+            str(metadata_file),
+            str(pre_modify_state_file),
+            str(post_modify_state_file),
+            str(session_guid_file),
+            str(verify_manifest_file),
+        ]
+
+        try:
+            generated = create_random_png(
+                local_file,
+                png_seed,
+                revision=self.PNG_REVISION_0,
+                width=self.PNG_IMAGE_WIDTH,
+                height=self.PNG_IMAGE_HEIGHT,
+                title="TC0021 session replacement PNG",
+            )
+        except Exception as exc:
+            details = {
+                "scenario_id": scenario_id,
+                "png_seed": png_seed,
+                "generation_error": str(exc),
+            }
+            write_text_file(metadata_file, f"generation_error={exc}\n")
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Failed to generate runtime PNG fixture: {exc}",
+                artifacts,
+                details,
+            )
+
+        generated_size = local_file.stat().st_size
+        write_text_file(
+            pre_modify_state_file,
+            "\n".join(
+                [
+                    f"png_seed={png_seed}",
+                    f"generated_size={generated_size}",
+                    f"generated_revision={self.PNG_REVISION_0}",
+                    f"image_width={generated['image_width']}",
+                    f"image_height={generated['image_height']}",
+                ]
+            )
+            + "\n",
+        )
+
+        if generated_size <= self.PNG_MIN_SIZE_BYTES:
+            details = {
+                "scenario_id": scenario_id,
+                "png_seed": png_seed,
+                "generated_size": generated_size,
+                "required_minimum_size": self.PNG_MIN_SIZE_BYTES + 1,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Generated PNG did not exceed two 10 MiB fragments; multi-fragment regression coverage is not guaranteed",
+                artifacts,
+                details,
+            )
+
+        seed_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(conf_dir),
+        ]
+        seed_result = self._run_and_capture(
+            context,
+            f"{scenario_id} seed",
+            seed_command,
+            seed_stdout,
+            seed_stderr,
+        )
+
+        if seed_result.returncode != 0:
+            details = {
+                "scenario_id": scenario_id,
+                "seed_returncode": seed_result.returncode,
+                "relative_path": relative_path,
+                "generated_size": generated_size,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Initial PNG seed upload failed with status {seed_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        canonical_validation_error = validate_png(local_file, self.PNG_REVISION_0)
+        if canonical_validation_error:
+            details = {
+                "scenario_id": scenario_id,
+                "seed_returncode": seed_result.returncode,
+                "relative_path": relative_path,
+                "canonical_validation_error": canonical_validation_error,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Post-seed local PNG is not a valid canonical document: {canonical_validation_error}",
+                artifacts,
+                details,
+            )
+
+        canonical_size_before_modify = local_file.stat().st_size
+        if canonical_size_before_modify <= self.PNG_MIN_SIZE_BYTES:
+            details = {
+                "scenario_id": scenario_id,
+                "relative_path": relative_path,
+                "canonical_size_before_modify": canonical_size_before_modify,
+                "required_minimum_size": self.PNG_MIN_SIZE_BYTES + 1,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Canonical PNG after initial upload/enrichment no longer exceeds the multi-fragment boundary",
+                artifacts,
+                details,
+            )
+
+        try:
+            mutate_png_revision(local_file, self.PNG_REVISION_0, self.PNG_REVISION_1)
+        except Exception as exc:
+            details = {
+                "scenario_id": scenario_id,
+                "relative_path": relative_path,
+                "mutation_error": str(exc),
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Failed to mutate the canonical PNG in place: {exc}",
+                artifacts,
+                details,
+            )
+
+        modified_size = local_file.stat().st_size
+        write_text_file(
+            post_modify_state_file,
+            "\n".join(
+                [
+                    f"canonical_size_before_modify={canonical_size_before_modify}",
+                    f"modified_size={modified_size}",
+                    f"modified_revision={self.PNG_REVISION_1}",
+                ]
+            )
+            + "\n",
+        )
+
+        if modified_size <= self.PNG_MIN_SIZE_BYTES:
+            details = {
+                "scenario_id": scenario_id,
+                "relative_path": relative_path,
+                "modified_size": modified_size,
+                "required_minimum_size": self.PNG_MIN_SIZE_BYTES + 1,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Modified PNG no longer exceeds the multi-fragment session-upload boundary",
+                artifacts,
+                details,
+            )
+
+        # The seed upload has already written this application's log. Remove it
+        # before the modified-file phase so the GUID sequence below contains
+        # only the session upload under test.
+        app_log_file.unlink(missing_ok=True)
+
+        # RT-0004P validates the real Microsoft response and upload-session GUID
+        # continuity during replacement. Those diagnostics require the client's
+        # double-verbose logging level, so use --verbose --verbose for the
+        # modified-upload phase being inspected. This does not inject or
+        # manufacture any API response.
+        modify_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--verbose",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(conf_dir),
+        ]
+        modify_result = self._run_and_capture(
+            context,
+            f"{scenario_id} modified upload",
+            modify_command,
+            modify_stdout,
+            modify_stderr,
+        )
+
+        modify_app_log_text = self._read_text_if_exists(app_log_file)
+        combined_modify_output = (
+            modify_result.stdout + "\n" + modify_result.stderr + "\n" + modify_app_log_text
+        )
+        session_guids = self._extract_upload_session_guids(
+            modify_app_log_text if modify_app_log_text else combined_modify_output
+        )
+        write_text_file(session_guid_file, "\n".join(session_guids) + ("\n" if session_guids else ""))
+
+        upload_session_not_found_seen = (
+            "The upload session was not found" in combined_modify_output
+            and "itemNotFound" in combined_modify_output
+        )
+        replacement_adopted_seen = (
+            "Adopted replacement upload session after 404; restarting from offset: 0"
+            in combined_modify_output
+        )
+        name_already_exists_seen = "nameAlreadyExists" in combined_modify_output
+        safe_backup_seen = "safeBackup" in combined_modify_output
+        modified_upload_done_seen = (
+            f"Uploading modified file: {relative_path} ... done" in combined_modify_output
+        )
+
+        replacement_guid_continuity = False
+        if len(session_guids) >= 3:
+            original_guid = session_guids[0]
+            replacement_guid = session_guids[1]
+            replacement_guid_continuity = (
+                original_guid != replacement_guid
+                and all(guid == replacement_guid for guid in session_guids[1:])
+            )
+
+        post_modify_resumable_state_files = self._find_resumable_state_files(
+            conf_dir,
+            ["session_upload*", "session_upload.*"],
+        )
+        safe_backup_files = sorted(
+            str(path.relative_to(sync_root))
+            for path in sync_root.rglob("*safeBackup*")
+            if path.is_file()
+        )
+
+        verify_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--download-only",
+            "--verbose",
+            "--resync",
+            "--resync-auth",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(verify_conf_dir),
+        ]
+        verify_result = self._run_and_capture(
+            context,
+            f"{scenario_id} verify",
+            verify_command,
+            verify_stdout,
+            verify_stderr,
+        )
+        verify_manifest = build_manifest(verify_root)
+        write_manifest(verify_manifest_file, verify_manifest)
+        verify_validation_error = validate_png(verify_file, self.PNG_REVISION_1)
+        self._append_if_exists(artifacts, app_log_dir)
+        self._append_if_exists(artifacts, verify_app_log_dir)
+
+        # The first-fragment replacement-session 404 exercised by RT-0004 is
+        # associated with SharePoint/Office document enrichment. A genuine PNG
+        # still exercises the same multi-fragment modified-upload machinery, but
+        # does not require that Office-specific service response. If a 404 is
+        # observed, the generic continuity checks below still validate recovery.
+        replacement_required = False
+        details = {
+            "scenario_id": scenario_id,
+            "relative_path": relative_path,
+            "png_seed": png_seed,
+            "generated_size": generated_size,
+            "canonical_size_before_modify": canonical_size_before_modify,
+            "modified_size": modified_size,
+            "seed_returncode": seed_result.returncode,
+            "modify_returncode": modify_result.returncode,
+            "verify_returncode": verify_result.returncode,
+            "replacement_required": replacement_required,
+            "upload_session_not_found_seen": upload_session_not_found_seen,
+            "replacement_adopted_seen": replacement_adopted_seen,
+            "session_guids": session_guids,
+            "replacement_guid_continuity": replacement_guid_continuity,
+            "name_already_exists_seen": name_already_exists_seen,
+            "safe_backup_seen": safe_backup_seen,
+            "safe_backup_files": safe_backup_files,
+            "modified_upload_done_seen": modified_upload_done_seen,
+            "post_modify_resumable_state_files": post_modify_resumable_state_files,
+            "verify_validation_error": verify_validation_error,
+        }
+
+        write_text_file(
+            metadata_file,
+            "\n".join(
+                [
+                    f"scenario_id={scenario_id}",
+                    f"relative_path={relative_path}",
+                    f"png_seed={png_seed}",
+                    f"generated_size={generated_size}",
+                    f"canonical_size_before_modify={canonical_size_before_modify}",
+                    f"modified_size={modified_size}",
+                    f"seed_returncode={seed_result.returncode}",
+                    f"modify_returncode={modify_result.returncode}",
+                    f"verify_returncode={verify_result.returncode}",
+                    f"replacement_required={replacement_required}",
+                    f"upload_session_not_found_seen={upload_session_not_found_seen}",
+                    f"replacement_adopted_seen={replacement_adopted_seen}",
+                    f"session_guid_count={len(session_guids)}",
+                    f"replacement_guid_continuity={replacement_guid_continuity}",
+                    f"name_already_exists_seen={name_already_exists_seen}",
+                    f"safe_backup_seen={safe_backup_seen}",
+                    f"safe_backup_file_count={len(safe_backup_files)}",
+                    f"modified_upload_done_seen={modified_upload_done_seen}",
+                    f"post_modify_resumable_state_file_count={len(post_modify_resumable_state_files)}",
+                    f"verify_validation_error={verify_validation_error}",
+                ]
+            )
+            + "\n",
+        )
+
+        if modify_result.returncode != 0:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Modified PNG upload failed with status {modify_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        if not modified_upload_done_seen:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Modified PNG upload did not report successful completion",
+                artifacts,
+                details,
+            )
+
+        if replacement_required and not upload_session_not_found_seen:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "SharePoint modified-PNG upload did not exercise the expected upload-session-not-found recovery path",
+                artifacts,
+                details,
+            )
+
+        if upload_session_not_found_seen and not replacement_adopted_seen:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Upload-session 404 was observed but the replacement session was not adopted",
+                artifacts,
+                details,
+            )
+
+        if upload_session_not_found_seen and not replacement_guid_continuity:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Replacement upload-session GUID was not used consistently for all fragments after the 404 recovery",
+                artifacts,
+                details,
+            )
+
+        if name_already_exists_seen:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Modified PNG upload regressed to nameAlreadyExists after upload-session replacement",
+                artifacts,
+                details,
+            )
+
+        if safe_backup_seen or safe_backup_files:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Modified PNG upload unexpectedly created or reported a safeBackup",
+                artifacts,
+                details,
+            )
+
+        if post_modify_resumable_state_files:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                "Successful modified PNG upload left stale resumable upload-session state behind",
+                artifacts,
+                details,
+            )
+
+        if verify_result.returncode != 0:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Remote PNG verification failed with status {verify_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        if verify_validation_error:
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Remote verification did not contain the expected modified PNG revision: {verify_validation_error}",
+                artifacts,
+                details,
+            )
+
+        return self._scenario_pass(scenario_id, description, artifacts, details)
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -2981,6 +3470,25 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     pdf_replacement_work_dir,
                     pdf_replacement_log_dir,
                     pdf_replacement_state_dir,
+                )
+            )
+
+        png_replacement_work_dir = case_work_dir / "rt0004i-modified-png-session-replacement"
+        png_replacement_log_dir = case_log_dir / "rt0004i-modified-png-session-replacement"
+        png_replacement_state_dir = state_dir / "rt0004i-modified-png-session-replacement"
+
+        reset_directory(png_replacement_work_dir)
+        reset_directory(png_replacement_log_dir)
+        reset_directory(png_replacement_state_dir)
+
+        if context.should_run_scenario(self.case_id, "RT-0004I"):
+            results.append(
+                self._run_modified_png_session_replacement_scenario(
+                    context,
+                    root_name,
+                    png_replacement_work_dir,
+                    png_replacement_log_dir,
+                    png_replacement_state_dir,
                 )
             )
 

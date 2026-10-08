@@ -8,6 +8,7 @@ from pathlib import Path
 from framework.context import E2EContext
 from framework.result import TestResult
 from framework.pdf import REVISION_1 as PDF_REVISION_1, REVISION_2 as PDF_REVISION_2, create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, set_pdf_pair_mtime, copy_pdf_pair, pdf_pair_hashes, pdf_pair_backup_files, validate_pdf_pair_backups, pdf_pair_backup_hashes
+from framework.image import REVISION_1 as IMAGE_REVISION_1, REVISION_2 as IMAGE_REVISION_2, create_random_image_set, mutate_image_set_revision, validate_image_set, set_image_set_mtime, copy_image_set, image_set_hashes, image_set_backup_files, validate_image_set_backups, image_set_backup_hashes
 from framework.utils import reset_directory, write_text_file
 from framework.xlsx import REVISION_1, REVISION_2, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, set_xlsx_pair_mtime, copy_xlsx_pair, xlsx_pair_hashes, xlsx_pair_backup_files, validate_xlsx_pair_backups, xlsx_pair_backup_hashes
 from testcases.safe_backup_case_base import SafeBackupCaseBase
@@ -17,7 +18,7 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
     case_id = "0070"
     name = "safeBackup new-file upload collision validation"
     description = (
-        "Validate with passive TXT plus real XLSX and PDF payloads that the no-database/new-local-file collision path "
+        "Validate with passive TXT plus real XLSX/PDF documents and PNG/JPEG image payloads that the no-database/new-local-file collision path "
         "under upload-only preserves older local files without replacing their canonical pathnames when newer "
         "same-name online files already exist"
     )
@@ -45,15 +46,19 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
         text_relative = f"{root_name}/new-file-collision.txt"
         xlsx_relative = f"{root_name}/new-file-collision.xlsx"
         pdf_relative = f"{root_name}/new-file-collision.pdf"
+        image_relative = f"{root_name}/new-file-collision.png"
         seed_text = seed_root / text_relative
         seed_xlsx = seed_root / xlsx_relative
         seed_pdf = seed_root / pdf_relative
+        seed_image = seed_root / image_relative
         local_text = local_root / text_relative
         local_xlsx = local_root / xlsx_relative
         local_pdf = local_root / pdf_relative
+        local_image = local_root / image_relative
         verify_text = verify_root / text_relative
         verify_xlsx = verify_root / xlsx_relative
         verify_pdf = verify_root / pdf_relative
+        verify_image = verify_root / image_relative
 
         local_text_content = "TC0070 older local untracked file that must remain canonical under upload-only\n"
         remote_text_content = "TC0070 newer online file with the same pathname\n"
@@ -68,20 +73,24 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
             title="TC0070 older untracked local workbook",
         )
         pdf_seed = f"{xlsx_seed}:pdf"
+        image_seed = f"{xlsx_seed}:image"
         generated_pdf = create_random_pdf_pair(
             local_pdf,
             pdf_seed,
             revision=PDF_REVISION_1,
             title="TC0070 older untracked local PDF",
         )
+        generated_images = create_random_image_set(local_image, image_seed, revision=IMAGE_REVISION_1, title="TC0070 older untracked local images")
 
         old_epoch = int(time.time()) - 3600
         os.utime(local_text, (old_epoch, old_epoch))
         set_xlsx_pair_mtime(local_xlsx, (old_epoch, old_epoch))
         set_pdf_pair_mtime(local_pdf, (old_epoch, old_epoch))
+        set_image_set_mtime(local_image, (old_epoch, old_epoch))
         local_text_hash = self._hash_if_file(local_text)
         local_xlsx_hashes = xlsx_pair_hashes(local_xlsx, self._hash_if_file)
         local_pdf_hashes = pdf_pair_hashes(local_pdf, self._hash_if_file)
+        local_image_hashes = image_set_hashes(local_image, self._hash_if_file)
 
         # Build the newer online XLSX from the exact local package, then change only the
         # revision marker. This gives the collision two realistic related document versions
@@ -91,8 +100,10 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
         seed_xlsx.parent.mkdir(parents=True, exist_ok=True)
         copy_xlsx_pair(local_xlsx, seed_xlsx)
         copy_pdf_pair(local_pdf, seed_pdf)
+        copy_image_set(local_image, seed_image)
         mutate_xlsx_pair_revision(seed_xlsx, REVISION_1, REVISION_2)
         mutate_pdf_pair_revision(seed_pdf, PDF_REVISION_1, PDF_REVISION_2)
+        mutate_image_set_revision(seed_image, IMAGE_REVISION_1, IMAGE_REVISION_2)
 
         seed_stdout, seed_stderr = logs / "seed_stdout.log", logs / "seed_stderr.log"
         collision_stdout, collision_stderr = logs / "collision_stdout.log", logs / "collision_stderr.log"
@@ -109,13 +120,16 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
             "text_relative": text_relative,
             "xlsx_relative": xlsx_relative,
             "pdf_relative": pdf_relative,
+            "image_relative": image_relative,
             "local_initial_mtime": old_epoch,
             "xlsx_seed": xlsx_seed,
             "pdf_seed": pdf_seed,
+            "image_seed": image_seed,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_local_xlsx_size": int(generated["size_bytes"]),
             "generated_local_pdf_size": int(generated_pdf["size_bytes"]),
             "generated_local_large_pdf_size": int(generated_pdf["large_size_bytes"]),
+            "generated_local_image_sizes": {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")},
         }
 
         seed = self._run_phase(
@@ -157,10 +171,13 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
         text_backups = self._safe_backup_files_for(local_text)
         xlsx_backups = xlsx_pair_backup_files(local_xlsx, self._safe_backup_files_for)
         pdf_backups = pdf_pair_backup_files(local_pdf, self._safe_backup_files_for)
+        image_backups = image_set_backup_files(local_image, self._safe_backup_files_for)
         local_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_1) if local_xlsx.is_file() else "Local canonical XLSX is missing"
         local_pdf_error = validate_pdf_pair(local_pdf, PDF_REVISION_1) if local_pdf.is_file() else "Local canonical PDF is missing"
+        local_image_error = validate_image_set(local_image, IMAGE_REVISION_1) if local_image.is_file() else "Local canonical image set is missing"
         backup_xlsx_error = validate_xlsx_pair_backups(xlsx_backups, REVISION_1)
         backup_pdf_error = validate_pdf_pair_backups(pdf_backups, PDF_REVISION_1)
+        backup_image_error = validate_image_set_backups(image_backups, IMAGE_REVISION_1)
         details.update(
             {
                 "collision_returncode": collision.returncode,
@@ -170,9 +187,12 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
                 "canonical_xlsx_validation_error": local_xlsx_error,
                 "canonical_pdf_hashes": pdf_pair_hashes(local_pdf, self._hash_if_file),
                 "canonical_pdf_validation_error": local_pdf_error,
+                "canonical_image_hashes": image_set_hashes(local_image, self._hash_if_file),
+                "canonical_image_validation_error": local_image_error,
                 "local_text_hash": local_text_hash,
                 "local_xlsx_hashes": local_xlsx_hashes,
                 "local_pdf_hashes": local_pdf_hashes,
+                "local_image_hashes": local_image_hashes,
                 "text_safe_backup_files": [str(p.relative_to(local_root)) for p in text_backups],
                 "text_safe_backup_hashes": [self._hash_if_file(p) for p in text_backups],
                 "xlsx_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in xlsx_backups.items()},
@@ -181,6 +201,9 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
                 "pdf_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in pdf_backups.items()},
                 "pdf_safe_backup_hashes": pdf_pair_backup_hashes(pdf_backups, self._hash_if_file),
                 "pdf_safe_backup_validation_error": backup_pdf_error,
+                "image_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in image_backups.items()},
+                "image_safe_backup_hashes": image_set_backup_hashes(image_backups, self._hash_if_file),
+                "image_safe_backup_validation_error": backup_image_error,
             }
         )
 
@@ -200,21 +223,27 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
         remote_text_backups = self._safe_backup_files_for(verify_text)
         remote_xlsx_backups = xlsx_pair_backup_files(verify_xlsx, self._safe_backup_files_for)
         remote_pdf_backups = pdf_pair_backup_files(verify_pdf, self._safe_backup_files_for)
+        remote_image_backups = image_set_backup_files(verify_image, self._safe_backup_files_for)
         verify_xlsx_error = validate_xlsx_pair(verify_xlsx, REVISION_2) if verify_xlsx.is_file() else "Verification canonical XLSX is missing"
         verify_pdf_error = validate_pdf_pair(verify_pdf, PDF_REVISION_2) if verify_pdf.is_file() else "Verification canonical PDF is missing"
+        verify_image_error = validate_image_set(verify_image, IMAGE_REVISION_2) if verify_image.is_file() else "Verification canonical image set is missing"
         remote_xlsx_backup_error = validate_xlsx_pair_backups(remote_xlsx_backups, REVISION_1)
         remote_pdf_backup_error = validate_pdf_pair_backups(remote_pdf_backups, PDF_REVISION_1)
+        remote_image_backup_error = validate_image_set_backups(remote_image_backups, IMAGE_REVISION_1)
         details.update(
             {
                 "verify_returncode": verify.returncode,
                 "verify_canonical_text": self._text_if_file(verify_text),
                 "verify_xlsx_validation_error": verify_xlsx_error,
                 "verify_pdf_validation_error": verify_pdf_error,
+                "verify_image_validation_error": verify_image_error,
                 "verify_text_safe_backup_files": [str(p.relative_to(verify_root)) for p in remote_text_backups],
                 "verify_xlsx_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_xlsx_backups.items()},
                 "verify_xlsx_safe_backup_validation_error": remote_xlsx_backup_error,
                 "verify_pdf_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_pdf_backups.items()},
                 "verify_pdf_safe_backup_validation_error": remote_pdf_backup_error,
+                "verify_image_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_image_backups.items()},
+                "verify_image_safe_backup_validation_error": remote_image_backup_error,
             }
         )
         self._write_metadata(metadata_file, details)
@@ -237,6 +266,12 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
                 artifacts=artifacts,
                 details=details,
             )
+        if local_image_error or image_set_hashes(local_image, self._hash_if_file) != local_image_hashes:
+            return self.fail_result(
+                reason=f"New-file upload-only collision removed or changed the local image canonical set: {local_image_error}",
+                artifacts=artifacts,
+                details=details,
+            )
         if local_pdf_error or pdf_pair_hashes(local_pdf, self._hash_if_file) != local_pdf_hashes:
             return self.fail_result(
                 reason=f"New-file upload-only collision removed or changed the local PDF canonical document: {local_pdf_error}",
@@ -255,13 +290,19 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
                 artifacts=artifacts,
                 details=details,
             )
+        if image_set_backup_hashes(image_backups, self._hash_if_file) != local_image_hashes or backup_image_error:
+            return self.fail_result(
+                reason=f"New-file image collision did not preserve exactly one valid local safeBackup: {backup_image_error}",
+                artifacts=artifacts,
+                details=details,
+            )
         if pdf_pair_backup_hashes(pdf_backups, self._hash_if_file) != local_pdf_hashes or backup_pdf_error:
             return self.fail_result(
                 reason=f"New-file PDF collision did not preserve exactly one valid local safeBackup: {backup_pdf_error}",
                 artifacts=artifacts,
                 details=details,
             )
-        if verify.returncode != 0 or self._text_if_file(verify_text) != remote_text_content or verify_xlsx_error or verify_pdf_error:
+        if verify.returncode != 0 or self._text_if_file(verify_text) != remote_text_content or verify_xlsx_error or verify_pdf_error or verify_image_error:
             return self.fail_result(
                 reason=f"New-file upload-only collision unexpectedly replaced the newer online canonical TXT/XLSX/PDF files: XLSX={verify_xlsx_error}; PDF={verify_pdf_error}",
                 artifacts=artifacts,
@@ -276,6 +317,12 @@ class TestCase0070SafeBackupNewFileUploadCollisionValidation(SafeBackupCaseBase)
         if remote_xlsx_backup_error:
             return self.fail_result(
                 reason="New-file XLSX collision did not upload the preserved revision-1 workbook under its safeBackup name",
+                artifacts=artifacts,
+                details=details,
+            )
+        if remote_image_backup_error:
+            return self.fail_result(
+                reason="New-file image collision did not upload the preserved revision-1 image set under its safeBackup names",
                 artifacts=artifacts,
                 details=details,
             )

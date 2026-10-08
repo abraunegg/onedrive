@@ -8,6 +8,7 @@ from pathlib import Path
 from framework.context import E2EContext
 from framework.result import TestResult
 from framework.pdf import REVISION_0 as PDF_REVISION_0, REVISION_1 as PDF_REVISION_1, REVISION_2 as PDF_REVISION_2, create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, copy_pdf_pair, pdf_pair_hashes, pdf_pair_mtimes, pdf_pair_backup_files, validate_pdf_pair_backups, pdf_pair_backup_hashes
+from framework.image import REVISION_0 as IMAGE_REVISION_0, REVISION_1 as IMAGE_REVISION_1, REVISION_2 as IMAGE_REVISION_2, create_random_image_set, mutate_image_set_revision, validate_image_set, copy_image_set, image_set_hashes, image_set_mtimes, image_set_backup_files, validate_image_set_backups, image_set_backup_hashes
 from framework.utils import reset_directory, write_text_file
 from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, copy_xlsx_pair, xlsx_pair_hashes, xlsx_pair_mtimes, xlsx_pair_backup_files, validate_xlsx_pair_backups, xlsx_pair_backup_hashes
 from testcases.safe_backup_case_base import SafeBackupCaseBase
@@ -17,7 +18,7 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
     case_id = "0066"
     name = "safeBackup transactional replacement validation"
     description = (
-        "Validate with passive TXT plus real XLSX and PDF payloads that a remote-newer/local-modified conflict "
+        "Validate with passive TXT plus real XLSX/PDF documents and PNG/JPEG image payloads that a remote-newer/local-modified conflict "
         "completes with the authoritative remote files at the canonical pathnames and the prior local "
         "bytes preserved exactly once as safeBackup"
     )
@@ -50,18 +51,23 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
         text_relative = f"{root_name}/conflict.txt"
         xlsx_relative = f"{root_name}/conflict.xlsx"
         pdf_relative = f"{root_name}/conflict.pdf"
+        image_relative = f"{root_name}/conflict.png"
         seed_text = seed_root / text_relative
         seed_xlsx = seed_root / xlsx_relative
         seed_pdf = seed_root / pdf_relative
+        seed_image = seed_root / image_relative
         local_text = local_root / text_relative
         local_xlsx = local_root / xlsx_relative
         local_pdf = local_root / pdf_relative
+        local_image = local_root / image_relative
         updater_text = updater_root / text_relative
         updater_xlsx = updater_root / xlsx_relative
         updater_pdf = updater_root / pdf_relative
+        updater_image = updater_root / image_relative
         verify_text = verify_root / text_relative
         verify_xlsx = verify_root / xlsx_relative
         verify_pdf = verify_root / pdf_relative
+        verify_image = verify_root / image_relative
 
         baseline_text = "TC0066 baseline remote content\n"
         local_conflict_text = "TC0066 locally modified content that must be preserved\n"
@@ -76,11 +82,18 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
             title="TC0066 transactional replacement workbook",
         )
         pdf_seed = f"{xlsx_seed}:pdf"
+        image_seed = f"{xlsx_seed}:image"
         generated_pdf = create_random_pdf_pair(
             seed_pdf,
             pdf_seed,
             revision=PDF_REVISION_0,
             title="TC0066 transactional replacement PDF",
+        )
+        generated_images = create_random_image_set(
+            seed_image,
+            image_seed,
+            revision=IMAGE_REVISION_0,
+            title="TC0066 transactional replacement images",
         )
 
         phase_files = {
@@ -94,12 +107,15 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
             "text_relative": text_relative,
             "xlsx_relative": xlsx_relative,
             "pdf_relative": pdf_relative,
+            "image_relative": image_relative,
             "xlsx_seed": xlsx_seed,
             "pdf_seed": pdf_seed,
+            "image_seed": image_seed,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_xlsx_size": int(generated["size_bytes"]),
             "generated_pdf_size": int(generated_pdf["size_bytes"]),
             "generated_large_pdf_size": int(generated_pdf["large_size_bytes"]),
+            "generated_image_sizes": {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")},
         }
 
         seed = self._run_phase(
@@ -124,9 +140,11 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
         details["initial_download_returncode"] = initial.returncode
         initial_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_0)
         initial_pdf_error = validate_pdf_pair(local_pdf, PDF_REVISION_0)
+        initial_image_error = validate_image_set(local_image, IMAGE_REVISION_0)
         details["initial_xlsx_validation_error"] = initial_xlsx_error
         details["initial_pdf_validation_error"] = initial_pdf_error
-        if initial.returncode != 0 or self._text_if_file(local_text) != baseline_text or initial_xlsx_error or initial_pdf_error:
+        details["initial_image_validation_error"] = initial_image_error
+        if initial.returncode != 0 or self._text_if_file(local_text) != baseline_text or initial_xlsx_error or initial_pdf_error or initial_image_error:
             self._write_metadata(metadata_file, details)
             return self.fail_result(reason=f"Initial local TXT/XLSX/PDF baseline download failed: XLSX={initial_xlsx_error}; PDF={initial_pdf_error}", artifacts=artifacts, details=details)
 
@@ -135,22 +153,27 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
         updater_xlsx.parent.mkdir(parents=True, exist_ok=True)
         copy_xlsx_pair(local_xlsx, updater_xlsx)
         copy_pdf_pair(local_pdf, updater_pdf)
+        copy_image_set(local_image, updater_image)
 
         time.sleep(2)
         write_text_file(local_text, local_conflict_text)
         mutate_xlsx_pair_revision(local_xlsx, REVISION_0, REVISION_1)
         mutate_pdf_pair_revision(local_pdf, PDF_REVISION_0, PDF_REVISION_1)
+        mutate_image_set_revision(local_image, IMAGE_REVISION_0, IMAGE_REVISION_1)
         local_text_hash = self._hash_if_file(local_text)
         local_xlsx_hashes = xlsx_pair_hashes(local_xlsx, self._hash_if_file)
         local_pdf_hashes = pdf_pair_hashes(local_pdf, self._hash_if_file)
+        local_image_hashes = image_set_hashes(local_image, self._hash_if_file)
         local_text_mtime = int(local_text.stat().st_mtime)
         local_xlsx_mtimes = xlsx_pair_mtimes(local_xlsx)
         local_pdf_mtimes = pdf_pair_mtimes(local_pdf)
+        local_image_mtimes = image_set_mtimes(local_image)
 
         time.sleep(2)
         write_text_file(updater_text, remote_replacement_text)
         mutate_xlsx_pair_revision(updater_xlsx, REVISION_0, REVISION_2)
         mutate_pdf_pair_revision(updater_pdf, PDF_REVISION_0, PDF_REVISION_2)
+        mutate_image_set_revision(updater_image, IMAGE_REVISION_0, IMAGE_REVISION_2)
         remote_update = self._run_phase(
             context,
             label="remote update",
@@ -175,22 +198,28 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
         text_backups = self._safe_backup_files_for(local_text)
         xlsx_backups = xlsx_pair_backup_files(local_xlsx, self._safe_backup_files_for)
         pdf_backups = pdf_pair_backup_files(local_pdf, self._safe_backup_files_for)
+        image_backups = image_set_backup_files(local_image, self._safe_backup_files_for)
         partials = self._partial_files_under(local_root / root_name)
         canonical_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_2) if local_xlsx.is_file() else "Canonical XLSX is missing"
         canonical_pdf_error = validate_pdf_pair(local_pdf, PDF_REVISION_2) if local_pdf.is_file() else "Canonical PDF is missing"
+        canonical_image_error = validate_image_set(local_image, IMAGE_REVISION_2) if local_image.is_file() else "Canonical image set is missing"
         backup_xlsx_error = validate_xlsx_pair_backups(xlsx_backups, REVISION_1)
         backup_pdf_error = validate_pdf_pair_backups(pdf_backups, PDF_REVISION_1)
+        backup_image_error = validate_image_set_backups(image_backups, IMAGE_REVISION_1)
         details.update(
             {
                 "canonical_text_content": self._text_if_file(local_text),
                 "canonical_xlsx_validation_error": canonical_xlsx_error,
                 "canonical_pdf_validation_error": canonical_pdf_error,
+                "canonical_image_validation_error": canonical_image_error,
                 "local_text_conflict_hash": local_text_hash,
                 "local_xlsx_conflict_hashes": local_xlsx_hashes,
                 "local_pdf_conflict_hashes": local_pdf_hashes,
+                "local_image_conflict_hashes": local_image_hashes,
                 "local_text_conflict_mtime": local_text_mtime,
                 "local_xlsx_conflict_mtimes": local_xlsx_mtimes,
                 "local_pdf_conflict_mtimes": local_pdf_mtimes,
+                "local_image_conflict_mtimes": local_image_mtimes,
                 "text_safe_backup_files": [str(p.relative_to(local_root)) for p in text_backups],
                 "text_safe_backup_hashes": [self._hash_if_file(p) for p in text_backups],
                 "xlsx_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in xlsx_backups.items()},
@@ -199,6 +228,9 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
                 "pdf_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in pdf_backups.items()},
                 "pdf_safe_backup_hashes": pdf_pair_backup_hashes(pdf_backups, self._hash_if_file),
                 "pdf_safe_backup_validation_error": backup_pdf_error,
+                "image_safe_backup_files": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in image_backups.items()},
+                "image_safe_backup_hashes": image_set_backup_hashes(image_backups, self._hash_if_file),
+                "image_safe_backup_validation_error": backup_image_error,
                 "partial_files": [str(p.relative_to(local_root)) for p in partials],
             }
         )
@@ -212,10 +244,13 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
         )
         verify_xlsx_error = validate_xlsx_pair(verify_xlsx, REVISION_2) if verify_xlsx.is_file() else "Verification XLSX is missing"
         verify_pdf_error = validate_pdf_pair(verify_pdf, PDF_REVISION_2) if verify_pdf.is_file() else "Verification PDF is missing"
+        verify_image_error = validate_image_set(verify_image, IMAGE_REVISION_2) if verify_image.is_file() else "Verification image set is missing"
         remote_xlsx_backups = xlsx_pair_backup_files(verify_xlsx, self._safe_backup_files_for)
         remote_pdf_backups = pdf_pair_backup_files(verify_pdf, self._safe_backup_files_for)
+        remote_image_backups = image_set_backup_files(verify_image, self._safe_backup_files_for)
         remote_xlsx_backup_error = validate_xlsx_pair_backups(remote_xlsx_backups, REVISION_1)
         remote_pdf_backup_error = validate_pdf_pair_backups(remote_pdf_backups, PDF_REVISION_1)
+        remote_image_backup_error = validate_image_set_backups(remote_image_backups, IMAGE_REVISION_1)
         xlsx_backup_hash_error, xlsx_backup_hash_modes = self._xlsx_safe_backup_hash_contract(
             reconcile_output=reconcile.stdout + "\n" + reconcile.stderr,
             local_backups=xlsx_backups,
@@ -228,12 +263,19 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
             expected_original_hashes=local_pdf_hashes,
             remote_backups=remote_pdf_backups,
         )
+        image_backup_hash_error, image_backup_hash_modes = self._image_safe_backup_hash_contract(
+            reconcile_output=reconcile.stdout + "\n" + reconcile.stderr,
+            local_backups=image_backups,
+            expected_original_hashes=local_image_hashes,
+            remote_backups=remote_image_backups,
+        )
         details.update(
             {
                 "verify_returncode": verify.returncode,
                 "verify_text_content": self._text_if_file(verify_text),
                 "verify_xlsx_validation_error": verify_xlsx_error,
                 "verify_pdf_validation_error": verify_pdf_error,
+                "verify_image_validation_error": verify_image_error,
                 "verify_xlsx_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_xlsx_backups.items()},
                 "verify_xlsx_safe_backup_hashes": xlsx_pair_backup_hashes(remote_xlsx_backups, self._hash_if_file),
                 "verify_xlsx_safe_backup_validation_error": remote_xlsx_backup_error,
@@ -244,6 +286,11 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
                 "verify_pdf_safe_backup_validation_error": remote_pdf_backup_error,
                 "pdf_safe_backup_hash_contract_error": pdf_backup_hash_error,
                 "pdf_safe_backup_hash_modes": pdf_backup_hash_modes,
+                "verify_image_safe_backup_files": {label: [str(p.relative_to(verify_root)) for p in paths] for label, paths in remote_image_backups.items()},
+                "verify_image_safe_backup_hashes": image_set_backup_hashes(remote_image_backups, self._hash_if_file),
+                "verify_image_safe_backup_validation_error": remote_image_backup_error,
+                "image_safe_backup_hash_contract_error": image_backup_hash_error,
+                "image_safe_backup_hash_modes": image_backup_hash_modes,
             }
         )
         self._write_metadata(metadata_file, details)
@@ -254,24 +301,32 @@ class TestCase0066SafeBackupTransactionalReplacementValidation(SafeBackupCaseBas
             return self.fail_result(reason="TXT canonical filename does not contain the authoritative remote replacement", artifacts=artifacts, details=details)
         if canonical_xlsx_error:
             return self.fail_result(reason=f"XLSX canonical filename does not contain the authoritative remote revision: {canonical_xlsx_error}", artifacts=artifacts, details=details)
+        if canonical_image_error:
+            return self.fail_result(reason=f"Image canonical set does not contain the authoritative remote revision: {canonical_image_error}", artifacts=artifacts, details=details)
         if canonical_pdf_error:
             return self.fail_result(reason=f"PDF canonical filename does not contain the authoritative remote revision: {canonical_pdf_error}", artifacts=artifacts, details=details)
         if len(text_backups) != 1 or self._text_if_file(text_backups[0]) != local_conflict_text or self._hash_if_file(text_backups[0]) != local_text_hash:
             return self.fail_result(reason="TXT safeBackup does not contain the exact pre-replacement local bytes", artifacts=artifacts, details=details)
         if backup_xlsx_error:
             return self.fail_result(reason=f"XLSX safeBackup is not a valid preserved pre-replacement workbook: {backup_xlsx_error}", artifacts=artifacts, details=details)
+        if backup_image_error:
+            return self.fail_result(reason=f"Image safeBackup is not a valid preserved pre-replacement set: {backup_image_error}", artifacts=artifacts, details=details)
         if backup_pdf_error:
             return self.fail_result(reason=f"PDF safeBackup is not a valid preserved pre-replacement document: {backup_pdf_error}", artifacts=artifacts, details=details)
         if partials:
             return self.fail_result(reason="Completed replacement left unexpected .partial files behind", artifacts=artifacts, details=details)
-        if verify.returncode != 0 or self._text_if_file(verify_text) != remote_replacement_text or verify_xlsx_error or verify_pdf_error:
+        if verify.returncode != 0 or self._text_if_file(verify_text) != remote_replacement_text or verify_xlsx_error or verify_pdf_error or verify_image_error:
             return self.fail_result(reason=f"Fresh verification did not confirm authoritative TXT/XLSX/PDF replacements: XLSX={verify_xlsx_error}; PDF={verify_pdf_error}", artifacts=artifacts, details=details)
         if remote_xlsx_backup_error:
             return self.fail_result(reason=f"Fresh verification did not confirm the preserved revision-1 XLSX safeBackup online: {remote_xlsx_backup_error}", artifacts=artifacts, details=details)
+        if remote_image_backup_error:
+            return self.fail_result(reason=f"Fresh verification did not confirm the preserved revision-1 image safeBackup online: {remote_image_backup_error}", artifacts=artifacts, details=details)
         if remote_pdf_backup_error:
             return self.fail_result(reason=f"Fresh verification did not confirm the preserved revision-1 PDF safeBackup online: {remote_pdf_backup_error}", artifacts=artifacts, details=details)
         if xlsx_backup_hash_error:
             return self.fail_result(reason=f"XLSX safeBackup preservation/hash contract failed: {xlsx_backup_hash_error}", artifacts=artifacts, details=details)
+        if image_backup_hash_error:
+            return self.fail_result(reason=f"Image safeBackup preservation/hash contract failed: {image_backup_hash_error}", artifacts=artifacts, details=details)
         if pdf_backup_hash_error:
             return self.fail_result(reason=f"PDF safeBackup preservation/hash contract failed: {pdf_backup_hash_error}", artifacts=artifacts, details=details)
         return self.pass_result(artifacts=artifacts, details=details)

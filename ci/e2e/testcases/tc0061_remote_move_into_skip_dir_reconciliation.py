@@ -8,6 +8,7 @@ from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
 from framework.pdf import REVISION_0 as PDF_REVISION_0, create_random_pdf_pair, validate_pdf_pair, rename_pdf_pair, large_pdf_relative, pdf_pair_any_exists, pdf_pair_all_files
+from framework.image import REVISION_0 as IMAGE_REVISION_0, create_random_image_set, validate_image_set, rename_image_set, image_set_relatives, image_set_any_exists, image_set_all_files
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists, xlsx_pair_all_files
 
@@ -153,6 +154,8 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         xlsx_destination_relative = xlsx_source_relative.replace(dcim_relative, archive_2025_relative, 1)
         pdf_source_relative = f"{dcim_relative}/move-real-document.pdf"
         pdf_destination_relative = pdf_source_relative.replace(dcim_relative, archive_2025_relative, 1)
+        image_source_relative = f"{dcim_relative}/move-real-image.png"
+        image_destination_relative = image_source_relative.replace(dcim_relative, archive_2025_relative, 1)
         xlsx_source_path = linux_sync_root / xlsx_source_relative
         xlsx_destination_path = linux_sync_root / xlsx_destination_relative
         pdf_source_path = linux_sync_root / pdf_source_relative
@@ -165,8 +168,15 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         verify_xlsx_destination_path = verify_sync_root / xlsx_destination_relative
         verify_pdf_source_path = verify_sync_root / pdf_source_relative
         verify_pdf_destination_path = verify_sync_root / pdf_destination_relative
+        image_source_path = linux_sync_root / image_source_relative
+        image_destination_path = linux_sync_root / image_destination_relative
+        mutator_image_source_path = mutator_sync_root / image_source_relative
+        mutator_image_destination_path = mutator_sync_root / image_destination_relative
+        verify_image_source_path = verify_sync_root / image_source_relative
+        verify_image_destination_path = verify_sync_root / image_destination_relative
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0061:{os.getpid()}"
         pdf_seed = f"{xlsx_seed}:pdf"
+        image_seed = f"{xlsx_seed}:image"
 
         context.prepare_minimal_config_dir(
             linux_conf,
@@ -195,6 +205,12 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             pdf_seed,
             revision=PDF_REVISION_0,
             title="TC0061 remote move into skip_dir PDF",
+        )
+        generated_images = create_random_image_set(
+            image_source_path,
+            image_seed,
+            revision=IMAGE_REVISION_0,
+            title="TC0061 remote move into skip_dir images",
         )
 
         phase_files = {
@@ -236,13 +252,17 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             "pdf_large_source_relative": large_pdf_relative(pdf_source_relative),
             "pdf_destination_relative": pdf_destination_relative,
             "pdf_large_destination_relative": large_pdf_relative(pdf_destination_relative),
+            "image_source_relatives": image_set_relatives(image_source_relative),
+            "image_destination_relatives": image_set_relatives(image_destination_relative),
             "xlsx_seed": xlsx_seed,
             "pdf_seed": pdf_seed,
+            "image_seed": image_seed,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_xlsx_size": int(generated_xlsx["size_bytes"]),
             "generated_large_xlsx_size": int(generated_xlsx["large_size_bytes"]),
             "generated_pdf_size": int(generated_pdf["size_bytes"]),
             "generated_large_pdf_size": int(generated_pdf["large_size_bytes"]),
+            "generated_image_sizes": {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")},
             "linux_sync_root": str(linux_sync_root),
             "mutator_sync_root": str(mutator_sync_root),
             "verify_sync_root": str(verify_sync_root),
@@ -295,12 +315,26 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             if pdf_pair_all_files(pdf_source_path)
             else "Seeded PDF pair is missing after phase 1"
         )
+        details["linux_image_validation_error_after_seed"] = (
+            validate_image_set(image_source_path, IMAGE_REVISION_0)
+            if image_set_all_files(image_source_path)
+            else "Seeded image set is missing after phase 1"
+        )
         if details["linux_xlsx_validation_error_after_seed"]:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Linux seed phase did not leave a valid XLSX pair: {details['linux_xlsx_validation_error_after_seed']}",
+                artifacts,
+                details,
+            )
+        if details["linux_image_validation_error_after_seed"]:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Linux seed phase did not leave a valid image set: {details['linux_image_validation_error_after_seed']}",
                 artifacts,
                 details,
             )
@@ -358,12 +392,26 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             if pdf_pair_all_files(mutator_pdf_source_path)
             else "Mutator did not download the expected PDF pair before move"
         )
+        details["mutator_image_validation_error_after_download"] = (
+            validate_image_set(mutator_image_source_path, IMAGE_REVISION_0)
+            if image_set_all_files(mutator_image_source_path)
+            else "Mutator did not download the expected image set before move"
+        )
         if details["mutator_xlsx_validation_error_after_download"]:
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
                 self.name,
                 f"Mutator XLSX baseline is invalid before move: {details['mutator_xlsx_validation_error_after_download']}",
+                artifacts,
+                details,
+            )
+        if details["mutator_image_validation_error_after_download"]:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Mutator image baseline is invalid before move: {details['mutator_image_validation_error_after_download']}",
                 artifacts,
                 details,
             )
@@ -412,6 +460,9 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
         if xlsx_pair_any_exists(mutator_xlsx_destination_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(self.case_id, self.name, f"Mutator XLSX destination unexpectedly exists before monitor move: {xlsx_destination_relative}", artifacts, details)
+        if image_set_any_exists(mutator_image_destination_path):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name, f"Mutator image destination unexpectedly exists before monitor move: {image_destination_relative}", artifacts, details)
         if pdf_pair_any_exists(mutator_pdf_destination_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(self.case_id, self.name, f"Mutator PDF destination unexpectedly exists before monitor move: {pdf_destination_relative}", artifacts, details)
@@ -538,6 +589,32 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                 )
                 mutator_post_move_log_segment += pdf_move_segment
 
+            image_move_processed = False
+            if all(move_results.get(relative, False) for relative in sorted(moved_source_files)) and xlsx_move_processed and pdf_move_processed:
+                context.log(
+                    f"Test Case {self.case_id}: mutator monitor moving local image set: "
+                    f"{image_source_relative} -> {image_destination_relative}"
+                )
+                current_log_offset = len(self._read_stdout(phase_files["mutator_monitor"][0]))
+                mutator_image_destination_path.parent.mkdir(parents=True, exist_ok=True)
+                rename_image_set(mutator_image_source_path, mutator_image_destination_path)
+                image_sources = image_set_relatives(image_source_relative)
+                image_destinations = image_set_relatives(image_destination_relative)
+                image_required_patterns: list[str] = []
+                for label in image_sources:
+                    image_required_patterns.extend([
+                        f"[M] Local item moved: ./{image_sources[label]} -> ./{image_destinations[label]}",
+                        f"Moving ./{image_sources[label]} to ./{image_destinations[label]}",
+                    ])
+                required_move_patterns.extend(image_required_patterns)
+                image_move_processed, image_move_segment = self._wait_for_stdout_growth_patterns(
+                    phase_files["mutator_monitor"][0],
+                    start_offset=current_log_offset,
+                    required_patterns=image_required_patterns,
+                    timeout_seconds=180,
+                )
+                mutator_post_move_log_segment += image_move_segment
+
             details["mutator_source_files_exist_after_local_move"] = {
                 relative: (mutator_sync_root / relative).exists() for relative in source_files
             }
@@ -558,17 +635,27 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                 if pdf_pair_all_files(mutator_pdf_destination_path)
                 else "Moved PDF pair is missing after local move"
             )
+            details["mutator_image_source_exists_after_local_move"] = image_set_any_exists(mutator_image_source_path)
+            details["mutator_image_destination_exists_after_local_move"] = image_set_all_files(mutator_image_destination_path)
+            details["mutator_image_destination_validation_error"] = (
+                validate_image_set(mutator_image_destination_path, IMAGE_REVISION_0)
+                if image_set_all_files(mutator_image_destination_path)
+                else "Moved image set is missing after local move"
+            )
             details["mutator_required_move_patterns"] = required_move_patterns
             details["mutator_per_file_move_results"] = move_results
             details["mutator_xlsx_move_processed"] = xlsx_move_processed
             details["mutator_pdf_move_processed"] = pdf_move_processed
+            details["mutator_image_move_processed"] = image_move_processed
 
             mutator_move_processed = (
                 all(move_results.get(relative, False) for relative in sorted(moved_source_files))
                 and xlsx_move_processed
                 and pdf_move_processed
+                and image_move_processed
                 and not details["mutator_xlsx_destination_validation_error"]
                 and not details["mutator_pdf_destination_validation_error"]
+                and not details["mutator_image_destination_validation_error"]
             )
             details["mutator_move_processed"] = mutator_move_processed
             details["mutator_post_move_bad_markers"] = self._contains_bad_monitor_move_side_effects(mutator_post_move_log_segment)
@@ -667,7 +754,7 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                 ),
                 "archive_download_logged_in_reconcile": any(
                     self._monitor_output_contains(reconcile_combined, f"Downloading file: {moved_relative}")
-                    for moved_relative in [*moved_files, xlsx_destination_relative, large_xlsx_relative(xlsx_destination_relative), pdf_destination_relative, large_pdf_relative(pdf_destination_relative)]
+                    for moved_relative in [*moved_files, xlsx_destination_relative, large_xlsx_relative(xlsx_destination_relative), pdf_destination_relative, large_pdf_relative(pdf_destination_relative), *image_set_relatives(image_destination_relative).values()]
                 ),
                 "linux_xlsx_source_exists_after_reconcile": xlsx_pair_any_exists(xlsx_source_path),
                 "linux_xlsx_destination_exists_after_reconcile": xlsx_pair_any_exists(xlsx_destination_path),
@@ -684,6 +771,14 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
                     validate_pdf_pair(verify_pdf_destination_path, PDF_REVISION_0)
                     if pdf_pair_all_files(verify_pdf_destination_path)
                     else "Remote truth is missing the moved PDF pair"
+                ),
+                "linux_image_source_exists_after_reconcile": image_set_any_exists(image_source_path),
+                "linux_image_destination_exists_after_reconcile": image_set_any_exists(image_destination_path),
+                "verify_image_source_exists": image_set_any_exists(verify_image_source_path),
+                "verify_image_destination_validation_error": (
+                    validate_image_set(verify_image_destination_path, IMAGE_REVISION_0)
+                    if image_set_all_files(verify_image_destination_path)
+                    else "Remote truth is missing the moved image set"
                 ),
             }
         )
@@ -722,6 +817,17 @@ class TestCase0061RemoteMoveIntoSkipDirReconciliation(MonitorModeTestCaseBase):
             failures.append(
                 "Remote truth is missing or contains an invalid moved XLSX pair: "
                 f"{details['verify_xlsx_destination_validation_error']}"
+            )
+        if details["linux_image_source_exists_after_reconcile"]:
+            failures.append(f"Linux skip client still contains stale moved image source after remote move into skip_dir: {image_source_relative}")
+        if details["verify_image_source_exists"]:
+            failures.append(f"Remote truth still contains old moved image source after move: {image_source_relative}")
+        if details["linux_image_destination_exists_after_reconcile"]:
+            failures.append(f"Linux skip client downloaded skipped image destination unexpectedly: {image_destination_relative}")
+        if details["verify_image_destination_validation_error"]:
+            failures.append(
+                "Remote truth is missing or contains an invalid moved image set: "
+                f"{details['verify_image_destination_validation_error']}"
             )
         if details["linux_pdf_source_exists_after_reconcile"]:
             failures.append(f"Linux skip client still contains stale moved PDF source after remote move into skip_dir: {pdf_source_relative}")

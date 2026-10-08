@@ -5,6 +5,7 @@ import os
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.pdf import REVISION_0 as PDF_REVISION_0, REVISION_1 as PDF_REVISION_1, create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, rename_pdf_pair, unlink_pdf_pair, large_pdf_relative, pdf_pair_any_exists
+from framework.image import create_random_image_set, mutate_image_set_revision, validate_image_set, rename_image_set, unlink_image_set, image_set_relatives, image_set_any_exists, image_set_all_files
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, rename_xlsx_pair, unlink_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists
@@ -50,6 +51,11 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
         rename_old_pdf_relative = f"{root_name}/rename-me.pdf"
         rename_new_pdf_relative = f"{root_name}/renamed-result.pdf"
         create_pdf_relative = f"{root_name}/new-created.pdf"
+        modify_image_relative = f"{root_name}/modify-me.png"
+        delete_image_relative = f"{root_name}/delete-me.png"
+        rename_old_image_relative = f"{root_name}/rename-me.png"
+        rename_new_image_relative = f"{root_name}/renamed-result.png"
+        create_image_relative = f"{root_name}/new-created.png"
 
         anchor_local = sync_root / anchor_relative
         modify_local = sync_root / modify_relative
@@ -67,6 +73,11 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
         rename_old_pdf_local = sync_root / rename_old_pdf_relative
         rename_new_pdf_local = sync_root / rename_new_pdf_relative
         create_pdf_local = sync_root / create_pdf_relative
+        modify_image_local = sync_root / modify_image_relative
+        delete_image_local = sync_root / delete_image_relative
+        rename_old_image_local = sync_root / rename_old_image_relative
+        rename_new_image_local = sync_root / rename_new_image_relative
+        create_image_local = sync_root / create_image_relative
 
         modify_verify = verify_root / modify_relative
         delete_verify = verify_root / delete_relative
@@ -83,6 +94,11 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
         rename_old_pdf_verify = verify_root / rename_old_pdf_relative
         rename_new_pdf_verify = verify_root / rename_new_pdf_relative
         create_pdf_verify = verify_root / create_pdf_relative
+        modify_image_verify = verify_root / modify_image_relative
+        delete_image_verify = verify_root / delete_image_relative
+        rename_old_image_verify = verify_root / rename_old_image_relative
+        rename_new_image_verify = verify_root / rename_new_image_relative
+        create_image_verify = verify_root / create_image_relative
 
         initial_modify = "TC0049 initial modify content\n"
         final_modify = "TC0049 final modify content\n"
@@ -90,6 +106,7 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
         create_content = "TC0049 create content\n"
         xlsx_seed_base = f"{context.run_id}:{context.e2e_target}:TC0049:{os.getpid()}"
         pdf_seed_base = f"{xlsx_seed_base}:pdf"
+        image_seed_base = f"{xlsx_seed_base}:image"
 
         context.prepare_minimal_config_dir(conf_main, self._build_config_text(sync_root, app_log_dir))
         context.prepare_minimal_config_dir(conf_verify, ("# tc0049 verify\n" f'sync_dir = "{verify_root}"\n' 'bypass_data_preservation = "true"\n'))
@@ -137,6 +154,9 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
             revision=PDF_REVISION_0,
             title="TC0049 mixed burst rename PDF",
         )
+        generated_modify_images = create_random_image_set(modify_image_local, f"{image_seed_base}:modify", revision=REVISION_0, title="TC0049 mixed burst modify images")
+        generated_delete_images = create_random_image_set(delete_image_local, f"{image_seed_base}:delete", revision=REVISION_0, title="TC0049 mixed burst delete images")
+        generated_rename_images = create_random_image_set(rename_old_image_local, f"{image_seed_base}:rename", revision=REVISION_0, title="TC0049 mixed burst rename images")
 
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"
@@ -165,8 +185,14 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
             "rename_old_pdf_relative": rename_old_pdf_relative,
             "rename_new_pdf_relative": rename_new_pdf_relative,
             "create_pdf_relative": create_pdf_relative,
+            "modify_image_relative": modify_image_relative,
+            "delete_image_relative": delete_image_relative,
+            "rename_old_image_relative": rename_old_image_relative,
+            "rename_new_image_relative": rename_new_image_relative,
+            "create_image_relative": create_image_relative,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "pdf_seed_base": pdf_seed_base,
+            "image_seed_base": image_seed_base,
             "generated_modify_xlsx_size": int(generated_modify_xlsx["size_bytes"]),
             "generated_delete_xlsx_size": int(generated_delete_xlsx["size_bytes"]),
             "generated_rename_xlsx_size": int(generated_rename_xlsx["size_bytes"]),
@@ -176,6 +202,9 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
             "generated_delete_pdf_large_size": int(generated_delete_pdf["large_size_bytes"]),
             "generated_rename_pdf_small_size": int(generated_rename_pdf["small_size_bytes"]),
             "generated_rename_pdf_large_size": int(generated_rename_pdf["large_size_bytes"]),
+            "generated_modify_image_sizes": {k: int(v) for k, v in generated_modify_images.items() if k.endswith("_size_bytes")},
+            "generated_delete_image_sizes": {k: int(v) for k, v in generated_delete_images.items() if k.endswith("_size_bytes")},
+            "generated_rename_image_sizes": {k: int(v) for k, v in generated_rename_images.items() if k.endswith("_size_bytes")},
         }
 
         seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(conf_main)]
@@ -220,6 +249,16 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
                 artifacts,
                 details,
             )
+        seed_image_errors = {
+            "modify": validate_image_set(modify_image_local, REVISION_0),
+            "delete": validate_image_set(delete_image_local, REVISION_0),
+            "rename": validate_image_set(rename_old_image_local, REVISION_0),
+        }
+        details["seed_image_validation_errors"] = seed_image_errors
+        invalid_seed_images = {key: value for key, value in seed_image_errors.items() if value}
+        if invalid_seed_images:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name, f"Seed phase did not leave valid image burst subjects: {invalid_seed_images}", artifacts, details)
 
         monitor_command = [context.onedrive_bin, "--display-running-config", "--monitor", "--verbose", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(conf_main)]
         context.log(f"Executing Test Case {self.case_id} monitor: {command_to_string(monitor_command)}")
@@ -238,13 +277,17 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
             details["modified_xlsx_validation_error"] = validate_xlsx_pair(modify_xlsx_local, REVISION_1)
             mutate_pdf_pair_revision(modify_pdf_local, PDF_REVISION_0, PDF_REVISION_1)
             details["modified_pdf_validation_error"] = validate_pdf_pair(modify_pdf_local, PDF_REVISION_1)
+            mutate_image_set_revision(modify_image_local, REVISION_0, REVISION_1)
+            details["modified_image_validation_error"] = validate_image_set(modify_image_local, REVISION_1)
             if delete_local.exists():
                 delete_local.unlink()
             unlink_xlsx_pair(delete_xlsx_local)
             unlink_pdf_pair(delete_pdf_local)
+            unlink_image_set(delete_image_local)
             rename_old_local.rename(rename_new_local)
             rename_xlsx_pair(rename_old_xlsx_local, rename_new_xlsx_local)
             rename_pdf_pair(rename_old_pdf_local, rename_new_pdf_local)
+            rename_image_set(rename_old_image_local, rename_new_image_local)
             generated_create_xlsx = create_random_xlsx_pair(
                 create_xlsx_local,
                 f"{xlsx_seed_base}:create",
@@ -263,7 +306,15 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
             details["generated_create_pdf_small_size"] = int(generated_create_pdf["small_size_bytes"])
             details["generated_create_pdf_large_size"] = int(generated_create_pdf["large_size_bytes"])
             details["created_pdf_validation_error"] = validate_pdf_pair(create_pdf_local, PDF_REVISION_0)
+            generated_create_images = create_random_image_set(create_image_local, f"{image_seed_base}:create", revision=REVISION_0, title="TC0049 mixed burst create images")
+            details["generated_create_image_sizes"] = {k: int(v) for k, v in generated_create_images.items() if k.endswith("_size_bytes")}
+            details["created_image_validation_error"] = validate_image_set(create_image_local, REVISION_0)
 
+            modify_image_relatives = image_set_relatives(modify_image_relative)
+            delete_image_relatives = image_set_relatives(delete_image_relative)
+            create_image_relatives = image_set_relatives(create_image_relative)
+            rename_old_image_relatives = image_set_relatives(rename_old_image_relative)
+            rename_new_image_relatives = image_set_relatives(rename_new_image_relative)
             fixed_patterns = [
                 f"Uploading new file: {create_relative} ... done",
                 f"Uploading modified file: {modify_relative} ... done",
@@ -280,6 +331,9 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
                 f"Uploading modified file: {large_pdf_relative(modify_pdf_relative)} ... done",
                 f"Deleting item from Microsoft OneDrive: {delete_pdf_relative}",
                 f"Deleting item from Microsoft OneDrive: {large_pdf_relative(delete_pdf_relative)}",
+                *[f"Uploading new file: {relative} ... done" for relative in create_image_relatives.values()],
+                *[f"Uploading modified file: {relative} ... done" for relative in modify_image_relatives.values()],
+                *[f"Deleting item from Microsoft OneDrive: {relative}" for relative in delete_image_relatives.values()],
             ]
             text_rename_move = [f"[M] Local item moved: {rename_old_relative} -> {rename_new_relative}", f"Moving {rename_old_relative} to {rename_new_relative}"]
             text_rename_recreate = [f"Deleting item from Microsoft OneDrive: {rename_old_relative}", f"Uploading new file: {rename_new_relative} ... done"]
@@ -296,8 +350,16 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
                     f"Deleting item from Microsoft OneDrive: {old_xlsx_relative}",
                     f"Uploading new file: {new_xlsx_relative} ... done",
                 ])
+            image_rename_group_options = []
+            for label in rename_old_image_relatives:
+                old_image_variant = rename_old_image_relatives[label]
+                new_image_variant = rename_new_image_relatives[label]
+                image_rename_group_options.append((
+                    [f"[M] Local item moved: {old_image_variant} -> {new_image_variant}", f"Moving {old_image_variant} to {new_image_variant}"],
+                    [f"Deleting item from Microsoft OneDrive: {old_image_variant}", f"Uploading new file: {new_image_variant} ... done"],
+                ))
             rename_groups = [
-                text_group + first_xlsx_group + second_xlsx_group + first_pdf_group + second_pdf_group
+                text_group + first_xlsx_group + second_xlsx_group + first_pdf_group + second_pdf_group + image_png_small_group + image_png_large_group + image_jpeg_small_group + image_jpeg_large_group
                 for text_group in (text_rename_move, text_rename_recreate)
                 for first_xlsx_group in xlsx_rename_groups[0:2]
                 for second_xlsx_group in xlsx_rename_groups[2:4]
@@ -309,6 +371,10 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
                     [f"[M] Local item moved: {large_pdf_relative(rename_old_pdf_relative)} -> {large_pdf_relative(rename_new_pdf_relative)}", f"Moving {large_pdf_relative(rename_old_pdf_relative)} to {large_pdf_relative(rename_new_pdf_relative)}"],
                     [f"Deleting item from Microsoft OneDrive: {large_pdf_relative(rename_old_pdf_relative)}", f"Uploading new file: {large_pdf_relative(rename_new_pdf_relative)} ... done"],
                 )
+                for image_png_small_group in image_rename_group_options[0]
+                for image_png_large_group in image_rename_group_options[1]
+                for image_jpeg_small_group in image_rename_group_options[2]
+                for image_jpeg_large_group in image_rename_group_options[3]
             ]
             fixed_ok, rename_ok, matched_group, post_mutation_log_segment = self._wait_for_required_patterns_and_any_group(
                 monitor_stdout,
@@ -353,6 +419,11 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
         details["verify_rename_old_pdf_exists"] = pdf_pair_any_exists(rename_old_pdf_verify)
         details["verify_rename_new_pdf_validation_error"] = (validate_pdf_pair(rename_new_pdf_verify, PDF_REVISION_0) if rename_new_pdf_verify.is_file() else "missing")
         details["verify_create_pdf_validation_error"] = (validate_pdf_pair(create_pdf_verify, PDF_REVISION_0) if create_pdf_verify.is_file() else "missing")
+        details["verify_modify_image_validation_error"] = validate_image_set(modify_image_verify, REVISION_1) if image_set_all_files(modify_image_verify) else "missing"
+        details["verify_delete_image_exists"] = image_set_any_exists(delete_image_verify)
+        details["verify_rename_old_image_exists"] = image_set_any_exists(rename_old_image_verify)
+        details["verify_rename_new_image_validation_error"] = validate_image_set(rename_new_image_verify, REVISION_0) if image_set_all_files(rename_new_image_verify) else "missing"
+        details["verify_create_image_validation_error"] = validate_image_set(create_image_verify, REVISION_0) if image_set_all_files(create_image_verify) else "missing"
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
@@ -381,4 +452,12 @@ class TestCase0049MonitorModeMixedBurstOperations(MonitorModeTestCaseBase):
             return self.fail_result(self.case_id, self.name, "Remote verification did not preserve renamed PDF state correctly", artifacts, details)
         if details["verify_create_pdf_validation_error"]:
             return self.fail_result(self.case_id, self.name, f"Remote verification did not preserve created PDF state: {create_pdf_relative}", artifacts, details)
+        if details["verify_modify_image_validation_error"]:
+            return self.fail_result(self.case_id, self.name, f"Remote verification did not preserve modified image revision: {modify_image_relative}", artifacts, details)
+        if image_set_any_exists(delete_image_verify):
+            return self.fail_result(self.case_id, self.name, f"Remote verification still contains deleted image set: {delete_image_relative}", artifacts, details)
+        if image_set_any_exists(rename_old_image_verify) or details["verify_rename_new_image_validation_error"]:
+            return self.fail_result(self.case_id, self.name, "Remote verification did not preserve renamed image state correctly", artifacts, details)
+        if details["verify_create_image_validation_error"]:
+            return self.fail_result(self.case_id, self.name, f"Remote verification did not preserve created image state: {create_image_relative}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

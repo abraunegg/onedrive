@@ -28,6 +28,23 @@ from framework.pdf import (
     mutate_pdf_revision,
     validate_pdf,
 )
+from framework.image import (
+    LARGE_JPEG_HEIGHT,
+    LARGE_JPEG_WIDTH,
+    LARGE_PNG_HEIGHT,
+    LARGE_PNG_WIDTH,
+    REVISION_0 as IMAGE_REVISION_0,
+    REVISION_1 as IMAGE_REVISION_1,
+    REVISION_2 as IMAGE_REVISION_2,
+    SMALL_IMAGE_HEIGHT,
+    SMALL_IMAGE_WIDTH,
+    create_random_jpeg,
+    create_random_png,
+    mutate_jpeg_revision,
+    mutate_png_revision,
+    validate_jpeg,
+    validate_png,
+)
 from framework.xlsx import (
     REVISION_0,
     REVISION_1,
@@ -47,7 +64,7 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
     case_id = "bsftc0006"
     name = "SharePoint-backed Business Shared Folder timestamp-preserving replacement"
     description = (
-        "Validate timestamp-preserving XLSX and PDF replacement plus genuine remote-conflict handling "
+        "Validate timestamp-preserving XLSX, PDF, PNG and JPEG replacement plus genuine remote-conflict handling "
         "inside the preserved SharePoint-backed Business Shared Folder topology without modifying "
         "any pre-existing fixture object"
     )
@@ -70,6 +87,14 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
     SMALL_PDF_FILENAME = "timestamp-preserving-small.pdf"
     LARGE_PDF_FILENAME = "timestamp-preserving-session.pdf"
     CONFLICT_PDF_FILENAME = "genuine-remote-conflict.pdf"
+
+    SMALL_PNG_FILENAME = "timestamp-preserving-small.png"
+    LARGE_PNG_FILENAME = "timestamp-preserving-session.png"
+    CONFLICT_PNG_FILENAME = "genuine-remote-conflict.png"
+
+    SMALL_JPEG_FILENAME = "timestamp-preserving-small.jpg"
+    LARGE_JPEG_FILENAME = "timestamp-preserving-session.jpg"
+    CONFLICT_JPEG_FILENAME = "genuine-remote-conflict.jpg"
 
     GUARD_MARKER = (
         "Online eTag matches database eTag; treating as local modification despite older local timestamp"
@@ -1004,6 +1029,385 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                 f"{scenario_id}: independently downloaded safeBackup PDF differs from preserved local bytes"
             )
 
+    @staticmethod
+    def _validate_image(path: Path, expected_revision: str) -> str:
+        suffix = path.suffix.lower()
+        if suffix == ".png":
+            return validate_png(path, expected_revision)
+        if suffix in {".jpg", ".jpeg"}:
+            return validate_jpeg(path, expected_revision)
+        return f"Unsupported image suffix for BSFTC0006 realism fixture: {path.suffix}"
+
+    @staticmethod
+    def _mutate_image(path: Path, old_revision: str, new_revision: str) -> None:
+        suffix = path.suffix.lower()
+        if suffix == ".png":
+            mutate_png_revision(path, old_revision, new_revision)
+            return
+        if suffix in {".jpg", ".jpeg"}:
+            mutate_jpeg_revision(path, old_revision, new_revision)
+            return
+        raise CaseFailure(f"Unsupported image suffix for BSFTC0006 realism fixture: {path.suffix}")
+
+    def _create_image_replacement(
+        self,
+        canonical_path: Path,
+        work_dir: Path,
+        *,
+        old_revision: str,
+        new_revision: str,
+        replacement_epoch: int,
+    ) -> tuple[Path, str, str]:
+        replacement_source = work_dir / f"{canonical_path.stem}.{new_revision}.source{canonical_path.suffix}"
+        shutil.copy2(canonical_path, replacement_source)
+        self._mutate_image(replacement_source, old_revision, new_revision)
+        os.utime(replacement_source, (replacement_epoch, replacement_epoch))
+        shutil.copy2(replacement_source, canonical_path)
+        replacement_hash = compute_quickxor_hash_file(canonical_path)
+        replacement_sha256 = self._sha256_file(canonical_path)
+        return replacement_source, replacement_hash, replacement_sha256
+
+    def _exercise_image_timestamp_preserving_replacement(
+        self,
+        context: E2EContext,
+        config_dir: Path,
+        sync_root: Path,
+        work_dir: Path,
+        log_dir: Path,
+        relative_file: Path,
+        artifacts: list[str],
+        details: dict[str, object],
+        scenario_id: str,
+    ) -> None:
+        canonical = sync_root / relative_file
+        image_label = "PNG" if canonical.suffix.lower() == ".png" else "JPEG"
+        if not canonical.is_file():
+            raise CaseFailure(f"{scenario_id}: seeded {image_label} is missing: {canonical}")
+
+        validation_error = self._validate_image(canonical, IMAGE_REVISION_0)
+        if validation_error:
+            raise CaseFailure(
+                f"{scenario_id}: seeded {image_label} failed validation: {validation_error}"
+            )
+
+        baseline_hash = compute_quickxor_hash_file(canonical)
+        baseline_sha256 = self._sha256_file(canonical)
+        baseline_mtime = int(canonical.stat().st_mtime)
+        baseline_size = canonical.stat().st_size
+        replacement_epoch = max(1, baseline_mtime - 3600)
+
+        replacement_source, replacement_hash, replacement_sha256 = self._create_image_replacement(
+            canonical,
+            work_dir,
+            old_revision=IMAGE_REVISION_0,
+            new_revision=IMAGE_REVISION_1,
+            replacement_epoch=replacement_epoch,
+        )
+        artifacts.append(str(replacement_source))
+
+        scenario_details = {
+            "format": image_label,
+            "baseline_hash": baseline_hash,
+            "baseline_sha256": baseline_sha256,
+            "baseline_mtime": baseline_mtime,
+            "baseline_size": baseline_size,
+            "replacement_hash": replacement_hash,
+            "replacement_sha256": replacement_sha256,
+            "replacement_mtime": int(canonical.stat().st_mtime),
+            "replacement_source": str(replacement_source),
+            "db_row_before_upload": self._capture_unique_item_row(config_dir, canonical.name),
+        }
+        details[scenario_id] = scenario_details
+
+        if replacement_sha256 == baseline_sha256:
+            raise CaseFailure(f"{scenario_id}: {image_label} replacement did not change content")
+        if int(canonical.stat().st_mtime) >= baseline_mtime:
+            raise CaseFailure(f"{scenario_id}: failed to establish an older replacement mtime")
+
+        result = self._run_logged(
+            context,
+            f"{scenario_id}_replacement",
+            self._sync_command(context, config_dir, debug=True),
+            log_dir,
+            artifacts,
+        )
+        scenario_details["replacement_returncode"] = result.returncode
+        output = result.stdout + "\n" + result.stderr
+        relative_text = relative_file.as_posix()
+        modified_marker = f"Uploading modified file: {relative_text} ... done"
+        safe_backups = self._safe_backup_files_for(canonical)
+
+        scenario_details["guard_marker_seen"] = self.GUARD_MARKER in output
+        scenario_details["conflict_marker_seen"] = self.CONFLICT_MARKER in output
+        scenario_details["modified_upload_seen"] = modified_marker in output
+        scenario_details["safe_backup_files"] = [
+            str(path.relative_to(sync_root)) for path in safe_backups
+        ]
+        scenario_details["db_row_after_upload"] = self._capture_unique_item_row(
+            config_dir, canonical.name
+        )
+
+        if result.returncode != 0:
+            raise CaseFailure(f"{scenario_id}: replacement sync failed with status {result.returncode}")
+        if modified_marker not in output:
+            raise CaseFailure(f"{scenario_id}: successful modified-file upload was not observed")
+        if self.CONFLICT_MARKER in output:
+            raise CaseFailure(f"{scenario_id}: incorrectly entered the newer-online conflict path")
+        if safe_backups:
+            raise CaseFailure(f"{scenario_id}: incorrectly created a safeBackup")
+        if self.GUARD_MARKER not in output:
+            raise CaseFailure(
+                f"{scenario_id}: unchanged-eTag older-mtime guard was not exercised"
+            )
+
+        post_validation_error = self._validate_image(canonical, IMAGE_REVISION_1)
+        if post_validation_error:
+            raise CaseFailure(
+                f"{scenario_id}: canonical {image_label} did not retain revision 1 after "
+                f"upload/reconciliation: {post_validation_error}"
+            )
+        if self._sha256_file(canonical) != replacement_sha256:
+            raise CaseFailure(
+                f"{scenario_id}: canonical {image_label} bytes changed unexpectedly after "
+                "upload/reconciliation"
+            )
+
+        noop_result = self._run_logged(
+            context,
+            f"{scenario_id}_noop",
+            self._sync_command(context, config_dir, debug=True),
+            log_dir,
+            artifacts,
+        )
+        scenario_details["noop_returncode"] = noop_result.returncode
+        noop_output = noop_result.stdout + "\n" + noop_result.stderr
+        scenario_details["noop_reupload_seen"] = modified_marker in noop_output
+
+        if noop_result.returncode != 0:
+            raise CaseFailure(
+                f"{scenario_id}: no-op stability sync failed with status {noop_result.returncode}"
+            )
+        if modified_marker in noop_output:
+            raise CaseFailure(
+                f"{scenario_id}: no-op sync attempted to upload the {image_label} again"
+            )
+
+    def _exercise_image_genuine_remote_conflict(
+        self,
+        context: E2EContext,
+        layout,
+        config_dir: Path,
+        sync_root: Path,
+        relative_file: Path,
+        artifacts: list[str],
+        details: dict[str, object],
+        scenario_id: str,
+    ) -> None:
+        canonical = sync_root / relative_file
+        image_label = "PNG" if canonical.suffix.lower() == ".png" else "JPEG"
+        slug = scenario_id.lower().replace("_", "-")
+        if not canonical.is_file():
+            raise CaseFailure(f"{scenario_id}: seeded conflict {image_label} is missing")
+
+        baseline_validation_error = self._validate_image(canonical, IMAGE_REVISION_0)
+        if baseline_validation_error:
+            raise CaseFailure(
+                f"{scenario_id}: seeded conflict {image_label} failed validation: "
+                f"{baseline_validation_error}"
+            )
+
+        baseline_mtime = int(canonical.stat().st_mtime)
+        baseline_hash = compute_quickxor_hash_file(canonical)
+        baseline_sha256 = self._sha256_file(canonical)
+
+        mutator_root = layout.work_dir / f"{slug}-mutator-syncroot"
+        mutator_conf = layout.work_dir / f"{slug}-mutator-conf"
+        mutator_log_dir = layout.log_dir / f"{scenario_id}-mutator"
+        reset_directory(mutator_log_dir)
+        self._clone_client_state(sync_root, config_dir, mutator_root, mutator_conf)
+
+        mutator_file = mutator_root / relative_file
+        self._mutate_image(mutator_file, IMAGE_REVISION_0, IMAGE_REVISION_1)
+        mutator_sha256 = self._sha256_file(mutator_file)
+        newer_epoch = max(int(time.time()), baseline_mtime) + 120
+        os.utime(mutator_file, (newer_epoch, newer_epoch))
+
+        mutator_result = self._run_logged(
+            context,
+            f"{scenario_id}_mutator_upload",
+            self._sync_command(
+                context,
+                mutator_conf,
+                upload_only=True,
+                debug=True,
+            ),
+            mutator_log_dir,
+            artifacts,
+        )
+        if mutator_result.returncode != 0:
+            raise CaseFailure(
+                f"{scenario_id}: independent mutator upload failed with status "
+                f"{mutator_result.returncode}"
+            )
+
+        verify_root, verify_conf, verify_result = self._fresh_verify(
+            context,
+            layout,
+            f"{slug}-remote-change-verify",
+            artifacts,
+        )
+        if verify_result.returncode != 0:
+            raise CaseFailure(
+                f"{scenario_id}: independent remote-change verification failed with status "
+                f"{verify_result.returncode}"
+            )
+
+        verified_remote_file = verify_root / relative_file
+        remote_validation_error = self._validate_image(verified_remote_file, IMAGE_REVISION_1)
+        if remote_validation_error:
+            raise CaseFailure(
+                f"{scenario_id}: remote mutation was not independently observed: "
+                f"{remote_validation_error}"
+            )
+        if self._sha256_file(verified_remote_file) != mutator_sha256:
+            raise CaseFailure(
+                f"{scenario_id}: independently downloaded remote {image_label} differs from "
+                "mutator bytes"
+            )
+
+        stale_db_row = self._capture_unique_item_row(config_dir, canonical.name)
+        mutator_db_row = self._capture_unique_item_row(mutator_conf, canonical.name)
+        verifier_db_row = self._capture_unique_item_row(verify_conf, canonical.name)
+
+        replacement_source = layout.work_dir / f"{slug}-local-replacement-source{canonical.suffix}"
+        shutil.copy2(canonical, replacement_source)
+        self._mutate_image(replacement_source, IMAGE_REVISION_0, IMAGE_REVISION_2)
+        older_epoch = max(1, baseline_mtime - 3600)
+        os.utime(replacement_source, (older_epoch, older_epoch))
+        shutil.copy2(replacement_source, canonical)
+        artifacts.append(str(replacement_source))
+
+        replacement_hash = compute_quickxor_hash_file(canonical)
+        replacement_sha256 = self._sha256_file(canonical)
+        if replacement_sha256 == baseline_sha256:
+            raise CaseFailure(f"{scenario_id}: stale local replacement did not change content")
+        if int(canonical.stat().st_mtime) >= baseline_mtime:
+            raise CaseFailure(f"{scenario_id}: failed to establish an older stale local replacement")
+
+        conflict_log_dir = layout.log_dir / f"{scenario_id}-conflict"
+        reset_directory(conflict_log_dir)
+        conflict_result = self._run_logged(
+            context,
+            f"{scenario_id}_local_first_conflict",
+            self._sync_command(
+                context,
+                config_dir,
+                local_first=True,
+                debug=True,
+            ),
+            conflict_log_dir,
+            artifacts,
+        )
+        conflict_output = conflict_result.stdout + "\n" + conflict_result.stderr
+        safe_backups = self._safe_backup_files_for(canonical)
+
+        scenario_details = {
+            "format": image_label,
+            "baseline_hash": baseline_hash,
+            "baseline_sha256": baseline_sha256,
+            "baseline_mtime": baseline_mtime,
+            "replacement_hash": replacement_hash,
+            "replacement_sha256": replacement_sha256,
+            "mutator_sha256": mutator_sha256,
+            "stale_db_row_before_conflict": stale_db_row,
+            "mutator_db_row_after_remote_change": mutator_db_row,
+            "verifier_db_row_after_remote_change": verifier_db_row,
+            "conflict_returncode": conflict_result.returncode,
+            "guard_marker_seen": self.GUARD_MARKER in conflict_output,
+            "conflict_marker_seen": self.CONFLICT_MARKER in conflict_output,
+            "safe_backup_files": [str(path.relative_to(sync_root)) for path in safe_backups],
+        }
+        details[scenario_id] = scenario_details
+
+        if conflict_result.returncode != 0:
+            raise CaseFailure(
+                f"{scenario_id}: local-first conflict sync failed with status "
+                f"{conflict_result.returncode}"
+            )
+        if self.GUARD_MARKER in conflict_output:
+            raise CaseFailure(
+                f"{scenario_id}: unchanged-eTag guard fired despite a genuine independent online change"
+            )
+        if self.CONFLICT_MARKER not in conflict_output:
+            raise CaseFailure(
+                f"{scenario_id}: guarded modified-upload branch did not enter the expected "
+                "newer-online conflict path"
+            )
+        if len(safe_backups) != 1:
+            raise CaseFailure(
+                f"{scenario_id}: expected exactly one local safeBackup; found {len(safe_backups)}"
+            )
+
+        canonical_validation_error = self._validate_image(canonical, IMAGE_REVISION_1)
+        if canonical_validation_error:
+            raise CaseFailure(
+                f"{scenario_id}: canonical file did not retain the genuine remote revision: "
+                f"{canonical_validation_error}"
+            )
+        if self._sha256_file(canonical) != mutator_sha256:
+            raise CaseFailure(
+                f"{scenario_id}: canonical {image_label} did not retain the exact genuine remote content"
+            )
+
+        backup_validation_error = self._validate_image(safe_backups[0], IMAGE_REVISION_2)
+        if backup_validation_error:
+            raise CaseFailure(
+                f"{scenario_id}: safeBackup did not preserve the stale local replacement: "
+                f"{backup_validation_error}"
+            )
+        if self._sha256_file(safe_backups[0]) != replacement_sha256:
+            raise CaseFailure(
+                f"{scenario_id}: safeBackup {image_label} did not preserve the exact stale local bytes"
+            )
+
+        final_verify_root, _, final_verify_result = self._fresh_verify(
+            context,
+            layout,
+            f"{slug}-final-verify",
+            artifacts,
+        )
+        if final_verify_result.returncode != 0:
+            raise CaseFailure(
+                f"{scenario_id}: final independent verification failed with status "
+                f"{final_verify_result.returncode}"
+            )
+
+        remote_canonical = final_verify_root / relative_file
+        remote_canonical_error = self._validate_image(remote_canonical, IMAGE_REVISION_1)
+        if remote_canonical_error:
+            raise CaseFailure(
+                f"{scenario_id}: remote canonical revision was not preserved: "
+                f"{remote_canonical_error}"
+            )
+        if self._sha256_file(remote_canonical) != mutator_sha256:
+            raise CaseFailure(
+                f"{scenario_id}: independently downloaded canonical {image_label} differs from "
+                "remote mutation bytes"
+            )
+
+        remote_backup = final_verify_root / safe_backups[0].relative_to(sync_root)
+        remote_backup_error = self._validate_image(remote_backup, IMAGE_REVISION_2)
+        if remote_backup_error:
+            raise CaseFailure(
+                f"{scenario_id}: preserved safeBackup was not independently observable online: "
+                f"{remote_backup_error}"
+            )
+        if self._sha256_file(remote_backup) != replacement_sha256:
+            raise CaseFailure(
+                f"{scenario_id}: independently downloaded safeBackup {image_label} differs from "
+                "preserved local bytes"
+            )
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -1091,6 +1495,24 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
             conflict_pdf_relative = (
                 self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.CONFLICT_PDF_FILENAME
             )
+            small_png_relative = (
+                self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.SMALL_PNG_FILENAME
+            )
+            large_png_relative = (
+                self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.LARGE_PNG_FILENAME
+            )
+            conflict_png_relative = (
+                self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.CONFLICT_PNG_FILENAME
+            )
+            small_jpeg_relative = (
+                self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.SMALL_JPEG_FILENAME
+            )
+            large_jpeg_relative = (
+                self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.LARGE_JPEG_FILENAME
+            )
+            conflict_jpeg_relative = (
+                self.FIXTURE_PARENT_RELATIVE / self.RESERVED_TEST_DIR / self.CONFLICT_JPEG_FILENAME
+            )
 
             small_path = sync_root / small_relative
             large_path = sync_root / large_relative
@@ -1098,6 +1520,12 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
             small_pdf_path = sync_root / small_pdf_relative
             large_pdf_path = sync_root / large_pdf_relative
             conflict_pdf_path = sync_root / conflict_pdf_relative
+            small_png_path = sync_root / small_png_relative
+            large_png_path = sync_root / large_png_relative
+            conflict_png_path = sync_root / conflict_png_relative
+            small_jpeg_path = sync_root / small_jpeg_relative
+            large_jpeg_path = sync_root / large_jpeg_relative
+            conflict_jpeg_path = sync_root / conflict_jpeg_relative
 
             small_generated = create_random_xlsx(
                 small_path,
@@ -1134,6 +1562,54 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                 f"{context.run_id}:{self.case_id}:pdf-conflict",
                 title="BSFTC0006 PDF genuine remote conflict",
             )
+            small_png_generated = create_random_png(
+                small_png_path,
+                f"{context.run_id}:{self.case_id}:png-small",
+                revision=IMAGE_REVISION_0,
+                width=SMALL_IMAGE_WIDTH,
+                height=SMALL_IMAGE_HEIGHT,
+                title="BSFTC0006 PNG small timestamp-preserving replacement",
+            )
+            large_png_generated = create_random_png(
+                large_png_path,
+                f"{context.run_id}:{self.case_id}:png-large",
+                revision=IMAGE_REVISION_0,
+                width=LARGE_PNG_WIDTH,
+                height=LARGE_PNG_HEIGHT,
+                title="BSFTC0006 PNG session timestamp-preserving replacement",
+            )
+            conflict_png_generated = create_random_png(
+                conflict_png_path,
+                f"{context.run_id}:{self.case_id}:png-conflict",
+                revision=IMAGE_REVISION_0,
+                width=SMALL_IMAGE_WIDTH,
+                height=SMALL_IMAGE_HEIGHT,
+                title="BSFTC0006 PNG genuine remote conflict",
+            )
+            small_jpeg_generated = create_random_jpeg(
+                small_jpeg_path,
+                f"{context.run_id}:{self.case_id}:jpeg-small",
+                revision=IMAGE_REVISION_0,
+                width=SMALL_IMAGE_WIDTH,
+                height=SMALL_IMAGE_HEIGHT,
+                title="BSFTC0006 JPEG small timestamp-preserving replacement",
+            )
+            large_jpeg_generated = create_random_jpeg(
+                large_jpeg_path,
+                f"{context.run_id}:{self.case_id}:jpeg-large",
+                revision=IMAGE_REVISION_0,
+                width=LARGE_JPEG_WIDTH,
+                height=LARGE_JPEG_HEIGHT,
+                title="BSFTC0006 JPEG session timestamp-preserving replacement",
+            )
+            conflict_jpeg_generated = create_random_jpeg(
+                conflict_jpeg_path,
+                f"{context.run_id}:{self.case_id}:jpeg-conflict",
+                revision=IMAGE_REVISION_0,
+                width=SMALL_IMAGE_WIDTH,
+                height=SMALL_IMAGE_HEIGHT,
+                title="BSFTC0006 JPEG genuine remote conflict",
+            )
 
             details["generated_sizes"] = {
                 "small": int(small_generated["size_bytes"]),
@@ -1145,6 +1621,14 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                 "large": int(large_pdf_generated["size_bytes"]),
                 "conflict": int(conflict_pdf_generated["size_bytes"]),
             }
+            details["generated_image_sizes"] = {
+                self.SMALL_PNG_FILENAME: int(small_png_generated["size_bytes"]),
+                self.LARGE_PNG_FILENAME: int(large_png_generated["size_bytes"]),
+                self.CONFLICT_PNG_FILENAME: int(conflict_png_generated["size_bytes"]),
+                self.SMALL_JPEG_FILENAME: int(small_jpeg_generated["size_bytes"]),
+                self.LARGE_JPEG_FILENAME: int(large_jpeg_generated["size_bytes"]),
+                self.CONFLICT_JPEG_FILENAME: int(conflict_jpeg_generated["size_bytes"]),
+            }
             if int(small_generated["size_bytes"]) > self.SESSION_THRESHOLD_BYTES:
                 raise CaseFailure("small XLSX unexpectedly exceeded the 4 MiB session threshold")
             if int(large_generated["size_bytes"]) <= self.SESSION_THRESHOLD_BYTES:
@@ -1153,6 +1637,14 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                 raise CaseFailure("small PDF unexpectedly exceeded the 4 MiB session threshold")
             if int(large_pdf_generated["size_bytes"]) <= self.SESSION_THRESHOLD_BYTES:
                 raise CaseFailure("large PDF did not exceed the 4 MiB session threshold")
+            if int(small_png_generated["size_bytes"]) >= self.SESSION_THRESHOLD_BYTES:
+                raise CaseFailure("small PNG unexpectedly exceeded the 4 MiB session threshold")
+            if int(large_png_generated["size_bytes"]) <= self.SESSION_THRESHOLD_BYTES:
+                raise CaseFailure("large PNG did not exceed the 4 MiB session threshold")
+            if int(small_jpeg_generated["size_bytes"]) >= self.SESSION_THRESHOLD_BYTES:
+                raise CaseFailure("small JPEG unexpectedly exceeded the 4 MiB session threshold")
+            if int(large_jpeg_generated["size_bytes"]) <= self.SESSION_THRESHOLD_BYTES:
+                raise CaseFailure("large JPEG did not exceed the 4 MiB session threshold")
 
             seed_result = self._run_logged(
                 context,
@@ -1164,7 +1656,7 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
             details["seed_returncode"] = seed_result.returncode
             if seed_result.returncode != 0:
                 raise CaseFailure(
-                    f"test-owned XLSX/PDF seed upload failed with status {seed_result.returncode}"
+                    f"test-owned XLSX/PDF/PNG/JPEG seed upload failed with status {seed_result.returncode}"
                 )
 
             for seeded_path in (small_path, large_path, conflict_path):
@@ -1179,6 +1671,20 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                     raise CaseFailure(
                         f"seeded PDF was invalid after SharePoint reconciliation ({seeded_path.name}): {error}"
                     )
+            for seeded_path in (
+                small_png_path,
+                large_png_path,
+                conflict_png_path,
+                small_jpeg_path,
+                large_jpeg_path,
+                conflict_jpeg_path,
+            ):
+                error = self._validate_image(seeded_path, IMAGE_REVISION_0)
+                if error:
+                    raise CaseFailure(
+                        f"seeded image was invalid after SharePoint reconciliation "
+                        f"({seeded_path.name}): {error}"
+                    )
 
             details["seed_db_rows"] = {
                 self.SMALL_FILENAME: self._capture_unique_item_row(config_dir, self.SMALL_FILENAME),
@@ -1189,6 +1695,12 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                 self.CONFLICT_PDF_FILENAME: self._capture_unique_item_row(
                     config_dir, self.CONFLICT_PDF_FILENAME
                 ),
+                self.SMALL_PNG_FILENAME: self._capture_unique_item_row(config_dir, self.SMALL_PNG_FILENAME),
+                self.LARGE_PNG_FILENAME: self._capture_unique_item_row(config_dir, self.LARGE_PNG_FILENAME),
+                self.CONFLICT_PNG_FILENAME: self._capture_unique_item_row(config_dir, self.CONFLICT_PNG_FILENAME),
+                self.SMALL_JPEG_FILENAME: self._capture_unique_item_row(config_dir, self.SMALL_JPEG_FILENAME),
+                self.LARGE_JPEG_FILENAME: self._capture_unique_item_row(config_dir, self.LARGE_JPEG_FILENAME),
+                self.CONFLICT_JPEG_FILENAME: self._capture_unique_item_row(config_dir, self.CONFLICT_JPEG_FILENAME),
             }
 
             replacement_work_dir = layout.work_dir / "replacement-sources"
@@ -1238,6 +1750,50 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                 details,
                 "SF-PDF-0002",
             )
+            self._exercise_image_timestamp_preserving_replacement(
+                context,
+                config_dir,
+                sync_root,
+                replacement_work_dir,
+                main_log_dir,
+                small_png_relative,
+                artifacts,
+                details,
+                "SF-PNG-0001",
+            )
+            self._exercise_image_timestamp_preserving_replacement(
+                context,
+                config_dir,
+                sync_root,
+                replacement_work_dir,
+                main_log_dir,
+                large_png_relative,
+                artifacts,
+                details,
+                "SF-PNG-0002",
+            )
+            self._exercise_image_timestamp_preserving_replacement(
+                context,
+                config_dir,
+                sync_root,
+                replacement_work_dir,
+                main_log_dir,
+                small_jpeg_relative,
+                artifacts,
+                details,
+                "SF-JPEG-0001",
+            )
+            self._exercise_image_timestamp_preserving_replacement(
+                context,
+                config_dir,
+                sync_root,
+                replacement_work_dir,
+                main_log_dir,
+                large_jpeg_relative,
+                artifacts,
+                details,
+                "SF-JPEG-0002",
+            )
 
             verify_root, _, verify_result = self._fresh_verify(
                 context,
@@ -1273,6 +1829,25 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                         f"remote PDF replacement bytes differ from the uploaded replacement for "
                         f"{relative_file.name}"
                     )
+            for relative_file, scenario_id in (
+                (small_png_relative, "SF-PNG-0001"),
+                (large_png_relative, "SF-PNG-0002"),
+                (small_jpeg_relative, "SF-JPEG-0001"),
+                (large_jpeg_relative, "SF-JPEG-0002"),
+            ):
+                remote_image = verify_root / relative_file
+                error = self._validate_image(remote_image, IMAGE_REVISION_1)
+                if error:
+                    raise CaseFailure(
+                        f"remote image replacement revision was not independently observed for "
+                        f"{relative_file.name}: {error}"
+                    )
+                expected_sha256 = str(details[scenario_id]["replacement_sha256"])
+                if self._sha256_file(remote_image) != expected_sha256:
+                    raise CaseFailure(
+                        f"remote image replacement bytes differ from the uploaded replacement for "
+                        f"{relative_file.name}"
+                    )
 
             self._exercise_genuine_remote_conflict(
                 context,
@@ -1291,6 +1866,26 @@ class BusinessSharedFolderTestCase0006SharePointTimestampReplacement(E2ETestCase
                 conflict_pdf_relative,
                 artifacts,
                 details,
+            )
+            self._exercise_image_genuine_remote_conflict(
+                context,
+                layout,
+                config_dir,
+                sync_root,
+                conflict_png_relative,
+                artifacts,
+                details,
+                "SF-PNG-0003",
+            )
+            self._exercise_image_genuine_remote_conflict(
+                context,
+                layout,
+                config_dir,
+                sync_root,
+                conflict_jpeg_relative,
+                artifacts,
+                details,
+                "SF-JPEG-0003",
             )
 
         except CaseFailure as exc:
