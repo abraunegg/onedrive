@@ -66,6 +66,8 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
     PNG_IMAGE_HEIGHT = 2700
     PNG_REVISION_0 = REVISION_0
     PNG_REVISION_1 = REVISION_1
+    IMAGE_POST_UPLOAD_SETTLE_SECONDS = 15
+    IMAGE_SETTLE_CONFIRMATION_SECONDS = 3
 
     # Use 10 MB/s to deliberately slow both upload and download so the 15% threshold
     # is reached with ample time to deliver SIGINT before the transfer can complete.
@@ -2918,6 +2920,10 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
 
         seed_stdout = scenario_log_dir / "seed_stdout.log"
         seed_stderr = scenario_log_dir / "seed_stderr.log"
+        settle1_stdout = scenario_log_dir / "settle1_stdout.log"
+        settle1_stderr = scenario_log_dir / "settle1_stderr.log"
+        settle2_stdout = scenario_log_dir / "settle2_stdout.log"
+        settle2_stderr = scenario_log_dir / "settle2_stderr.log"
         modify_stdout = scenario_log_dir / "modify_stdout.log"
         modify_stderr = scenario_log_dir / "modify_stderr.log"
         verify_stdout = scenario_log_dir / "verify_stdout.log"
@@ -2931,6 +2937,10 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         artifacts = [
             str(seed_stdout),
             str(seed_stderr),
+            str(settle1_stdout),
+            str(settle1_stderr),
+            str(settle2_stdout),
+            str(settle2_stderr),
             str(modify_stdout),
             str(modify_stderr),
             str(verify_stdout),
@@ -3061,6 +3071,84 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                 details,
             )
 
+        # Microsoft can asynchronously post-process image files after the initial
+        # upload and advance only the eTag while leaving cTag, size and content
+        # unchanged.  RT-0004I is intended to validate modified multi-fragment
+        # upload-session behaviour, not race that unrelated metadata processing.
+        # Refresh the tracked identity twice before mutating the local file so the
+        # replacement starts from a Microsoft-settled baseline.
+        time.sleep(self.IMAGE_POST_UPLOAD_SETTLE_SECONDS)
+        settle_command = [
+            context.onedrive_bin,
+            "--display-running-config",
+            "--sync",
+            "--verbose",
+            "--single-directory",
+            f"{root_name}/{scenario_id}",
+            "--confdir",
+            str(conf_dir),
+        ]
+        settle1_result = self._run_and_capture(
+            context,
+            f"{scenario_id} settle pass 1",
+            settle_command,
+            settle1_stdout,
+            settle1_stderr,
+        )
+        if settle1_result.returncode != 0:
+            details = {
+                "scenario_id": scenario_id,
+                "relative_path": relative_path,
+                "settle1_returncode": settle1_result.returncode,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"First image metadata-settle sync failed with status {settle1_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        time.sleep(self.IMAGE_SETTLE_CONFIRMATION_SECONDS)
+        settle2_result = self._run_and_capture(
+            context,
+            f"{scenario_id} settle pass 2",
+            settle_command,
+            settle2_stdout,
+            settle2_stderr,
+        )
+        if settle2_result.returncode != 0:
+            details = {
+                "scenario_id": scenario_id,
+                "relative_path": relative_path,
+                "settle1_returncode": settle1_result.returncode,
+                "settle2_returncode": settle2_result.returncode,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Second image metadata-settle sync failed with status {settle2_result.returncode}",
+                artifacts,
+                details,
+            )
+
+        settled_validation_error = validate_png(local_file, self.PNG_REVISION_0)
+        if settled_validation_error:
+            details = {
+                "scenario_id": scenario_id,
+                "relative_path": relative_path,
+                "settle1_returncode": settle1_result.returncode,
+                "settle2_returncode": settle2_result.returncode,
+                "settled_validation_error": settled_validation_error,
+            }
+            return self._scenario_fail(
+                scenario_id,
+                description,
+                f"Settled PNG baseline is invalid before modification: {settled_validation_error}",
+                artifacts,
+                details,
+            )
+
         try:
             mutate_png_revision(local_file, self.PNG_REVISION_0, self.PNG_REVISION_1)
         except Exception as exc:
@@ -3110,7 +3198,7 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
         # only the session upload under test.
         app_log_file.unlink(missing_ok=True)
 
-        # RT-0004P validates the real Microsoft response and upload-session GUID
+        # RT-0004I validates the real Microsoft response and upload-session GUID
         # continuity during replacement. Those diagnostics require the client's
         # double-verbose logging level, so use --verbose --verbose for the
         # modified-upload phase being inspected. This does not inject or
@@ -3216,6 +3304,10 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
             "canonical_size_before_modify": canonical_size_before_modify,
             "modified_size": modified_size,
             "seed_returncode": seed_result.returncode,
+            "settle_wait_seconds": self.IMAGE_POST_UPLOAD_SETTLE_SECONDS,
+            "settle_confirmation_seconds": self.IMAGE_SETTLE_CONFIRMATION_SECONDS,
+            "settle1_returncode": settle1_result.returncode,
+            "settle2_returncode": settle2_result.returncode,
             "modify_returncode": modify_result.returncode,
             "verify_returncode": verify_result.returncode,
             "replacement_required": replacement_required,
@@ -3242,6 +3334,10 @@ class TestCase0021ResumableTransfersValidation(E2ETestCase):
                     f"canonical_size_before_modify={canonical_size_before_modify}",
                     f"modified_size={modified_size}",
                     f"seed_returncode={seed_result.returncode}",
+                    f"settle_wait_seconds={self.IMAGE_POST_UPLOAD_SETTLE_SECONDS}",
+                    f"settle_confirmation_seconds={self.IMAGE_SETTLE_CONFIRMATION_SECONDS}",
+                    f"settle1_returncode={settle1_result.returncode}",
+                    f"settle2_returncode={settle2_result.returncode}",
                     f"modify_returncode={modify_result.returncode}",
                     f"verify_returncode={verify_result.returncode}",
                     f"replacement_required={replacement_required}",
