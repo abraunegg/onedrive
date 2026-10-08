@@ -25,16 +25,27 @@ from framework.pdf import (
     create_random_pdf,
     validate_pdf,
 )
-from framework.image import create_random_image_set, validate_image_set, image_set_hashes, image_set_sizes, image_set_mtimes, set_image_set_mtime, image_set_relatives, image_set_all_files
+from framework.image import (
+    LARGE_JPEG_HEIGHT,
+    LARGE_JPEG_WIDTH,
+    LARGE_PNG_HEIGHT,
+    LARGE_PNG_WIDTH,
+    SMALL_IMAGE_HEIGHT,
+    SMALL_IMAGE_WIDTH,
+    create_random_jpeg,
+    create_random_png,
+    validate_jpeg,
+    validate_png,
+)
 
 
 class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
     case_id = "0037"
     name = "mtime-only Microsoft file change handling"
     description = (
-        "Validate mtime-only local XLSX/PDF and PNG/JPEG image changes across initial simple upload, automatic "
-        "session upload for files larger than 4 MiB, and forced session upload behaviour "
-        "without changing workbook content"
+        "Validate mtime-only local XLSX, PDF, PNG and JPEG changes across initial simple upload, "
+        "automatic session upload for files larger than 4 MiB, and forced session upload behaviour "
+        "without changing file content"
     )
 
     SESSION_THRESHOLD_BYTES = 4 * 1024 * 1024
@@ -135,7 +146,6 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         root_name = f"ZZ_E2E_TC0037_{scenario_id}_{context.run_id}_{os.getpid()}"
         relative_path = f"{root_name}/mtime-only.xlsx"
         pdf_relative_path = f"{root_name}/mtime-only.pdf"
-        image_relative_path = f"{root_name}/mtime-only.png"
 
         local_file_path = local_root / relative_path
         local_pdf_path = local_root / pdf_relative_path
@@ -143,16 +153,12 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         verify_initial_pdf_path = verify_initial_root / pdf_relative_path
         verify_final_file_path = verify_final_root / relative_path
         verify_final_pdf_path = verify_final_root / pdf_relative_path
-        local_image_path = local_root / image_relative_path
-        verify_initial_image_path = verify_initial_root / image_relative_path
-        verify_final_image_path = verify_final_root / image_relative_path
 
-        expected_manifest = sorted([
+        expected_manifest = [
             root_name,
             pdf_relative_path,
             relative_path,
-            *image_set_relatives(image_relative_path).values(),
-        ])
+        ]
 
         phase1_stdout = scenario_log_dir / "phase1_seed_stdout.log"
         phase1_stderr = scenario_log_dir / "phase1_seed_stderr.log"
@@ -200,21 +206,12 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             image_height=LARGE_PDF_IMAGE_HEIGHT if pdf_is_large else SMALL_PDF_IMAGE_HEIGHT,
             title=f"TC0037 {scenario_id} mtime-only PDF",
         )
-        generated_images = create_random_image_set(
-            local_image_path,
-            f"{xlsx_seed}:image",
-            revision=REVISION_0,
-            title=f"TC0037 {scenario_id} mtime-only images",
-        )
         initial_generated_hash = compute_quickxor_hash_file(local_file_path)
         initial_generated_pdf_hash = compute_quickxor_hash_file(local_pdf_path)
         initial_generated_size = local_file_path.stat().st_size
         initial_generated_pdf_size = local_pdf_path.stat().st_size
-        initial_generated_image_hashes = image_set_hashes(local_image_path, compute_quickxor_hash_file)
-        initial_generated_image_sizes = image_set_sizes(local_image_path)
         uses_session_upload = self._scenario_uses_session_upload(initial_generated_size, force_session_upload)
         pdf_uses_session_upload = self._scenario_uses_session_upload(initial_generated_pdf_size, force_session_upload)
-        image_uses_session_upload = {k: self._scenario_uses_session_upload(v, force_session_upload) for k, v in initial_generated_image_sizes.items()}
 
         details: dict[str, object] = {
             "scenario_id": scenario_id,
@@ -225,20 +222,15 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             "xlsx_seed": xlsx_seed,
             "pdf_seed": pdf_seed,
             "pdf_relative_path": pdf_relative_path,
-            "image_relative_path": image_relative_path,
             "generated_size": int(generated["size_bytes"]),
             "generated_pdf_size": int(generated_pdf["size_bytes"]),
-            "generated_image_sizes": {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")},
             "initial_generated_hash": initial_generated_hash,
             "initial_generated_pdf_hash": initial_generated_pdf_hash,
             "initial_generated_size": initial_generated_size,
             "initial_generated_pdf_size": initial_generated_pdf_size,
-            "initial_generated_image_hashes": initial_generated_image_hashes,
-            "initial_generated_image_sizes": initial_generated_image_sizes,
             "force_session_upload": force_session_upload,
             "uses_session_upload": uses_session_upload,
             "pdf_uses_session_upload": pdf_uses_session_upload,
-            "image_uses_session_upload": image_uses_session_upload,
             "main_conf_dir": str(conf_main),
             "verify_initial_conf_dir": str(conf_verify_initial),
             "verify_final_conf_dir": str(conf_verify_final),
@@ -284,16 +276,11 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
 
         settled_validation_error = validate_xlsx(local_file_path, REVISION_0)
         settled_pdf_validation_error = validate_pdf(local_pdf_path, REVISION_0)
-        settled_image_validation_error = validate_image_set(local_image_path, REVISION_0)
         details["settled_validation_error"] = settled_validation_error
         details["settled_pdf_validation_error"] = settled_pdf_validation_error
-        details["settled_image_validation_error"] = settled_image_validation_error
         if settled_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} seeded XLSX was invalid after initial sync: {settled_validation_error}", details
-        if settled_image_validation_error:
-            self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} seeded image set was invalid after initial sync: {settled_image_validation_error}", details
         if settled_pdf_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} seeded PDF was invalid after initial sync: {settled_pdf_validation_error}", details
@@ -304,18 +291,12 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         settled_pdf_size = local_pdf_path.stat().st_size
         settled_local_mtime = int(local_file_path.stat().st_mtime)
         settled_pdf_mtime = int(local_pdf_path.stat().st_mtime)
-        settled_image_hashes = image_set_hashes(local_image_path, compute_quickxor_hash_file)
-        settled_image_sizes = image_set_sizes(local_image_path)
-        settled_image_mtimes = image_set_mtimes(local_image_path)
         details["settled_local_hash"] = settled_local_hash
         details["settled_local_size"] = settled_local_size
         details["settled_local_mtime"] = settled_local_mtime
         details["settled_pdf_hash"] = settled_pdf_hash
         details["settled_pdf_size"] = settled_pdf_size
         details["settled_pdf_mtime"] = settled_pdf_mtime
-        details["settled_image_hashes"] = settled_image_hashes
-        details["settled_image_sizes"] = settled_image_sizes
-        details["settled_image_mtimes"] = settled_image_mtimes
         details["microsoft_changed_seed_bytes"] = settled_local_hash != initial_generated_hash
         details["microsoft_changed_pdf_seed_bytes"] = settled_pdf_hash != initial_generated_pdf_hash
 
@@ -341,7 +322,6 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         details["verify_initial_manifest"] = verify_initial_manifest
         details["verify_initial_file_exists"] = verify_initial_file_path.is_file()
         details["verify_initial_pdf_exists"] = verify_initial_pdf_path.is_file()
-        details["verify_initial_image_exists"] = image_set_all_files(verify_initial_image_path)
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -350,25 +330,18 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         if not verify_initial_file_path.is_file():
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} initial remote verification is missing expected file: {relative_path}", details
-        if not image_set_all_files(verify_initial_image_path):
-            self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} initial remote verification is missing expected image set: {image_relative_path}", details
         if not verify_initial_pdf_path.is_file():
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} initial remote verification is missing expected PDF: {pdf_relative_path}", details
 
         baseline_validation_error = validate_xlsx(verify_initial_file_path, REVISION_0)
         baseline_pdf_validation_error = validate_pdf(verify_initial_pdf_path, REVISION_0)
-        baseline_image_validation_error = validate_image_set(verify_initial_image_path, REVISION_0)
         baseline_verified_hash = compute_quickxor_hash_file(verify_initial_file_path)
         baseline_verified_size = verify_initial_file_path.stat().st_size
         baseline_verified_mtime = int(verify_initial_file_path.stat().st_mtime)
         baseline_verified_pdf_hash = compute_quickxor_hash_file(verify_initial_pdf_path)
         baseline_verified_pdf_size = verify_initial_pdf_path.stat().st_size
         baseline_verified_pdf_mtime = int(verify_initial_pdf_path.stat().st_mtime)
-        baseline_verified_image_hashes = image_set_hashes(verify_initial_image_path, compute_quickxor_hash_file)
-        baseline_verified_image_sizes = image_set_sizes(verify_initial_image_path)
-        baseline_verified_image_mtimes = image_set_mtimes(verify_initial_image_path)
 
         details["baseline_validation_error"] = baseline_validation_error
         details["baseline_pdf_validation_error"] = baseline_pdf_validation_error
@@ -378,17 +351,10 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         details["baseline_verified_pdf_hash"] = baseline_verified_pdf_hash
         details["baseline_verified_pdf_size"] = baseline_verified_pdf_size
         details["baseline_verified_pdf_mtime"] = baseline_verified_pdf_mtime
-        details["baseline_image_validation_error"] = baseline_image_validation_error
-        details["baseline_verified_image_hashes"] = baseline_verified_image_hashes
-        details["baseline_verified_image_sizes"] = baseline_verified_image_sizes
-        details["baseline_verified_image_mtimes"] = baseline_verified_image_mtimes
 
         if baseline_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} initial remote XLSX validation failed: {baseline_validation_error}", details
-        if baseline_image_validation_error:
-            self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} initial remote image validation failed: {baseline_image_validation_error}", details
         if baseline_pdf_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} initial remote PDF validation failed: {baseline_pdf_validation_error}", details
@@ -404,9 +370,6 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         if baseline_verified_pdf_hash != settled_pdf_hash:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} initial remote verification hash did not match the settled post-upload PDF", details
-        if baseline_verified_image_hashes != settled_image_hashes or baseline_verified_image_sizes != settled_image_sizes:
-            self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} initial remote image content did not match the settled post-upload image set", details
         if baseline_verified_pdf_size != settled_pdf_size:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} initial remote verification size did not match the settled post-upload PDF", details
@@ -417,8 +380,6 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         local_pdf_hash_before_touch = compute_quickxor_hash_file(local_pdf_path)
         local_mtime_before_touch = int(local_file_path.stat().st_mtime)
         local_pdf_mtime_before_touch = int(local_pdf_path.stat().st_mtime)
-        local_image_hashes_before_touch = image_set_hashes(local_image_path, compute_quickxor_hash_file)
-        local_image_mtimes_before_touch = image_set_mtimes(local_image_path)
 
         touched_epoch = max(
             int(time.time()),
@@ -426,18 +387,14 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             local_pdf_mtime_before_touch,
             baseline_verified_mtime,
             baseline_verified_pdf_mtime,
-            *baseline_verified_image_mtimes.values(),
         ) + 120
         os.utime(local_file_path, (touched_epoch, touched_epoch))
         os.utime(local_pdf_path, (touched_epoch, touched_epoch))
-        set_image_set_mtime(local_image_path, (touched_epoch, touched_epoch))
 
         local_hash_after_touch = compute_quickxor_hash_file(local_file_path)
         local_pdf_hash_after_touch = compute_quickxor_hash_file(local_pdf_path)
         local_mtime_after_touch = int(local_file_path.stat().st_mtime)
         local_pdf_mtime_after_touch = int(local_pdf_path.stat().st_mtime)
-        local_image_hashes_after_touch = image_set_hashes(local_image_path, compute_quickxor_hash_file)
-        local_image_mtimes_after_touch = image_set_mtimes(local_image_path)
 
         details["local_hash_before_touch"] = local_hash_before_touch
         details["local_hash_after_touch"] = local_hash_after_touch
@@ -447,10 +404,6 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         details["local_pdf_hash_after_touch"] = local_pdf_hash_after_touch
         details["local_pdf_mtime_before_touch"] = local_pdf_mtime_before_touch
         details["local_pdf_mtime_after_touch"] = local_pdf_mtime_after_touch
-        details["local_image_hashes_before_touch"] = local_image_hashes_before_touch
-        details["local_image_hashes_after_touch"] = local_image_hashes_after_touch
-        details["local_image_mtimes_before_touch"] = local_image_mtimes_before_touch
-        details["local_image_mtimes_after_touch"] = local_image_mtimes_after_touch
         details["touched_epoch"] = touched_epoch
 
         if local_hash_after_touch != local_hash_before_touch:
@@ -459,12 +412,6 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         if local_mtime_after_touch <= local_mtime_before_touch:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} local XLSX mtime did not advance after touch", details
-        if local_image_hashes_after_touch != local_image_hashes_before_touch:
-            self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} local image hashes changed after mtime-only touch", details
-        if any(local_image_mtimes_after_touch[k] <= local_image_mtimes_before_touch[k] for k in local_image_mtimes_before_touch):
-            self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} local image mtimes did not advance after touch", details
         if local_pdf_hash_after_touch != local_pdf_hash_before_touch:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} local PDF hash changed after mtime-only touch", details
@@ -508,16 +455,11 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
 
         post_touch_validation_error = validate_xlsx(local_file_path, REVISION_0)
         post_touch_pdf_validation_error = validate_pdf(local_pdf_path, REVISION_0)
-        post_touch_image_validation_error = validate_image_set(local_image_path, REVISION_0)
         details["post_touch_validation_error"] = post_touch_validation_error
         details["post_touch_pdf_validation_error"] = post_touch_pdf_validation_error
-        details["post_touch_image_validation_error"] = post_touch_image_validation_error
         if post_touch_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} local XLSX became invalid during mtime-only reconciliation: {post_touch_validation_error}", details
-        if post_touch_image_validation_error:
-            self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} local image set became invalid during mtime-only reconciliation: {post_touch_image_validation_error}", details
         if post_touch_pdf_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} local PDF became invalid during mtime-only reconciliation: {post_touch_pdf_validation_error}", details
@@ -544,7 +486,6 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         details["verify_final_manifest"] = verify_final_manifest
         details["verify_final_file_exists"] = verify_final_file_path.is_file()
         details["verify_final_pdf_exists"] = verify_final_pdf_path.is_file()
-        details["verify_final_image_exists"] = image_set_all_files(verify_final_image_path)
 
         if phase4_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -552,25 +493,18 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         if not verify_final_file_path.is_file():
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} final remote verification is missing expected file: {relative_path}", details
-        if not image_set_all_files(verify_final_image_path):
-            self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} final remote verification is missing expected image set: {image_relative_path}", details
         if not verify_final_pdf_path.is_file():
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} final remote verification is missing expected PDF: {pdf_relative_path}", details
 
         final_validation_error = validate_xlsx(verify_final_file_path, REVISION_0)
         final_pdf_validation_error = validate_pdf(verify_final_pdf_path, REVISION_0)
-        final_image_validation_error = validate_image_set(verify_final_image_path, REVISION_0)
         final_verified_hash = compute_quickxor_hash_file(verify_final_file_path)
         final_verified_size = verify_final_file_path.stat().st_size
         final_verified_mtime = int(verify_final_file_path.stat().st_mtime)
         final_verified_pdf_hash = compute_quickxor_hash_file(verify_final_pdf_path)
         final_verified_pdf_size = verify_final_pdf_path.stat().st_size
         final_verified_pdf_mtime = int(verify_final_pdf_path.stat().st_mtime)
-        final_verified_image_hashes = image_set_hashes(verify_final_image_path, compute_quickxor_hash_file)
-        final_verified_image_sizes = image_set_sizes(verify_final_image_path)
-        final_verified_image_mtimes = image_set_mtimes(verify_final_image_path)
 
         details["final_validation_error"] = final_validation_error
         details["final_pdf_validation_error"] = final_pdf_validation_error
@@ -580,16 +514,10 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         details["final_verified_pdf_hash"] = final_verified_pdf_hash
         details["final_verified_pdf_size"] = final_verified_pdf_size
         details["final_verified_pdf_mtime"] = final_verified_pdf_mtime
-        details["final_image_validation_error"] = final_image_validation_error
-        details["final_verified_image_hashes"] = final_verified_image_hashes
-        details["final_verified_image_sizes"] = final_verified_image_sizes
-        details["final_verified_image_mtimes"] = final_verified_image_mtimes
         self._write_metadata(metadata_file, details)
 
         if final_validation_error:
             return False, f"{scenario_id} final remote XLSX validation failed: {final_validation_error}", details
-        if final_image_validation_error:
-            return False, f"{scenario_id} final remote image validation failed: {final_image_validation_error}", details
         if final_pdf_validation_error:
             return False, f"{scenario_id} final remote PDF validation failed: {final_pdf_validation_error}", details
         if verify_final_manifest != expected_manifest:
@@ -598,10 +526,6 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             return False, f"{scenario_id} final verified XLSX hash changed during an mtime-only operation", details
         if final_verified_size != settled_local_size:
             return False, f"{scenario_id} final verified XLSX size changed during an mtime-only operation", details
-        if final_verified_image_hashes != local_image_hashes_after_touch:
-            return False, f"{scenario_id} final verified image hashes changed during an mtime-only operation", details
-        if final_verified_image_sizes != settled_image_sizes:
-            return False, f"{scenario_id} final verified image sizes changed during an mtime-only operation", details
         if final_verified_pdf_hash != local_pdf_hash_after_touch:
             return False, f"{scenario_id} final verified PDF hash changed during an mtime-only operation", details
         if final_verified_pdf_size != settled_pdf_size:
@@ -646,13 +570,375 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
                     details,
                 )
 
-        for key, final_mtime in final_verified_image_mtimes.items():
-            if image_uses_session_upload[key]:
-                if abs(final_mtime - touched_epoch) > 2:
-                    return False, f"{scenario_id} final {key} remote mtime {final_mtime} did not match touched local timestamp {touched_epoch} within tolerance", details
-            else:
-                if final_mtime <= baseline_verified_image_mtimes[key]:
-                    return False, f"{scenario_id} final {key} remote mtime {final_mtime} did not advance beyond baseline {baseline_verified_image_mtimes[key]}", details
+        return True, f"{scenario_id} passed", details
+
+    def _run_image_scenario(
+        self,
+        context: E2EContext,
+        case_work_dir: Path,
+        case_log_dir: Path,
+        state_dir: Path,
+        scenario_id: str,
+        scenario_name: str,
+        image_is_large: bool,
+        force_session_upload: bool,
+        artifacts: list[str],
+    ) -> tuple[bool, str, dict[str, object]]:
+        """Validate mtime-only handling for genuine PNG/JPEG files without coupling to Office enrichment."""
+        scenario_work_dir = case_work_dir / scenario_id
+        scenario_log_dir = case_log_dir / scenario_id
+        scenario_state_dir = state_dir / scenario_id
+
+        reset_directory(scenario_work_dir)
+        reset_directory(scenario_log_dir)
+        reset_directory(scenario_state_dir)
+
+        local_root = scenario_work_dir / "syncroot"
+        verify_initial_root = scenario_work_dir / "verify-initial-root"
+        verify_final_root = scenario_work_dir / "verify-final-root"
+        conf_main = scenario_work_dir / "conf-main"
+        conf_verify_initial = scenario_work_dir / "conf-verify-initial"
+        conf_verify_final = scenario_work_dir / "conf-verify-final"
+
+        reset_directory(local_root)
+        reset_directory(verify_initial_root)
+        reset_directory(verify_final_root)
+        context.prepare_minimal_config_dir(conf_main, "")
+        context.prepare_minimal_config_dir(conf_verify_initial, "")
+        context.prepare_minimal_config_dir(conf_verify_final, "")
+
+        extra_config_lines: list[str] = []
+        if force_session_upload:
+            extra_config_lines.append('force_session_upload = "true"')
+        self._write_config(conf_main, local_root, extra_config_lines)
+        self._write_config(conf_verify_initial, verify_initial_root)
+        self._write_config(conf_verify_final, verify_final_root)
+
+        root_name = f"ZZ_E2E_TC0037_{scenario_id}_{context.run_id}_{os.getpid()}"
+        png_relative_path = f"{root_name}/mtime-only.png"
+        jpeg_relative_path = f"{root_name}/mtime-only.jpg"
+        local_png_path = local_root / png_relative_path
+        local_jpeg_path = local_root / jpeg_relative_path
+        verify_initial_png_path = verify_initial_root / png_relative_path
+        verify_initial_jpeg_path = verify_initial_root / jpeg_relative_path
+        verify_final_png_path = verify_final_root / png_relative_path
+        verify_final_jpeg_path = verify_final_root / jpeg_relative_path
+        expected_manifest = sorted([root_name, png_relative_path, jpeg_relative_path])
+
+        phase1_stdout = scenario_log_dir / "phase1_seed_stdout.log"
+        phase1_stderr = scenario_log_dir / "phase1_seed_stderr.log"
+        phase2_stdout = scenario_log_dir / "phase2_verify_initial_stdout.log"
+        phase2_stderr = scenario_log_dir / "phase2_verify_initial_stderr.log"
+        phase3_stdout = scenario_log_dir / "phase3_touch_sync_stdout.log"
+        phase3_stderr = scenario_log_dir / "phase3_touch_sync_stderr.log"
+        phase3_retry_stdout = scenario_log_dir / "phase3_retry_stdout.log"
+        phase3_retry_stderr = scenario_log_dir / "phase3_retry_stderr.log"
+        phase4_stdout = scenario_log_dir / "phase4_verify_final_stdout.log"
+        phase4_stderr = scenario_log_dir / "phase4_verify_final_stderr.log"
+        verify_initial_manifest_file = scenario_state_dir / "verify_initial_manifest.txt"
+        verify_final_manifest_file = scenario_state_dir / "verify_final_manifest.txt"
+        metadata_file = scenario_state_dir / "metadata.txt"
+
+        artifacts.extend(
+            [
+                str(phase1_stdout), str(phase1_stderr),
+                str(phase2_stdout), str(phase2_stderr),
+                str(phase3_stdout), str(phase3_stderr),
+                str(phase3_retry_stdout), str(phase3_retry_stderr),
+                str(phase4_stdout), str(phase4_stderr),
+                str(verify_initial_manifest_file), str(verify_final_manifest_file),
+                str(metadata_file),
+            ]
+        )
+
+        seed = f"{context.run_id}:{context.e2e_target}:{scenario_id}:{os.getpid()}"
+        png_width = LARGE_PNG_WIDTH if image_is_large else SMALL_IMAGE_WIDTH
+        png_height = LARGE_PNG_HEIGHT if image_is_large else SMALL_IMAGE_HEIGHT
+        jpeg_width = LARGE_JPEG_WIDTH if image_is_large else SMALL_IMAGE_WIDTH
+        jpeg_height = LARGE_JPEG_HEIGHT if image_is_large else SMALL_IMAGE_HEIGHT
+
+        png_generated = create_random_png(
+            local_png_path,
+            f"{seed}:png",
+            revision=REVISION_0,
+            width=png_width,
+            height=png_height,
+            title=f"TC0037 {scenario_id} mtime-only PNG",
+        )
+        jpeg_generated = create_random_jpeg(
+            local_jpeg_path,
+            f"{seed}:jpeg",
+            revision=REVISION_0,
+            width=jpeg_width,
+            height=jpeg_height,
+            title=f"TC0037 {scenario_id} mtime-only JPEG",
+        )
+
+        png_size = local_png_path.stat().st_size
+        jpeg_size = local_jpeg_path.stat().st_size
+        png_hash = compute_quickxor_hash_file(local_png_path)
+        jpeg_hash = compute_quickxor_hash_file(local_jpeg_path)
+        uses_session_upload = force_session_upload or image_is_large
+
+        details: dict[str, object] = {
+            "scenario_id": scenario_id,
+            "scenario_name": scenario_name,
+            "root_name": root_name,
+            "png_relative_path": png_relative_path,
+            "jpeg_relative_path": jpeg_relative_path,
+            "image_is_large": image_is_large,
+            "force_session_upload": force_session_upload,
+            "uses_session_upload": uses_session_upload,
+            "png_size": png_size,
+            "jpeg_size": jpeg_size,
+            "png_generated": png_generated,
+            "jpeg_generated": jpeg_generated,
+            "initial_png_hash": png_hash,
+            "initial_jpeg_hash": jpeg_hash,
+            "expected_manifest": expected_manifest,
+        }
+
+        if image_is_large:
+            if png_size <= self.SESSION_THRESHOLD_BYTES or jpeg_size <= self.SESSION_THRESHOLD_BYTES:
+                self._write_metadata(metadata_file, details)
+                return False, f"{scenario_id} large PNG/JPEG fixture did not exceed the 4 MiB session threshold", details
+        else:
+            if png_size > self.SESSION_THRESHOLD_BYTES or jpeg_size > self.SESSION_THRESHOLD_BYTES:
+                self._write_metadata(metadata_file, details)
+                return False, f"{scenario_id} small PNG/JPEG fixture unexpectedly exceeded the 4 MiB session threshold", details
+
+        phase1_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+            "--single-directory", root_name, "--confdir", str(conf_main),
+        ]
+        phase1_result = self._run_logged_command(context, phase1_command, phase1_stdout, phase1_stderr)
+        details["phase1_returncode"] = phase1_result.returncode
+        if phase1_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} image seed phase failed with status {phase1_result.returncode}", details
+
+        png_validation_error = validate_png(local_png_path, REVISION_0)
+        jpeg_validation_error = validate_jpeg(local_jpeg_path, REVISION_0)
+        settled_png_hash = compute_quickxor_hash_file(local_png_path)
+        settled_jpeg_hash = compute_quickxor_hash_file(local_jpeg_path)
+        settled_png_size = local_png_path.stat().st_size
+        settled_jpeg_size = local_jpeg_path.stat().st_size
+        settled_png_mtime = int(local_png_path.stat().st_mtime)
+        settled_jpeg_mtime = int(local_jpeg_path.stat().st_mtime)
+        details.update(
+            {
+                "settled_png_validation_error": png_validation_error,
+                "settled_jpeg_validation_error": jpeg_validation_error,
+                "settled_png_hash": settled_png_hash,
+                "settled_jpeg_hash": settled_jpeg_hash,
+                "settled_png_size": settled_png_size,
+                "settled_jpeg_size": settled_jpeg_size,
+                "settled_png_mtime": settled_png_mtime,
+                "settled_jpeg_mtime": settled_jpeg_mtime,
+            }
+        )
+        if png_validation_error or jpeg_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} seeded PNG/JPEG validation failed: {png_validation_error or jpeg_validation_error}", details
+        if settled_png_hash != png_hash or settled_jpeg_hash != jpeg_hash:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} Microsoft unexpectedly changed PNG/JPEG bytes during seed", details
+
+        phase2_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose",
+            "--resync", "--resync-auth", "--single-directory", root_name,
+            "--confdir", str(conf_verify_initial),
+        ]
+        phase2_result = self._run_logged_command(context, phase2_command, phase2_stdout, phase2_stderr)
+        details["phase2_returncode"] = phase2_result.returncode
+        verify_initial_manifest = build_manifest(verify_initial_root)
+        write_manifest(verify_initial_manifest_file, verify_initial_manifest)
+        details["verify_initial_manifest"] = verify_initial_manifest
+        if phase2_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} initial image verification failed with status {phase2_result.returncode}", details
+        if verify_initial_manifest != expected_manifest:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} initial image verification manifest did not match expected structure", details
+
+        initial_png_validation_error = validate_png(verify_initial_png_path, REVISION_0)
+        initial_jpeg_validation_error = validate_jpeg(verify_initial_jpeg_path, REVISION_0)
+        baseline_png_hash = compute_quickxor_hash_file(verify_initial_png_path)
+        baseline_jpeg_hash = compute_quickxor_hash_file(verify_initial_jpeg_path)
+        baseline_png_mtime = int(verify_initial_png_path.stat().st_mtime)
+        baseline_jpeg_mtime = int(verify_initial_jpeg_path.stat().st_mtime)
+        details.update(
+            {
+                "initial_png_validation_error": initial_png_validation_error,
+                "initial_jpeg_validation_error": initial_jpeg_validation_error,
+                "baseline_png_hash": baseline_png_hash,
+                "baseline_jpeg_hash": baseline_jpeg_hash,
+                "baseline_png_mtime": baseline_png_mtime,
+                "baseline_jpeg_mtime": baseline_jpeg_mtime,
+            }
+        )
+        if initial_png_validation_error or initial_jpeg_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} initial remote PNG/JPEG validation failed: {initial_png_validation_error or initial_jpeg_validation_error}", details
+        if baseline_png_hash != settled_png_hash or baseline_jpeg_hash != settled_jpeg_hash:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} initial remote PNG/JPEG content did not match the settled local content", details
+
+        touched_epoch = max(
+            int(time.time()),
+            settled_png_mtime,
+            settled_jpeg_mtime,
+            baseline_png_mtime,
+            baseline_jpeg_mtime,
+        ) + 120
+        os.utime(local_png_path, (touched_epoch, touched_epoch))
+        os.utime(local_jpeg_path, (touched_epoch, touched_epoch))
+        touched_png_hash = compute_quickxor_hash_file(local_png_path)
+        touched_jpeg_hash = compute_quickxor_hash_file(local_jpeg_path)
+        details.update(
+            {
+                "touched_epoch": touched_epoch,
+                "touched_png_hash": touched_png_hash,
+                "touched_jpeg_hash": touched_jpeg_hash,
+                "touched_png_mtime": int(local_png_path.stat().st_mtime),
+                "touched_jpeg_mtime": int(local_jpeg_path.stat().st_mtime),
+            }
+        )
+        if touched_png_hash != settled_png_hash or touched_jpeg_hash != settled_jpeg_hash:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} PNG/JPEG bytes changed during local mtime-only touch", details
+
+        phase3_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+            "--single-directory", root_name, "--confdir", str(conf_main),
+        ]
+        phase3_result = self._run_logged_command(context, phase3_command, phase3_stdout, phase3_stderr)
+        phase3_output = phase3_result.stdout + "\n" + phase3_result.stderr
+        details["phase3_returncode"] = phase3_result.returncode
+        details["phase3_timestamp_412_count"] = phase3_output.count(
+            "HTTP 412 - Precondition Failed' when attempting file time stamp update"
+        )
+        details["phase3_content_unchanged_count"] = phase3_output.count(
+            "The last modified timestamp has changed however the file content has not changed"
+        )
+        details["phase3_same_hash_count"] = phase3_output.count(
+            "The local item has the same hash value as the item online"
+        )
+        details["phase3_timestamp_correction_count"] = phase3_output.count("correcting online timestamp")
+        details["phase3_png_processed"] = f"Processing: {png_relative_path}" in phase3_output
+        details["phase3_jpeg_processed"] = f"Processing: {jpeg_relative_path}" in phase3_output
+        if phase3_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} image mtime-only sync failed with status {phase3_result.returncode}", details
+        if not details["phase3_png_processed"] or not details["phase3_jpeg_processed"]:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} did not process both PNG and JPEG during mtime-only reconciliation", details
+        if details["phase3_content_unchanged_count"] < 2 or details["phase3_same_hash_count"] < 2:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} did not exercise same-content mtime handling for both image formats", details
+        if f"Uploading modified file: {png_relative_path}" in phase3_output or f"Uploading modified file: {jpeg_relative_path}" in phase3_output:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} incorrectly uploaded image content for an mtime-only local change", details
+
+        # A 412 is a supported race: Microsoft changed the remote eTag after the
+        # consistency check. Production code deliberately defers the timestamp
+        # correction until the following delta/true-up has reconciled that newer
+        # remote identity. Exercise that real recovery path with one normal retry.
+        retry_output = ""
+        if details["phase3_timestamp_412_count"]:
+            retry_result = self._run_logged_command(
+                context, phase3_command, phase3_retry_stdout, phase3_retry_stderr
+            )
+            retry_output = retry_result.stdout + "\n" + retry_result.stderr
+            details["phase3_retry_returncode"] = retry_result.returncode
+            details["phase3_retry_timestamp_412_count"] = retry_output.count(
+                "HTTP 412 - Precondition Failed' when attempting file time stamp update"
+            )
+            if retry_result.returncode != 0:
+                self._write_metadata(metadata_file, details)
+                return False, f"{scenario_id} deferred timestamp retry failed with status {retry_result.returncode}", details
+            if details["phase3_retry_timestamp_412_count"]:
+                self._write_metadata(metadata_file, details)
+                return False, f"{scenario_id} image timestamp correction still hit HTTP 412 after delta reconciliation", details
+        else:
+            details["phase3_retry_returncode"] = None
+            details["phase3_retry_timestamp_412_count"] = 0
+            write_text_file(phase3_retry_stdout, "not required\n")
+            write_text_file(phase3_retry_stderr, "")
+
+        post_phase3_png_validation_error = validate_png(local_png_path, REVISION_0)
+        post_phase3_jpeg_validation_error = validate_jpeg(local_jpeg_path, REVISION_0)
+        post_phase3_png_hash = compute_quickxor_hash_file(local_png_path)
+        post_phase3_jpeg_hash = compute_quickxor_hash_file(local_jpeg_path)
+        details.update(
+            {
+                "post_phase3_png_validation_error": post_phase3_png_validation_error,
+                "post_phase3_jpeg_validation_error": post_phase3_jpeg_validation_error,
+                "post_phase3_png_hash": post_phase3_png_hash,
+                "post_phase3_jpeg_hash": post_phase3_jpeg_hash,
+            }
+        )
+        if post_phase3_png_validation_error or post_phase3_jpeg_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} local PNG/JPEG became invalid during mtime-only reconciliation", details
+        if post_phase3_png_hash != touched_png_hash or post_phase3_jpeg_hash != touched_jpeg_hash:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} local PNG/JPEG bytes changed during mtime-only reconciliation", details
+
+        phase4_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose",
+            "--resync", "--resync-auth", "--single-directory", root_name,
+            "--confdir", str(conf_verify_final),
+        ]
+        phase4_result = self._run_logged_command(context, phase4_command, phase4_stdout, phase4_stderr)
+        details["phase4_returncode"] = phase4_result.returncode
+        verify_final_manifest = build_manifest(verify_final_root)
+        write_manifest(verify_final_manifest_file, verify_final_manifest)
+        details["verify_final_manifest"] = verify_final_manifest
+        if phase4_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} final image verification failed with status {phase4_result.returncode}", details
+        if verify_final_manifest != expected_manifest:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} final image verification manifest did not match expected structure", details
+
+        final_png_validation_error = validate_png(verify_final_png_path, REVISION_0)
+        final_jpeg_validation_error = validate_jpeg(verify_final_jpeg_path, REVISION_0)
+        final_png_hash = compute_quickxor_hash_file(verify_final_png_path)
+        final_jpeg_hash = compute_quickxor_hash_file(verify_final_jpeg_path)
+        final_png_size = verify_final_png_path.stat().st_size
+        final_jpeg_size = verify_final_jpeg_path.stat().st_size
+        final_png_mtime = int(verify_final_png_path.stat().st_mtime)
+        final_jpeg_mtime = int(verify_final_jpeg_path.stat().st_mtime)
+        details.update(
+            {
+                "final_png_validation_error": final_png_validation_error,
+                "final_jpeg_validation_error": final_jpeg_validation_error,
+                "final_png_hash": final_png_hash,
+                "final_jpeg_hash": final_jpeg_hash,
+                "final_png_size": final_png_size,
+                "final_jpeg_size": final_jpeg_size,
+                "final_png_mtime": final_png_mtime,
+                "final_jpeg_mtime": final_jpeg_mtime,
+            }
+        )
+        self._write_metadata(metadata_file, details)
+
+        if final_png_validation_error or final_jpeg_validation_error:
+            return False, f"{scenario_id} final remote PNG/JPEG validation failed: {final_png_validation_error or final_jpeg_validation_error}", details
+        if final_png_hash != touched_png_hash or final_jpeg_hash != touched_jpeg_hash:
+            return False, f"{scenario_id} final remote PNG/JPEG bytes changed during an mtime-only operation", details
+        if final_png_size != settled_png_size or final_jpeg_size != settled_jpeg_size:
+            return False, f"{scenario_id} final remote PNG/JPEG size changed during an mtime-only operation", details
+
+        if uses_session_upload:
+            if abs(final_png_mtime - touched_epoch) > 2 or abs(final_jpeg_mtime - touched_epoch) > 2:
+                return False, f"{scenario_id} final remote PNG/JPEG mtimes did not match the touched local timestamp within tolerance", details
+        else:
+            if final_png_mtime <= baseline_png_mtime or final_jpeg_mtime <= baseline_jpeg_mtime:
+                return False, f"{scenario_id} final remote PNG/JPEG mtimes did not advance beyond baseline", details
+            if details["phase3_timestamp_correction_count"] < 2:
+                return False, f"{scenario_id} did not log timestamp correction for both direct-upload image fixtures", details
 
         return True, f"{scenario_id} passed", details
 
@@ -669,40 +955,72 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
         artifacts: list[str] = []
         details: dict[str, object] = {}
 
-        scenarios = [
+        document_scenarios = [
             {
                 "scenario_id": "MT-0001",
-                "scenario_name": "small XLSX/PDF plus PNG/JPEG image set with default simple-upload seed behaviour",
+                "scenario_name": "small XLSX/PDF with default simple-upload seed behaviour",
                 "payload_rows": self.SMALL_XLSX_PAYLOAD_ROWS,
                 "force_session_upload": False,
             },
             {
                 "scenario_id": "MT-0002",
-                "scenario_name": "large XLSX/PDF plus PNG/JPEG image set greater than 4 MiB with automatic session-upload seed behaviour",
+                "scenario_name": "large XLSX/PDF greater than 4 MiB with automatic session-upload seed behaviour",
                 "payload_rows": self.LARGE_XLSX_PAYLOAD_ROWS,
                 "force_session_upload": False,
             },
             {
                 "scenario_id": "MT-0003",
-                "scenario_name": "small XLSX/PDF plus PNG/JPEG image set with force_session_upload enabled",
+                "scenario_name": "small XLSX/PDF with force_session_upload enabled",
                 "payload_rows": self.SMALL_XLSX_PAYLOAD_ROWS,
                 "force_session_upload": True,
             },
             {
                 "scenario_id": "MT-0004",
-                "scenario_name": "large XLSX/PDF plus PNG/JPEG image set greater than 4 MiB with force_session_upload enabled",
+                "scenario_name": "large XLSX/PDF greater than 4 MiB with force_session_upload enabled",
                 "payload_rows": self.LARGE_XLSX_PAYLOAD_ROWS,
                 "force_session_upload": True,
             },
         ]
+        image_scenarios = [
+            {
+                "scenario_id": "IMG-0001",
+                "scenario_name": "small PNG/JPEG with default simple-upload seed behaviour",
+                "image_is_large": False,
+                "force_session_upload": False,
+            },
+            {
+                "scenario_id": "IMG-0002",
+                "scenario_name": "large PNG/JPEG greater than 4 MiB with automatic session-upload seed behaviour",
+                "image_is_large": True,
+                "force_session_upload": False,
+            },
+            {
+                "scenario_id": "IMG-0003",
+                "scenario_name": "small PNG/JPEG with force_session_upload enabled",
+                "image_is_large": False,
+                "force_session_upload": True,
+            },
+            {
+                "scenario_id": "IMG-0004",
+                "scenario_name": "large PNG/JPEG greater than 4 MiB with force_session_upload enabled",
+                "image_is_large": True,
+                "force_session_upload": True,
+            },
+        ]
 
-        scenarios = [
-            scenario for scenario in scenarios if context.should_run_scenario(self.case_id, scenario["scenario_id"])
+        document_scenarios = [
+            scenario for scenario in document_scenarios
+            if context.should_run_scenario(self.case_id, scenario["scenario_id"])
+        ]
+        image_scenarios = [
+            scenario for scenario in image_scenarios
+            if context.should_run_scenario(self.case_id, scenario["scenario_id"])
         ]
 
         failed_scenarios: list[str] = []
+        executed_scenario_ids: list[str] = []
 
-        for scenario in scenarios:
+        for scenario in document_scenarios:
             passed, message, scenario_details = self._run_scenario(
                 context=context,
                 case_work_dir=case_work_dir,
@@ -714,21 +1032,40 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
                 force_session_upload=scenario["force_session_upload"],
                 artifacts=artifacts,
             )
-
-            details[scenario["scenario_id"]] = scenario_details
-            details[f"{scenario['scenario_id']}_passed"] = passed
-            details[f"{scenario['scenario_id']}_message"] = message
-
+            scenario_id = scenario["scenario_id"]
+            executed_scenario_ids.append(scenario_id)
+            details[scenario_id] = scenario_details
+            details[f"{scenario_id}_passed"] = passed
+            details[f"{scenario_id}_message"] = message
             if not passed:
-                failed_scenarios.append(scenario["scenario_id"])
+                failed_scenarios.append(scenario_id)
 
-        details["executed_scenario_ids"] = [scenario["scenario_id"] for scenario in scenarios]
+        for scenario in image_scenarios:
+            passed, message, scenario_details = self._run_image_scenario(
+                context=context,
+                case_work_dir=case_work_dir,
+                case_log_dir=case_log_dir,
+                state_dir=state_dir,
+                scenario_id=scenario["scenario_id"],
+                scenario_name=scenario["scenario_name"],
+                image_is_large=scenario["image_is_large"],
+                force_session_upload=scenario["force_session_upload"],
+                artifacts=artifacts,
+            )
+            scenario_id = scenario["scenario_id"]
+            executed_scenario_ids.append(scenario_id)
+            details[scenario_id] = scenario_details
+            details[f"{scenario_id}_passed"] = passed
+            details[f"{scenario_id}_message"] = message
+            if not passed:
+                failed_scenarios.append(scenario_id)
+
+        details["executed_scenario_ids"] = executed_scenario_ids
         details["failed_scenario_ids"] = list(failed_scenarios)
 
         summary_file = state_dir / "scenario-summary.txt"
         summary_lines: list[str] = []
-        for scenario in scenarios:
-            scenario_id = scenario["scenario_id"]
+        for scenario_id in executed_scenario_ids:
             summary_lines.append(
                 f"{scenario_id}: passed={details.get(f'{scenario_id}_passed')} "
                 f"message={details.get(f'{scenario_id}_message')!r}"
@@ -744,7 +1081,7 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"{len(failed_scenarios)} of {len(scenarios)} mtime-only XLSX/PDF/image scenarios failed: {', '.join(failed_scenarios)}",
+                f"{len(failed_scenarios)} of {len(executed_scenario_ids)} mtime-only document/image scenarios failed: {', '.join(failed_scenarios)}",
                 artifacts,
                 details,
             )

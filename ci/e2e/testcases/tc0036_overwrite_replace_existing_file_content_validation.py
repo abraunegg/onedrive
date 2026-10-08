@@ -497,7 +497,7 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         guard_marker = "Online eTag matches database eTag; treating as local modification despite older local timestamp"
         local_safe_backups = self._safe_backup_files_for(local_file_path)
         local_pdf_safe_backups = self._safe_backup_files_for(local_pdf_path)
-        local_image_safe_backups = image_set_backup_files(local_image_path)
+        local_image_safe_backups = image_set_backup_files(local_image_path, self._safe_backup_files_for)
 
         details["phase2_modified_upload_seen"] = modified_upload_marker in phase2_output
         details["phase2_pdf_modified_upload_seen"] = pdf_modified_upload_marker in phase2_output
@@ -934,7 +934,7 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         guard_marker = "Online eTag matches database eTag; treating as local modification despite older local timestamp"
         local_safe_backups = self._safe_backup_files_for(subject_file)
         local_pdf_safe_backups = self._safe_backup_files_for(subject_pdf_file)
-        local_image_safe_backups = image_set_backup_files(subject_image_file)
+        local_image_safe_backups = image_set_backup_files(subject_image_file, self._safe_backup_files_for)
 
         details["conflict_marker_seen"] = conflict_marker in conflict_output
         details["guard_marker_seen"] = guard_marker in conflict_output
