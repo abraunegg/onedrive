@@ -1153,8 +1153,25 @@ class ApplicationConfig {
 					return false;
 				}
 				setValueLong(key, thisConfigValue);
-				// Validate monitor limits after the complete configuration is loaded.
-				if (key == "space_reservation") { // if key is 'space_reservation' we have to calculate MB -> bytes
+				if (key == "monitor_interval") { // normal minimum 300; bounded developer monitor minimum 60
+					ulong tempValue = thisConfigValue;
+					if (tempValue < (getValueLong("monitor_max_loop") > 0 ? 60 : defaultMonitorInterval)) {
+						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+						tempValue = defaultMonitorInterval;
+					}
+					setValueLong("monitor_interval", tempValue);
+				} else if (key == "monitor_fullscan_frequency") { // normal minimum 12; bounded developer monitor minimum 1
+					ulong tempValue = thisConfigValue;
+					if (tempValue < (getValueLong("monitor_max_loop") > 0 ? 1 : 12)) {
+						// If this is not set to zero (0) then we are not disabling 'monitor_fullscan_frequency'
+						if (tempValue != 0) {
+							// invalid value
+							addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+							tempValue = 12;
+						}
+					}
+					setValueLong("monitor_fullscan_frequency", tempValue);
+				} else if (key == "space_reservation") { // if key is 'space_reservation' we have to calculate MB -> bytes
 					ulong tempValue = thisConfigValue;
 					// a value of 0 needs to be made at least 1MB .. 
 					if (tempValue == 0) {
@@ -1212,21 +1229,6 @@ class ApplicationConfig {
 				addLogEntry("Unknown key in config file: " ~ key);
 				return false;
 			}
-		}
-		
-		// A bounded developer monitor run may accelerate the real scheduler for
-		// E2E testing. Normal runs retain the 300-second / 12-loop minimums.
-		// Perform this check after reading all keys (configuration order independent).
-		bool boundedDeveloperMonitor = getValueLong("monitor_max_loop") > 0;
-		ulong minimumMonitorInterval = boundedDeveloperMonitor ? 60 : defaultMonitorInterval;
-		if (getValueLong("monitor_interval") < minimumMonitorInterval) {
-			addLogEntry("Invalid value for key in config file - using default value: monitor_interval");
-			setValueLong("monitor_interval", defaultMonitorInterval);
-		}
-		ulong fullscanFrequency = getValueLong("monitor_fullscan_frequency");
-		if (fullscanFrequency != 0 && fullscanFrequency < (boundedDeveloperMonitor ? 1 : 12)) {
-			addLogEntry("Invalid value for key in config file - using default value: monitor_fullscan_frequency");
-			setValueLong("monitor_fullscan_frequency", 12);
 		}
 		
 		// If we read in 'skip_file' from the 'config' file, this will be 'true'
@@ -1614,15 +1616,6 @@ class ApplicationConfig {
 			if (getValueLong("monitor_interval") < (getValueLong("monitor_max_loop") > 0 ? 60 : defaultMonitorInterval)) {
 				addLogEntry("Invalid value for --monitor-interval - using default value: " ~ to!string(defaultMonitorInterval));
 				setValueLong("monitor_interval", defaultMonitorInterval);
-			}
-			
-			// Preserve production full-scan minimum for unbounded runs, including
-			// configurations changed after the file was parsed.
-			if (getValueLong("monitor_max_loop") == 0 &&
-			    getValueLong("monitor_fullscan_frequency") > 0 &&
-			    getValueLong("monitor_fullscan_frequency") < 12) {
-				addLogEntry("Invalid value for --monitor-fullscan-frequency - using default value: 12");
-				setValueLong("monitor_fullscan_frequency", 12);
 			}
 			
 			// Was --file-fragment-size specified and now set to a value below or above maximum?
