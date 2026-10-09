@@ -100,9 +100,9 @@ class TestCase0084RemoteBatchDeletionReconciliation(MonitorModeTestCaseBase):
             conf_subject,
             f'# tc0084 tracked monitor subject\nsync_dir = "{subject_root}"\n'
             'bypass_data_preservation = "false"\n'
+            'monitor_max_loop = "3"\n'
             'monitor_interval = "90"\n'
             'monitor_fullscan_frequency = "1"\n'
-            'monitor_max_loop = "3"\n'
             'disable_websocket_support = "true"\n',
         )
         # Scope via sync_list, not --single-directory: the subject must use native /delta.
