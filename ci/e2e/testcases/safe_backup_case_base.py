@@ -175,6 +175,84 @@ class SafeBackupCaseBase(E2ETestCase):
 
         return "; ".join(errors), modes
 
+    def _pdf_safe_backup_hash_contract(
+        self,
+        *,
+        reconcile_output: str,
+        local_backups: dict[str, list[Path]],
+        expected_original_hashes: dict[str, str],
+        remote_backups: dict[str, list[Path]],
+    ) -> tuple[str, dict[str, str]]:
+        """Validate exact PDF safeBackup preservation across local and remote verification."""
+        errors: list[str] = []
+        modes: dict[str, str] = {}
+
+        for label in ("small", "large"):
+            local_files = local_backups.get(label, [])
+            remote_files = remote_backups.get(label, [])
+
+            if len(local_files) != 1:
+                modes[label] = "invalid-local-backup-count"
+                errors.append(f"{label}: expected exactly one local PDF safeBackup, found {len(local_files)}")
+                continue
+
+            local_hash = self._hash_if_file(local_files[0])
+            expected_hash = expected_original_hashes.get(label, "")
+            if not expected_hash or local_hash != expected_hash:
+                modes[label] = "local-bytes-changed"
+                errors.append(f"{label}: local PDF safeBackup does not retain the exact pre-conflict bytes")
+                continue
+
+            modes[label] = "exact-local-preservation"
+            if len(remote_files) != 1:
+                errors.append(f"{label}: fresh verification found {len(remote_files)} remote PDF safeBackups")
+                continue
+
+            remote_hash = self._hash_if_file(remote_files[0])
+            if remote_hash != local_hash:
+                errors.append(f"{label}: remote PDF safeBackup does not match the locally preserved bytes")
+
+        return "; ".join(errors), modes
+
+    def _image_safe_backup_hash_contract(
+        self,
+        *,
+        reconcile_output: str,
+        local_backups: dict[str, list[Path]],
+        expected_original_hashes: dict[str, str],
+        remote_backups: dict[str, list[Path]],
+    ) -> tuple[str, dict[str, str]]:
+        """Validate exact PNG/JPEG safeBackup preservation locally and remotely."""
+        errors: list[str] = []
+        modes: dict[str, str] = {}
+
+        for label in ("png_small", "png_large", "jpeg_small", "jpeg_large"):
+            local_files = local_backups.get(label, [])
+            remote_files = remote_backups.get(label, [])
+
+            if len(local_files) != 1:
+                modes[label] = "invalid-local-backup-count"
+                errors.append(f"{label}: expected exactly one local image safeBackup, found {len(local_files)}")
+                continue
+
+            local_hash = self._hash_if_file(local_files[0])
+            expected_hash = expected_original_hashes.get(label, "")
+            if not expected_hash or local_hash != expected_hash:
+                modes[label] = "local-bytes-changed"
+                errors.append(f"{label}: local image safeBackup does not retain the exact pre-conflict bytes")
+                continue
+
+            modes[label] = "exact-local-preservation"
+            if len(remote_files) != 1:
+                errors.append(f"{label}: fresh verification found {len(remote_files)} remote image safeBackups")
+                continue
+
+            remote_hash = self._hash_if_file(remote_files[0])
+            if remote_hash != local_hash:
+                errors.append(f"{label}: remote image safeBackup does not match the locally preserved bytes")
+
+        return "; ".join(errors), modes
+
     def _text_if_file(self, path: Path) -> str:
         return path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
 

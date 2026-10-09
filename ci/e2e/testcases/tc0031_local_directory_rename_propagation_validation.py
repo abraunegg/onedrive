@@ -1,406 +1,1008 @@
 from __future__ import annotations
 
+
+
 import os
+
 from pathlib import Path
 
+
+
 from framework.base import E2ETestCase
+
 from framework.context import E2EContext
+
 from framework.manifest import build_manifest, write_manifest
+
 from framework.result import TestResult
+
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair
+
+from framework.pdf import create_random_pdf_pair, validate_pdf_pair
+
+from framework.image import create_random_image_set, validate_image_set, image_set_any_exists, image_set_all_files
+
 from framework.utils import (
+
     command_to_string,
+
     compute_quickxor_hash_file,
+
     reset_directory,
+
     run_command,
+
     write_onedrive_config,
+
     write_text_file,
+
 )
 
 
+
+
+
 class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
+
     case_id = "0031"
+
     name = "local directory rename propagation validation"
+
     description = (
-        "Validate that renaming a local directory tree containing passive TXT and real XLSX files "
-        "is correctly propagated to remote state"
+
+        "Validate that renaming a local directory tree containing passive TXT, real XLSX/PDF files "
+
+        "and a real PNG/JPEG image set is correctly propagated to remote state"
+
     )
+
+
 
     XLSX_PAYLOAD_ROWS = 32
 
+
+
     def _write_config(self, config_dir: Path, sync_dir: Path) -> None:
+
         config_path = config_dir / "config"
+
         backup_path = config_dir / ".config.backup"
+
         hash_path = config_dir / ".config.hash"
 
+
+
         config_text = (
+
             "# tc0031 config\n"
+
             f'sync_dir = "{sync_dir}"\n'
+
         )
+
+
 
         write_onedrive_config(config_path, config_text)
+
         write_onedrive_config(backup_path, config_text)
+
         hash_path.write_text(compute_quickxor_hash_file(config_path), encoding="utf-8")
+
         os.chmod(config_path, 0o600)
+
         os.chmod(backup_path, 0o600)
+
         os.chmod(hash_path, 0o600)
 
+
+
     def _write_metadata(self, metadata_file: Path, details: dict[str, object]) -> None:
+
         write_text_file(
+
             metadata_file,
+
             "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+
         )
+
+
 
     def run(self, context: E2EContext) -> TestResult:
+
         layout = self.prepare_case_layout(
+
             context,
+
             case_dir_name="tc0031",
+
             ensure_refresh_token=True,
+
         )
+
         case_work_dir = layout.work_dir
+
         case_log_dir = layout.log_dir
+
         state_dir = layout.state_dir
 
+
+
         local_root = case_work_dir / "syncroot"
+
         verify_root = case_work_dir / "verifyroot"
+
         conf_main = case_work_dir / "conf-main"
+
         conf_verify = case_work_dir / "conf-verify"
 
+
+
         reset_directory(local_root)
+
         reset_directory(verify_root)
 
+
+
         context.prepare_minimal_config_dir(conf_main, "")
+
         context.prepare_minimal_config_dir(conf_verify, "")
 
+
+
         self._write_config(conf_main, local_root)
+
         self._write_config(conf_verify, verify_root)
 
+
+
         root_name = f"ZZ_E2E_TC0031_{context.run_id}_{os.getpid()}"
+
         source_dir_relative = f"{root_name}/SourceDirectory"
+
         renamed_dir_relative = f"{root_name}/RenamedDirectory"
 
+
+
         source_dir = local_root / source_dir_relative
+
         renamed_dir = local_root / renamed_dir_relative
 
+
+
         source_file_1_relative = f"{source_dir_relative}/top-level.xlsx"
+
+        source_pdf_relative = f"{source_dir_relative}/top-level.pdf"
+
+        source_image_relative = f"{source_dir_relative}/top-level.png"
+
         source_file_2_relative = f"{source_dir_relative}/Nested/child.txt"
+
         source_text_relative = f"{source_dir_relative}/top-level.txt"
+
         renamed_file_1_relative = f"{renamed_dir_relative}/top-level.xlsx"
+
+        renamed_pdf_relative = f"{renamed_dir_relative}/top-level.pdf"
+
+        renamed_image_relative = f"{renamed_dir_relative}/top-level.png"
+
         renamed_file_2_relative = f"{renamed_dir_relative}/Nested/child.txt"
+
         renamed_text_relative = f"{renamed_dir_relative}/top-level.txt"
 
+
+
         source_file_1 = local_root / source_file_1_relative
+
+        source_pdf = local_root / source_pdf_relative
+
+        source_image = local_root / source_image_relative
+
         source_file_2 = local_root / source_file_2_relative
+
         source_text = local_root / source_text_relative
 
+
+
         file2_content = "child\n"
+
         text_content = "top\n"
+
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0031:{os.getpid()}"
 
+        pdf_seed = f"{xlsx_seed}:pdf"
+
+        image_seed = f"{xlsx_seed}:image"
+
+
+
         phase1_stdout = case_log_dir / "phase1_seed_stdout.log"
+
         phase1_stderr = case_log_dir / "phase1_seed_stderr.log"
+
         phase1_settle_stdout = case_log_dir / "phase1_settle_stdout.log"
+
         phase1_settle_stderr = case_log_dir / "phase1_settle_stderr.log"
+
         phase2_stdout = case_log_dir / "phase2_directory_rename_stdout.log"
+
         phase2_stderr = case_log_dir / "phase2_directory_rename_stderr.log"
+
         verify_stdout = case_log_dir / "verify_stdout.log"
+
         verify_stderr = case_log_dir / "verify_stderr.log"
+
         verify_manifest_file = state_dir / "verify_manifest.txt"
+
         metadata_file = state_dir / "metadata.txt"
 
+
+
         artifacts = [
+
             str(phase1_stdout),
+
             str(phase1_stderr),
+
             str(phase1_settle_stdout),
+
             str(phase1_settle_stderr),
+
             str(phase2_stdout),
+
             str(phase2_stderr),
+
             str(verify_stdout),
+
             str(verify_stderr),
+
             str(verify_manifest_file),
+
             str(metadata_file),
+
         ]
+
+
 
         details: dict[str, object] = {
+
             "root_name": root_name,
+
             "source_dir_relative": source_dir_relative,
+
             "renamed_dir_relative": renamed_dir_relative,
+
             "main_conf_dir": str(conf_main),
+
             "verify_conf_dir": str(conf_verify),
+
             "local_root": str(local_root),
+
             "verify_root": str(verify_root),
+
             "xlsx_seed": xlsx_seed,
+
+            "pdf_seed": pdf_seed,
+
+            "image_seed": image_seed,
+
+            "source_pdf_relative": source_pdf_relative,
+
+            "renamed_pdf_relative": renamed_pdf_relative,
+
+            "source_image_relative": source_image_relative,
+
+            "renamed_image_relative": renamed_image_relative,
+
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
+
         }
 
+
+
         generated = create_random_xlsx_pair(
+
             source_file_1,
+
             xlsx_seed,
+
             revision=REVISION_0,
+
             payload_rows=self.XLSX_PAYLOAD_ROWS,
+
             title="TC0031 local directory rename propagation workbook",
+
         )
+
         details["generated_size"] = int(generated["size_bytes"])
+
+        generated_pdf = create_random_pdf_pair(source_pdf, pdf_seed, revision=REVISION_0, title="TC0031 local directory rename PDF")
+
+        details["generated_pdf_size"] = int(generated_pdf["size_bytes"])
+
+        details["generated_large_pdf_size"] = int(generated_pdf["large_size_bytes"])
+
+        generated_images = create_random_image_set(source_image, image_seed, revision=REVISION_0, title="TC0031 local directory rename images")
+
+        details["generated_image_sizes"] = {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")}
+
         write_text_file(source_file_2, file2_content)
+
         write_text_file(source_text, text_content)
 
+
+
         phase1_command = [
+
             context.onedrive_bin,
+
             "--display-running-config",
+
             "--sync",
+
             "--verbose",
+
             "--confdir",
+
             str(conf_main),
+
         ]
+
         context.log(f"Executing Test Case {self.case_id} phase1: {command_to_string(phase1_command)}")
+
         phase1_result = run_command(phase1_command, cwd=context.repo_root)
+
         write_text_file(phase1_stdout, phase1_result.stdout)
+
         write_text_file(phase1_stderr, phase1_result.stderr)
+
         details["phase1_returncode"] = phase1_result.returncode
 
+
+
         if phase1_result.returncode != 0:
+
             self._write_metadata(metadata_file, details)
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 f"seed phase failed with status {phase1_result.returncode}",
+
                 artifacts,
+
                 details,
+
             )
+
+
 
         # Stabilise the just-created remote tree before performing the local rename.
+
         # This prevents Graph delta timing from rehydrating the original source
+
         # directory locally during the subsequent rename propagation phase.
+
         phase1_settle_command = [
+
             context.onedrive_bin,
+
             "--display-running-config",
+
             "--sync",
+
             "--verbose",
+
             "--confdir",
+
             str(conf_main),
+
         ]
+
         context.log(f"Executing Test Case {self.case_id} phase1 settle: {command_to_string(phase1_settle_command)}")
+
         phase1_settle_result = run_command(phase1_settle_command, cwd=context.repo_root)
+
         write_text_file(phase1_settle_stdout, phase1_settle_result.stdout)
+
         write_text_file(phase1_settle_stderr, phase1_settle_result.stderr)
+
         details["phase1_settle_returncode"] = phase1_settle_result.returncode
 
+
+
         if phase1_settle_result.returncode != 0:
+
             self._write_metadata(metadata_file, details)
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 f"seed settle phase failed with status {phase1_settle_result.returncode}",
+
                 artifacts,
+
                 details,
+
             )
+
+
 
         settled_validation_error = validate_xlsx_pair(source_file_1, REVISION_0)
+
+        settled_pdf_validation_error = validate_pdf_pair(source_pdf, REVISION_0)
+
+        settled_image_validation_error = validate_image_set(source_image, REVISION_0)
+
         settled_text_content = source_text.read_text(encoding="utf-8") if source_text.is_file() else ""
+
         details["settled_validation_error"] = settled_validation_error
+
+        details["settled_pdf_validation_error"] = settled_pdf_validation_error
+
+        details["settled_image_validation_error"] = settled_image_validation_error
+
         details["settled_text_content"] = settled_text_content
+
         if settled_validation_error:
+
             self._write_metadata(metadata_file, details)
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 f"seeded XLSX was invalid after settle sync: {settled_validation_error}",
+
                 artifacts,
+
                 details,
+
             )
 
-        if settled_text_content != text_content:
+
+
+        if settled_image_validation_error:
+
             self._write_metadata(metadata_file, details)
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
-                "seeded passive TXT content changed during initial settle sync",
+
+                f"seeded image set was invalid after settle sync: {settled_image_validation_error}",
+
                 artifacts,
+
                 details,
+
             )
+
+
+
+        if settled_pdf_validation_error:
+
+            self._write_metadata(metadata_file, details)
+
+            return self.fail_result(
+
+                self.case_id,
+
+                self.name,
+
+                f"seeded PDF was invalid after settle sync: {settled_pdf_validation_error}",
+
+                artifacts,
+
+                details,
+
+            )
+
+
+
+        if settled_text_content != text_content:
+
+            self._write_metadata(metadata_file, details)
+
+            return self.fail_result(
+
+                self.case_id,
+
+                self.name,
+
+                "seeded passive TXT content changed during initial settle sync",
+
+                artifacts,
+
+                details,
+
+            )
+
+
 
         source_dir.rename(renamed_dir)
 
+
+
         if source_dir.exists():
+
             self._write_metadata(metadata_file, details)
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 "local original directory still exists immediately after rename",
+
                 artifacts,
+
                 details,
+
             )
+
+
 
         if not renamed_dir.is_dir():
+
             self._write_metadata(metadata_file, details)
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 "local renamed directory does not exist immediately after rename",
+
                 artifacts,
+
                 details,
+
             )
+
+
 
         phase2_command = [
+
             context.onedrive_bin,
+
             "--display-running-config",
+
             "--sync",
+
             "--verbose",
+
             "--confdir",
+
             str(conf_main),
+
         ]
+
         context.log(f"Executing Test Case {self.case_id} phase2: {command_to_string(phase2_command)}")
+
         phase2_result = run_command(phase2_command, cwd=context.repo_root)
+
         write_text_file(phase2_stdout, phase2_result.stdout)
+
         write_text_file(phase2_stderr, phase2_result.stderr)
+
         details["phase2_returncode"] = phase2_result.returncode
+
         details["phase2_deleted_old_directory_online"] = (
+
             f"Deleting item from Microsoft OneDrive: {source_dir_relative}" in phase2_result.stdout
+
         )
+
+
 
         if phase2_result.returncode != 0:
+
             self._write_metadata(metadata_file, details)
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 f"directory rename propagation phase failed with status {phase2_result.returncode}",
+
                 artifacts,
+
                 details,
+
             )
 
+
+
         verify_command = [
+
             context.onedrive_bin,
+
             "--display-running-config",
+
             "--sync",
+
             "--download-only",
+
             "--verbose",
+
             "--resync",
+
             "--resync-auth",
+
             "--single-directory",
+
             root_name,
+
             "--confdir",
+
             str(conf_verify),
+
         ]
+
         context.log(f"Executing Test Case {self.case_id} verify: {command_to_string(verify_command)}")
+
         verify_result = run_command(verify_command, cwd=context.repo_root)
+
         write_text_file(verify_stdout, verify_result.stdout)
+
         write_text_file(verify_stderr, verify_result.stderr)
+
         details["verify_returncode"] = verify_result.returncode
 
+
+
         verify_manifest = build_manifest(verify_root)
+
         write_manifest(verify_manifest_file, verify_manifest)
 
+
+
         verify_old_dir = verify_root / source_dir_relative
+
         verify_new_dir = verify_root / renamed_dir_relative
+
         verify_old_file_1 = verify_root / source_file_1_relative
+
+        verify_old_pdf = verify_root / source_pdf_relative
+
+        verify_old_image = verify_root / source_image_relative
+
         verify_old_file_2 = verify_root / source_file_2_relative
+
         verify_old_text = verify_root / source_text_relative
+
         verify_new_file_1 = verify_root / renamed_file_1_relative
+
+        verify_new_pdf = verify_root / renamed_pdf_relative
+
+        verify_new_image = verify_root / renamed_image_relative
+
         verify_new_file_2 = verify_root / renamed_file_2_relative
+
         verify_new_text = verify_root / renamed_text_relative
 
+
+
         details["verify_old_dir_exists"] = verify_old_dir.exists()
+
         details["verify_new_dir_exists"] = verify_new_dir.exists()
+
         details["verify_old_file_1_exists"] = verify_old_file_1.exists()
+
+        details["verify_old_pdf_exists"] = verify_old_pdf.exists()
+
+        details["verify_old_image_exists"] = image_set_any_exists(verify_old_image)
+
         details["verify_old_file_2_exists"] = verify_old_file_2.exists()
+
         details["verify_old_text_exists"] = verify_old_text.exists()
+
         details["verify_new_file_1_exists"] = verify_new_file_1.exists()
+
+        details["verify_new_pdf_exists"] = verify_new_pdf.exists()
+
+        details["verify_new_image_exists"] = image_set_all_files(verify_new_image)
+
         details["verify_new_file_2_exists"] = verify_new_file_2.exists()
+
         details["verify_new_text_exists"] = verify_new_text.exists()
 
+
+
         verify_new_file_1_validation_error = (
+
             validate_xlsx_pair(verify_new_file_1, REVISION_0)
+
             if verify_new_file_1.is_file()
+
             else "Verification XLSX is missing"
+
         )
+
+        verify_new_pdf_validation_error = (
+
+            validate_pdf_pair(verify_new_pdf, REVISION_0)
+
+            if verify_new_pdf.is_file()
+
+            else "Verification PDF is missing"
+
+        )
+        verify_new_image_validation_error = (
+            validate_image_set(verify_new_image, REVISION_0)
+            if image_set_all_files(verify_new_image)
+            else "Verification image set is missing"
+        )
+
         verify_new_file_2_content = verify_new_file_2.read_text(encoding="utf-8") if verify_new_file_2.is_file() else ""
+
         verify_new_text_content = verify_new_text.read_text(encoding="utf-8") if verify_new_text.is_file() else ""
 
+
+
         details["verify_new_file_1_validation_error"] = verify_new_file_1_validation_error
+
+        details["verify_new_pdf_validation_error"] = verify_new_pdf_validation_error
+
+        details["verify_new_image_validation_error"] = verify_new_image_validation_error
+
         details["verify_new_file_2_content"] = verify_new_file_2_content
+
         details["verify_new_text_content"] = verify_new_text_content
+
+
 
         self._write_metadata(metadata_file, details)
 
+
+
         if verify_result.returncode != 0:
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 f"remote verification failed with status {verify_result.returncode}",
+
                 artifacts,
+
                 details,
+
             )
 
-        if verify_old_dir.exists() or verify_old_file_1.exists() or verify_old_file_2.exists() or verify_old_text.exists():
+
+
+        if verify_old_dir.exists() or verify_old_file_1.exists() or verify_old_pdf.exists() or verify_old_file_2.exists() or verify_old_text.exists() or image_set_any_exists(verify_old_image):
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 f"remote verification still contains original directory tree: {source_dir_relative}",
+
                 artifacts,
+
                 details,
+
             )
+
+
 
         if not verify_new_dir.is_dir():
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 f"remote verification is missing renamed directory: {renamed_dir_relative}",
+
                 artifacts,
+
                 details,
+
             )
+
+
 
         if not verify_new_file_1.is_file():
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 f"remote verification is missing renamed top-level file: {renamed_file_1_relative}",
+
                 artifacts,
+
                 details,
+
             )
+
+
+
+        if not image_set_all_files(verify_new_image):
+
+            return self.fail_result(
+
+                self.case_id,
+
+                self.name,
+
+                f"remote verification is missing renamed image set: {renamed_image_relative}",
+
+                artifacts,
+
+                details,
+
+            )
+
+
+
+        if not verify_new_pdf.is_file():
+
+            return self.fail_result(
+
+                self.case_id,
+
+                self.name,
+
+                f"remote verification is missing renamed PDF: {renamed_pdf_relative}",
+
+                artifacts,
+
+                details,
+
+            )
+
+
 
         if not verify_new_file_2.is_file():
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 f"remote verification is missing renamed nested file: {renamed_file_2_relative}",
+
                 artifacts,
+
                 details,
+
             )
+
+
 
         if not verify_new_text.is_file():
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 f"remote verification is missing renamed passive TXT file: {renamed_text_relative}",
+
                 artifacts,
+
                 details,
+
             )
+
+
 
         if verify_new_file_1_validation_error:
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 f"renamed top-level XLSX was invalid or stale: {verify_new_file_1_validation_error}",
+
                 artifacts,
+
                 details,
+
             )
+
+
+
+        if verify_new_image_validation_error:
+
+            return self.fail_result(
+
+                self.case_id,
+
+                self.name,
+
+                f"renamed image set was invalid or stale: {verify_new_image_validation_error}",
+
+                artifacts,
+
+                details,
+
+            )
+
+
+
+        if verify_new_pdf_validation_error:
+
+            return self.fail_result(
+
+                self.case_id,
+
+                self.name,
+
+                f"renamed PDF was invalid or stale: {verify_new_pdf_validation_error}",
+
+                artifacts,
+
+                details,
+
+            )
+
+
 
         if verify_new_file_2_content != file2_content:
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 "renamed nested file content did not match expected content",
+
                 artifacts,
+
                 details,
+
             )
 
+
+
         if verify_new_text_content != text_content:
+
             return self.fail_result(
+
                 self.case_id,
+
                 self.name,
+
                 "renamed passive TXT content did not match expected content",
+
                 artifacts,
+
                 details,
+
             )
+
+
 
         return self.pass_result(self.case_id, self.name, artifacts, details)

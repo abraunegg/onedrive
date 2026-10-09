@@ -337,6 +337,7 @@ mozram
 msghdr
 msonenote
 mswsock
+mtimes
 mtls
 mtune
 mydir
@@ -605,6 +606,7 @@ timerfd
 tkx
 tlsv
 tpgid
+tracebacks
 traceflag
 tracep
 trapno

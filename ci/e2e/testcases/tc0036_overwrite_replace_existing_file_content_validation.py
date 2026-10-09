@@ -8,6 +8,15 @@ from pathlib import Path
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.pdf import (
+    LARGE_PDF_IMAGE_HEIGHT,
+    LARGE_PDF_IMAGE_WIDTH,
+    SMALL_PDF_IMAGE_HEIGHT,
+    SMALL_PDF_IMAGE_WIDTH,
+    create_random_pdf,
+    mutate_pdf_revision,
+    validate_pdf,
+)
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -17,6 +26,33 @@ from framework.utils import (
     write_text_file,
 )
 from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
+from framework.image import (
+    LARGE_JPEG_HEIGHT,
+    LARGE_JPEG_WIDTH,
+    LARGE_PNG_HEIGHT,
+    LARGE_PNG_WIDTH,
+    SMALL_IMAGE_HEIGHT,
+    SMALL_IMAGE_WIDTH,
+    REVISION_0 as IMAGE_REVISION_0,
+    REVISION_1 as IMAGE_REVISION_1,
+    create_random_jpeg,
+    create_random_png,
+    mutate_jpeg_revision,
+    mutate_png_revision,
+    validate_jpeg,
+    validate_png,
+    create_random_image_set,
+    mutate_image_set_revision,
+    validate_image_set,
+    image_set_hashes,
+    image_set_sizes,
+    image_set_mtimes,
+    set_image_set_mtime,
+    image_set_backup_files,
+    image_set_relatives,
+    image_set_all_files,
+    copy_image_set,
+)
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 
 
@@ -24,7 +60,7 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
     case_id = "0036"
     name = "overwrite / replace existing Microsoft file content validation"
     description = (
-        "Validate XLSX content replacement across newer and timestamp-preserving older local "
+        "Validate real XLSX/PDF and PNG/JPEG image content replacement across newer and timestamp-preserving older local "
         "mtime cases, including simple and session uploads, while retaining the safeBackup "
         "conflict path when the online item has genuinely changed"
     )
@@ -32,6 +68,8 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
     SESSION_THRESHOLD_BYTES = 4 * 1024 * 1024
     SMALL_XLSX_PAYLOAD_ROWS = 80
     LARGE_XLSX_PAYLOAD_ROWS = 240
+    IMAGE_POST_UPLOAD_SETTLE_SECONDS = 15
+    IMAGE_SETTLE_CONFIRMATION_SECONDS = 3
 
     def _write_config(
         self,
@@ -133,6 +171,58 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
             if path.is_file()
         )
 
+    @staticmethod
+    def _image_suffix(image_format: str) -> str:
+        if image_format == "png":
+            return ".png"
+        if image_format == "jpeg":
+            return ".jpg"
+        raise ValueError(f"Unsupported image format: {image_format}")
+
+    def _create_single_image(
+        self,
+        path: Path,
+        seed: str,
+        *,
+        image_format: str,
+        large: bool,
+        revision: str,
+        title: str,
+    ) -> dict[str, object]:
+        if image_format == "png":
+            return create_random_png(
+                path, seed, revision=revision,
+                width=LARGE_PNG_WIDTH if large else SMALL_IMAGE_WIDTH,
+                height=LARGE_PNG_HEIGHT if large else SMALL_IMAGE_HEIGHT,
+                title=title,
+            )
+        if image_format == "jpeg":
+            return create_random_jpeg(
+                path, seed, revision=revision,
+                width=LARGE_JPEG_WIDTH if large else SMALL_IMAGE_WIDTH,
+                height=LARGE_JPEG_HEIGHT if large else SMALL_IMAGE_HEIGHT,
+                title=title,
+            )
+        raise ValueError(f"Unsupported image format: {image_format}")
+
+    @staticmethod
+    def _mutate_single_image(path: Path, image_format: str, expected_revision: str, new_revision: str) -> None:
+        if image_format == "png":
+            mutate_png_revision(path, expected_revision, new_revision)
+            return
+        if image_format == "jpeg":
+            mutate_jpeg_revision(path, expected_revision, new_revision)
+            return
+        raise ValueError(f"Unsupported image format: {image_format}")
+
+    @staticmethod
+    def _validate_single_image(path: Path, image_format: str, expected_revision: str) -> str:
+        if image_format == "png":
+            return validate_png(path, expected_revision)
+        if image_format == "jpeg":
+            return validate_jpeg(path, expected_revision)
+        return f"Unsupported image format: {image_format}"
+
     def _sync_command(
         self,
         context: E2EContext,
@@ -179,6 +269,8 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         scenario_name: str,
         payload_rows: int,
         timestamp_mode: str,
+        image_format: str,
+        image_large: bool,
         artifacts: list[str],
     ) -> tuple[bool, str, dict[str, object]]:
         scenario_work_dir = case_work_dir / scenario_id
@@ -203,11 +295,21 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
 
         root_name = f"ZZ_E2E_TC0036_{scenario_id}_{context.run_id}_{os.getpid()}"
         relative_path = f"{root_name}/replace-me.xlsx"
+        pdf_relative_path = f"{root_name}/replace-me.pdf"
+        image_relative_path = f"{root_name}/replace-me{self._image_suffix(image_format)}"
         local_file_path = local_root / relative_path
         verify_file_path = verify_root / relative_path
+        local_pdf_path = local_root / pdf_relative_path
+        verify_pdf_path = verify_root / pdf_relative_path
+        local_image_path = local_root / image_relative_path
+        verify_image_path = verify_root / image_relative_path
 
         phase1_stdout = scenario_log_dir / "phase1_seed_stdout.log"
         phase1_stderr = scenario_log_dir / "phase1_seed_stderr.log"
+        settle1_stdout = scenario_log_dir / "phase1_settle1_stdout.log"
+        settle1_stderr = scenario_log_dir / "phase1_settle1_stderr.log"
+        settle2_stdout = scenario_log_dir / "phase1_settle2_stdout.log"
+        settle2_stderr = scenario_log_dir / "phase1_settle2_stderr.log"
         phase2_stdout = scenario_log_dir / "phase2_replace_stdout.log"
         phase2_stderr = scenario_log_dir / "phase2_replace_stderr.log"
         phase3_stdout = scenario_log_dir / "phase3_verify_stdout.log"
@@ -219,6 +321,10 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
             [
                 str(phase1_stdout),
                 str(phase1_stderr),
+                str(settle1_stdout),
+                str(settle1_stderr),
+                str(settle2_stdout),
+                str(settle2_stderr),
                 str(phase2_stdout),
                 str(phase2_stderr),
                 str(phase3_stdout),
@@ -236,6 +342,22 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
             title=f"TC0036 {scenario_id} replacement workbook",
         )
         generated_size = int(generated["size_bytes"])
+        pdf_is_large = payload_rows == self.LARGE_XLSX_PAYLOAD_ROWS
+        generated_pdf = create_random_pdf(
+            local_pdf_path,
+            f"{xlsx_seed}:pdf",
+            revision=REVISION_0,
+            image_width=LARGE_PDF_IMAGE_WIDTH if pdf_is_large else SMALL_PDF_IMAGE_WIDTH,
+            image_height=LARGE_PDF_IMAGE_HEIGHT if pdf_is_large else SMALL_PDF_IMAGE_HEIGHT,
+            title=f"TC0036 {scenario_id} replacement PDF",
+        )
+        generated_pdf_size = int(generated_pdf["size_bytes"])
+        image_seed = f"{xlsx_seed}:image:{image_format}"
+        generated_image = self._create_single_image(
+            local_image_path, image_seed, image_format=image_format, large=image_large,
+            revision=IMAGE_REVISION_0, title=f"TC0036 {scenario_id} replacement {image_format.upper()} image",
+        )
+        generated_image_size = int(generated_image["size_bytes"])
         expected_session_upload = generated_size > self.SESSION_THRESHOLD_BYTES
 
         details: dict[str, object] = {
@@ -243,10 +365,19 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
             "scenario_name": scenario_name,
             "root_name": root_name,
             "relative_path": relative_path,
+            "pdf_relative_path": pdf_relative_path,
+            "image_relative_path": image_relative_path,
+            "image_format": image_format,
+            "image_large": image_large,
+            "image_seed": image_seed,
             "timestamp_mode": timestamp_mode,
             "payload_rows": payload_rows,
             "generated_size": generated_size,
+            "generated_pdf_size": generated_pdf_size,
+            "generated_image_size": generated_image_size,
             "expected_session_upload": expected_session_upload,
+            "image_expected_session_upload": generated_image_size > self.SESSION_THRESHOLD_BYTES,
+            "pdf_expected_session_upload": generated_pdf_size > self.SESSION_THRESHOLD_BYTES,
             "xlsx_seed": xlsx_seed,
             "main_conf_dir": str(conf_main),
             "verify_conf_dir": str(conf_verify),
@@ -261,6 +392,20 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} large XLSX did not exceed the 4 MiB session threshold", details
 
+        if not pdf_is_large and generated_pdf_size > self.SESSION_THRESHOLD_BYTES:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} small PDF unexpectedly exceeded the 4 MiB session threshold", details
+        if pdf_is_large and generated_pdf_size <= self.SESSION_THRESHOLD_BYTES:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} large PDF did not exceed the 4 MiB session threshold", details
+
+        if image_large and generated_image_size <= self.SESSION_THRESHOLD_BYTES:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} large {image_format.upper()} did not exceed the 4 MiB session threshold", details
+        if not image_large and generated_image_size > self.SESSION_THRESHOLD_BYTES:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} small {image_format.upper()} unexpectedly exceeded the 4 MiB session threshold", details
+
         phase1_result = self._run_logged_command(
             context,
             f"{scenario_id} phase1 seed",
@@ -273,18 +418,63 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} seed phase failed with status {phase1_result.returncode}", details
 
+        # Microsoft can asynchronously post-process images after upload and advance
+        # only the eTag.  Refresh the tracked identity before testing replacement
+        # semantics so this scenario is not an image-enrichment race.
+        time.sleep(self.IMAGE_POST_UPLOAD_SETTLE_SECONDS)
+        settle1_result = self._run_logged_command(
+            context, f"{scenario_id} phase1 metadata settle 1",
+            self._sync_command(context, root_name, conf_main), settle1_stdout, settle1_stderr,
+        )
+        details["settle1_returncode"] = settle1_result.returncode
+        if settle1_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} first metadata-settle sync failed with status {settle1_result.returncode}", details
+        time.sleep(self.IMAGE_SETTLE_CONFIRMATION_SECONDS)
+        settle2_result = self._run_logged_command(
+            context, f"{scenario_id} phase1 metadata settle 2",
+            self._sync_command(context, root_name, conf_main), settle2_stdout, settle2_stderr,
+        )
+        details["settle2_returncode"] = settle2_result.returncode
+        if settle2_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} second metadata-settle sync failed with status {settle2_result.returncode}", details
+
         baseline_validation_error = validate_xlsx(local_file_path, REVISION_0)
+        baseline_pdf_validation_error = validate_pdf(local_pdf_path, REVISION_0)
+        baseline_image_validation_error = self._validate_single_image(local_image_path, image_format, IMAGE_REVISION_0)
         details["baseline_validation_error"] = baseline_validation_error
+        details["baseline_pdf_validation_error"] = baseline_pdf_validation_error
+        details["baseline_image_validation_error"] = baseline_image_validation_error
         if baseline_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} seeded XLSX was invalid after initial sync: {baseline_validation_error}", details
 
+        if baseline_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} seeded PDF was invalid after initial sync: {baseline_pdf_validation_error}", details
+        if baseline_image_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} seeded {image_format.upper()} was invalid after metadata settle: {baseline_image_validation_error}", details
+
         baseline_hash = compute_quickxor_hash_file(local_file_path)
         baseline_size = local_file_path.stat().st_size
         baseline_mtime = int(local_file_path.stat().st_mtime)
+        baseline_pdf_hash = compute_quickxor_hash_file(local_pdf_path)
+        baseline_pdf_size = local_pdf_path.stat().st_size
+        baseline_pdf_mtime = int(local_pdf_path.stat().st_mtime)
+        baseline_image_hash = compute_quickxor_hash_file(local_image_path)
+        baseline_image_size = local_image_path.stat().st_size
+        baseline_image_mtime = int(local_image_path.stat().st_mtime)
         details["baseline_hash"] = baseline_hash
         details["baseline_size"] = baseline_size
         details["baseline_mtime"] = baseline_mtime
+        details["baseline_pdf_hash"] = baseline_pdf_hash
+        details["baseline_pdf_size"] = baseline_pdf_size
+        details["baseline_pdf_mtime"] = baseline_pdf_mtime
+        details["baseline_image_hash"] = baseline_image_hash
+        details["baseline_image_size"] = baseline_image_size
+        details["baseline_image_mtime"] = baseline_image_mtime
 
         if payload_rows == self.SMALL_XLSX_PAYLOAD_ROWS and baseline_size > self.SESSION_THRESHOLD_BYTES:
             self._write_metadata(metadata_file, details)
@@ -293,29 +483,66 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} settled large XLSX did not exceed the 4 MiB session threshold", details
 
+        if not pdf_is_large and baseline_pdf_size > self.SESSION_THRESHOLD_BYTES:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} settled small PDF unexpectedly exceeded the 4 MiB session threshold", details
+        if pdf_is_large and baseline_pdf_size <= self.SESSION_THRESHOLD_BYTES:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} settled large PDF did not exceed the 4 MiB session threshold", details
+
+        if image_large and baseline_image_size <= self.SESSION_THRESHOLD_BYTES:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} settled large {image_format.upper()} did not exceed the 4 MiB session threshold", details
+        if not image_large and baseline_image_size > self.SESSION_THRESHOLD_BYTES:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} settled small {image_format.upper()} unexpectedly exceeded the 4 MiB session threshold", details
+
         # Reproduce the user workflow as a timestamp-preserving copy-over rather
         # than editing the synced file in place. Build the replacement from the
         # settled Microsoft-returned workbook so any SharePoint enrichment remains
         # part of the XLSX package under test.
         replacement_source = scenario_work_dir / "replacement-source.xlsx"
+        pdf_replacement_source = scenario_work_dir / "replacement-source.pdf"
+        image_replacement_source = scenario_work_dir / f"replacement-source{self._image_suffix(image_format)}"
         shutil.copy2(local_file_path, replacement_source)
         mutate_xlsx_revision(replacement_source, REVISION_0, REVISION_1)
+        shutil.copy2(local_pdf_path, pdf_replacement_source)
+        mutate_pdf_revision(pdf_replacement_source, REVISION_0, REVISION_1)
+        shutil.copy2(local_image_path, image_replacement_source)
+        self._mutate_single_image(image_replacement_source, image_format, IMAGE_REVISION_0, IMAGE_REVISION_1)
         replacement_hash_before_timestamp = compute_quickxor_hash_file(replacement_source)
+        pdf_replacement_hash_before_timestamp = compute_quickxor_hash_file(pdf_replacement_source)
+        image_replacement_hash_before_timestamp = compute_quickxor_hash_file(image_replacement_source)
         if replacement_hash_before_timestamp == baseline_hash:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} XLSX revision mutation did not change file content", details
 
+        if pdf_replacement_hash_before_timestamp == baseline_pdf_hash:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} PDF revision mutation did not change file content", details
+        if image_replacement_hash_before_timestamp == baseline_image_hash:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} {image_format.upper()} revision mutation did not change file content", details
+
         if timestamp_mode == "older":
-            replacement_epoch = max(1, baseline_mtime - 3600)
+            replacement_epoch = max(1, min(baseline_mtime, baseline_pdf_mtime, baseline_image_mtime) - 3600)
         elif timestamp_mode == "newer":
-            replacement_epoch = max(int(time.time()), baseline_mtime) + 120
+            replacement_epoch = max(int(time.time()), baseline_mtime, baseline_pdf_mtime, baseline_image_mtime) + 120
         else:
             raise ValueError(f"Unsupported timestamp mode: {timestamp_mode}")
 
         os.utime(replacement_source, (replacement_epoch, replacement_epoch))
+        os.utime(pdf_replacement_source, (replacement_epoch, replacement_epoch))
+        os.utime(image_replacement_source, (replacement_epoch, replacement_epoch))
         shutil.copy2(replacement_source, local_file_path)
+        shutil.copy2(pdf_replacement_source, local_pdf_path)
+        shutil.copy2(image_replacement_source, local_image_path)
         replacement_mtime = int(local_file_path.stat().st_mtime)
         replacement_hash = compute_quickxor_hash_file(local_file_path)
+        pdf_replacement_mtime = int(local_pdf_path.stat().st_mtime)
+        pdf_replacement_hash = compute_quickxor_hash_file(local_pdf_path)
+        image_replacement_mtime = int(local_image_path.stat().st_mtime)
+        image_replacement_hash = compute_quickxor_hash_file(local_image_path)
 
         details["replacement_epoch"] = replacement_epoch
         details["replacement_mtime"] = replacement_mtime
@@ -323,6 +550,12 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         details["replacement_hash"] = replacement_hash
         details["replacement_size"] = replacement_size
         details["replacement_source"] = str(replacement_source)
+        details["pdf_replacement_mtime"] = pdf_replacement_mtime
+        details["pdf_replacement_hash"] = pdf_replacement_hash
+        details["pdf_replacement_source"] = str(pdf_replacement_source)
+        details["image_replacement_mtime"] = image_replacement_mtime
+        details["image_replacement_hash"] = image_replacement_hash
+        details["image_replacement_source"] = str(image_replacement_source)
 
         if payload_rows == self.SMALL_XLSX_PAYLOAD_ROWS and replacement_size > self.SESSION_THRESHOLD_BYTES:
             self._write_metadata(metadata_file, details)
@@ -334,12 +567,31 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         if replacement_hash != replacement_hash_before_timestamp:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} setting replacement mtime unexpectedly changed XLSX content", details
+        if pdf_replacement_hash != pdf_replacement_hash_before_timestamp:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} setting replacement mtime unexpectedly changed PDF content", details
+        if image_replacement_hash != image_replacement_hash_before_timestamp:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} setting replacement mtime unexpectedly changed {image_format.upper()} content", details
         if timestamp_mode == "older" and replacement_mtime >= baseline_mtime:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} failed to establish an older local replacement mtime", details
         if timestamp_mode == "newer" and replacement_mtime <= baseline_mtime:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} failed to establish a newer local replacement mtime", details
+
+        if timestamp_mode == "older" and pdf_replacement_mtime >= baseline_pdf_mtime:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} failed to establish an older PDF replacement mtime", details
+        if timestamp_mode == "newer" and pdf_replacement_mtime <= baseline_pdf_mtime:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} failed to establish a newer PDF replacement mtime", details
+        if timestamp_mode == "older" and image_replacement_mtime >= baseline_image_mtime:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} failed to establish an older {image_format.upper()} replacement mtime", details
+        if timestamp_mode == "newer" and image_replacement_mtime <= baseline_image_mtime:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} failed to establish a newer {image_format.upper()} replacement mtime", details
 
         phase2_result = self._run_logged_command(
             context,
@@ -352,14 +604,22 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
 
         phase2_output = phase2_result.stdout + "\n" + phase2_result.stderr
         modified_upload_marker = f"Uploading modified file: {relative_path} ... done"
+        pdf_modified_upload_marker = f"Uploading modified file: {pdf_relative_path} ... done"
+        image_modified_upload_marker = f"Uploading modified file: {image_relative_path} ... done"
         conflict_marker = "Skipping uploading this item as a locally modified file"
         guard_marker = "Online eTag matches database eTag; treating as local modification despite older local timestamp"
         local_safe_backups = self._safe_backup_files_for(local_file_path)
+        local_pdf_safe_backups = self._safe_backup_files_for(local_pdf_path)
+        local_image_safe_backups = self._safe_backup_files_for(local_image_path)
 
         details["phase2_modified_upload_seen"] = modified_upload_marker in phase2_output
+        details["phase2_pdf_modified_upload_seen"] = pdf_modified_upload_marker in phase2_output
+        details["phase2_image_modified_upload_seen"] = image_modified_upload_marker in phase2_output
         details["phase2_conflict_marker_seen"] = conflict_marker in phase2_output
         details["phase2_guard_marker_seen"] = guard_marker in phase2_output
         details["local_safe_backup_files"] = [str(path.relative_to(local_root)) for path in local_safe_backups]
+        details["local_pdf_safe_backup_files"] = [str(path.relative_to(local_root)) for path in local_pdf_safe_backups]
+        details["local_image_safe_backup_files"] = [str(path.relative_to(local_root)) for path in local_image_safe_backups]
 
         if phase2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -367,12 +627,24 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         if modified_upload_marker not in phase2_output:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} did not report a successful modified-file upload", details
+        if pdf_modified_upload_marker not in phase2_output:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} did not report a successful PDF modified-file upload", details
+        if image_modified_upload_marker not in phase2_output:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} did not report a successful {image_format.upper()} modified-file upload", details
         if conflict_marker in phase2_output:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} incorrectly entered the newer-online safeBackup conflict path", details
         if local_safe_backups:
             self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} incorrectly created a local safeBackup for the replacement", details
+            return False, f"{scenario_id} incorrectly created a local safeBackup for the XLSX replacement", details
+        if local_pdf_safe_backups:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} incorrectly created a local safeBackup for the PDF replacement", details
+        if local_image_safe_backups:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} incorrectly created a local safeBackup for the {image_format.upper()} replacement", details
         if timestamp_mode == "older" and guard_marker not in phase2_output:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} did not exercise the unchanged-eTag older-mtime guard", details
@@ -388,18 +660,26 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
 
         verify_manifest = build_manifest(verify_root)
         write_manifest(verify_manifest_file, verify_manifest)
-        expected_manifest = [root_name, relative_path]
+        expected_manifest = sorted([root_name, relative_path, pdf_relative_path, image_relative_path])
         verify_validation_error = validate_xlsx(verify_file_path, REVISION_1)
+        verify_pdf_validation_error = validate_pdf(verify_pdf_path, REVISION_1)
+        verify_image_validation_error = self._validate_single_image(verify_image_path, image_format, IMAGE_REVISION_1)
 
         details["verify_manifest"] = verify_manifest
         details["expected_manifest"] = expected_manifest
         details["verify_validation_error"] = verify_validation_error
+        details["verify_pdf_validation_error"] = verify_pdf_validation_error
+        details["verify_image_validation_error"] = verify_image_validation_error
         self._write_metadata(metadata_file, details)
 
         if phase3_result.returncode != 0:
             return False, f"{scenario_id} fresh remote verification failed with status {phase3_result.returncode}", details
         if verify_validation_error:
             return False, f"{scenario_id} remote canonical XLSX did not contain the replacement revision: {verify_validation_error}", details
+        if verify_pdf_validation_error:
+            return False, f"{scenario_id} remote canonical PDF did not contain the replacement revision: {verify_pdf_validation_error}", details
+        if verify_image_validation_error:
+            return False, f"{scenario_id} remote canonical {image_format.upper()} did not contain the replacement revision: {verify_image_validation_error}", details
         if verify_manifest != expected_manifest:
             return False, f"{scenario_id} remote verification found unexpected files, including a possible safeBackup", details
 
@@ -445,15 +725,33 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
 
         root_name = f"ZZ_E2E_TC0036_{scenario_id}_{context.run_id}_{os.getpid()}"
         relative_path = f"{root_name}/replace-me.xlsx"
+        pdf_relative_path = f"{root_name}/replace-me.pdf"
+        image_relative_path = f"{root_name}/replace-me.png"
         subject_file = subject_root / relative_path
+        subject_pdf_file = subject_root / pdf_relative_path
+        subject_image_file = subject_root / image_relative_path
         mutator_file = mutator_root / relative_path
+        mutator_pdf_file = mutator_root / pdf_relative_path
+        mutator_image_file = mutator_root / image_relative_path
         precheck_file = precheck_root / relative_path
+        precheck_pdf_file = precheck_root / pdf_relative_path
+        precheck_image_file = precheck_root / image_relative_path
         verify_file = verify_root / relative_path
+        verify_pdf_file = verify_root / pdf_relative_path
+        verify_image_file = verify_root / image_relative_path
 
         phase_files = {
             "seed": (
                 scenario_log_dir / "phase1_subject_seed_stdout.log",
                 scenario_log_dir / "phase1_subject_seed_stderr.log",
+            ),
+            "settle1": (
+                scenario_log_dir / "phase1_subject_settle1_stdout.log",
+                scenario_log_dir / "phase1_subject_settle1_stderr.log",
+            ),
+            "settle2": (
+                scenario_log_dir / "phase1_subject_settle2_stdout.log",
+                scenario_log_dir / "phase1_subject_settle2_stderr.log",
             ),
             "mutator": (
                 scenario_log_dir / "phase2_mutator_monitor_stdout.log",
@@ -486,19 +784,39 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         )
 
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:{scenario_id}:{os.getpid()}"
+        pdf_seed = f"{xlsx_seed}:pdf"
         generated = create_random_xlsx(
             subject_file,
             xlsx_seed,
             payload_rows=self.SMALL_XLSX_PAYLOAD_ROWS,
             title=f"TC0036 {scenario_id} remote-change control workbook",
         )
+        generated_pdf = create_random_pdf(
+            subject_pdf_file,
+            pdf_seed,
+            revision=REVISION_0,
+            image_width=SMALL_PDF_IMAGE_WIDTH,
+            image_height=SMALL_PDF_IMAGE_HEIGHT,
+            title=f"TC0036 {scenario_id} remote-change control PDF",
+        )
+        generated_images = create_random_image_set(
+            subject_image_file,
+            f"{xlsx_seed}:image",
+            revision=REVISION_0,
+            title=f"TC0036 {scenario_id} remote-change control images",
+        )
         details: dict[str, object] = {
             "scenario_id": scenario_id,
             "scenario_name": scenario_name,
             "root_name": root_name,
             "relative_path": relative_path,
+            "pdf_relative_path": pdf_relative_path,
+            "image_relative_path": image_relative_path,
             "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
             "generated_size": int(generated["size_bytes"]),
+            "generated_pdf_size": int(generated_pdf["size_bytes"]),
+            "generated_image_sizes": {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")},
             "subject_conf_dir": str(conf_subject),
             "mutator_conf_dir": str(conf_mutator),
             "precheck_conf_dir": str(conf_precheck),
@@ -516,16 +834,60 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} subject seed failed with status {seed_result.returncode}", details
 
+        # Refresh image identities after Microsoft-side post-upload metadata
+        # processing before cloning the stale subject into the mutator.  The
+        # remote-change control should begin from a genuinely settled baseline.
+        time.sleep(self.IMAGE_POST_UPLOAD_SETTLE_SECONDS)
+        settle1_result = self._run_logged_command(
+            context,
+            f"{scenario_id} phase1 subject metadata settle 1",
+            self._sync_command(context, root_name, conf_subject),
+            *phase_files["settle1"],
+        )
+        details["settle1_returncode"] = settle1_result.returncode
+        if settle1_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} first subject metadata-settle sync failed with status {settle1_result.returncode}", details
+        time.sleep(self.IMAGE_SETTLE_CONFIRMATION_SECONDS)
+        settle2_result = self._run_logged_command(
+            context,
+            f"{scenario_id} phase1 subject metadata settle 2",
+            self._sync_command(context, root_name, conf_subject),
+            *phase_files["settle2"],
+        )
+        details["settle2_returncode"] = settle2_result.returncode
+        if settle2_result.returncode != 0:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} second subject metadata-settle sync failed with status {settle2_result.returncode}", details
+
         subject_baseline_error = validate_xlsx(subject_file, REVISION_0)
+        subject_pdf_baseline_error = validate_pdf(subject_pdf_file, REVISION_0)
+        subject_image_baseline_error = validate_image_set(subject_image_file, REVISION_0)
         if subject_baseline_error:
             details["subject_baseline_validation_error"] = subject_baseline_error
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} subject baseline XLSX invalid after seed: {subject_baseline_error}", details
+        if subject_image_baseline_error:
+            details["subject_image_baseline_validation_error"] = subject_image_baseline_error
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} subject baseline image set invalid after seed: {subject_image_baseline_error}", details
+        if subject_pdf_baseline_error:
+            details["subject_pdf_baseline_validation_error"] = subject_pdf_baseline_error
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} subject baseline PDF invalid after seed: {subject_pdf_baseline_error}", details
 
         subject_baseline_mtime = int(subject_file.stat().st_mtime)
+        subject_pdf_baseline_mtime = int(subject_pdf_file.stat().st_mtime)
+        subject_image_baseline_mtimes = image_set_mtimes(subject_image_file)
         subject_baseline_hash = compute_quickxor_hash_file(subject_file)
+        subject_pdf_baseline_hash = compute_quickxor_hash_file(subject_pdf_file)
+        subject_image_baseline_hashes = image_set_hashes(subject_image_file, compute_quickxor_hash_file)
         details["subject_baseline_mtime"] = subject_baseline_mtime
+        details["subject_pdf_baseline_mtime"] = subject_pdf_baseline_mtime
         details["subject_baseline_hash"] = subject_baseline_hash
+        details["subject_pdf_baseline_hash"] = subject_pdf_baseline_hash
+        details["subject_image_baseline_mtimes"] = subject_image_baseline_mtimes
+        details["subject_image_baseline_hashes"] = subject_image_baseline_hashes
 
         # Use the established multi-client E2E topology: clone the complete tracked
         # client state and local tree, then let a separate --monitor --upload-only
@@ -587,22 +949,43 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
                 )
                 if bool(details.get("monitor_ready_after_initial_sync", False)):
                     mutator_replacement_source = scenario_work_dir / "mutator-replacement-source.xlsx"
+                    mutator_pdf_replacement_source = scenario_work_dir / "mutator-replacement-source.pdf"
+                    mutator_image_replacement_source = scenario_work_dir / "mutator-replacement-source.png"
                     shutil.copy2(mutator_file, mutator_replacement_source)
+                    shutil.copy2(mutator_pdf_file, mutator_pdf_replacement_source)
+                    copy_image_set(mutator_image_file, mutator_image_replacement_source)
                     mutate_xlsx_revision(mutator_replacement_source, REVISION_0, REVISION_2)
+                    mutate_pdf_revision(mutator_pdf_replacement_source, REVISION_0, REVISION_2)
+                    mutate_image_set_revision(mutator_image_replacement_source, REVISION_0, REVISION_2)
                     mutator_epoch = max(
                         int(time.time()),
                         int(mutator_replacement_source.stat().st_mtime),
+                        int(mutator_pdf_replacement_source.stat().st_mtime),
                         subject_baseline_mtime,
+                        subject_pdf_baseline_mtime,
+                        *subject_image_baseline_mtimes.values(),
                     ) + 240
                     os.utime(mutator_replacement_source, (mutator_epoch, mutator_epoch))
+                    os.utime(mutator_pdf_replacement_source, (mutator_epoch, mutator_epoch))
+                    set_image_set_mtime(mutator_image_replacement_source, (mutator_epoch, mutator_epoch))
                     shutil.copy2(mutator_replacement_source, mutator_file)
+                    shutil.copy2(mutator_pdf_replacement_source, mutator_pdf_file)
+                    copy_image_set(mutator_image_replacement_source, mutator_image_file)
                     details["mutator_epoch"] = mutator_epoch
                     details["mutator_hash"] = compute_quickxor_hash_file(mutator_file)
+                    details["mutator_pdf_hash"] = compute_quickxor_hash_file(mutator_pdf_file)
+                    details["mutator_image_hashes"] = image_set_hashes(mutator_image_file, compute_quickxor_hash_file)
                     details["mutator_replacement_source"] = str(mutator_replacement_source)
+                    details["mutator_pdf_replacement_source"] = str(mutator_pdf_replacement_source)
+                    details["mutator_image_replacement_source"] = str(mutator_image_replacement_source)
                     mutator_modified, mutator_segment = self._wait_for_stdout_growth_patterns(
                         phase_files["mutator"][0],
                         start_offset=mutation_offset,
-                        required_patterns=[f"Uploading modified file: {relative_path} ... done"],
+                        required_patterns=[
+                            f"Uploading modified file: {relative_path} ... done",
+                            f"Uploading modified file: {pdf_relative_path} ... done",
+                            *[f"Uploading modified file: {rel} ... done" for rel in image_set_relatives(image_relative_path).values()],
+                        ],
                         timeout_seconds=180,
                     )
         finally:
@@ -632,28 +1015,58 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         precheck_manifest = build_manifest(precheck_root)
         write_manifest(precheck_manifest_file, precheck_manifest)
         precheck_validation_error = validate_xlsx(precheck_file, REVISION_2)
+        precheck_pdf_validation_error = validate_pdf(precheck_pdf_file, REVISION_2)
+        precheck_image_validation_error = validate_image_set(precheck_image_file, REVISION_2)
         details["precheck_manifest"] = precheck_manifest
         details["precheck_validation_error"] = precheck_validation_error
+        details["precheck_pdf_validation_error"] = precheck_pdf_validation_error
+        details["precheck_image_validation_error"] = precheck_image_validation_error
         if precheck_result.returncode != 0:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} remote precheck failed with status {precheck_result.returncode}", details
         if precheck_validation_error:
             self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} remote precheck did not contain the mutator revision: {precheck_validation_error}", details
+            return False, f"{scenario_id} remote precheck did not contain the mutator XLSX revision: {precheck_validation_error}", details
+        if precheck_image_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} remote precheck did not contain the mutator image revision: {precheck_image_validation_error}", details
+        if precheck_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} remote precheck did not contain the mutator PDF revision: {precheck_pdf_validation_error}", details
 
         subject_replacement_source = scenario_work_dir / "subject-replacement-source.xlsx"
+        subject_pdf_replacement_source = scenario_work_dir / "subject-replacement-source.pdf"
+        subject_image_replacement_source = scenario_work_dir / "subject-replacement-source.png"
         shutil.copy2(subject_file, subject_replacement_source)
+        shutil.copy2(subject_pdf_file, subject_pdf_replacement_source)
+        copy_image_set(subject_image_file, subject_image_replacement_source)
         mutate_xlsx_revision(subject_replacement_source, REVISION_0, REVISION_1)
-        subject_replacement_epoch = max(1, subject_baseline_mtime - 3600)
+        mutate_pdf_revision(subject_pdf_replacement_source, REVISION_0, REVISION_1)
+        mutate_image_set_revision(subject_image_replacement_source, REVISION_0, REVISION_1)
+        subject_replacement_epoch = max(1, min([subject_baseline_mtime, subject_pdf_baseline_mtime, *subject_image_baseline_mtimes.values()]) - 3600)
         os.utime(subject_replacement_source, (subject_replacement_epoch, subject_replacement_epoch))
+        os.utime(subject_pdf_replacement_source, (subject_replacement_epoch, subject_replacement_epoch))
+        set_image_set_mtime(subject_image_replacement_source, (subject_replacement_epoch, subject_replacement_epoch))
         shutil.copy2(subject_replacement_source, subject_file)
+        shutil.copy2(subject_pdf_replacement_source, subject_pdf_file)
+        copy_image_set(subject_image_replacement_source, subject_image_file)
         details["subject_replacement_epoch"] = subject_replacement_epoch
         details["subject_replacement_hash"] = compute_quickxor_hash_file(subject_file)
+        details["subject_pdf_replacement_hash"] = compute_quickxor_hash_file(subject_pdf_file)
+        details["subject_image_replacement_hashes"] = image_set_hashes(subject_image_file, compute_quickxor_hash_file)
         details["subject_replacement_source"] = str(subject_replacement_source)
+        details["subject_pdf_replacement_source"] = str(subject_pdf_replacement_source)
+        details["subject_image_replacement_source"] = str(subject_image_replacement_source)
 
         if int(subject_file.stat().st_mtime) >= subject_baseline_mtime:
             self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} failed to establish the older local replacement precondition", details
+            return False, f"{scenario_id} failed to establish the older local XLSX replacement precondition", details
+        if any(image_set_mtimes(subject_image_file)[k] >= subject_image_baseline_mtimes[k] for k in subject_image_baseline_mtimes):
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} failed to establish the older local image replacement precondition", details
+        if int(subject_pdf_file.stat().st_mtime) >= subject_pdf_baseline_mtime:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} failed to establish the older local PDF replacement precondition", details
 
         subject_conflict_result = self._run_logged_command(
             context,
@@ -667,10 +1080,14 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         conflict_marker = "Skipping uploading this item as a locally modified file"
         guard_marker = "Online eTag matches database eTag; treating as local modification despite older local timestamp"
         local_safe_backups = self._safe_backup_files_for(subject_file)
+        local_pdf_safe_backups = self._safe_backup_files_for(subject_pdf_file)
+        local_image_safe_backups = image_set_backup_files(subject_image_file, self._safe_backup_files_for)
 
         details["conflict_marker_seen"] = conflict_marker in conflict_output
         details["guard_marker_seen"] = guard_marker in conflict_output
         details["local_safe_backup_files"] = [str(path.relative_to(subject_root)) for path in local_safe_backups]
+        details["local_pdf_safe_backup_files"] = [str(path.relative_to(subject_root)) for path in local_pdf_safe_backups]
+        details["local_image_safe_backup_files"] = {k: [str(path.relative_to(subject_root)) for path in paths] for k, paths in local_image_safe_backups.items()}
 
         if subject_conflict_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -680,18 +1097,47 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
             return False, f"{scenario_id} incorrectly trusted the database eTag after the remote item changed", details
         if len(local_safe_backups) != 1:
             self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} expected exactly one local safeBackup, found {len(local_safe_backups)}", details
+            return False, f"{scenario_id} expected exactly one local XLSX safeBackup, found {len(local_safe_backups)}", details
+        if any(len(paths) != 1 for paths in local_image_safe_backups.values()):
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} expected exactly one local safeBackup for each image fixture", details
+        if len(local_pdf_safe_backups) != 1:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} expected exactly one local PDF safeBackup, found {len(local_pdf_safe_backups)}", details
 
         canonical_validation_error = validate_xlsx(subject_file, REVISION_2)
+        canonical_pdf_validation_error = validate_pdf(subject_pdf_file, REVISION_2)
         backup_validation_error = validate_xlsx(local_safe_backups[0], REVISION_1)
+        backup_pdf_validation_error = validate_pdf(local_pdf_safe_backups[0], REVISION_1)
+        canonical_image_validation_error = validate_image_set(subject_image_file, REVISION_2)
+        backup_image_validation_errors = {
+            label: (validate_png(paths[0], REVISION_1) if label.startswith("png_") else validate_jpeg(paths[0], REVISION_1))
+            for label, paths in local_image_safe_backups.items()
+        }
         details["canonical_validation_error"] = canonical_validation_error
+        details["canonical_pdf_validation_error"] = canonical_pdf_validation_error
         details["backup_validation_error"] = backup_validation_error
+        details["backup_pdf_validation_error"] = backup_pdf_validation_error
+        details["canonical_image_validation_error"] = canonical_image_validation_error
+        details["backup_image_validation_errors"] = backup_image_validation_errors
         if canonical_validation_error:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} canonical file did not retain the genuine remote revision: {canonical_validation_error}", details
         if backup_validation_error:
             self._write_metadata(metadata_file, details)
-            return False, f"{scenario_id} safeBackup did not preserve the local replacement revision: {backup_validation_error}", details
+            return False, f"{scenario_id} XLSX safeBackup did not preserve the local replacement revision: {backup_validation_error}", details
+        if canonical_image_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} canonical image set did not retain the genuine remote revision: {canonical_image_validation_error}", details
+        if canonical_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} canonical PDF did not retain the genuine remote revision: {canonical_pdf_validation_error}", details
+        if any(backup_image_validation_errors.values()):
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} one or more image safeBackups did not preserve the local replacement revision: {backup_image_validation_errors}", details
+        if backup_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return False, f"{scenario_id} PDF safeBackup did not preserve the local replacement revision: {backup_pdf_validation_error}", details
 
         verify_result = self._run_logged_command(
             context,
@@ -704,15 +1150,45 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         verify_manifest = build_manifest(verify_root)
         write_manifest(verify_manifest_file, verify_manifest)
         backup_relative_path = f"{root_name}/{local_safe_backups[0].name}"
-        expected_manifest = sorted([root_name, relative_path, backup_relative_path])
+        pdf_backup_relative_path = f"{root_name}/{local_pdf_safe_backups[0].name}"
+        image_backup_relative_by_label = {
+            label: f"{root_name}/{paths[0].name}"
+            for label, paths in local_image_safe_backups.items()
+        }
+        image_backup_relative_paths = list(image_backup_relative_by_label.values())
+        expected_manifest = sorted([
+            root_name,
+            relative_path,
+            pdf_relative_path,
+            backup_relative_path,
+            pdf_backup_relative_path,
+            *image_set_relatives(image_relative_path).values(),
+            *image_backup_relative_paths,
+        ])
         verify_backup_file = verify_root / backup_relative_path
+        verify_pdf_backup_file = verify_root / pdf_backup_relative_path
         verify_canonical_error = validate_xlsx(verify_file, REVISION_2)
+        verify_pdf_canonical_error = validate_pdf(verify_pdf_file, REVISION_2)
+        verify_image_canonical_error = validate_image_set(verify_image_file, REVISION_2)
         verify_backup_error = validate_xlsx(verify_backup_file, REVISION_1)
+        verify_pdf_backup_error = validate_pdf(verify_pdf_backup_file, REVISION_1)
+        verify_image_backup_errors = {
+            label: (
+                validate_png(verify_root / relative, REVISION_1)
+                if label.startswith("png_")
+                else validate_jpeg(verify_root / relative, REVISION_1)
+            )
+            for label, relative in image_backup_relative_by_label.items()
+        }
 
         details["verify_manifest"] = verify_manifest
         details["expected_manifest"] = expected_manifest
         details["verify_canonical_error"] = verify_canonical_error
+        details["verify_pdf_canonical_error"] = verify_pdf_canonical_error
+        details["verify_image_canonical_error"] = verify_image_canonical_error
         details["verify_backup_error"] = verify_backup_error
+        details["verify_pdf_backup_error"] = verify_pdf_backup_error
+        details["verify_image_backup_errors"] = verify_image_backup_errors
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
@@ -722,7 +1198,15 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         if verify_canonical_error:
             return False, f"{scenario_id} remote canonical XLSX does not contain the genuine remote revision: {verify_canonical_error}", details
         if verify_backup_error:
-            return False, f"{scenario_id} remote safeBackup does not contain the preserved local revision: {verify_backup_error}", details
+            return False, f"{scenario_id} remote XLSX safeBackup does not contain the preserved local revision: {verify_backup_error}", details
+        if verify_image_canonical_error:
+            return False, f"{scenario_id} remote canonical image set does not contain the genuine remote revision: {verify_image_canonical_error}", details
+        if verify_pdf_canonical_error:
+            return False, f"{scenario_id} remote canonical PDF does not contain the genuine remote revision: {verify_pdf_canonical_error}", details
+        if any(verify_image_backup_errors.values()):
+            return False, f"{scenario_id} one or more remote image safeBackups do not contain the preserved local revision: {verify_image_backup_errors}", details
+        if verify_pdf_backup_error:
+            return False, f"{scenario_id} remote PDF safeBackup does not contain the preserved local revision: {verify_pdf_backup_error}", details
 
         return True, f"{scenario_id} passed", details
 
@@ -743,28 +1227,34 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         scenarios = [
             {
                 "scenario_id": "OR-0001",
-                "scenario_name": "small XLSX replacement with newer local mtime using simple upload",
+                "scenario_name": "small XLSX/PDF/PNG replacements with newer local mtime using simple upload",
                 "payload_rows": self.SMALL_XLSX_PAYLOAD_ROWS,
                 "timestamp_mode": "newer",
+                "image_format": "png",
+                "image_large": False,
                 "remote_change_control": False,
             },
             {
                 "scenario_id": "OR-0002",
-                "scenario_name": "small XLSX replacement with preserved older local mtime using simple upload",
+                "scenario_name": "small XLSX/PDF/JPEG replacements with preserved older local mtime using simple upload",
                 "payload_rows": self.SMALL_XLSX_PAYLOAD_ROWS,
                 "timestamp_mode": "older",
+                "image_format": "jpeg",
+                "image_large": False,
                 "remote_change_control": False,
             },
             {
                 "scenario_id": "OR-0003",
-                "scenario_name": "large XLSX replacement with preserved older local mtime using automatic session upload",
+                "scenario_name": "large XLSX/PDF/PNG replacements with preserved older local mtime using automatic session upload",
                 "payload_rows": self.LARGE_XLSX_PAYLOAD_ROWS,
                 "timestamp_mode": "older",
+                "image_format": "png",
+                "image_large": True,
                 "remote_change_control": False,
             },
             {
                 "scenario_id": "OR-0004",
-                "scenario_name": "genuine remote XLSX change preserves both revisions through safeBackup handling",
+                "scenario_name": "genuine remote XLSX/PDF changes preserve both revisions through safeBackup handling",
                 "payload_rows": self.SMALL_XLSX_PAYLOAD_ROWS,
                 "timestamp_mode": "older",
                 "remote_change_control": True,
@@ -797,6 +1287,8 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
                     scenario_name=scenario["scenario_name"],
                     payload_rows=scenario["payload_rows"],
                     timestamp_mode=scenario["timestamp_mode"],
+                    image_format=scenario["image_format"],
+                    image_large=scenario["image_large"],
                     artifacts=artifacts,
                 )
 

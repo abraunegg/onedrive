@@ -10,6 +10,8 @@ from pathlib import Path
 from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.result import TestResult
+from framework.pdf import REVISION_0 as PDF_REVISION_0, REVISION_1 as PDF_REVISION_1, create_random_pdf_pair, copy_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair
+from framework.image import REVISION_0 as IMAGE_REVISION_0, REVISION_1 as IMAGE_REVISION_1, create_random_image_set, copy_image_set, mutate_image_set_revision, validate_image_set
 from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, copy_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair
 
@@ -25,6 +27,8 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
     TARGET_RELATIVE = "Documents/divers/jeux intéressants.odt"
     NOTES_RELATIVE = "Documents/divers/Notes/dummy.txt"
     XLSX_RELATIVE = "Documents/divers/Notes/real-workbook.xlsx"
+    PDF_RELATIVE = "Documents/divers/Notes/real-document.pdf"
+    IMAGE_RELATIVE = "Documents/divers/Notes/real-image.png"
     XLSX_PAYLOAD_ROWS = 32
 
     def _write_config(self, config_path: Path, sync_dir: Path, *, local_first: bool = False) -> None:
@@ -212,10 +216,20 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
         target_relative = f"{root_name}/{self.TARGET_RELATIVE}"
         notes_relative = f"{root_name}/{self.NOTES_RELATIVE}"
         xlsx_relative = f"{root_name}/{self.XLSX_RELATIVE}"
+        pdf_relative = f"{root_name}/{self.PDF_RELATIVE}"
+        image_relative = f"{root_name}/{self.IMAGE_RELATIVE}"
         seed_xlsx = seed_root / xlsx_relative
         local_xlsx = local_root / xlsx_relative
         remote_update_xlsx = remote_update_root / xlsx_relative
+        seed_pdf = seed_root / pdf_relative
+        local_pdf = local_root / pdf_relative
+        remote_update_pdf = remote_update_root / pdf_relative
+        seed_image = seed_root / image_relative
+        local_image = local_root / image_relative
+        remote_update_image = remote_update_root / image_relative
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0063:{os.getpid()}"
+        pdf_seed = f"{xlsx_seed}:pdf"
+        image_seed = f"{xlsx_seed}:image"
 
         reset_directory(seed_root)
         reset_directory(local_root)
@@ -230,6 +244,13 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0063 parent rename during download workbook",
         )
+        generated_pdf = create_random_pdf_pair(
+            seed_pdf,
+            pdf_seed,
+            revision=PDF_REVISION_0,
+            title="TC0063 parent rename during download PDF",
+        )
+        generated_images = create_random_image_set(seed_image, image_seed, revision=IMAGE_REVISION_0, title="TC0063 parent rename during download images")
         self._write_large_file(remote_update_root / target_relative, size_mb=80, fill_byte=b"B")
         write_text_file(remote_update_root / notes_relative, "TC0063 baseline Notes content\n")
 
@@ -305,13 +326,15 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
             return self.fail_result(self.case_id, self.name, f"Initial download failed with status {initial_download_result.returncode}", artifacts, {"initial_download_returncode": initial_download_result.returncode})
 
         initial_xlsx_error = validate_xlsx_pair(local_xlsx, REVISION_0)
-        if initial_xlsx_error:
+        initial_pdf_error = validate_pdf_pair(local_pdf, PDF_REVISION_0)
+        initial_image_error = validate_image_set(local_image, IMAGE_REVISION_0)
+        if initial_xlsx_error or initial_pdf_error or initial_image_error:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Initial download did not establish a valid Microsoft-settled XLSX pair: {initial_xlsx_error}",
+                f"Initial download did not establish valid Microsoft-settled XLSX/PDF/image fixtures: XLSX={initial_xlsx_error}; PDF={initial_pdf_error}; IMAGE={initial_image_error}",
                 artifacts,
-                {"initial_download_returncode": initial_download_result.returncode, "initial_xlsx_validation_error": initial_xlsx_error},
+                {"initial_download_returncode": initial_download_result.returncode, "initial_xlsx_validation_error": initial_xlsx_error, "initial_pdf_validation_error": initial_pdf_error, "initial_image_validation_error": initial_image_error},
             )
 
         # Start the XLSX remote update from the bytes Microsoft actually returned. This preserves
@@ -319,14 +342,20 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
         # marker, avoiding false byte-identity assumptions for documentLibrary targets.
         copy_xlsx_pair(local_xlsx, remote_update_xlsx)
         mutate_xlsx_pair_revision(remote_update_xlsx, REVISION_0, REVISION_1)
+        copy_pdf_pair(local_pdf, remote_update_pdf)
+        mutate_pdf_pair_revision(remote_update_pdf, PDF_REVISION_0, PDF_REVISION_1)
+        copy_image_set(local_image, remote_update_image)
+        mutate_image_set_revision(remote_update_image, IMAGE_REVISION_0, IMAGE_REVISION_1)
         remote_update_xlsx_error = validate_xlsx_pair(remote_update_xlsx, REVISION_1)
-        if remote_update_xlsx_error:
+        remote_update_pdf_error = validate_pdf_pair(remote_update_pdf, PDF_REVISION_1)
+        remote_update_image_error = validate_image_set(remote_update_image, IMAGE_REVISION_1)
+        if remote_update_xlsx_error or remote_update_pdf_error or remote_update_image_error:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"Prepared remote-update XLSX pair is invalid: {remote_update_xlsx_error}",
+                f"Prepared remote-update XLSX/PDF/image fixtures are invalid: XLSX={remote_update_xlsx_error}; PDF={remote_update_pdf_error}; IMAGE={remote_update_image_error}",
                 artifacts,
-                {"remote_update_xlsx_validation_error": remote_update_xlsx_error},
+                {"remote_update_xlsx_validation_error": remote_update_xlsx_error, "remote_update_pdf_validation_error": remote_update_pdf_error, "remote_update_image_validation_error": remote_update_image_error},
             )
 
         # Remote-side content change: the local DB remains from the initial download, and the
@@ -387,12 +416,23 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
             "target_relative": target_relative,
             "notes_relative": notes_relative,
             "xlsx_relative": xlsx_relative,
+            "pdf_relative": pdf_relative,
+            "image_relative": image_relative,
             "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
+            "image_seed": image_seed,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_xlsx_size": int(generated_xlsx["size_bytes"]),
             "generated_large_xlsx_size": int(generated_xlsx["large_size_bytes"]),
+            "generated_pdf_size": int(generated_pdf["size_bytes"]),
+            "generated_large_pdf_size": int(generated_pdf["large_size_bytes"]),
+            "generated_image_sizes": {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")},
             "initial_xlsx_validation_error": initial_xlsx_error,
+            "initial_pdf_validation_error": initial_pdf_error,
+            "initial_image_validation_error": initial_image_error,
             "remote_update_xlsx_validation_error": remote_update_xlsx_error,
+            "remote_update_pdf_validation_error": remote_update_pdf_error,
+            "remote_update_image_validation_error": remote_update_image_error,
             "seed_returncode": seed_result.returncode,
             "initial_download_returncode": initial_download_result.returncode,
             "remote_update_returncode": remote_update_result.returncode,

@@ -5,6 +5,8 @@ import shutil
 
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
+from framework.pdf import REVISION_0 as PDF_REVISION_0, create_random_pdf_pair, large_pdf_relative, validate_pdf_pair
+from framework.image import create_random_image_set, image_set_relatives, validate_image_set
 from framework.result import TestResult
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, large_xlsx_relative
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
@@ -14,7 +16,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCaseBase):
     case_id = "0047"
     name = "monitor mode local directory delete propagation"
-    description = "Delete a populated local directory tree containing passive TXT and real XLSX files under --monitor and validate the remote delete"
+    description = "Delete a populated local directory tree containing passive TXT plus real XLSX/PDF and PNG/JPEG files under --monitor and validate the remote delete"
 
     XLSX_PAYLOAD_ROWS = 32
 
@@ -40,12 +42,16 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
         delete_file1_relative = f"{delete_dir_relative}/file1.txt"
         delete_file2_relative = f"{delete_dir_relative}/nested/file2.txt"
         delete_xlsx_relative = f"{delete_dir_relative}/nested/file3.xlsx"
+        delete_pdf_relative = f"{delete_dir_relative}/nested/file4.pdf"
+        delete_image_relative = f"{delete_dir_relative}/nested/file5.png"
 
         keep_local_path = sync_root / keep_relative
         delete_dir_local_path = sync_root / delete_dir_relative
         delete_file1_local_path = sync_root / delete_file1_relative
         delete_file2_local_path = sync_root / delete_file2_relative
         delete_xlsx_local_path = sync_root / delete_xlsx_relative
+        delete_pdf_local_path = sync_root / delete_pdf_relative
+        delete_image_local_path = sync_root / delete_image_relative
         keep_verify_path = verify_root / keep_relative
         delete_dir_verify_path = verify_root / delete_dir_relative
 
@@ -70,6 +76,15 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0047 populated directory delete workbook",
         )
+        pdf_seed = f"{xlsx_seed}:pdf"
+        image_seed = f"{xlsx_seed}:image"
+        generated_pdf = create_random_pdf_pair(
+            delete_pdf_local_path,
+            pdf_seed,
+            revision=PDF_REVISION_0,
+            title="TC0047 populated directory delete PDF",
+        )
+        generated_images = create_random_image_set(delete_image_local_path, image_seed, revision=REVISION_0, title="TC0047 populated directory delete images")
 
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"
@@ -88,10 +103,19 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
             "delete_file1_relative": delete_file1_relative,
             "delete_file2_relative": delete_file2_relative,
             "delete_xlsx_relative": delete_xlsx_relative,
+            "delete_pdf_relative": delete_pdf_relative,
+            "delete_image_relative": delete_image_relative,
             "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
+            "image_seed": image_seed,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_xlsx_size": int(generated["size_bytes"]),
+            "generated_pdf_small_size": int(generated_pdf["small_size_bytes"]),
+            "generated_pdf_large_size": int(generated_pdf["large_size_bytes"]),
             "seed_xlsx_validation_error": validate_xlsx_pair(delete_xlsx_local_path, REVISION_0),
+            "seed_pdf_validation_error": validate_pdf_pair(delete_pdf_local_path, PDF_REVISION_0),
+            "generated_image_sizes": {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")},
+            "seed_image_validation_error": validate_image_set(delete_image_local_path, REVISION_0),
         }
 
         seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(conf_main)]
@@ -116,6 +140,7 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
 
             shutil.rmtree(delete_dir_local_path)
+            image_relatives = image_set_relatives(delete_image_relative)
             groups = [
                 [f"Deleting item from Microsoft OneDrive: {delete_dir_relative}"],
                 [
@@ -123,6 +148,9 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
                     f"Deleting item from Microsoft OneDrive: {delete_file2_relative}",
                     f"Deleting item from Microsoft OneDrive: {delete_xlsx_relative}",
                     f"Deleting item from Microsoft OneDrive: {large_xlsx_relative(delete_xlsx_relative)}",
+                    f"Deleting item from Microsoft OneDrive: {delete_pdf_relative}",
+                    f"Deleting item from Microsoft OneDrive: {large_pdf_relative(delete_pdf_relative)}",
+                    *[f"Deleting item from Microsoft OneDrive: {relative}" for relative in image_relatives.values()],
                 ],
             ]
             mutation_processed, matched_group, post_mutation_log_segment = self._wait_for_any_stdout_growth_pattern_group(

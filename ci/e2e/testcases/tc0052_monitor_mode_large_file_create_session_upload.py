@@ -4,6 +4,8 @@ import os
 
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
+from framework.pdf import REVISION_0 as PDF_REVISION_0, create_random_pdf_pair, large_pdf_relative, validate_pdf_pair
+from framework.image import create_random_image_set, validate_image_set, image_set_relatives, image_set_all_files
 from framework.result import TestResult
 from framework.utils import command_to_string, compute_quickxor_hash_file, reset_directory, write_text_file
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, large_xlsx_relative
@@ -13,7 +15,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 class TestCase0052MonitorModeLargeFileCreateSessionUpload(MonitorModeTestCaseBase):
     case_id = "0052"
     name = "monitor mode large file create session upload"
-    description = "Create large and realistic XLSX files under --monitor and validate simple/session upload behaviour and remote integrity"
+    description = "Create large files plus realistic XLSX/PDF and PNG/JPEG sets under --monitor and validate simple/session upload behaviour and remote integrity"
 
     XLSX_PAYLOAD_ROWS = 32
 
@@ -37,17 +39,25 @@ class TestCase0052MonitorModeLargeFileCreateSessionUpload(MonitorModeTestCaseBas
         anchor_relative = f"{root_name}/anchor.txt"
         large_relative = f"{root_name}/large-session-upload.bin"
         xlsx_relative = f"{root_name}/real-session-upload.xlsx"
+        pdf_relative = f"{root_name}/real-session-upload.pdf"
+        image_relative = f"{root_name}/real-session-upload.png"
         anchor_local = sync_root / anchor_relative
         large_local = sync_root / large_relative
         xlsx_local = sync_root / xlsx_relative
+        pdf_local = sync_root / pdf_relative
         large_verify = verify_root / large_relative
         xlsx_verify = verify_root / xlsx_relative
+        pdf_verify = verify_root / pdf_relative
+        image_local = sync_root / image_relative
+        image_verify = verify_root / image_relative
         large_size_bytes = 6 * 1024 * 1024
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0052:{os.getpid()}"
+        pdf_seed = f"{xlsx_seed}:pdf"
+        image_seed = f"{xlsx_seed}:image"
 
         # The 6 MiB sentinel already crosses the application's automatic session-upload
-        # threshold. Do not force all files through session upload: the XLSX pair deliberately
-        # exercises the normal <4 MiB simple-upload and >4 MiB session-upload paths together.
+        # threshold. Do not force all files through session upload: the XLSX and PDF pairs
+        # deliberately exercise the normal <4 MiB simple-upload and >4 MiB session-upload paths.
         context.prepare_minimal_config_dir(conf_main, self._build_config_text(sync_root, app_log_dir))
         context.prepare_minimal_config_dir(conf_verify, ("# tc0052 verify\n" f'sync_dir = "{verify_root}"\n' 'bypass_data_preservation = "true"\n'))
         write_text_file(anchor_local, "TC0052 anchor\n")
@@ -67,6 +77,11 @@ class TestCase0052MonitorModeLargeFileCreateSessionUpload(MonitorModeTestCaseBas
             "xlsx_relative": xlsx_relative,
             "xlsx_large_relative": large_xlsx_relative(xlsx_relative),
             "xlsx_seed": xlsx_seed,
+            "pdf_relative": pdf_relative,
+            "pdf_large_relative": large_pdf_relative(pdf_relative),
+            "pdf_seed": pdf_seed,
+            "image_relative": image_relative,
+            "image_seed": image_seed,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
@@ -89,19 +104,41 @@ class TestCase0052MonitorModeLargeFileCreateSessionUpload(MonitorModeTestCaseBas
                 payload_rows=self.XLSX_PAYLOAD_ROWS,
                 title="TC0052 monitor session upload workbook",
             )
+            generated_pdf = create_random_pdf_pair(
+                pdf_local,
+                pdf_seed,
+                revision=PDF_REVISION_0,
+                title="TC0052 monitor session upload PDF",
+            )
             details["local_large_hash"] = compute_quickxor_hash_file(large_local)
             details["local_large_size"] = large_local.stat().st_size
             details["generated_xlsx_size"] = int(generated_xlsx["size_bytes"])
             details["generated_large_xlsx_size"] = int(generated_xlsx["large_size_bytes"])
             details["created_xlsx_validation_error"] = validate_xlsx_pair(xlsx_local, REVISION_0)
+            details["generated_pdf_small_size"] = int(generated_pdf["small_size_bytes"])
+            details["generated_pdf_large_size"] = int(generated_pdf["large_size_bytes"])
+            details["created_pdf_validation_error"] = validate_pdf_pair(pdf_local, PDF_REVISION_0)
+            generated_images = create_random_image_set(image_local, image_seed, revision=REVISION_0, title="TC0052 monitor session upload images")
+            details["generated_image_sizes"] = {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")}
+            details["created_image_validation_error"] = validate_image_set(image_local, REVISION_0)
             if details["created_xlsx_validation_error"]:
                 self._write_metadata(metadata_file, details)
                 return self.fail_result(self.case_id, self.name, f"Generated XLSX pair is invalid before monitor processing: {details['created_xlsx_validation_error']}", artifacts, details)
+            if details["created_image_validation_error"]:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name, f"Generated image set is invalid before monitor processing: {details['created_image_validation_error']}", artifacts, details)
+            if details["created_pdf_validation_error"]:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name, f"Generated PDF pair is invalid before monitor processing: {details['created_pdf_validation_error']}", artifacts, details)
 
+            image_relatives = image_set_relatives(image_relative)
             required_patterns = [
                 f"Uploading new file: {large_relative} ... done",
                 f"Uploading new file: {xlsx_relative} ... done",
                 f"Uploading new file: {large_xlsx_relative(xlsx_relative)} ... done",
+                f"Uploading new file: {pdf_relative} ... done",
+                f"Uploading new file: {large_pdf_relative(pdf_relative)} ... done",
+                *[f"Uploading new file: {relative} ... done" for relative in image_relatives.values()],
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
@@ -122,6 +159,12 @@ class TestCase0052MonitorModeLargeFileCreateSessionUpload(MonitorModeTestCaseBas
             if xlsx_local.is_file()
             else "Local XLSX is missing after monitor processing"
         )
+        details["post_monitor_pdf_validation_error"] = (
+            validate_pdf_pair(pdf_local, PDF_REVISION_0)
+            if pdf_local.is_file()
+            else "Local PDF is missing after monitor processing"
+        )
+        details["post_monitor_image_validation_error"] = (validate_image_set(image_local, REVISION_0) if image_set_all_files(image_local) else "Local image set is missing after monitor processing")
 
         verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(verify_root), "--confdir", str(conf_verify)]
         context.log(f"Executing Test Case {self.case_id} verify: {command_to_string(verify_command)}")
@@ -137,6 +180,12 @@ class TestCase0052MonitorModeLargeFileCreateSessionUpload(MonitorModeTestCaseBas
             if xlsx_verify.is_file()
             else "Verification XLSX is missing"
         )
+        details["verify_pdf_validation_error"] = (
+            validate_pdf_pair(pdf_verify, PDF_REVISION_0)
+            if pdf_verify.is_file()
+            else "Verification PDF is missing"
+        )
+        details["verify_image_validation_error"] = (validate_image_set(image_verify, REVISION_0) if image_set_all_files(image_verify) else "Verification image set is missing")
         self._write_metadata(metadata_file, details)
 
         if verify_result.returncode != 0:
@@ -149,4 +198,12 @@ class TestCase0052MonitorModeLargeFileCreateSessionUpload(MonitorModeTestCaseBas
             return self.fail_result(self.case_id, self.name, f"Monitor processing did not leave a valid XLSX pair locally: {details['post_monitor_xlsx_validation_error']}", artifacts, details)
         if details["verify_xlsx_validation_error"]:
             return self.fail_result(self.case_id, self.name, f"Remote verification is missing or contains an invalid XLSX pair: {details['verify_xlsx_validation_error']}", artifacts, details)
+        if details["post_monitor_image_validation_error"]:
+            return self.fail_result(self.case_id, self.name, f"Monitor processing did not leave a valid image set locally: {details['post_monitor_image_validation_error']}", artifacts, details)
+        if details["verify_image_validation_error"]:
+            return self.fail_result(self.case_id, self.name, f"Remote verification is missing or contains an invalid image set: {details['verify_image_validation_error']}", artifacts, details)
+        if details["post_monitor_pdf_validation_error"]:
+            return self.fail_result(self.case_id, self.name, f"Monitor processing did not leave a valid PDF pair locally: {details['post_monitor_pdf_validation_error']}", artifacts, details)
+        if details["verify_pdf_validation_error"]:
+            return self.fail_result(self.case_id, self.name, f"Remote verification is missing or contains an invalid PDF pair: {details['verify_pdf_validation_error']}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

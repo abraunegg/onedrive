@@ -9,6 +9,8 @@ from pathlib import Path
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
+from framework.pdf import create_random_pdf_pair, validate_pdf_pair, unlink_pdf_pair, large_pdf_relative, pdf_pair_any_exists
+from framework.image import create_random_image_set, validate_image_set, unlink_image_set, image_set_relatives, image_set_any_exists
 from framework.result import TestResult
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, unlink_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
@@ -17,7 +19,7 @@ from framework.utils import command_to_string, reset_directory, run_command, wri
 class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
     case_id = "0043"
     name = "monitor mode local delete propagation"
-    description = "Delete passive TXT and real XLSX files under --monitor and validate both remote deletes occur as expected"
+    description = "Delete passive TXT plus real XLSX and PDF files under --monitor and validate all remote deletes occur as expected"
 
     XLSX_PAYLOAD_ROWS = 32
 
@@ -100,14 +102,20 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
         keep_relative = f"{root_name}/anchor.txt"
         delete_relative = f"{root_name}/delete-me.txt"
         delete_xlsx_relative = f"{root_name}/delete-me.xlsx"
+        delete_pdf_relative = f"{root_name}/delete-me.pdf"
+        delete_image_relative = f"{root_name}/delete-me.png"
 
         keep_local_path = sync_root / keep_relative
         delete_local_path = sync_root / delete_relative
         delete_xlsx_local_path = sync_root / delete_xlsx_relative
+        delete_pdf_local_path = sync_root / delete_pdf_relative
+        delete_image_local_path = sync_root / delete_image_relative
 
         keep_verify_path = verify_root / keep_relative
         delete_verify_path = verify_root / delete_relative
         delete_xlsx_verify_path = verify_root / delete_xlsx_relative
+        delete_pdf_verify_path = verify_root / delete_pdf_relative
+        delete_image_verify_path = verify_root / delete_image_relative
 
         keep_content = "TC0043 anchor\n"
         delete_content = (
@@ -115,6 +123,8 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
             "This file should be removed while --monitor is active.\n"
         )
         xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0043:{os.getpid()}"
+        pdf_seed = f"{xlsx_seed}:pdf"
+        image_seed = f"{xlsx_seed}:image"
 
         context.bootstrap_config_dir(conf_main)
         write_text_file(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
@@ -156,7 +166,11 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
             "keep_relative": keep_relative,
             "delete_relative": delete_relative,
             "delete_xlsx_relative": delete_xlsx_relative,
+            "delete_pdf_relative": delete_pdf_relative,
+            "delete_image_relative": delete_image_relative,
             "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
+            "image_seed": image_seed,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "sync_root": str(sync_root),
             "verify_root": str(verify_root),
@@ -175,6 +189,18 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
         )
         details["generated_xlsx_size"] = int(generated["size_bytes"])
         details["seed_xlsx_validation_error"] = validate_xlsx_pair(delete_xlsx_local_path, REVISION_0)
+        generated_pdf = create_random_pdf_pair(
+            delete_pdf_local_path,
+            pdf_seed,
+            revision=REVISION_0,
+            title="TC0043 monitor local delete PDF",
+        )
+        details["generated_pdf_size"] = int(generated_pdf["size_bytes"])
+        details["generated_large_pdf_size"] = int(generated_pdf["large_size_bytes"])
+        details["seed_pdf_validation_error"] = validate_pdf_pair(delete_pdf_local_path, REVISION_0)
+        generated_images = create_random_image_set(delete_image_local_path, image_seed, revision=REVISION_0, title="TC0043 monitor delete images")
+        details["generated_image_sizes"] = {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")}
+        details["seed_image_validation_error"] = validate_image_set(delete_image_local_path, REVISION_0)
 
         seed_command = [
             context.onedrive_bin,
@@ -239,19 +265,29 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
 
             mutation_log_start_offset = self._prepare_monitor_for_local_mutation(process, monitor_stdout, details)
 
-            context.log(f"Test Case {self.case_id}: deleting local files while monitor is running: {delete_relative}, {delete_xlsx_relative}")
+            context.log(f"Test Case {self.case_id}: deleting local files while monitor is running: {delete_relative}, {delete_xlsx_relative}, {delete_pdf_relative}, {delete_image_relative}")
             if delete_local_path.exists():
                 delete_local_path.unlink()
             if xlsx_pair_any_exists(delete_xlsx_local_path):
                 unlink_xlsx_pair(delete_xlsx_local_path)
+            if pdf_pair_any_exists(delete_pdf_local_path):
+                unlink_pdf_pair(delete_pdf_local_path)
+            if image_set_any_exists(delete_image_local_path):
+                unlink_image_set(delete_image_local_path)
 
             details["local_deleted_exists_after_unlink"] = delete_local_path.exists()
             details["local_deleted_xlsx_exists_after_unlink"] = xlsx_pair_any_exists(delete_xlsx_local_path)
+            details["local_deleted_pdf_exists_after_unlink"] = pdf_pair_any_exists(delete_pdf_local_path)
+            details["local_deleted_image_exists_after_unlink"] = image_set_any_exists(delete_image_local_path)
 
+            image_relatives = image_set_relatives(delete_image_relative)
             required_patterns = [
                 f"Deleting item from Microsoft OneDrive: {delete_relative}",
                 f"Deleting item from Microsoft OneDrive: {delete_xlsx_relative}",
                 f"Deleting item from Microsoft OneDrive: {large_xlsx_relative(delete_xlsx_relative)}",
+                f"Deleting item from Microsoft OneDrive: {delete_pdf_relative}",
+                f"Deleting item from Microsoft OneDrive: {large_pdf_relative(delete_pdf_relative)}",
+                *[f"Deleting item from Microsoft OneDrive: {relative}" for relative in image_relatives.values()],
             ]
             mutation_processed, post_mutation_log_segment = self._wait_for_stdout_growth_patterns(
                 monitor_stdout,
@@ -294,6 +330,8 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
         details["verify_keep_exists"] = keep_verify_path.is_file()
         details["verify_deleted_exists"] = delete_verify_path.exists()
         details["verify_deleted_xlsx_exists"] = xlsx_pair_any_exists(delete_xlsx_verify_path)
+        details["verify_deleted_pdf_exists"] = pdf_pair_any_exists(delete_pdf_verify_path)
+        details["verify_deleted_image_exists"] = image_set_any_exists(delete_image_verify_path)
 
         self._write_metadata(metadata_file, details)
 
@@ -329,6 +367,18 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
                 self.case_id,
                 self.name,
                 f"Remote verification still contains deleted XLSX file: {delete_xlsx_relative}",
+                artifacts,
+                details,
+            )
+
+        if image_set_any_exists(delete_image_verify_path):
+            return self.fail_result(self.case_id, self.name, f"Remote verification still contains deleted image set: {delete_image_relative}", artifacts, details)
+
+        if pdf_pair_any_exists(delete_pdf_verify_path):
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"Remote verification still contains deleted PDF file: {delete_pdf_relative}",
                 artifacts,
                 details,
             )
