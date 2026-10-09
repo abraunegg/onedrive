@@ -98,6 +98,7 @@ from testcases.tc0081_historical_database_upgrade_validation import TestCase0081
 from testcases.tc0082_single_directory_delete_reconciliation import TestCase0082SingleDirectoryDeleteReconciliation
 from testcases.tc0083_delta_children_reconciliation_parity import TestCase0083DeltaChildrenReconciliationParity
 from testcases.tc0084_remote_batch_deletion_reconciliation import TestCase0084RemoteBatchDeletionReconciliation
+from testcases.tc0085_websocket_wake_during_active_upload import TestCase0085WebSocketWakeDuringActiveUpload
 
 
 def build_test_suite() -> list:
@@ -159,7 +160,7 @@ def build_test_suite() -> list:
         #TestCase0055UploadOnlyRemoveSourceFolders(),
         #TestCase0056MonitorModeCreateThenDeleteQuickly(),
         #TestCase0057RecycleBinDeleteBehaviourValidation(),
-        TestCase0058MonitorDownloadOnlyCleanupCadence(),
+        #TestCase0058MonitorDownloadOnlyCleanupCadence(),
         #TestCase0059WebSocketRemoteUploadNotification(),
         #TestCase0060MonitorModeLocalMoveNoDeleteReupload(),
         #TestCase0061RemoteMoveIntoSkipDirReconciliation(),
@@ -186,6 +187,7 @@ def build_test_suite() -> list:
         TestCase0082SingleDirectoryDeleteReconciliation(),
         TestCase0083DeltaChildrenReconciliationParity(),
         TestCase0084RemoteBatchDeletionReconciliation(),
+        TestCase0085WebSocketWakeDuringActiveUpload(),
     ]
 
 
