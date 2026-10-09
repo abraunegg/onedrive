@@ -97,6 +97,7 @@ from testcases.tc0080_monitor_remote_directory_rename_reconciliation import Test
 from testcases.tc0081_historical_database_upgrade_validation import TestCase0081HistoricalDatabaseUpgradeValidation
 from testcases.tc0082_single_directory_delete_reconciliation import TestCase0082SingleDirectoryDeleteReconciliation
 from testcases.tc0083_delta_children_reconciliation_parity import TestCase0083DeltaChildrenReconciliationParity
+from testcases.tc0084_remote_batch_deletion_reconciliation import TestCase0084RemoteBatchDeletionReconciliation
 
 
 def build_test_suite() -> list:
@@ -184,6 +185,7 @@ def build_test_suite() -> list:
         #TestCase0081HistoricalDatabaseUpgradeValidation(),
         TestCase0082SingleDirectoryDeleteReconciliation(),
         TestCase0083DeltaChildrenReconciliationParity(),
+        TestCase0084RemoteBatchDeletionReconciliation(),
     ]
 
 
