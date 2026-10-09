@@ -2,30 +2,33 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
 from pathlib import Path
 
-from framework.base import E2ETestCase
+from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_typed_manifest, write_manifest
 from framework.result import TestResult
 from framework.utils import command_to_string, run_command, write_text_file
 
 
-class TestCase0084RemoteBatchDeletionReconciliation(E2ETestCase):
-    """Reconcile remotely deleted tracked objects using an authoritative full scan.
+class TestCase0084RemoteBatchDeletionReconciliation(MonitorModeTestCaseBase):
+    """Validate production monitor full-scan true-up after independent remote deletes.
 
-    This tests recovery from stale database/local entries described in #3775.
-    It does not attempt to force Microsoft Graph to omit /delta tombstones.
-    The observer must remain stopped while the independent mutator deletes the
-    objects, and its reconciliation must not use --resync or --single-directory.
+    The mutator is an independent upload-only client. The subject runs normal
+    bidirectional --monitor, with native /delta enabled and a one-cycle
+    full-scan cadence to keep CI bounded. The 90-second interval is permitted
+    only for a bounded developer monitor run (monitor_max_loop > 0).
+    No forced /children or resync is used during reconciliation.
+    We cannot simulate omitted Graph tombstones.
     """
 
     case_id = "0084"
-    name = "authoritative remote batch deletion reconciliation"
+    name = "monitor remote batch deletion full-scan reconciliation"
     description = (
-        "Validate that a forced /children full scan removes stale tracked files "
-        "and directories after independent remote batch deletion, without resync "
-        "or resurrection of deleted remote objects"
+        "Validate native monitor /delta reconciliation and scheduled online full-scan "
+        "true-up after independent remote batch deletion, without resync or "
+        "resurrection of deleted remote objects"
     )
 
     def run(self, context: E2EContext) -> TestResult:
@@ -64,12 +67,16 @@ class TestCase0084RemoteBatchDeletionReconciliation(E2ETestCase):
         ])
         phase_names = (
             "seed", "subject_initial", "remote_delete", "remote_before",
-            "subject_reconcile", "subject_converge", "remote_after",
+            "subject_converge", "remote_after",
         )
         artifacts = [
             str(log_dir / f"{phase}_{stream}.log")
             for phase in phase_names for stream in ("stdout", "stderr")
         ]
+        artifacts.extend((
+            str(log_dir / "subject_monitor_stdout.log"),
+            str(log_dir / "subject_monitor_stderr.log"),
+        ))
         artifacts.extend(str(state_dir / name) for name in (
             "seed_manifest.txt", "subject_initial_manifest.txt", "remote_before_manifest.txt",
             "subject_final_manifest.txt", "remote_after_manifest.txt", "metadata.txt",
@@ -78,7 +85,10 @@ class TestCase0084RemoteBatchDeletionReconciliation(E2ETestCase):
             "root_name": root_name,
             "deleted_file_count": len(deleted_files),
             "deleted_directory_roots": removed_directories,
-            "subject_force_children_scan": True,
+            "subject_force_children_scan": False,
+            "subject_monitor_fullscan_frequency": 1,
+            "subject_monitor_interval_seconds": 90,
+            "subject_websocket_support": False,
         }
 
         context.prepare_minimal_config_dir(
@@ -88,12 +98,14 @@ class TestCase0084RemoteBatchDeletionReconciliation(E2ETestCase):
         )
         context.prepare_minimal_config_dir(
             conf_subject,
-            f'# tc0084 tracked authoritative observer\nsync_dir = "{subject_root}"\n'
-            'force_children_scan = "true"\n'
-            'bypass_data_preservation = "false"\n',
+            f'# tc0084 tracked monitor subject\nsync_dir = "{subject_root}"\n'
+            'bypass_data_preservation = "false"\n'
+            'monitor_interval = "90"\n'
+            'monitor_fullscan_frequency = "1"\n'
+            'monitor_max_loop = "3"\n'
+            'disable_websocket_support = "true"\n',
         )
-        # The observer uses sync_list instead of --single-directory. The latter
-        # would select /children by itself and weaken this regression test.
+        # Scope via sync_list, not --single-directory: the subject must use native /delta.
         write_text_file(conf_subject / "sync_list", f"/{root_name}\n")
         for conf_dir, sync_root in (
             (conf_before_verify, before_verify_root),
@@ -117,6 +129,10 @@ class TestCase0084RemoteBatchDeletionReconciliation(E2ETestCase):
         subject_command = [
             context.onedrive_bin, "--display-running-config", "--sync",
             "--verbose", "--confdir", str(conf_subject),
+        ]
+        monitor_command = [
+            context.onedrive_bin, "--display-running-config", "--monitor",
+            "--verbose", "--verbose", "--confdir", str(conf_subject),
         ]
 
         def fail(reason: str) -> TestResult:
@@ -149,57 +165,97 @@ class TestCase0084RemoteBatchDeletionReconciliation(E2ETestCase):
             if not (subject_root / relative).is_file() or (subject_root / relative).read_text(encoding="utf-8") != content:
                 return fail(f"initial tracked observer content mismatch: {relative}")
 
-        # Mutator owns the remote delete; the subject is stopped, with its
-        # pre-deletion database and files untouched until authoritative scan.
-        shutil.rmtree(mutator_root / removed_directories[0])
-        (mutator_root / removed_directories[1]).rmdir()
-        (mutator_root / f"{root_name}/Singles/removed.txt").unlink()
-        deleted = execute("remote_delete", mutator_command)
-        if deleted.returncode != 0:
-            return fail("independent mutator batch remote deletion failed")
+        # Start a live, previously tracked, bidirectional monitor before remote
+        # mutation. The helper controls the monitor process exactly as the
+        # existing monitor testcases do; no subject upload-only/download-only.
+        monitor_stdout = log_dir / "subject_monitor_stdout.log"
+        monitor_stderr = log_dir / "subject_monitor_stderr.log"
+        context.log(f"Executing Test Case {self.case_id} subject monitor: {command_to_string(monitor_command)}")
+        monitor_process, monitor_ready = self._launch_monitor_process(
+            context, monitor_command, monitor_stdout, monitor_stderr,
+            startup_timeout_seconds=300,
+        )
+        details["subject_monitor_initial_sync_complete"] = monitor_ready
+        details["subject_monitor_command"] = command_to_string(monitor_command)
+        if not monitor_ready:
+            return fail("subject monitor initial synchronisation did not complete")
 
-        before = execute("remote_before", [
-            context.onedrive_bin, "--display-running-config", "--sync", "--download-only",
-            "--verbose", "--resync", "--resync-auth", "--single-directory", root_name,
-            "--confdir", str(conf_before_verify),
-        ])
-        if before.returncode != 0:
-            return fail("fresh independent verifier failed before observer reconciliation")
-        before_manifest = build_typed_manifest(before_verify_root)
-        write_manifest(state_dir / "remote_before_manifest.txt", before_manifest)
-        if before_manifest != expected_final:
-            return fail("remote deletion not confirmed before observer reconciliation")
-        # Explicitly establish that the subject really is stale: absent online,
-        # still present locally, with its original database retained.
-        if not all((subject_root / relative).is_file() for relative in deleted_files):
-            return fail("observer lost tracked files before authoritative reconciliation")
-        if not (subject_root / removed_directories[0]).is_dir():
-            return fail("observer no longer contains stale directory before reconciliation")
+        try:
+            if not self._wait_for_monitor_stdout_quiet(
+                monitor_process, monitor_stdout, quiet_seconds=3, timeout_seconds=40,
+            ):
+                return fail("subject monitor did not become idle before remote mutation")
+            # Record an offset so initial-sync diagnostics cannot impersonate
+            # the online full-scan pass after the mutator changed the remote.
+            monitor_offset = len(self._read_stdout(monitor_stdout))
+            details["monitor_post_mutation_offset"] = monitor_offset
 
-        reconciled = execute("subject_reconcile", subject_command)
-        if reconciled.returncode != 0:
-            return fail("authoritative /children observer reconciliation failed")
-        if "Forcing client to use /children API call rather than /delta API" not in reconciled.stdout:
-            return fail("observer did not confirm forced /children traversal in application logs")
-        for phase, outcome in (("subject_reconcile", reconciled),):
-            if any(marker in outcome.stdout for marker in (
+            shutil.rmtree(mutator_root / removed_directories[0])
+            (mutator_root / removed_directories[1]).rmdir()
+            (mutator_root / f"{root_name}/Singles/removed.txt").unlink()
+            deleted = execute("remote_delete", mutator_command)
+            if deleted.returncode != 0:
+                return fail("independent mutator remote batch deletion failed")
+
+            before = execute("remote_before", [
+                context.onedrive_bin, "--display-running-config", "--sync", "--download-only",
+                "--verbose", "--resync", "--resync-auth", "--single-directory", root_name,
+                "--confdir", str(conf_before_verify),
+            ])
+            if before.returncode != 0:
+                return fail("fresh independent verifier failed before monitor reconciliation")
+            before_manifest = build_typed_manifest(before_verify_root)
+            write_manifest(state_dir / "remote_before_manifest.txt", before_manifest)
+            if before_manifest != expected_final:
+                return fail("remote batch deletion not confirmed before monitor reconciliation")
+
+            # Wait for a real scheduled online true-up, not merely the local
+            # database consistency check. Frequency 1 means one scheduled
+            # cadence instead of the normal twelve. The bounded developer
+            # monitor uses the 90-second interval allowed by config.d.
+            deadline = time.monotonic() + 390
+            full_scan_seen = False
+            while time.monotonic() < deadline:
+                post_mutation_output = self._read_stdout_from_offset(monitor_stdout, monitor_offset)
+                full_scan_seen = (
+                    "Perform a Full Scan True-Up: true" in post_mutation_output
+                    and "Performing a full scan of online data to ensure consistent local state" in post_mutation_output
+                )
+                if full_scan_seen and build_typed_manifest(subject_root) == expected_final:
+                    break
+                if monitor_process.poll() is not None:
+                    return fail("subject monitor exited before completing scheduled online full scan")
+                time.sleep(1)
+            else:
+                details["post_mutation_monitor_log_tail"] = post_mutation_output[-5000:]
+                return fail("monitor did not prove a scheduled online full scan and correct deletion convergence")
+
+            details["full_scan_true_up_logged"] = full_scan_seen
+            if "Forcing client to use /children API call rather than /delta API" in post_mutation_output:
+                return fail("subject unexpectedly entered forced /children developer path")
+            if any(marker in post_mutation_output for marker in (
                 "Uploading file:", "Successfully created the remote directory",
                 "Successfully deleted the item from Microsoft OneDrive",
             )):
-                return fail(f"unexpected remote upload/create/delete during {phase}")
+                return fail("subject unexpectedly modified remote state during monitor reconciliation")
+        finally:
+            self._shutdown_monitor_process(monitor_process, details)
+
         final_manifest = build_typed_manifest(subject_root)
         write_manifest(state_dir / "subject_final_manifest.txt", final_manifest)
         if final_manifest != expected_final:
-            return fail("authoritative reconciliation did not remove stale tracked items")
+            return fail("scheduled online full-scan did not remove stale tracked items")
 
+        # A standard standalone delta sync (no resync, no force_children_scan)
+        # checks that the retained database and filesystem have converged.
         converged = execute("subject_converge", subject_command)
         if converged.returncode != 0 or build_typed_manifest(subject_root) != expected_final:
-            return fail("observer did not converge to stable authoritative remote state")
+            return fail("subject did not converge to stable remote state")
         if any(marker in converged.stdout for marker in (
             "Uploading file:", "Successfully created the remote directory",
             "Successfully deleted the item from Microsoft OneDrive",
         )):
-            return fail("unexpected remote mutation during observer convergence")
+            return fail("unexpected remote mutation during subject convergence")
 
         after = execute("remote_after", [
             context.onedrive_bin, "--display-running-config", "--sync", "--download-only",

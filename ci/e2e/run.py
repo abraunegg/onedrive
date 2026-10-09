@@ -159,7 +159,7 @@ def build_test_suite() -> list:
         #TestCase0055UploadOnlyRemoveSourceFolders(),
         #TestCase0056MonitorModeCreateThenDeleteQuickly(),
         #TestCase0057RecycleBinDeleteBehaviourValidation(),
-        #TestCase0058MonitorDownloadOnlyCleanupCadence(),
+        TestCase0058MonitorDownloadOnlyCleanupCadence(),
         #TestCase0059WebSocketRemoteUploadNotification(),
         #TestCase0060MonitorModeLocalMoveNoDeleteReupload(),
         #TestCase0061RemoteMoveIntoSkipDirReconciliation(),
