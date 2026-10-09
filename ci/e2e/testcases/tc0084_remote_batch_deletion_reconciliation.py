@@ -209,28 +209,46 @@ class TestCase0084RemoteBatchDeletionReconciliation(MonitorModeTestCaseBase):
             if before_manifest != expected_final:
                 return fail("remote batch deletion not confirmed before monitor reconciliation")
 
-            # Wait for a real scheduled online true-up, not merely the local
-            # database consistency check. Frequency 1 means one scheduled
-            # cadence instead of the normal twelve. The bounded developer
-            # monitor uses the 90-second interval allowed by config.d.
+            # Wait for the scheduled online true-up AND for the bounded monitor
+            # to finish normally. Do not interrupt loop 2 when its deletions
+            # become visible: the sync must reach its completion marker, and
+            # loop 3 must complete before monitor_max_loop stops the process.
             deadline = time.monotonic() + 390
             full_scan_seen = False
+            monitor_completed = False
             while time.monotonic() < deadline:
                 post_mutation_output = self._read_stdout_from_offset(monitor_stdout, monitor_offset)
                 full_scan_seen = (
                     "Perform a Full Scan True-Up: true" in post_mutation_output
                     and "Performing a full scan of online data to ensure consistent local state" in post_mutation_output
                 )
-                if full_scan_seen and build_typed_manifest(subject_root) == expected_final:
+                completed_syncs = post_mutation_output.count(self.SYNC_COMPLETE_PATTERN)
+                bounded_exit_seen = "Exiting after 3 loops due to developer set option" in post_mutation_output
+                if (
+                    full_scan_seen
+                    and completed_syncs >= 2
+                    and bounded_exit_seen
+                    and monitor_process.poll() is not None
+                ):
+                    monitor_completed = True
                     break
                 if monitor_process.poll() is not None:
-                    return fail("subject monitor exited before completing scheduled online full scan")
+                    break
                 time.sleep(1)
-            else:
-                details["post_mutation_monitor_log_tail"] = post_mutation_output[-5000:]
-                return fail("monitor did not prove a scheduled online full scan and correct deletion convergence")
 
             details["full_scan_true_up_logged"] = full_scan_seen
+            details["post_mutation_completed_syncs"] = completed_syncs
+            details["bounded_monitor_exit_logged"] = bounded_exit_seen
+            details["monitor_automatic_returncode"] = monitor_process.poll()
+            if not monitor_completed:
+                details["post_mutation_monitor_log_tail"] = post_mutation_output[-5000:]
+                return fail("monitor did not complete loops 2 and 3 and exit via monitor_max_loop")
+            if monitor_process.returncode != 0:
+                return fail("bounded monitor exited with non-zero status")
+            if build_typed_manifest(subject_root) != expected_final:
+                return fail("monitor completed but local deletion reconciliation did not converge")
+            if "interrupted (SIGINT) before completion" in post_mutation_output:
+                return fail("monitor synchronisation was interrupted before completion")
             if "Forcing client to use /children API call rather than /delta API" in post_mutation_output:
                 return fail("subject unexpectedly entered forced /children developer path")
             if any(marker in post_mutation_output for marker in (
