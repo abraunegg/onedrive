@@ -95,6 +95,12 @@ from testcases.tc0078_monitor_mode_rename_to_invalid_name import TestCase0078Mon
 from testcases.tc0079_display_sync_status_validation import TestCase0079DisplaySyncStatusValidation
 from testcases.tc0080_monitor_remote_directory_rename_reconciliation import TestCase0080MonitorRemoteDirectoryRenameReconciliation
 from testcases.tc0081_historical_database_upgrade_validation import TestCase0081HistoricalDatabaseUpgradeValidation
+from testcases.tc0082_single_directory_delete_reconciliation import TestCase0082SingleDirectoryDeleteReconciliation
+from testcases.tc0083_delta_children_reconciliation_parity import TestCase0083DeltaChildrenReconciliationParity
+from testcases.tc0084_remote_batch_deletion_reconciliation import TestCase0084RemoteBatchDeletionReconciliation
+from testcases.tc0085_websocket_wake_during_active_upload import TestCase0085WebSocketWakeDuringActiveUpload
+from testcases.tc0086_https_credential_redaction import TestCase0086HTTPSCredentialRedaction
+from testcases.tc0087_resync_monitor_working_directory_boundary import TestCase0087ResyncMonitorWorkingDirectoryBoundary
 
 
 def build_test_suite() -> list:
@@ -180,6 +186,12 @@ def build_test_suite() -> list:
         TestCase0079DisplaySyncStatusValidation(),
         TestCase0080MonitorRemoteDirectoryRenameReconciliation(),
         TestCase0081HistoricalDatabaseUpgradeValidation(),
+        TestCase0082SingleDirectoryDeleteReconciliation(),
+        TestCase0083DeltaChildrenReconciliationParity(),
+        TestCase0084RemoteBatchDeletionReconciliation(),
+        TestCase0085WebSocketWakeDuringActiveUpload(),
+        TestCase0086HTTPSCredentialRedaction(),
+        TestCase0087ResyncMonitorWorkingDirectoryBoundary(),
     ]
 
 

@@ -1153,18 +1153,16 @@ class ApplicationConfig {
 					return false;
 				}
 				setValueLong(key, thisConfigValue);
-				if (key == "monitor_interval") { // if key is 'monitor_interval' the value must be 300 or greater
+				if (key == "monitor_interval") { // normal minimum 300; bounded developer monitor minimum 60
 					ulong tempValue = thisConfigValue;
-					// the temp value needs to be 300 or greater
-					if (tempValue < defaultMonitorInterval) {
+					if (tempValue < (getValueLong("monitor_max_loop") > 0 ? 60 : defaultMonitorInterval)) {
 						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
 						tempValue = defaultMonitorInterval;
 					}
 					setValueLong("monitor_interval", tempValue);
-				} else if (key == "monitor_fullscan_frequency") { // if key is 'monitor_fullscan_frequency' the value must be 12 or greater
+				} else if (key == "monitor_fullscan_frequency") { // normal minimum 12; bounded developer monitor minimum 1
 					ulong tempValue = thisConfigValue;
-					// the temp value needs to be 12 or greater
-					if (tempValue < 12) {
+					if (tempValue < (getValueLong("monitor_max_loop") > 0 ? 1 : 12)) {
 						// If this is not set to zero (0) then we are not disabling 'monitor_fullscan_frequency'
 						if (tempValue != 0) {
 							// invalid value
@@ -1615,7 +1613,7 @@ class ApplicationConfig {
 			}
 			
 			// Was --monitor-interval specified and now set to a value below minimum requirement?
-			if (getValueLong("monitor_interval") < defaultMonitorInterval ) {
+			if (getValueLong("monitor_interval") < (getValueLong("monitor_max_loop") > 0 ? 60 : defaultMonitorInterval)) {
 				addLogEntry("Invalid value for --monitor-interval - using default value: " ~ to!string(defaultMonitorInterval));
 				setValueLong("monitor_interval", defaultMonitorInterval);
 			}
