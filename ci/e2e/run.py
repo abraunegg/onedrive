@@ -100,6 +100,7 @@ from testcases.tc0083_delta_children_reconciliation_parity import TestCase0083De
 from testcases.tc0084_remote_batch_deletion_reconciliation import TestCase0084RemoteBatchDeletionReconciliation
 from testcases.tc0085_websocket_wake_during_active_upload import TestCase0085WebSocketWakeDuringActiveUpload
 from testcases.tc0086_https_credential_redaction import TestCase0086HTTPSCredentialRedaction
+from testcases.tc0087_resync_monitor_working_directory_boundary import TestCase0087ResyncMonitorWorkingDirectoryBoundary
 
 
 def build_test_suite() -> list:
@@ -190,6 +191,7 @@ def build_test_suite() -> list:
         TestCase0084RemoteBatchDeletionReconciliation(),
         TestCase0085WebSocketWakeDuringActiveUpload(),
         TestCase0086HTTPSCredentialRedaction(),
+        TestCase0087ResyncMonitorWorkingDirectoryBoundary(),
     ]
 
 
