@@ -9,7 +9,7 @@ from pathlib import Path
 from framework.context import E2EContext
 from framework.manifest import build_typed_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, run_command, write_text_file
+from framework.utils import CommandResult, command_to_string, run_command, write_text_file
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 
 
@@ -88,7 +88,19 @@ class TestCase0087ResyncMonitorWorkingDirectoryBoundary(MonitorModeTestCaseBase)
                         process_env.pop(name, None)
                     else:
                         process_env[name] = value
-            result = run_command(command, cwd=cwd, env=process_env)
+            # run_command() overlays its environment on os.environ, which restores
+            # variables deliberately removed above. For absence scenarios, pass
+            # the exact environment to subprocess instead of the shared helper.
+            if env is not None and any(value is None for value in env.values()):
+                completed = subprocess.run(
+                    command, cwd=str(cwd), env=process_env,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    text=True, encoding="utf-8", errors="replace", check=False,
+                )
+                result = CommandResult(command, completed.returncode,
+                                       completed.stdout, completed.stderr)
+            else:
+                result = run_command(command, cwd=cwd, env=process_env)
             if env is not None:
                 details[f"{phase}_environment"] = dict(env)
             write_text_file(log_dir / f"{phase}_stdout.log", result.stdout)
