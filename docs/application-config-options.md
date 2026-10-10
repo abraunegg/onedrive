@@ -1283,15 +1283,13 @@ _**CLI Option Use:**_ `--threads '16'`
 
 > [!IMPORTANT]
 > The application fully implements Microsoft’s throttling requirements for handling 429 and 503 response codes by:
-> * Handles 429 and 503 responses using exponential backoff
-> * Respects Retry-After headers provided by the API for the required back off period
-> * Limits concurrency to the recommended limits
-> 
-> If you receive this application output:
->```
->Handling a Microsoft Graph API HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: AbCdEfGhIjKlMnOp
->```
-> Reduce your configured 'threads' value or raise a support ticket with Microsoft
+> * Handling 429 and 503 responses using exponential backoff
+> * Respecting Retry-After headers provided by the API for the required back off period
+> * Limiting concurrency to the recommended limits
+>
+> HTTP 429 throttling is an expected, retryable Microsoft Graph response. During normal application operation, routine 429 handling and retry messages are suppressed while the client honours the service-provided back-off period and retries the request. Detailed 429 handling and retry messages remain available when running with `--verbose` or debug-level logging. Actual unrecoverable failures continue to be reported.
+>
+> If repeated throttling is observed while using verbose or debug logging, review the configured `threads` value and reduce it if appropriate. Persistent throttling that cannot be explained by client concurrency may require investigation with Microsoft.
 
 
 > [!WARNING]

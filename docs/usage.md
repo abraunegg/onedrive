@@ -2625,7 +2625,7 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
     onedrive [options] --display-config
       Display the currently used configuration
     onedrive [options] --display-sync-status
-      Query OneDrive service and report on pending changes
+      Perform a read-only bidirectional assessment of local and Microsoft OneDrive sync state
     onedrive -h | --help
       Show this help screen
     onedrive --version
