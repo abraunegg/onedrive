@@ -195,6 +195,10 @@ class SyncEngine {
 	string[] newLocalFilesToUploadToOneDrive;
 	// Array of local file paths that failed to be uploaded to OneDrive
 	string[] fileUploadFailures;
+	// Modified and new file uploads can complete on TaskPool workers. Protect
+	// updates to the shared upload-failure list so failures are not lost when
+	// multiple workers finish at the same time.
+	private Mutex fileUploadFailureMutex;
 	// List of path names changed online, but not changed locally when using --dry-run
 	string[] pathsRenamed;
 	// List of path names retained when using --download-only --cleanup-local-files + using a 'sync_list'
@@ -323,6 +327,17 @@ class SyncEngine {
 	// Debug Logging Break Lines
 	string debugLogBreakType1 = "-----------------------------------------------------------------------------------------------------------";
 	string debugLogBreakType2 = "===========================================================================================================";
+
+	private void recordFileUploadFailure(string path) {
+		fileUploadFailureMutex.lock();
+		try {
+			if (!fileUploadFailures.canFind(path)) {
+				fileUploadFailures ~= path;
+			}
+		} finally {
+			fileUploadFailureMutex.unlock();
+		}
+	}
 
 	private void notifyExpectedLocalDirectoryCreate(string path) {
 		if (recordExpectedLocalDirectoryCreate is null) return;
@@ -521,6 +536,7 @@ class SyncEngine {
 		// Initialise the small cross-thread hand-off used only by online file
 		// download workers to declare their resulting local filesystem events.
 		expectedLocalEffectMutex = new Mutex();
+		fileUploadFailureMutex = new Mutex();
 
 		// Create the specific task pool to process items in parallel
 		processPool = new TaskPool(to!int(appConfig.getValueLong("threads")));
@@ -8398,6 +8414,10 @@ class SyncEngine {
 
 		// Did the upload fail?
 		if (uploadFailed) {
+			// Track modified-file upload failures consistently with new-file uploads
+			// so the final sync outcome and process exit status reflect the failure.
+			recordFileUploadFailure(localFilePath);
+
 			// Upload failed .. why?
 			// No space available online
 			if (!spaceAvailableOnline) {
@@ -8993,29 +9013,75 @@ class SyncEngine {
 					// create the session
 					uploadSessionData = createSessionForFileUpload(uploadFileOneDriveApiInstance, localFilePath, targetDriveId, targetParentId, baseName(localFilePath), currentOnlineItemData.eTag, threadUploadSessionFilePath);
 				} catch (OneDriveException exception) {
-					// HTTP request returned status code 403
-					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
-						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
-						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
-						uploadFileOneDriveApiInstance.releaseCurlEngine();
-						uploadFileOneDriveApiInstance = null;
-						return uploadResponse;
+					bool preconditionRecoveryHandled = false;
+
+					// Microsoft can change item metadata/eTag between the fresh DriveItem query
+					// above and createUploadSession(). Only retry a 412 when another query
+					// proves that the remote bytes and identity are still exactly the item we
+					// inspected before the failed request. Never blindly retry over a genuine
+					// concurrent remote content change.
+					if ((exception.httpStatusCode == 412) && haveCurrentOnlineItemData) {
+						preconditionRecoveryHandled = true;
+						try {
+							JSONValue refreshedOnlineJSONData = uploadFileOneDriveApiInstance.getPathDetailsById(targetDriveId, targetItemId);
+							if ((refreshedOnlineJSONData.type() == JSONType.object) && hasId(refreshedOnlineJSONData) && hasETag(refreshedOnlineJSONData)) {
+								Item refreshedOnlineItemData = makeItem(refreshedOnlineJSONData);
+								bool comparableContentHash =
+									(!currentOnlineItemData.quickXorHash.empty && !refreshedOnlineItemData.quickXorHash.empty) ||
+									(!currentOnlineItemData.sha256Hash.empty && !refreshedOnlineItemData.sha256Hash.empty);
+								bool remoteContentUnchanged =
+									(currentOnlineItemData.id == targetItemId) &&
+									(refreshedOnlineItemData.id == targetItemId) &&
+									(currentOnlineItemData.parentId == refreshedOnlineItemData.parentId) &&
+									(currentOnlineItemData.name == refreshedOnlineItemData.name) &&
+									comparableContentHash &&
+									sameAppliedFileContent(currentOnlineItemData, refreshedOnlineItemData);
+
+								if (remoteContentUnchanged) {
+									if (debugLogging) {addLogEntry("Microsoft Graph returned HTTP 412 during modified upload-session creation, but the refreshed remote content identity is unchanged; retrying once: " ~ localFilePath, ["debug"]);}
+									try {
+										uploadSessionData = createSessionForFileUpload(uploadFileOneDriveApiInstance, localFilePath, targetDriveId, targetParentId, baseName(localFilePath), refreshedOnlineJSONData["eTag"].str, threadUploadSessionFilePath);
+									} catch (OneDriveException retryException) {
+										displayOneDriveErrorMessage(retryException.msg, thisFunctionName);
+									} catch (FileException retryException) {
+										displayFileSystemErrorMessage(retryException.msg, thisFunctionName, threadUploadSessionFilePath);
+									}
+								} else {
+									displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+								}
+							} else {
+								displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+							}
+						} catch (OneDriveException refreshException) {
+							displayOneDriveErrorMessage(refreshException.msg, thisFunctionName);
+						}
 					}
 
-					// HTTP request returned status code 423
-					// Resolve https://github.com/abraunegg/onedrive/issues/36
-					if (exception.httpStatusCode == 423) {
-						// The file is currently checked out or locked for editing by another user
-						// We cant upload this file at this time
-						addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
-						uploadFileOneDriveApiInstance.releaseCurlEngine();
-						uploadFileOneDriveApiInstance = null;
-						return uploadResponse;
-					} else {
-						// Handle all other HTTP status codes
-						// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-						// Display what the error is
-						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+					if (!preconditionRecoveryHandled) {
+						// HTTP request returned status code 403
+						if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
+							// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
+							addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
+							uploadFileOneDriveApiInstance.releaseCurlEngine();
+							uploadFileOneDriveApiInstance = null;
+							return uploadResponse;
+						}
+
+						// HTTP request returned status code 423
+						// Resolve https://github.com/abraunegg/onedrive/issues/36
+						if (exception.httpStatusCode == 423) {
+							// The file is currently checked out or locked for editing by another user
+							// We cant upload this file at this time
+							addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
+							uploadFileOneDriveApiInstance.releaseCurlEngine();
+							uploadFileOneDriveApiInstance = null;
+							return uploadResponse;
+						} else {
+							// Handle all other HTTP status codes
+							// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+							// Display what the error is
+							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+						}
 					}
 				} catch (FileException e) {
 					// Display filesystem exception error message
@@ -11092,7 +11158,7 @@ class SyncEngine {
 			// Find files that were meant to be uploaded, but were not tracked as uploaded
 			foreach (file; newLocalFilesToUploadToOneDrive) {
 				if (file !in uploadedSet) {
-					fileUploadFailures ~= file;
+					recordFileUploadFailure(file);
 				}
 			}
 		} else {
@@ -11524,7 +11590,7 @@ class SyncEngine {
 			}
 		} else {
 			// Need to add this to fileUploadFailures to capture at the end
-			fileUploadFailures ~= fileToUpload;
+			recordFileUploadFailure(fileToUpload);
 		}
 
 		// Display function processing time if configured to do so
@@ -13370,6 +13436,15 @@ class SyncEngine {
 				foreach (searchDriveId; onlineDriveDetails.keys) {
 					Item dbItem;
 					if (itemDB.selectByPath(failedFile, searchDriveId, dbItem)) {
+						// A failed modified upload must retain the existing database row: it is
+						// the last successfully applied remote baseline and is required to retry
+						// the local modification safely on the next sync. New-file upload failures
+						// do not have a database row and therefore do not enter this branch.
+						if (operation == "upload") {
+							if (debugLogging) {addLogEntry("Retaining database identity for failed modified upload so the pending local change can be retried: " ~ failedFile, ["debug"]);}
+							continue;
+						}
+
 						addLogEntry("ERROR: Failed " ~ operation ~ " path found in database, must delete this item from the database .. it should not be in there if the file failed to " ~ operation);
 						itemDB.deleteById(dbItem.driveId, dbItem.id);
 						if (dbItem.remoteDriveId != null) {
