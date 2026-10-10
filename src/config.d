@@ -364,8 +364,8 @@ class ApplicationConfig {
 		longValues["skip_size"] = 0;
 		// - How many 'loops' when using --monitor, before we print out high frequency recurring items?
 		longValues["monitor_log_frequency"] = 12;
-		// - Number of N sync runs before performing a full local scan of sync_dir
-		//   By default 12 which means every ~60 minutes a full disk scan of sync_dir will occur 
+		// - Number of scheduled monitor-interval sync cycles before performing an online full-scan true-up
+		//   By default 12 which means every ~60 minutes an online full-scan true-up will occur
 		//   'monitor_interval' * 'monitor_fullscan_frequency' = 3600 = 1 hour
 		longValues["monitor_fullscan_frequency"] = 12;
 		// - Number of children in a path that is locally removed which will be classified as a 'big data delete'
@@ -3435,7 +3435,7 @@ void outputLongHelp(Option[] opt) {
     onedrive [options] --display-config
       Display the currently used configuration
     onedrive [options] --display-sync-status
-      Query OneDrive service and report on pending changes
+      Perform a read-only bidirectional assessment of local and Microsoft OneDrive sync state
     onedrive -h | --help
       Show this help screen
     onedrive --version

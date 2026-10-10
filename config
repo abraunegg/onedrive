@@ -127,7 +127,7 @@
 ## Default: monitor_and_signal
 #monitor_authoritative_sync = "monitor_and_signal"
 
-## This configuration option controls how often a full scan of your data is performed in monitor mode.
+## This configuration option controls how many scheduled monitor-interval sync cycles occur before an online full-scan true-up.
 #monitor_fullscan_frequency = "12"
 
 ## This setting determines how often the sync loop runs in --monitor mode.
@@ -135,6 +135,10 @@
 
 ## This configuration option controls suppression of frequent monitor log messages.
 #monitor_log_frequency = "12"
+
+## Publish machine-readable monitor runtime status to monitor-status.json.
+## Default: true
+#monitor_status = "true"
 
 ## This configuration option controls whether local deletes are replicated to OneDrive when using --upload-only.
 #no_remote_delete = "false"
