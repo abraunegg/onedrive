@@ -931,9 +931,9 @@ class OneDriveApi {
 									addLogEntry();
 									addLogEntry("Opening the Microsoft authorisation URL in your default browser ...", ["consoleOnly"]);
 									addLogEntry("Waiting for the Microsoft authorisation response on " ~ redirectUrl, ["consoleOnly"]);
-									// Sponsorship is displayed only during successful initial graphical authentication.
-									// Explicit --reauth remains focused solely on restoring authentication.
-									bool displaySponsorship = !appConfig.getValueBool("reauth");
+									// Sponsorship is displayed following successful graphical authentication,
+									// including explicit --reauth.
+									bool displaySponsorship = true;
 									LocalAuthResponse localAuthResponse = performLocalBrowserAuth(url, localAuthPort, displaySponsorship,
 										(string authCode) {
 											return redeemToken(authCode, true);
