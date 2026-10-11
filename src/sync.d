@@ -8388,12 +8388,31 @@ class SyncEngine {
 		// Do we have space available or is space available being restricted (so we make the blind assumption that there is space available)
 		JSONValue uploadResponse;
 		bool simpleUploadUsed = false;
+		bool modifiedUploadRedirectedByConflictResolution = false;
 		if (spaceAvailableOnline) {
 			// Does this file exceed the maximum file size to upload to OneDrive?
 			if (thisFileSizeLocal <= maxUploadFileSize) {
 				// Attempt to upload the modified file
-				// Error handling is in performModifiedFileUpload(), and the JSON that is responded with - will either be null or a valid JSON object containing the upload result
-				uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal, simpleUploadUsed, uploadTransferStartTime, uploadTransferEndTime);
+				// Error handling is in performModifiedFileUpload(). A normal modified upload returns
+				// a valid upload JSON response. A genuine newer-online conflict can instead be
+				// redirected through the safeBackup/new-file path without performing the original
+				// modified upload; that disposition is reported explicitly by the out parameter.
+				uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal, simpleUploadUsed, modifiedUploadRedirectedByConflictResolution, uploadTransferStartTime, uploadTransferEndTime);
+
+				// A genuine newer-online conflict deliberately does not return a modified-upload
+				// response. The conflict path has already preserved/uploaded the local version and,
+				// where applicable, reconciled the canonical file from the newer remote version.
+				// Do not misclassify that intentional redirection as either a modified-upload
+				// failure or a normal modified-upload success. Any failure in the redirected
+				// new-file upload or replacement download is accounted for by those operations.
+				if (modifiedUploadRedirectedByConflictResolution) {
+					uploadResponse = null;
+
+					if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+						displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+					}
+					return;
+				}
 
 				// Evaluate the returned JSON uploadResponse
 				// If there was an error uploading the file, uploadResponse should be empty and invalid
@@ -8688,7 +8707,7 @@ class SyncEngine {
 	}
 
 	// Perform the upload of a locally modified file to OneDrive
-	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal, out bool simpleUploadUsed, out SysTime uploadTransferStartTime, out SysTime uploadTransferEndTime) {
+	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, long thisFileSizeLocal, out bool simpleUploadUsed, out bool modifiedUploadRedirectedByConflictResolution, out SysTime uploadTransferStartTime, out SysTime uploadTransferEndTime) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -8703,6 +8722,7 @@ class SyncEngine {
 		// Function variables
 		JSONValue uploadResponse;
 		simpleUploadUsed = false;
+		modifiedUploadRedirectedByConflictResolution = false;
 		OneDriveApi uploadFileOneDriveApiInstance;
 		uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
 		uploadFileOneDriveApiInstance.initialise();
@@ -8895,8 +8915,10 @@ class SyncEngine {
 						addLogEntry("Upload-only mode: retaining the original canonical file locally because the newer online file will not be downloaded", ["verbose"]);
 					}
 
-					// The original modified-file upload was intentionally not performed. Return
-					// its response after handling the newer-online conflict safely.
+					// The original modified-file upload was intentionally not performed. Tell the
+					// caller that this item was redirected through conflict resolution so the empty
+					// modified-upload response is not recorded as a failed transfer.
+					modifiedUploadRedirectedByConflictResolution = true;
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
 					uploadFileOneDriveApiInstance = null;
 					return uploadResponse;
