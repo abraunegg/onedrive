@@ -254,6 +254,45 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
                 )
         return None
 
+    def _assert_no_upload_failure(
+        self,
+        stdout_text: str,
+        phase_name: str,
+        artifacts: list[str],
+        details: dict[str, object],
+    ) -> TestResult | None:
+        failed_modified_upload = any(
+            "Uploading modified file:" in line and "... failed!" in line
+            for line in stdout_text.splitlines()
+        )
+        if failed_modified_upload:
+            marker = "Uploading modified file: ... failed!"
+            details[f"{phase_name}_upload_failure_marker"] = marker
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"{phase_name} reported an upload failure before convergence",
+                artifacts,
+                details,
+            )
+
+        failure_markers = [
+            "Failed items to upload to/from Microsoft OneDrive:",
+            "Failed to upload:",
+            "Sync with Microsoft OneDrive has completed, however there are items that failed to sync.",
+        ]
+        for marker in failure_markers:
+            if marker in stdout_text:
+                details[f"{phase_name}_upload_failure_marker"] = marker
+                return self.fail_result(
+                    self.case_id,
+                    self.name,
+                    f"{phase_name} reported an upload failure before convergence",
+                    artifacts,
+                    details,
+                )
+        return None
+
     def _assert_no_upload_activity(
         self,
         stdout_text: str,
@@ -554,6 +593,19 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
                 artifacts,
                 details,
             )
+
+        failure = self._assert_no_upload_failure(
+            phase2_result.stdout,
+            "Modified upload phase",
+            artifacts,
+            details,
+        )
+        if failure is not None:
+            write_text_file(
+                metadata_file,
+                "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
+            )
+            return failure
 
         failure = self._assert_no_download_activity(
             phase2_result.stdout,
