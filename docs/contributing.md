@@ -122,13 +122,11 @@ For reference, below are the available application logging output functions and 
 If the code changes any of the functionality that is documented, it is expected that any PR submission will also include updating the respective section of user documentation and/or man page as part of the code submission.
 
 ## Development Testing
-Whilst there are more modern D compilers available, ensuring client build compatibility with older platforms is a key requirement.
+Ensuring client build compatibility with the oldest supported distributions remains a key requirement. Compiler validation should therefore use the **distribution-provided LDC package** from the oldest supported platform being used as the compatibility baseline, rather than a manually installed compiler environment.
 
-The issue stems from Debian and Ubuntu LTS versions - such as Ubuntu 20.04. It's [ldc package](https://packages.ubuntu.com/focal/ldc) is only v1.20.1 , thus, this is the minimum version that all compilation needs to be tested against.
+At present, Debian 11 is the oldest Debian release listed as supported in the installation documentation and provides LDC 1.24.0. This is newer than the build system's historical LDC minimum of 1.20.1. Ubuntu 20.04 is no longer an appropriate minimum-compiler test platform because Ubuntu 20.04 itself is no longer supported by this project.
 
-The reason LDC v1.20.1 must be used, is that this is the version that is used to compile the packages presented at [OpenSuSE Build Service ](https://build.opensuse.org/package/show/home:npreining:debian-ubuntu-onedrive/onedrive) - which is where most Debian and Ubuntu users will install the client from.
-
-It is assumed here that you know how to download and install the correct LDC compiler for your platform.
+The preferred development path is to install LDC through the platform package manager and compile using that system compiler. DMD remains supported for targeted compiler testing, and GDC version 15 or later may be used on platforms where it is the appropriate supported compiler.
 
 ## Submitting a PR
 When submitting a PR, please provide your testing evidence in the PR submission of what has been fixed, in the format of:
@@ -142,14 +140,13 @@ Application output that is doing whatever | or illustration of issue | illustrat
 ```
 Application output that is doing whatever | or illustration of issue being fixed | illustration of bug being fixed
 ```
-Please also include validation of compilation using the minimum LDC package version.
+Please also include validation that the change compiles using a distribution-provided LDC package representative of the oldest supported platform affected by the change.
 
-To assist with your testing validation against the minimum LDC compiler version, a script as per below could assist you with this validation:
+For example, the following can be used on a suitable test system or VM where the required LDC package has already been installed:
 
 ```bash
-
 #!/bin/bash
-  
+
 PR=<Your_PR_Number>
 
 rm -rf ./onedrive-pr${PR}
@@ -158,15 +155,13 @@ cd onedrive-pr${PR}
 git fetch origin pull/${PR}/head:pr${PR}
 git checkout pr${PR}
 
-# MIN LDC Version to compile
-# MIN Version for ARM / Compiling with LDC
-source ~/dlang/ldc-1.20.1/activate
+# Confirm the distribution-provided LDC version in use
+ldc2 --version
 
-# Compile code with specific LDC version
-./configure --enable-debug --enable-notifications; make clean; make;
-deactivate
+# Compile explicitly with LDC
+./configure DC=ldc2 --enable-debug --enable-notifications
+make clean; make;
 ./onedrive --version
-
 ```
 
 ### Optional GitHub Actions smoke testing

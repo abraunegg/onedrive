@@ -9,8 +9,10 @@ from pathlib import Path
 
 from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
-from framework.manifest import build_manifest, write_manifest
+from framework.manifest import build_manifest, build_typed_manifest, write_manifest
 from framework.result import TestResult
+from framework.pdf import REVISION_0 as PDF_REVISION_0, REVISION_1 as PDF_REVISION_1, create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, large_pdf_relative, unlink_pdf_pair
+from framework.image import REVISION_0 as IMAGE_REVISION_0, REVISION_1 as IMAGE_REVISION_1, create_random_image_set, mutate_image_set_revision, validate_image_set, image_set_relatives, unlink_image_set
 from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, large_xlsx_relative, unlink_xlsx_pair
 from framework.utils import command_to_string, reset_directory, run_command, write_text_file
 
@@ -64,6 +66,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
       S05 - download-only + cleanup-local-files validator, two directory moves,
             post-move modification, whole-directory deletion, files-first
             deletion with retained empty parent, then empty-parent deletion
+      S06 - nested remote parent+child rename, download-only + cleanup + sync_list
+      S07 - nested remote parent+child rename, bidirectional + sync_list
     """
 
     case_id = "0065"
@@ -148,13 +152,31 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 validator_mode="download_only_cleanup",
                 full_lifecycle=True,
             ),
+            ScenarioSpec(
+                scenario_id="S06_download_only_cleanup_nested_rename",
+                description=(
+                    "An inactive download-only + cleanup-local-files sync_list observer "
+                    "reconciles a parent and nested child both renamed remotely before one sync"
+                ),
+                movement="nested_rename",
+                validator_mode="download_only_cleanup",
+            ),
+            ScenarioSpec(
+                scenario_id="S07_bidirectional_nested_rename",
+                description=(
+                    "An inactive bidirectional sync_list observer reconciles a parent and "
+                    "nested child both renamed remotely before one sync"
+                ),
+                movement="nested_rename",
+                validator_mode="bidirectional",
+            ),
         ]
 
-    def _simple_config_text(self, sync_root: Path, *, label: str) -> str:
+    def _simple_config_text(self, sync_root: Path, *, label: str, preserve_data: bool = False) -> str:
         return (
             f"# tc0065 {label} config\n"
             f'sync_dir = "{sync_root}"\n'
-            'bypass_data_preservation = "true"\n'
+            f'bypass_data_preservation = "{str(not preserve_data).lower()}"\n'
         )
 
     def _prepare_client_config(
@@ -166,9 +188,10 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         label: str,
         sync_list_root_name: str | None = None,
         monitor_app_log_dir: Path | None = None,
+        preserve_data: bool = False,
     ) -> None:
         if monitor_app_log_dir is None:
-            config_text = self._simple_config_text(sync_root, label=label)
+            config_text = self._simple_config_text(sync_root, label=label, preserve_data=preserve_data)
         else:
             config_text = self._build_config_text(sync_root, monitor_app_log_dir)
 
@@ -440,12 +463,26 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         for relative, content in files.items():
             write_text_file(mutator_root / relative, content)
         xlsx_relative = f"{root_name}/incoming/{source_name}/top-level.xlsx"
+        pdf_relative = f"{root_name}/incoming/{source_name}/top-level.pdf"
+        image_relative = f"{root_name}/incoming/{source_name}/top-level.png"
         create_random_xlsx_pair(
             mutator_root / xlsx_relative,
             f"{root_name}:{source_name}:xlsx",
             revision=REVISION_0,
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0065 sync_list moved-directory workbook",
+        )
+        create_random_pdf_pair(
+            mutator_root / pdf_relative,
+            f"{root_name}:{source_name}:pdf",
+            revision=PDF_REVISION_0,
+            title="TC0065 sync_list moved-directory PDF",
+        )
+        create_random_image_set(
+            mutator_root / image_relative,
+            f"{root_name}:{source_name}:image",
+            revision=IMAGE_REVISION_0,
+            title="TC0065 sync_list moved-directory images",
         )
         (mutator_root / root_name / "incoming" / source_name / "EmptyChild").mkdir(
             parents=True, exist_ok=True
@@ -648,6 +685,10 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         )
         xlsx_source_relative = f"{source_relative}/top-level.xlsx"
         xlsx_destination_relative = xlsx_source_relative.replace(source_relative, destination_relative, 1)
+        pdf_source_relative = f"{source_relative}/top-level.pdf"
+        pdf_destination_relative = pdf_source_relative.replace(source_relative, destination_relative, 1)
+        image_source_relative = f"{source_relative}/top-level.png"
+        image_destination_relative = image_source_relative.replace(source_relative, destination_relative, 1)
 
         phase_files = {
             "seed": (
@@ -696,6 +737,10 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             "destination_relative": destination_relative,
             "xlsx_source_relative": xlsx_source_relative,
             "xlsx_destination_relative": xlsx_destination_relative,
+            "pdf_source_relative": pdf_source_relative,
+            "pdf_destination_relative": pdf_destination_relative,
+            "image_source_relative": image_source_relative,
+            "image_destination_relative": image_destination_relative,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "mutator_items_db": str(conf_mutator / "items.sqlite3"),
             "validator_items_db": str(conf_validator / "items.sqlite3"),
@@ -767,9 +812,17 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             )
         )
         initial_xlsx_error = validate_xlsx_pair(validator_root / xlsx_source_relative, REVISION_0)
+        initial_pdf_error = validate_pdf_pair(validator_root / pdf_source_relative, PDF_REVISION_0)
+        initial_image_error = validate_image_set(validator_root / image_source_relative, IMAGE_REVISION_0)
         details["validator_initial_xlsx_validation_error"] = initial_xlsx_error
+        details["validator_initial_pdf_validation_error"] = initial_pdf_error
+        details["validator_initial_image_validation_error"] = initial_image_error
         if initial_xlsx_error:
             failures.append(f"initial validator XLSX invalid: {initial_xlsx_error}")
+        if initial_pdf_error:
+            failures.append(f"initial validator PDF invalid: {initial_pdf_error}")
+        if initial_image_error:
+            failures.append(f"initial validator image set invalid: {initial_image_error}")
 
         if failures:
             self._write_metadata(metadata_file, details)
@@ -905,9 +958,17 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             )
         )
         validator_xlsx_error = validate_xlsx_pair(validator_root / xlsx_destination_relative, REVISION_0)
+        validator_pdf_error = validate_pdf_pair(validator_root / pdf_destination_relative, PDF_REVISION_0)
+        validator_image_error = validate_image_set(validator_root / image_destination_relative, IMAGE_REVISION_0)
         details["validator_moved_xlsx_validation_error"] = validator_xlsx_error
+        details["validator_moved_pdf_validation_error"] = validator_pdf_error
+        details["validator_moved_image_validation_error"] = validator_image_error
         if validator_xlsx_error:
             failures.append(f"validator moved XLSX invalid: {validator_xlsx_error}")
+        if validator_pdf_error:
+            failures.append(f"validator moved PDF invalid: {validator_pdf_error}")
+        if validator_image_error:
+            failures.append(f"validator moved image set invalid: {validator_image_error}")
 
         verify_result = self._run_phase(
             context=context,
@@ -946,10 +1007,449 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             )
         )
         verify_xlsx_error = validate_xlsx_pair(verify_root / xlsx_destination_relative, REVISION_0)
+        verify_pdf_error = validate_pdf_pair(verify_root / pdf_destination_relative, PDF_REVISION_0)
+        verify_image_error = validate_image_set(verify_root / image_destination_relative, IMAGE_REVISION_0)
         details["verify_moved_xlsx_validation_error"] = verify_xlsx_error
+        details["verify_moved_pdf_validation_error"] = verify_pdf_error
+        details["verify_moved_image_validation_error"] = verify_image_error
         if verify_xlsx_error:
             failures.append(f"remote truth moved XLSX invalid: {verify_xlsx_error}")
+        if verify_pdf_error:
+            failures.append(f"remote truth moved PDF invalid: {verify_pdf_error}")
+        if verify_image_error:
+            failures.append(f"remote truth moved image set invalid: {verify_image_error}")
 
+        self._write_metadata(metadata_file, details)
+        return failures, artifacts, details
+
+    @staticmethod
+    def _remap_nested_path(relative: str, renames: list[tuple[str, str]]) -> str:
+        """Apply parent then child rename to a path, including directory-manifest suffixes."""
+        for source, destination in renames:
+            if relative == source or relative.startswith(source + "/"):
+                relative = destination + relative[len(source):]
+        return relative
+
+    @staticmethod
+    def _nested_bad_rename_errors(output: str) -> list[str]:
+        return [
+            line.strip()
+            for line in output.splitlines()
+            if ("safeRename" in line and re.search(r"fail|error", line, re.IGNORECASE))
+            or re.search(r"(?:unable|failed) to (?:move|rename) local", line, re.IGNORECASE)
+        ]
+
+    @staticmethod
+    def _nested_safe_backups(root: Path) -> list[str]:
+        return sorted(
+            path.relative_to(root).as_posix()
+            for path in root.rglob("*")
+            if path.is_file() and "-safeBackup-" in path.name
+        )
+
+    def _run_nested_rename_scenario(
+        self,
+        context: E2EContext,
+        scenario: ScenarioSpec,
+        *,
+        scenario_work: Path,
+        scenario_logs: Path,
+        scenario_state: Path,
+    ) -> tuple[list[str], list[str], dict[str, object]]:
+        """Discussion #3886: BOTH existing-ID remote renames precede observer sync."""
+        mutator_root = scenario_work / "mutator-root"
+        validator_root = scenario_work / "validator-root"
+        before_verify_root = scenario_work / "before-verify-root"
+        verify_root = scenario_work / "verify-root"
+        conf_mutator = scenario_work / "conf-mutator"
+        conf_validator = scenario_work / "conf-validator"
+        conf_before_verify = scenario_work / "conf-before-verify"
+        conf_verify = scenario_work / "conf-verify"
+        mutator_app_logs = scenario_logs / "app-logs"
+        for root in (mutator_root, validator_root, before_verify_root, verify_root):
+            reset_directory(root)
+
+        root_name = f"ZZ_E2E_TC0065_{scenario.scenario_id}_{context.run_id}_{os.getpid()}"
+        parent_source = f"{root_name}/incoming/GenerationAlpha"
+        parent_destination = f"{root_name}/incoming/GenerationAlphaRenamed"
+        child_source = f"{parent_destination}/Nested"
+        child_destination = f"{parent_destination}/NestedRenamed"
+        # For the observer, both original paths remain in its old database until
+        # BOTH online moves are complete. These two operations are not siblings.
+        renames = [(parent_source, parent_destination), (child_source, child_destination)]
+        original_child = f"{parent_source}/Nested"
+        xlsx_source = f"{parent_source}/top-level.xlsx"
+        xlsx_destination = f"{parent_destination}/top-level.xlsx"
+        pdf_source = f"{parent_source}/top-level.pdf"
+        pdf_destination = f"{parent_destination}/top-level.pdf"
+        image_source = f"{parent_source}/top-level.png"
+        image_destination = f"{parent_destination}/top-level.png"
+
+        self._prepare_client_config(
+            context, conf_mutator, mutator_root,
+            label=f"{scenario.scenario_id} mutator", monitor_app_log_dir=mutator_app_logs,
+        )
+        self._prepare_client_config(
+            context, conf_validator, validator_root,
+            label=f"{scenario.scenario_id} observer", sync_list_root_name=root_name,
+            preserve_data=True,
+        )
+        for config_dir, root, label in (
+            (conf_before_verify, before_verify_root, "before-verify"),
+            (conf_verify, verify_root, "final-verify"),
+        ):
+            self._prepare_client_config(
+                context, config_dir, root, label=f"{scenario.scenario_id} {label}"
+            )
+
+        initial_files = self._create_common_fixture(
+            mutator_root, root_name=root_name, source_name="GenerationAlpha"
+        )
+        initial_manifest = build_typed_manifest(mutator_root / root_name)
+        # Typed manifests are relative to the testcase root, unlike mutation paths.
+        root_relative_renames = [
+            (source[len(root_name) + 1:], destination[len(root_name) + 1:])
+            for source, destination in renames
+        ]
+        expected_manifest = sorted(
+            self._remap_nested_path(path, root_relative_renames) for path in initial_manifest
+        )
+        expected_files = {
+            self._remap_nested_path(path, renames): content for path, content in initial_files.items()
+        }
+        required_dirs = [
+            parent_destination,
+            child_destination,
+            f"{child_destination}/Deep",
+            f"{parent_destination}/EmptyChild",
+            f"{root_name}/moved",
+        ]
+        forbidden_paths = [
+            parent_source,
+            original_child,
+            child_source,
+        ]
+
+        phase_names = (
+            "seed", "validator_initial", "mutator_monitor", "before_verify",
+            "validator_reconcile", "validator_converge", "verify",
+        )
+        phase_files = {
+            phase: (
+                scenario_logs / f"{phase}_stdout.log",
+                scenario_logs / f"{phase}_stderr.log",
+            ) for phase in phase_names
+        }
+        manifest_paths = {
+            label: scenario_state / f"{label}_manifest.txt"
+            for label in ("initial", "before_verify", "validator", "verify")
+        }
+        metadata_file = scenario_state / "metadata.txt"
+        artifacts = [
+            *(str(path) for pair in phase_files.values() for path in pair),
+            *(str(path) for path in manifest_paths.values()),
+            str(conf_validator / "sync_list"),
+            str(mutator_app_logs),
+            str(metadata_file),
+        ]
+        details: dict[str, object] = {
+            "scenario_id": scenario.scenario_id,
+            "validator_mode": scenario.validator_mode,
+            "root_name": root_name,
+            "renames_in_order": renames,
+            "initial_observer_path": original_child,
+            "xlsx_source": xlsx_source,
+            "xlsx_destination": xlsx_destination,
+            "pdf_source": pdf_source,
+            "pdf_destination": pdf_destination,
+            "image_source": image_source,
+            "image_destination": image_destination,
+            "expected_manifest": expected_manifest,
+            "sync_list": [f"/{root_name}"],
+            "observer_data_preservation_enabled": True,
+            "observer_remains_inactive_during_both_mutations": True,
+        }
+        failures: list[str] = []
+
+        def check_tree(label: str, root: Path, *, original: bool = False) -> None:
+            if original:
+                expected = initial_files
+                required = [
+                    parent_source, original_child, f"{original_child}/Deep",
+                    f"{parent_source}/EmptyChild", f"{root_name}/moved",
+                ]
+                forbidden = [parent_destination]
+                typed_expected = initial_manifest
+            else:
+                expected, required, forbidden = expected_files, required_dirs, forbidden_paths
+                typed_expected = expected_manifest
+            failures.extend(
+                f"{label}: {error}"
+                for error in self._tree_matches(
+                    root=root, expected_files=expected,
+                    required_dirs=required, forbidden_paths=forbidden,
+                )
+            )
+            manifest = build_typed_manifest(root / root_name)
+            if label in manifest_paths:
+                write_manifest(manifest_paths[label], manifest)
+            details[f"{label}_manifest"] = manifest
+            if manifest != typed_expected:
+                failures.append(
+                    f"{label}: exact typed manifest mismatch: missing "
+                    f"{sorted(set(typed_expected) - set(manifest))}; "
+                    f"extra {sorted(set(manifest) - set(typed_expected))}"
+                )
+            xlsx_path = root / (xlsx_source if original else xlsx_destination)
+            pdf_path = root / (pdf_source if original else pdf_destination)
+            image_path = root / (image_source if original else image_destination)
+            xlsx_error = validate_xlsx_pair(xlsx_path, REVISION_0)
+            pdf_error = validate_pdf_pair(pdf_path, PDF_REVISION_0)
+            image_error = validate_image_set(image_path, IMAGE_REVISION_0)
+            details[f"{label}_xlsx_validation_error"] = xlsx_error
+            details[f"{label}_pdf_validation_error"] = pdf_error
+            details[f"{label}_image_validation_error"] = image_error
+            if xlsx_error:
+                failures.append(f"{label}: XLSX pair failed structural/revision validation: {xlsx_error}")
+            if pdf_error:
+                failures.append(f"{label}: PDF pair failed structural/revision validation: {pdf_error}")
+            if image_error:
+                failures.append(f"{label}: image set failed structural/revision validation: {image_error}")
+            backups = self._nested_safe_backups(root / root_name)
+            details[f"{label}_safe_backups"] = backups
+            if backups:
+                failures.append(f"{label}: unexpected safeBackup files: {backups}")
+
+        # Seed the mutator, then load the observer's original filesystem and DB.
+        seed = self._run_phase(
+            context=context, label=f"{scenario.scenario_id}_seed",
+            command=self._seed_upload_command(
+                context, root_name=root_name, conf_dir=conf_mutator
+            ), stdout_file=phase_files["seed"][0],
+            stderr_file=phase_files["seed"][1], details=details,
+        )
+        if seed.returncode != 0:
+            failures.append(f"mutator seed failed with status {seed.returncode}")
+            self._write_metadata(metadata_file, details)
+            return failures, artifacts, details
+
+        initial = self._run_phase(
+            context=context, label=f"{scenario.scenario_id}_observer_initial",
+            command=self._validator_initial_command(context, conf_dir=conf_validator),
+            stdout_file=phase_files["validator_initial"][0],
+            stderr_file=phase_files["validator_initial"][1], details=details,
+        )
+        initial_output = self._combined_output(*phase_files["validator_initial"])
+        if initial.returncode != 0:
+            failures.append(f"observer initial sync failed with status {initial.returncode}")
+        if not self._sync_list_active(initial_output, root_name):
+            failures.append("observer initial sync did not prove sync_list was active")
+        if not self._validator_mode_active(initial_output, "download_only"):
+            failures.append("observer initial sync did not prove download-only preload")
+        if 'bypass_data_preservation = "false"' not in (conf_validator / "config").read_text(encoding="utf-8"):
+            failures.append("observer config unexpectedly disables safeBackup preservation")
+        if failures:
+            self._write_metadata(metadata_file, details)
+            return failures, artifacts, details
+        check_tree("initial", validator_root, original=True)
+        if failures:
+            self._write_metadata(metadata_file, details)
+            return failures, artifacts, details
+
+        # Keep the observer's original items.sqlite3. The application owns it;
+        # this rename regression checks database existence, application move logs,
+        # local hierarchy and fresh independent remote truth, not raw SQLite rows.
+        for label, config_dir in (
+            ("mutator", conf_mutator), ("observer", conf_validator),
+        ):
+            exists = (config_dir / "items.sqlite3").is_file()
+            details[f"{label}_items_db_exists_after_seed"] = exists
+            if not exists:
+                failures.append(f"{label} did not establish items.sqlite3 during seed")
+        if failures:
+            self._write_metadata(metadata_file, details)
+            return failures, artifacts, details
+
+        # CRITICAL: The observer has exited. The separate mutator uses inotify
+        # with --monitor --upload-only, and each actual Graph move must finish
+        # before the next nested rename starts. Neither observer syncs here.
+        process, ready = self._launch_ready_mutator_monitor(
+            context=context, root_name=root_name, conf_mutator=conf_mutator,
+            monitor_stdout=phase_files["mutator_monitor"][0],
+            monitor_stderr=phase_files["mutator_monitor"][1], details=details,
+        )
+        try:
+            if not ready:
+                failures.append("mutator monitor did not complete its initial sync")
+            elif not self._mutator_upload_only_active(
+                self._combined_output(*phase_files["mutator_monitor"])
+            ):
+                failures.append("mutator monitor did not prove --upload-only was active")
+            else:
+                for label, source, destination in (
+                    ("parent", parent_source, parent_destination),
+                    ("child", child_source, child_destination),
+                ):
+                    if not (mutator_root / source).is_dir() or (mutator_root / destination).exists():
+                        failures.append(f"mutator {label} source/destination state invalid before move")
+                        break
+                    completed, segment = self._run_mutator_move_transaction(
+                        process=process,
+                        monitor_stdout=phase_files["mutator_monitor"][0],
+                        details=details,
+                        moves=[(mutator_root / source, mutator_root / destination, source, destination)],
+                        detail_prefix=f"mutator_nested_{label}",
+                    )
+                    details[f"mutator_nested_{label}_existing_item_move_logged"] = (
+                        self._contains_monitor_move_pair(segment, source, destination)
+                    )
+                    if not completed or not details[f"mutator_nested_{label}_existing_item_move_logged"]:
+                        failures.append(f"mutator failed to prove completed existing-ID {label} rename")
+                    if details[f"mutator_nested_{label}_bad_markers"]:
+                        failures.append(
+                            f"mutator {label} rename degraded into delete/re-upload: "
+                            + repr(details[f"mutator_nested_{label}_bad_markers"])
+                        )
+                    if failures:
+                        break
+        finally:
+            self._shutdown_monitor_process(process, details)
+            details["mutator_monitor_returncode"] = process.returncode
+        if details["mutator_monitor_returncode"] not in {0, 130}:
+            failures.append(f"mutator monitor unexpected exit: {details['mutator_monitor_returncode']}")
+        if failures:
+            self._write_metadata(metadata_file, details)
+            return failures, artifacts, details
+        check_tree("mutator_after", mutator_root)
+        details["mutator_items_db_exists_after_renames"] = (
+            conf_mutator / "items.sqlite3"
+        ).is_file()
+        if not details["mutator_items_db_exists_after_renames"]:
+            failures.append("mutator lost items.sqlite3 during nested renames")
+        if failures:
+            self._write_metadata(metadata_file, details)
+            return failures, artifacts, details
+
+        # Independently prove BOTH renames are already online, before the
+        # inactive observer receives any remote changes. New confdir and --resync
+        # here are solely for this independent verifier, never the observer.
+        before_verify = self._run_phase(
+            context=context, label=f"{scenario.scenario_id}_before_verify",
+            command=self._verify_command(
+                context, root_name=root_name, conf_dir=conf_before_verify
+            ), stdout_file=phase_files["before_verify"][0],
+            stderr_file=phase_files["before_verify"][1], details=details,
+        )
+        if before_verify.returncode != 0:
+            failures.append(f"pre-observer remote verification failed: {before_verify.returncode}")
+        else:
+            check_tree("before_verify", before_verify_root)
+            details["before_verify_items_db_exists"] = (
+                conf_before_verify / "items.sqlite3"
+            ).is_file()
+            if not details["before_verify_items_db_exists"]:
+                failures.append("pre-observer independent verifier did not establish items.sqlite3")
+        if failures:
+            self._write_metadata(metadata_file, details)
+            return failures, artifacts, details
+
+        # The FIRST observer sync must reconcile both pending remote renames.
+        reconcile_code, reconcile_output = self._reconcile_validator(
+            context=context, scenario=scenario, conf_validator=conf_validator,
+            stdout_file=phase_files["validator_reconcile"][0],
+            stderr_file=phase_files["validator_reconcile"][1], details=details,
+        )
+        if reconcile_code != 0:
+            failures.append(f"observer first reconciliation failed: {reconcile_code}")
+        if not self._sync_list_active(reconcile_output, root_name):
+            failures.append("observer first reconciliation did not prove sync_list was active")
+        if not self._validator_mode_active(reconcile_output, scenario.validator_mode):
+            failures.append("observer first reconciliation did not prove requested mode")
+        if not self._contains_move(reconcile_output, parent_source, parent_destination):
+            failures.append("observer did not log the existing-ID parent move")
+        # Depending on Graph delta ordering, the child may be reported under
+        # its original parent or its already-renamed parent. Require the final
+        # child destination and an actual move in either permitted ordering.
+        child_sources = (original_child, child_source)
+        details["observer_child_move_source_variants"] = child_sources
+        if not any(
+            self._contains_move(reconcile_output, source, child_destination)
+            for source in child_sources
+        ):
+            failures.append("observer did not log the existing-ID nested-child move")
+        for destination in (parent_destination, child_destination):
+            if self._destination_precreation_seen(reconcile_output, destination):
+                failures.append(f"observer pre-created known rename destination: {destination}")
+        bad_markers = self._bad_validator_move_markers(reconcile_output)
+        details["observer_first_bad_markers"] = bad_markers
+        if bad_markers:
+            failures.append(f"observer first reconciliation logged destructive feedback: {bad_markers}")
+        rename_errors = self._nested_bad_rename_errors(reconcile_output)
+        details["observer_first_rename_errors"] = rename_errors
+        if rename_errors:
+            failures.append(f"observer first reconciliation logged rename errors: {rename_errors}")
+        if "-safeBackup-" in reconcile_output:
+            failures.append("observer first reconciliation logged an unexpected safeBackup")
+        check_tree("validator", validator_root)
+        details["observer_items_db_exists_after_first"] = (
+            conf_validator / "items.sqlite3"
+        ).is_file()
+        if not details["observer_items_db_exists_after_first"]:
+            failures.append("observer lost its existing items.sqlite3 on first reconciliation")
+        if failures:
+            self._write_metadata(metadata_file, details)
+            return failures, artifacts, details
+
+        # A second ordinary observer pass must be inert: no latent stale-path
+        # re-uploads or delete/recreate feedback from stale database state.
+        converge = self._run_phase(
+            context=context, label=f"{scenario.scenario_id}_observer_converge",
+            command=self._validator_reconcile_command(
+                context, conf_dir=conf_validator, validator_mode=scenario.validator_mode,
+            ), stdout_file=phase_files["validator_converge"][0],
+            stderr_file=phase_files["validator_converge"][1], details=details,
+        )
+        converge_output = self._combined_output(*phase_files["validator_converge"])
+        if converge.returncode != 0:
+            failures.append(f"observer convergence pass failed: {converge.returncode}")
+        if not self._sync_list_active(converge_output, root_name):
+            failures.append("observer convergence pass did not prove sync_list was active")
+        if not self._validator_mode_active(converge_output, scenario.validator_mode):
+            failures.append("observer convergence pass did not prove requested mode")
+        late_bad = self._bad_validator_move_markers(converge_output)
+        details["observer_converge_bad_markers"] = late_bad
+        if late_bad or "-safeBackup-" in converge_output:
+            failures.append(f"observer convergence pass logged unwanted side effects: {late_bad}")
+        late_errors = self._nested_bad_rename_errors(converge_output)
+        details["observer_converge_rename_errors"] = late_errors
+        if late_errors:
+            failures.append(f"observer convergence pass logged rename errors: {late_errors}")
+        check_tree("validator", validator_root)
+        details["observer_items_db_exists_after_converge"] = (
+            conf_validator / "items.sqlite3"
+        ).is_file()
+        if not details["observer_items_db_exists_after_converge"]:
+            failures.append("observer lost its existing items.sqlite3 on convergence pass")
+        if failures:
+            self._write_metadata(metadata_file, details)
+            return failures, artifacts, details
+
+        # Fresh independent client after observer convergence: no stale paths
+        # recreated remotely, missing descendants or extra content.
+        verify = self._run_phase(
+            context=context, label=f"{scenario.scenario_id}_verify",
+            command=self._verify_command(
+                context, root_name=root_name, conf_dir=conf_verify,
+            ), stdout_file=phase_files["verify"][0],
+            stderr_file=phase_files["verify"][1], details=details,
+        )
+        if verify.returncode != 0:
+            failures.append(f"final remote verification failed: {verify.returncode}")
+        else:
+            check_tree("verify", verify_root)
+            details["verify_items_db_exists"] = (conf_verify / "items.sqlite3").is_file()
+            if not details["verify_items_db_exists"]:
+                failures.append("final independent verifier did not establish items.sqlite3")
         self._write_metadata(metadata_file, details)
         return failures, artifacts, details
 
@@ -1018,6 +1518,14 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         files_first_xlsx_source = f"{files_first_source}/workbook.xlsx"
         whole_xlsx_destination = f"{whole_destination}/workbook.xlsx"
         files_first_xlsx_destination = f"{files_first_destination}/workbook.xlsx"
+        whole_pdf_source = f"{whole_source}/document.pdf"
+        files_first_pdf_source = f"{files_first_source}/document.pdf"
+        whole_pdf_destination = f"{whole_destination}/document.pdf"
+        files_first_pdf_destination = f"{files_first_destination}/document.pdf"
+        whole_image_source = f"{whole_source}/image.png"
+        files_first_image_source = f"{files_first_source}/image.png"
+        whole_image_destination = f"{whole_destination}/image.png"
+        files_first_image_destination = f"{files_first_destination}/image.png"
         create_random_xlsx_pair(
             mutator_root / whole_xlsx_source,
             f"{root_name}:whole:xlsx",
@@ -1032,6 +1540,20 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0065 files-first lifecycle workbook",
         )
+        create_random_pdf_pair(
+            mutator_root / whole_pdf_source,
+            f"{root_name}:whole:pdf",
+            revision=PDF_REVISION_0,
+            title="TC0065 whole-directory lifecycle PDF",
+        )
+        create_random_pdf_pair(
+            mutator_root / files_first_pdf_source,
+            f"{root_name}:files-first:pdf",
+            revision=PDF_REVISION_0,
+            title="TC0065 files-first lifecycle PDF",
+        )
+        create_random_image_set(mutator_root / whole_image_source, f"{root_name}:whole:image", revision=IMAGE_REVISION_0, title="TC0065 whole-directory lifecycle images")
+        create_random_image_set(mutator_root / files_first_image_source, f"{root_name}:files-first:image", revision=IMAGE_REVISION_0, title="TC0065 files-first lifecycle images")
 
         phase_names = [
             "phase1_seed",
@@ -1075,6 +1597,14 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             "whole_xlsx_destination": whole_xlsx_destination,
             "files_first_xlsx_source": files_first_xlsx_source,
             "files_first_xlsx_destination": files_first_xlsx_destination,
+            "whole_pdf_source": whole_pdf_source,
+            "whole_pdf_destination": whole_pdf_destination,
+            "files_first_pdf_source": files_first_pdf_source,
+            "files_first_pdf_destination": files_first_pdf_destination,
+            "whole_image_source": whole_image_source,
+            "whole_image_destination": whole_image_destination,
+            "files_first_image_source": files_first_image_source,
+            "files_first_image_destination": files_first_image_destination,
             "xlsx_payload_rows": self.XLSX_PAYLOAD_ROWS,
             "sync_list": [f"/{root_name}"],
         }
@@ -1131,6 +1661,16 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             details[f"validator_initial_{label}_xlsx_validation_error"] = error
             if error:
                 failures.append(f"initial validator {label} XLSX invalid: {error}")
+        for label, relative in (("whole", whole_pdf_source), ("files_first", files_first_pdf_source)):
+            error = validate_pdf_pair(validator_root / relative, PDF_REVISION_0)
+            details[f"validator_initial_{label}_pdf_validation_error"] = error
+            if error:
+                failures.append(f"initial validator {label} PDF invalid: {error}")
+        for label, relative in (("whole", whole_image_source), ("files_first", files_first_image_source)):
+            error = validate_image_set(validator_root / relative, IMAGE_REVISION_0)
+            details[f"validator_initial_{label}_image_validation_error"] = error
+            if error:
+                failures.append(f"initial validator {label} image set invalid: {error}")
         if failures:
             self._write_metadata(metadata_file, details)
             return failures, artifacts, details
@@ -1244,6 +1784,16 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 details[f"validator_moved_{label}_xlsx_validation_error"] = error
                 if error:
                     failures.append(f"validator moved {label} XLSX invalid: {error}")
+            for label, relative in (("whole", whole_pdf_destination), ("files_first", files_first_pdf_destination)):
+                error = validate_pdf_pair(validator_root / relative, PDF_REVISION_0)
+                details[f"validator_moved_{label}_pdf_validation_error"] = error
+                if error:
+                    failures.append(f"validator moved {label} PDF invalid: {error}")
+            for label, relative in (("whole", whole_image_destination), ("files_first", files_first_image_destination)):
+                error = validate_image_set(validator_root / relative, IMAGE_REVISION_0)
+                details[f"validator_moved_{label}_image_validation_error"] = error
+                if error:
+                    failures.append(f"validator moved {label} image set invalid: {error}")
             if failures:
                 self._write_metadata(metadata_file, details)
                 return failures, artifacts, details
@@ -1268,12 +1818,25 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 REVISION_0,
                 REVISION_1,
             )
+            mutate_pdf_pair_revision(
+                mutator_root / files_first_pdf_destination,
+                PDF_REVISION_0,
+                PDF_REVISION_1,
+            )
+            mutate_image_set_revision(
+                mutator_root / files_first_image_destination,
+                IMAGE_REVISION_0,
+                IMAGE_REVISION_1,
+            )
 
             modify_patterns = [
                 f"Uploading modified file: ./{whole_modified_relative} ... done",
                 f"Uploading modified file: ./{files_first_modified_relative} ... done",
                 f"Uploading modified file: ./{files_first_xlsx_destination} ... done",
                 f"Uploading modified file: ./{large_xlsx_relative(files_first_xlsx_destination)} ... done",
+                f"Uploading modified file: ./{files_first_pdf_destination} ... done",
+                f"Uploading modified file: ./{large_pdf_relative(files_first_pdf_destination)} ... done",
+                *[f"Uploading modified file: ./{relative} ... done" for relative in image_set_relatives(files_first_image_destination).values()],
             ]
             modify_processed, modify_segment = self._wait_for_stdout_growth_patterns(
                 phase_files["phase3_mutator_monitor"][0],
@@ -1324,6 +1887,22 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 failures.append(f"validator whole XLSX changed unexpectedly after post-move modification: {whole_xlsx_error}")
             if files_first_xlsx_error:
                 failures.append(f"validator files-first XLSX did not receive post-move revision: {files_first_xlsx_error}")
+            whole_pdf_error = validate_pdf_pair(validator_root / whole_pdf_destination, PDF_REVISION_0)
+            files_first_pdf_error = validate_pdf_pair(validator_root / files_first_pdf_destination, PDF_REVISION_1)
+            details["validator_postmodify_whole_pdf_validation_error"] = whole_pdf_error
+            details["validator_postmodify_files_first_pdf_validation_error"] = files_first_pdf_error
+            if whole_pdf_error:
+                failures.append(f"validator whole PDF changed unexpectedly after post-move modification: {whole_pdf_error}")
+            if files_first_pdf_error:
+                failures.append(f"validator files-first PDF did not receive post-move revision: {files_first_pdf_error}")
+            whole_image_error = validate_image_set(validator_root / whole_image_destination, IMAGE_REVISION_0)
+            files_first_image_error = validate_image_set(validator_root / files_first_image_destination, IMAGE_REVISION_1)
+            details["validator_postmodify_whole_image_validation_error"] = whole_image_error
+            details["validator_postmodify_files_first_image_validation_error"] = files_first_image_error
+            if whole_image_error:
+                failures.append(f"validator whole image set changed unexpectedly after post-move modification: {whole_image_error}")
+            if files_first_image_error:
+                failures.append(f"validator files-first image set did not receive post-move revision: {files_first_image_error}")
             if failures:
                 self._write_metadata(metadata_file, details)
                 return failures, artifacts, details
@@ -1416,6 +1995,56 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             details["mutator_files_first_xlsx_delete_log_segment_length"] = len(xlsx_delete_segment)
             if not xlsx_delete_processed:
                 failures.append("mutator monitor did not propagate both files-first XLSX deletions")
+                self._write_metadata(metadata_file, details)
+                return failures, artifacts, details
+
+            pdf_delete_start = self._prepare_monitor_for_local_mutation(
+                process,
+                phase_files["phase3_mutator_monitor"][0],
+                details,
+            )
+            unlink_pdf_pair(mutator_root / files_first_pdf_destination)
+            pdf_delete_patterns = [
+                f"Deleting item from Microsoft OneDrive: ./{files_first_pdf_destination}",
+                f"Deleting item from Microsoft OneDrive: ./{large_pdf_relative(files_first_pdf_destination)}",
+            ]
+            pdf_delete_processed, pdf_delete_segment = self._wait_for_stdout_growth_patterns(
+                phase_files["phase3_mutator_monitor"][0],
+                start_offset=pdf_delete_start,
+                required_patterns=pdf_delete_patterns,
+                timeout_seconds=180,
+            )
+            for relative in (files_first_pdf_destination, large_pdf_relative(files_first_pdf_destination)):
+                files_first_file_results[relative] = pdf_delete_processed
+            details["mutator_files_first_pdf_delete_patterns"] = pdf_delete_patterns
+            details["mutator_files_first_pdf_delete_log_segment_length"] = len(pdf_delete_segment)
+            if not pdf_delete_processed:
+                failures.append("mutator monitor did not propagate both files-first PDF deletions")
+                self._write_metadata(metadata_file, details)
+                return failures, artifacts, details
+
+            image_delete_start = self._prepare_monitor_for_local_mutation(
+                process,
+                phase_files["phase3_mutator_monitor"][0],
+                details,
+            )
+            unlink_image_set(mutator_root / files_first_image_destination)
+            image_delete_patterns = [
+                f"Deleting item from Microsoft OneDrive: ./{relative}"
+                for relative in image_set_relatives(files_first_image_destination).values()
+            ]
+            image_delete_processed, image_delete_segment = self._wait_for_stdout_growth_patterns(
+                phase_files["phase3_mutator_monitor"][0],
+                start_offset=image_delete_start,
+                required_patterns=image_delete_patterns,
+                timeout_seconds=180,
+            )
+            for relative in image_set_relatives(files_first_image_destination).values():
+                files_first_file_results[relative] = image_delete_processed
+            details["mutator_files_first_image_delete_patterns"] = image_delete_patterns
+            details["mutator_files_first_image_delete_log_segment_length"] = len(image_delete_segment)
+            if not image_delete_processed:
+                failures.append("mutator monitor did not propagate all files-first image deletions")
                 self._write_metadata(metadata_file, details)
                 return failures, artifacts, details
 
@@ -1594,7 +2223,15 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             reset_directory(scenario_logs)
             reset_directory(scenario_state)
 
-            if scenario.full_lifecycle:
+            if scenario.movement == "nested_rename":
+                scenario_failures, artifacts, details = self._run_nested_rename_scenario(
+                    context,
+                    scenario,
+                    scenario_work=scenario_work,
+                    scenario_logs=scenario_logs,
+                    scenario_state=scenario_state,
+                )
+            elif scenario.full_lifecycle:
                 scenario_failures, artifacts, details = self._run_full_lifecycle_scenario(
                     context,
                     scenario,

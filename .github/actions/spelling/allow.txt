@@ -366,6 +366,7 @@ mozram
 msghdr
 msonenote
 mswsock
+mtimes
 mtls
 mtune
 mydir
@@ -624,8 +625,8 @@ sooooo
 specpart
 SSLVERSION
 startuml
-statfs
 stat'ing
+statfs
 statm
 stbuf
 stdc
@@ -665,6 +666,7 @@ timerfd
 tkx
 tlsv
 tpgid
+tracebacks
 traceflag
 tracep
 trapno

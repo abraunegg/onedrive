@@ -364,8 +364,8 @@ class ApplicationConfig {
 		longValues["skip_size"] = 0;
 		// - How many 'loops' when using --monitor, before we print out high frequency recurring items?
 		longValues["monitor_log_frequency"] = 12;
-		// - Number of N sync runs before performing a full local scan of sync_dir
-		//   By default 12 which means every ~60 minutes a full disk scan of sync_dir will occur 
+		// - Number of scheduled monitor-interval sync cycles before performing an online full-scan true-up
+		//   By default 12 which means every ~60 minutes an online full-scan true-up will occur
 		//   'monitor_interval' * 'monitor_fullscan_frequency' = 3600 = 1 hour
 		longValues["monitor_fullscan_frequency"] = 12;
 		// - Number of children in a path that is locally removed which will be classified as a 'big data delete'
@@ -410,6 +410,9 @@ class ApplicationConfig {
 		boolValues["check_nosync"] = false;
 		// Do we wish to download only?
 		boolValues["download_only"] = false;
+		// Publish machine-readable monitor runtime status to <confdir>/monitor-status.json
+		// Enabled by default so monitor observability is available without additional configuration.
+		boolValues["monitor_status"] = true;
 		// Do we disable notifications?
 		boolValues["disable_notifications"] = false;
 		// Do we bypass all the download validation? 
@@ -1161,18 +1164,16 @@ class ApplicationConfig {
 					return false;
 				}
 				setValueLong(key, thisConfigValue);
-				if (key == "monitor_interval") { // if key is 'monitor_interval' the value must be 300 or greater
+				if (key == "monitor_interval") { // normal minimum 300; bounded developer monitor minimum 60
 					ulong tempValue = thisConfigValue;
-					// the temp value needs to be 300 or greater
-					if (tempValue < defaultMonitorInterval) {
+					if (tempValue < (getValueLong("monitor_max_loop") > 0 ? 60 : defaultMonitorInterval)) {
 						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
 						tempValue = defaultMonitorInterval;
 					}
 					setValueLong("monitor_interval", tempValue);
-				} else if (key == "monitor_fullscan_frequency") { // if key is 'monitor_fullscan_frequency' the value must be 12 or greater
+				} else if (key == "monitor_fullscan_frequency") { // normal minimum 12; bounded developer monitor minimum 1
 					ulong tempValue = thisConfigValue;
-					// the temp value needs to be 12 or greater
-					if (tempValue < 12) {
+					if (tempValue < (getValueLong("monitor_max_loop") > 0 ? 1 : 12)) {
 						// If this is not set to zero (0) then we are not disabling 'monitor_fullscan_frequency'
 						if (tempValue != 0) {
 							// invalid value
@@ -1623,7 +1624,7 @@ class ApplicationConfig {
 			}
 			
 			// Was --monitor-interval specified and now set to a value below minimum requirement?
-			if (getValueLong("monitor_interval") < defaultMonitorInterval ) {
+			if (getValueLong("monitor_interval") < (getValueLong("monitor_max_loop") > 0 ? 60 : defaultMonitorInterval)) {
 				addLogEntry("Invalid value for --monitor-interval - using default value: " ~ to!string(defaultMonitorInterval));
 				setValueLong("monitor_interval", defaultMonitorInterval);
 			}
@@ -1781,6 +1782,7 @@ class ApplicationConfig {
 		// If using the 'system' directory, (/etc/onedrive) for the config file, these should always live in the 'users' home directory
 		addLogEntry("Applicable 'sync_list' location               = " ~ syncListFilePath);
 		addLogEntry("Applicable 'items.sqlite3' location           = " ~ databaseFilePath);
+		addLogEntry("Applicable 'monitor-status.json' location      = " ~ buildNormalizedPath(buildPath(dirName(databaseFilePath), "monitor-status.json")));
 		
 		// Is config option drive_id configured?
 		addLogEntry("Config option 'drive_id'                      = " ~ getValueString("drive_id"));
@@ -1815,6 +1817,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'monitor_log_frequency'         = " ~ to!string(getValueLong("monitor_log_frequency")));
 		addLogEntry("Config option 'monitor_fullscan_frequency'    = " ~ to!string(getValueLong("monitor_fullscan_frequency")));
 		addLogEntry("Config option 'monitor_authoritative_sync'    = " ~ getValueString("monitor_authoritative_sync"));
+		addLogEntry("Config option 'monitor_status'                = " ~ to!string(getValueBool("monitor_status")));
 		addLogEntry("Config option 'disable_websocket_support'     = " ~ to!string(getValueBool("disable_websocket_support")));
 		addLogEntry("Config option 'disable_time_check'            = " ~ to!string(getValueBool("disable_time_check")));
 		
@@ -3454,7 +3457,7 @@ void outputLongHelp(Option[] opt) {
     onedrive [options] --display-config
       Display the currently used configuration
     onedrive [options] --display-sync-status
-      Query OneDrive service and report on pending changes
+      Perform a read-only bidirectional assessment of local and Microsoft OneDrive sync state
     onedrive -h | --help
       Show this help screen
     onedrive --version

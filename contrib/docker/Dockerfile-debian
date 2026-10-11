@@ -1,6 +1,12 @@
 # -*-Dockerfile-*-
 
 ARG DEBIAN_VERSION=trixie
+ARG GO_VERSION=1.27
+ARG GOSU_VERSION=1.19
+
+FROM golang:${GO_VERSION}-${DEBIAN_VERSION} AS builder-gosu
+ARG GOSU_VERSION
+RUN go install -ldflags "-s -w" github.com/tianon/gosu@${GOSU_VERSION}
 
 FROM debian:${DEBIAN_VERSION} AS builder-onedrive
 ARG DEBIAN_VERSION
@@ -40,12 +46,8 @@ RUN apt-get clean \
  && /usr/bin/c_rehash \
  && mkdir -p /onedrive/conf /onedrive/data
 
-# Install gosu v1.17 from trusted upstream source (built against Go 1.18.2)
-RUN set -eux; \
-    arch="$(dpkg --print-architecture)"; \
-    curl -fsSL -o /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/1.17/gosu-${arch}"; \
-    chmod +x /usr/local/bin/gosu; \
-    gosu nobody true
+COPY --from=builder-gosu /go/bin/gosu /usr/local/bin/
+RUN gosu nobody true
 
 COPY --from=builder-onedrive /usr/local/bin/onedrive /usr/local/bin/
 
