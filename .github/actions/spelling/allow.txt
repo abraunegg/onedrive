@@ -626,6 +626,7 @@ undefiened
 unistd
 unittests
 upn
+urandom
 urlify
 userinfo
 usermod
