@@ -3,7 +3,7 @@ module localAuth;
 
 // What does this module require to function?
 import core.thread;
-import std.algorithm : canFind, startsWith;
+import std.algorithm : canFind, findSplit, startsWith;
 import std.array : split;
 import std.concurrency;
 import std.conv;
@@ -11,7 +11,6 @@ import std.datetime;
 import std.exception;
 import std.process : environment, spawnProcess, Config;
 import std.stdio : File;
-import std.format : format;
 import std.socket;
 import std.string;
 import std.uri;
@@ -34,7 +33,6 @@ private struct LocalAuthServerResult {
 	bool browserResponsePending = false;
 	string responseUri = "";
 	string code = "";
-	string state = "";
 	string error = "";
 	string errorDescription = "";
 }
@@ -51,33 +49,12 @@ private enum string LOCAL_AUTH_HOST = "127.0.0.1";
 private enum ushort LOCAL_AUTH_PORT_START = 53100;
 private enum ushort LOCAL_AUTH_PORT_END = 53149;
 private enum Duration LOCAL_AUTH_TIMEOUT = dur!"minutes"(10);
+private enum Duration LOCAL_AUTH_CONNECTION_TIMEOUT = dur!"seconds"(5);
+private enum size_t LOCAL_AUTH_MAX_REQUEST_LINE = 8192;
 private enum string SPONSORSHIP_URL = "https://github.com/sponsors/abraunegg?metadata_campaign=onedrive-sponsorship&metadata_source=client&metadata_content=initial-auth";
 
 string buildLocalAuthRedirectUri(ushort port) {
 	return "http://127.0.0.1:" ~ to!string(port) ~ "/";
-}
-
-// Generate an unpredictable OAuth 'state' value for a single local browser authorisation attempt.
-// An empty string is returned if a secure random value cannot be obtained, in which case the
-// caller must not use the local loopback listener and must use the manual redirect URI flow.
-string generateLocalAuthState() {
-	try {
-		auto urandom = File("/dev/urandom", "rb");
-		ubyte[16] randomBytes;
-		auto randomRead = urandom.rawRead(randomBytes[]);
-		urandom.close();
-		if (randomRead.length != randomBytes.length) {
-			return "";
-		}
-		string state;
-		foreach (b; randomBytes) {
-			state ~= format("%02x", b);
-		}
-		return state;
-	} catch (Exception e) {
-		addLogEntry("Unable to generate a secure OAuth state value: " ~ e.msg, ["debug"]);
-		return "";
-	}
 }
 
 // Does the 'state' returned on the loopback redirect match the 'state' sent in the authorisation request?
@@ -246,23 +223,54 @@ private string buildBrowserResponse(LocalAuthServerResult result, bool authentic
 	body ~= "</main></body></html>";
 	return body;
 }
-private string queryValue(string query, string key) {
+// Extract a single query parameter value from the raw query string.
+// Returns false if the parameter appears more than once, as an ambiguous callback must not be accepted.
+// 'present' indicates whether the parameter was supplied at all, and the value is returned still percent-encoded.
+private bool queryValue(string query, string key, out string value, out bool present) {
+	value = "";
+	present = false;
 	foreach (pair; query.split("&")) {
 		if (pair.empty) {
 			continue;
 		}
 
-		auto parts = pair.split("=");
-		string pairKey = parts.length > 0 ? parts[0] : "";
-		if (pairKey == key) {
-			return parts.length > 1 ? parts[1] : "";
+		auto keyAndValue = pair.findSplit("=");
+		if (keyAndValue[0] != key) {
+			continue;
 		}
+
+		// Duplicate parameter
+		if (present) {
+			return false;
+		}
+		present = true;
+		value = keyAndValue[2];
 	}
-	return "";
+	return true;
 }
 
-private void parseHttpRequestTarget(string requestTarget, ushort port, ref LocalAuthServerResult result) {
-	string pathAndQuery = requestTarget;
+// Is this percent-encoded value well formed?
+private bool decodesCleanly(string encodedValue, out string decodedValue) {
+	try {
+		decodedValue = decodeComponent(encodedValue);
+		return true;
+	} catch (Exception e) {
+		decodedValue = "";
+		return false;
+	}
+}
+
+// Validate an HTTP request line received on the loopback listener.
+// The request is only accepted if it is a GET for the callback path, the OAuth 'state' value matches the
+// one generated for this authentication attempt, and none of the parameters are malformed or ambiguous.
+// The 'state' and authorisation code are intentionally never written to any log output.
+private bool validateCallbackRequest(string requestLine, ushort port, string expectedState, ref LocalAuthServerResult result) {
+	auto requestParts = requestLine.split(" ");
+	if (requestParts.length < 2 || requestParts[0] != "GET") {
+		return false;
+	}
+
+	string pathAndQuery = requestParts[1];
 	if (pathAndQuery.startsWith("http://127.0.0.1")) {
 		auto marker = ":" ~ to!string(port);
 		auto markerIndex = pathAndQuery.indexOf(marker);
@@ -271,18 +279,78 @@ private void parseHttpRequestTarget(string requestTarget, ushort port, ref Local
 		}
 	}
 
-	result.responseUri = "http://127.0.0.1:" ~ to!string(port) ~ pathAndQuery;
-
+	// Only the callback path is valid
 	auto queryIndex = pathAndQuery.indexOf("?");
-	if (queryIndex < 0) {
-		return;
+	if (queryIndex < 0 || pathAndQuery[0 .. queryIndex] != "/") {
+		return false;
+	}
+	string query = pathAndQuery[queryIndex + 1 .. $];
+
+	// The 'state' must be present exactly once, and match
+	string encodedState;
+	string decodedState;
+	bool statePresent;
+	if (!queryValue(query, "state", encodedState, statePresent) || !statePresent || !decodesCleanly(encodedState, decodedState)) {
+		return false;
+	}
+	if (!localAuthStateMatches(expectedState, decodedState)) {
+		return false;
 	}
 
-	string query = pathAndQuery[queryIndex + 1 .. $];
-	result.code = queryValue(query, "code");
-	result.state = queryValue(query, "state");
-	result.error = queryValue(query, "error");
-	result.errorDescription = queryValue(query, "error_description");
+	// The remaining parameters must each be unambiguous and well formed
+	string[string] encodedValues;
+	foreach (key; ["code", "error", "error_description"]) {
+		string encodedValue;
+		string decodedValue;
+		bool present;
+		if (!queryValue(query, key, encodedValue, present) || !decodesCleanly(encodedValue, decodedValue)) {
+			return false;
+		}
+		encodedValues[key] = encodedValue;
+	}
+
+	// A callback must contain either an authorisation code or an error, but not both
+	bool hasCode = !encodedValues["code"].empty;
+	bool hasError = !encodedValues["error"].empty;
+	if (hasCode == hasError) {
+		return false;
+	}
+
+	result.received = true;
+	result.responseUri = buildLocalAuthRedirectUri(port);
+	result.code = encodedValues["code"];
+	result.error = encodedValues["error"];
+	result.errorDescription = encodedValues["error_description"];
+	return true;
+}
+
+// Read the HTTP request line from a connection, bounded by size and by the per-connection timeout
+private string readRequestLine(Socket client) {
+	string received;
+	ubyte[1024] buffer;
+	while (received.indexOf("\r\n") < 0 && received.length < LOCAL_AUTH_MAX_REQUEST_LINE) {
+		auto count = client.receive(buffer[]);
+		// 0 = connection closed, Socket.ERROR = error or timeout
+		if (count <= 0) {
+			break;
+		}
+		received ~= cast(string) buffer[0 .. count].idup;
+	}
+	auto requestLineEnd = received.indexOf("\r\n");
+	return requestLineEnd >= 0 ? received[0 .. requestLineEnd] : "";
+}
+
+// Reject an invalid request without disclosing any detail. The listener continues to wait for the genuine redirect.
+private void sendRejectionResponse(Socket client) {
+	try {
+		string response = "HTTP/1.1 400 Bad Request\r\n" ~
+			"Content-Length: 0\r\n" ~
+			"Cache-Control: no-store\r\n" ~
+			"Connection: close\r\n\r\n";
+		client.send(cast(const(ubyte)[]) response);
+	} catch (Exception e) {
+		// The client has gone away - nothing further to do
+	}
 }
 
 private void sendHttpResponse(Socket client, LocalAuthServerResult result, bool authenticationSucceeded, bool displaySponsorship) {
@@ -309,7 +377,7 @@ private void closeSocketNoThrow(Socket socket) {
 	}
 }
 
-private void localAuthServeOnce(Tid parentTid, ushort port, bool displaySponsorship) {
+private void localAuthServeOnce(Tid parentTid, ushort port, string expectedState, bool displaySponsorship) {
 	LocalAuthServerResult result;
 	Socket listener;
 	Socket client;
@@ -324,26 +392,41 @@ private void localAuthServeOnce(Tid parentTid, ushort port, bool displaySponsors
 		listener.bind(new InternetAddress(LOCAL_AUTH_HOST, port));
 		listener.listen(1);
 
-		client = listener.accept();
-		ubyte[8192] buffer;
-		auto received = client.receive(buffer[]);
-		if (received > 0) {
-			string request = cast(string) buffer[0 .. received];
-			auto requestLineEnd = request.indexOf("\r\n");
-			string requestLine = requestLineEnd >= 0 ? request[0 .. requestLineEnd] : request;
-			auto requestParts = requestLine.split(" ");
-			if (requestParts.length >= 2 && requestParts[0] == "GET") {
-				result.received = true;
-				parseHttpRequestTarget(requestParts[1], port, result);
-			} else {
-				result.received = true;
-				result.error = "local_auth_invalid_request";
-				result.errorDescription = "The local authentication listener received an invalid HTTP request.";
+		// Keep accepting connections until a valid callback is received, or the overall authentication timeout is reached.
+		// Any other request - wrong path, missing, duplicate or incorrect 'state', malformed data or a stalled connection -
+		// is rejected, and does not consume the single authentication attempt.
+		MonoTime deadline = MonoTime.currTime + LOCAL_AUTH_TIMEOUT;
+		bool callbackAccepted = false;
+		while (!callbackAccepted) {
+			Duration remaining = deadline - MonoTime.currTime;
+			if (remaining <= Duration.zero) {
+				// The parent thread applies the same overall timeout and reports it
+				return;
 			}
-		} else {
-			result.received = true;
-			result.error = "local_auth_empty_request";
-			result.errorDescription = "The local authentication listener received an empty HTTP request.";
+
+			SocketSet readSet = new SocketSet();
+			readSet.add(listener);
+			if (Socket.select(readSet, null, null, remaining) <= 0) {
+				continue;
+			}
+
+			Socket candidate = listener.accept();
+			try {
+				candidate.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, LOCAL_AUTH_CONNECTION_TIMEOUT);
+				candidate.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, LOCAL_AUTH_CONNECTION_TIMEOUT);
+
+				LocalAuthServerResult candidateResult;
+				if (validateCallbackRequest(readRequestLine(candidate), port, expectedState, candidateResult)) {
+					client = candidate;
+					result = candidateResult;
+					callbackAccepted = true;
+				} else {
+					sendRejectionResponse(candidate);
+					closeSocketNoThrow(candidate);
+				}
+			} catch (Exception e) {
+				closeSocketNoThrow(candidate);
+			}
 		}
 
 		// Keep the browser connection open until the normal OneDrive authentication flow
@@ -373,36 +456,11 @@ private void localAuthServeOnce(Tid parentTid, ushort port, bool displaySponsors
 	}
 }
 
-// Validate the OAuth 'state' handling used to reject forged loopback redirects
-unittest {
-	// Matching state is accepted
-	assert(localAuthStateMatches("0123456789abcdef", "0123456789abcdef"));
-	// Missing, empty, altered or truncated state is rejected
-	assert(!localAuthStateMatches("0123456789abcdef", ""));
-	assert(!localAuthStateMatches("0123456789abcdef", "0123456789abcdee"));
-	assert(!localAuthStateMatches("0123456789abcdef", "0123456789abcde"));
-	// An empty expected state must never match, including an empty received state
-	assert(!localAuthStateMatches("", ""));
-
-	// The 'state' query parameter is extracted from the redirect request target
-	LocalAuthServerResult withState;
-	parseHttpRequestTarget("/?code=abc&state=0123456789abcdef", 53100, withState);
-	assert(withState.code == "abc");
-	assert(withState.state == "0123456789abcdef");
-
-	// A forged redirect without 'state' results in an empty state
-	LocalAuthServerResult withoutState;
-	parseHttpRequestTarget("/?code=attackerCode", 53100, withoutState);
-	assert(withoutState.code == "attackerCode");
-	assert(!localAuthStateMatches("0123456789abcdef", withoutState.state));
-}
-
 LocalAuthResponse performLocalBrowserAuth(string authorisationUrl, ushort port, string expectedState, bool displaySponsorship, bool delegate(string) completeAuthentication) {
 	LocalAuthResponse response;
 	Tid ownerTid = thisTid;
-	Tid serverTid = spawn(&localAuthServeOnce, ownerTid, port, displaySponsorship);
+	Tid serverTid = spawn(&localAuthServeOnce, ownerTid, port, expectedState, displaySponsorship);
 	bool browserResponsePending = false;
-	string receivedState = "";
 
 	// Give the listener a very small window to bind before launching the browser.
 	Thread.sleep(dur!"msecs"(200));
@@ -417,7 +475,6 @@ LocalAuthResponse performLocalBrowserAuth(string authorisationUrl, ushort port, 
 			response.received = serverResult.received;
 			response.responseUri = serverResult.responseUri;
 			response.code = decodeComponent(serverResult.code);
-			receivedState = serverResult.state;
 			response.error = decodeComponent(serverResult.error);
 			response.errorDescription = decodeComponent(serverResult.errorDescription);
 			browserResponsePending = serverResult.browserResponsePending;
@@ -427,15 +484,6 @@ LocalAuthResponse performLocalBrowserAuth(string authorisationUrl, ushort port, 
 	if (!gotMessage) {
 		response.error = "local_auth_timeout";
 		return response;
-	}
-
-	// The loopback listener is reachable by any local process or web page that can issue a request to
-	// 127.0.0.1. Only accept an authorisation code if it was returned with the 'state' we generated,
-	// otherwise a forged redirect could sign this client in to an account chosen by someone else.
-	if (response.received && response.error.empty && !localAuthStateMatches(expectedState, decodeComponent(receivedState))) {
-		response.code = "";
-		response.error = "local_auth_state_mismatch";
-		response.errorDescription = "The authorisation response did not contain the expected state value.";
 	}
 
 	bool callbackSucceeded = response.received && !response.code.empty && response.error.empty;

@@ -925,8 +925,17 @@ class OneDriveApi {
 							if (shouldAttemptLocalBrowserAuth(appConfig)) {
 								string originalRedirectUrl = redirectUrl;
 								ushort localAuthPort = findAvailableLocalAuthPort();
-								// A unique OAuth 'state' value is required to validate the loopback redirect
-								string localAuthState = generateLocalAuthState();
+								// Only when a callback port is available, generate a unique, cryptographically secure OAuth 'state'
+								// value for this authentication attempt. The value is used to validate the loopback redirect.
+								string localAuthState = "";
+								if (localAuthPort != 0) {
+									try {
+										localAuthState = generateCryptographicallySecureHexString(16);
+									} catch (Exception e) {
+										// Without a secure state value the local listener must not be used - use the manual workflow
+										addLogEntry("Unable to generate a secure OAuth state value: " ~ e.msg, ["debug"]);
+									}
+								}
 								if ((localAuthPort != 0) && !localAuthState.empty) {
 									redirectUrl = buildLocalAuthRedirectUri(localAuthPort);
 									url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ encodeComponent(redirectUrl) ~ "&state=" ~ localAuthState;
