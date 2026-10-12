@@ -431,7 +431,7 @@ If the browser configured by `BROWSER` cannot be launched, the application falls
 
 This local listener is only used during the authentication process. It binds only to the loopback interface, does not require any inbound firewall changes, and is closed once authentication has completed or failed.
 
-Following successful **initial** graphical authentication, the completion page also displays an optional **Help sustain OneDrive Client for Linux** section with a link to support ongoing development, testing and maintenance through [GitHub Sponsors](https://github.com/sponsors/abraunegg?metadata_campaign=onedrive-sponsorship&metadata_source=github&metadata_content=usage-auth). Sponsorship is entirely optional. This section is not displayed during `--reauth`, is not shown as a desktop notification, and is not added to normal terminal or synchronisation output.
+Following successful graphical authentication, including an explicit `--reauth`, the completion page also displays an optional **Help sustain OneDrive Client for Linux** section with a link to support ongoing development, testing and maintenance through [GitHub Sponsors](https://github.com/sponsors/abraunegg?metadata_campaign=onedrive-sponsorship&metadata_source=github&metadata_content=usage-auth). Sponsorship is entirely optional. This section is not shown as a desktop notification and is not added to normal terminal or synchronisation output.
 
 **Example Terminal Session within Graphical Desktop session:**
 ```text
@@ -657,17 +657,19 @@ Intune SSO via Microsoft Identity Broker dbus session usage criteria met - will 
 ...
 ```
 > [!IMPORTANT]
-> **Intune Authentication – Required Component Versions**
+> **Intune Authentication – Validated Component Versions**
 > 
-> | Component                    | RedHat Enterprise Linux 9.x                  | Ubuntu 24.04                          |
-> |:-----------------------------|:---------------------------------------------|:--------------------------------------|
-> | Microsoft Edge               | microsoft-edge-stable-146.0.3856.97-1.x86_64 | microsoft-edge-stable 146.0.3856.97-1 |
-> | Microsoft Identity Broker    | microsoft-identity-broker-3.0.1-1.el9.x86_64 | microsoft-identity-broker 3.0.1-noble |
-> | Intune Portal                | intune-portal-1.2603.31-1.el9.x86_64         | intune-portal 1.2603.31-noble         |
-> | dbus                         | dbus-1.12.20-8.el9.x86_64                    | dbus 1.14.10-4ubuntu4.1               |
-> | dbus-broker                  | dbus-broker-28-7.el9.x86_64                  | dbus-daemon 1.14.10-4ubuntu4.1        |
+> | Component                 | Red Hat Enterprise Linux 9.8                  | Red Hat Enterprise Linux 10.2                  | Ubuntu 24.04                           | Ubuntu 26.04                              |
+> |:--------------------------|:----------------------------------------------|:-----------------------------------------------|:---------------------------------------|:------------------------------------------|
+> | Microsoft Edge            | microsoft-edge-stable-155.0.4283.45-1.x86_64 | microsoft-edge-stable-155.0.4283.45-1.x86_64  | microsoft-edge-stable 155.0.4283.45-1 | microsoft-edge-stable 155.0.4283.45-1     |
+> | Microsoft Identity Broker | microsoft-identity-broker-3.0.2-1.el9.x86_64 | microsoft-identity-broker-3.0.2-1.el10.x86_64 | microsoft-identity-broker 3.0.2-noble | microsoft-identity-broker 3.0.2-resolute  |
+> | Intune Portal             | intune-portal-1.2609.5-1.el9.x86_64          | intune-portal-1.2609.5-1.el10.x86_64          | intune-portal 1.2609.5-noble          | intune-portal 1.2609.5-resolute           |
+> | dbus                      | dbus-1.12.20-8.el9.x86_64                    | dbus-1.14.10-5.el10.x86_64                    | dbus 1.14.10-4ubuntu4.1               | dbus 1.16.2-2ubuntu4                      |
+> | dbus-broker               | dbus-broker-28-9.el9_8.x86_64                | dbus-broker-36-5.el10_2.x86_64                | not separately queried                | not separately queried                    |
 >
-> Microsoft Intune integration tested and validated with the above distributions and package versions on: **10 April 2026**
+> Microsoft Intune integration was tested and validated with `onedrive v2.5.11-63-g47c9a3c` using the above distributions and package versions on: **13 October 2026**
+>
+> On all four platforms, the client detected the Microsoft Identity Broker D-Bus session, confirmed that the Intune SSO usage criteria were met, authenticated successfully, and operated correctly against Microsoft OneDrive.
 
 > [!IMPORTANT]
 > The installation and configuration of Microsoft Intune for your platform is beyond the scope of this documentation.
