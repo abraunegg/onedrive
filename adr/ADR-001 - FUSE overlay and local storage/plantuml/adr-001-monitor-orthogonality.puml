@@ -1,36 +1,35 @@
 @startuml
-title on_demand and --monitor are orthogonal
+title On-demand operating model: --monitor required
 skinparam shadowing false
 top to bottom direction
 
-rectangle "onedrive process" {
-  component "Existing sync engine" as Sync
-  component "Remote monitor\nGraph delta / online change" as Remote
-  component "Local monitor\ninotify / local reconciliation" as Local
-  database "Item DB\nentire eligible online namespace" as DB
-  component "FUSE" as Fuse
-  folder "Physical files\nhydrated subset only" as Disk
+rectangle "Supported runtime combinations" {
+  rectangle "on_demand=false
+--sync OR --monitor" as Normal #E8F5E9
+  rectangle "on_demand=true
+--monitor ONLY" as Demand #E3F2FD
+  rectangle "on_demand=true + --sync
+REJECT configuration" as Invalid #FFEBEE
 }
-
+rectangle "Existing --monitor engine" {
+  component "Remote Graph/delta monitoring
+all eligible online items" as Remote
+  component "Local inotify monitoring
+physical backing tree" as Local
+  database "Authoritative item DB" as DB
+  component "FUSE namespace
+at existing sync_dir" as Fuse
+  folder "Hydrated physical files" as Disk
+}
 cloud "Microsoft OneDrive" as Graph
-
-Graph <--> Remote : all eligible online changes
-Remote --> Sync
-Sync --> DB : namespace / metadata updates
-DB --> Fuse : authoritative presentation
-Fuse --> Disk : content I/O only when hydrated
-Disk --> Local : local events only for\nphysically resident content
-Local --> Sync
-Sync --> Graph : existing upload path
-
-note right of Remote
-Runs normally with --monitor.
-on_demand does not disable or replace it.
-end note
-
-note right of Local
-Cloud-only files have no physical inode/content
-to monitor locally. They remain represented
-through remote state + DB + FUSE.
+Demand --> Remote
+Graph <--> Remote
+Remote --> DB : remote metadata
+DB --> Fuse : visible namespace
+Fuse --> Disk : resident content I/O
+Disk --> Local : physical change events
+Local --> Graph : existing sync/upload engine
+note right of Invalid
+Rejected before mount or sync activity
 end note
 @enduml

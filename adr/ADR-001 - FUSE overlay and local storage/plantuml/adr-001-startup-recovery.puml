@@ -1,24 +1,36 @@
 @startuml
-title Startup, Monitor and Recovery Lifecycle
+title On-demand startup, readiness and recovery
 start
-:Start onedrive;
-:Load configuration;
-:Open / validate item database;
-:Inspect/reconcile physical sync_dir;
-:Detect and safely recover stale FUSE state;
-:Establish direct access to physical backing tree;
-:Establish/validate local monitoring for resident content;
-:Mount FUSE over configured sync_dir;
-:FUSE presents authoritative DB namespace;
-:Run normal sync / --monitor processing;
-
+:Load configuration and validate --monitor;
+:Open/validate authoritative item DB;
+:Inspect and reconcile physical sync_dir;
+if (Stale FUSE mount?) then (yes)
+  :Verify mount state and safely recover;
+  if (Recovery successful?) then (no)
+    :Report actionable error; preserve backing content;
+    stop
+  endif
+endif
+:Retain direct physical-tree access;
+:Attach inotify to physical backing tree;
+:Launch isolated FUSE helper and mount;
+:Verify mount and working getattr/readdir;
+if (Verified ready?) then (no)
+  :Stop/reap helper, verify unmount, close FDs;
+  :Report startup failure;
+  stop
+endif
+:Expose DB-authoritative FUSE namespace;
+:Run existing --monitor processing;
 fork
-  :Remote Graph/delta monitoring;
-  :Update entire eligible DB namespace;
+  :Remote Graph/delta updates to DB;
 fork again
-  :Local monitoring;
-  :Observe hydrated physical content only;
+  :Physical resident-content inotify;
 end fork
-
+:Quiesce FUSE operations and unmount;
+if (Unmount verified?) then (no)
+  :Report failure and perform safe mount recovery;
+endif
+:Preserve hydrated physical content;
 stop
 @enduml

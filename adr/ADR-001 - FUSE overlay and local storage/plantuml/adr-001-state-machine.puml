@@ -9,7 +9,7 @@ state "DEHYDRATING\ntransient operation" as Dehydrating
 state "LOCAL CHANGE\nphysical content must be preserved" as Dirty
 
 [*] --> Cloud : remote item recorded\non-demand, no local requirement
-Cloud --> Hydrating : content demand / always_local
+Cloud --> Hydrating : permitted content demand / always_local
 Hydrating --> Hydrated : validated content materialised\nthen stable DB state committed
 Hydrating --> Cloud : failure / cancellation\nno valid final backing file
 
@@ -19,6 +19,11 @@ Dirty --> Hydrated : existing sync completes\nremote/local state reconciled
 Hydrated --> Dehydrating : explicit/policy request\nonly after safety checks
 Dehydrating --> Cloud : physical removal safe\nthen stable DB state committed
 Dehydrating --> Hydrated : abort/failure\npreserve content
+
+note left of Cloud
+Blocked background indexer/thumbnailer open:
+no Graph request and no state transition.
+end note
 
 note right of Dirty
 Dirty is not a candidate for

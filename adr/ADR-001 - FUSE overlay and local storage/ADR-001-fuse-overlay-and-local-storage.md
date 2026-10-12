@@ -105,28 +105,20 @@ The key distinction is:
 
 ---
 
-## 4. `on_demand` is orthogonal to normal synchronisation and `--monitor`
+## 4. `on_demand` requires `--monitor`; monitoring responsibilities remain unchanged
 
-This is a foundational design requirement.
+`on_demand` is a storage and namespace-presentation capability, not an alternative synchronisation engine or event loop. **On-demand operation requires `--monitor`**. A single-run `--sync` with `on_demand = "true"` is unsupported and must be rejected during configuration validation, before mounting FUSE or modifying local state.
 
-`on_demand` is **not** an alternative to `--monitor`, a special sync mode, or a replacement event loop.
+| Configuration | Supported | Behaviour |
+| --- | --- | --- |
+| `on_demand=false` + `--sync` | Yes | Existing single-run synchronisation |
+| `on_demand=false` + `--monitor` | Yes | Existing monitor operation |
+| `on_demand=true` + `--sync` | **No** | Explicit configuration error |
+| `on_demand=true` + `--monitor` | Yes | On-demand namespace with existing continuous remote/local monitoring |
 
-It is a storage/presentation capability that changes whether eligible remote content is immediately materialised.
+The responsibilities remain separate: remote Graph/delta monitoring covers the complete eligible online namespace, and local inotify/reconciliation covers physically resident content on the **underlying physical tree**, not the FUSE view. Cloud-only absence must never be interpreted as a local deletion.
 
-The following combinations are conceptually valid:
-
-```text
-on_demand=false + single sync
-on_demand=false + --monitor
-on_demand=true  + single sync
-on_demand=true  + --monitor
-```
-
-The meaning of `--monitor` does not change: the client continues monitoring Microsoft OneDrive for remote changes and the local filesystem for local changes.
-
-What changes is the **scope of physical local monitoring**, because cloud-only content has no local backing file to observe.
-
-![on_demand and monitor orthogonality](images/adr-001-monitor-orthogonality.png)
+![On-demand monitor operating model](images/adr-001-monitor-orthogonality.png)
 
 PlantUML source: [`plantuml/adr-001-monitor-orthogonality.puml`](plantuml/adr-001-monitor-orthogonality.puml)
 
@@ -425,6 +417,24 @@ FUSE must not implement an independent Microsoft Graph downloader.
 
 ---
 
+### 9.4 Background indexer and thumbnailer hydration guard — mandatory
+
+A FUSE `open()` does not, by itself, distinguish intentional user access from background inspection. Known indexers and thumbnail generators must **not automatically hydrate cloud-only content**. This protection is a required part of the demand-hydration milestone, not a later desktop enhancement.
+
+The initial policy is a **default-enabled, conservative process-identity blocklist**:
+
+1. For a content-requiring request against a `CLOUD_ONLY` file, inspect the FUSE request-context PID and, where available, `/proc/<pid>/exe` and `/proc/<pid>/comm`. Verify the executable identity before applying a block.
+2. Match recognised background scanners. Initial candidates include KDE Baloo (`baloo_file`, `baloo_file_extractor`), GNOME Tracker/LocalSearch (`tracker-miner-fs-3`, `localsearch-3`) and Tumbler (`tumblerd`), subject to confirmation of actual executable names and behaviour on supported desktops.
+3. For a blocked request, **do not enqueue a download, create a placeholder, or change residency state**. Return a defined filesystem error. Select `EACCES`, `EPERM`, or another suitable errno only after observing retry and user-interface behaviour.
+4. Allow metadata-only operations (`lookup`, `getattr`, `readdir`) without hydration. Allow recognised indexers to read already `HYDRATED` files normally.
+5. Allow unknown requesting processes to use ordinary hydration. Treat failed PID identity lookup as unknown for this *usability policy*; this is not a security boundary. Test PID reuse, process exit and identity ambiguity.
+6. Do not indiscriminately block generic desktop helpers such as KDE `kioworker`, which can perform deliberate user-initiated opens. Validate caller ancestry/context where necessary.
+7. Log blocked requests at debug verbosity without producing routine log floods. A configuration toggle or custom denylist may be added once naming and semantics are validated; the built-in default-on protection is required regardless.
+
+The guard is best-effort prevention of unintended background network/disk activity, not an access-control or anti-malware mechanism. A deliberately opened file must remain usable, and concurrent permitted/blocked requests must not race into unintended hydration.
+
+---
+
 ## 10. Hydrated edits and existing local-change processing
 
 Once hydrated, a file is real physical content.
@@ -475,7 +485,7 @@ After mounting, ordinary pathname lookup through `sync_dir` enters FUSE. The exi
 - local scanning;
 - conflict handling.
 
-### 11.1 Proposed mechanism to validate
+### 11.1 Current experimental mechanism and validation requirements
 
 Before mounting FUSE, retain a directory handle/file descriptor to the physical `sync_dir` and use directory-relative operations where appropriate:
 
@@ -487,7 +497,7 @@ unlinkat()
 renameat()
 ```
 
-This is a **prototype hypothesis**, not yet a final architectural decision.
+The current PR #3600 scaffold retains a physical-directory file descriptor before mounting and launches a dedicated helper via `fork()` followed immediately by `exec()` so the helper initialises its own D runtime/libfuse context. This is an **implemented experimental mechanism**, not yet a proven production architecture. A retained descriptor and directory-relative operations remain subject to validation.
 
 Testing must establish:
 
@@ -658,9 +668,13 @@ The exact ordering still requires prototype validation, but the lifecycle must s
 4. offline local changes are preserved/reconciled;
 5. local monitoring is attached to the correct physical backing tree;
 6. FUSE becomes visible at `sync_dir`;
-7. normal sync or `--monitor` operation continues;
+7. existing `--monitor` operation continues (single-run `--sync` is prohibited in on-demand mode);
 8. remote monitoring updates the entire eligible DB namespace;
 9. local monitoring processes only physically resident content.
+
+### 17.0 Mount readiness is a correctness gate
+
+The helper must not be considered ready merely because it is alive after a fixed delay. Before reporting the overlay active, verify the mount exists at the intended path and can successfully serve basic `getattr`/`readdir` operations. A failed or early-exiting helper must be reaped, descriptors closed, and any partially established mount safely recovered. Physical-tree inotify watches must remain attached to the backing tree throughout the lifecycle.
 
 ### 17.1 First-run / enabling on-demand on an existing sync
 
@@ -695,6 +709,10 @@ The client should:
 7. leave hydrated physical files directly accessible.
 
 Cloud-only entries cease to be visible locally while FUSE is absent, but remain in DB/OneDrive.
+
+### 18.1.1 Failed unmount and stale-mount recovery
+
+Unmount must be attempted and verified before the helper is terminated. If unmount fails, report an actionable error, inspect the actual mount state, and provide safe recovery rather than assuming that killing the helper removed the mount. Stale FUSE mounts must be detected at the next startup without deleting or overwriting hydrated physical data. Failure injection must cover early helper exit, `SIGTERM`, `SIGKILL`, unmount failure and interruption between physical and DB state transitions.
 
 ### 18.2 Crash
 
@@ -787,9 +805,7 @@ Aggressive caching may improve performance for large accounts, but correctness a
 
 ## 22. FUSE3 foundation
 
-Recovered groundwork contains D bindings with FUSE2-style callback signatures while the build configuration targets FUSE3.
-
-The bindings must be reconciled with the supported FUSE3 API before production integration.
+The experimental branch includes vendored D FUSE bindings and an explicit libfuse3 session. Their callback signatures, struct layouts and lifecycle must be validated against the supported FUSE3 ABI before production integration.
 
 This is an appropriate isolated contribution because it establishes infrastructure without deciding higher-level synchronisation semantics.
 
@@ -804,13 +820,17 @@ Binding work should include:
 
 ---
 
+The current scaffold uses an explicitly launched FUSE helper and a retained physical-directory FD. It still requires runtime proof of callback ABI correctness, errno mapping, file-handle and threading behaviour, verified readiness, clean unmount and stale-mount recovery. Remove unconditional `[FUSE-DEBUG]` output and unconditional libfuse `-d` diagnostics before production use; integrate diagnostic verbosity with existing logging policy. Linux and FreeBSD support must be validated separately rather than inferred from build success.
+
+---
+
 ## 23. Architectural invariants
 
 **INV-001 — Disabled means existing behaviour.**  
 `on_demand = "false"` retains current non-FUSE behaviour unless the user is explicitly transitioning from a previously cloud-only on-demand state.
 
-**INV-002 — `on_demand` is orthogonal to `--monitor`.**  
-On-demand does not disable or replace normal monitor mode, Graph delta processing or local change processing.
+**INV-002 — On-demand requires `--monitor`.**  
+`on_demand=true` is supported only with `--monitor`; it is invalid with `--sync`. This does not replace existing Graph or local monitor engines.
 
 **INV-003 — Remote monitoring covers the entire eligible namespace.**  
 Cloud-only items remain monitored remotely and represented through DB/FUSE.
@@ -862,89 +882,70 @@ Caches may accelerate presentation but must converge on authoritative DB state.
 
 ---
 
+**INV-019 — Background scanning does not automatically hydrate cloud-only content.**  
+Recognised background indexers/thumbnailers are denied content-triggered hydration by default; metadata operations and already hydrated content remain accessible.
+
+**INV-020 — Mount readiness is verified.**  
+An alive helper PID or elapsed startup delay alone does not establish a working overlay.
+
+**INV-021 — Failed unmount is surfaced and recoverable.**  
+Helper termination alone does not prove the mount has gone; physical content is preserved.
+
+**INV-022 — Demand hydration does not introduce a second download engine.**  
+FUSE requests are coordinated with the existing validated download path and item-identity rules.
+
+---
+
 ## 24. Implementation stages
 
-### Stage 1 — FUSE3 foundation
+### Stage 1 — FUSE3 lifecycle and physical overlay safety
 
-- reconcile/update bindings;
-- lifecycle object;
-- mount/unmount;
-- `on_demand` flag integration;
-- disabled by default.
+- Correct and validate FUSE3 callback ABI, errno handling and file-handle semantics.
+- Prove retained-FD backing-tree access, helper isolation and physical inotify attachment.
+- Replace fixed-delay readiness assumptions with verified mount/`getattr`/`readdir` readiness.
+- Prove clean unmount, failed-unmount handling, early helper exit and stale-mount recovery.
+- Test disposable file create/read/write/rename/delete and atomic-save patterns. **No Graph hydration.**
 
-### Stage 2 — Physical overlay + local monitoring prototype
+### Stage 2 — DB-authoritative read-only namespace
 
-Using disposable content:
+- Add stable residency metadata to the item DB.
+- Implement FUSE lookup/getattr/readdir for eligible DB files and directories, including `CLOUD_ONLY` items with no physical placeholders.
+- Preserve local-only and unsynchronised physical content, and make namespace caches converge with DB updates.
+- Prove restart reconstructs namespace without content downloads.
 
-- mount over existing physical tree;
-- expose real files;
-- read/write/create/rename/delete;
-- editor atomic-save patterns;
-- underlying direct engine access;
-- inotify event behaviour;
-- clean shutdown;
-- forced termination/stale mount recovery.
+**First functional milestone:** `ls ~/OneDrive` shows eligible online entries whose bytes are not resident.
 
-**No Graph hydration required.**
+### Stage 3 — Existing sync-engine materialisation decision
 
-### Stage 3 — DB-authoritative read-only namespace
+- Preserve delta/children enumeration, filtering, remote identity, bounded processing and memory behaviour.
+- Intercept the existing download scheduling decision: leave eligible content cloud-only unless local policy requires it.
+- Prove cloud-only absence never enters deletion processing.
+- Validate in `--monitor` mode, not single-run `--sync`.
 
-- expose DB namespace;
-- minimum stable hydration state;
-- cloud-only entries without placeholders;
-- directory representation;
-- DB rename/move/delete reflected in FUSE;
-- enumeration does not hydrate;
-- cloud-only absence cannot generate deletion.
+### Stage 4 — Demand hydration **with background-process protection**
 
-### Stage 4 — Sync-engine materialisation decision
+- Define content-demand semantics and integrate existing validated download machinery.
+- Coordinate concurrent opens, remote mutation, network/disk errors and atomic DB/physical state transitions.
+- Implement default-on recognised indexer/thumbnailer protection before download scheduling.
+- Test deliberate user opens, blocked background opens, unknown PID fallback and race conditions as **one acceptance gate**.
 
-- preserve existing remote pipeline;
-- intercept ordinary download decision;
-- commit cloud-only state instead of queueing content;
-- preserve immediate hydration for policy-required local items;
-- validate with normal sync and `--monitor`.
+### Stage 5 — Full local mutation and offline reconciliation
 
-### Stage 5 — Demand hydration
+- Create/write/truncate/rename/move/replace/unlink and editor atomic-save semantics.
+- Handle local-only items, edits while the client is stopped, and existing inotify/upload/conflict paths.
 
-- FUSE content demand;
-- existing download path;
-- concurrent request coordination;
-- network/disk failure;
-- crash recovery;
-- atomic stable-state transition.
+### Stage 6 — Safe dehydration
 
-### Stage 6 — Full local mutation semantics
+- Distinguish physical-content reclamation from user deletion.
+- Protect dirty, pinned, open, in-flight and ambiguous files; prove crash-safe ordering.
 
-- create/write/truncate;
-- rename/move/replace;
-- delete;
-- local edits while client stopped;
-- inotify behaviour;
-- existing upload path;
-- conflict behaviour.
+### Stage 7 — Retention and storage policy
 
-### Stage 7 — Dehydration primitive
+- `always_local`, manual free-up-space, optional cache limits and **opt-in** expiry disabled by default.
 
-- safe manual transition;
-- open/in-use protection;
-- dirty-file protection;
-- crash-safe ordering;
-- deletion/dehydration distinction.
+### Stage 8 — Desktop integration and UX
 
-### Stage 8 — Retention policy
-
-- `always_local`;
-- free-up-space;
-- optional cache-size limit;
-- optional expiry policy, disabled by default.
-
-### Stage 9 — Desktop integration
-
-- status representation;
-- thumbnails;
-- file-manager behaviour;
-- usability enhancements.
+- Residency/status presentation, file-manager integration and thumbnail behaviour consistent with the background hydration guard.
 
 ---
 
@@ -983,7 +984,22 @@ With FUSE absent, modify/create/rename/delete hydrated physical content, restart
 
 Validate large DB-backed namespaces without mass hydration and without pathological lookup/readdir/database overhead.
 
-### 25.7 Account coverage
+### 25.7 Background hydration protection tests
+
+- Run KDE Baloo and GNOME Tracker/LocalSearch over thousands of cloud-only entries: **zero content-download requests and zero residency transitions** attributable to recognised blocked processes.
+- Exercise thumbnail workers and repeat scans: no automatic hydration, pathological retry loops or sustained CPU churn.
+- Confirm recognised scanners can access already hydrated files and metadata queries remain available.
+- Confirm intentional user opens hydrate successfully, including via desktop file managers and ordinary applications.
+- Test unknown PID identity, `/proc` lookup failure, PID reuse/exit and concurrent blocked/permitted requests.
+- Repeat after restart and at 100K+ namespace scale.
+
+### 25.8 Lifecycle failure injection
+
+- Verify readiness handshake and basic FUSE operations, not only helper survival.
+- Exercise mount failure, helper early exit, failed unmount, `SIGTERM`/`SIGKILL`, stale mounts and post-restart preservation of physical files.
+- Confirm no Graph hydration or unintended local deletion in these failures.
+
+### 25.9 Account coverage
 
 At minimum:
 
@@ -1009,15 +1025,18 @@ Platform coverage must include supported Linux environments and FreeBSD where FU
 9. How are concurrent hydration requests serialised?
 10. What is the crash-safe commit ordering for hydration?
 11. What is the crash-safe commit ordering for dehydration?
-12. What exact operation constitutes content demand?
-13. How should thumbnail generation avoid unintended hydration?
+12. What exact operation constitutes content demand, and what filesystem error should a blocked background request return without causing retry loops?
+13. Which verified executable identities/ancestry rules belong in the default background-process blocklist? How are FUSE PID identity, PID reuse and `/proc` failures handled?
 14. How should disabling `on_demand` materialise existing cloud-only items?
 15. How does `always_local` interact with existing filters and `sync_list`?
-16. Which configuration combinations require initial rejection?
+16. Beyond the decided rejection of `on_demand=true` with `--sync`, which other configuration combinations require initial rejection?
 17. What Linux/FreeBSD differences require abstraction?
 18. How are physical directories managed when all remote descendants are cloud-only?
 19. How are local-only unsynchronised items represented before Graph assigns remote identity?
 20. How should FUSE behave if the DB is temporarily unavailable or inconsistent?
+21. How does the helper prove mount readiness to the parent, including successful `getattr`/`readdir`?
+22. How are failed unmount and stale mount state verified and safely recovered?
+23. What bounded lookup and cache-invalidation strategy remains efficient for 100K+ items?
 
 ---
 
@@ -1073,7 +1092,7 @@ FUSE at existing sync_dir
                        Microsoft Graph
 ```
 
-`on_demand` and `--monitor` coexist.
+`on_demand=true` **requires** `--monitor` and cannot be used with `--sync`.
 
 Remote monitoring continues across the whole eligible online namespace.
 
@@ -1083,6 +1102,6 @@ The database determines what FUSE presents.
 
 The existing engine continues to determine how OneDrive is synchronised.
 
-FUSE determines when user access requires cloud-only content to become physical.
+FUSE determines when eligible content demand requires cloud-only content to become physical, while recognised background indexers and thumbnail workers must not automatically trigger hydration.
 
 Once content is physical, the design aims to return immediately to the mature local-change and upload paths that already exist in the client.
