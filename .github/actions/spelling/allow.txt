@@ -272,6 +272,7 @@ keepass
 keyboxd
 keyutils
 kinfo
+kioworker
 kotlin
 Kql
 krb
@@ -335,6 +336,7 @@ listxattr
 llclose
 llsend
 lnotify
+localsearch
 localstatedir
 lol
 lowlevel
@@ -625,8 +627,8 @@ sooooo
 specpart
 SSLVERSION
 startuml
-stat'ing
 statfs
+stat'ing
 statm
 stbuf
 stdc
@@ -661,6 +663,7 @@ testbuild
 textvp
 Thh
 thnk
+thumbnailer
 tidx
 timerfd
 tkx
@@ -674,6 +677,7 @@ trashinfo
 tsess
 tsid
 Tting
+tumblerd
 tval
 typecons
 uda
@@ -699,6 +703,7 @@ uticks
 utimbuf
 utimens
 valgrind
+vendored
 verifypeer
 vmspace
 vsid
