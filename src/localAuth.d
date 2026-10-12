@@ -11,6 +11,7 @@ import std.datetime;
 import std.exception;
 import std.process : environment, spawnProcess, Config;
 import std.stdio : File;
+import std.format : format;
 import std.socket;
 import std.string;
 import std.uri;
@@ -33,6 +34,7 @@ private struct LocalAuthServerResult {
 	bool browserResponsePending = false;
 	string responseUri = "";
 	string code = "";
+	string state = "";
 	string error = "";
 	string errorDescription = "";
 }
@@ -53,6 +55,42 @@ private enum string SPONSORSHIP_URL = "https://github.com/sponsors/abraunegg?met
 
 string buildLocalAuthRedirectUri(ushort port) {
 	return "http://127.0.0.1:" ~ to!string(port) ~ "/";
+}
+
+// Generate an unpredictable OAuth 'state' value for a single local browser authorisation attempt.
+// An empty string is returned if a secure random value cannot be obtained, in which case the
+// caller must not use the local loopback listener and must use the manual redirect URI flow.
+string generateLocalAuthState() {
+	try {
+		auto urandom = File("/dev/urandom", "rb");
+		ubyte[16] randomBytes;
+		auto randomRead = urandom.rawRead(randomBytes[]);
+		urandom.close();
+		if (randomRead.length != randomBytes.length) {
+			return "";
+		}
+		string state;
+		foreach (b; randomBytes) {
+			state ~= format("%02x", b);
+		}
+		return state;
+	} catch (Exception e) {
+		addLogEntry("Unable to generate a secure OAuth state value: " ~ e.msg, ["debug"]);
+		return "";
+	}
+}
+
+// Does the 'state' returned on the loopback redirect match the 'state' sent in the authorisation request?
+// The comparison does not exit early on the first differing character.
+bool localAuthStateMatches(string expectedState, string receivedState) {
+	if (expectedState.empty || expectedState.length != receivedState.length) {
+		return false;
+	}
+	ubyte difference = 0;
+	foreach (i; 0 .. expectedState.length) {
+		difference |= cast(ubyte)(expectedState[i] ^ receivedState[i]);
+	}
+	return difference == 0;
 }
 
 bool shouldAttemptLocalBrowserAuth(ApplicationConfig appConfig) {
@@ -242,6 +280,7 @@ private void parseHttpRequestTarget(string requestTarget, ushort port, ref Local
 
 	string query = pathAndQuery[queryIndex + 1 .. $];
 	result.code = queryValue(query, "code");
+	result.state = queryValue(query, "state");
 	result.error = queryValue(query, "error");
 	result.errorDescription = queryValue(query, "error_description");
 }
@@ -334,11 +373,36 @@ private void localAuthServeOnce(Tid parentTid, ushort port, bool displaySponsors
 	}
 }
 
-LocalAuthResponse performLocalBrowserAuth(string authorisationUrl, ushort port, bool displaySponsorship, bool delegate(string) completeAuthentication) {
+// Validate the OAuth 'state' handling used to reject forged loopback redirects
+unittest {
+	// Matching state is accepted
+	assert(localAuthStateMatches("0123456789abcdef", "0123456789abcdef"));
+	// Missing, empty, altered or truncated state is rejected
+	assert(!localAuthStateMatches("0123456789abcdef", ""));
+	assert(!localAuthStateMatches("0123456789abcdef", "0123456789abcdee"));
+	assert(!localAuthStateMatches("0123456789abcdef", "0123456789abcde"));
+	// An empty expected state must never match, including an empty received state
+	assert(!localAuthStateMatches("", ""));
+
+	// The 'state' query parameter is extracted from the redirect request target
+	LocalAuthServerResult withState;
+	parseHttpRequestTarget("/?code=abc&state=0123456789abcdef", 53100, withState);
+	assert(withState.code == "abc");
+	assert(withState.state == "0123456789abcdef");
+
+	// A forged redirect without 'state' results in an empty state
+	LocalAuthServerResult withoutState;
+	parseHttpRequestTarget("/?code=attackerCode", 53100, withoutState);
+	assert(withoutState.code == "attackerCode");
+	assert(!localAuthStateMatches("0123456789abcdef", withoutState.state));
+}
+
+LocalAuthResponse performLocalBrowserAuth(string authorisationUrl, ushort port, string expectedState, bool displaySponsorship, bool delegate(string) completeAuthentication) {
 	LocalAuthResponse response;
 	Tid ownerTid = thisTid;
 	Tid serverTid = spawn(&localAuthServeOnce, ownerTid, port, displaySponsorship);
 	bool browserResponsePending = false;
+	string receivedState = "";
 
 	// Give the listener a very small window to bind before launching the browser.
 	Thread.sleep(dur!"msecs"(200));
@@ -353,6 +417,7 @@ LocalAuthResponse performLocalBrowserAuth(string authorisationUrl, ushort port, 
 			response.received = serverResult.received;
 			response.responseUri = serverResult.responseUri;
 			response.code = decodeComponent(serverResult.code);
+			receivedState = serverResult.state;
 			response.error = decodeComponent(serverResult.error);
 			response.errorDescription = decodeComponent(serverResult.errorDescription);
 			browserResponsePending = serverResult.browserResponsePending;
@@ -362,6 +427,15 @@ LocalAuthResponse performLocalBrowserAuth(string authorisationUrl, ushort port, 
 	if (!gotMessage) {
 		response.error = "local_auth_timeout";
 		return response;
+	}
+
+	// The loopback listener is reachable by any local process or web page that can issue a request to
+	// 127.0.0.1. Only accept an authorisation code if it was returned with the 'state' we generated,
+	// otherwise a forged redirect could sign this client in to an account chosen by someone else.
+	if (response.received && response.error.empty && !localAuthStateMatches(expectedState, decodeComponent(receivedState))) {
+		response.code = "";
+		response.error = "local_auth_state_mismatch";
+		response.errorDescription = "The authorisation response did not contain the expected state value.";
 	}
 
 	bool callbackSucceeded = response.received && !response.code.empty && response.error.empty;

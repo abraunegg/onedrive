@@ -925,16 +925,18 @@ class OneDriveApi {
 							if (shouldAttemptLocalBrowserAuth(appConfig)) {
 								string originalRedirectUrl = redirectUrl;
 								ushort localAuthPort = findAvailableLocalAuthPort();
-								if (localAuthPort != 0) {
+								// A unique OAuth 'state' value is required to validate the loopback redirect
+								string localAuthState = generateLocalAuthState();
+								if ((localAuthPort != 0) && !localAuthState.empty) {
 									redirectUrl = buildLocalAuthRedirectUri(localAuthPort);
-									url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ encodeComponent(redirectUrl);
+									url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ encodeComponent(redirectUrl) ~ "&state=" ~ localAuthState;
 									addLogEntry();
 									addLogEntry("Opening the Microsoft authorisation URL in your default browser ...", ["consoleOnly"]);
 									addLogEntry("Waiting for the Microsoft authorisation response on " ~ redirectUrl, ["consoleOnly"]);
 									// Sponsorship is displayed following successful graphical authentication,
 									// including explicit --reauth.
 									bool displaySponsorship = true;
-									LocalAuthResponse localAuthResponse = performLocalBrowserAuth(url, localAuthPort, displaySponsorship,
+									LocalAuthResponse localAuthResponse = performLocalBrowserAuth(url, localAuthPort, localAuthState, displaySponsorship,
 										(string authCode) {
 											return redeemToken(authCode, true);
 										}
