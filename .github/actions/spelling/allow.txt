@@ -163,6 +163,7 @@ eventfd
 evt
 execinfo
 exitsig
+exploitability
 extattr
 fasynchronous
 fbc
@@ -603,6 +604,7 @@ textvp
 Thh
 thnk
 tidx
+timeframe
 timerfd
 tkx
 tlsv
