@@ -11,17 +11,50 @@
 #   - the first synchronisation cycle has completed successfully.
 set -u
 
-# Extract a top-level "key": value pair from the flat, pretty-printed JSON
-# the client emits (one field per line). Avoids a jq/python dependency,
-# neither of which the shipped images install.
-json_field() {
-	grep -o "\"${1}\":[^,}]*" "$2" \
-		| head -n 1 \
-		| sed -e 's/^"[^"]*":[[:space:]]*//' -e 's/^"//' -e 's/"[[:space:]]*$//'
+unhealthy() {
+	echo "unhealthy: $*"
+	exit 1
+}
+
+# Extract the value of a "key": value pair from STATUS_LINES into FIELD_VALUE.
+#
+# The client writes the status file pretty-printed (one "key": value pair per
+# line), so this matches whole lines rather than parsing JSON, which avoids a
+# jq/python dependency that the shipped images do not install. Bash builtins
+# are used instead of grep/sed so behaviour does not vary between the GNU
+# (Debian/Fedora) and BusyBox (Alpine) tools.
+#
+# To fail safely if the file is truncated, malformed or formatted differently
+# than expected, the key must appear on exactly one line and its value must
+# match value_re, whose first capture group becomes FIELD_VALUE. Otherwise the
+# check reports unhealthy with a diagnostic naming the offending field.
+read_field() {
+	local key="$1" value_re="$2" line_re line raw="" count=0
+	line_re="^[[:space:]]*\"${key}\"[[:space:]]*:[[:space:]]*(.*[^,[:space:]])[[:space:]]*,?[[:space:]]*$"
+	for line in "${STATUS_LINES[@]}"; do
+		if [[ ${line} =~ ${line_re} ]]; then
+			raw="${BASH_REMATCH[1]}"
+			count=$((count + 1))
+		fi
+	done
+	if [ "${count}" -eq 0 ]; then
+		unhealthy "field '${key}' not found in ${STATUS_FILE}"
+	fi
+	if [ "${count}" -gt 1 ]; then
+		unhealthy "field '${key}' found ${count} times in ${STATUS_FILE}, expected exactly once"
+	fi
+	if [[ ! ${raw} =~ ${value_re} ]]; then
+		unhealthy "field '${key}' has unexpected value '${raw}' in ${STATUS_FILE}"
+	fi
+	FIELD_VALUE="${BASH_REMATCH[1]}"
 }
 
 # The expected path for the monitor file inside the container
 STATUS_FILE="/onedrive/conf/monitor-status.json"
+
+# The status file layout this script understands. A different
+# schema_version may move or rename the fields checked below.
+SUPPORTED_SCHEMA_VERSION=1
 
 # How stale (in seconds) the status file is allowed to be before the
 # container is considered unhealthy. Default is twice the client's default
@@ -38,16 +71,28 @@ if [ ! -f "${STATUS_FILE}" ]; then
 	exit 1
 fi
 
-
-
-PID="$(json_field pid "${STATUS_FILE}")"
-STATE="$(json_field state "${STATUS_FILE}")"
-INITIAL_SYNC_DONE="$(json_field initial_successful_sync_completed "${STATUS_FILE}")"
-
-if [ -z "${PID}" ]; then
-	echo "unhealthy: could not read 'pid' from ${STATUS_FILE}"
-	exit 1
+# Read the file once so every field comes from the same snapshot, even if
+# the monitor atomically replaces it while this check is running. The file
+# can also disappear between the test above and this read during an orderly
+# shutdown.
+if ! { mapfile -t STATUS_LINES < "${STATUS_FILE}"; } 2>/dev/null; then
+	unhealthy "${STATUS_FILE} could not be read"
 fi
+if [ "${#STATUS_LINES[@]}" -eq 0 ]; then
+	unhealthy "${STATUS_FILE} is empty"
+fi
+
+read_field schema_version '^([0-9]+)$'
+if [ "${FIELD_VALUE}" != "${SUPPORTED_SCHEMA_VERSION}" ]; then
+	unhealthy "${STATUS_FILE} has schema_version ${FIELD_VALUE}, this healthcheck supports ${SUPPORTED_SCHEMA_VERSION}"
+fi
+
+read_field pid '^([1-9][0-9]*)$'
+PID="${FIELD_VALUE}"
+read_field state '^"([a-z_]+)"$'
+STATE="${FIELD_VALUE}"
+read_field initial_successful_sync_completed '^(true|false)$'
+INITIAL_SYNC_DONE="${FIELD_VALUE}"
 
 # Liveness: the pid recorded in the status file must still be running. A
 # crashed or SIGKILLed monitor leaves its last snapshot behind; this catches
