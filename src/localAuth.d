@@ -270,14 +270,9 @@ private bool validateCallbackRequest(string requestLine, ushort port, string exp
 		return false;
 	}
 
+	// Only the origin-form request target (/?...) is accepted - this is what a browser sends for a redirect to the
+	// loopback redirect URI. Absolute-form request targets are rejected rather than partially parsed.
 	string pathAndQuery = requestParts[1];
-	if (pathAndQuery.startsWith("http://127.0.0.1")) {
-		auto marker = ":" ~ to!string(port);
-		auto markerIndex = pathAndQuery.indexOf(marker);
-		if (markerIndex >= 0) {
-			pathAndQuery = pathAndQuery[markerIndex + marker.length .. $];
-		}
-	}
 
 	// Only the callback path is valid
 	auto queryIndex = pathAndQuery.indexOf("?");
@@ -324,11 +319,19 @@ private bool validateCallbackRequest(string requestLine, ushort port, string exp
 	return true;
 }
 
-// Read the HTTP request line from a connection, bounded by size and by the per-connection timeout
-private string readRequestLine(Socket client) {
+// Read the HTTP request line from a connection. The complete read is bounded by an absolute monotonic deadline,
+// so a client sending data slowly cannot hold the listener for longer than the deadline allows.
+private string readRequestLine(Socket client, MonoTime deadline) {
 	string received;
 	ubyte[1024] buffer;
 	while (received.indexOf("\r\n") < 0 && received.length < LOCAL_AUTH_MAX_REQUEST_LINE) {
+		// Only wait for the time remaining until the deadline
+		Duration remaining = deadline - MonoTime.currTime;
+		if (remaining <= Duration.zero) {
+			return "";
+		}
+		client.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, remaining);
+
 		auto count = client.receive(buffer[]);
 		// 0 = connection closed, Socket.ERROR = error or timeout
 		if (count <= 0) {
@@ -412,11 +415,16 @@ private void localAuthServeOnce(Tid parentTid, ushort port, string expectedState
 
 			Socket candidate = listener.accept();
 			try {
-				candidate.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, LOCAL_AUTH_CONNECTION_TIMEOUT);
 				candidate.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, LOCAL_AUTH_CONNECTION_TIMEOUT);
 
+				// The complete request must arrive within the per-connection limit, and never beyond the overall deadline
+				MonoTime requestDeadline = MonoTime.currTime + LOCAL_AUTH_CONNECTION_TIMEOUT;
+				if (requestDeadline > deadline) {
+					requestDeadline = deadline;
+				}
+
 				LocalAuthServerResult candidateResult;
-				if (validateCallbackRequest(readRequestLine(candidate), port, expectedState, candidateResult)) {
+				if (validateCallbackRequest(readRequestLine(candidate, requestDeadline), port, expectedState, candidateResult)) {
 					client = candidate;
 					result = candidateResult;
 					callbackAccepted = true;
