@@ -2331,6 +2331,18 @@ There are a few ways to employ onedrive as a service:
 * via systemd
 * via runit
 
+**Which systemd service should I use?**
+
+| Your environment | Use this service | Command |
+|---|---|---|
+| Linux graphical desktop (including users requiring desktop notifications or Microsoft Intune SSO) | **User-level** `onedrive.service` | `systemctl --user enable --now onedrive.service` |
+| Headless server or unattended system without a graphical session | **System-level** `onedrive@<username>.service` | `sudo systemctl enable --now onedrive@$(whoami).service` |
+
+The user-level service runs within the user's systemd session. The system-level service runs under the selected Linux account but **does not automatically inherit that account's graphical session or user D-Bus environment**. Consequently, desktop notifications and access to the Microsoft Identity Broker may be unavailable when using the system-level service. For graphical desktop users, particularly those using Intune SSO, use the user-level service described below.
+
+> [!IMPORTANT]
+> Do not run both services against the same OneDrive configuration and synchronisation directory. Before switching service types, stop and disable the existing service.
+
 #### OneDrive service running as root user via init.d
 ```text
 chkconfig onedrive on
@@ -2405,6 +2417,8 @@ journalctl --unit=onedrive -f
 ```
 
 #### OneDrive service running as a non-root user via systemd (All Linux Distributions)
+This section configures the **system-level** `onedrive@<username>.service`, suitable for headless or unattended operation. For graphical desktops, desktop notifications or Microsoft Intune SSO, use the **user-level** service in the next section instead.
+
 In some instances, it is preferable to run the OneDrive client as a service without the 'root' user. Follow the instructions below to configure the service for your regular user login.
 
 1. As the user who will run the service, launch the application in standalone mode, authorise it for use, and verify that synchronisation is functioning as expected:
@@ -2427,7 +2441,7 @@ journalctl --unit=onedrive@<username> -f
 ```
 
 #### OneDrive service running as a non-root user via systemd (with notifications enabled) (Arch, Ubuntu, Debian, OpenSuSE, Fedora)
-In some scenarios, you may want to receive GUI notifications when using the client as a non-root user. In this case, follow these steps:
+**Recommended for graphical desktop users**, including those using GUI notifications or Microsoft Intune SSO. This uses the systemd **user-level** service, which can access the user's session D-Bus when the graphical session and required services are available. Follow these steps:
 
 1. Log in via the graphical UI as the user you want to enable the service for.
 2. Disable any `onedrive@` service files for your username, e.g.:
@@ -2523,6 +2537,9 @@ To address this issue, you need to reconfigure your 'user' account so that the s
 ```text
 loginctl enable-linger <your_user_name>
 ```
+
+> [!IMPORTANT]
+> Enabling lingering starts the user service without an interactive login, but **does not create a graphical desktop session**. Desktop notification delivery and interactive Microsoft Identity Broker functionality are not guaranteed until the relevant user-session services are available.
 
 ### How to access Microsoft OneDrive service through a proxy
 If you have a requirement to run the client through a proxy, there are a couple of ways to achieve this:
