@@ -39,6 +39,7 @@ void dbus_error_free(DBusError* error);
 int dbus_error_is_set(DBusError* error);
 DBusConnection* dbus_bus_get(DBusBusType type, DBusError* error);
 dbus_bool_t dbus_bus_name_has_owner(DBusConnection* conn, const char* name, DBusError* error);
+dbus_bool_t dbus_bus_start_service_by_name(DBusConnection* conn, const char* name, uint flags, uint* result, DBusError* error);
 DBusMessage* dbus_message_new_method_call(const char* dest, const char* path, const char* iface, const char* method);
 dbus_bool_t dbus_connection_send(DBusConnection* conn, DBusMessage* msg, void* client_serial);
 void dbus_connection_flush(DBusConnection* conn);
@@ -101,9 +102,49 @@ bool check_intune_broker_available() {
 	}
 }
 
-bool wait_for_broker(int timeoutSeconds = 10) {
-	int waited = 0;
+// Request activation of a broker that is registered with D-Bus but has no owner yet.
+// The user session bus activates the broker without involving an external command.
+bool activate_intune_broker() {
+	version (linux) {
+		DBusError err;
+		dbus_error_init(&err);
 
+		DBusConnection* conn = dbus_bus_get(DBusBusType.DBUS_BUS_SESSION, &err);
+		if (dbus_error_is_set(&err)) {
+			dbus_error_free(&err);
+			return false;
+		}
+		if (conn is null) {
+			return false;
+		}
+
+		uint result = 0;
+		dbus_bool_t success = dbus_bus_start_service_by_name(conn, BROKER_BUS_NAME, 0, &result, &err);
+		if (dbus_error_is_set(&err)) {
+			if (debugLogging) {
+				addLogEntry("Unable to activate Microsoft Identity Broker via D-Bus: " ~ fromStringz(err.message).idup, ["debug"]);
+			}
+			dbus_error_free(&err);
+			return false;
+		}
+
+		// DBUS_START_REPLY_SUCCESS=1; DBUS_START_REPLY_ALREADY_RUNNING=2.
+		return success != 0 && (result == 1 || result == 2);
+	} else {
+		return false;
+	}
+}
+
+bool wait_for_broker(int timeoutSeconds = 10) {
+	if (check_intune_broker_available()) {
+		return true;
+	}
+
+	// A D-Bus-activatable broker need not own its name until requested.
+	// Do this once; the existing retry loop handles delayed ownership.
+	activate_intune_broker();
+
+	int waited = 0;
 	while (waited < timeoutSeconds) {
 		if (check_intune_broker_available()) {
 			return true;
@@ -408,7 +449,6 @@ string get_first_broker_account_json(string clientId) {
 	}
 
 	auto obj = result.parsedJson.object;
-
 	if ("error" in obj) {
 		if (debugLogging) {
 			addLogEntry("Broker getAccounts returned an error payload", ["debug"]);
@@ -431,6 +471,7 @@ string get_first_broker_account_json(string clientId) {
 
 	return to!string(accountsArray[0]);
 }
+
 
 // Perform silent authentication via D-Bus using the Microsoft Identity Broker
 AuthResult acquire_token_silently(string accountJson, string clientId, string redirectURI = DEFAULT_REDIRECT_URI, string authority = DEFAULT_AUTHORITY) {
