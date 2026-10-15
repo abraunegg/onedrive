@@ -206,19 +206,80 @@ For service-readiness use cases, `sync.initial_successful_sync_completed` become
 
 The status file is removed during an orderly monitor shutdown. An abnormal process termination can leave the last status file behind, so external tooling should evaluate `pid`, `instance_id` and `updated_at` rather than treating file existence alone as definitive liveness. All timestamps are UTC.
 
-See [Machine-readable monitor runtime status](./usage.md#machine-readable-monitor-runtime-status) for full details.
+See [Machine-readable monitor runtime status](./usage.md#machine-readable-monitor-runtime-status) for full details. For a ready-to-use container healthcheck based on this file, see [Using a container healthcheck](#64-using-a-container-healthcheck) below.
 
-#### 6.4 Stop running 'onedrive' container
+#### 6.4 Using a container healthcheck
+The healthcheck script provided at [contrib/docker/healthcheck.sh](https://github.com/abraunegg/onedrive/blob/master/contrib/docker/healthcheck.sh) is not specific to Docker and can be used unchanged under Podman. It evaluates `/onedrive/conf/monitor-status.json` and only reports the container as healthy once the running monitor process has completed its first successful synchronisation. Refer to [Using a container healthcheck](./docker.md#using-a-container-healthcheck) in the Docker documentation for the exact conditions it checks, the requirement to run in the default `--monitor` mode, and guidance on setting `ONEDRIVE_HEALTHCHECK_MAX_AGE` when you have changed `monitor_interval` or your synchronisation cycles take a long time.
+
+> [!NOTE]
+> The healthcheck script has been tested against the Debian, Fedora and Alpine container images under Docker, both as 'root' and as an unprivileged container user. The Podman configuration below, including rootless operation, has not yet been validated under Podman.
+
+The script is not included in the container image, so you must download it to your host and bind mount it into the container:
+```bash
+mkdir -p "${HOME}/.config/onedrive-podman"
+curl -fsSL -o "${HOME}/.config/onedrive-podman/healthcheck.sh" \
+    https://raw.githubusercontent.com/abraunegg/onedrive/master/contrib/docker/healthcheck.sh
+```
+
+Healthcheck options can only be set when a container is created. If you have already created the 'onedrive' container in step 5, remove it with `podman rm -f onedrive` and create it again with the healthcheck options added. Your authorisation is stored in the `onedrive_conf` volume, so you will not need to authorise the client again:
+```bash
+export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
+export ONEDRIVE_UID=`id -u`
+export ONEDRIVE_GID=`id -g`
+podman run -d --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
+    --userns=keep-id \
+    -v onedrive_conf:/onedrive/conf:U,Z \
+    -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" \
+    -v "${HOME}/.config/onedrive-podman/healthcheck.sh:/healthcheck.sh:ro,Z" \
+    -e PODMAN=1 \
+    --label "io.containers.autoupdate=image" \
+    --health-cmd "bash /healthcheck.sh" \
+    --health-interval 30s \
+    --health-timeout 5s \
+    --health-retries 3 \
+    --health-start-period 5m \
+    driveone/onedrive:edge
+```
+
+The healthcheck is invoked as `bash /healthcheck.sh`, so the bind mounted file does not need to be executable. Do not add the `U` option to the script mount, as this would change the ownership of the file on your host. To allow for long synchronisation cycles, add for example `-e ONEDRIVE_HEALTHCHECK_MAX_AGE=1800`.
+
+The health state is shown in the `STATUS` column of `podman ps`. You can also run the healthcheck on demand, or view the output of the most recent checks:
+```bash
+podman healthcheck run onedrive
+podman inspect --format '{{json .State.Health}}' onedrive
+```
+
+Older Podman releases expose the health state as `.State.Healthcheck` instead of `.State.Health`.
+
+##### Rootless Podman considerations
+*   The healthcheck runs inside the container as the container user set with `--user`. It only reads the status file and the process information under `/proc`, so it does not require 'root' privileges.
+*   Podman schedules the periodic healthcheck using systemd timers. When running rootless, these require an active systemd user session. If the healthcheck does not appear to run after you log out, enable lingering for your user with `loginctl enable-linger`. Without systemd, the periodic healthcheck does not run at all, although `podman healthcheck run onedrive` still works.
+
+##### SELinux and volume considerations
+*   The `Z` option applies a private SELinux label to the script so that only this container can access it. If you run multiple containers, for example when [syncing multiple accounts](#syncing-multiple-accounts), and they share a single copy of the script, use the lowercase `z` option instead so that the file is shared between containers.
+*   These options are harmless when SELinux is disabled, as described in step 2.
+
+##### Container health status and systemd
+> [!IMPORTANT]
+> Container health status is separate from the status of a systemd service. When the container is run as a systemd service as described in [Systemd Service & Auto Updating](#systemd-service--auto-updating), `systemctl status container-onedrive` only reports whether the container is running, not whether it is healthy. A `--restart-policy` of `on-failure` restarts the container when it exits, not when its healthcheck fails, so by default **an unhealthy container is not restarted automatically** and continues to be reported as unhealthy.
+
+If you want Podman to act when the container becomes unhealthy, add the `--health-on-failure` option (available in Podman 4.3 and later):
+*   When running the container directly with `podman run`, use `--health-on-failure=restart`.
+*   When running the container as a systemd service, use `--health-on-failure=kill` instead, so that the container exits and systemd restarts it according to the unit's restart policy. Do not combine `--health-on-failure=restart` with systemd's own restart handling.
+
+The healthcheck options are part of the container definition, so they are carried over into the unit file created by `podman generate systemd --new`.
+
+#### 6.5 Stop running 'onedrive' container
 ```bash
 podman stop onedrive
 ```
 
-#### 6.5 Start 'onedrive' container
+#### 6.6 Start 'onedrive' container
 ```bash
 podman start onedrive
 ```
 
-#### 6.6 Remove 'onedrive' container
+#### 6.7 Remove 'onedrive' container
 ```bash
 podman rm -f onedrive
 ```
@@ -330,6 +391,7 @@ podman run -it --name onedrive_work --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
 | <B>ONEDRIVE_SYNC_ONCE</B> | Controls if the Docker container should be run in Standalone Mode. It will use Monitor Mode otherwise. Default is 0 | 1 |
 | <B>ONEDRIVE_FILE_FRAGMENT_SIZE</B> | Controls the fragment size when uploading large files to Microsoft OneDrive. The value specified is in MB. Default is 10, Limit is 60 | 25 |
 | <B>ONEDRIVE_THREADS</B> | Controls the value for the number of worker threads used for parallel upload and download operations. Default is 8, Limit is 16 | 4 |
+| <B>ONEDRIVE_HEALTHCHECK_MAX_AGE</B> | Maximum age in seconds of `monitor-status.json` before the optional [healthcheck script](#64-using-a-container-healthcheck) reports the container as unhealthy. Not used by the client itself. Default is 600 | 1800 |
 
 ### Environment Variables Usage Examples
 **Verbose Output:**
