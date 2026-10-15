@@ -2327,6 +2327,30 @@ string generateAlphanumericString(size_t length = 16) {
 	return to!string(randomString);
 }
 
+// Generate a cryptographically secure random hexadecimal string from 'byteCount' bytes of
+// randomness provided by the Linux kernel (/dev/urandom). Unlike generateAlphanumericString(),
+// the output is suitable for security sensitive values such as OAuth 'state' parameters.
+// If secure random data cannot be obtained, an Exception is thrown - there is deliberately no
+// fallback to a non-cryptographic random number generator.
+string generateCryptographicallySecureHexString(size_t byteCount = 16) {
+	// Ensure the byte count is not zero
+	if (byteCount == 0) {
+		throw new Exception("Byte count must be greater than 0");
+	}
+
+	ubyte[] randomBytes = new ubyte[byteCount];
+	auto randomSource = File("/dev/urandom", "rb");
+	scope(exit) randomSource.close();
+
+	// Read the requested number of bytes - a short read is treated as a failure
+	auto bytesRead = randomSource.rawRead(randomBytes);
+	if (bytesRead.length != byteCount) {
+		throw new Exception("Unable to read sufficient secure random data");
+	}
+
+	return format("%(%02x%)", randomBytes);
+}
+
 // Display internal memory stats and RSS details
 void displayMemoryUsageDetails() {
 	// The Resident Set Size (RSS) represents the amount of physical memory currently

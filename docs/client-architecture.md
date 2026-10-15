@@ -33,7 +33,7 @@ Several configuration options change how the HTTP transport behaves:
 
 ## Authentication architecture
 
-The normal OAuth flow uses an authorisation-code exchange. Where a graphical browser environment is available, the client can start a temporary loopback listener, open the Microsoft authorisation URL in the browser and receive the returned authorisation code on the local callback. If that workflow cannot be used, the existing manual redirect-URI workflow remains available.
+The normal OAuth flow uses an authorisation-code exchange. Where a graphical browser environment is available, the client can start a temporary loopback listener, open the Microsoft authorisation URL in the browser and receive the returned authorisation code on the local callback. The authorisation request carries a randomly generated OAuth `state` value, and a callback that does not return the same value is rejected. If that workflow cannot be used, the existing manual redirect-URI workflow remains available.
 
 The client also supports the OAuth device-authorisation flow when configured, and Microsoft Intune broker authentication where applicable.
 

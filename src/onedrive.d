@@ -925,16 +925,27 @@ class OneDriveApi {
 							if (shouldAttemptLocalBrowserAuth(appConfig)) {
 								string originalRedirectUrl = redirectUrl;
 								ushort localAuthPort = findAvailableLocalAuthPort();
+								// Only when a callback port is available, generate a unique, cryptographically secure OAuth 'state'
+								// value for this authentication attempt. The value is used to validate the loopback redirect.
+								string localAuthState = "";
 								if (localAuthPort != 0) {
+									try {
+										localAuthState = generateCryptographicallySecureHexString(16);
+									} catch (Exception e) {
+										// Without a secure state value the local listener must not be used - use the manual workflow
+										addLogEntry("Unable to generate a secure OAuth state value: " ~ e.msg, ["debug"]);
+									}
+								}
+								if ((localAuthPort != 0) && !localAuthState.empty) {
 									redirectUrl = buildLocalAuthRedirectUri(localAuthPort);
-									url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ encodeComponent(redirectUrl);
+									url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ encodeComponent(redirectUrl) ~ "&state=" ~ localAuthState;
 									addLogEntry();
 									addLogEntry("Opening the Microsoft authorisation URL in your default browser ...", ["consoleOnly"]);
 									addLogEntry("Waiting for the Microsoft authorisation response on " ~ redirectUrl, ["consoleOnly"]);
 									// Sponsorship is displayed following successful graphical authentication,
 									// including explicit --reauth.
 									bool displaySponsorship = true;
-									LocalAuthResponse localAuthResponse = performLocalBrowserAuth(url, localAuthPort, displaySponsorship,
+									LocalAuthResponse localAuthResponse = performLocalBrowserAuth(url, localAuthPort, localAuthState, displaySponsorship,
 										(string authCode) {
 											return redeemToken(authCode, true);
 										}
