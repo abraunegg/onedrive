@@ -353,7 +353,7 @@ A healthcheck script is provided at [contrib/docker/healthcheck.sh](https://gith
 
 The script reports the container as healthy only when **all** of the following conditions are true:
 *   `/onedrive/conf/monitor-status.json` exists
-*   The monitor process recorded in the `pid` field of the status file is still running. This detects a stale status file left behind by an abnormal termination (`SIGKILL`, OOM-killer, crash, sudden host loss), where the client never had the opportunity to remove it.
+*   The `pid` field of the status file refers to a running process named `onedrive`, and that process started before the status file was last written. This detects a stale status file left behind by an abnormal termination (`SIGKILL`, OOM-killer, crash, sudden host loss), where the client never had the opportunity to remove it, including after a container restart where the new client process is given the same PID as the one that left the file behind. This is a strong indication, but not an absolute guarantee, that the file was written by the running process: PIDs are reused, and the check relies on process name and start time rather than a unique process identity.
 *   The status file was published recently. Its modification time must be no older than `ONEDRIVE_HEALTHCHECK_MAX_AGE` seconds (default `600`, which is twice the default `monitor_interval` of 300 seconds). This detects a monitor loop that is no longer progressing.
 *   `sync.initial_successful_sync_completed` is `true`, meaning the current monitor process has completed at least one successful synchronisation cycle.
 

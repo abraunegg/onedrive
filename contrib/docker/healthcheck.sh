@@ -5,7 +5,8 @@
 # /onedrive/conf/monitor-status.json (see
 # docs/usage.md#machine-readable-monitor-runtime-status) and reports
 # healthy only when:
-#   - the monitor process recorded in the file is still running,
+#   - the pid recorded in the file belongs to a running 'onedrive' process
+#     that started before the file was last written,
 #   - the file was published recently enough to not be a stale leftover
 #     from a crashed/killed process, and
 #   - the first synchronisation cycle has completed successfully.
@@ -103,12 +104,19 @@ STATE="${FIELD_VALUE}"
 read_field initial_successful_sync_completed '^(true|false)$'
 INITIAL_SYNC_DONE="${FIELD_VALUE}"
 
-# Liveness: the pid recorded in the status file must still be running. A
-# crashed or SIGKILLed monitor leaves its last snapshot behind; this catches
-# that case immediately rather than waiting for the staleness check below.
-if ! kill -0 "${PID}" 2>/dev/null; then
-	echo "unhealthy: monitor pid ${PID} from status file is not running"
-	exit 1
+# Liveness: a crashed or SIGKILLed monitor leaves its last snapshot behind,
+# so the pid recorded in the status file must belong to a running process
+# named 'onedrive'. A process existing with that pid is not on its own proof
+# that it is the same monitor that wrote the file: pids are reused, and the
+# monitor is normally pid 1 in the container, so after a restart the new
+# instance has the same pid as the one that left the file behind. The start
+# time check further below covers that case.
+if ! { read -r PROC_STAT < "/proc/${PID}/stat"; } 2>/dev/null \
+	|| ! { read -r PROC_COMM < "/proc/${PID}/comm"; } 2>/dev/null; then
+	unhealthy "monitor pid ${PID} from status file is not running"
+fi
+if [ "${PROC_COMM}" != "onedrive" ]; then
+	unhealthy "pid ${PID} from status file is '${PROC_COMM}', not the onedrive monitor"
 fi
 
 # Staleness: the file is replaced via temp-file + atomic rename on every
@@ -127,6 +135,38 @@ AGE=$((NOW - MTIME))
 
 if [ "${AGE}" -lt 0 ]; then
 	unhealthy "${STATUS_FILE} modification time is $((-AGE))s in the future - check the system clock"
+fi
+
+# Identity: a running monitor can only have written the file after it
+# started, so a file last written before the recorded process started was
+# left behind by a previous instance that happened to have the same pid. The process start
+# time is boot time plus field 22 of /proc/<pid>/stat (in clock ticks). The
+# fields are read after the last ')' because the process name preceding it
+# may itself contain spaces or parentheses. This still cannot distinguish
+# a different 'onedrive' process that reused the pid and started before
+# the file was written, but the staleness check limits how long such a
+# file is trusted.
+read -r -a PROC_FIELDS <<< "${PROC_STAT##*) }"
+PROC_START_TICKS="${PROC_FIELDS[19]-}"
+BOOT_TIME=""
+while read -r key value _; do
+	if [ "${key}" = "btime" ]; then
+		BOOT_TIME="${value}"
+		break
+	fi
+done < /proc/stat
+CLK_TCK="$(getconf CLK_TCK 2>/dev/null)"
+if [[ ! ${CLK_TCK} =~ ^[1-9][0-9]*$ ]]; then
+	CLK_TCK=100
+fi
+if [[ ! ${PROC_START_TICKS} =~ ^[0-9]+$ ]] || [[ ! ${BOOT_TIME} =~ ^[0-9]+$ ]]; then
+	unhealthy "could not determine the start time of monitor pid ${PID}"
+fi
+PROC_START=$((BOOT_TIME + PROC_START_TICKS / CLK_TCK))
+
+# Both timestamps are truncated to whole seconds, so allow 1s of slack.
+if [ $((MTIME + 1)) -lt "${PROC_START}" ]; then
+	unhealthy "${STATUS_FILE} was last written $((PROC_START - MTIME))s before monitor pid ${PID} started - left behind by a previous instance"
 fi
 
 if [ "${AGE}" -gt "${MAX_AGE_SECONDS}" ]; then
