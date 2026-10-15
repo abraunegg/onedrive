@@ -363,7 +363,7 @@ docker inspect --format '{{json .State.Health}}' onedrive
 ```
 
 > [!NOTE]
-> The status file is only republished at monitor cycle boundaries. If you have changed `monitor_interval`, or your synchronisation cycles routinely take a long time to complete (for example, large uploads or downloads), you must increase `ONEDRIVE_HEALTHCHECK_MAX_AGE` to be greater than your `monitor_interval` plus your longest expected synchronisation cycle duration, otherwise the container will be reported as unhealthy while a long cycle is still running. This can be set as a container environment variable, for example `-e ONEDRIVE_HEALTHCHECK_MAX_AGE=1800`.
+> The status file is only republished at monitor cycle boundaries. If you have changed `monitor_interval`, or your synchronisation cycles routinely take a long time to complete (for example, large uploads or downloads), you must increase `ONEDRIVE_HEALTHCHECK_MAX_AGE` to be greater than your `monitor_interval` plus your longest expected synchronisation cycle duration, otherwise the container will be reported as unhealthy while a long cycle is still running. This can be set as a container environment variable, for example `-e ONEDRIVE_HEALTHCHECK_MAX_AGE=1800`. The value must be a positive whole number of seconds; an empty or invalid value (such as `0`, `-5` or `30m`) causes the healthcheck to fail with a message describing the problem.
 
 Download the script to your host:
 ```bash

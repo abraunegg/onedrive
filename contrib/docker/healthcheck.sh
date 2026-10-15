@@ -59,7 +59,16 @@ SUPPORTED_SCHEMA_VERSION=1
 # How stale (in seconds) the status file is allowed to be before the
 # container is considered unhealthy. Default is twice the client's default
 # monitor_interval_seconds (300s), giving one missed cycle of slack.
-MAX_AGE_SECONDS="${ONEDRIVE_HEALTHCHECK_MAX_AGE:=600}"
+# The default only applies when the variable is unset; an explicitly empty
+# value is treated as a configuration error below.
+MAX_AGE_SECONDS="${ONEDRIVE_HEALTHCHECK_MAX_AGE-600}"
+
+# Validate before use in arithmetic, so a misconfiguration is reported
+# clearly regardless of the status file contents. At most 10 digits keeps
+# the value well within the range of shell arithmetic.
+if [[ ! ${MAX_AGE_SECONDS} =~ ^[1-9][0-9]{0,9}$ ]]; then
+	unhealthy "ONEDRIVE_HEALTHCHECK_MAX_AGE='${MAX_AGE_SECONDS}' is not a positive integer number of seconds"
+fi
 
 # monitor-status.json only exists while --monitor is running with
 # monitor_status enabled (the default). If you wire this healthcheck up,
@@ -106,9 +115,19 @@ fi
 # monitor lifecycle event, so its mtime is a reliable, portable proxy for
 # the JSON's own "updated_at" without needing to parse ISO-8601 timestamps
 # across Fedora/Debian/Alpine's differing `date` implementations.
-NOW="$(date +%s)"
-MTIME="$(stat -c %Y "${STATUS_FILE}")"
+# Freshness cannot be determined if either timestamp is unavailable, so any
+# failure here is reported as unhealthy.
+if ! NOW="$(date +%s 2>/dev/null)" || [[ ! ${NOW} =~ ^[0-9]+$ ]]; then
+	unhealthy "could not determine the current time (date +%s returned '${NOW}')"
+fi
+if ! MTIME="$(stat -c %Y "${STATUS_FILE}" 2>/dev/null)" || [[ ! ${MTIME} =~ ^[0-9]+$ ]]; then
+	unhealthy "could not determine the modification time of ${STATUS_FILE}"
+fi
 AGE=$((NOW - MTIME))
+
+if [ "${AGE}" -lt 0 ]; then
+	unhealthy "${STATUS_FILE} modification time is $((-AGE))s in the future - check the system clock"
+fi
 
 if [ "${AGE}" -gt "${MAX_AGE_SECONDS}" ]; then
 	echo "unhealthy: ${STATUS_FILE} is ${AGE}s old (max ${MAX_AGE_SECONDS}s) - monitor loop may be stuck"
