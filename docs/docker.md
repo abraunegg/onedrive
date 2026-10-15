@@ -348,14 +348,20 @@ The Docker images do not define a `HEALTHCHECK` by default. You can add one at r
 > [!IMPORTANT]
 > A healthcheck based on `monitor-status.json` is only applicable when the container runs in the default `--monitor` mode with [monitor_status](./application-config-options.md#monitor_status) enabled (the default). If you use `ONEDRIVE_SYNC_ONCE=1` or set `monitor_status = "false"`, the status file is never created and the container will always be reported as unhealthy.
 
+> [!NOTE]
+> Both methods below use `jq` to parse the status file, which is included in the Fedora, Debian and Alpine container images. Older container images do not include `jq`; with these, the provided script reports `jq not found` and the one-liner fails, so the container is always reported as unhealthy. Update to a current container image before enabling a healthcheck.
+
 #### Recommended: Use the provided 'healthcheck.sh' script
 A healthcheck script is provided at [contrib/docker/healthcheck.sh](https://github.com/abraunegg/onedrive/blob/master/contrib/docker/healthcheck.sh). It is not included in the Docker image, so you must download it to your host and bind mount it into the container.
 
 The script reports the container as healthy only when **all** of the following conditions are true:
 *   `/onedrive/conf/monitor-status.json` exists
+*   The status file is valid JSON with the expected structure: `schema_version` is `1`, and `pid`, `process.state` and `sync.initial_successful_sync_completed` are present with the expected types and values. `process.state` must be one of `starting`, `syncing`, `idle` or `degraded`. Otherwise the script reports which field is missing or invalid.
 *   The `pid` field of the status file refers to a running process named `onedrive`, and that process started before the status file was last written. This detects a stale status file left behind by an abnormal termination (`SIGKILL`, OOM-killer, crash, sudden host loss), where the client never had the opportunity to remove it, including after a container restart where the new client process is given the same PID as the one that left the file behind. This is a strong indication, but not an absolute guarantee, that the file was written by the running process: PIDs are reused, and the check relies on process name and start time rather than a unique process identity.
 *   The status file was published recently. Its modification time must be no older than `ONEDRIVE_HEALTHCHECK_MAX_AGE` seconds (default `600`, which is twice the default `monitor_interval` of 300 seconds). This detects a monitor loop that is no longer progressing.
 *   `sync.initial_successful_sync_completed` is `true`, meaning the current monitor process has completed at least one successful synchronisation cycle.
+
+A `process.state` of `degraded`, meaning that the most recent synchronisation cycle did not fully succeed (for example because of a temporary network outage or a failed transfer), does not on its own make the container unhealthy. Such conditions are usually resolved by a later cycle and are not fixed by restarting the container. If you want to alert on them, monitor `sync.last_cycle.result` in the status file separately.
 
 The script prints a single line describing the result. The health state is shown in the `STATUS` column of `docker ps`, and the output of the most recent checks can be viewed with:
 ```bash
@@ -431,8 +437,8 @@ In this example `healthcheck.sh` is placed in the same directory as your compose
 > [!TIP]
 > `start_period` (`--health-start-period`) is the grace period during which failed checks do not count towards marking the container unhealthy. Set it to be longer than your expected initial synchronisation time. A very large initial synchronisation can take hours.
 
-#### Alternative: A 'grep' one-liner healthcheck
-If you do not want to bind mount a script, a minimal healthcheck can be implemented by using `grep` to check that `sync.initial_successful_sync_completed` is `true` in the status file.
+#### Alternative: A 'jq' one-liner healthcheck
+If you do not want to bind mount a script, a minimal healthcheck can be implemented by using `jq` to check that `sync.initial_successful_sync_completed` is `true` in the status file. The `-e` option makes `jq` exit with a non-zero status when the result is `false` or the field is missing, and `jq` also fails when the status file does not exist or is not valid JSON. As `jq` uses several different non-zero exit codes, `|| exit 1` is added so that every failure is reported to Docker as the documented 'unhealthy' exit code `1`.
 
 Using `docker run`:
 ```bash
@@ -441,7 +447,7 @@ docker run -d --restart unless-stopped --name onedrive \
     -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
     -e "ONEDRIVE_UID=${ONEDRIVE_UID}" \
     -e "ONEDRIVE_GID=${ONEDRIVE_GID}" \
-    --health-cmd 'grep -Eq "\"initial_successful_sync_completed\": *true" /onedrive/conf/monitor-status.json' \
+    --health-cmd 'jq -e ".sync.initial_successful_sync_completed == true" /onedrive/conf/monitor-status.json || exit 1' \
     --health-interval 30s \
     --health-timeout 5s \
     --health-retries 3 \
@@ -452,7 +458,7 @@ docker run -d --restart unless-stopped --name onedrive \
 Using Docker Compose:
 ```yaml
         healthcheck:
-            test: ["CMD", "grep", "-Eq", '"initial_successful_sync_completed": *true', "/onedrive/conf/monitor-status.json"]
+            test: ["CMD-SHELL", "jq -e '.sync.initial_successful_sync_completed == true' /onedrive/conf/monitor-status.json || exit 1"]
             interval: 30s
             timeout: 5s
             retries: 3
@@ -463,7 +469,7 @@ Using Docker Compose:
 > This one-liner is **less reliable** than the provided `healthcheck.sh` script and should only be used when the readiness signal is all you need:
 > * **It does not check that the monitor process is still running.** The status file is removed during an orderly shutdown, but an abnormal termination (`SIGKILL`, an OOM-killer termination, a fatal crash, sudden host/container loss, or Docker escalating `docker stop` to `SIGKILL` after the grace period) leaves the last snapshot behind in the persistent `onedrive_conf` volume. A stale file that still contains `"initial_successful_sync_completed": true` will be reported as healthy.
 > * **It does not check that the monitor loop is still progressing.** Once the first synchronisation has completed, the field stays `true` for the lifetime of the process, so a monitor that has become stuck will continue to be reported as healthy.
-> * **It matches text rather than parsing JSON.** It relies on the formatting of the status file rather than its schema.
+> * **It does not validate the rest of the status file.** It does not check `schema_version` or the other fields, so it cannot detect a status file whose format has changed.
 
 ### Editing the running configuration and using a 'config' file
 The 'onedrive' client should run in default configuration, however you can change this default configuration by placing a custom config file in the `onedrive_conf` docker volume. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  
