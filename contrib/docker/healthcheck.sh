@@ -10,44 +10,13 @@
 #   - the file was published recently enough to not be a stale leftover
 #     from a crashed/killed process, and
 #   - the first synchronisation cycle has completed successfully.
+#
+# Requires jq, which is included in the container images.
 set -u
 
 unhealthy() {
 	echo "unhealthy: $*"
 	exit 1
-}
-
-# Extract the value of a "key": value pair from STATUS_LINES into FIELD_VALUE.
-#
-# The client writes the status file pretty-printed (one "key": value pair per
-# line), so this matches whole lines rather than parsing JSON, which avoids a
-# jq/python dependency that the shipped images do not install. Bash builtins
-# are used instead of grep/sed so behaviour does not vary between the GNU
-# (Debian/Fedora) and BusyBox (Alpine) tools.
-#
-# To fail safely if the file is truncated, malformed or formatted differently
-# than expected, the key must appear on exactly one line and its value must
-# match value_re, whose first capture group becomes FIELD_VALUE. Otherwise the
-# check reports unhealthy with a diagnostic naming the offending field.
-read_field() {
-	local key="$1" value_re="$2" line_re line raw="" count=0
-	line_re="^[[:space:]]*\"${key}\"[[:space:]]*:[[:space:]]*(.*[^,[:space:]])[[:space:]]*,?[[:space:]]*$"
-	for line in "${STATUS_LINES[@]}"; do
-		if [[ ${line} =~ ${line_re} ]]; then
-			raw="${BASH_REMATCH[1]}"
-			count=$((count + 1))
-		fi
-	done
-	if [ "${count}" -eq 0 ]; then
-		unhealthy "field '${key}' not found in ${STATUS_FILE}"
-	fi
-	if [ "${count}" -gt 1 ]; then
-		unhealthy "field '${key}' found ${count} times in ${STATUS_FILE}, expected exactly once"
-	fi
-	if [[ ! ${raw} =~ ${value_re} ]]; then
-		unhealthy "field '${key}' has unexpected value '${raw}' in ${STATUS_FILE}"
-	fi
-	FIELD_VALUE="${BASH_REMATCH[1]}"
 }
 
 # The expected path for the monitor file inside the container
@@ -56,6 +25,34 @@ STATUS_FILE="/onedrive/conf/monitor-status.json"
 # The status file layout this script understands. A different
 # schema_version may move or rename the fields checked below.
 SUPPORTED_SCHEMA_VERSION=1
+
+# Validate the status document and print "<pid> <state> <initial sync>".
+# Every field is checked for type and value here, so a missing field,
+# a null or a value of the wrong type is reported by its JSON path rather
+# than passed on to the checks below. process.state must be one of the
+# states the monitor publishes; a degraded state (the last cycle did not
+# fully succeed) is accepted, as it does not mean the monitor has stopped
+# working and is usually resolved by a later cycle.
+    read -r -d '' STATUS_FILTER <<'EOF'
+def field(path; expected):
+	getpath(path) as $value
+	| if ($value | type) == expected then $value
+	  else error("field '\(path | join("."))' is \($value | type), expected \(expected)")
+	  end;
+def require(condition; message):
+	if condition then . else error(message) end;
+
+if length != 1 then error("expected one JSON document, found \(length)") else .[0] end
+| if type != "object" then error("top-level value is \(type), expected object") else . end
+| (field(["schema_version"]; "number")
+	| require(. == $supported; "schema_version is \(.), this healthcheck supports \($supported)")) as $schema
+| (field(["pid"]; "number")
+	| require(. == floor and . > 0; "field 'pid' is \(.), expected a positive integer")) as $pid
+| (field(["process", "state"]; "string")
+	| require(IN("starting", "syncing", "idle", "degraded"); "field 'process.state' has unknown value \"\(.)\"")) as $state
+| field(["sync", "initial_successful_sync_completed"]; "boolean") as $initial_sync
+| "\($pid) \($state) \($initial_sync)"
+EOF
 
 # How stale (in seconds) the status file is allowed to be before the
 # container is considered unhealthy. Default is twice the client's default
@@ -81,28 +78,22 @@ if [ ! -f "${STATUS_FILE}" ]; then
 	exit 1
 fi
 
-# Read the file once so every field comes from the same snapshot, even if
-# the monitor atomically replaces it while this check is running. The file
-# can also disappear between the test above and this read during an orderly
-# shutdown.
-if ! { mapfile -t STATUS_LINES < "${STATUS_FILE}"; } 2>/dev/null; then
-	unhealthy "${STATUS_FILE} could not be read"
-fi
-if [ "${#STATUS_LINES[@]}" -eq 0 ]; then
-	unhealthy "${STATUS_FILE} is empty"
+if ! command -v jq >/dev/null 2>&1; then
+	unhealthy "jq not found - this healthcheck requires a container image that includes jq"
 fi
 
-read_field schema_version '^([0-9]+)$'
-if [ "${FIELD_VALUE}" != "${SUPPORTED_SCHEMA_VERSION}" ]; then
-	unhealthy "${STATUS_FILE} has schema_version ${FIELD_VALUE}, this healthcheck supports ${SUPPORTED_SCHEMA_VERSION}"
+# A single jq invocation opens the file once, so all fields come from the
+# same snapshot even if the monitor atomically replaces the file while this
+# check is running. --slurp makes an empty file or one containing several
+# JSON documents a reported error rather than an empty or partial result.
+# On failure, the first line of jq's message (a parse error, or one raised
+# by the filter above) is reported without its "jq: " prefix.
+if ! STATUS_FIELDS="$(jq --slurp --raw-output --argjson supported "${SUPPORTED_SCHEMA_VERSION}" "${STATUS_FILTER}" "${STATUS_FILE}" 2>&1)"; then
+	STATUS_FIELDS="${STATUS_FIELDS%%$'\n'*}"
+	STATUS_FIELDS="${STATUS_FIELDS#jq: error (at *): }"
+	unhealthy "invalid ${STATUS_FILE}: ${STATUS_FIELDS#jq: }"
 fi
-
-read_field pid '^([1-9][0-9]*)$'
-PID="${FIELD_VALUE}"
-read_field state '^"([a-z_]+)"$'
-STATE="${FIELD_VALUE}"
-read_field initial_successful_sync_completed '^(true|false)$'
-INITIAL_SYNC_DONE="${FIELD_VALUE}"
+read -r PID STATE INITIAL_SYNC_DONE <<< "${STATUS_FIELDS}"
 
 # Liveness: a crashed or SIGKILLed monitor leaves its last snapshot behind,
 # so the pid recorded in the status file must belong to a running process
