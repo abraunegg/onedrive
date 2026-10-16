@@ -175,6 +175,7 @@ evt
 execinfo
 execv
 exitsig
+exploitability
 extattr
 fargs
 fasynchronous
@@ -666,6 +667,7 @@ thnk
 thumbnailer
 thumbnailers
 tidx
+timeframe
 timerfd
 tkx
 tlsv
@@ -692,6 +694,7 @@ unistd
 unittests
 unlinkat
 upn
+urandom
 urlify
 userinfo
 usermod

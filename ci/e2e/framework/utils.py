@@ -240,7 +240,12 @@ def perform_full_account_cleanup(
     1. Running a full resync to establish local state from remote
     2. Deleting everything locally
     3. Running a normal sync to propagate deletions online
-    4. Validating that the local sync directory is empty
+    4. Validating the local sync directory
+    5. Independently downloading remote state into a new, isolated verification
+       directory, and ensuring only protected seed roots remain.
+
+    permanent_delete=true is supplied by the caller's cleanup configuration.
+    This verifies active remote contents, not Recycle Bin contents or versions.
 
     Returns:
         (success, reason, artifacts, details)
@@ -253,6 +258,8 @@ def perform_full_account_cleanup(
     phase2_state = log_dir / "cleanup_phase2_local_purge_state.txt"
     phase3_stdout = log_dir / "cleanup_phase3_sync_stdout.log"
     phase3_stderr = log_dir / "cleanup_phase3_sync_stderr.log"
+    phase5_stdout = log_dir / "cleanup_phase5_remote_verify_stdout.log"
+    phase5_stderr = log_dir / "cleanup_phase5_remote_verify_stderr.log"
 
     artifacts = [
         str(phase1_stdout),
@@ -260,6 +267,8 @@ def perform_full_account_cleanup(
         str(phase2_state),
         str(phase3_stdout),
         str(phase3_stderr),
+        str(phase5_stdout),
+        str(phase5_stderr),
     ]
 
     # Phase 1: establish local state from remote
@@ -366,6 +375,52 @@ def perform_full_account_cleanup(
             },
         )
 
+    # Phase 5: verify the *remote* view independently. The cleanup config's
+    # database must NOT be trusted here: use a fresh config and an empty sync
+    # directory to force a new Graph traversal. Download-only cannot create
+    # remote items, so verification itself cannot pollute the test account.
+    verify_root = log_dir / "remote-verification"
+    verify_config = verify_root / "conf"
+    verify_sync_dir = verify_root / "syncroot"
+    if verify_root.exists():
+        shutil.rmtree(verify_root)
+    ensure_directory(verify_config)
+    ensure_directory(verify_sync_dir)
+    for name in ("config", "refresh_token"):
+        source = config_dir / name
+        if not source.is_file():
+            return False, f"Remote verification cannot locate {name}", artifacts, {"verification_missing": name}
+        shutil.copy2(source, verify_config / name)
+    # A new config requires --resync; use separate state to avoid misreading
+    # the database which originally drove deletion propagation.
+    phase5_command = [
+        onedrive_bin,
+        "--sync", "--download-only", "--verbose", "--resync", "--resync-auth",
+        "--syncdir", str(verify_sync_dir),
+        "--confdir", str(verify_config),
+    ]
+    phase5 = run_command_logged(
+        phase5_command,
+        stdout_file=phase5_stdout,
+        stderr_file=phase5_stderr,
+        cwd=repo_root,
+    )
+    if phase5.returncode != 0:
+        return False, f"Remote verification failed with status {phase5.returncode}", artifacts, {
+            "phase5_returncode": phase5.returncode,
+            "phase5_command": command_to_string(phase5_command),
+        }
+    remaining_remote = sorted(child.name for child in verify_sync_dir.iterdir())
+    unsafe_remaining_remote = [
+        name for name in remaining_remote
+        if not name.startswith(PROTECTED_SUITE_CLEANUP_PREFIXES)
+    ]
+    if unsafe_remaining_remote:
+        return False, "Remote verification found undeleted content", artifacts, {
+            "remaining_remote": remaining_remote,
+            "unsafe_remaining_remote": unsafe_remaining_remote,
+        }
+
     return (
         True,
         "",
@@ -373,12 +428,17 @@ def perform_full_account_cleanup(
         {
             "phase1_returncode": phase1.returncode,
             "phase3_returncode": phase3.returncode,
+            "phase5_returncode": phase5.returncode,
             "phase1_command": command_to_string(phase1_command),
             "phase3_command": command_to_string(phase3_command),
+            "phase5_command": command_to_string(phase5_command),
             "preserved_after_purge": preserved_after_purge,
             "remaining_after_sync": remaining_after_sync,
+            "remaining_remote": remaining_remote,
+            "recycle_bin_verified": False,
         },
     )
+
 
 def default_onedrive_config_dir_from_env() -> Path:
     xdg_config_home = os.environ.get("XDG_CONFIG_HOME", "").strip()
