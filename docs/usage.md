@@ -2360,14 +2360,14 @@ This option suits headless or unattended systems using an already-authorised One
 2. Enable and start the system service, substituting that account's username:
 
    ```bash
-   sudo systemctl enable --now onedrive@<username>.service
+   sudo systemctl enable --now "onedrive@$(whoami).service"
    ```
 
 3. Examine its state and logs:
 
    ```bash
-   systemctl status onedrive@<username>.service
-   journalctl -u onedrive@<username>.service -f
+   systemctl status "onedrive@$(whoami).service"
+   journalctl -u "onedrive@$(whoami).service" -f
    ```
 
 The system service uses the selected account but starts independently of that user's interactive login. It does not require `loginctl enable-linger`.
@@ -2380,7 +2380,7 @@ The system service uses the selected account but starts independently of that us
 2. Stop and disable any existing system-level `onedrive@<username>.service` instance using the same configuration:
 
    ```bash
-   sudo systemctl disable --now onedrive@<username>.service
+   sudo systemctl disable --now "onedrive@$(whoami).service"
    ```
 
 3. Enable and start the user service **as that user**, without `sudo`:
@@ -2532,14 +2532,14 @@ By default, a systemd user manager starts when the user logs in, **including thr
 To enable lingering for a user:
 
 ```bash
-sudo loginctl enable-linger <username>
-loginctl show-user <username> -p Linger
+sudo loginctl enable-linger "$(whoami)"
+loginctl show-user "$(whoami)" -p Linger
 ```
 
 To restore normal login-managed behaviour:
 
 ```bash
-sudo loginctl disable-linger <username>
+sudo loginctl disable-linger "$(whoami)"
 ```
 
 > [!IMPORTANT]
