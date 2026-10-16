@@ -338,7 +338,132 @@ services:
 > Before you run the container using your compose file you must first authenticate the client following [step 6](https://github.com/abraunegg/onedrive/blob/master/docs/docker.md#6-first-run-of-docker-container-under-docker-and-performing-authorisation) above.
 > Failure to perform this step before running your container using your compose file will see your container detail that an invalid response uri was entered.
 
-When Compose or another orchestration layer needs to gate a dependent service on the OneDrive monitor becoming ready, prefer consuming `/onedrive/conf/monitor-status.json` and evaluating `sync.initial_successful_sync_completed` rather than repeatedly invoking `--display-sync-status`. The status file is a lightweight publication of state already known by the monitor process and does not generate additional Microsoft Graph or filesystem reconciliation work.
+When Compose or another orchestration layer needs to gate a dependent service on the OneDrive monitor becoming ready, prefer consuming `/onedrive/conf/monitor-status.json` and evaluating `sync.initial_successful_sync_completed` rather than repeatedly invoking `--display-sync-status`. The status file is a lightweight publication of state already known by the monitor process and does not generate additional Microsoft Graph or filesystem reconciliation work. See [Using a container healthcheck](#using-a-container-healthcheck) below for a ready-to-use implementation.
+
+### Using a container healthcheck
+The client itself does not define what a 'healthy' container is. Instead, when running in the default `--monitor` mode, it publishes the facts about the running monitor process to `/onedrive/conf/monitor-status.json` (refer to [Inspect machine-readable monitor runtime status](#73-inspect-machine-readable-monitor-runtime-status)), and you decide how those facts map to a container health state.
+
+The Docker images do not define a `HEALTHCHECK` by default. You can add one at runtime using either of the methods below. A typical use case is to start a dependent service only after the OneDrive client has completed its first successful synchronisation, using `depends_on` with `condition: service_healthy` in Docker Compose.
+
+> [!IMPORTANT]
+> A healthcheck based on `monitor-status.json` is only applicable when the container runs in the default `--monitor` mode with [monitor_status](./application-config-options.md#monitor_status) enabled (the default). If you use `ONEDRIVE_SYNC_ONCE=1` or set `monitor_status = "false"`, the status file is never created and the container will always be reported as unhealthy.
+
+#### Recommended: Use the provided 'healthcheck.sh' script
+A healthcheck script is provided at [contrib/docker/healthcheck.sh](https://github.com/abraunegg/onedrive/blob/master/contrib/docker/healthcheck.sh). It is not included in the Docker image, so you must download it to your host and bind mount it into the container.
+
+The script reports the container as healthy only when **all** of the following conditions are true:
+*   `/onedrive/conf/monitor-status.json` exists
+*   The monitor process recorded in the `pid` field of the status file is still running. This detects a stale status file left behind by an abnormal termination (`SIGKILL`, OOM-killer, crash, sudden host loss), where the client never had the opportunity to remove it.
+*   The status file was published recently. Its modification time must be no older than `ONEDRIVE_HEALTHCHECK_MAX_AGE` seconds (default `600`, which is twice the default `monitor_interval` of 300 seconds). This detects a monitor loop that is no longer progressing.
+*   `sync.initial_successful_sync_completed` is `true`, meaning the current monitor process has completed at least one successful synchronisation cycle.
+
+The script prints a single line describing the result. The health state is shown in the `STATUS` column of `docker ps`, and the output of the most recent checks can be viewed with:
+```bash
+docker inspect --format '{{json .State.Health}}' onedrive
+```
+
+> [!NOTE]
+> The status file is only republished at monitor cycle boundaries. If you have changed `monitor_interval`, or your synchronisation cycles routinely take a long time to complete (for example, large uploads or downloads), you must increase `ONEDRIVE_HEALTHCHECK_MAX_AGE` to be greater than your `monitor_interval` plus your longest expected synchronisation cycle duration, otherwise the container will be reported as unhealthy while a long cycle is still running. This can be set as a container environment variable, for example `-e ONEDRIVE_HEALTHCHECK_MAX_AGE=1800`.
+
+Download the script to your host:
+```bash
+mkdir -p "${HOME}/.config/onedrive-docker"
+curl -fsSL -o "${HOME}/.config/onedrive-docker/healthcheck.sh" \
+    https://raw.githubusercontent.com/abraunegg/onedrive/master/contrib/docker/healthcheck.sh
+```
+
+##### Using 'docker run'
+Add the bind mount and the `--health-*` options to your `docker run` command:
+```bash
+docker run -d --restart unless-stopped --name onedrive \
+    -v onedrive_conf:/onedrive/conf \
+    -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
+    -v "${HOME}/.config/onedrive-docker/healthcheck.sh:/healthcheck.sh:ro" \
+    -e "ONEDRIVE_UID=${ONEDRIVE_UID}" \
+    -e "ONEDRIVE_GID=${ONEDRIVE_GID}" \
+    --health-cmd "bash /healthcheck.sh" \
+    --health-interval 30s \
+    --health-timeout 5s \
+    --health-retries 3 \
+    --health-start-period 5m \
+    driveone/onedrive:edge
+```
+
+##### Using Docker Compose
+Add the bind mount and a `healthcheck` directive to your service definition:
+```yaml
+services:
+    onedrive:
+        image: driveone/onedrive:edge
+        restart: unless-stopped
+        environment:
+            - ONEDRIVE_UID=${PUID}
+            - ONEDRIVE_GID=${PGID}
+            # Optional: increase if your sync cycles take longer (see note above)
+            # - ONEDRIVE_HEALTHCHECK_MAX_AGE=600
+        volumes:
+            - onedrive_conf:/onedrive/conf
+            - ${ONEDRIVE_DATA_DIR}:/onedrive/data
+            - ./healthcheck.sh:/healthcheck.sh:ro
+        healthcheck:
+            test: ["CMD", "bash", "/healthcheck.sh"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 5m
+
+    my-dependent-service:
+        image: my/image
+        depends_on:
+            onedrive:
+                condition: service_healthy
+
+volumes:
+    onedrive_conf:
+        external: true
+```
+
+In this example `healthcheck.sh` is placed in the same directory as your compose file.
+
+> [!TIP]
+> The healthcheck is invoked as `bash /healthcheck.sh`, so the bind mounted file does not need to be executable. `bash` is available in all the provided images (Fedora, Debian and Alpine).
+
+> [!TIP]
+> `start_period` (`--health-start-period`) is the grace period during which failed checks do not count towards marking the container unhealthy. Set it to be longer than your expected initial synchronisation time. A very large initial synchronisation can take hours.
+
+#### Alternative: A 'grep' one-liner healthcheck
+If you do not want to bind mount a script, a minimal healthcheck can be implemented by using `grep` to check that `sync.initial_successful_sync_completed` is `true` in the status file.
+
+Using `docker run`:
+```bash
+docker run -d --restart unless-stopped --name onedrive \
+    -v onedrive_conf:/onedrive/conf \
+    -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
+    -e "ONEDRIVE_UID=${ONEDRIVE_UID}" \
+    -e "ONEDRIVE_GID=${ONEDRIVE_GID}" \
+    --health-cmd 'grep -Eq "\"initial_successful_sync_completed\": *true" /onedrive/conf/monitor-status.json' \
+    --health-interval 30s \
+    --health-timeout 5s \
+    --health-retries 3 \
+    --health-start-period 5m \
+    driveone/onedrive:edge
+```
+
+Using Docker Compose:
+```yaml
+        healthcheck:
+            test: ["CMD", "grep", "-Eq", '"initial_successful_sync_completed": *true', "/onedrive/conf/monitor-status.json"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 5m
+```
+
+> [!WARNING]
+> This one-liner is **less reliable** than the provided `healthcheck.sh` script and should only be used when the readiness signal is all you need:
+> * **It does not check that the monitor process is still running.** The status file is removed during an orderly shutdown, but an abnormal termination (`SIGKILL`, an OOM-killer termination, a fatal crash, sudden host/container loss, or Docker escalating `docker stop` to `SIGKILL` after the grace period) leaves the last snapshot behind in the persistent `onedrive_conf` volume. A stale file that still contains `"initial_successful_sync_completed": true` will be reported as healthy.
+> * **It does not check that the monitor loop is still progressing.** Once the first synchronisation has completed, the field stays `true` for the lifetime of the process, so a monitor that has become stuck will continue to be reported as healthy.
+> * **It matches text rather than parsing JSON.** It relies on the formatting of the status file rather than its schema.
 
 ### Editing the running configuration and using a 'config' file
 The 'onedrive' client should run in default configuration, however you can change this default configuration by placing a custom config file in the `onedrive_conf` docker volume. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  
