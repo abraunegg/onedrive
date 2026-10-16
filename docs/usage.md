@@ -65,13 +65,13 @@ Before reading this document, please ensure you are running application version 
   - [How to Synchronise Multiple SharePoint Libraries simultaneously?](#how-to-synchronise-multiple-sharepoint-libraries-simultaneously)
   - [How to Receive Real-time Changes from Microsoft OneDrive Service, instead of waiting for the next sync period?](#how-to-receive-real-time-changes-from-microsoft-onedrive-service-instead-of-waiting-for-the-next-sync-period)
   - [How to initiate the client as a background service?](#how-to-initiate-the-client-as-a-background-service)
+    - [Choosing a systemd service](#choosing-a-systemd-service)
+    - [Running OneDrive as a non-root user with a systemd system service](#running-onedrive-as-a-non-root-user-with-a-systemd-system-service)
+    - [Running OneDrive with a systemd user service](#running-onedrive-with-a-systemd-user-service)
+    - [Microsoft Intune SSO and systemd startup](#microsoft-intune-sso-and-systemd-startup)
     - [OneDrive service running as root user via init.d](#onedrive-service-running-as-root-user-via-initd)
-    - [OneDrive service running as root user via systemd (Arch, Ubuntu, Debian, OpenSuSE, Fedora)](#onedrive-service-running-as-root-user-via-systemd-arch-ubuntu-debian-opensuse-fedora)
-    - [OneDrive service running as root user via systemd (Red Hat Enterprise Linux, CentOS Linux)](#onedrive-service-running-as-root-user-via-systemd-red-hat-enterprise-linux-centos-linux)
-    - [OneDrive service running as a non-root user via systemd (All Linux Distributions)](#onedrive-service-running-as-a-non-root-user-via-systemd-all-linux-distributions)
-    - [OneDrive service running as a non-root user via systemd (with notifications enabled) (Arch, Ubuntu, Debian, OpenSuSE, Fedora)](#onedrive-service-running-as-a-non-root-user-via-systemd-with-notifications-enabled-arch-ubuntu-debian-opensuse-fedora)
     - [OneDrive service running as a non-root user via runit (antiX, Devuan, Artix, Void)](#onedrive-service-running-as-a-non-root-user-via-runit-antix-devuan-artix-void)
-  - [How to start a user systemd service at boot without user login?](#how-to-start-a-user-systemd-service-at-boot-without-user-login)
+  - [Running the systemd user service without login (lingering)](#running-the-systemd-user-service-without-login-lingering)
   - [How to access Microsoft OneDrive service through a proxy](#how-to-access-microsoft-onedrive-service-through-a-proxy)
   - [How to set up SELinux for a sync folder outside of the home folder](#how-to-set-up-selinux-for-a-sync-folder-outside-of-the-home-folder)
   - [Why do I see `Performing a database consistency and integrity check on locally stored data` every monitor cycle?](#why-do-i-see-performing-a-database-consistency-and-integrity-check-on-locally-stored-data-every-monitor-cycle)
@@ -649,7 +649,7 @@ To use this method of authentication, you must add the following configuration t
 ```
 use_intune_sso = "true"
 ```
-The application will check to ensure that Intune is operational and that the required dbus elements are available. Should these be available, the following will be displayed:
+The application checks for the required Microsoft Identity Broker D-Bus capability and can automatically activate the broker when it is registered but not already running. Broker availability does **not** guarantee that authentication is ready, particularly before graphical login. See [Microsoft Intune SSO and systemd startup](#microsoft-intune-sso-and-systemd-startup) for validated user-service, SSH-login, graphical-login and lingering behaviour. When the required capability is available, the following will be displayed:
 ```
 ...
 Client has been configured to use Intune SSO via Microsoft Identity Broker dbus session - checking usage criteria
@@ -2326,22 +2326,131 @@ disable_websocket_support = "true"
 > WebSocket and webhook notifications are change **signals**; they do not contain the complete synchronisation data. When a signal is received, the client queries Microsoft OneDrive through the Microsoft Graph API and performs the normal reconciliation process. The configured `monitor_interval` remains the scheduled fallback so that synchronisation does not depend solely on receipt of a near real-time notification.
 
 ### How to initiate the client as a background service?
-There are a few ways to employ onedrive as a service:
-* via init.d
-* via systemd
-* via runit
 
-**Which systemd service should I use?**
+OneDrive can run in the background through systemd, init.d or runit. The following systemd guidance applies to distributions that provide a systemd user manager and the corresponding OneDrive unit files, including current Ubuntu, Fedora and Red Hat Enterprise Linux releases.
 
-| Your environment | Use this service | Command |
+#### Choosing a systemd service
+
+The client provides two different systemd units. **Select one service type for each OneDrive configuration and synchronisation directory.**
+
+| Environment | Recommended service | How it runs |
 |---|---|---|
-| Linux graphical desktop (including users requiring desktop notifications or Microsoft Intune SSO) | **User-level** `onedrive.service` | `systemctl --user enable --now onedrive.service` |
-| Headless server or unattended system without a graphical session | **System-level** `onedrive@<username>.service` | `sudo systemctl enable --now onedrive@$(whoami).service` |
+| Graphical desktop, desktop notifications or Microsoft Intune SSO | **User service:** `onedrive.service` | Managed by the user's systemd manager; may start at graphical or SSH login, or at boot with lingering |
+| Headless server using previously configured, non-Intune authentication | **System service:** `onedrive@<username>.service` | Managed by the system manager; runs under the specified non-root Linux account independently of login |
+| Headless environment requiring a persistent systemd user service | **User service with lingering**, where appropriate | Starts the user manager at boot; does not create a graphical desktop session |
 
-The user-level service runs within the user's systemd session. The system-level service runs under the selected Linux account but **does not automatically inherit that account's graphical session or user D-Bus environment**. Consequently, desktop notifications and access to the Microsoft Identity Broker may be unavailable when using the system-level service. For graphical desktop users, particularly those using Intune SSO, use the user-level service described below.
+The system service does not automatically inherit a user's graphical-session environment or user D-Bus context. It is therefore **not recommended for Microsoft Intune SSO or GUI notifications**. For Intune SSO, use the user service and see [Microsoft Intune SSO and systemd startup](#microsoft-intune-sso-and-systemd-startup).
 
 > [!IMPORTANT]
-> Do not run both services against the same OneDrive configuration and synchronisation directory. Before switching service types, stop and disable the existing service.
+> Never run a system-level and user-level OneDrive service simultaneously against the same configuration, item database or synchronisation directory. Stop and disable the existing service before switching. Normal service operation should use a non-root account; running OneDrive as root can create root-owned synchronised files.
+
+> [!NOTE]
+> The user unit must be installed in the distribution's **systemd user unit directory** (typically `/usr/lib/systemd/user/`), while the template system unit belongs in the **systemd system unit directory** (typically `/usr/lib/systemd/system/`). Check availability with `systemctl --user cat onedrive.service` or `systemctl cat onedrive@.service` respectively. The correct installation paths are determined by the distribution's systemd configuration; source installations may use `/usr/local/bin/onedrive` for the executable.
+
+#### Running OneDrive as a non-root user with a systemd system service
+
+This option suits headless or unattended systems using an already-authorised OneDrive configuration **without a requirement for Microsoft Intune SSO or desktop notifications**.
+
+1. Sign in as the intended non-root Linux account, complete the initial authorisation and verify that a standalone synchronisation works:
+
+   ```bash
+   onedrive --sync --verbose
+   ```
+
+2. Enable and start the system service, substituting that account's username:
+
+   ```bash
+   sudo systemctl enable --now onedrive@<username>.service
+   ```
+
+3. Examine its state and logs:
+
+   ```bash
+   systemctl status onedrive@<username>.service
+   journalctl -u onedrive@<username>.service -f
+   ```
+
+The system service uses the selected account but starts independently of that user's interactive login. It does not require `loginctl enable-linger`.
+
+#### Running OneDrive with a systemd user service
+
+**Recommended for normal graphical desktop use**, including desktop notifications and Microsoft Intune SSO. This procedure also works on current RHEL distributions when the systemd user unit is installed correctly; `systemctl --user` is **not** exclusive to Ubuntu, Fedora or other desktop-focused distributions.
+
+1. Log into the graphical desktop as the user who will run OneDrive. Complete initial authorisation and verify that synchronisation works.
+2. Stop and disable any existing system-level `onedrive@<username>.service` instance using the same configuration:
+
+   ```bash
+   sudo systemctl disable --now onedrive@<username>.service
+   ```
+
+3. Enable and start the user service **as that user**, without `sudo`:
+
+   ```bash
+   systemctl --user enable --now onedrive.service
+   ```
+
+4. Check its status and logs:
+
+   ```bash
+   systemctl --user status onedrive.service
+   journalctl --user -u onedrive.service -f
+   ```
+
+Without lingering, the user service starts when the **systemd user manager** starts, which may happen following an **SSH login as well as graphical login**. This does not imply that a graphical desktop or Microsoft Identity Broker authentication is already available. The user manager normally stops after the user's last login session ends unless lingering is enabled.
+
+> [!TIP]
+> **Troubleshooting `systemctl --user` and missing XDG/D-Bus environment variables**
+>
+> On some Linux installations, including some SSH, `su` or custom login environments, `systemctl --user` can report:
+>
+> ```text
+> Failed to connect to bus: No such file or directory
+> ```
+>
+> An absent or incorrect `XDG_RUNTIME_DIR` or `DBUS_SESSION_BUS_ADDRESS` may be responsible **when the user's systemd manager and D-Bus socket are already running**. Check these before changing anything:
+>
+> ```bash
+> id -u
+> printf 'XDG_RUNTIME_DIR=%s\n' "$XDG_RUNTIME_DIR"
+> printf 'DBUS_SESSION_BUS_ADDRESS=%s\n' "$DBUS_SESSION_BUS_ADDRESS"
+> ls -l "/run/user/$(id -u)/bus"
+> ```
+>
+> If the socket exists for the **current user**, but the environment variables are absent or incorrect, the original workaround can be applied to the current shell:
+>
+> ```bash
+> export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+> export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+> systemctl --user status onedrive.service
+> ```
+>
+> If this resolves the issue, review how the login session initialises its environment (including `pam_systemd`, where applicable). On a system where this is an established, environment-specific requirement, the exports may be added to the relevant interactive shell startup file, such as `~/.bashrc`, but **not as a blanket recommendation**. Re-login to test persistent changes. Do not use these variables to connect as root to another user's D-Bus socket.
+>
+> **Important:** these exports do not create a missing user manager or D-Bus socket, and do not provide a graphical desktop session or make Microsoft Identity Broker authentication available before GUI login. If `/run/user/$(id -u)/bus` does not exist, investigate user-manager and PAM login-session startup instead of merely exporting the variables.
+
+> [!NOTE]
+> **Legacy Raspberry Pi and other minimal installations:** Historical troubleshooting reports described systems where a root-owned user service or its XDG environment did not survive reboot reliably. Where a genuine boot-time, non-interactive service is required, the **system-level** `onedrive@<username>.service` described above is an alternative because it is managed by the system manager rather than a root user-manager session. An older workaround copied or linked configuration from `/home/root/.config/onedrive` to `/root/.config/onedrive`; do **not** assume that `/home/root` exists or that such a link is needed. Use the correct configuration for the account that will run OneDrive, and prefer a normal non-root account to avoid root-owned synchronised files.
+
+#### Microsoft Intune SSO and systemd startup
+
+When `use_intune_sso = "true"`, OneDrive communicates with Microsoft Identity Broker over the **user D-Bus**. The broker can be registered as `com.microsoft.identity.broker1` and marked **`(activatable)`** even when no broker process is running. The client can request automatic broker activation; **D-Bus activation or ownership alone does not establish authentication readiness**.
+
+On **Ubuntu 24.04, Ubuntu 26.04, RHEL 9.8 and RHEL 10.2**, the following startup and recovery behaviour was validated with the updated client in October 2026:
+
+| Startup condition | Observed Intune SSO behaviour |
+|---|---|
+| Graphical desktop available; broker already running | Authentication succeeded |
+| Graphical desktop available; broker inactive but D-Bus activatable | Client activated the broker and authentication succeeded |
+| SSH login before graphical login, without lingering | Enabled user service could start, but broker authentication failed until graphical login |
+| Boot before graphical login, with lingering enabled | User service started at boot, but broker authentication failed until graphical login |
+| Subsequent graphical login, with or without lingering | Existing systemd restart behaviour retried OneDrive; authentication succeeded and synchronisation completed without manual restart |
+
+The supplied user unit uses `Restart=on-failure` and `RestartSec=3`, with a 15-second `ExecStartPre` delay. Authentication failures can therefore generate **repeated failed attempts and restarts** until the graphical environment is ready. This is observed recovery behaviour, **not a guarantee of endless retries**: systemd start limits, a different unit configuration and `RestartPreventExitStatus=78` can alter restarting.
+
+**Recommended configuration:** for desktop users authenticating through Microsoft Intune SSO, use `systemctl --user enable --now onedrive.service` and ordinarily leave lingering disabled. Enabling lingering **does not make Intune SSO work before graphical login**; it allows the user manager and OneDrive to start earlier. A system service should not be presented as a substitute for a functioning graphical-session broker.
+
+> [!NOTE]
+> These observations describe the four tested operating-system environments and their installed Microsoft Identity Broker configurations. They do not establish a universal requirement for every Linux distribution or broker version. Whether token renewal continues after graphical logout was not validated by the startup/recovery tests.
 
 #### OneDrive service running as root user via init.d
 ```text
@@ -2353,120 +2462,6 @@ To view the logs, execute:
 tail -f /var/log/onedrive/<username>.onedrive.log
 ```
 To alter the 'user' under which the client operates (typically root by default), manually modify the init.d service file and adjust `daemon --user root onedrive_service.sh` to match the correct user.
-
-#### OneDrive service running as root user via systemd (Arch, Ubuntu, Debian, OpenSuSE, Fedora)
-Initially, switch to the root user with `su - root`, then activate the systemd service:
-```text
-systemctl --user enable onedrive
-systemctl --user start onedrive
-```
-
-> [!IMPORTANT]
-> This will execute the 'onedrive' process with a UID/GID of '0', which means any files or folders created will be owned by 'root'.
-
-> [!IMPORTANT]
-> The `systemctl --user` command is not applicable to Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms - see below.
-
-To monitor the service's status, use the following:
-```text
-systemctl --user status onedrive.service
-```
-
-To observe the systemd application logs, use:
-```text
-journalctl --user-unit=onedrive -f
-```
-
-> [!TIP]
-> For systemd to function correctly, it requires the presence of XDG environment variables. If you encounter the following error while enabling the systemd service:
-> ```text
-> Failed to connect to bus: No such file or directory
-> ```
-> The most likely cause is missing XDG environment variables. To resolve this, add the following lines to `.bashrc` or another file executed upon user login:
-> ```text
-> export XDG_RUNTIME_DIR="/run/user/$UID"
-> export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
-> ```
-> 
-> To apply this change, you must log out of all user accounts where it has been made.
-
-> [!IMPORTANT]
-> On certain systems (e.g., Raspbian / Ubuntu / Debian on Raspberry Pi), the XDG fix above may not persist after system reboots. An alternative to starting the client via systemd as root is as follows:
-> 1. Create a symbolic link from `/home/root/.config/onedrive` to `/root/.config/onedrive/`.
-> 2. Establish a systemd service using the '@' service file: `systemctl enable onedrive@root.service`.
-> 3. Start the root@service: `systemctl start onedrive@root.service`.
->
-> This ensures that the service correctly restarts upon system reboot.
-
-To examine the systemd application logs, run:
-```text
-journalctl --unit=onedrive@<username> -f
-```
-
-#### OneDrive service running as root user via systemd (Red Hat Enterprise Linux, CentOS Linux)
-```text
-systemctl enable onedrive
-systemctl start onedrive
-```
-> [!IMPORTANT]
-> This will execute the 'onedrive' process with a UID/GID of '0', meaning any files or folders created will be owned by 'root'.
-
-To view the systemd application logs, execute:
-```text
-journalctl --unit=onedrive -f
-```
-
-#### OneDrive service running as a non-root user via systemd (All Linux Distributions)
-This section configures the **system-level** `onedrive@<username>.service`, suitable for headless or unattended operation. For graphical desktops, desktop notifications or Microsoft Intune SSO, use the **user-level** service in the next section instead.
-
-In some instances, it is preferable to run the OneDrive client as a service without the 'root' user. Follow the instructions below to configure the service for your regular user login.
-
-1. As the user who will run the service, launch the application in standalone mode, authorise it for use, and verify that synchronisation is functioning as expected:
-```text
-onedrive --sync --verbose
-```
-2. After validating the application for your user, switch to the 'root' user, where <username> is your username from step 1 above.
-```text
-systemctl enable onedrive@<username>.service
-systemctl start onedrive@<username>.service
-```
-3. To check the service's status for the user, use the following:
-```text
-systemctl status onedrive@<username>.service
-```
-
-To observe the systemd application logs, use:
-```text
-journalctl --unit=onedrive@<username> -f
-```
-
-#### OneDrive service running as a non-root user via systemd (with notifications enabled) (Arch, Ubuntu, Debian, OpenSuSE, Fedora)
-**Recommended for graphical desktop users**, including those using GUI notifications or Microsoft Intune SSO. This uses the systemd **user-level** service, which can access the user's session D-Bus when the graphical session and required services are available. Follow these steps:
-
-1. Log in via the graphical UI as the user you want to enable the service for.
-2. Disable any `onedrive@` service files for your username, e.g.:
-```text
-sudo systemctl stop onedrive@alex.service
-sudo systemctl disable onedrive@alex.service
-```
-3. Enable the service as follows:
-```text
-systemctl --user enable onedrive
-systemctl --user start onedrive
-```
-
-To check the service's status for the user, use the following:
-```text
-systemctl --user status onedrive.service
-```
-
-To view the systemd application logs, execute:
-```text
-journalctl --user-unit=onedrive -f
-```
-
-> [!IMPORTANT]
-> The `systemctl --user` command is not applicable to Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms.
 
 #### OneDrive service running as a non-root user via runit (antiX, Devuan, Artix, Void)
 
@@ -2530,16 +2525,25 @@ journalctl --user-unit=onedrive -f
 > [!NOTE]
 > For additional details, you can refer to Void's documentation on [Per-User Services](https://docs.voidlinux.org/config/services/user-services.html)
 
-### How to start a user systemd service at boot without user login?
-In some situations, it may be necessary for the systemd service to start without requiring your 'user' to log in.
+### Running the systemd user service without login (lingering)
 
-To address this issue, you need to reconfigure your 'user' account so that the systemd services you've created launch without the need for you to log in to your system:
-```text
-loginctl enable-linger <your_user_name>
+By default, a systemd user manager starts when the user logs in, **including through SSH**, and normally stops after the last login session ends. Lingering changes that lifecycle: it allows the user's manager, and enabled user services, to start at boot and remain available after logout.
+
+To enable lingering for a user:
+
+```bash
+sudo loginctl enable-linger <username>
+loginctl show-user <username> -p Linger
+```
+
+To restore normal login-managed behaviour:
+
+```bash
+sudo loginctl disable-linger <username>
 ```
 
 > [!IMPORTANT]
-> Enabling lingering starts the user service without an interactive login, but **does not create a graphical desktop session**. Desktop notification delivery and interactive Microsoft Identity Broker functionality are not guaranteed until the relevant user-session services are available.
+> Lingering **does not create a graphical session** and does not make Microsoft Identity Broker authentication or desktop notifications available before graphical login. In the four tested Intune SSO environments, OneDrive repeatedly failed authentication before graphical login and recovered automatically after graphical login through the supplied user unit's restart policy. For Intune SSO desktop use, lingering is generally unnecessary.
 
 ### How to access Microsoft OneDrive service through a proxy
 If you have a requirement to run the client through a proxy, there are a couple of ways to achieve this:
