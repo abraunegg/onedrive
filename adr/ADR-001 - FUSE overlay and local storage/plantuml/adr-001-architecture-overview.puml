@@ -1,0 +1,46 @@
+@startuml
+title ADR-001 - On-Demand Architecture and Authority Boundaries
+skinparam componentStyle rectangle
+skinparam shadowing false
+left to right direction
+
+actor User
+cloud "Microsoft OneDrive\nMicrosoft Graph" as Graph
+component "Existing synchronisation engine\n(remote + local processing)" as Sync
+database "Item database\nAUTHORITATIVE FUSE NAMESPACE\nremote metadata + stable hydration state" as DB
+component "FUSE presentation / access layer" as Fuse
+rectangle "User-visible sync_dir\n~/OneDrive" as View
+folder "Physical sync_dir beneath mount\nHYDRATED CONTENT ONLY" as Disk
+component "Existing local change detection\ninotify + reconciliation" as Local
+
+User --> View : browse / open / edit
+View --> Fuse
+Fuse --> DB : namespace / metadata /\nhydration state
+Fuse --> Disk : hydrated content I/O
+Fuse --> Sync : hydration request\nwhen content required
+
+Graph <--> Sync : existing Graph / delta processing
+Sync --> DB : authoritative namespace updates
+Sync --> Disk : existing validated download path
+Sync --> DB : commit stable hydration state\nafter storage transition
+Disk --> Local : events for resident content
+Local --> Sync : existing local change path
+Sync --> Graph : existing upload / delete / rename
+
+note right of DB
+FUSE presents what the database says
+belongs in the eligible namespace.
+No physical placeholder is required.
+end note
+
+note bottom of Disk
+Physical storage answers whether
+content is resident and supplies
+local-change evidence.
+end note
+
+note bottom of Fuse
+FUSE does not become a second
+Microsoft Graph sync engine.
+end note
+@enduml

@@ -1,0 +1,36 @@
+@startuml
+title On-demand startup, readiness and recovery
+start
+:Load configuration and validate --monitor;
+:Open/validate authoritative item DB;
+:Inspect and reconcile physical sync_dir;
+if (Stale FUSE mount?) then (yes)
+  :Verify mount state and safely recover;
+  if (Recovery successful?) then (no)
+    :Report actionable error; preserve backing content;
+    stop
+  endif
+endif
+:Retain direct physical-tree access;
+:Attach inotify to physical backing tree;
+:Launch isolated FUSE helper and mount;
+:Verify mount and working getattr/readdir;
+if (Verified ready?) then (no)
+  :Stop/reap helper, verify unmount, close FDs;
+  :Report startup failure;
+  stop
+endif
+:Expose DB-authoritative FUSE namespace;
+:Run existing --monitor processing;
+fork
+  :Remote Graph/delta updates to DB;
+fork again
+  :Physical resident-content inotify;
+end fork
+:Quiesce FUSE operations and unmount;
+if (Unmount verified?) then (no)
+  :Report failure and perform safe mount recovery;
+endif
+:Preserve hydrated physical content;
+stop
+@enduml
