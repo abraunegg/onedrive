@@ -9,10 +9,11 @@ module ondemand;
 
 import fused.fuse;
 
-import core.stdc.errno : errno;
+import core.stdc.config : c_long;
+import core.stdc.errno : errno, ENOTCONN;
 import core.sys.posix.fcntl : open, O_RDONLY, O_WRONLY, O_CREAT, O_EXCL;
 import core.sys.posix.signal : kill, signal, SIGINT, SIGTERM, SIGKILL;
-import core.sys.posix.sys.stat : stat, lstat, mkdir, chmod, stat_t, mode_t;
+import core.sys.posix.sys.stat : stat, fstat, lstat, mkdir, chmod, stat_t, mode_t;
 import core.sys.posix.sys.wait : waitpid, WNOHANG;
 import core.sys.posix.unistd : fork, execv, close, pread, pwrite, unlink, rmdir, truncate, chown, readlink, symlink, _exit, getpid;
 import core.sys.posix.utime : utime, utimbuf;
@@ -21,11 +22,13 @@ import core.sys.posix.sys.types : pid_t, uid_t, gid_t;
 import std.conv : to;
 import std.file : dirEntries, SpanMode;
 import std.path : baseName;
-import std.process : execute;
+import std.array : join;
+import std.datetime.stopwatch : StopWatch, AutoStart;
+import std.process : pipeProcess, tryWait, wait, processKill = kill, ProcessPipes, ProcessException, Redirect;
 import std.stdio : stderr;
-import std.string : toStringz;
+import std.string : indexOf, toStringz;
 import core.thread : Thread;
-import core.time : dur;
+import core.time : dur, Duration;
 
 
 class OnDemandException : Exception {
@@ -219,6 +222,63 @@ int runOnDemandFuseHelper(string physicalDirectoryFdArgument, string syncDirecto
     }
 }
 
+struct FusermountResult {
+    int status;
+    string output;
+}
+
+// Run fusermount3 with a bounded wait. Throws OnDemandException when it can
+// not be started or does not finish in time, so that callers fail closed.
+FusermountResult runFusermount(string[] arguments, Duration timeout = dur!"seconds"(10)) {
+    ProcessPipes pipes;
+    try {
+        // LC_ALL=C keeps the error text stable for the busy check in stop().
+        pipes = pipeProcess(["fusermount3"] ~ arguments,
+            Redirect.stdout | Redirect.stderrToStdout, ["LC_ALL": "C"]);
+    } catch (ProcessException e) {
+        throw new OnDemandException("Unable to execute fusermount3: " ~ e.msg);
+    }
+
+    auto stopWatch = StopWatch(AutoStart.yes);
+    while (true) {
+        auto waitResult = tryWait(pipes.pid);
+        if (waitResult.terminated) {
+            FusermountResult result;
+            result.status = waitResult.status;
+            foreach (line; pipes.stdout.byLine) result.output ~= line.idup ~ "\n";
+            return result;
+        }
+        if (stopWatch.peek() >= timeout) {
+            processKill(pipes.pid, SIGKILL);
+            wait(pipes.pid);
+            throw new OnDemandException("fusermount3 " ~ arguments.join(" ") ~
+                " did not complete within " ~ timeout.toString());
+        }
+        Thread.sleep(dur!"msecs"(50));
+    }
+}
+
+// druntime has no statfs(2) binding for Linux. f_type is the first member of
+// struct statfs (120 bytes on x86_64); the buffer below is 512 bytes on LP64.
+private extern (C) int fstatfs(int fd, void* buf) nothrow @nogc;
+private enum FUSE_SUPER_MAGIC = 0x65735546;
+
+// True when directory is itself the mount point of a FUSE filesystem. A
+// sync_dir that merely lives inside another FUSE filesystem is not refused.
+bool isFuseMountPoint(int directoryFd, string directory) {
+    c_long[64] statfsBuffer;
+    if (fstatfs(directoryFd, statfsBuffer.ptr) != 0) {
+        throw new OnDemandException("Unable to statfs sync_dir: " ~ directory);
+    }
+    if (statfsBuffer[0] != FUSE_SUPER_MAGIC) return false;
+
+    stat_t self, parent;
+    if (fstat(directoryFd, &self) != 0 || stat(toStringz(directory ~ "/.."), &parent) != 0) {
+        throw new OnDemandException("Unable to stat sync_dir: " ~ directory);
+    }
+    return self.st_dev != parent.st_dev;
+}
+
 final class OnDemand {
 private:
     string syncDirectory;
@@ -238,10 +298,41 @@ public:
         if (running) return;
 
         // Capture the physical directory BEFORE FUSE covers the pathname.
-		physicalDirectoryFd = .open(toStringz(syncDirectory), O_RDONLY);
-		if (physicalDirectoryFd < 0) {
-			throw new OnDemandException("Unable to open physical sync_dir before FUSE mount: " ~ syncDirectory);
-		}
+        physicalDirectoryFd = .open(toStringz(syncDirectory), O_RDONLY);
+        if (physicalDirectoryFd < 0 && errno == ENOTCONN) {
+            // A previous helper was killed and left a dead FUSE mount over
+            // sync_dir. Detach it and try once more.
+            auto result = runFusermount(["-u", "-z", syncDirectory]);
+            if (result.status != 0) {
+                throw new OnDemandException(
+                    "Unable to remove stale FUSE mount from sync_dir: " ~
+                    syncDirectory ~ " (fusermount3 exit status " ~
+                    to!string(result.status) ~ ")");
+            }
+            physicalDirectoryFd = .open(toStringz(syncDirectory), O_RDONLY);
+        }
+        if (physicalDirectoryFd < 0) {
+            throw new OnDemandException("Unable to open physical sync_dir before FUSE mount: " ~ syncDirectory);
+        }
+
+        // Opening a live FUSE mount would capture the overlay instead of the
+        // physical directory, for example one left by another instance.
+        bool alreadyMounted;
+        try {
+            alreadyMounted = isFuseMountPoint(physicalDirectoryFd, syncDirectory);
+        } catch (OnDemandException e) {
+            close(physicalDirectoryFd);
+            physicalDirectoryFd = -1;
+            throw e;
+        }
+        if (alreadyMounted) {
+            close(physicalDirectoryFd);
+            physicalDirectoryFd = -1;
+            throw new OnDemandException(
+                "sync_dir is already a FUSE mount, possibly from another onedrive instance: " ~
+                syncDirectory ~ ". Stop that instance or run 'fusermount3 -u " ~
+                syncDirectory ~ "' before starting");
+        }
 
         // Build every exec argument before fork(). The child of this already
         // multi-threaded process must do no D runtime/libfuse work before exec.
@@ -290,7 +381,14 @@ public:
             // Killing a fuse_main() process is not sufficient: the kernel can
             // retain a stale FUSE mount over sync_dir after the process exits.
             try {
-                auto result = execute(["fusermount3", "-u", syncDirectory]);
+                auto result = runFusermount(["-u", syncDirectory]);
+                if (result.status != 0 && result.output.indexOf("Device or resource busy") >= 0) {
+                    // A process still has its working directory or an open
+                    // file below sync_dir. Detach the overlay lazily so that
+                    // sync_dir shows the physical directory again; the kernel
+                    // completes the unmount once the last reference is gone.
+                    result = runFusermount(["-u", "-z", syncDirectory]);
+                }
                 if (result.status != 0) {
                     throw new OnDemandException(
                         "Unable to unmount experimental FUSE overlay from sync_dir: " ~
