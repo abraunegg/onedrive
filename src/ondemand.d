@@ -10,12 +10,11 @@ module ondemand;
 import fused.fuse;
 
 import core.stdc.errno : errno;
-import core.sys.posix.fcntl : open, O_RDONLY, O_WRONLY, O_CREAT, O_EXCL;
+import core.sys.posix.fcntl : open, O_RDONLY, O_WRONLY, O_CREAT, O_EXCL, AT_FDCWD, AT_SYMLINK_NOFOLLOW;
 import core.sys.posix.signal : kill, signal, SIGINT, SIGTERM, SIGKILL;
-import core.sys.posix.sys.stat : stat, lstat, mkdir, chmod, stat_t, mode_t;
+import core.sys.posix.sys.stat : stat, lstat, mkdir, chmod, stat_t, mode_t, utimensat, UTIME_NOW;
 import core.sys.posix.sys.wait : waitpid, WNOHANG;
 import core.sys.posix.unistd : fork, execv, close, pread, pwrite, unlink, rmdir, truncate, chown, readlink, symlink, _exit, getpid;
-import core.sys.posix.utime : utime, utimbuf;
 import core.sys.posix.sys.types : pid_t, uid_t, gid_t;
 
 import std.conv : to;
@@ -167,9 +166,15 @@ public:
         if (.chown(toStringz(p), uid, gid) != 0) throwErrno();
     }
 
-    override void utime(const(char)[] path, utimbuf* times) {
+    override void utimens(const(char)[] path, const(timespec)* tv) {
         auto p = physicalPath(path);
-        if (.utime(toStringz(p), times) != 0) throwErrno();
+        // A null tv means "set both to now", as utimensat(2) does for NULL.
+        timespec[2] times = [timespec(0, UTIME_NOW), timespec(0, UTIME_NOW)];
+        if (tv !is null) times = tv[0 .. 2];
+        // The FUSE root is reached through the /proc/self/fd/<fd> symlink,
+        // which must be followed. Below the root, do not follow symlinks.
+        int flags = (path.length == 0 || path == "/") ? 0 : AT_SYMLINK_NOFOLLOW;
+        if (utimensat(AT_FDCWD, toStringz(p), times, flags) != 0) throwErrno();
     }
 
     override size_t readlink(const(char)[] path, ubyte[] buf) {

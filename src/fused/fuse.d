@@ -11,7 +11,6 @@ module fused.fuse;
 
 /* reexport stat_t */
 public import core.sys.posix.fcntl;
-public import core.sys.posix.utime;
 public import core.sys.posix.time : timespec;
 public import c.fuse.fuse : fuse_config;
 
@@ -279,19 +278,9 @@ extern(System)
         return call!(
             (Operations t)
             {
-                // Preserve the scaffold's existing second-resolution Operations API.
-                // UTIME_NOW/UTIME_OMIT are not required for the current read-only proof.
-                if (tv is null)
-                {
-                    t.utime(path[0 .. path.strlen], null);
-                }
-                else
-                {
-                    utimbuf times;
-                    times.actime = tv[0].tv_sec;
-                    times.modtime = tv[1].tv_sec;
-                    t.utime(path[0 .. path.strlen], &times);
-                }
+                // tv is [atime, mtime]. Pass it through unchanged so that
+                // nanoseconds, UTIME_NOW and UTIME_OMIT are preserved.
+                t.utimens(path[0 .. path.strlen], tv);
                 return 0;
             }
         )();
@@ -456,9 +445,10 @@ export class Operations
      *
      * Params:
      *   path = The path to modify.
-     *   time = The time to set.
+     *   tv   = [atime, mtime] as for utimensat(2), including UTIME_NOW and
+     *          UTIME_OMIT, or null to set both to the current time.
      */
-    void utime(const(char)[] path, utimbuf* time)
+    void utimens(const(char)[] path, const(timespec)* tv)
     {
         throw new FuseException(errno.EOPNOTSUPP);
     }
