@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 *   Added support for OpenBSD (#3765)
 *   Added `notify_monitor_start` configuration option to control monitor startup notifications (#3779)
+*   Added `disable_time_check` configuration option and `--disable-time-check` command-line option to bypass system-time validation when required (#3836)
 *   Added support for selecting an alternative browser during graphical authentication and reauthentication (#3848)
 *   Added enhanced `--display-sync-status` output with separate upload and download metrics and improved synchronisation reporting (#3844)
 *   Added graphical authentication sponsorship messaging to improve project sponsorship visibility (#3867, #3904)
@@ -15,8 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Added `security.md` to document project security reporting procedures (#3912)
 
 ### Changed
+*   Incremented the item database version from 18 to 19 to rebuild existing synchronisation tracking state using the corrected reconciliation and object validation logic. Existing installations will recreate the item database tables on upgrade (#3919)
 *   Improved Microsoft Graph delta processing performance by batching database transactions (#3791)
-*   Improved monitor-mode remote change detection and reconciliation to reduce synchronisation drift between local and online state (#3794)
 *   Improved WebSocket notification handling and recovery from transient connection failures (#3809)
 *   Improved long-running application memory management and resource cleanup (#3832)
 *   Improved timestamp validation and authority handling between the local filesystem and Microsoft OneDrive (#3836, #3837, #3839)
@@ -72,7 +73,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Updated client architecture documentation (#3870)
 *   Updated supported and unsupported platform documentation (#3877)
 *   Updated project sponsorship information (#3907)
-*   Updated documentation
 
 
 ## 2.5.11 - 2026-06-30
