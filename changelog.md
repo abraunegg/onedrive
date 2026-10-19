@@ -2,6 +2,79 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.12 - 2026-10-24
+
+### Added
+*   Added support for OpenBSD (#3765)
+*   Added `notify_monitor_start` configuration option to control monitor startup notifications (#3779)
+*   Added support for selecting an alternative browser during graphical authentication and reauthentication (#3848)
+*   Added enhanced `--display-sync-status` output with separate upload and download metrics and improved synchronisation reporting (#3844)
+*   Added graphical authentication sponsorship messaging to improve project sponsorship visibility (#3867, #3904)
+*   Added `monitor_status` configuration option to enable monitor runtime telemetry in JSON format for external applications and integrations (#3896)
+*   Added OAuth `state` validation to the local browser authentication callback to improve authentication security (#3911)
+*   Added `security.md` to document project security reporting procedures (#3912)
+
+### Changed
+*   Improved Microsoft Graph delta processing performance by batching database transactions (#3791)
+*   Improved monitor-mode remote change detection and reconciliation to reduce synchronisation drift between local and online state (#3794)
+*   Improved WebSocket notification handling and recovery from transient connection failures (#3809)
+*   Improved long-running application memory management and resource cleanup (#3832)
+*   Improved timestamp validation and authority handling between the local filesystem and Microsoft OneDrive (#3836, #3837, #3839)
+*   Improved HTTP error reporting during file downloads and suppressed expected HTTP 404 messages during timestamp reconciliation (#3856, #3857)
+*   Improved upload retry handling for transient network failures and upload fragment retries (#3864)
+*   Improved database validation to detect structural inconsistencies and require a resync instead of terminating unexpectedly (#3873)
+*   Improved systemd service behaviour to prevent startup dependencies from unnecessarily blocking the default target (#3874)
+*   Improved graphical authentication messaging by limiting large-drive warnings to once per application run (#3887)
+*   Optimised Full Scan database access and monitor-loop memory reclamation to reduce resource usage during long-running operation (#3888)
+*   Improved handling of recoverable HTTP 429 responses to reduce unnecessary warning output during normal retry operations (#3900)
+*   Improved modified-file upload handling to recover from HTTP 412 precondition failures caused by concurrent online changes (#3905)
+*   Updated mandatory resync exit status from 126 to 78 for more appropriate systemd service handling (#3799)
+*   Updated compiler detection and build guidance to prefer distribution-provided LDC toolchains while retaining alternative D compiler support (#3899)
+
+### Fixed
+*   Fix Bug: Fix broken symbolic links causing application crashes when resuming uploads (#3774)
+*   Fix Bug: Fix hardcoded Microsoft Graph endpoint usage during SharePoint drive searches, including support for non-default cloud environments (#3773)
+*   Fix Bug: Fix shutdown signal handling incorrectly returning a successful exit status after a SIGSEGV (#3780)
+*   Fix Bug: Fix libcurl CA certificate read failures unexpectedly terminating synchronisation (#3801)
+*   Fix Bug: Fix upload retry handling by allowing libcurl to rewind the request body after a failed transfer (#3792)
+*   Fix Bug: Fix incorrect QuickXorHash calculation when upload fragments are retransmitted (#3793)
+*   Fix Bug: Fix monitor mode missing remote changes and deletions due to incomplete filesystem observation and reconciliation (#3794)
+*   Fix Bug: Fix application handling of insufficient disk space during libcurl initialisation (#3808)
+*   Fix Bug: Fix incorrect collision filename formatting when moving files into the local Recycle Bin (#3807)
+*   Fix Bug: Fix build version detection when compiling from a Git worktree (#3804)
+*   Fix Bug: Fix download response handling to prevent failed downloads from being treated as successful or producing corrupted local files (#3812)
+*   Fix Bug: Fix WebSocket retry handling that could crash monitor mode when no message-producing worker was active (#3815)
+*   Fix Bug: Fix OAuth access token exposure in `--debug-https` logging output (#3838)
+*   Fix Bug: Fix `safeBackup` replacement handling to preserve existing files during replacement operations (#3826)
+*   Fix Bug: Fix local file renames to unsupported online filenames incorrectly impacting the existing online copy (#3833)
+*   Fix Bug: Fix local directory move reconciliation causing repeated HTTP 412 precondition failures (#3849)
+*   Fix Bug: Fix temporary-file hard-link finalisation not being detected correctly during monitor-mode synchronisation (#3841)
+*   Fix Bug: Fix local Recycle Bin move failures incorrectly removing associated database records (#3845)
+*   Fix Bug: Fix `check_nosync` handling for directories already recorded in the synchronisation database (#3846)
+*   Fix Bug: Fix `skip_dir` rules beginning with `/` incorrectly matching directories at unrelated filesystem depths (#3851)
+*   Fix Bug: Fix concurrent downloads of the same OneDrive item sharing a `.partial` file and causing incorrect download failures (#3855)
+*   Fix Bug: Fix upload session recovery following HTTP 403 and HTTP 404 responses (#3860)
+*   Fix Bug: Fix resumed upload sessions not validating whether the local source file has changed (#3863)
+*   Fix Bug: Fix graphical authentication incorrectly reporting success before OAuth token redemption completes (#3866)
+*   Fix Bug: Fix timestamp-preserving local file replacements incorrectly triggering `safeBackup` and unnecessary replacement uploads (#3869)
+*   Fix Bug: Fix item database child traversal modifying a dynamic array during iteration (#3890)
+*   Fix Bug: Fix configured `drive_id` handling when accessing SharePoint resources using Microsoft national cloud endpoints (#3898)
+*   Fix Bug: Fix Microsoft Identity Broker detection when the broker is available through automatic D-Bus activation but is not already running (#3916)
+*   Fix Bug: Fix systemd user service installation paths on RHEL-based distributions (#3917)
+
+### Updated
+*   Updated CI E2E testing with expanded synchronisation coverage, more realistic test data, additional regression scenarios and improved test reliability (#3878, #3889, #3902)
+*   Updated CI E2E test cleanup to improve isolation and reliability between test runs (#3918)
+*   Updated Docker build environments, dependencies and container documentation to support current distributions and toolchains (#3778, #3906)
+*   Updated systemd usage documentation and service management guidance (#3915)
+*   Updated Microsoft Intune authentication documentation and validation guidance (#3910)
+*   Updated application help output, configuration documentation, man page and shell completions to align with current functionality (#3903)
+*   Updated client architecture documentation (#3870)
+*   Updated supported and unsupported platform documentation (#3877)
+*   Updated project sponsorship information (#3907)
+*   Updated documentation
+
+
 ## 2.5.11 - 2026-06-30
 
 ### Added
