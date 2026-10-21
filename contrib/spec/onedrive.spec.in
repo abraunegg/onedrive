@@ -30,12 +30,6 @@ BuildRequires: ldc >= %{ldc_minver}
 %global with_systemd      0
 %endif
 
-%if 0%{?rhel} >= 7
-%global rhel_unitdir      1
-%else
-%global rhel_unitdir      0
-%endif
-
 Name:       onedrive
 Version:    2.5.11
 Release:    1%{?dist}
@@ -81,15 +75,9 @@ make
 %make_install PREFIX="%{buildroot}"
 
 %if 0%{?with_systemd}
-%if 0%{?rhel_unitdir}
-# RHEL/CentOS: system unit only
-install -D -m 0644 contrib/systemd/onedrive.service %{buildroot}%{_unitdir}/onedrive.service
-install -D -m 0644 contrib/systemd/onedrive@.service %{buildroot}%{_unitdir}/onedrive@.service
-%else
-# Fedora: install both system and user units
+# Install each service unit in its corresponding systemd directory.
 install -D -m 0644 contrib/systemd/onedrive@.service %{buildroot}%{_unitdir}/onedrive@.service
 install -D -m 0644 contrib/systemd/onedrive.service %{buildroot}%{_userunitdir}/onedrive.service
-%endif
 %endif
 
 %clean
@@ -102,13 +90,8 @@ install -D -m 0644 contrib/systemd/onedrive.service %{buildroot}%{_userunitdir}/
 %{_datadir}/icons/hicolor/scalable/places/onedrive.svg
 %{_datadir}/icons/hicolor/scalable/apps/onedrive-notifications.svg
 %if 0%{?with_systemd}
-%if 0%{?rhel_unitdir}
-%{_unitdir}/%{name}.service
-%{_unitdir}/%{name}@.service
-%else
 %{_unitdir}/%{name}@.service
 %{_userunitdir}/%{name}.service
-%endif
 %else
 %{_bindir}/onedrive_service.sh
 /etc/init.d/onedrive

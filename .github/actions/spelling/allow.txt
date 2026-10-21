@@ -163,6 +163,7 @@ eventfd
 evt
 execinfo
 exitsig
+exploitability
 extattr
 fasynchronous
 fbc
@@ -337,6 +338,7 @@ mozram
 msghdr
 msonenote
 mswsock
+mtimes
 mtls
 mtune
 mydir
@@ -602,10 +604,12 @@ textvp
 Thh
 thnk
 tidx
+timeframe
 timerfd
 tkx
 tlsv
 tpgid
+tracebacks
 traceflag
 tracep
 trapno
@@ -625,6 +629,7 @@ undefiened
 unistd
 unittests
 upn
+urandom
 urlify
 userinfo
 usermod

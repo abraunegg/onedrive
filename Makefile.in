@@ -130,13 +130,8 @@ install: all
 ifeq ($(HAVE_SYSTEMD),yes)
 	mkdir -p $(DESTDIR)$(systemduserunitdir)
 	mkdir -p $(DESTDIR)$(systemdsystemunitdir)
-ifeq ($(RHEL),1)
-	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
-	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemdsystemunitdir)
-else
 	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
 	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemduserunitdir)
-endif
 else
 ifeq ($(RHEL_VERSION),6)
 	$(INSTALL) contrib/init.d/onedrive.init $(DESTDIR)/etc/init.d/onedrive
@@ -168,12 +163,8 @@ uninstall:
 	rm -f $(DESTDIR)$(mandir)/man1/onedrive.1
 	rm -f $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
 ifeq ($(HAVE_SYSTEMD),yes)
-ifeq ($(RHEL),1)
-	rm -f $(DESTDIR)$(systemdsystemunitdir)/onedrive*.service
-else
 	rm -f $(DESTDIR)$(systemdsystemunitdir)/onedrive*.service
 	rm -f $(DESTDIR)$(systemduserunitdir)/onedrive*.service
-endif
 else
 ifeq ($(RHEL_VERSION),6)
 	rm -f $(DESTDIR)/etc/init.d/onedrive

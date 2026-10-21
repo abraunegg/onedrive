@@ -181,7 +181,7 @@ Display the currently used configuration for the onedrive client.
 
 .TP
 \fB\-\-display-sync-status\fR
-Query OneDrive service and report on pending changes.
+Perform a read-only bidirectional assessment of the configured synchronisation scope and report whether the local filesystem and Microsoft OneDrive are in sync, not in sync, or cannot be assessed completely. No synchronisation will be performed.
 
 .TP
 \fB\-\-auth-files\fR \fIARG\fR

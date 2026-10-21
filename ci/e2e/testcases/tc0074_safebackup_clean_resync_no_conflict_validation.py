@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from framework.context import E2EContext
 from framework.result import TestResult
-from framework.utils import reset_directory, write_text_file
+from framework.pdf import REVISION_0 as PDF_REVISION_0, create_random_pdf_pair, validate_pdf_pair, pdf_pair_hashes, pdf_pair_mtimes, pdf_pair_sizes, pdf_pair_backup_files, pdf_pair_all_files
+from framework.image import REVISION_0 as IMAGE_REVISION_0, create_random_image_set, validate_image_set, image_set_hashes, image_set_mtimes, image_set_sizes, image_set_backup_files, image_set_all_files
+from framework.utils import compute_quickxor_hash_file, reset_directory, write_text_file
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, xlsx_pair_hashes, xlsx_pair_mtimes, xlsx_pair_sizes, xlsx_pair_backup_files, xlsx_pair_all_files
 from testcases.safe_backup_case_base import SafeBackupCaseBase
 
 
@@ -13,9 +15,11 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
     case_id = "0074"
     name = "safeBackup clean resync no-conflict validation"
     description = (
-        "Validate that repeating --resync against an already in-sync local file with no online change "
-        "does not create a safeBackup or replace unchanged canonical content"
+        "Validate with passive-text plus real XLSX/PDF documents and PNG/JPEG image payloads that repeating --resync against already in-sync "
+        "local files with no online change does not create safeBackup artifacts or replace unchanged canonical content"
     )
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(context, case_dir_name="tc0074", ensure_refresh_token=True)
@@ -35,12 +39,47 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
         self._prepare_config(context, conf_verify, verify_root)
 
         root_name = f"ZZ_E2E_TC0074_{context.run_id}_{os.getpid()}"
-        relative = f"{root_name}/already-in-sync.txt"
-        seed_file = seed_root / relative
-        local_file = local_root / relative
-        verify_file = verify_root / relative
-        content = "TC0074 canonical content remains unchanged across a clean repeated resync\n"
-        write_text_file(seed_file, content)
+        text_relative = f"{root_name}/already-in-sync.txt"
+        xlsx_relative = f"{root_name}/already-in-sync.xlsx"
+        pdf_relative = f"{root_name}/already-in-sync.pdf"
+        image_relative = f"{root_name}/already-in-sync.png"
+
+        seed_text_file = seed_root / text_relative
+        local_text_file = local_root / text_relative
+        verify_text_file = verify_root / text_relative
+        seed_xlsx_file = seed_root / xlsx_relative
+        local_xlsx_file = local_root / xlsx_relative
+        verify_xlsx_file = verify_root / xlsx_relative
+        seed_pdf_file = seed_root / pdf_relative
+        local_pdf_file = local_root / pdf_relative
+        verify_pdf_file = verify_root / pdf_relative
+        seed_image_file = seed_root / image_relative
+        local_image_file = local_root / image_relative
+        verify_image_file = verify_root / image_relative
+
+        text_content = "TC0074 canonical content remains unchanged across a clean repeated resync\n"
+        write_text_file(seed_text_file, text_content)
+
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0074:{os.getpid()}"
+        generated = create_random_xlsx_pair(
+            seed_xlsx_file,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0074 clean repeated resync workbook",
+        )
+        generated_xlsx_hashes = xlsx_pair_hashes(seed_xlsx_file, compute_quickxor_hash_file)
+        pdf_seed = f"{xlsx_seed}:pdf"
+        generated_pdf = create_random_pdf_pair(
+            seed_pdf_file,
+            pdf_seed,
+            revision=PDF_REVISION_0,
+            title="TC0074 clean repeated resync PDF",
+        )
+        generated_pdf_hashes = pdf_pair_hashes(seed_pdf_file, compute_quickxor_hash_file)
+        image_seed = f"{xlsx_seed}:image"
+        generated_images = create_random_image_set(seed_image_file, image_seed, revision=IMAGE_REVISION_0, title="TC0074 clean repeated resync images")
+        generated_image_hashes = image_set_hashes(seed_image_file, compute_quickxor_hash_file)
 
         seed_stdout, seed_stderr = logs / "seed_stdout.log", logs / "seed_stderr.log"
         baseline_stdout, baseline_stderr = logs / "baseline_stdout.log", logs / "baseline_stderr.log"
@@ -54,7 +93,24 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
             str(verify_stdout), str(verify_stderr),
             str(metadata_file),
         ]
-        details: dict[str, object] = {"root_name": root_name, "relative": relative}
+        details: dict[str, object] = {
+            "root_name": root_name,
+            "text_relative": text_relative,
+            "xlsx_relative": xlsx_relative,
+            "pdf_relative": pdf_relative,
+            "image_relative": image_relative,
+            "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
+            "image_seed": image_seed,
+            "payload_rows": self.XLSX_PAYLOAD_ROWS,
+            "generated_xlsx_size": int(generated["size_bytes"]),
+            "generated_xlsx_hashes": generated_xlsx_hashes,
+            "generated_pdf_size": int(generated_pdf["size_bytes"]),
+            "generated_large_pdf_size": int(generated_pdf["large_size_bytes"]),
+            "generated_pdf_hashes": generated_pdf_hashes,
+            "generated_image_sizes": {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")},
+            "generated_image_hashes": generated_image_hashes,
+        }
 
         seed = self._run_phase(
             context,
@@ -92,37 +148,102 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
             stderr_file=baseline_stderr,
         )
         details["baseline_returncode"] = baseline.returncode
-        if baseline.returncode != 0 or not local_file.is_file():
+        if baseline.returncode != 0 or not local_text_file.is_file() or not xlsx_pair_all_files(local_xlsx_file) or not pdf_pair_all_files(local_pdf_file) or not image_set_all_files(local_image_file):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
-                reason="Failed to establish the tracked in-sync baseline before repeated resync",
+                reason="Failed to establish both tracked in-sync baselines before repeated resync",
                 artifacts=artifacts,
                 details=details,
             )
 
-        baseline_hash = self._hash_if_file(local_file)
-        baseline_content = self._text_if_file(local_file)
-        baseline_mtime = int(local_file.stat().st_mtime)
-        baseline_backups = self._safe_backup_files_for(local_file)
-        baseline_partials = self._partial_files_under(local_root / root_name)
+        baseline_text_hash = self._hash_if_file(local_text_file)
+        baseline_text_content = self._text_if_file(local_text_file)
+        baseline_text_mtime = int(local_text_file.stat().st_mtime)
+        baseline_xlsx_validation_error = validate_xlsx_pair(local_xlsx_file, REVISION_0)
+        baseline_xlsx_hashes = xlsx_pair_hashes(local_xlsx_file, self._hash_if_file)
+        baseline_xlsx_mtimes = xlsx_pair_mtimes(local_xlsx_file)
+        baseline_pdf_validation_error = validate_pdf_pair(local_pdf_file, PDF_REVISION_0)
+        baseline_pdf_hashes = pdf_pair_hashes(local_pdf_file, self._hash_if_file)
+        baseline_pdf_mtimes = pdf_pair_mtimes(local_pdf_file)
+        baseline_image_validation_error = validate_image_set(local_image_file, IMAGE_REVISION_0)
+        baseline_image_hashes = image_set_hashes(local_image_file, self._hash_if_file)
+        baseline_image_mtimes = image_set_mtimes(local_image_file)
 
-        if baseline_content != content or not baseline_hash:
+        baseline_xlsx_backups = xlsx_pair_backup_files(local_xlsx_file, self._safe_backup_files_for)
+        baseline_pdf_backups = pdf_pair_backup_files(local_pdf_file, self._safe_backup_files_for)
+        baseline_image_backups = image_set_backup_files(local_image_file, self._safe_backup_files_for)
+        baseline_backups = self._safe_backup_files_for(local_text_file)
+        baseline_partials = self._partial_files_under(local_root / root_name)
+        details.update(
+            {
+                "baseline_text_hash": baseline_text_hash,
+                "baseline_text_content": baseline_text_content,
+                "baseline_text_mtime": baseline_text_mtime,
+                "baseline_xlsx_validation_error": baseline_xlsx_validation_error,
+                "baseline_xlsx_hashes": baseline_xlsx_hashes,
+                "baseline_xlsx_sizes": xlsx_pair_sizes(local_xlsx_file),
+                "baseline_xlsx_mtimes": baseline_xlsx_mtimes,
+                "microsoft_changed_seed_xlsx_bytes": {label: baseline_xlsx_hashes[label] != generated_xlsx_hashes[label] for label in baseline_xlsx_hashes},
+                "baseline_pdf_validation_error": baseline_pdf_validation_error,
+                "baseline_pdf_hashes": baseline_pdf_hashes,
+                "baseline_pdf_sizes": pdf_pair_sizes(local_pdf_file),
+                "baseline_pdf_mtimes": baseline_pdf_mtimes,
+                "microsoft_changed_seed_pdf_bytes": {label: baseline_pdf_hashes[label] != generated_pdf_hashes[label] for label in baseline_pdf_hashes},
+                "baseline_image_validation_error": baseline_image_validation_error,
+                "baseline_image_hashes": baseline_image_hashes,
+                "baseline_image_sizes": image_set_sizes(local_image_file),
+                "baseline_image_mtimes": baseline_image_mtimes,
+                "microsoft_changed_seed_image_bytes": {label: baseline_image_hashes[label] != generated_image_hashes[label] for label in baseline_image_hashes},
+            }
+        )
+
+        if baseline_text_content != text_content or not baseline_text_hash:
             details.update(
                 {
-                    "baseline_hash": baseline_hash,
-                    "baseline_content": baseline_content,
                     "baseline_safe_backup_files": [str(p.relative_to(local_root)) for p in baseline_backups],
                     "baseline_partial_files": [str(p.relative_to(local_root)) for p in baseline_partials],
                 }
             )
             self._write_metadata(metadata_file, details)
             return self.fail_result(
-                reason="Tracked baseline content does not match the remote seed",
+                reason="Tracked passive-text baseline content does not match the remote seed",
                 artifacts=artifacts,
                 details=details,
             )
 
-        if baseline_backups or baseline_partials:
+        if baseline_xlsx_validation_error or not all(baseline_xlsx_hashes.values()):
+            details.update(
+                {
+                    "baseline_safe_backup_files": [str(p.relative_to(local_root)) for p in baseline_backups],
+                    "baseline_partial_files": [str(p.relative_to(local_root)) for p in baseline_partials],
+                }
+            )
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                reason=f"Tracked XLSX baseline is not a valid revision-0 workbook: {baseline_xlsx_validation_error}",
+                artifacts=artifacts,
+                details=details,
+            )
+
+        if baseline_image_validation_error or not all(baseline_image_hashes.values()):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(reason=f"Tracked image baseline is not a valid revision-0 set: {baseline_image_validation_error}", artifacts=artifacts, details=details)
+
+        if baseline_pdf_validation_error or not all(baseline_pdf_hashes.values()):
+            details.update(
+                {
+                    "baseline_safe_backup_files": [str(p.relative_to(local_root)) for p in baseline_backups],
+                    "baseline_partial_files": [str(p.relative_to(local_root)) for p in baseline_partials],
+                }
+            )
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                reason=f"Tracked PDF baseline is not a valid revision-0 document: {baseline_pdf_validation_error}",
+                artifacts=artifacts,
+                details=details,
+            )
+
+        if baseline_backups or any(baseline_xlsx_backups.values()) or any(baseline_pdf_backups.values()) or any(baseline_image_backups.values()) or baseline_partials:
             details.update(
                 {
                     "baseline_safe_backup_files": [str(p.relative_to(local_root)) for p in baseline_backups],
@@ -153,19 +274,45 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
             stderr_file=resync_stderr,
         )
 
-        backups_after_resync = self._safe_backup_files_for(local_file)
+        xlsx_backups_after_resync = xlsx_pair_backup_files(local_xlsx_file, self._safe_backup_files_for)
+        pdf_backups_after_resync = pdf_pair_backup_files(local_pdf_file, self._safe_backup_files_for)
+        image_backups_after_resync = image_set_backup_files(local_image_file, self._safe_backup_files_for)
+        backups_after_resync = self._safe_backup_files_for(local_text_file)
         partials_after_resync = self._partial_files_under(local_root / root_name)
+        canonical_xlsx_validation_error = (
+            validate_xlsx_pair(local_xlsx_file, REVISION_0)
+            if local_xlsx_file.is_file()
+            else "Canonical XLSX is missing"
+        )
+        canonical_pdf_validation_error = (
+            validate_pdf_pair(local_pdf_file, PDF_REVISION_0)
+            if local_pdf_file.is_file()
+            else "Canonical PDF is missing"
+        )
+        canonical_image_validation_error = (validate_image_set(local_image_file, IMAGE_REVISION_0) if local_image_file.is_file() else "Canonical image set is missing")
         details.update(
             {
                 "repeated_resync_returncode": repeated_resync.returncode,
-                "baseline_hash": baseline_hash,
-                "baseline_content": baseline_content,
-                "baseline_mtime": baseline_mtime,
-                "canonical_exists_after_resync": local_file.is_file(),
-                "canonical_hash_after_resync": self._hash_if_file(local_file),
-                "canonical_content_after_resync": self._text_if_file(local_file),
-                "canonical_mtime_after_resync": int(local_file.stat().st_mtime) if local_file.is_file() else -1,
+                "canonical_text_exists_after_resync": local_text_file.is_file(),
+                "canonical_text_hash_after_resync": self._hash_if_file(local_text_file),
+                "canonical_text_content_after_resync": self._text_if_file(local_text_file),
+                "canonical_text_mtime_after_resync": int(local_text_file.stat().st_mtime) if local_text_file.is_file() else -1,
+                "canonical_xlsx_exists_after_resync": local_xlsx_file.is_file(),
+                "canonical_xlsx_validation_error_after_resync": canonical_xlsx_validation_error,
+                "canonical_xlsx_hashes_after_resync": xlsx_pair_hashes(local_xlsx_file, self._hash_if_file),
+                "canonical_xlsx_mtimes_after_resync": xlsx_pair_mtimes(local_xlsx_file),
                 "safe_backup_files_after_resync": [str(p.relative_to(local_root)) for p in backups_after_resync],
+                "xlsx_safe_backup_files_after_resync": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in xlsx_backups_after_resync.items()},
+                "canonical_pdf_exists_after_resync": local_pdf_file.is_file(),
+                "canonical_pdf_validation_error_after_resync": canonical_pdf_validation_error,
+                "canonical_pdf_hashes_after_resync": pdf_pair_hashes(local_pdf_file, self._hash_if_file),
+                "canonical_pdf_mtimes_after_resync": pdf_pair_mtimes(local_pdf_file),
+                "pdf_safe_backup_files_after_resync": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in pdf_backups_after_resync.items()},
+                "canonical_image_exists_after_resync": local_image_file.is_file(),
+                "canonical_image_validation_error_after_resync": canonical_image_validation_error,
+                "canonical_image_hashes_after_resync": image_set_hashes(local_image_file, self._hash_if_file),
+                "canonical_image_mtimes_after_resync": image_set_mtimes(local_image_file),
+                "image_safe_backup_files_after_resync": {label: [str(p.relative_to(local_root)) for p in paths] for label, paths in image_backups_after_resync.items()},
                 "partial_files_after_resync": [str(p.relative_to(local_root)) for p in partials_after_resync],
             }
         )
@@ -183,11 +330,28 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
             stdout_file=verify_stdout,
             stderr_file=verify_stderr,
         )
+        verify_xlsx_validation_error = (
+            validate_xlsx_pair(verify_xlsx_file, REVISION_0)
+            if verify_xlsx_file.is_file()
+            else "Verification XLSX is missing"
+        )
+        verify_pdf_validation_error = (
+            validate_pdf_pair(verify_pdf_file, PDF_REVISION_0)
+            if verify_pdf_file.is_file()
+            else "Verification PDF is missing"
+        )
+        verify_image_validation_error = (validate_image_set(verify_image_file, IMAGE_REVISION_0) if verify_image_file.is_file() else "Verification image set is missing")
         details.update(
             {
                 "verify_returncode": verify.returncode,
-                "verify_hash": self._hash_if_file(verify_file),
-                "verify_content": self._text_if_file(verify_file),
+                "verify_text_hash": self._hash_if_file(verify_text_file),
+                "verify_text_content": self._text_if_file(verify_text_file),
+                "verify_xlsx_hashes": xlsx_pair_hashes(verify_xlsx_file, self._hash_if_file),
+                "verify_xlsx_validation_error": verify_xlsx_validation_error,
+                "verify_pdf_hashes": pdf_pair_hashes(verify_pdf_file, self._hash_if_file),
+                "verify_pdf_validation_error": verify_pdf_validation_error,
+                "verify_image_hashes": image_set_hashes(verify_image_file, self._hash_if_file),
+                "verify_image_validation_error": verify_image_validation_error,
             }
         )
         self._write_metadata(metadata_file, details)
@@ -198,19 +362,33 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 artifacts=artifacts,
                 details=details,
             )
-        if not local_file.is_file():
+        if not local_text_file.is_file() or not xlsx_pair_all_files(local_xlsx_file) or not pdf_pair_all_files(local_pdf_file) or not image_set_all_files(local_image_file):
             return self.fail_result(
-                reason="Repeated clean resync removed the canonical local file",
+                reason="Repeated clean resync removed one or more canonical local files",
                 artifacts=artifacts,
                 details=details,
             )
-        if self._hash_if_file(local_file) != baseline_hash or self._text_if_file(local_file) != baseline_content:
+        if self._hash_if_file(local_text_file) != baseline_text_hash or self._text_if_file(local_text_file) != baseline_text_content:
             return self.fail_result(
-                reason="Repeated clean resync changed canonical content despite no local or online change",
+                reason="Repeated clean resync changed passive-text canonical content despite no local or online change",
                 artifacts=artifacts,
                 details=details,
             )
-        if backups_after_resync:
+        if canonical_xlsx_validation_error or xlsx_pair_hashes(local_xlsx_file, self._hash_if_file) != baseline_xlsx_hashes:
+            return self.fail_result(
+                reason=f"Repeated clean resync changed or invalidated canonical XLSX content: {canonical_xlsx_validation_error}",
+                artifacts=artifacts,
+                details=details,
+            )
+        if canonical_image_validation_error or image_set_hashes(local_image_file, self._hash_if_file) != baseline_image_hashes:
+            return self.fail_result(reason=f"Repeated clean resync changed or invalidated canonical image content: {canonical_image_validation_error}", artifacts=artifacts, details=details)
+        if canonical_pdf_validation_error or pdf_pair_hashes(local_pdf_file, self._hash_if_file) != baseline_pdf_hashes:
+            return self.fail_result(
+                reason=f"Repeated clean resync changed or invalidated canonical PDF content: {canonical_pdf_validation_error}",
+                artifacts=artifacts,
+                details=details,
+            )
+        if backups_after_resync or any(xlsx_backups_after_resync.values()) or any(pdf_backups_after_resync.values()) or any(image_backups_after_resync.values()):
             return self.fail_result(
                 reason="Repeated clean resync incorrectly created a safeBackup for an already in-sync unchanged file",
                 artifacts=artifacts,
@@ -222,9 +400,27 @@ class TestCase0074SafeBackupCleanResyncNoConflictValidation(SafeBackupCaseBase):
                 artifacts=artifacts,
                 details=details,
             )
-        if verify.returncode != 0 or self._hash_if_file(verify_file) != baseline_hash or self._text_if_file(verify_file) != baseline_content:
+        if (
+            verify.returncode != 0
+            or self._hash_if_file(verify_text_file) != baseline_text_hash
+            or self._text_if_file(verify_text_file) != baseline_text_content
+        ):
             return self.fail_result(
-                reason="Fresh verification did not confirm that the online file remained unchanged",
+                reason="Fresh verification did not confirm that the online passive-text file remained unchanged",
+                artifacts=artifacts,
+                details=details,
+            )
+        if verify_xlsx_validation_error or xlsx_pair_hashes(verify_xlsx_file, self._hash_if_file) != baseline_xlsx_hashes:
+            return self.fail_result(
+                reason=f"Fresh verification did not confirm that the online XLSX remained unchanged: {verify_xlsx_validation_error}",
+                artifacts=artifacts,
+                details=details,
+            )
+        if verify_image_validation_error or image_set_hashes(verify_image_file, self._hash_if_file) != baseline_image_hashes:
+            return self.fail_result(reason=f"Fresh verification did not confirm that the online image set remained unchanged: {verify_image_validation_error}", artifacts=artifacts, details=details)
+        if verify_pdf_validation_error or pdf_pair_hashes(verify_pdf_file, self._hash_if_file) != baseline_pdf_hashes:
+            return self.fail_result(
+                reason=f"Fresh verification did not confirm that the online PDF remained unchanged: {verify_pdf_validation_error}",
                 artifacts=artifacts,
                 details=details,
             )

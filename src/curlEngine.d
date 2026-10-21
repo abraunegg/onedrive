@@ -1191,12 +1191,18 @@ CurlEngine getCurlInstance() {
 			return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
 		} else {
 			CurlEngine curlEngine = curlEnginePool[$ - 1];
+			// Clear the popped slot too: shortening the pool does not necessarily
+			// clear a stale class reference in its backing allocation.
+			curlEnginePool[$ - 1] = null;
 			curlEnginePool.popBack(); // assumes a LIFO (last-in, first-out) usage pattern
 			
 			// Is this engine stopped?
 			if (curlEngine.http.isStopped) {
-				// return a new curl engine as a stopped one cannot be used
-				if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine was in a stopped state (not usable) - constructing a new CurlEngine instance", ["debug"]);}
+				// This engine has left the pool and cannot be reused. Its destructor
+				// releases any remaining response, HTTP wrapper, and open file.
+				if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("CurlEngine was in a stopped state (not usable) - destroying and constructing a new CurlEngine instance", ["debug"]);}
+				object.destroy(curlEngine);
+				curlEngine = null;
 				return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
 			} else {
 				// When was this engine last used?
@@ -1218,8 +1224,15 @@ CurlEngine getCurlInstance() {
 						addLogEntry(curlTooOldMessage, ["debug"]);
 					}
 					
-					curlEngine.cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
-					curlEngine.shutdownCurlHTTPInstance();  // Assume proper cleanup of any resources used by HTTP
+					// Keep the existing cookie cleanup, but always destroy the
+					// discarded engine, including if cleanup itself throws. Its
+					// destructor owns HTTP shutdown and object destruction.
+					try {
+						curlEngine.cleanup(true);
+					} finally {
+						object.destroy(curlEngine);
+						curlEngine = null;
+					}
 					if ((debugLogging) && (debugHTTPSResponse)) {addLogEntry("Returning NEW curlEngine instance", ["debug"]);}
 					return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
 				} else {

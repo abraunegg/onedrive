@@ -111,33 +111,17 @@ If you need to build the client from source, follow this high-level process:
 ### Minimum Build Requirements
 *   For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space.
 *   Install the required distribution package dependencies covering the required development tools and development libraries for curl, sqlite and dbus where required.
-*   Install the [Digital Mars D Compiler (DMD)](https://dlang.org/download.html), [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc), or, at least version 15 of the [GNU D Compiler (GDC)](https://www.gdcproject.org/)
+*   Install a supported D compiler. For supported Linux distributions, the **preferred compiler is the distribution-provided [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)** package.
 
 > [!IMPORTANT]
-> To compile this application successfully, the minimum supported versions of each compiler are: DMD **2.091.1**, LDC **1.20.1**, and, GDC **15**. Ensuring compatibility and optimal performance necessitates the use of these specific versions or their more recent updates.
+> To compile this application successfully, the minimum compiler versions accepted by the build system are: DMD **2.091.1**, LDC **1.20.1**, and GDC **15**.
 >
-> You only need 1 compiler installed. You do not need to install DMD, LDC and GDC. Please *pick* the most applicable compiler for your distribution.
+> You only need **one** D compiler installed. Where your distribution provides a suitable LDC package, use that package rather than manually installing a separate compiler toolchain. This keeps the compiler and runtime libraries under the distribution package manager and avoids compiler activation/deactivation steps.
 
-#### Installing DMD Compiler
-To install the DMD Compiler, this can be achieved in the following manner:
-```text
-curl -fsS https://dlang.org/install.sh | bash -s dmd
-```
+#### Alternative D Compilers
+[DMD](https://dlang.org/download.html) remains supported when a suitable distribution-provided LDC package is not available or when DMD is specifically required for development or testing.
 
-> [!NOTE]
-> Note the `source ~/dlang/dmd-X.XXX.X/activate` string as this will be needed later when building the client.
-
-#### Installing LDC Compiler
-To install the LDC Compiler, this can be achieved in the following manner:
-```text
-curl -fsS https://dlang.org/install.sh | bash -s ldc
-```
-
-> [!NOTE]
-> Note the `source ~/dlang/ldc-X.XX.X/activate` string as this will be needed later when building the client.
-
-#### Installing GDC Compiler
-You will need at least GDC version 15. If your distribution's repositories include a suitable version, you can install it from there. Common names for the GDC package are listed on the [GDC website](https://www.gdcproject.org/downloads#linux-distribution-packages). If the package is unavailable or its version is too old, you can try building it from source following [these instructions](https://wiki.dlang.org/GDC/Installation).
+[GDC](https://www.gdcproject.org/) version 15 or later is also supported and may be used on platforms where it is the suitable packaged compiler. Common package names are listed on the [GDC website](https://www.gdcproject.org/downloads#linux-distribution-packages).
 
 ### Install Build Dependencies (By Distribution)
 
@@ -156,11 +140,16 @@ CentOS 6.x and RHEL 6.x reached End of Life status on November 30th 2020 and is 
 #### CentOS 7.x | RHEL 7.x
 CentOS 7.x and RHEL 7.x reached End of Life status on June 30th 2024 and is no longer supported or tested against.
 
-#### CentOS Stream 8 | CentOS Stream 9 | CentOS Stream 10
+#### CentOS Stream 8
+CentOS Stream 8 reached End of Life on May 31st 2024 and is no longer supported or tested against.
+
+#### CentOS Stream 9 | CentOS Stream 10
+LDC is provided through EPEL. Enable EPEL for the applicable CentOS Stream release before installing the build dependencies.
+
 ```text
 sudo dnf groupinstall 'Development Tools'
-sudo dnf install libcurl-devel sqlite-devel dbus-devel
-curl -fsS https://dlang.org/install.sh | bash -s dmd
+sudo dnf install epel-release
+sudo dnf install libcurl-devel sqlite-devel dbus-devel ldc
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -176,8 +165,7 @@ Debian 10 reached the end of its five-year LTS window on September 10th 2022 and
 #### Debian 11 | Debian 12 | Debian 13 | Linux Mint Debian Edition 6 | Linux Mint Debian Edition 7 - x86_64
  ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
-curl -fsS https://dlang.org/install.sh | bash -s dmd
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -203,22 +191,7 @@ sudo apt install libnotify-dev
 
 ```text
 sudo dnf group install development-tools
-sudo dnf install libcurl-devel sqlite-devel dbus-devel
-```
-Before running the dmd install you need to check for the option 'use-keyboxd' in your gnupg common.conf file and comment it out while running the install.
-```text
-curl -fsS https://dlang.org/install.sh | bash -s dmd
-```
-Or you may get the following error:
-```text
-myuser@fedora:~$ curl -fsS https://dlang.org/install.sh | bash -s dmd
-Downloading https://dlang.org/d-keyring.gpg
-######################################################################## 100.0%
-gpg: Note: Specified keyrings are ignored due to option "use-keyboxd"
-gpg: Signature made Thu 06 Mar 2025 10:45:29 GMT
-gpg:                using RSA key F3F896F3274BBD9BBBA59058710592E7FB7AF6CA
-gpg: Can't check signature: No public key
-Invalid signature https://dlang.org/d-keyring.gpg.sig
+sudo dnf install libcurl-devel sqlite-devel dbus-devel ldc
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -247,8 +220,7 @@ sudo emerge --onlydeps net-misc/onedrive
 #### MX Linux 25
  ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
-curl -fsS https://dlang.org/install.sh | bash -s dmd
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -258,7 +230,7 @@ sudo apt install libnotify-dev
 #### OpenSUSE Leap | OpenSUSE Tumbleweed
 ```text
 sudo zypper refresh
-sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static dbus-1-devel
+sudo zypper install gcc git libcurl-devel sqlite3-devel ldc dbus-1-devel
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -338,10 +310,11 @@ sudo apt install libnotify-dev
 
 #### RedHat Enterprise Linux (RHEL) 8 | RedHat Enterprise Linux (RHEL) 9 | RedHat Enterprise Linux (RHEL) 10
 
+LDC is available for supported RHEL releases through [EPEL](https://docs.fedoraproject.org/en-US/epel/getting-started/). Enable the appropriate EPEL repository and its required CodeReady Builder repository for your RHEL release before installing the build dependencies.
+
 ```text
 sudo dnf groupinstall 'Development Tools'
-sudo dnf install libcurl-devel sqlite-devel dbus-devel
-curl -fsS https://dlang.org/install.sh | bash -s dmd
+sudo dnf install libcurl-devel sqlite-devel dbus-devel ldc
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -371,8 +344,7 @@ Ubuntu 20.x LTS reached the end of its five-year LTS window on May 31th 2025 and
 
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl systemd-dev libdbus-1-dev
-curl -fsS https://dlang.org/install.sh | bash -s dmd
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc systemd-dev libdbus-1-dev
 ```
 For GUI notifications the following is also necessary:
 ```text
@@ -383,47 +355,29 @@ sudo apt install libnotify-dev
 
 ### High Level Steps to building the OneDrive Client for Linux
 The overall process is as follows:
-1. Install the required platform dependencies (see above)
-2. If necessary, enable your DMD or LDC compiler environment
-3. Clone the GitHub repository
-4. Run the configure script adding any applicable build options (see below), then build the application
-5. Either run the built binary directly from the build directory, or install it system-wide
-6. If applicable, deactivate the DMD or LDC compiler environment when finished
+1. Install the required platform dependencies and the distribution-provided LDC package (see above)
+2. Clone the GitHub repository
+3. Run the configure script adding any applicable build options (see below), then build the application
+4. Either run the built binary directly from the build directory, or install it system-wide
 
 ### Building the Application Using Default configure Settings
 
-#### Building the application on Linux using DMD, LDC or GDC
-You must first **activate** the compiler environment before building. For example:
-```text
-source ~/dlang/dmd-2.091.1/activate
+#### Building the application on Linux using LDC, DMD or GDC
+When LDC is installed from your distribution packages, no compiler activation step is required. The compiler is installed into the normal system path and can be detected directly by `configure`.
 
-# or
-
-source ~/dlang/ldc-1.20.1/activate
-```
-
-This command updates your environment (`PATH`, `LIBRARY_PATH`, `LD_LIBRARY_PATH`, etc.) so that the correct compiler is available.
-
-If you skip this step, the build will fail because the compiler will not be found.
-
-> [!NOTE]
-> Replace the `source` string with the compiler environment activation string displayed when you installed the relevant compiler.
-
-Once the compiler is activated, clone, build and install the client:
+Clone, build and install the client:
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
 ./configure
 make clean; make;
 sudo make install
-deactivate
 ```
 
 > [!NOTE]
-> If using GDC ≥ 15, specify it explicitly when configuring the application:
-> ```text
-> ./configure DC=gdc
-> ```
+> If more than one supported D compiler is installed and you need to select a specific compiler, pass it explicitly to `configure`. For example, use `./configure DC=ldc2` for LDC or `./configure DC=gdc` for GDC.
+>
+> If you intentionally install a compiler outside your distribution package manager, follow that compiler's own instructions to make it available in your shell environment before running `configure`.
 
 
 #### Building the application on FreeBSD using gmake

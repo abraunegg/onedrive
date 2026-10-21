@@ -17,6 +17,7 @@ Before reading this document, please ensure you are running application version 
   - [Understanding OneDrive Client for Linux Operational Modes](#understanding-onedrive-client-for-linux-operational-modes)
     - [Standalone Synchronisation Operational Mode (Standalone Mode)](#standalone-synchronisation-operational-mode-standalone-mode)
     - [Ongoing Synchronisation Operational Mode (Monitor Mode)](#ongoing-synchronisation-operational-mode-monitor-mode)
+      - [Machine-readable monitor runtime status](#machine-readable-monitor-runtime-status)
 - [Using the OneDrive Client for Linux to synchronise your data](#using-the-onedrive-client-for-linux-to-synchronise-your-data)
   - [Client Documentation](#client-documentation)
   - [Increasing application logging level](#increasing-application-logging-level)
@@ -64,13 +65,13 @@ Before reading this document, please ensure you are running application version 
   - [How to Synchronise Multiple SharePoint Libraries simultaneously?](#how-to-synchronise-multiple-sharepoint-libraries-simultaneously)
   - [How to Receive Real-time Changes from Microsoft OneDrive Service, instead of waiting for the next sync period?](#how-to-receive-real-time-changes-from-microsoft-onedrive-service-instead-of-waiting-for-the-next-sync-period)
   - [How to initiate the client as a background service?](#how-to-initiate-the-client-as-a-background-service)
+    - [Choosing a systemd service](#choosing-a-systemd-service)
+    - [Running OneDrive as a non-root user with a systemd system service](#running-onedrive-as-a-non-root-user-with-a-systemd-system-service)
+    - [Running OneDrive with a systemd user service](#running-onedrive-with-a-systemd-user-service)
+    - [Microsoft Intune SSO and systemd startup](#microsoft-intune-sso-and-systemd-startup)
     - [OneDrive service running as root user via init.d](#onedrive-service-running-as-root-user-via-initd)
-    - [OneDrive service running as root user via systemd (Arch, Ubuntu, Debian, OpenSuSE, Fedora)](#onedrive-service-running-as-root-user-via-systemd-arch-ubuntu-debian-opensuse-fedora)
-    - [OneDrive service running as root user via systemd (Red Hat Enterprise Linux, CentOS Linux)](#onedrive-service-running-as-root-user-via-systemd-red-hat-enterprise-linux-centos-linux)
-    - [OneDrive service running as a non-root user via systemd (All Linux Distributions)](#onedrive-service-running-as-a-non-root-user-via-systemd-all-linux-distributions)
-    - [OneDrive service running as a non-root user via systemd (with notifications enabled) (Arch, Ubuntu, Debian, OpenSuSE, Fedora)](#onedrive-service-running-as-a-non-root-user-via-systemd-with-notifications-enabled-arch-ubuntu-debian-opensuse-fedora)
     - [OneDrive service running as a non-root user via runit (antiX, Devuan, Artix, Void)](#onedrive-service-running-as-a-non-root-user-via-runit-antix-devuan-artix-void)
-  - [How to start a user systemd service at boot without user login?](#how-to-start-a-user-systemd-service-at-boot-without-user-login)
+  - [Running the systemd user service without login (lingering)](#running-the-systemd-user-service-without-login-lingering)
   - [How to access Microsoft OneDrive service through a proxy](#how-to-access-microsoft-onedrive-service-through-a-proxy)
   - [How to set up SELinux for a sync folder outside of the home folder](#how-to-set-up-selinux-for-a-sync-folder-outside-of-the-home-folder)
   - [Why do I see `Performing a database consistency and integrity check on locally stored data` every monitor cycle?](#why-do-i-see-performing-a-database-consistency-and-integrity-check-on-locally-stored-data-every-monitor-cycle)
@@ -80,11 +81,42 @@ Before reading this document, please ensure you are running application version 
 ## Important Notes
 
 ### Memory Usage
-Starting with version 2.5.x, the application has been completely rewritten. It is crucial to understand the memory requirements to ensure the application runs smoothly on your system.
 
-During a `--resync` or full online scan, the OneDrive Client may use approximately 1GB of memory for every 100,000 objects stored online. This is because the client retrieves data for all objects via the OneDrive API before processing them locally. Once this process completes, the memory is freed. To avoid performance issues, ensure your system has sufficient available memory. If the system starts using swap space due to insufficient free memory, this can significantly slow down the application and impact overall performance.
+The amount of memory used by the OneDrive Client depends on several factors, including the number of objects stored online, the type of synchronisation being performed, the amount of metadata returned by Microsoft OneDrive, configured filtering rules, and any concurrent upload or download activity.
 
-To avoid potential system instability or the client being terminated by your Out-Of-Memory (OOM) process monitors, please ensure your system has sufficient memory allocated or configure adequate swap space.
+Starting with version 2.5.12, large online enumerations are processed using bounded working sets rather than retaining the complete set of retrieved objects in memory before processing begins. This significantly reduces the memory required for large OneDrive accounts during operations such as an initial synchronisation, `--resync`, Full Scan reconciliation and other authoritative online scans.
+
+In monitor mode, the application also performs managed-memory collection and heap minimisation after each completed monitor loop. This allows temporary objects created during synchronisation to be reclaimed promptly and unused managed heap capacity to be returned to the operating system where possible.
+
+> [!IMPORTANT]
+> Resident Set Size (RSS) does not directly represent the amount of application data that is currently in use.
+>
+> The D runtime, system allocator, SQLite, curl and other native libraries may retain previously allocated memory for later reuse. As a result, RSS may remain above its initial value even after temporary synchronisation data has been released.
+>
+> For a long-running monitor process, the important behaviour is that memory reaches a bounded working level and is subsequently reused, rather than increasing continuously after each synchronisation or Full Scan.
+
+The previous guidance for early 2.5.x releases that suggested allowing approximately **1 GB of memory for every 100,000 OneDrive objects** is no longer applicable to version 2.5.12 and later.
+
+As part of the version 2.5.12 memory and large-account validation, the client was repeatedly tested against a fixed dataset containing **101,494 OneDrive objects**. In these controlled tests, both the normal Microsoft Graph `/delta` pathway and the generated `/children` pathway demonstrated bounded memory behaviour over repeated authoritative scans rather than memory usage increasing in proportion to each scan.
+
+These results are validation data rather than a guaranteed memory requirement. Actual memory consumption will vary depending on platform, compiler/runtime, account contents, enabled features and workload.
+
+When diagnosing memory behaviour, the developer option:
+
+```text
+display_memory = "true"
+```
+
+can be enabled to display memory information at each monitor-loop collection boundary.
+
+The reported values include:
+
+- `usedSize` — managed heap memory currently containing live allocations.
+- `freeSize` — managed heap capacity currently reserved and available for reuse.
+- `allocatedInCurrentThread` — a cumulative allocation counter. This value will continually increase while the application runs and **does not represent current memory usage**.
+- `Resident Set Size (RSS)` — memory currently resident in the process according to the operating system, including managed and native allocations.
+
+When investigating a suspected memory issue, trends across multiple monitor loops and Full Scans are more meaningful than any individual RSS reading.
 
 ### Guidelines for Local File and Folder Naming in the Synchronisation Directory
 To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adhere strictly to the prescribed naming conventions for your files and folders within the sync directory. The guidelines detailed below are designed to preempt potential sync failures by aligning with Microsoft Windows Naming Conventions, coupled with specific OneDrive restrictions.
@@ -399,7 +431,7 @@ If the browser configured by `BROWSER` cannot be launched, the application falls
 
 This local listener is only used during the authentication process. It binds only to the loopback interface, does not require any inbound firewall changes, and is closed once authentication has completed or failed.
 
-Following successful **initial** graphical authentication, the completion page also displays an optional **Help sustain OneDrive Client for Linux** section with a link to support ongoing development, testing and maintenance through [GitHub Sponsors](https://github.com/sponsors/abraunegg?metadata_campaign=onedrive-sponsorship&metadata_source=github&metadata_content=usage-auth). Sponsorship is entirely optional. This section is not displayed during `--reauth`, is not shown as a desktop notification, and is not added to normal terminal or synchronisation output.
+Following successful graphical authentication, including an explicit `--reauth`, the completion page also displays an optional **Help sustain OneDrive Client for Linux** section with a link to support ongoing development, testing and maintenance through [GitHub Sponsors](https://github.com/sponsors/abraunegg?metadata_campaign=onedrive-sponsorship&metadata_source=github&metadata_content=usage-auth). Sponsorship is entirely optional. This section is not shown as a desktop notification and is not added to normal terminal or synchronisation output.
 
 **Example Terminal Session within Graphical Desktop session:**
 ```text
@@ -617,7 +649,7 @@ To use this method of authentication, you must add the following configuration t
 ```
 use_intune_sso = "true"
 ```
-The application will check to ensure that Intune is operational and that the required dbus elements are available. Should these be available, the following will be displayed:
+The application checks for the required Microsoft Identity Broker D-Bus capability and can automatically activate the broker when it is registered but not already running. Broker availability does **not** guarantee that authentication is ready, particularly before graphical login. See [Microsoft Intune SSO and systemd startup](#microsoft-intune-sso-and-systemd-startup) for validated user-service, SSH-login, graphical-login and lingering behaviour. When the required capability is available, the following will be displayed:
 ```
 ...
 Client has been configured to use Intune SSO via Microsoft Identity Broker dbus session - checking usage criteria
@@ -625,17 +657,19 @@ Intune SSO via Microsoft Identity Broker dbus session usage criteria met - will 
 ...
 ```
 > [!IMPORTANT]
-> **Intune Authentication – Required Component Versions**
+> **Intune Authentication – Validated Component Versions**
 > 
-> | Component                    | RedHat Enterprise Linux 9.x                  | Ubuntu 24.04                          |
-> |:-----------------------------|:---------------------------------------------|:--------------------------------------|
-> | Microsoft Edge               | microsoft-edge-stable-146.0.3856.97-1.x86_64 | microsoft-edge-stable 146.0.3856.97-1 |
-> | Microsoft Identity Broker    | microsoft-identity-broker-3.0.1-1.el9.x86_64 | microsoft-identity-broker 3.0.1-noble |
-> | Intune Portal                | intune-portal-1.2603.31-1.el9.x86_64         | intune-portal 1.2603.31-noble         |
-> | dbus                         | dbus-1.12.20-8.el9.x86_64                    | dbus 1.14.10-4ubuntu4.1               |
-> | dbus-broker                  | dbus-broker-28-7.el9.x86_64                  | dbus-daemon 1.14.10-4ubuntu4.1        |
+> | Component                 | Red Hat Enterprise Linux 9.8                  | Red Hat Enterprise Linux 10.2                  | Ubuntu 24.04                           | Ubuntu 26.04                              |
+> |:--------------------------|:----------------------------------------------|:-----------------------------------------------|:---------------------------------------|:------------------------------------------|
+> | Microsoft Edge            | microsoft-edge-stable-155.0.4283.45-1.x86_64 | microsoft-edge-stable-155.0.4283.45-1.x86_64  | microsoft-edge-stable 155.0.4283.45-1 | microsoft-edge-stable 155.0.4283.45-1     |
+> | Microsoft Identity Broker | microsoft-identity-broker-3.0.2-1.el9.x86_64 | microsoft-identity-broker-3.0.2-1.el10.x86_64 | microsoft-identity-broker 3.0.2-noble | microsoft-identity-broker 3.0.2-resolute  |
+> | Intune Portal             | intune-portal-1.2609.5-1.el9.x86_64          | intune-portal-1.2609.5-1.el10.x86_64          | intune-portal 1.2609.5-noble          | intune-portal 1.2609.5-resolute           |
+> | dbus                      | dbus-1.12.20-8.el9.x86_64                    | dbus-1.14.10-5.el10.x86_64                    | dbus 1.14.10-4ubuntu4.1               | dbus 1.16.2-2ubuntu4                      |
+> | dbus-broker               | dbus-broker-28-9.el9_8.x86_64                | dbus-broker-36-5.el10_2.x86_64                | not separately queried                | not separately queried                    |
 >
-> Microsoft Intune integration tested and validated with the above distributions and package versions on: **10 April 2026**
+> Microsoft Intune integration was tested and validated with `onedrive v2.5.11-63-g47c9a3c` using the above distributions and package versions on: **13 October 2026**
+>
+> On all four platforms, the client detected the Microsoft Identity Broker D-Bus session, confirmed that the Intune SSO usage criteria were met, authenticated successfully, and operated correctly against Microsoft OneDrive.
 
 > [!IMPORTANT]
 > The installation and configuration of Microsoft Intune for your platform is beyond the scope of this documentation.
@@ -771,6 +805,112 @@ Performing a database consistency and integrity check on locally stored data
 means the client is validating its local database state against the local filesystem. It does not, by itself, mean that the client is performing an online full-scan true-up.
 
 The configuration option `monitor_fullscan_frequency` only controls the scheduled online full-scan true-up cadence in `--monitor` mode. An online full-scan true-up is when the client deliberately does not use the stored Microsoft Graph `/delta` link for that pass and instead performs a broader online reconciliation pass. The database consistency check and local filesystem scan may still occur during normal monitor sync cycles.
+
+##### Machine-readable monitor runtime status
+
+When `--monitor` is running, the client publishes a small machine-readable JSON status document in the same application state directory as the `items.sqlite3` database:
+
+```text
+monitor-status.json
+```
+
+For a default user configuration this is normally:
+
+```text
+~/.config/onedrive/monitor-status.json
+```
+
+For an alternate configuration directory, the file is created alongside the `items.sqlite3` used by that configuration. The resolved status-file location is also displayed by the application's runtime configuration output.
+
+This capability is enabled by default through:
+
+```text
+monitor_status = "true"
+```
+
+and can be disabled with:
+
+```text
+monitor_status = "false"
+```
+
+The file is a **runtime observability interface**. It publishes state the monitor process already knows; creating or updating it does not perform an additional Microsoft Graph request, database reconciliation or filesystem scan. It is independent of `display_memory` and does not require verbose or debug logging.
+
+A typical status document while a monitor cycle is running resembles:
+
+```json
+{
+    "application": "onedrive",
+    "conditions": {
+        "onedrive_reachability": "reachable",
+        "system_time": "TIME_OK"
+    },
+    "instance_id": "1027995-2026-10-01T21:43:16.2285174Z",
+    "mode": {
+        "download_only": false,
+        "monitor": true,
+        "monitor_interval_seconds": 300,
+        "upload_only": false
+    },
+    "pid": 1027995,
+    "process": {
+        "current_cycle_started_at": "2026-10-01T21:43:26.9855399Z",
+        "last_loop_completed_at": "",
+        "monitor_loop": 1,
+        "runtime_seconds": 10,
+        "started_at": "2026-10-01T21:43:16.2285174Z",
+        "state": "syncing"
+    },
+    "schema_version": 1,
+    "sync": {
+        "initial_successful_sync_completed": false,
+        "last_cycle": {
+            "completed_at": "",
+            "download_failures": 0,
+            "duration_seconds": 0,
+            "recycle_bin_failures": 0,
+            "result": "never_run",
+            "started_at": "",
+            "upload_failures": 0
+        },
+        "last_successful_sync_at": "",
+        "successful_cycle_count": 0
+    },
+    "updated_at": "2026-10-01T21:43:26.9855405Z"
+}
+```
+
+The key fields are:
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | Version of the JSON status schema. Consumers should use this when validating compatibility. |
+| `pid` / `instance_id` | Identity of the monitor process instance that owns the status document. |
+| `mode` | Relevant operating-mode values, including `download_only`, `upload_only` and the scheduled monitor interval. |
+| `process.state` | Current monitor runtime state. During active reconciliation this is `syncing`; after a successful completed cycle this is `idle`; a non-successful completed cycle is represented as `degraded`. |
+| `process.monitor_loop` | Current scheduled monitor-loop number. |
+| `process.current_cycle_started_at` | UTC timestamp for the currently running scheduled monitor cycle, or an empty string when no cycle is active. |
+| `process.last_loop_completed_at` | UTC timestamp for the most recently completed scheduled monitor cycle. |
+| `sync.initial_successful_sync_completed` | Becomes `true` after this process instance completes its first successful monitor synchronisation cycle. This is particularly useful as a service-readiness signal. |
+| `sync.successful_cycle_count` | Number of successfully completed monitor synchronisation cycles for the current process instance. |
+| `sync.last_successful_sync_at` | UTC timestamp of the most recent successful cycle. |
+| `sync.last_cycle.result` | Result of the most recently completed scheduled cycle. Values include `success`, `partial_failure`, `service_unreachable`, `time_unsafe`, `interrupted` and `never_run`. |
+| `sync.last_cycle.*_failures` | Counts of failed downloads, uploads and local Recycle Bin moves recorded for the most recently completed cycle. Detailed failed paths remain in the normal application output/log rather than being duplicated into the JSON status file. |
+| `conditions.onedrive_reachability` | Current known Microsoft OneDrive reachability state, such as `reachable`, `unreachable` or `unknown` during very early startup. |
+| `conditions.system_time` | The application's canonical system-time validation state, for example `TIME_OK`. |
+| `updated_at` | UTC timestamp when the status document was last published. |
+
+> [!IMPORTANT]
+> `monitor-status.json` and `--display-sync-status` answer different questions.
+>
+> * `monitor-status.json` reports the operational state and outcome of the running `--monitor` process.
+> * `--display-sync-status` performs a separate read-only point-in-time assessment of whether Microsoft OneDrive and the configured local filesystem scope are currently converged.
+>
+> For example, a `--download-only` monitor can have `sync.initial_successful_sync_completed = true` and a most recent cycle result of `success`, while `--display-sync-status` reports `NOT IN SYNC` because additional local-only files exist. Both results are correct: the monitor successfully completed all work permitted by its configured operating mode, while the local and remote data states are not identical.
+
+All status timestamps are emitted in UTC and use a trailing `Z`. This is deliberate so monitoring systems can compare timestamps without ambiguity across hosts, containers and daylight-saving transitions. Human-facing tools should convert the UTC timestamp into the viewer's local timezone when displaying it.
+
+The status file is written with restrictive permissions and replaced atomically so readers see a complete old or new document rather than partially-written JSON. On an orderly `--monitor` shutdown the file is removed. A hard termination such as `SIGKILL`, a process crash or loss of power can leave the last file behind, so external tooling should not treat file existence alone as definitive liveness after an abnormal termination; use the process identity and timestamps as well.
 
 Two common errors can occur when using monitor mode:
 *   Initialisation failure
@@ -1839,6 +1979,8 @@ Sync with Microsoft OneDrive has completed, however there are items that failed 
 ```
 A file list of failed upload or download items will also be listed to allow you to determine your next steps.
 
+When running in `--monitor` mode with `monitor_status = "true"`, the same cycle outcome is also reflected in `monitor-status.json`. A clean cycle is recorded as `sync.last_cycle.result = "success"`; cycles containing failed transfers are recorded as `partial_failure` together with the applicable failure counts. See [Machine-readable monitor runtime status](#machine-readable-monitor-runtime-status).
+
 In order to fix the upload or download failures, you may need to:
 *   Review the application output to determine what happened
 *   Re-try your command utilising a resync to ensure your system is correctly synced with your Microsoft OneDrive Account
@@ -2184,10 +2326,131 @@ disable_websocket_support = "true"
 > WebSocket and webhook notifications are change **signals**; they do not contain the complete synchronisation data. When a signal is received, the client queries Microsoft OneDrive through the Microsoft Graph API and performs the normal reconciliation process. The configured `monitor_interval` remains the scheduled fallback so that synchronisation does not depend solely on receipt of a near real-time notification.
 
 ### How to initiate the client as a background service?
-There are a few ways to employ onedrive as a service:
-* via init.d
-* via systemd
-* via runit
+
+OneDrive can run in the background through systemd, init.d or runit. The following systemd guidance applies to distributions that provide a systemd user manager and the corresponding OneDrive unit files, including current Ubuntu, Fedora and Red Hat Enterprise Linux releases.
+
+#### Choosing a systemd service
+
+The client provides two different systemd units. **Select one service type for each OneDrive configuration and synchronisation directory.**
+
+| Environment | Recommended service | How it runs |
+|---|---|---|
+| Graphical desktop, desktop notifications or Microsoft Intune SSO | **User service:** `onedrive.service` | Managed by the user's systemd manager; may start at graphical or SSH login, or at boot with lingering |
+| Headless server using previously configured, non-Intune authentication | **System service:** `onedrive@<username>.service` | Managed by the system manager; runs under the specified non-root Linux account independently of login |
+| Headless environment requiring a persistent systemd user service | **User service with lingering**, where appropriate | Starts the user manager at boot; does not create a graphical desktop session |
+
+The system service does not automatically inherit a user's graphical-session environment or user D-Bus context. It is therefore **not recommended for Microsoft Intune SSO or GUI notifications**. For Intune SSO, use the user service and see [Microsoft Intune SSO and systemd startup](#microsoft-intune-sso-and-systemd-startup).
+
+> [!IMPORTANT]
+> Never run a system-level and user-level OneDrive service simultaneously against the same configuration, item database or synchronisation directory. Stop and disable the existing service before switching. Normal service operation should use a non-root account; running OneDrive as root can create root-owned synchronised files.
+
+> [!NOTE]
+> The user unit must be installed in the distribution's **systemd user unit directory** (typically `/usr/lib/systemd/user/`), while the template system unit belongs in the **systemd system unit directory** (typically `/usr/lib/systemd/system/`). Check availability with `systemctl --user cat onedrive.service` or `systemctl cat onedrive@.service` respectively. The correct installation paths are determined by the distribution's systemd configuration; source installations may use `/usr/local/bin/onedrive` for the executable.
+
+#### Running OneDrive as a non-root user with a systemd system service
+
+This option suits headless or unattended systems using an already-authorised OneDrive configuration **without a requirement for Microsoft Intune SSO or desktop notifications**.
+
+1. Sign in as the intended non-root Linux account, complete the initial authorisation and verify that a standalone synchronisation works:
+
+   ```bash
+   onedrive --sync --verbose
+   ```
+
+2. Enable and start the system service, substituting that account's username:
+
+   ```bash
+   sudo systemctl enable --now "onedrive@$(whoami).service"
+   ```
+
+3. Examine its state and logs:
+
+   ```bash
+   systemctl status "onedrive@$(whoami).service"
+   journalctl -u "onedrive@$(whoami).service" -f
+   ```
+
+The system service uses the selected account but starts independently of that user's interactive login. It does not require `loginctl enable-linger`.
+
+#### Running OneDrive with a systemd user service
+
+**Recommended for normal graphical desktop use**, including desktop notifications and Microsoft Intune SSO. This procedure also works on current RHEL distributions when the systemd user unit is installed correctly; `systemctl --user` is **not** exclusive to Ubuntu, Fedora or other desktop-focused distributions.
+
+1. Log into the graphical desktop as the user who will run OneDrive. Complete initial authorisation and verify that synchronisation works.
+2. Stop and disable any existing system-level `onedrive@<username>.service` instance using the same configuration:
+
+   ```bash
+   sudo systemctl disable --now "onedrive@$(whoami).service"
+   ```
+
+3. Enable and start the user service **as that user**, without `sudo`:
+
+   ```bash
+   systemctl --user enable --now onedrive.service
+   ```
+
+4. Check its status and logs:
+
+   ```bash
+   systemctl --user status onedrive.service
+   journalctl --user -u onedrive.service -f
+   ```
+
+Without lingering, the user service starts when the **systemd user manager** starts, which may happen following an **SSH login as well as graphical login**. This does not imply that a graphical desktop or Microsoft Identity Broker authentication is already available. The user manager normally stops after the user's last login session ends unless lingering is enabled.
+
+> [!TIP]
+> **Troubleshooting `systemctl --user` and missing XDG/D-Bus environment variables**
+>
+> On some Linux installations, including some SSH, `su` or custom login environments, `systemctl --user` can report:
+>
+> ```text
+> Failed to connect to bus: No such file or directory
+> ```
+>
+> An absent or incorrect `XDG_RUNTIME_DIR` or `DBUS_SESSION_BUS_ADDRESS` may be responsible **when the user's systemd manager and D-Bus socket are already running**. Check these before changing anything:
+>
+> ```bash
+> id -u
+> printf 'XDG_RUNTIME_DIR=%s\n' "$XDG_RUNTIME_DIR"
+> printf 'DBUS_SESSION_BUS_ADDRESS=%s\n' "$DBUS_SESSION_BUS_ADDRESS"
+> ls -l "/run/user/$(id -u)/bus"
+> ```
+>
+> If the socket exists for the **current user**, but the environment variables are absent or incorrect, the original workaround can be applied to the current shell:
+>
+> ```bash
+> export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+> export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+> systemctl --user status onedrive.service
+> ```
+>
+> If this resolves the issue, review how the login session initialises its environment (including `pam_systemd`, where applicable). On a system where this is an established, environment-specific requirement, the exports may be added to the relevant interactive shell startup file, such as `~/.bashrc`, but **not as a blanket recommendation**. Re-login to test persistent changes. Do not use these variables to connect as root to another user's D-Bus socket.
+>
+> **Important:** these exports do not create a missing user manager or D-Bus socket, and do not provide a graphical desktop session or make Microsoft Identity Broker authentication available before GUI login. If `/run/user/$(id -u)/bus` does not exist, investigate user-manager and PAM login-session startup instead of merely exporting the variables.
+
+> [!NOTE]
+> **Legacy Raspberry Pi and other minimal installations:** Historical troubleshooting reports described systems where a root-owned user service or its XDG environment did not survive reboot reliably. Where a genuine boot-time, non-interactive service is required, the **system-level** `onedrive@<username>.service` described above is an alternative because it is managed by the system manager rather than a root user-manager session. An older workaround copied or linked configuration from `/home/root/.config/onedrive` to `/root/.config/onedrive`; do **not** assume that `/home/root` exists or that such a link is needed. Use the correct configuration for the account that will run OneDrive, and prefer a normal non-root account to avoid root-owned synchronised files.
+
+#### Microsoft Intune SSO and systemd startup
+
+When `use_intune_sso = "true"`, OneDrive communicates with Microsoft Identity Broker over the **user D-Bus**. The broker can be registered as `com.microsoft.identity.broker1` and marked **`(activatable)`** even when no broker process is running. The client can request automatic broker activation; **D-Bus activation or ownership alone does not establish authentication readiness**.
+
+On **Ubuntu 24.04, Ubuntu 26.04, RHEL 9.8 and RHEL 10.2**, the following startup and recovery behaviour was validated with the updated client in October 2026:
+
+| Startup condition | Observed Intune SSO behaviour |
+|---|---|
+| Graphical desktop available; broker already running | Authentication succeeded |
+| Graphical desktop available; broker inactive but D-Bus activatable | Client activated the broker and authentication succeeded |
+| SSH login before graphical login, without lingering | Enabled user service could start, but broker authentication failed until graphical login |
+| Boot before graphical login, with lingering enabled | User service started at boot, but broker authentication failed until graphical login |
+| Subsequent graphical login, with or without lingering | Existing systemd restart behaviour retried OneDrive; authentication succeeded and synchronisation completed without manual restart |
+
+The supplied user unit uses `Restart=on-failure` and `RestartSec=3`, with a 15-second `ExecStartPre` delay. Authentication failures can therefore generate **repeated failed attempts and restarts** until the graphical environment is ready. This is observed recovery behaviour, **not a guarantee of endless retries**: systemd start limits, a different unit configuration and `RestartPreventExitStatus=78` can alter restarting.
+
+**Recommended configuration:** for desktop users authenticating through Microsoft Intune SSO, use `systemctl --user enable --now onedrive.service` and ordinarily leave lingering disabled. Enabling lingering **does not make Intune SSO work before graphical login**; it allows the user manager and OneDrive to start earlier. A system service should not be presented as a substitute for a functioning graphical-session broker.
+
+> [!NOTE]
+> These observations describe the four tested operating-system environments and their installed Microsoft Identity Broker configurations. They do not establish a universal requirement for every Linux distribution or broker version. Whether token renewal continues after graphical logout was not validated by the startup/recovery tests.
 
 #### OneDrive service running as root user via init.d
 ```text
@@ -2199,118 +2462,6 @@ To view the logs, execute:
 tail -f /var/log/onedrive/<username>.onedrive.log
 ```
 To alter the 'user' under which the client operates (typically root by default), manually modify the init.d service file and adjust `daemon --user root onedrive_service.sh` to match the correct user.
-
-#### OneDrive service running as root user via systemd (Arch, Ubuntu, Debian, OpenSuSE, Fedora)
-Initially, switch to the root user with `su - root`, then activate the systemd service:
-```text
-systemctl --user enable onedrive
-systemctl --user start onedrive
-```
-
-> [!IMPORTANT]
-> This will execute the 'onedrive' process with a UID/GID of '0', which means any files or folders created will be owned by 'root'.
-
-> [!IMPORTANT]
-> The `systemctl --user` command is not applicable to Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms - see below.
-
-To monitor the service's status, use the following:
-```text
-systemctl --user status onedrive.service
-```
-
-To observe the systemd application logs, use:
-```text
-journalctl --user-unit=onedrive -f
-```
-
-> [!TIP]
-> For systemd to function correctly, it requires the presence of XDG environment variables. If you encounter the following error while enabling the systemd service:
-> ```text
-> Failed to connect to bus: No such file or directory
-> ```
-> The most likely cause is missing XDG environment variables. To resolve this, add the following lines to `.bashrc` or another file executed upon user login:
-> ```text
-> export XDG_RUNTIME_DIR="/run/user/$UID"
-> export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
-> ```
-> 
-> To apply this change, you must log out of all user accounts where it has been made.
-
-> [!IMPORTANT]
-> On certain systems (e.g., Raspbian / Ubuntu / Debian on Raspberry Pi), the XDG fix above may not persist after system reboots. An alternative to starting the client via systemd as root is as follows:
-> 1. Create a symbolic link from `/home/root/.config/onedrive` to `/root/.config/onedrive/`.
-> 2. Establish a systemd service using the '@' service file: `systemctl enable onedrive@root.service`.
-> 3. Start the root@service: `systemctl start onedrive@root.service`.
->
-> This ensures that the service correctly restarts upon system reboot.
-
-To examine the systemd application logs, run:
-```text
-journalctl --unit=onedrive@<username> -f
-```
-
-#### OneDrive service running as root user via systemd (Red Hat Enterprise Linux, CentOS Linux)
-```text
-systemctl enable onedrive
-systemctl start onedrive
-```
-> [!IMPORTANT]
-> This will execute the 'onedrive' process with a UID/GID of '0', meaning any files or folders created will be owned by 'root'.
-
-To view the systemd application logs, execute:
-```text
-journalctl --unit=onedrive -f
-```
-
-#### OneDrive service running as a non-root user via systemd (All Linux Distributions)
-In some instances, it is preferable to run the OneDrive client as a service without the 'root' user. Follow the instructions below to configure the service for your regular user login.
-
-1. As the user who will run the service, launch the application in standalone mode, authorise it for use, and verify that synchronisation is functioning as expected:
-```text
-onedrive --sync --verbose
-```
-2. After validating the application for your user, switch to the 'root' user, where <username> is your username from step 1 above.
-```text
-systemctl enable onedrive@<username>.service
-systemctl start onedrive@<username>.service
-```
-3. To check the service's status for the user, use the following:
-```text
-systemctl status onedrive@<username>.service
-```
-
-To observe the systemd application logs, use:
-```text
-journalctl --unit=onedrive@<username> -f
-```
-
-#### OneDrive service running as a non-root user via systemd (with notifications enabled) (Arch, Ubuntu, Debian, OpenSuSE, Fedora)
-In some scenarios, you may want to receive GUI notifications when using the client as a non-root user. In this case, follow these steps:
-
-1. Log in via the graphical UI as the user you want to enable the service for.
-2. Disable any `onedrive@` service files for your username, e.g.:
-```text
-sudo systemctl stop onedrive@alex.service
-sudo systemctl disable onedrive@alex.service
-```
-3. Enable the service as follows:
-```text
-systemctl --user enable onedrive
-systemctl --user start onedrive
-```
-
-To check the service's status for the user, use the following:
-```text
-systemctl --user status onedrive.service
-```
-
-To view the systemd application logs, execute:
-```text
-journalctl --user-unit=onedrive -f
-```
-
-> [!IMPORTANT]
-> The `systemctl --user` command is not applicable to Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms.
 
 #### OneDrive service running as a non-root user via runit (antiX, Devuan, Artix, Void)
 
@@ -2374,13 +2525,25 @@ journalctl --user-unit=onedrive -f
 > [!NOTE]
 > For additional details, you can refer to Void's documentation on [Per-User Services](https://docs.voidlinux.org/config/services/user-services.html)
 
-### How to start a user systemd service at boot without user login?
-In some situations, it may be necessary for the systemd service to start without requiring your 'user' to log in.
+### Running the systemd user service without login (lingering)
 
-To address this issue, you need to reconfigure your 'user' account so that the systemd services you've created launch without the need for you to log in to your system:
-```text
-loginctl enable-linger <your_user_name>
+By default, a systemd user manager starts when the user logs in, **including through SSH**, and normally stops after the last login session ends. Lingering changes that lifecycle: it allows the user's manager, and enabled user services, to start at boot and remain available after logout.
+
+To enable lingering for a user:
+
+```bash
+sudo loginctl enable-linger "$(whoami)"
+loginctl show-user "$(whoami)" -p Linger
 ```
+
+To restore normal login-managed behaviour:
+
+```bash
+sudo loginctl disable-linger "$(whoami)"
+```
+
+> [!IMPORTANT]
+> Lingering **does not create a graphical session** and does not make Microsoft Identity Broker authentication or desktop notifications available before graphical login. In the four tested Intune SSO environments, OneDrive repeatedly failed authentication before graphical login and recovered automatically after graphical login through the supplied user unit's restart policy. For Intune SSO desktop use, lingering is generally unnecessary.
 
 ### How to access Microsoft OneDrive service through a proxy
 If you have a requirement to run the client through a proxy, there are a couple of ways to achieve this:
@@ -2485,7 +2648,7 @@ onedrive - A client for the Microsoft OneDrive Cloud Service
     onedrive [options] --display-config
       Display the currently used configuration
     onedrive [options] --display-sync-status
-      Query OneDrive service and report on pending changes
+      Perform a read-only bidirectional assessment of local and Microsoft OneDrive sync state
     onedrive -h | --help
       Show this help screen
     onedrive --version

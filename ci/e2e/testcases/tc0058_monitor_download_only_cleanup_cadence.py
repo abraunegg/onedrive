@@ -39,10 +39,10 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             'bypass_data_preservation = "true"\n'
             'enable_logging = "true"\n'
             f'log_dir = "{app_log_dir}"\n'
+            f'monitor_max_loop = "{monitor_max_loop}"\n'
             f'monitor_interval = "{monitor_interval}"\n'
             f'monitor_fullscan_frequency = "{monitor_fullscan_frequency}"\n'
             f'monitor_authoritative_sync = "{monitor_authoritative_sync}"\n'
-            f'monitor_max_loop = "{monitor_max_loop}"\n'
         )
 
     def _write_simple_config(self, config_file: Path, sync_dir: Path) -> None:

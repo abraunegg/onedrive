@@ -18,26 +18,52 @@ sudo yum install -y wget
 mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 ```
 
-### Install DMD Compiler for Linux
-Install the latest DMD Compiler for Linux from https://dlang.org/download.html using the Fedora/CentOS x86_64 link.
+### Install LDC Compiler for Linux
+For Fedora, RHEL and CentOS platforms the provided RPM spec defaults to the LDC compiler. Use the compiler supplied through the applicable distribution package repositories rather than manually installing DMD as the normal build path.
 
-Illustrated below is the installation using the minimum supported compiler. You should always install the latest version of the compiler for your platform when manually building an RPM.
+On CentOS Stream 9, enable EPEL and install LDC:
+```text
+sudo yum install -y epel-release
+sudo yum install -y ldc
+```
+
+On Fedora, LDC is available directly from the Fedora repositories:
+```text
+sudo dnf install -y ldc
+```
+
+> [!NOTE]
+> DMD remains a supported compiler. If you intentionally need to build the RPM with DMD instead of the default LDC compiler, install a supported DMD version and use the `dcompiler` override shown below.
+
+### Optional: Install DMD Compiler for an explicit DMD build
+DMD can still be installed from https://dlang.org/download.html when a DMD-specific build is required.
+
+The historical CentOS Stream 9 example retained later in this document used the minimum supported DMD compiler version:
 ```text
 sudo yum install -y https://downloads.dlang.org/releases/2.x/2.091.1/dmd-2.091.1-0.fedora.x86_64.rpm
 ```
 
-## Build RPM from spec file using the DMD Compiler
-Build the RPM from the provided spec file:
+When deliberately using DMD, it is recommended to use the latest supported DMD version available for your platform rather than selecting this historical version solely to reproduce the example output.
+
+## Build RPM from spec file using the default LDC Compiler
+Build the RPM from the provided spec file. On Fedora, RHEL and CentOS the spec selects LDC by default, so no compiler override is required:
 ```text
 wget https://github.com/abraunegg/onedrive/archive/refs/tags/v2.5.6.tar.gz -O ~/rpmbuild/SOURCES/v2.5.6.tar.gz
 wget https://raw.githubusercontent.com/abraunegg/onedrive/master/contrib/spec/onedrive.spec.in -O ~/rpmbuild/SPECS/onedrive.spec
+rpmbuild -ba ~/rpmbuild/SPECS/onedrive.spec
+```
+
+To explicitly build using DMD instead:
+```text
 rpmbuild -ba ~/rpmbuild/SPECS/onedrive.spec --define 'dcompiler dmd'
 ```
 
 ### RPM Build Example Results
-Below are example output results of building, installing and running the RPM package on the respective platforms:
+Below are example output results of building, installing and running the RPM package on the respective platforms.
 
-#### CentOS Stream release 9 RPM Build Process
+The CentOS Stream 9 direct `rpmbuild` example below was captured using DMD 2.091.1 and is retained in full as a reference for the complete build and installation process. The Fedora `mock` example later in this document demonstrates the RPM spec selecting LDC.
+
+#### CentOS Stream release 9 RPM Build Process using the DMD override
 ```text
 setting SOURCE_DATE_EPOCH=1749081600
 Executing(%prep): /bin/sh -e /var/tmp/rpm-tmp.ZhVuOR
@@ -200,7 +226,7 @@ Executing(%clean): /bin/sh -e /var/tmp/rpm-tmp.tGKXPN
 + exit 0
 ```
 
-#### CentOS Stream release 9 RPM Package Install Process
+#### CentOS Stream release 9 RPM Package Install Process for the DMD-built example
 ```text
 [alex@centos9stream ~]$ sudo yum -y install /home/alex/rpmbuild/RPMS/x86_64/onedrive-2.5.6-1.el9.x86_64.rpm
 [sudo] password for alex: 

@@ -581,6 +581,9 @@ private:
 			}
 		}
 
+		// All required values have been copied into the Socket.IO instance.
+		j = null;
+
 		// Log that we have opened a connection and have a valid SID
 		logSocketIOOutput("Engine open; sid=" ~ self.engineSid ~ " pingInterval=" ~ self.pingIntervalMs.to!string ~ "ms" ~ " pingTimeout="  ~ self.pingTimeoutMs.to!string  ~ "ms");
 		return true;
@@ -633,6 +636,7 @@ private:
 				auto ex2 = collectException(inner = parseJSON(d.str));
 				if (ex2 is null) {
 					dataText = inner.toString(); // normalized JSON
+					inner = null;
 				} else {
 					dataText = d.str;           // raw string if not JSON
 				}
@@ -649,5 +653,8 @@ private:
 			// Visibility in case the service uses other event names
 			logSocketIOOutput("Event '" ~ evName ~ "' (ns='/" ~ ns ~ "') -> " ~ dataText);
 		}
+
+		// Event name/data have been converted to strings; release the parsed frame.
+		arr = null;
 	}
 }

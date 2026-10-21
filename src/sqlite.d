@@ -276,12 +276,18 @@ struct Statement {
 				return;
 			}
 			if (rc == SQLITE_DONE) {
-				row.length = 0;
+				// Drop this result's last row reference on completion.
+				row = [];
 			} else if (rc == SQLITE_ROW) {
 				// https://www.sqlite.org/c3ref/data_count.html
 				int count = 0;
 				count = sqlite3_data_count(pStmt);
-				row = new const(char)[][count];
+				// Reuse the column-header array within this Result. Each
+				// column's TEXT data is still borrowed from SQLite and
+				// must be copied before the next step if retained.
+				if (row.length != count) {
+					row = new const(char)[][count];
+				}
 				foreach (size_t i, ref column; row) {
 					// https://www.sqlite.org/c3ref/column_blob.html
 					column = fromStringz(sqlite3_column_text(pStmt, to!int(i)));

@@ -54,6 +54,10 @@ __gshared bool exitHandlerTriggered = false;
 // Global flag to indicate file transfers are occurring
 __gshared bool fileTransferInProgress = false;
 
+// Application exit code used when the local state requires a mandatory --resync.
+// Use the traditional EX_CONFIG status value so callers can distinguish it from a generic failure.
+const int EXIT_RESYNC_REQUIRED = 78;
+
 // util module variable
 ulong previousRSS;
 
@@ -785,10 +789,17 @@ MicrosoftServiceProbeResult probeMicrosoftService(ApplicationConfig appConfig, b
 	
 	// Exit scope to ensure cleanup http object
 	scope(exit) {
-		// Shut http down http object
-		http.shutdown();
+		try {
+			if (!http.isStopped) {
+				// Shut http down http object
+				http.shutdown();
+			}
+		} finally {
+			// Destroy, however we cant set to null
+			object.destroy(http);
+		}
 	}
-
+	
 	// Capture both clocks immediately around the request. Realtime is required for
 	// comparison with Microsoft's wall-clock Date value; monotonic time is required
 	// for reliable RTT measurement even if the system clock is adjusted mid-request.
@@ -1464,6 +1475,9 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 		addLogEntry("JSON Message: " ~ to!string(errorMessage), ["debug"]);
 	}
 	
+	// The parsed error object is no longer required once all display fields have been extracted.
+	errorMessage = null;
+
 	// Close out logging with an empty line, so that in console output, and logging output this becomes clear
 	addLogEntry();
 }
@@ -1744,6 +1758,8 @@ JSONValue getLatestReleaseDetails() {
 		"latestTag": JSONValue(latestTag),
 		"publishedDate": JSONValue(publishedDate)
 	];
+	// versionDetails owns the extracted scalar values; release the GitHub response tree.
+	githubLatest = null;
 	
 	// return JSON
 	return versionDetails;
@@ -1798,6 +1814,8 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 		"versionTag": JSONValue(thisVersion),
 		"publishedDate": JSONValue(publishedDate)
 	];
+	// versionDetails owns the extracted scalar values; release the GitHub response tree.
+	githubDetails = null;
 	
 	// return JSON
 	return versionDetails;
@@ -1811,6 +1829,8 @@ void checkApplicationVersion() {
 	SysTime publishedDate = SysTime.fromISOExtString(latestVersionDetails["publishedDate"].str).toUTC();
 	SysTime releaseGracePeriod = publishedDate;
 	SysTime currentTime = Clock.currTime().toUTC();
+	// Required version metadata has been extracted into scalar values.
+	latestVersionDetails = null;
 	
 	// drop fraction seconds
 	publishedDate.fracSecs = Duration.zero;
@@ -1843,6 +1863,7 @@ void checkApplicationVersion() {
 			// go get this running version details
 			JSONValue thisVersionDetails = getCurrentVersionDetails(applicationVersion);
 			SysTime thisVersionPublishedDate = SysTime.fromISOExtString(thisVersionDetails["publishedDate"].str).toUTC();
+			thisVersionDetails = null;
 			thisVersionPublishedDate.fracSecs = Duration.zero;
 			if (debugLogging) {addLogEntry("thisVersionPublishedDate: " ~ to!string(thisVersionPublishedDate), ["debug"]);}
 			
@@ -2306,6 +2327,30 @@ string generateAlphanumericString(size_t length = 16) {
 	return to!string(randomString);
 }
 
+// Generate a cryptographically secure random hexadecimal string from 'byteCount' bytes of
+// randomness provided by the Linux kernel (/dev/urandom). Unlike generateAlphanumericString(),
+// the output is suitable for security sensitive values such as OAuth 'state' parameters.
+// If secure random data cannot be obtained, an Exception is thrown - there is deliberately no
+// fallback to a non-cryptographic random number generator.
+string generateCryptographicallySecureHexString(size_t byteCount = 16) {
+	// Ensure the byte count is not zero
+	if (byteCount == 0) {
+		throw new Exception("Byte count must be greater than 0");
+	}
+
+	ubyte[] randomBytes = new ubyte[byteCount];
+	auto randomSource = File("/dev/urandom", "rb");
+	scope(exit) randomSource.close();
+
+	// Read the requested number of bytes - a short read is treated as a failure
+	auto bytesRead = randomSource.rawRead(randomBytes);
+	if (bytesRead.length != byteCount) {
+		throw new Exception("Unable to read sufficient secure random data");
+	}
+
+	return format("%(%02x%)", randomBytes);
+}
+
 // Display internal memory stats and RSS details
 void displayMemoryUsageDetails() {
 	// The Resident Set Size (RSS) represents the amount of physical memory currently
@@ -2491,7 +2536,7 @@ string formatETA(int eta) {
 }
 
 // Force Exit due to failure
-void forceExit() {
+void forceExit(int exitCode = EXIT_FAILURE) {
 	// Allow any logging complete before we force exit
 	Thread.sleep(dur!("msecs")(500));
 	// Shutdown logging, which also flushes all logging buffers
@@ -2499,7 +2544,7 @@ void forceExit() {
 	// Setup signal handling for the exit scope
 	setupExitScopeSignalHandler();
 	// Force Exit
-	_exit(EXIT_FAILURE);
+	_exit(exitCode);
 }
 
 // Get the current PID of the application

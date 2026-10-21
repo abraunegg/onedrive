@@ -8,6 +8,9 @@ from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
+from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, xlsx_pair_any_exists, xlsx_pair_all_files
+from framework.pdf import create_random_pdf_pair, validate_pdf_pair, rename_pdf_pair, pdf_pair_any_exists, pdf_pair_all_files
+from framework.image import create_random_image_set, validate_image_set, rename_image_set, image_set_any_exists, image_set_all_files
 from framework.utils import (
     command_to_string,
     compute_quickxor_hash_file,
@@ -22,9 +25,11 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
     case_id = "0035"
     name = "remote move between directories reconciliation"
     description = (
-        "Validate that a stale local client correctly reconciles a remote-side "
-        "file move between directories without leaving stale local file leftovers"
+        "Validate that a stale local client correctly reconciles remote-side moves of passive TXT "
+        "and real XLSX/PDF files plus a real PNG/JPEG image set between directories without leaving stale local file leftovers"
     )
+
+    XLSX_PAYLOAD_ROWS = 32
 
     def _write_config(self, config_dir: Path, sync_dir: Path) -> None:
         config_path = config_dir / "config"
@@ -84,20 +89,44 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         root_name = f"ZZ_E2E_TC0035_{context.run_id}_{os.getpid()}"
 
-        source_relative = f"{root_name}/SourceDirectory/move-me.txt"
-        destination_relative = f"{root_name}/DestinationDirectory/move-me.txt"
+        source_txt_relative = f"{root_name}/SourceDirectory/move-me.txt"
+        destination_txt_relative = f"{root_name}/DestinationDirectory/move-me.txt"
+        source_xlsx_relative = f"{root_name}/SourceDirectory/move-me.xlsx"
+        destination_xlsx_relative = f"{root_name}/DestinationDirectory/move-me.xlsx"
+        source_pdf_relative = f"{root_name}/SourceDirectory/move-me.pdf"
+        destination_pdf_relative = f"{root_name}/DestinationDirectory/move-me.pdf"
+        source_image_relative = f"{root_name}/SourceDirectory/move-me.png"
+        destination_image_relative = f"{root_name}/DestinationDirectory/move-me.png"
         anchor_relative = f"{root_name}/DestinationDirectory/anchor.txt"
 
-        seed_source_path = seed_root / source_relative
-        seed_destination_path = seed_root / destination_relative
+        seed_source_txt_path = seed_root / source_txt_relative
+        seed_destination_txt_path = seed_root / destination_txt_relative
+        seed_source_xlsx_path = seed_root / source_xlsx_relative
+        seed_destination_xlsx_path = seed_root / destination_xlsx_relative
+        seed_source_pdf_path = seed_root / source_pdf_relative
+        seed_destination_pdf_path = seed_root / destination_pdf_relative
+        seed_source_image_path = seed_root / source_image_relative
+        seed_destination_image_path = seed_root / destination_image_relative
         seed_anchor_path = seed_root / anchor_relative
 
-        stale_source_path = stale_root / source_relative
-        stale_destination_path = stale_root / destination_relative
+        stale_source_txt_path = stale_root / source_txt_relative
+        stale_destination_txt_path = stale_root / destination_txt_relative
+        stale_source_xlsx_path = stale_root / source_xlsx_relative
+        stale_destination_xlsx_path = stale_root / destination_xlsx_relative
+        stale_source_pdf_path = stale_root / source_pdf_relative
+        stale_destination_pdf_path = stale_root / destination_pdf_relative
+        stale_source_image_path = stale_root / source_image_relative
+        stale_destination_image_path = stale_root / destination_image_relative
         stale_anchor_path = stale_root / anchor_relative
 
-        verify_source_path = verify_root / source_relative
-        verify_destination_path = verify_root / destination_relative
+        verify_source_txt_path = verify_root / source_txt_relative
+        verify_destination_txt_path = verify_root / destination_txt_relative
+        verify_source_xlsx_path = verify_root / source_xlsx_relative
+        verify_destination_xlsx_path = verify_root / destination_xlsx_relative
+        verify_source_pdf_path = verify_root / source_pdf_relative
+        verify_destination_pdf_path = verify_root / destination_pdf_relative
+        verify_source_image_path = verify_root / source_image_relative
+        verify_destination_image_path = verify_root / destination_image_relative
         verify_anchor_path = verify_root / anchor_relative
 
         stale_source_dir = stale_root / f"{root_name}/SourceDirectory"
@@ -107,6 +136,9 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             "TC0035 remote move between directories reconciliation\n"
             "This file is moved remotely and must reconcile locally.\n"
         )
+        xlsx_seed = f"{context.run_id}:{context.e2e_target}:TC0035:{os.getpid()}"
+        pdf_seed = f"{xlsx_seed}:pdf"
+        image_seed = f"{xlsx_seed}:image"
         anchor_content = (
             "TC0035 destination directory anchor\n"
             "This ensures the destination directory exists before the move.\n"
@@ -140,8 +172,14 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
 
         details: dict[str, object] = {
             "root_name": root_name,
-            "source_relative": source_relative,
-            "destination_relative": destination_relative,
+            "source_txt_relative": source_txt_relative,
+            "destination_txt_relative": destination_txt_relative,
+            "source_xlsx_relative": source_xlsx_relative,
+            "destination_xlsx_relative": destination_xlsx_relative,
+            "source_pdf_relative": source_pdf_relative,
+            "destination_pdf_relative": destination_pdf_relative,
+            "source_image_relative": source_image_relative,
+            "destination_image_relative": destination_image_relative,
             "anchor_relative": anchor_relative,
             "seed_root": str(seed_root),
             "stale_root": str(stale_root),
@@ -149,10 +187,32 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             "seed_conf_dir": str(conf_seed),
             "stale_conf_dir": str(conf_stale),
             "verify_conf_dir": str(conf_verify),
+            "xlsx_seed": xlsx_seed,
+            "pdf_seed": pdf_seed,
+            "image_seed": image_seed,
+            "payload_rows": self.XLSX_PAYLOAD_ROWS,
         }
 
-        # Phase 1: seed original remote state
-        write_text_file(seed_source_path, initial_content)
+        # Phase 1: seed original remote state with passive TXT plus real XLSX/PDF payloads.
+        write_text_file(seed_source_txt_path, initial_content)
+        generated = create_random_xlsx_pair(
+            seed_source_xlsx_path,
+            xlsx_seed,
+            revision=REVISION_0,
+            payload_rows=self.XLSX_PAYLOAD_ROWS,
+            title="TC0035 remote move between directories reconciliation workbook",
+        )
+        generated_pdf = create_random_pdf_pair(
+            seed_source_pdf_path,
+            pdf_seed,
+            revision=REVISION_0,
+            title="TC0035 remote move between directories reconciliation PDF",
+        )
+        details["generated_size"] = int(generated["size_bytes"])
+        details["generated_pdf_size"] = int(generated_pdf["size_bytes"])
+        details["generated_large_pdf_size"] = int(generated_pdf["large_size_bytes"])
+        generated_images = create_random_image_set(seed_source_image_path, image_seed, revision=REVISION_0, title="TC0035 remote move images")
+        details["generated_image_sizes"] = {k: int(v) for k, v in generated_images.items() if k.endswith("_size_bytes")}
         write_text_file(seed_anchor_path, anchor_content)
 
         seed_command = [
@@ -181,6 +241,52 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
+        settled_txt_content = (
+            seed_source_txt_path.read_text(encoding="utf-8")
+            if seed_source_txt_path.is_file()
+            else ""
+        )
+        details["settled_txt_content"] = settled_txt_content
+        if settled_txt_content != initial_content:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "seeded passive TXT content changed during initial sync",
+                artifacts,
+                details,
+            )
+
+        settled_validation_error = validate_xlsx_pair(seed_source_xlsx_path, REVISION_0)
+        settled_pdf_validation_error = validate_pdf_pair(seed_source_pdf_path, REVISION_0)
+        settled_image_validation_error = validate_image_set(seed_source_image_path, REVISION_0)
+        details["settled_validation_error"] = settled_validation_error
+        details["settled_pdf_validation_error"] = settled_pdf_validation_error
+        details["settled_image_validation_error"] = settled_image_validation_error
+        if settled_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"seeded XLSX was invalid after initial sync: {settled_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if settled_image_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"seeded image set was invalid after initial sync: {settled_image_validation_error}",
+                artifacts,
+                details,
+            )
+
+        if settled_pdf_validation_error:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name, f"seeded PDF was invalid after initial sync: {settled_pdf_validation_error}", artifacts, details)
+
         # Snapshot synchronised local + config/db state to create a stale client.
         # This stale client represents a second machine that has not yet seen the move.
         if conf_stale.exists():
@@ -194,45 +300,56 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
         # Rewrite stale runtime config so it points at stale_root while preserving DB state.
         self._write_config(conf_stale, stale_root)
 
-        details["stale_snapshot_source_exists_before_reconcile"] = stale_source_path.is_file()
-        details["stale_snapshot_destination_exists_before_reconcile"] = stale_destination_path.exists()
+        details["stale_snapshot_source_txt_exists_before_reconcile"] = stale_source_txt_path.is_file()
+        details["stale_snapshot_source_xlsx_exists_before_reconcile"] = stale_source_xlsx_path.is_file()
+        details["stale_snapshot_destination_txt_exists_before_reconcile"] = stale_destination_txt_path.exists()
+        details["stale_snapshot_destination_xlsx_exists_before_reconcile"] = stale_destination_xlsx_path.exists()
+        details["stale_snapshot_source_pdf_exists_before_reconcile"] = stale_source_pdf_path.is_file()
+        details["stale_snapshot_destination_pdf_exists_before_reconcile"] = stale_destination_pdf_path.exists()
+        details["stale_snapshot_source_image_exists_before_reconcile"] = image_set_all_files(stale_source_image_path)
+        details["stale_snapshot_destination_image_exists_before_reconcile"] = image_set_any_exists(stale_destination_image_path)
         details["stale_snapshot_anchor_exists_before_reconcile"] = stale_anchor_path.is_file()
 
-        if not stale_source_path.is_file():
+        if not stale_source_txt_path.is_file() or not stale_source_xlsx_path.is_file() or not stale_source_pdf_path.is_file() or not image_set_all_files(stale_source_image_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "stale snapshot did not preserve original source file before reconciliation",
+                "stale snapshot did not preserve both original source files before reconciliation",
                 artifacts,
                 details,
             )
 
-        # Phase 2: perform the move through the seed client.
+        # Phase 2: perform both moves through the seed client.
         # This is our remote-side move mechanism.
-        seed_destination_path.parent.mkdir(parents=True, exist_ok=True)
-        seed_source_path.rename(seed_destination_path)
+        seed_destination_txt_path.parent.mkdir(parents=True, exist_ok=True)
+        seed_source_txt_path.rename(seed_destination_txt_path)
+        rename_xlsx_pair(seed_source_xlsx_path, seed_destination_xlsx_path)
+        rename_pdf_pair(seed_source_pdf_path, seed_destination_pdf_path)
+        rename_image_set(seed_source_image_path, seed_destination_image_path)
 
-        details["seed_source_exists_after_local_move"] = seed_source_path.exists()
-        details["seed_destination_exists_after_local_move"] = seed_destination_path.is_file()
+        details["seed_source_txt_exists_after_local_move"] = seed_source_txt_path.exists()
+        details["seed_destination_txt_exists_after_local_move"] = seed_destination_txt_path.is_file()
+        details["seed_source_xlsx_exists_after_local_move"] = seed_source_xlsx_path.exists()
+        details["seed_destination_xlsx_exists_after_local_move"] = seed_destination_xlsx_path.is_file()
         details["seed_anchor_exists_after_local_move"] = seed_anchor_path.is_file()
 
-        if seed_source_path.exists():
+        if seed_source_txt_path.exists() or xlsx_pair_any_exists(seed_source_xlsx_path) or pdf_pair_any_exists(seed_source_pdf_path) or image_set_any_exists(seed_source_image_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "seed local source path still exists immediately after move",
+                "one or more seed source paths still exist immediately after move",
                 artifacts,
                 details,
             )
 
-        if not seed_destination_path.is_file():
+        if not seed_destination_txt_path.is_file() or not xlsx_pair_all_files(seed_destination_xlsx_path) or not pdf_pair_all_files(seed_destination_pdf_path) or not image_set_all_files(seed_destination_image_path):
             self._write_metadata(metadata_file, details)
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "seed local destination path does not exist immediately after move",
+                "one or more seed destination paths do not exist immediately after move",
                 artifacts,
                 details,
             )
@@ -285,17 +402,42 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
         stale_manifest = build_manifest(stale_root)
         write_manifest(stale_manifest_file, stale_manifest)
 
-        details["stale_source_exists_after_reconcile"] = stale_source_path.exists()
-        details["stale_destination_exists_after_reconcile"] = stale_destination_path.is_file()
+        details["stale_source_txt_exists_after_reconcile"] = stale_source_txt_path.exists()
+        details["stale_destination_txt_exists_after_reconcile"] = stale_destination_txt_path.is_file()
+        details["stale_source_xlsx_exists_after_reconcile"] = xlsx_pair_any_exists(stale_source_xlsx_path)
+        details["stale_destination_xlsx_exists_after_reconcile"] = xlsx_pair_all_files(stale_destination_xlsx_path)
+        details["stale_source_pdf_exists_after_reconcile"] = pdf_pair_any_exists(stale_source_pdf_path)
+        details["stale_destination_pdf_exists_after_reconcile"] = pdf_pair_all_files(stale_destination_pdf_path)
+        details["stale_source_image_exists_after_reconcile"] = image_set_any_exists(stale_source_image_path)
+        details["stale_destination_image_exists_after_reconcile"] = image_set_all_files(stale_destination_image_path)
         details["stale_anchor_exists_after_reconcile"] = stale_anchor_path.is_file()
         details["stale_source_dir_files_after_reconcile"] = self._list_files_under(stale_source_dir)
 
-        stale_destination_content = (
-            stale_destination_path.read_text(encoding="utf-8")
-            if stale_destination_path.is_file()
+        stale_destination_txt_content = (
+            stale_destination_txt_path.read_text(encoding="utf-8")
+            if stale_destination_txt_path.is_file()
             else ""
         )
-        details["stale_destination_content"] = stale_destination_content
+        details["stale_destination_txt_content"] = stale_destination_txt_content
+
+        stale_destination_validation_error = (
+            validate_xlsx_pair(stale_destination_xlsx_path, REVISION_0)
+            if xlsx_pair_all_files(stale_destination_xlsx_path)
+            else "Stale client XLSX is missing"
+        )
+        stale_pdf_validation_error = (
+            validate_pdf_pair(stale_destination_pdf_path, REVISION_0)
+            if pdf_pair_all_files(stale_destination_pdf_path)
+            else "Stale client PDF is missing"
+        )
+        details["stale_destination_validation_error"] = stale_destination_validation_error
+        stale_image_validation_error = (
+            validate_image_set(stale_destination_image_path, REVISION_0)
+            if image_set_all_files(stale_destination_image_path)
+            else "Stale client image set is missing"
+        )
+        details["stale_pdf_validation_error"] = stale_pdf_validation_error
+        details["stale_image_validation_error"] = stale_image_validation_error
 
         if stale_sync_result.returncode != 0:
             self._write_metadata(metadata_file, details)
@@ -330,17 +472,42 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
         verify_manifest = build_manifest(verify_root)
         write_manifest(verify_manifest_file, verify_manifest)
 
-        details["verify_source_exists"] = verify_source_path.exists()
-        details["verify_destination_exists"] = verify_destination_path.is_file()
+        details["verify_source_txt_exists"] = verify_source_txt_path.exists()
+        details["verify_destination_txt_exists"] = verify_destination_txt_path.is_file()
+        details["verify_source_xlsx_exists"] = xlsx_pair_any_exists(verify_source_xlsx_path)
+        details["verify_destination_xlsx_exists"] = xlsx_pair_all_files(verify_destination_xlsx_path)
+        details["verify_source_pdf_exists"] = pdf_pair_any_exists(verify_source_pdf_path)
+        details["verify_destination_pdf_exists"] = pdf_pair_all_files(verify_destination_pdf_path)
+        details["verify_source_image_exists"] = image_set_any_exists(verify_source_image_path)
+        details["verify_destination_image_exists"] = image_set_all_files(verify_destination_image_path)
         details["verify_anchor_exists"] = verify_anchor_path.is_file()
         details["verify_source_dir_files"] = self._list_files_under(verify_source_dir)
 
-        verify_destination_content = (
-            verify_destination_path.read_text(encoding="utf-8")
-            if verify_destination_path.is_file()
+        verify_destination_txt_content = (
+            verify_destination_txt_path.read_text(encoding="utf-8")
+            if verify_destination_txt_path.is_file()
             else ""
         )
-        details["verify_destination_content"] = verify_destination_content
+        details["verify_destination_txt_content"] = verify_destination_txt_content
+
+        verify_destination_validation_error = (
+            validate_xlsx_pair(verify_destination_xlsx_path, REVISION_0)
+            if xlsx_pair_all_files(verify_destination_xlsx_path)
+            else "Verification XLSX is missing"
+        )
+        verify_pdf_validation_error = (
+            validate_pdf_pair(verify_destination_pdf_path, REVISION_0)
+            if pdf_pair_all_files(verify_destination_pdf_path)
+            else "Verification PDF is missing"
+        )
+        details["verify_destination_validation_error"] = verify_destination_validation_error
+        verify_image_validation_error = (
+            validate_image_set(verify_destination_image_path, REVISION_0)
+            if image_set_all_files(verify_destination_image_path)
+            else "Verification image set is missing"
+        )
+        details["verify_pdf_validation_error"] = verify_pdf_validation_error
+        details["verify_image_validation_error"] = verify_image_validation_error
 
         self._write_metadata(metadata_file, details)
 
@@ -353,12 +520,12 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
-        # Stale client assertions: existing-state client must reconcile cleanly.
-        if stale_source_path.exists():
+        # Stale client assertions: existing-state client must reconcile both payload classes cleanly.
+        if stale_source_txt_path.exists() or xlsx_pair_any_exists(stale_source_xlsx_path) or pdf_pair_any_exists(stale_source_pdf_path) or image_set_any_exists(stale_source_image_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"stale client still contains original source file after reconciliation: {source_relative}",
+                "stale client still contains one or more original source files after reconciliation",
                 artifacts,
                 details,
             )
@@ -372,20 +539,50 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
-        if not stale_destination_path.is_file():
+        if not stale_destination_txt_path.is_file():
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"stale client is missing moved file after reconciliation: {destination_relative}",
+                f"stale client is missing moved passive TXT after reconciliation: {destination_txt_relative}",
                 artifacts,
                 details,
             )
 
-        if stale_destination_content != initial_content:
+        if stale_destination_txt_content != initial_content:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "stale client moved file content did not match expected content after reconciliation",
+                "stale client moved passive TXT content did not match expected content after reconciliation",
+                artifacts,
+                details,
+            )
+
+        if not image_set_all_files(stale_destination_image_path):
+            return self.fail_result(self.case_id, self.name, f"stale client is missing moved image set after reconciliation: {destination_image_relative}", artifacts, details)
+
+        if not pdf_pair_all_files(stale_destination_pdf_path):
+            return self.fail_result(self.case_id, self.name, f"stale client is missing moved PDF after reconciliation: {destination_pdf_relative}", artifacts, details)
+
+        if not xlsx_pair_all_files(stale_destination_xlsx_path):
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"stale client is missing moved XLSX after reconciliation: {destination_xlsx_relative}",
+                artifacts,
+                details,
+            )
+
+        if stale_image_validation_error:
+            return self.fail_result(self.case_id, self.name, f"stale client moved image set is invalid or stale after reconciliation: {stale_image_validation_error}", artifacts, details)
+
+        if stale_pdf_validation_error:
+            return self.fail_result(self.case_id, self.name, f"stale client moved PDF is invalid or stale after reconciliation: {stale_pdf_validation_error}", artifacts, details)
+
+        if stale_destination_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"stale client moved XLSX is invalid or stale after reconciliation: {stale_destination_validation_error}",
                 artifacts,
                 details,
             )
@@ -399,12 +596,12 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
-        # Verify assertions: fresh remote truth must also be correct.
-        if verify_source_path.exists():
+        # Verify assertions: fresh remote truth must also be correct for both payload classes.
+        if verify_source_txt_path.exists() or xlsx_pair_any_exists(verify_source_xlsx_path) or pdf_pair_any_exists(verify_source_pdf_path) or image_set_any_exists(verify_source_image_path):
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"remote verification still contains original source file path: {source_relative}",
+                "remote verification still contains one or more original source file paths",
                 artifacts,
                 details,
             )
@@ -418,20 +615,50 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
-        if not verify_destination_path.is_file():
+        if not verify_destination_txt_path.is_file():
             return self.fail_result(
                 self.case_id,
                 self.name,
-                f"remote verification is missing moved file at destination path: {destination_relative}",
+                f"remote verification is missing moved passive TXT at destination path: {destination_txt_relative}",
                 artifacts,
                 details,
             )
 
-        if verify_destination_content != initial_content:
+        if verify_destination_txt_content != initial_content:
             return self.fail_result(
                 self.case_id,
                 self.name,
-                "remote verification moved file content did not match expected content",
+                "remote verification moved passive TXT content did not match expected content",
+                artifacts,
+                details,
+            )
+
+        if not image_set_all_files(verify_destination_image_path):
+            return self.fail_result(self.case_id, self.name, f"remote verification is missing moved image set at destination path: {destination_image_relative}", artifacts, details)
+
+        if not pdf_pair_all_files(verify_destination_pdf_path):
+            return self.fail_result(self.case_id, self.name, f"remote verification is missing moved PDF at destination path: {destination_pdf_relative}", artifacts, details)
+
+        if not xlsx_pair_all_files(verify_destination_xlsx_path):
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"remote verification is missing moved XLSX at destination path: {destination_xlsx_relative}",
+                artifacts,
+                details,
+            )
+
+        if verify_image_validation_error:
+            return self.fail_result(self.case_id, self.name, f"remote verification moved image set is invalid or stale: {verify_image_validation_error}", artifacts, details)
+
+        if verify_pdf_validation_error:
+            return self.fail_result(self.case_id, self.name, f"remote verification moved PDF is invalid or stale: {verify_pdf_validation_error}", artifacts, details)
+
+        if verify_destination_validation_error:
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                f"remote verification moved XLSX is invalid or stale: {verify_destination_validation_error}",
                 artifacts,
                 details,
             )

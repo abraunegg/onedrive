@@ -209,6 +209,7 @@ class OneDriveWebhook {
 			// Save important subscription metadata including id and expiration
 			subscriptionId = response["id"].str;
 			subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
+			response = null;
 			addLogEntry("Created new subscription " ~ subscriptionId ~ " with expiration: " ~ to!string(subscriptionExpiration.toISOExtString()));
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 409) {
@@ -263,6 +264,7 @@ class OneDriveWebhook {
 
 			// Update subscription expiration from the response
 			subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
+			response = null;
 			addLogEntry("Renewed webhook subscription " ~ subscriptionId ~ " with expiration: " ~ to!string(subscriptionExpiration.toISOExtString()));
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {

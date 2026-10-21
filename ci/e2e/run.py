@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import traceback
 from pathlib import Path
@@ -92,6 +93,14 @@ from testcases.tc0076_safebackup_resync_content_conflict_validation import TestC
 from testcases.tc0077_timestamp_authority_validation import TestCase0077TimestampAuthorityValidation
 from testcases.tc0078_monitor_mode_rename_to_invalid_name import TestCase0078MonitorModeRenameToInvalidName
 from testcases.tc0079_display_sync_status_validation import TestCase0079DisplaySyncStatusValidation
+from testcases.tc0080_monitor_remote_directory_rename_reconciliation import TestCase0080MonitorRemoteDirectoryRenameReconciliation
+from testcases.tc0081_historical_database_upgrade_validation import TestCase0081HistoricalDatabaseUpgradeValidation
+from testcases.tc0082_single_directory_delete_reconciliation import TestCase0082SingleDirectoryDeleteReconciliation
+from testcases.tc0083_delta_children_reconciliation_parity import TestCase0083DeltaChildrenReconciliationParity
+from testcases.tc0084_remote_batch_deletion_reconciliation import TestCase0084RemoteBatchDeletionReconciliation
+from testcases.tc0085_websocket_wake_during_active_upload import TestCase0085WebSocketWakeDuringActiveUpload
+from testcases.tc0086_https_credential_redaction import TestCase0086HTTPSCredentialRedaction
+from testcases.tc0087_resync_monitor_working_directory_boundary import TestCase0087ResyncMonitorWorkingDirectoryBoundary
 
 
 def build_test_suite() -> list:
@@ -175,6 +184,14 @@ def build_test_suite() -> list:
         TestCase0077TimestampAuthorityValidation(),
         TestCase0078MonitorModeRenameToInvalidName(),
         TestCase0079DisplaySyncStatusValidation(),
+        TestCase0080MonitorRemoteDirectoryRenameReconciliation(),
+        TestCase0081HistoricalDatabaseUpgradeValidation(),
+        TestCase0082SingleDirectoryDeleteReconciliation(),
+        TestCase0083DeltaChildrenReconciliationParity(),
+        TestCase0084RemoteBatchDeletionReconciliation(),
+        TestCase0085WebSocketWakeDuringActiveUpload(),
+        TestCase0086HTTPSCredentialRedaction(),
+        TestCase0087ResyncMonitorWorkingDirectoryBoundary(),
     ]
 
 
@@ -306,7 +323,6 @@ def main() -> int:
             sync_dir=context.default_sync_dir,
             log_dir=context.suite_cleanup_log_dir,
         )
-
         if not cleanup_ok:
             context.log(f"Suite cleanup FAILED: {cleanup_reason}")
 
@@ -341,53 +357,90 @@ def main() -> int:
     cases = []
     failed = False
 
-    for testcase in cases_to_run:
-        context.log(f"Starting test case {testcase.case_id}: {testcase.name}")
+    try:
+        for testcase in cases_to_run:
+            context.log(f"Starting test case {testcase.case_id}: {testcase.name}")
 
-        try:
-            result = testcase.run(context)
+            try:
+                result = testcase.run(context)
 
-            if result.case_id != testcase.case_id:
-                raise RuntimeError(
-                    f"Test case returned mismatched case_id: expected '{testcase.case_id}', got '{result.case_id}'"
-                )
+                if result.case_id != testcase.case_id:
+                    raise RuntimeError(
+                        f"Test case returned mismatched case_id: expected '{testcase.case_id}', got '{result.case_id}'"
+                    )
 
-            cases.append(result_to_actions_case(result))
+                cases.append(result_to_actions_case(result))
 
-            if result.status != "pass":
+                if result.status != "pass":
+                    failed = True
+                    captured_databases = capture_onedrive_databases(context, testcase.case_id, reason="failure")
+                    if captured_databases:
+                        result.artifacts.extend(captured_databases)
+                        result.details.setdefault("captured_database_files", captured_databases)
+                        cases[-1] = result_to_actions_case(result)
+                    context.log(f"Test case {testcase.case_id} FAILED: {result.reason or 'no reason provided'}")
+                else:
+                    context.log(f"Test case {testcase.case_id} PASSED")
+
+            except Exception as exc:
                 failed = True
+                tb = traceback.format_exc()
+
+                context.log(f"Unhandled exception in test case {testcase.case_id}: {exc}")
+                context.log(tb)
+
+                error_log = context.logs_dir / f"{testcase.case_id}_exception.log"
+                write_text_file(error_log, tb)
+
+                failure_result = TestResult(
+                    case_id=testcase.case_id,
+                    name=testcase.name,
+                    status="fail",
+                    reason=f"Unhandled exception: {exc}",
+                    artifacts=[str(error_log)],
+                    details={"exception_type": type(exc).__name__},
+                )
                 captured_databases = capture_onedrive_databases(context, testcase.case_id, reason="failure")
                 if captured_databases:
-                    result.artifacts.extend(captured_databases)
-                    result.details.setdefault("captured_database_files", captured_databases)
-                    cases[-1] = result_to_actions_case(result)
-                context.log(f"Test case {testcase.case_id} FAILED: {result.reason or 'no reason provided'}")
-            else:
-                context.log(f"Test case {testcase.case_id} PASSED")
+                    failure_result.artifacts.extend(captured_databases)
+                    failure_result.details["captured_database_files"] = captured_databases
+                cases.append(result_to_actions_case(failure_result))
 
-        except Exception as exc:
-            failed = True
-            tb = traceback.format_exc()
-
-            context.log(f"Unhandled exception in test case {testcase.case_id}: {exc}")
-            context.log(tb)
-
-            error_log = context.logs_dir / f"{testcase.case_id}_exception.log"
-            write_text_file(error_log, tb)
-
-            failure_result = TestResult(
-                case_id=testcase.case_id,
-                name=testcase.name,
-                status="fail",
-                reason=f"Unhandled exception: {exc}",
-                artifacts=[str(error_log)],
-                details={"exception_type": type(exc).__name__},
-            )
-            captured_databases = capture_onedrive_databases(context, testcase.case_id, reason="failure")
-            if captured_databases:
-                failure_result.artifacts.extend(captured_databases)
-                failure_result.details["captured_database_files"] = captured_databases
-            cases.append(result_to_actions_case(failure_result))
+    finally:
+        # Never destroy evidence during a debug rerun. Primary suites should
+        # clean after tests even if one of them throws an exception.
+        if not context.skip_suite_cleanup:
+            context.log("Starting end-of-suite permanent cleanup")
+            try:
+                cleanup_ok, cleanup_reason, cleanup_artifacts, cleanup_details = perform_full_account_cleanup(
+                    onedrive_bin=context.onedrive_bin,
+                    repo_root=context.repo_root,
+                    config_dir=context.suite_cleanup_config_dir,
+                    sync_dir=context.default_sync_dir,
+                    log_dir=context.logs_dir / "_suite_cleanup_final",
+                )
+                if not cleanup_ok:
+                    failed = True
+                    cases.append({
+                        "id": "9999", "name": "final suite cleanup", "status": "fail",
+                        "reason": cleanup_reason, "artifacts": cleanup_artifacts,
+                        "details": cleanup_details,
+                    })
+                    context.log(f"Final suite cleanup FAILED: {cleanup_reason}")
+                else:
+                    context.log("Final suite cleanup completed and active remote state verified")
+            except Exception as exc:
+                failed = True
+                error_log = context.logs_dir / "final_cleanup_exception.log"
+                write_text_file(error_log, traceback.format_exc())
+                cases.append({
+                    "id": "9999", "name": "final suite cleanup", "status": "fail",
+                    "reason": f"Exception during final cleanup: {exc}",
+                    "artifacts": [str(error_log)],
+                })
+                context.log(f"Final suite cleanup threw an exception: {exc}")
+            finally:
+                shutil.rmtree(context.suite_cleanup_config_dir, ignore_errors=True)
 
     results = {
         **suite_metadata,

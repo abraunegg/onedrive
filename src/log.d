@@ -39,6 +39,8 @@ class LogBuffer {
 	private	string[3][] buffer;
 	private Mutex bufferLock;
 	private Condition condReady;
+	private Condition condDrained;
+	private bool flushInProgress;
 	private string logFilePath;
 	private bool writeToFile;
 	private bool verboseLogging;
@@ -51,6 +53,8 @@ class LogBuffer {
 		// Initialise the mutex
 		bufferLock = new Mutex();
 		condReady = new Condition(bufferLock);
+		condDrained = new Condition(bufferLock);
+		flushInProgress = false;
 		// Initialise shared items
 		isRunning = true;
 		// Initialise other items
@@ -76,6 +80,7 @@ class LogBuffer {
 			// flag that we are no longer running due to shutting down
 			isRunning = false;
 			condReady.notifyAll(); // Wake up all waiting threads
+			condDrained.notifyAll(); // Wake any caller waiting for buffered output to drain
 		} finally {
 			bufferLock.unlock();
 		}
@@ -90,20 +95,50 @@ class LogBuffer {
 
 		// Release references only
 		condReady = null;
+		condDrained = null;
 		flushThread = null;
 	}
 		
 	// Flush the logging buffer
 	private void flushBuffer() {
 		while (true) {
-			if (!flush()) {
+			bool keepRunning = flush();
+
+			// flush() has now returned, so its local message batch and formatting
+			// variables are no longer on the active logger stack. Only now advertise
+			// that the flush is complete to callers waiting at the pre-GC barrier.
+			bufferLock.lock();
+			try {
+				flushInProgress = false;
+				if (buffer.empty) {
+					condDrained.notifyAll();
+				}
+			} finally {
+				bufferLock.unlock();
+			}
+
+			if (!keepRunning) {
 				break;
 			}
 		}
 		stdout.flush();
 	}
 
-	// Add the message received to the buffer for logging
+	// Wait until all currently buffered log entries have been fully written.
+	// This is used by memory telemetry immediately before garbage collection so
+	// telemetry strings are no longer retained by the asynchronous logger when
+	// GC.collect() and GC.minimize() run.
+	void waitUntilDrained() {
+		bufferLock.lock();
+		try {
+			while (isRunning && (!buffer.empty || flushInProgress)) {
+				condDrained.wait();
+			}
+		} finally {
+			bufferLock.unlock();
+		}
+	}
+
 	void logThisMessage(string message, string[] levels = ["info"]) {
 		// Generate the timestamp for this log entry
 		auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
@@ -179,39 +214,45 @@ class LogBuffer {
 			// retaining a historical high-water logging buffer indefinitely.
 			messages = buffer;
 			buffer = null;
+			flushInProgress = true;
 		} finally {
 			bufferLock.unlock();
 		}
 
-		// Are there messages to process?
-		if (messages.length > 0) {
-			// There are messages to process
-			foreach (msg; messages) {
-				// timestamp, logLevel, message
-				// Always write the log line to the console, if level != logFileOnly
-				if (msg[1] != "logFileOnly") {
-					// Console output .. what sort of output
-					if (msg[1] == "consoleOnlyNoNewLine") {
-						// This is used write out a message to the console only, without a new line 
-						// This is used in non-verbose mode to indicate something is happening when downloading JSON data from OneDrive or when we need user input from --resync
-						write(msg[2]);
-					} else {
-						// write this to the console with a new line
-						writeln(msg[2]);
+		try {
+			// Are there messages to process?
+			if (messages.length > 0) {
+				// There are messages to process
+				foreach (msg; messages) {
+					// timestamp, logLevel, message
+					// Always write the log line to the console, if level != logFileOnly
+					if (msg[1] != "logFileOnly") {
+						// Console output .. what sort of output
+						if (msg[1] == "consoleOnlyNoNewLine") {
+							// This is used write out a message to the console only, without a new line 
+							// This is used in non-verbose mode to indicate something is happening when downloading JSON data from OneDrive or when we need user input from --resync
+							write(msg[2]);
+						} else {
+							// write this to the console with a new line
+							writeln(msg[2]);
+						}
 					}
-				}
-				
-				// Was this just console only output?
-				if ((msg[1] != "consoleOnlyNoNewLine") && (msg[1] != "consoleOnly")) {
-					// Write to the logfile only if configured to do so - console only items should not be written out
-					if (writeToFile) {
-						string logFileLine = format("[%s] %s", msg[0], msg[2]);
-						std.file.append(logFilePath, logFileLine ~ "\n");
+					
+					// Was this just console only output?
+					if ((msg[1] != "consoleOnlyNoNewLine") && (msg[1] != "consoleOnly")) {
+						// Write to the logfile only if configured to do so - console only items should not be written out
+						if (writeToFile) {
+							string logFileLine = format("[%s] %s", msg[0], msg[2]);
+							std.file.append(logFilePath, logFileLine ~ "\n");
+						}
 					}
 				}
 			}
-			// Clear Messages
-			messages.length = 0;
+		} finally {
+			// Drop this thread's reference to the completed batch before returning.
+			// flushBuffer() signals the drained condition only after this function
+			// has returned and these local variables are off the active stack.
+			messages = [];
 		}
 
 		return true;
@@ -246,6 +287,16 @@ void addLogEntry(string message = "", string[] levels = ["info"]) {
 			" isRunning=", isRunning,
 			" thread=", Thread.getThis(),
 			" msg=", message);
+	}
+}
+
+// Block until all log entries submitted before this call have been fully written.
+// Primarily used by pre-GC memory telemetry so asynchronous logging cannot retain
+// the telemetry strings across GC.collect() / GC.minimize().
+void flushPendingLogEntries() {
+	auto lb = logBuffer;
+	if ((lb !is null) && isRunning) {
+		lb.waitUntilDrained();
 	}
 }
 
