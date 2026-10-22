@@ -19,8 +19,10 @@ unhealthy() {
 	exit 1
 }
 
-# The expected path for the monitor file inside the container
-STATUS_FILE="/onedrive/conf/monitor-status.json"
+# The expected path for the monitor file inside the container. It only
+# needs to be overridden when the script is run against a client outside
+# the container images, for example by the end-to-end tests.
+STATUS_FILE="${ONEDRIVE_HEALTHCHECK_STATUS_FILE-/onedrive/conf/monitor-status.json}"
 
 # The status file layout this script understands. A different
 # schema_version may move or rename the fields checked below.
@@ -66,6 +68,9 @@ MAX_AGE_SECONDS="${ONEDRIVE_HEALTHCHECK_MAX_AGE-600}"
 # the value well within the range of shell arithmetic.
 if [[ ! ${MAX_AGE_SECONDS} =~ ^[1-9][0-9]{0,9}$ ]]; then
 	unhealthy "ONEDRIVE_HEALTHCHECK_MAX_AGE='${MAX_AGE_SECONDS}' is not a positive integer number of seconds"
+fi
+if [ -z "${STATUS_FILE}" ]; then
+	unhealthy "ONEDRIVE_HEALTHCHECK_STATUS_FILE is set but empty"
 fi
 
 # monitor-status.json only exists while --monitor is running with

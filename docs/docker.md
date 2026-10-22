@@ -537,6 +537,7 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 | <B>ONEDRIVE_FILE_FRAGMENT_SIZE</B> | Controls the fragment size when uploading large files to Microsoft OneDrive. The value specified is in MB. Default is 10, Limit is 60 | 25 |
 | <B>ONEDRIVE_THREADS</B> | Controls the value for the number of worker threads used for parallel upload and download operations. Default is 8, Limit is 16 | 4 |
 | <B>ONEDRIVE_HEALTHCHECK_MAX_AGE</B> | Maximum age in seconds of `monitor-status.json` before the optional [healthcheck script](#using-a-container-healthcheck) reports the container as unhealthy. Not used by the client itself. Default is 600 | 1800 |
+| <B>ONEDRIVE_HEALTHCHECK_STATUS_FILE</B> | Path of the status file read by the optional [healthcheck script](#using-a-container-healthcheck). Only needs to be changed when the script is run outside the container images. Not used by the client itself. Default is `/onedrive/conf/monitor-status.json` | /path/to/monitor-status.json |
 
 ### Environment Variables Usage Examples
 **Verbose Output:**
