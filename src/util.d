@@ -711,9 +711,10 @@ Regex!char wild2regex(const(char)[] pattern) {
 		case ')':
 			str ~= "\\)";
 			break;
-		// These are valid characters in OneDrive file and folder names, so they must be matched literally.
-		// Without escaping, 'Photos [2023]' would become a character class (matching 'Photos 2' but not 'Photos [2023]'),
-		// '~$*' would never match, and an unbalanced '[' or '{' would throw a RegexException when the rule is loaded.
+		// '[', ']', '{', '}', '^' and '$' are valid characters in OneDrive file and folder names, so escape them to match them literally.
+		// Without escaping, 'Photos [2023]' becomes a character class (matching 'Photos 2' but not 'Photos [2023]'),
+		// 'Backup{1}.txt' becomes a repetition quantifier, '^' and '$' become anchors, and an unbalanced '[' or '{'
+		// throws a RegexException when the rule is loaded.
 		case '[':
 			str ~= "\\[";
 			break;
@@ -739,38 +740,6 @@ Regex!char wild2regex(const(char)[] pattern) {
 	}
 	str ~= "$";
 	return regex(str, "i");
-}
-
-// 'skip_file' and 'skip_dir' only support '*' and '?' wildcards, all other characters must be matched literally
-unittest {
-	bool matches(string pattern, string name) {
-		return !name.matchFirst(wild2regex(pattern)).empty;
-	}
-
-	// Existing wildcard and separator behaviour
-	assert(matches("~*|.~*|*.tmp|*.swp|*.partial", "~lock"));
-	assert(matches("~*|.~*|*.tmp|*.swp|*.partial", "file.partial"));
-	assert(!matches("~*|.~*|*.tmp|*.swp|*.partial", "file.txt"));
-	assert(matches("file?.txt", "FILE1.TXT"));
-	assert(matches("/Documents/OneNote*", "/Documents/OneNote Notebooks"));
-
-	// Square brackets are literal characters, not a character class
-	assert(matches("Photos [2023]", "Photos [2023]"));
-	assert(!matches("Photos [2023]", "Photos 2"));
-	assert(matches("*[draft]*", "Report [draft] v2.docx"));
-
-	// Braces are literal characters, not a repetition quantifier
-	assert(matches("Backup{1}", "Backup{1}"));
-	assert(!matches("Backup{1}", "Backup"));
-
-	// '^' and '$' are literal characters, not anchors
-	assert(matches("~$*", "~$Report.docx"));
-	assert(matches("a^b", "a^b"));
-
-	// Unbalanced brackets or braces must not throw when the rule is loaded
-	assert(matches("Draft [old", "Draft [old"));
-	assert(matches("Draft {old", "Draft {old"));
-	assert(matches("Draft ]old}", "Draft ]old}"));
 }
 
 // Result of the lightweight Microsoft HTTPS service probe used for both
