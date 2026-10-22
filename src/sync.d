@@ -7301,7 +7301,11 @@ class SyncEngine {
 
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
-					if (selectiveSync.isFileNameExcluded(localFilePath.strip('.'))) {
+					string exclusionTestPath = localFilePath.strip('.');
+					if (!startsWith(exclusionTestPath, "/")) {
+						exclusionTestPath = "/" ~ exclusionTestPath;
+					}
+					if (selectiveSync.isFileNameExcluded(exclusionTestPath)) {
 						if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_file config: " ~ localFilePath, ["verbose"]);}
 						clientSideRuleExcludesPath = true;
 					}
