@@ -29,6 +29,11 @@ class TestCase0011SkipFileValidation(TestCase0012SkipDirValidation):
         write_onedrive_config(config_path, "\n".join(lines) + "\n")
 
     def _build_scenarios(self, suffix: str) -> list[SkipDirScenario]:
+        # skip_file supports filename masks anywhere (e.g. blah.txt, *.txt),
+        # or an exact path relative to sync_dir, rooted with '/' (e.g.
+        # /Documents [2023]/blocked.txt). The latter slash is NOT the host
+        # filesystem root. Both upload and download must honour this contract.
+
         scenarios: list[SkipDirScenario] = []
         scenarios.append(SkipDirScenario(
             scenario_id="SF-0001",
@@ -476,9 +481,9 @@ class TestCase0011SkipFileValidation(TestCase0012SkipDirValidation):
         ))
         scenarios.append(SkipDirScenario(
             scenario_id="SF-0023",
-            description='full path rule with literal brackets' + " (local to remote)",
+            description='sync-root anchored full path rule with literal brackets' + " (local to remote)",
             direction=self.LOCAL_TO_REMOTE,
-            skip_dir_entries=(f"ZZ_E2E_TC0011_SF0023_{suffix}" + '/Documents [2023]/blocked.txt',),
+            skip_dir_entries=(f"/ZZ_E2E_TC0011_SF0023_{suffix}" + '/Documents [2023]/blocked.txt',),
             strict=False,
             files=(
                 (f"ZZ_E2E_TC0011_SF0023_{suffix}" + '/Documents [2023]/blocked.txt', 'skip\n'),
@@ -496,9 +501,9 @@ class TestCase0011SkipFileValidation(TestCase0012SkipDirValidation):
         ))
         scenarios.append(SkipDirScenario(
             scenario_id="SF-0024",
-            description='full path rule with literal brackets' + " (remote to local)",
+            description='sync-root anchored full path rule with literal brackets' + " (remote to local)",
             direction=self.REMOTE_TO_LOCAL,
-            skip_dir_entries=(f"ZZ_E2E_TC0011_SF0024_{suffix}" + '/Documents [2023]/blocked.txt',),
+            skip_dir_entries=(f"/ZZ_E2E_TC0011_SF0024_{suffix}" + '/Documents [2023]/blocked.txt',),
             strict=False,
             files=(
                 (f"ZZ_E2E_TC0011_SF0024_{suffix}" + '/Documents [2023]/blocked.txt', 'skip\n'),
