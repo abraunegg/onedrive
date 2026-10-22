@@ -430,6 +430,446 @@ class TestCase0012SkipDirValidation(E2ETestCase):
                 ),
                 single_directory=mixed_remote_root,
             ),
+            SkipDirScenario(
+                scenario_id="SD-0011",
+                description='literal square brackets and false-positive digit' + " (local to remote)",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=('Photos [2023]',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0011_{suffix}" + '/Photos [2023]/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0011_{suffix}" + '/Photos 2/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0011_{suffix}" + '/Photos 3/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0011_{suffix}" + '/Keep/ok.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0011_{suffix}" + '/Photos 2/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0011_{suffix}" + '/Photos 3/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0011_{suffix}" + '/Keep/ok.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0011_{suffix}" + '/Photos [2023]/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0011_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0012",
+                description='literal square brackets and false-positive digit' + " (remote to local)",
+                direction=self.REMOTE_TO_LOCAL,
+                skip_dir_entries=('Photos [2023]',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0012_{suffix}" + '/Photos [2023]/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0012_{suffix}" + '/Photos 2/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0012_{suffix}" + '/Photos 3/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0012_{suffix}" + '/Keep/ok.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0012_{suffix}" + '/Photos 2/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0012_{suffix}" + '/Photos 3/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0012_{suffix}" + '/Keep/ok.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0012_{suffix}" + '/Photos [2023]/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0012_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0013",
+                description='literal braces and false-positive quantifier' + " (local to remote)",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=('Backup{1}',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0013_{suffix}" + '/Backup{1}/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0013_{suffix}" + '/Backup/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0013_{suffix}" + '/Keep/ok.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0013_{suffix}" + '/Backup/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0013_{suffix}" + '/Keep/ok.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0013_{suffix}" + '/Backup{1}/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0013_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0014",
+                description='literal braces and false-positive quantifier' + " (remote to local)",
+                direction=self.REMOTE_TO_LOCAL,
+                skip_dir_entries=('Backup{1}',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0014_{suffix}" + '/Backup{1}/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0014_{suffix}" + '/Backup/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0014_{suffix}" + '/Keep/ok.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0014_{suffix}" + '/Backup/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0014_{suffix}" + '/Keep/ok.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0014_{suffix}" + '/Backup{1}/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0014_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0015",
+                description='literal dollar anchor' + " (local to remote)",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=('Budget$2026',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0015_{suffix}" + '/Budget$2026/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0015_{suffix}" + '/Budget/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0015_{suffix}" + '/Keep/ok.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0015_{suffix}" + '/Budget/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0015_{suffix}" + '/Keep/ok.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0015_{suffix}" + '/Budget$2026/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0015_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0016",
+                description='literal dollar anchor' + " (remote to local)",
+                direction=self.REMOTE_TO_LOCAL,
+                skip_dir_entries=('Budget$2026',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0016_{suffix}" + '/Budget$2026/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0016_{suffix}" + '/Budget/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0016_{suffix}" + '/Keep/ok.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0016_{suffix}" + '/Budget/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0016_{suffix}" + '/Keep/ok.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0016_{suffix}" + '/Budget$2026/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0016_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0017",
+                description='literal caret anchor' + " (local to remote)",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=('Q^A',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0017_{suffix}" + '/Q^A/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0017_{suffix}" + '/QA/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0017_{suffix}" + '/Keep/ok.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0017_{suffix}" + '/QA/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0017_{suffix}" + '/Keep/ok.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0017_{suffix}" + '/Q^A/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0017_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0018",
+                description='literal caret anchor' + " (remote to local)",
+                direction=self.REMOTE_TO_LOCAL,
+                skip_dir_entries=('Q^A',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0018_{suffix}" + '/Q^A/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0018_{suffix}" + '/QA/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0018_{suffix}" + '/Keep/ok.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0018_{suffix}" + '/QA/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0018_{suffix}" + '/Keep/ok.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0018_{suffix}" + '/Q^A/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0018_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0019",
+                description='unbalanced opening bracket' + " (local to remote)",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=('Draft [old',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0019_{suffix}" + '/Draft [old/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0019_{suffix}" + '/Draft old/retained.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0019_{suffix}" + '/Draft old/retained.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0019_{suffix}" + '/Draft [old/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0019_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0020",
+                description='unbalanced opening bracket' + " (remote to local)",
+                direction=self.REMOTE_TO_LOCAL,
+                skip_dir_entries=('Draft [old',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0020_{suffix}" + '/Draft [old/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0020_{suffix}" + '/Draft old/retained.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0020_{suffix}" + '/Draft old/retained.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0020_{suffix}" + '/Draft [old/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0020_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0021",
+                description='unbalanced opening brace' + " (local to remote)",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=('Draft {old',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0021_{suffix}" + '/Draft {old/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0021_{suffix}" + '/Draft old/retained.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0021_{suffix}" + '/Draft old/retained.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0021_{suffix}" + '/Draft {old/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0021_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0022",
+                description='unbalanced opening brace' + " (remote to local)",
+                direction=self.REMOTE_TO_LOCAL,
+                skip_dir_entries=('Draft {old',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0022_{suffix}" + '/Draft {old/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0022_{suffix}" + '/Draft old/retained.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0022_{suffix}" + '/Draft old/retained.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0022_{suffix}" + '/Draft {old/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0022_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0023",
+                description='unbalanced closing bracket and brace' + " (local to remote)",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=('Draft ]old}',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0023_{suffix}" + '/Draft ]old}/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0023_{suffix}" + '/Draft old/retained.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0023_{suffix}" + '/Draft old/retained.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0023_{suffix}" + '/Draft ]old}/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0023_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0024",
+                description='unbalanced closing bracket and brace' + " (remote to local)",
+                direction=self.REMOTE_TO_LOCAL,
+                skip_dir_entries=('Draft ]old}',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0024_{suffix}" + '/Draft ]old}/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0024_{suffix}" + '/Draft old/retained.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0024_{suffix}" + '/Draft old/retained.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0024_{suffix}" + '/Draft ]old}/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0024_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0025",
+                description='literal metacharacters with star wildcard and pipe alternatives' + " (local to remote)",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=('*[draft]*|Backup{1}|Budget$*',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0025_{suffix}" + '/Report [draft] v2/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0025_{suffix}" + '/Backup{1}/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0025_{suffix}" + '/Budget$2026/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0025_{suffix}" + '/Report draft v2/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0025_{suffix}" + '/Backup/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0025_{suffix}" + '/Keep/ok.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0025_{suffix}" + '/Report draft v2/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0025_{suffix}" + '/Backup/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0025_{suffix}" + '/Keep/ok.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0025_{suffix}" + '/Report [draft] v2/blocked.txt',
+                    f"ZZ_E2E_TC0012_SD0025_{suffix}" + '/Backup{1}/blocked.txt',
+                    f"ZZ_E2E_TC0012_SD0025_{suffix}" + '/Budget$2026/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0025_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0026",
+                description='literal metacharacters with star wildcard and pipe alternatives' + " (remote to local)",
+                direction=self.REMOTE_TO_LOCAL,
+                skip_dir_entries=('*[draft]*|Backup{1}|Budget$*',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0026_{suffix}" + '/Report [draft] v2/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0026_{suffix}" + '/Backup{1}/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0026_{suffix}" + '/Budget$2026/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0026_{suffix}" + '/Report draft v2/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0026_{suffix}" + '/Backup/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0026_{suffix}" + '/Keep/ok.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0026_{suffix}" + '/Report draft v2/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0026_{suffix}" + '/Backup/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0026_{suffix}" + '/Keep/ok.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0026_{suffix}" + '/Report [draft] v2/blocked.txt',
+                    f"ZZ_E2E_TC0012_SD0026_{suffix}" + '/Backup{1}/blocked.txt',
+                    f"ZZ_E2E_TC0012_SD0026_{suffix}" + '/Budget$2026/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0026_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0027",
+                description='literal bracket in strict path' + " (local to remote)",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=(f"ZZ_E2E_TC0012_SD0027_{suffix}" + '/Projects [2023]/Cache',),
+                strict=True,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0027_{suffix}" + '/Projects [2023]/Cache/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0027_{suffix}" + '/Projects 2/Cache/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0027_{suffix}" + '/Elsewhere/Cache/retained.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0027_{suffix}" + '/Projects 2/Cache/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0027_{suffix}" + '/Elsewhere/Cache/retained.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0027_{suffix}" + '/Projects [2023]/Cache/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0027_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0028",
+                description='literal bracket in strict path' + " (remote to local)",
+                direction=self.REMOTE_TO_LOCAL,
+                skip_dir_entries=(f"ZZ_E2E_TC0012_SD0028_{suffix}" + '/Projects [2023]/Cache',),
+                strict=True,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0028_{suffix}" + '/Projects [2023]/Cache/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0028_{suffix}" + '/Projects 2/Cache/retained.txt', 'keep\n'),
+                    (f"ZZ_E2E_TC0012_SD0028_{suffix}" + '/Elsewhere/Cache/retained.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0028_{suffix}" + '/Projects 2/Cache/retained.txt',
+                    f"ZZ_E2E_TC0012_SD0028_{suffix}" + '/Elsewhere/Cache/retained.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0028_{suffix}" + '/Projects [2023]/Cache/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0028_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0029",
+                description='non-strict segment exclusion with bracket' + " (local to remote)",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=('Cache [old]',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0029_{suffix}" + '/Nested/Cache [old]/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0029_{suffix}" + '/Nested/Cache old/retained.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0029_{suffix}" + '/Nested/Cache old/retained.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0029_{suffix}" + '/Nested/Cache [old]/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0029_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0030",
+                description='non-strict segment exclusion with bracket' + " (remote to local)",
+                direction=self.REMOTE_TO_LOCAL,
+                skip_dir_entries=('Cache [old]',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0030_{suffix}" + '/Nested/Cache [old]/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0030_{suffix}" + '/Nested/Cache old/retained.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0030_{suffix}" + '/Nested/Cache old/retained.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0030_{suffix}" + '/Nested/Cache [old]/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0030_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0031",
+                description='question mark wildcard with literal braces' + " (local to remote)",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=('Build?{1}',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0031_{suffix}" + '/BuildA{1}/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0031_{suffix}" + '/BuildB{1}/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0031_{suffix}" + '/BuildA/retained.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0031_{suffix}" + '/BuildA/retained.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0031_{suffix}" + '/BuildA{1}/blocked.txt',
+                    f"ZZ_E2E_TC0012_SD0031_{suffix}" + '/BuildB{1}/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0031_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0032",
+                description='question mark wildcard with literal braces' + " (remote to local)",
+                direction=self.REMOTE_TO_LOCAL,
+                skip_dir_entries=('Build?{1}',),
+                strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0032_{suffix}" + '/BuildA{1}/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0032_{suffix}" + '/BuildB{1}/blocked.txt', 'blocked\n'),
+                    (f"ZZ_E2E_TC0012_SD0032_{suffix}" + '/BuildA/retained.txt', 'keep\n'),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0032_{suffix}" + '/BuildA/retained.txt',
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0032_{suffix}" + '/BuildA{1}/blocked.txt',
+                    f"ZZ_E2E_TC0012_SD0032_{suffix}" + '/BuildB{1}/blocked.txt',
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0032_{suffix}",
+            ),
         ]
 
     def _run_scenario(
@@ -620,7 +1060,7 @@ class TestCase0012SkipDirValidation(E2ETestCase):
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
-            case_dir_name="tc0012",
+            case_dir_name=f"tc{self.case_id}",
             ensure_refresh_token=True,
         )
 
@@ -723,7 +1163,7 @@ class TestCase0012SkipDirValidation(E2ETestCase):
                 self.name,
                 (
                     f"{len(failed_results)} of {len(results)} "
-                    f"skip_dir scenarios failed — {failure_text}"
+                    f"filtering scenarios failed — {failure_text}"
                 ),
                 deduped_artifacts,
                 details,
