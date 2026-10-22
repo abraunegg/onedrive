@@ -1010,13 +1010,14 @@ _**CLI Option Use:**_ `--resync-auth`
 > In certain automated environments (assuming you know what you're doing due to using automation), to avoid the 'proceed with acknowledgement' resync requirement, this option allows you to automatically acknowledge the resync prompt.
 
 ### skip_dir
-_**Description:**_ This configuration option controls whether the application skips certain directories from being synced. Directories can be specified in 2 ways:
+_**Description:**_ This configuration option controls whether the application skips certain directories from being synced. Directory exclusions can be specified as:
 
-* As a single entry. This will search the respective path for this entry and skip all instances where this directory is present, where ever it may exist.
-* As a full path entry. This will skip the explicit path as set.
+* **Directory-name pattern:** For example, `Cache` excludes directories named `Cache` wherever they occur beneath `sync_dir` when `skip_dir_strict_match = "false"` (the default). With strict matching enabled, individual directory components are not tested, so `Cache` matches only a directory at the top level of `sync_dir`.
+* **Directory-path pattern:** For example, `/Documents/Cache` identifies the `Cache` directory under `Documents` in `sync_dir`, rather than every directory named `Cache`. Using a leading `/` makes the sync-root-relative intent clear.
+* **Wildcard pattern:** For example, `Visual Studio*` matches directory names beginning with `Visual Studio` under the applicable directory-matching rules.
 
 > [!IMPORTANT]
-> Entries for 'skip_dir' are *relative* to your 'sync_dir' path.
+> All `skip_dir` paths are relative to the configured `sync_dir`, not the Linux filesystem root. If `sync_dir = "~/OneDrive"`, then `/Documents/Cache` identifies `~/OneDrive/Documents/Cache`. The leading `/` marks the synchronisation root; it does not mean `/Documents/Cache` on the host filesystem.
 
 _**Value Type:**_ String
 
@@ -1024,7 +1025,9 @@ _**Default Value:**_ *Empty* - not required for normal operation
 
 _**Config Example:**_ 
 
-Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns. 
+Patterns are case insensitive. `*` matches zero or more characters and `?` matches one character. Use `|` to separate multiple patterns. Unlike `sync_list`, these rules do not use `**` as a separate globstar syntax.
+
+With the PR #3922 filtering correction, `[`, `]`, `{`, `}`, `^` and `$` are matched as literal characters, not regular-expression operators. For example, `skip_dir = "/Photos [2023]"` matches the `Photos [2023]` directory, not a directory named `Photos 2`. A `|` remains a rule separator, not a literal name character.
 
 ```text
 skip_dir = "Desktop|Documents/IISExpress|Documents/SQL Server Management Studio|Documents/Visual Studio*|Documents/WindowsPowerShell|.Rproj-user"
@@ -1049,7 +1052,12 @@ _**CLI Option Use:**_ `--skip-dir 'SkipThisDirectoryAnywhere|.SkipThisOtherDirec
 > This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. If using the config file and CLI option is used, the CLI option will *replace* the config file entries. After changing or modifying this option, you will be required to perform a resync.
 
 ### skip_dir_strict_match
-_**Description:**_ This configuration option controls whether the application performs strict directory matching when checking 'skip_dir' items. When enabled, the 'skip_dir' item must be a full path match to the path to be skipped.
+_**Description:**_ This configuration option controls whether the application also tests individual directory components against `skip_dir` patterns.
+
+* **`false` (default):** First test the directory's complete path against each pattern; if no full-path match is found, also test each directory component. A rule such as `Cache` therefore matches a `Cache` directory at any depth.
+* **`true`:** Test the complete directory path only. No individual-component matching is performed. A rule such as `Cache` therefore matches the directory at the top level of `sync_dir` but not `Documents/Cache`; to select the latter location explicitly, use `/Documents/Cache`.
+
+Both modes accept matching path representations with or without an initial `/`; for clarity, use an initial `/` when expressing a path from the root of `sync_dir`. This option does not change the behaviour of `skip_file`.
 
 _**Value Type:**_ Boolean
 
@@ -1101,19 +1109,23 @@ The following suggested skip file patterns are not included in the default confi
 
 _**Config Example:**_ 
 
-Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
+Patterns are case insensitive. `*` matches zero or more characters and `?` matches one character. Use `|` to separate multiple patterns.
 
-Files can be skipped in the following fashion:
-*   Specify a wildcard, eg: '*.txt' (skip all txt files)
-*   Explicitly specify the filename and it's full path relative to your sync_dir, eg: '/path/to/file/filename.ext'
-*   Explicitly specify the filename only and skip every instance of this filename, eg: 'filename.ext'
+Files can be excluded in three ways:
 
+* **Filename anywhere:** `skip_file = "blah.txt"` excludes files named `blah.txt` wherever they occur beneath `sync_dir`.
+* **Filename pattern anywhere:** `skip_file = "*.txt"` excludes files with a `.txt` extension wherever they occur beneath `sync_dir`.
+* **Specific file at a specific location:** `skip_file = "/Documents/Reports/blah.txt"` excludes that one file under `sync_dir`. **A path-specific rule must begin with `/`** to identify the sync-root-relative location consistently. Do not use an unprefixed directory-qualified pattern for this purpose.
+
+The leading `/` on a path-specific rule refers to `sync_dir`, **not** the Linux filesystem root. For example, when `sync_dir = "~/OneDrive"`, `/Documents/Reports/blah.txt` refers to `~/OneDrive/Documents/Reports/blah.txt`, not `/Documents/Reports/blah.txt` on the host.
+
+With the PR #3922 filtering correction, `[`, `]`, `{`, `}`, `^` and `$` are interpreted literally in patterns. For example, `/Documents/Backup{1}.txt` matches a file named `Backup{1}.txt`, not `Backup.txt`. The `|` character still separates patterns. These options use wildcard patterns; they are not general-purpose regular-expression configuration settings.
 ```text
 skip_file = "~*|/Documents/OneNote*|/Documents/config.xlaunch|myfile.ext|/Documents/keepass.kdbx"
 ```
 
 > [!IMPORTANT]
-> Entries for 'skip_file' are *relative* to your 'sync_dir' path.
+> `skip_file` path entries are relative to `sync_dir`. Only filename-only and filename-wildcard rules are intended to match anywhere; use a leading `/` for an explicit, location-specific file path. This behaviour applies when evaluating both local uploads and remote downloads.
 
 The 'skip_file' option can be specified multiple times within your config file, for example:
 ```text
