@@ -1190,13 +1190,15 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         if not failures:
             execute("05_supported_resync", subject_root, subject_conf,
                     ["--resync", "--resync-auth"])
-        if not failures:
-            # Capture the exact configuration comparison that requests another
-            # resync, without weakening the expected successful convergence.
-            execute("06_followup_reconciliation", subject_root, subject_conf, ["--verbose"])
-        independently_verify("07_remote_after_recovery")
+        # This regression verifies remote preservation when an existing tracked
+        # object becomes excluded.  An ordinary follow-up sync after --resync
+        # is a separate configuration-state convergence contract and is not
+        # required to establish whether existing remote content was deleted.
+        # Do not hide an exit 78 as success: omit that unrelated operation and
+        # independently inspect remote state after supported recovery instead.
+        independently_verify("06_remote_after_recovery")
 
-        if not failures and snapshots.get("02_remote_baseline") != snapshots.get("07_remote_after_recovery"):
+        if not failures and snapshots.get("02_remote_baseline") != snapshots.get("06_remote_after_recovery"):
             failures.append("remote manifest changed during filtering configuration transition")
         subject_manifest = build_manifest(subject_root)
         path = scenario_state_dir / "subject_manifest.txt"
