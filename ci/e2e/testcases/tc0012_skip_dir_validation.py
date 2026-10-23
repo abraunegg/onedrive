@@ -1193,7 +1193,7 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         if not failures:
             # Capture the exact configuration comparison that requests another
             # resync, without weakening the expected successful convergence.
-            execute("06_followup_reconciliation", subject_root, subject_conf, ["--debug"])
+            execute("06_followup_reconciliation", subject_root, subject_conf, ["--verbose"])
         independently_verify("07_remote_after_recovery")
 
         if not failures and snapshots.get("02_remote_baseline") != snapshots.get("07_remote_after_recovery"):
