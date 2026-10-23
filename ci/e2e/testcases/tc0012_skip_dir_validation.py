@@ -22,7 +22,9 @@ class SkipDirScenario:
     expected_present: tuple[str, ...]
     expected_absent: tuple[str, ...]
     single_directory: str | None = None
-    mode: str = "ordinary"  # ordinary, tracked_exclusion, invalid_config
+    mode: str = "ordinary"  # ordinary, tracked_exclusion, invalid_config, sync_list_valid, sync_list_shadowed
+    sync_list_rules: tuple[str, ...] = ()
+    expected_shadowing_option: str | None = None
 
 
 @dataclass
@@ -908,6 +910,42 @@ class TestCase0012SkipDirValidation(E2ETestCase):
                 files=((f"ZZ_E2E_TC0012_SD0036_{suffix}/keep.txt", "no upload\n"),),
                 expected_present=(), expected_absent=(), mode="invalid_config",
             ),
+            SkipDirScenario(
+                scenario_id="SD-0037",
+                description="sync_list literal bracket skip_dir must not shadow unrelated included directory",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=("Photos [2023]",), strict=False,
+                files=(
+                    (f"ZZ_E2E_TC0012_SD0037_{suffix}/Photos 2/keep.txt", "include\n"),
+                    (f"ZZ_E2E_TC0012_SD0037_{suffix}/Albums/Photos [2023]/blocked.txt", "skip\n"),
+                    (f"ZZ_E2E_TC0012_SD0037_{suffix}/Albums/Photos 3/keep.txt", "include\n"),
+                    (f"ZZ_E2E_TC0012_SD0037_{suffix}/Outside/not-in-list.txt", "no include\n"),
+                ),
+                expected_present=(
+                    f"ZZ_E2E_TC0012_SD0037_{suffix}/Photos 2/keep.txt",
+                    f"ZZ_E2E_TC0012_SD0037_{suffix}/Albums/Photos 3/keep.txt",
+                ),
+                expected_absent=(
+                    f"ZZ_E2E_TC0012_SD0037_{suffix}/Albums/Photos [2023]/blocked.txt",
+                    f"ZZ_E2E_TC0012_SD0037_{suffix}/Outside/not-in-list.txt",
+                ),
+                single_directory=f"ZZ_E2E_TC0012_SD0037_{suffix}",
+                mode="sync_list_valid",
+                sync_list_rules=(
+                    f"/ZZ_E2E_TC0012_SD0037_{suffix}/Photos 2",
+                    f"/ZZ_E2E_TC0012_SD0037_{suffix}/Albums",
+                ),
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0038",
+                description="sync_list bracket directory include truly shadowed by skip_dir must be rejected",
+                direction=self.LOCAL_TO_REMOTE,
+                skip_dir_entries=("Photos [2023]",), strict=False,
+                files=((f"ZZ_E2E_TC0012_SD0038_{suffix}/Photos [2023]/must-not-upload.txt", "reject\n"),),
+                expected_present=(), expected_absent=(),
+                mode="sync_list_shadowed", expected_shadowing_option="skip_dir",
+                sync_list_rules=(f"/ZZ_E2E_TC0012_SD0038_{suffix}/Photos [2023]",),
+            ),
         ]
 
     def _run_scenario(
@@ -919,6 +957,12 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         scenario_log_dir: Path,
         scenario_state_dir: Path,
     ) -> ScenarioResult:
+        if scenario.mode == "sync_list_shadowed":
+            return self._run_shadowed_sync_list(
+                context, scenario, scenario_work_dir=scenario_work_dir,
+                scenario_log_dir=scenario_log_dir,
+                scenario_state_dir=scenario_state_dir,
+            )
         if scenario.mode == "tracked_exclusion":
             return self._run_tracked_exclusion(
                 context, scenario, scenario_work_dir=scenario_work_dir,
@@ -974,6 +1018,10 @@ class TestCase0012SkipDirValidation(E2ETestCase):
             other_conf / "config",
             label=f"{scenario.scenario_id} unfiltered",
         )
+        if scenario.mode == "sync_list_valid":
+            # TC0002 policy: the subject must use sync_list as its ONLY scope.
+            # Never combine its sync_list with --single-directory.
+            write_text_file(subject_conf / "sync_list", "\n".join(scenario.sync_list_rules) + "\n")
 
         phase1_stdout = scenario_log_dir / "phase1_source_stdout.log"
         phase1_stderr = scenario_log_dir / "phase1_source_stderr.log"
@@ -1007,7 +1055,11 @@ class TestCase0012SkipDirValidation(E2ETestCase):
             "--confdir",
             str(source_conf),
         ]
-        self._append_scope(phase1_command, scenario.single_directory)
+        self._append_scope(
+            phase1_command,
+            None if scenario.mode == "sync_list_valid" and scenario.direction == self.LOCAL_TO_REMOTE
+            else scenario.single_directory,
+        )
 
         context.log(
             f"Executing Test Case {self.case_id} {scenario.scenario_id} "
@@ -1038,7 +1090,11 @@ class TestCase0012SkipDirValidation(E2ETestCase):
             "--confdir",
             str(result_conf),
         ]
-        self._append_scope(phase2_command, scenario.single_directory)
+        self._append_scope(
+            phase2_command,
+            None if scenario.mode == "sync_list_valid" and scenario.direction == self.REMOTE_TO_LOCAL
+            else scenario.single_directory,
+        )
 
         context.log(
             f"Executing Test Case {self.case_id} {scenario.scenario_id} "
@@ -1216,6 +1272,66 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         artifacts.append(str(metadata))
         return ScenarioResult(scenario.scenario_id, scenario.description, not failures,
                               failures, artifacts, details)
+
+    def _run_shadowed_sync_list(
+        self, context: E2EContext, scenario: SkipDirScenario, *,
+        scenario_work_dir: Path, scenario_log_dir: Path, scenario_state_dir: Path,
+    ) -> ScenarioResult:
+        """TC0002-style scoped sync_list startup rejection, without --single-directory.
+
+        No cloud fixture is seeded: rejection must precede any Graph synchronisation.
+        """
+        for d in (scenario_work_dir, scenario_log_dir, scenario_state_dir):
+            reset_directory(d)
+        syncroot = scenario_work_dir / "subject-syncroot"
+        conf = scenario_work_dir / "conf-subject"
+        reset_directory(syncroot)
+        context.bootstrap_config_dir(conf)
+        self._write_config(
+            conf / "config", skip_dir_entries=scenario.skip_dir_entries,
+            strict=scenario.strict, label=f"{scenario.scenario_id} shadowed include",
+        )
+        write_text_file(conf / "sync_list", "\n".join(scenario.sync_list_rules) + "\n")
+        for relative, content in scenario.files:
+            write_text_file(syncroot / relative, content)
+        # Same resync/auth policy as TC0002, importantly no --single-directory.
+        command = [
+            context.onedrive_bin, "--sync", "--upload-only", "--verbose",
+            "--resync", "--resync-auth", "--syncdir", str(syncroot),
+            "--confdir", str(conf),
+        ]
+        result = run_command(command, cwd=context.repo_root)
+        stdout = scenario_log_dir / "rejected_stdout.log"
+        stderr = scenario_log_dir / "rejected_stderr.log"
+        write_text_file(stdout, result.stdout)
+        write_text_file(stderr, result.stderr)
+        output = result.stdout + "\n" + result.stderr
+        failures = []
+        if result.returncode == 0:
+            failures.append("shadowed sync_list include was accepted")
+        heading = f"inclusion rules are shadowed by '{scenario.expected_shadowing_option}'"
+        if heading not in output:
+            failures.append(f"missing expected diagnostic: {heading}")
+        for rule in scenario.sync_list_rules:
+            if f"Shadowed 'sync_list' rule: {rule}" not in output:
+                failures.append(f"missing shadowed rule diagnostic: {rule}")
+        if any(marker in output for marker in (
+            "Attempting to contact the Microsoft OneDrive Service",
+            "Fetching items from the OneDrive API", "Uploading file:",
+        )):
+            failures.append("Graph processing began despite shadowed include")
+        details = {
+            "scenario_id": scenario.scenario_id, "mode": scenario.mode,
+            "sync_list_rules": list(scenario.sync_list_rules),
+            "returncode": result.returncode, "failure_messages": failures,
+            "command": command_to_string(command),
+        }
+        metadata = scenario_state_dir / "metadata.txt"
+        self._write_metadata(metadata, details)
+        return ScenarioResult(
+            scenario.scenario_id, scenario.description, not failures,
+            failures, [str(stdout), str(stderr), str(metadata)], details,
+        )
 
     def _run_invalid_config(
         self, context: E2EContext, scenario: SkipDirScenario, *,

@@ -573,4 +573,38 @@ class TestCase0011SkipFileValidation(TestCase0012SkipDirValidation):
             files=((f"ZZ_E2E_TC0011_SF0030_{suffix}/keep.txt", "no upload\n"),),
             expected_present=(), expected_absent=(), mode="invalid_config",
         ))
+        scenarios.append(SkipDirScenario(
+            scenario_id="SF-0031",
+            description="sync_list literal brace skip_file must not shadow unrelated included file",
+            direction=self.LOCAL_TO_REMOTE, skip_dir_entries=("Backup{1}.txt",), strict=False,
+            files=(
+                (f"ZZ_E2E_TC0011_SF0031_{suffix}/Backup.txt", "include\n"),
+                (f"ZZ_E2E_TC0011_SF0031_{suffix}/Albums/Backup{{1}}.txt", "skip\n"),
+                (f"ZZ_E2E_TC0011_SF0031_{suffix}/Albums/keep.txt", "include\n"),
+                (f"ZZ_E2E_TC0011_SF0031_{suffix}/Outside/not-in-list.txt", "no include\n"),
+            ),
+            expected_present=(
+                f"ZZ_E2E_TC0011_SF0031_{suffix}/Backup.txt",
+                f"ZZ_E2E_TC0011_SF0031_{suffix}/Albums/keep.txt",
+            ),
+            expected_absent=(
+                f"ZZ_E2E_TC0011_SF0031_{suffix}/Albums/Backup{{1}}.txt",
+                f"ZZ_E2E_TC0011_SF0031_{suffix}/Outside/not-in-list.txt",
+            ),
+            single_directory=f"ZZ_E2E_TC0011_SF0031_{suffix}",
+            mode="sync_list_valid",
+            sync_list_rules=(
+                f"/ZZ_E2E_TC0011_SF0031_{suffix}/Backup.txt",
+                f"/ZZ_E2E_TC0011_SF0031_{suffix}/Albums",
+            ),
+        ))
+        scenarios.append(SkipDirScenario(
+            scenario_id="SF-0032",
+            description="sync_list literal brace file include truly shadowed by skip_file must be rejected",
+            direction=self.LOCAL_TO_REMOTE, skip_dir_entries=("Backup{1}.txt",), strict=False,
+            files=((f"ZZ_E2E_TC0011_SF0032_{suffix}/Backup{{1}}.txt", "reject\n"),),
+            expected_present=(), expected_absent=(),
+            mode="sync_list_shadowed", expected_shadowing_option="skip_file",
+            sync_list_rules=(f"/ZZ_E2E_TC0011_SF0032_{suffix}/Backup{{1}}.txt",),
+        ))
         return scenarios
