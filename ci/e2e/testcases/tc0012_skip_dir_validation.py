@@ -871,10 +871,12 @@ class TestCase0012SkipDirValidation(E2ETestCase):
                 ),
                 single_directory=f"ZZ_E2E_TC0012_SD0032_{suffix}",
             ),
-            # Historical #3133: non-strict, unprefixed multi-component exclusion.
+            # Supported explicit rooted multi-component path matching; unlike
+            # single-component non-strict rules, bare "App/Private" does not
+            # match an arbitrary suffix of a longer path.
             SkipDirScenario(
-                scenario_id="SD-0033", description="issue #3133 unprefixed nested path (upload)",
-                direction=self.LOCAL_TO_REMOTE, skip_dir_entries=("App/Private",), strict=False,
+                scenario_id="SD-0033", description="explicit sync-root multi-component directory path (upload)",
+                direction=self.LOCAL_TO_REMOTE, skip_dir_entries=(f"/ZZ_E2E_TC0012_SD0033_{suffix}/App/Private",), strict=True,
                 files=((f"ZZ_E2E_TC0012_SD0033_{suffix}/App/Private/no.txt", "skip\n"),
                        (f"ZZ_E2E_TC0012_SD0033_{suffix}/App/Public/yes.txt", "keep\n")),
                 expected_present=(f"ZZ_E2E_TC0012_SD0033_{suffix}/App/Public/yes.txt",),
@@ -882,8 +884,8 @@ class TestCase0012SkipDirValidation(E2ETestCase):
                 single_directory=f"ZZ_E2E_TC0012_SD0033_{suffix}",
             ),
             SkipDirScenario(
-                scenario_id="SD-0034", description="issue #3133 unprefixed nested path (download)",
-                direction=self.REMOTE_TO_LOCAL, skip_dir_entries=("App/Private",), strict=False,
+                scenario_id="SD-0034", description="explicit sync-root multi-component directory path (download)",
+                direction=self.REMOTE_TO_LOCAL, skip_dir_entries=(f"/ZZ_E2E_TC0012_SD0034_{suffix}/App/Private",), strict=True,
                 files=((f"ZZ_E2E_TC0012_SD0034_{suffix}/App/Private/no.txt", "skip\n"),
                        (f"ZZ_E2E_TC0012_SD0034_{suffix}/App/Public/yes.txt", "keep\n")),
                 expected_present=(f"ZZ_E2E_TC0012_SD0034_{suffix}/App/Public/yes.txt",),
@@ -1109,30 +1111,29 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         self, context: E2EContext, scenario: SkipDirScenario, *,
         scenario_work_dir: Path, scenario_log_dir: Path, scenario_state_dir: Path,
     ) -> ScenarioResult:
-        """Seed tracked state, add exclusion, verify online survival twice.
+        """Verify required exit 78, then supported resync and online preservation.
 
-        Deliberately no --resync after the original seed: the scenario is
-        specifically about preserving the subject's existing item database.
+        A skip_file/skip_dir configuration change must not be silently used
+        with a pre-existing state database. This explicitly tests the refusal
+        AND preserves all seeded remote fixture bytes after supported recovery.
         """
         for d in (scenario_work_dir, scenario_log_dir, scenario_state_dir):
             reset_directory(d)
         subject_root = scenario_work_dir / "subject-syncroot"
-        verifier_root = scenario_work_dir / "verifier-syncroot"
         subject_conf = scenario_work_dir / "conf-subject"
-        verifier_conf = scenario_work_dir / "conf-verifier"
         reset_directory(subject_root)
-        reset_directory(verifier_root)
         context.bootstrap_config_dir(subject_conf)
-        context.bootstrap_config_dir(verifier_conf)
         self._write_config(subject_conf / "config", label="initial unfiltered tracked baseline")
-        self._write_config(verifier_conf / "config", label="independent unfiltered verifier")
         for rel, content in scenario.files:
             write_text_file(subject_root / rel, content)
+
         artifacts: list[str] = []
         commands: list[dict[str, object]] = []
         failures: list[str] = []
+        expected_contents = dict(scenario.files)
+        snapshots: dict[str, list[str]] = {}
 
-        def execute(label: str, root: Path, conf: Path, args: list[str]) -> None:
+        def execute(label: str, root: Path, conf: Path, args: list[str], *, expected_rc: int = 0) -> str:
             command = [context.onedrive_bin, "--sync", "--verbose", *args,
                        "--syncdir", str(root), "--confdir", str(conf)]
             self._append_scope(command, scenario.single_directory)
@@ -1143,42 +1144,67 @@ class TestCase0012SkipDirValidation(E2ETestCase):
             write_text_file(err, result.stderr)
             artifacts.extend((str(out), str(err)))
             commands.append({"phase": label, "command": command_to_string(command),
-                             "returncode": result.returncode})
-            if result.returncode != 0:
-                failures.append(f"{label} returned {result.returncode}")
+                             "returncode": result.returncode, "expected_returncode": expected_rc})
+            if result.returncode != expected_rc:
+                failures.append(f"{label} returned {result.returncode}, expected {expected_rc}")
+            return result.stdout + "\n" + result.stderr
+
+        def independently_verify(label: str) -> None:
+            if failures:
+                return
+            # Fresh verifier state avoids accidentally relying on a prior delta
+            # cursor/database rather than checking authoritative remote objects.
+            root = scenario_work_dir / f"{label}-syncroot"
+            conf = scenario_work_dir / f"{label}-conf"
+            reset_directory(root)
+            context.bootstrap_config_dir(conf)
+            self._write_config(conf / "config", label=f"{label} unfiltered verification")
+            execute(label, root, conf, ["--download-only", "--resync", "--resync-auth"])
+            manifest = build_manifest(root)
+            snapshots[label] = sorted(manifest)
+            path = scenario_state_dir / f"{label}_manifest.txt"
+            write_manifest(path, manifest)
+            artifacts.append(str(path))
+            if failures:
+                return
+            for rel, data in expected_contents.items():
+                if rel not in manifest:
+                    failures.append(f"{label}: expected remotely preserved path absent: {rel}")
+                elif (root / rel).read_bytes() != data.encode("utf-8"):
+                    failures.append(f"{label}: remote file bytes changed: {rel}")
+            for unwanted in scenario.expected_absent:
+                if unwanted in manifest:
+                    failures.append(f"{label}: unexpected remote object: {unwanted}")
 
         execute("01_seed_tracked_remote", subject_root, subject_conf,
                 ["--upload-only", "--resync", "--resync-auth"])
-        self._write_config(subject_conf / "config", skip_dir_entries=scenario.skip_dir_entries,
-                           strict=scenario.strict, label="newly excluded tracked object")
-        # Both normal passes use existing state/database; never --resync.
+        independently_verify("02_remote_baseline")
         if not failures:
-            execute("02_excluded_reconciliation", subject_root, subject_conf, [])
+            self._write_config(subject_conf / "config", skip_dir_entries=scenario.skip_dir_entries,
+                               strict=scenario.strict, label="newly excluded tracked object")
+            refused_output = execute("03_configuration_change_refused", subject_root, subject_conf,
+                                     [], expected_rc=78)
+            if "resync" not in refused_output.lower():
+                failures.append("exit 78 without a resync-required diagnostic")
+        independently_verify("04_remote_after_refusal")
         if not failures:
-            execute("03_followup_reconciliation", subject_root, subject_conf, [])
+            execute("05_supported_resync", subject_root, subject_conf,
+                    ["--resync", "--resync-auth"])
         if not failures:
-            execute("04_independent_remote_verification", verifier_root, verifier_conf,
-                    ["--download-only", "--resync", "--resync-auth"])
+            execute("06_followup_reconciliation", subject_root, subject_conf, [])
+        independently_verify("07_remote_after_recovery")
 
-        remote_manifest = build_manifest(verifier_root)
+        if not failures and snapshots.get("02_remote_baseline") != snapshots.get("07_remote_after_recovery"):
+            failures.append("remote manifest changed during filtering configuration transition")
         subject_manifest = build_manifest(subject_root)
-        remote_path = scenario_state_dir / "remote_manifest.txt"
-        subject_path = scenario_state_dir / "subject_manifest.txt"
-        write_manifest(remote_path, remote_manifest)
-        write_manifest(subject_path, subject_manifest)
-        artifacts.extend((str(remote_path), str(subject_path)))
-        if not failures:
-            for expected in scenario.expected_present:
-                if expected not in remote_manifest:
-                    failures.append(f"previously tracked remote object lost: {expected}")
-            for unwanted in scenario.expected_absent:
-                if unwanted in remote_manifest:
-                    failures.append(f"unexpected remote object after exclusion: {unwanted}")
+        path = scenario_state_dir / "subject_manifest.txt"
+        write_manifest(path, subject_manifest)
+        artifacts.append(str(path))
         details: dict[str, object] = {
             "scenario_id": scenario.scenario_id, "mode": scenario.mode,
             "description": scenario.description, "commands": commands,
             "expected_remote_present": list(scenario.expected_present),
-            "remote_manifest": remote_manifest, "subject_manifest": subject_manifest,
+            "remote_manifests": snapshots, "subject_manifest": subject_manifest,
             "failure_messages": failures,
         }
         metadata = scenario_state_dir / "metadata.txt"
