@@ -559,10 +559,10 @@ class TestCase0011SkipFileValidation(TestCase0012SkipDirValidation):
             ))
         scenarios.append(SkipDirScenario(
             scenario_id="SF-0029", description="tracked file newly excluded must not delete remote item",
-            direction=self.LOCAL_TO_REMOTE, skip_dir_entries=("tracked.tmp",), strict=False,
-            files=((f"ZZ_E2E_TC0011_SF0029_{suffix}/tracked.tmp", "remote preserve\n"),
+            direction=self.LOCAL_TO_REMOTE, skip_dir_entries=("historical_excluded.txt",), strict=False,
+            files=((f"ZZ_E2E_TC0011_SF0029_{suffix}/historical_excluded.txt", "remote preserve\n"),
                    (f"ZZ_E2E_TC0011_SF0029_{suffix}/retained.txt", "remote preserve\n")),
-            expected_present=(f"ZZ_E2E_TC0011_SF0029_{suffix}/tracked.tmp",
+            expected_present=(f"ZZ_E2E_TC0011_SF0029_{suffix}/historical_excluded.txt",
                               f"ZZ_E2E_TC0011_SF0029_{suffix}/retained.txt"),
             expected_absent=(), single_directory=f"ZZ_E2E_TC0011_SF0029_{suffix}",
             mode="tracked_exclusion",
