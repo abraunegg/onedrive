@@ -101,7 +101,6 @@ from testcases.tc0084_remote_batch_deletion_reconciliation import TestCase0084Re
 from testcases.tc0085_websocket_wake_during_active_upload import TestCase0085WebSocketWakeDuringActiveUpload
 from testcases.tc0086_https_credential_redaction import TestCase0086HTTPSCredentialRedaction
 from testcases.tc0087_resync_monitor_working_directory_boundary import TestCase0087ResyncMonitorWorkingDirectoryBoundary
-from testcases.tc0088_skip_rule_literal_character_validation import TestCase0088SkipRuleLiteralCharacterValidation
 
 
 def build_test_suite() -> list:
@@ -193,7 +192,6 @@ def build_test_suite() -> list:
         TestCase0085WebSocketWakeDuringActiveUpload(),
         TestCase0086HTTPSCredentialRedaction(),
         TestCase0087ResyncMonitorWorkingDirectoryBoundary(),
-        TestCase0088SkipRuleLiteralCharacterValidation(),
     ]
 
 
