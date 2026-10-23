@@ -2218,7 +2218,7 @@ There are two methods to achieve this:
 *   Employ 'skip_file' as part of your 'config' file to configure what files to skip
 *   Employ 'sync_list' to configure what files and directories to sync, and what should be excluded
 
-`skip_file = "report.txt"` excludes that filename anywhere beneath `sync_dir`; `skip_file = "*.txt"` excludes matching filenames anywhere. To exclude a **specific file in a specific directory**, include the leading sync-root `/`, for example `skip_file = "/Documents/Reports/report.txt"`. With `sync_dir = "~/OneDrive"`, this targets `~/OneDrive/Documents/Reports/report.txt`, not an absolute Linux path. Filenames containing `[`, `]`, `{`, `}`, `^` or `$` are matched literally with the PR #3922 correction.
+`skip_file = "report.txt"` excludes that filename anywhere beneath `sync_dir`; `skip_file = "*.txt"` excludes matching filenames anywhere. To exclude a **specific file in a specific directory**, include the leading sync-root `/`, for example `skip_file = "/Documents/Reports/report.txt"`. With `sync_dir = "~/OneDrive"`, this targets `~/OneDrive/Documents/Reports/report.txt`, not an absolute Linux path. Filenames containing `[`, `]`, `{`, `}`, `^` or `$` are matched literally.
 
 For further details please read the ['skip_file' config option documentation](https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md#skip_file)
 

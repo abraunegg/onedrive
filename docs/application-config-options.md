@@ -1027,7 +1027,9 @@ _**Config Example:**_
 
 Patterns are case insensitive. `*` matches zero or more characters and `?` matches one character. Use `|` to separate multiple patterns. Unlike `sync_list`, these rules do not use `**` as a separate globstar syntax.
 
-With the PR #3922 filtering correction, `[`, `]`, `{`, `}`, `^` and `$` are matched as literal characters, not regular-expression operators. For example, `skip_dir = "/Photos [2023]"` matches the `Photos [2023]` directory, not a directory named `Photos 2`. A `|` remains a rule separator, not a literal name character.
+The characters `[`, `]`, `{`, `}`, `^` and `$` are treated as literal characters in exclusion patterns, not as regular-expression operators. For example, `skip_dir = "/Photos [2023]"` matches the directory `Photos [2023]`, not a directory named `Photos 2`.
+
+The `|` character separates multiple exclusion patterns; it is not interpreted as a literal character within a directory name.
 
 ```text
 skip_dir = "Desktop|Documents/IISExpress|Documents/SQL Server Management Studio|Documents/Visual Studio*|Documents/WindowsPowerShell|.Rproj-user"
@@ -1119,7 +1121,9 @@ Files can be excluded in three ways:
 
 The leading `/` on a path-specific rule refers to `sync_dir`, **not** the Linux filesystem root. For example, when `sync_dir = "~/OneDrive"`, `/Documents/Reports/blah.txt` refers to `~/OneDrive/Documents/Reports/blah.txt`, not `/Documents/Reports/blah.txt` on the host.
 
-With the PR #3922 filtering correction, `[`, `]`, `{`, `}`, `^` and `$` are interpreted literally in patterns. For example, `/Documents/Backup{1}.txt` matches a file named `Backup{1}.txt`, not `Backup.txt`. The `|` character still separates patterns. These options use wildcard patterns; they are not general-purpose regular-expression configuration settings.
+The characters `[`, `]`, `{`, `}`, `^` and `$` are treated as literal characters in exclusion patterns, not as regular-expression operators. For example, `/Documents/Backup{1}.txt` matches a file named `Backup{1}.txt`, not `Backup.txt`.
+
+The `|` character separates multiple exclusion patterns. These options use wildcard patterns and do not accept general-purpose regular expressions.
 ```text
 skip_file = "~*|/Documents/OneNote*|/Documents/config.xlaunch|myfile.ext|/Documents/keepass.kdbx"
 ```

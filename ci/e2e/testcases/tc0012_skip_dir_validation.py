@@ -22,6 +22,7 @@ class SkipDirScenario:
     expected_present: tuple[str, ...]
     expected_absent: tuple[str, ...]
     single_directory: str | None = None
+    mode: str = "ordinary"  # ordinary, tracked_exclusion, invalid_config
 
 
 @dataclass
@@ -870,6 +871,41 @@ class TestCase0012SkipDirValidation(E2ETestCase):
                 ),
                 single_directory=f"ZZ_E2E_TC0012_SD0032_{suffix}",
             ),
+            # Historical #3133: non-strict, unprefixed multi-component exclusion.
+            SkipDirScenario(
+                scenario_id="SD-0033", description="issue #3133 unprefixed nested path (upload)",
+                direction=self.LOCAL_TO_REMOTE, skip_dir_entries=("App/Private",), strict=False,
+                files=((f"ZZ_E2E_TC0012_SD0033_{suffix}/App/Private/no.txt", "skip\n"),
+                       (f"ZZ_E2E_TC0012_SD0033_{suffix}/App/Public/yes.txt", "keep\n")),
+                expected_present=(f"ZZ_E2E_TC0012_SD0033_{suffix}/App/Public/yes.txt",),
+                expected_absent=(f"ZZ_E2E_TC0012_SD0033_{suffix}/App/Private/no.txt",),
+                single_directory=f"ZZ_E2E_TC0012_SD0033_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0034", description="issue #3133 unprefixed nested path (download)",
+                direction=self.REMOTE_TO_LOCAL, skip_dir_entries=("App/Private",), strict=False,
+                files=((f"ZZ_E2E_TC0012_SD0034_{suffix}/App/Private/no.txt", "skip\n"),
+                       (f"ZZ_E2E_TC0012_SD0034_{suffix}/App/Public/yes.txt", "keep\n")),
+                expected_present=(f"ZZ_E2E_TC0012_SD0034_{suffix}/App/Public/yes.txt",),
+                expected_absent=(f"ZZ_E2E_TC0012_SD0034_{suffix}/App/Private/no.txt",),
+                single_directory=f"ZZ_E2E_TC0012_SD0034_{suffix}",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0035", description="issues #2910/#1122 tracked directory newly excluded; preserve online data",
+                direction=self.LOCAL_TO_REMOTE, skip_dir_entries=("Excluded",), strict=False,
+                files=((f"ZZ_E2E_TC0012_SD0035_{suffix}/Excluded/tracked.txt", "must survive\n"),
+                       (f"ZZ_E2E_TC0012_SD0035_{suffix}/Retained/sibling.txt", "must survive\n")),
+                expected_present=(f"ZZ_E2E_TC0012_SD0035_{suffix}/Excluded/tracked.txt",
+                                  f"ZZ_E2E_TC0012_SD0035_{suffix}/Retained/sibling.txt"),
+                expected_absent=(), single_directory=f"ZZ_E2E_TC0012_SD0035_{suffix}",
+                mode="tracked_exclusion",
+            ),
+            SkipDirScenario(
+                scenario_id="SD-0036", description="issue #3475 reject .* in skip_dir before sync",
+                direction=self.LOCAL_TO_REMOTE, skip_dir_entries=(".*|Archived Sites",), strict=False,
+                files=((f"ZZ_E2E_TC0012_SD0036_{suffix}/keep.txt", "no upload\n"),),
+                expected_present=(), expected_absent=(), mode="invalid_config",
+            ),
         ]
 
     def _run_scenario(
@@ -881,6 +917,18 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         scenario_log_dir: Path,
         scenario_state_dir: Path,
     ) -> ScenarioResult:
+        if scenario.mode == "tracked_exclusion":
+            return self._run_tracked_exclusion(
+                context, scenario, scenario_work_dir=scenario_work_dir,
+                scenario_log_dir=scenario_log_dir,
+                scenario_state_dir=scenario_state_dir,
+            )
+        if scenario.mode == "invalid_config":
+            return self._run_invalid_config(
+                context, scenario, scenario_work_dir=scenario_work_dir,
+                scenario_log_dir=scenario_log_dir,
+                scenario_state_dir=scenario_state_dir,
+            )
         reset_directory(scenario_work_dir)
         reset_directory(scenario_log_dir)
         reset_directory(scenario_state_dir)
@@ -1056,6 +1104,131 @@ class TestCase0012SkipDirValidation(E2ETestCase):
             artifacts=artifacts,
             details=details,
         )
+
+    def _run_tracked_exclusion(
+        self, context: E2EContext, scenario: SkipDirScenario, *,
+        scenario_work_dir: Path, scenario_log_dir: Path, scenario_state_dir: Path,
+    ) -> ScenarioResult:
+        """Seed tracked state, add exclusion, verify online survival twice.
+
+        Deliberately no --resync after the original seed: the scenario is
+        specifically about preserving the subject's existing item database.
+        """
+        for d in (scenario_work_dir, scenario_log_dir, scenario_state_dir):
+            reset_directory(d)
+        subject_root = scenario_work_dir / "subject-syncroot"
+        verifier_root = scenario_work_dir / "verifier-syncroot"
+        subject_conf = scenario_work_dir / "conf-subject"
+        verifier_conf = scenario_work_dir / "conf-verifier"
+        reset_directory(subject_root)
+        reset_directory(verifier_root)
+        context.bootstrap_config_dir(subject_conf)
+        context.bootstrap_config_dir(verifier_conf)
+        self._write_config(subject_conf / "config", label="initial unfiltered tracked baseline")
+        self._write_config(verifier_conf / "config", label="independent unfiltered verifier")
+        for rel, content in scenario.files:
+            write_text_file(subject_root / rel, content)
+        artifacts: list[str] = []
+        commands: list[dict[str, object]] = []
+        failures: list[str] = []
+
+        def execute(label: str, root: Path, conf: Path, args: list[str]) -> None:
+            command = [context.onedrive_bin, "--sync", "--verbose", *args,
+                       "--syncdir", str(root), "--confdir", str(conf)]
+            self._append_scope(command, scenario.single_directory)
+            result = run_command(command, cwd=context.repo_root)
+            out = scenario_log_dir / f"{label}_stdout.log"
+            err = scenario_log_dir / f"{label}_stderr.log"
+            write_text_file(out, result.stdout)
+            write_text_file(err, result.stderr)
+            artifacts.extend((str(out), str(err)))
+            commands.append({"phase": label, "command": command_to_string(command),
+                             "returncode": result.returncode})
+            if result.returncode != 0:
+                failures.append(f"{label} returned {result.returncode}")
+
+        execute("01_seed_tracked_remote", subject_root, subject_conf,
+                ["--upload-only", "--resync", "--resync-auth"])
+        self._write_config(subject_conf / "config", skip_dir_entries=scenario.skip_dir_entries,
+                           strict=scenario.strict, label="newly excluded tracked object")
+        # Both normal passes use existing state/database; never --resync.
+        if not failures:
+            execute("02_excluded_reconciliation", subject_root, subject_conf, [])
+        if not failures:
+            execute("03_followup_reconciliation", subject_root, subject_conf, [])
+        if not failures:
+            execute("04_independent_remote_verification", verifier_root, verifier_conf,
+                    ["--download-only", "--resync", "--resync-auth"])
+
+        remote_manifest = build_manifest(verifier_root)
+        subject_manifest = build_manifest(subject_root)
+        remote_path = scenario_state_dir / "remote_manifest.txt"
+        subject_path = scenario_state_dir / "subject_manifest.txt"
+        write_manifest(remote_path, remote_manifest)
+        write_manifest(subject_path, subject_manifest)
+        artifacts.extend((str(remote_path), str(subject_path)))
+        if not failures:
+            for expected in scenario.expected_present:
+                if expected not in remote_manifest:
+                    failures.append(f"previously tracked remote object lost: {expected}")
+            for unwanted in scenario.expected_absent:
+                if unwanted in remote_manifest:
+                    failures.append(f"unexpected remote object after exclusion: {unwanted}")
+        details: dict[str, object] = {
+            "scenario_id": scenario.scenario_id, "mode": scenario.mode,
+            "description": scenario.description, "commands": commands,
+            "expected_remote_present": list(scenario.expected_present),
+            "remote_manifest": remote_manifest, "subject_manifest": subject_manifest,
+            "failure_messages": failures,
+        }
+        metadata = scenario_state_dir / "metadata.txt"
+        self._write_metadata(metadata, details)
+        artifacts.append(str(metadata))
+        return ScenarioResult(scenario.scenario_id, scenario.description, not failures,
+                              failures, artifacts, details)
+
+    def _run_invalid_config(
+        self, context: E2EContext, scenario: SkipDirScenario, *,
+        scenario_work_dir: Path, scenario_log_dir: Path, scenario_state_dir: Path,
+    ) -> ScenarioResult:
+        """Reject an invalid rule before synchronisation; do not seed/delete remote data."""
+        for d in (scenario_work_dir, scenario_log_dir, scenario_state_dir):
+            reset_directory(d)
+        syncroot = scenario_work_dir / "subject-syncroot"
+        conf = scenario_work_dir / "conf-subject"
+        reset_directory(syncroot)
+        context.bootstrap_config_dir(conf)
+        self._write_config(conf / "config", skip_dir_entries=scenario.skip_dir_entries,
+                           strict=scenario.strict, label="invalid pattern must fail closed")
+        # An otherwise valid local fixture makes an accidental sync observable
+        # without introducing any destructive remote test data.
+        fixture = scenario.files[0][0]
+        write_text_file(syncroot / fixture, scenario.files[0][1])
+        command = [context.onedrive_bin, "--sync", "--upload-only", "--verbose",
+                   "--syncdir", str(syncroot), "--confdir", str(conf)]
+        result = run_command(command, cwd=context.repo_root)
+        stdout = scenario_log_dir / "rejected_stdout.log"
+        stderr = scenario_log_dir / "rejected_stderr.log"
+        write_text_file(stdout, result.stdout)
+        write_text_file(stderr, result.stderr)
+        output = result.stdout + "\n" + result.stderr
+        option = "skip_file" if self.case_id == "0011" else "skip_dir"
+        failures = []
+        if result.returncode == 0:
+            failures.append("invalid configuration was accepted (exit status 0)")
+        if f"Invalid {option} entry" not in output:
+            failures.append(f"missing expected Invalid {option} entry diagnostic")
+        # Stronger invariant: startup validation must reject before Graph work.
+        if "Attempting to contact the Microsoft OneDrive Service" in output or                 "Fetching items from the OneDrive API" in output or                 "Uploading file:" in output:
+            failures.append("client started online processing despite invalid configuration")
+        details: dict[str, object] = {
+            "scenario_id": scenario.scenario_id, "mode": scenario.mode,
+            "returncode": result.returncode, "failure_messages": failures,
+        }
+        metadata = scenario_state_dir / "metadata.txt"
+        self._write_metadata(metadata, details)
+        return ScenarioResult(scenario.scenario_id, scenario.description, not failures,
+                              failures, [str(stdout), str(stderr), str(metadata)], details)
 
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(

@@ -541,4 +541,36 @@ class TestCase0011SkipFileValidation(TestCase0012SkipDirValidation):
             expected_absent=(f"ZZ_E2E_TC0011_SF0026_{suffix}/skip.tmp",),
             single_directory=f"ZZ_E2E_TC0011_SF0026_{suffix}",
         ))
+        for number, direction in ((27, self.LOCAL_TO_REMOTE), (28, self.REMOTE_TO_LOCAL)):
+            root = f"ZZ_E2E_TC0011_SF{number:04d}_{suffix}"
+            scenarios.append(SkipDirScenario(
+                scenario_id=f"SF-{number:04d}",
+                description="issue #52 filename containing spaces with rooted exclusion",
+                direction=direction,
+                skip_dir_entries=(f"/{root}/My Documents/private report.txt",),
+                strict=False,
+                files=((f"{root}/My Documents/private report.txt", "skip\n"),
+                       (f"{root}/Other/private report.txt", "keep\n"),
+                       (f"{root}/My Documents/public report.txt", "keep\n")),
+                expected_present=(f"{root}/Other/private report.txt",
+                                  f"{root}/My Documents/public report.txt"),
+                expected_absent=(f"{root}/My Documents/private report.txt",),
+                single_directory=root,
+            ))
+        scenarios.append(SkipDirScenario(
+            scenario_id="SF-0029", description="tracked file newly excluded must not delete remote item",
+            direction=self.LOCAL_TO_REMOTE, skip_dir_entries=("tracked.tmp",), strict=False,
+            files=((f"ZZ_E2E_TC0011_SF0029_{suffix}/tracked.tmp", "remote preserve\n"),
+                   (f"ZZ_E2E_TC0011_SF0029_{suffix}/retained.txt", "remote preserve\n")),
+            expected_present=(f"ZZ_E2E_TC0011_SF0029_{suffix}/tracked.tmp",
+                              f"ZZ_E2E_TC0011_SF0029_{suffix}/retained.txt"),
+            expected_absent=(), single_directory=f"ZZ_E2E_TC0011_SF0029_{suffix}",
+            mode="tracked_exclusion",
+        ))
+        scenarios.append(SkipDirScenario(
+            scenario_id="SF-0030", description="reject .* in skip_file before sync",
+            direction=self.LOCAL_TO_REMOTE, skip_dir_entries=(".*",), strict=False,
+            files=((f"ZZ_E2E_TC0011_SF0030_{suffix}/keep.txt", "no upload\n"),),
+            expected_present=(), expected_absent=(), mode="invalid_config",
+        ))
         return scenarios
