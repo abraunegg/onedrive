@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Added `security.md` to document project security reporting procedures (#3912)
 
 ### Changed
+*   Clarified Microsoft OneDrive item-count guidance, distinguishing official-client support from this client's validated large-account performance (#3924)
 *   Incremented the item database version from 18 to 19 to rebuild existing synchronisation tracking state using the corrected reconciliation and object validation logic. Existing installations will recreate the item database tables on upgrade (#3919)
 *   Improved Microsoft Graph delta processing performance by batching database transactions (#3791)
 *   Improved WebSocket notification handling and recovery from transient connection failures (#3809)
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Updated compiler detection and build guidance to prefer distribution-provided LDC toolchains while retaining alternative D compiler support (#3899)
 
 ### Fixed
+*   Fix Bug: Fix `skip_file` and `skip_dir` patterns treating valid filename characters as regular-expression syntax, causing incorrect exclusions, `sync_list` validation errors and potential application startup failures; preserve wildcard behaviour and correct sync-root-relative `skip_file` matching (#3922)
 *   Fix Bug: Fix broken symbolic links causing application crashes when resuming uploads (#3774)
 *   Fix Bug: Fix hardcoded Microsoft Graph endpoint usage during SharePoint drive searches, including support for non-default cloud environments (#3773)
 *   Fix Bug: Fix shutdown signal handling incorrectly returning a successful exit status after a SIGSEGV (#3780)
@@ -64,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 *   Fix Bug: Fix systemd user service installation paths on RHEL-based distributions (#3917)
 
 ### Updated
+*   Expanded TC0011 and TC0012 E2E filtering validation to 70 scenarios per account configuration, covering upload and download exclusions, wildcards, path matching and `sync_list` interactions (#3922)
 *   Updated CI E2E testing with expanded synchronisation coverage, more realistic test data, additional regression scenarios and improved test reliability (#3878, #3889, #3902)
 *   Updated CI E2E test cleanup to improve isolation and reliability between test runs (#3918)
 *   Updated Docker build environments, dependencies and container documentation to support current distributions and toolchains (#3778, #3906)
