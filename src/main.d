@@ -362,8 +362,8 @@ int main(string[] cliArgs) {
 	// Handle it before normal OneDrive logging, signal handlers, shutdown scopes,
 	// database, WebSocket or monitor state are initialised.
 	version (OnDemand) {
-		if ((cliArgs.length == 4) && (cliArgs[1] == "--internal-on-demand-fuse-helper")) {
-			return runOnDemandFuseHelper(cliArgs[2], cliArgs[3]);
+		if ((cliArgs.length == 5) && (cliArgs[1] == "--internal-on-demand-fuse-helper")) {
+			return runOnDemandFuseHelper(cliArgs[2], cliArgs[3], cliArgs[4]);
 		}
 	}
 
@@ -1526,7 +1526,7 @@ int main(string[] cliArgs) {
 						if (appConfig.getValueBool("on_demand")) {
 							try {
 								addLogEntry("Starting experimental on-demand FUSE passthrough overlay ...");
-								onDemandInstance = new OnDemand(runtimeSyncDirectory);
+								onDemandInstance = new OnDemand(runtimeSyncDirectory, cast(int) verbosityCount);
 								onDemandInstance.start();
 								addLogEntry("Experimental on-demand FUSE passthrough overlay is active; existing inotify remains attached to the physical tree.");
 							} catch (OnDemandException e) {

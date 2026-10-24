@@ -8,6 +8,7 @@ module ondemand;
 // that existed before the mount.
 
 import fused.fuse;
+import std.format : format;
 
 import core.stdc.errno : errno;
 import core.sys.posix.fcntl : open, O_RDONLY, O_WRONLY, O_CREAT, O_EXCL;
@@ -56,7 +57,8 @@ public:
 
     override void getattr(const(char)[] path, ref stat_t st) {
         auto p = physicalPath(path);
-        stderr.writefln("[FUSE-DEBUG] getattr path='%s' physicalPath='%s'", path, p);
+        if (fuseDiagnosticsEnabled())
+            fuseDiagnostic(2, format("getattr path='%s' physicalPath='%s'", path, p));
         errno = 0;
 
         // The retained directory FD is exposed through /proc/self/fd/<fd>,
@@ -66,11 +68,17 @@ public:
         int rc;
         if (path.length == 0 || path == "/") {
             rc = stat(toStringz(p), &st);
-            stderr.writefln("[FUSE-DEBUG] getattr root stat rc=%s errno=%s mode=%o mtime=%s",
-                rc, errno, st.st_mode, st.st_mtime);
+            if (fuseDiagnosticsEnabled()) {
+                if (rc == 0)
+                    fuseDiagnostic(2, format("getattr root stat rc=%s mode=%o mtime=%s",
+                        rc, st.st_mode, st.st_mtime));
+                else
+                    fuseDiagnostic(2, format("getattr root stat rc=%s errno=%s", rc, errno));
+            }
         } else {
             rc = lstat(toStringz(p), &st);
-            stderr.writefln("[FUSE-DEBUG] getattr lstat rc=%s errno=%s", rc, errno);
+            if (fuseDiagnosticsEnabled())
+                fuseDiagnostic(2, format("getattr lstat rc=%s errno=%s", rc, errno));
         }
 
         int savedErrno = errno;
@@ -78,7 +86,7 @@ public:
             errno = savedErrno;
             throwErrno();
         }
-        stderr.writeln("[FUSE-DEBUG] getattr returning success");
+        fuseDiagnostic(2, "getattr returning success");
     }
 
     override string[] readdir(const(char)[] path) {
@@ -195,18 +203,25 @@ public:
     }
 }
 
-int runOnDemandFuseHelper(string physicalDirectoryFdArgument, string syncDirectory)
+int runOnDemandFuseHelper(string physicalDirectoryFdArgument, string syncDirectory,
+    string verbosityArgument)
 {
     int physicalDirectoryFd;
+    int diagnosticLevel;
     try {
         physicalDirectoryFd = to!int(physicalDirectoryFdArgument);
+        diagnosticLevel = to!int(verbosityArgument);
+        if (physicalDirectoryFd < 0 || diagnosticLevel < 0 || diagnosticLevel > 2)
+            throw new OnDemandException("Invalid FUSE helper arguments");
     } catch (Exception e) {
-        stderr.writefln("[FUSE-DEBUG] invalid helper physical directory fd: %s", e.msg);
+        stderr.writeln("[FUSE] invalid helper arguments: ", e.msg);
         return 2;
     }
 
-    stderr.writefln("[FUSE-DEBUG] helper process started pid=%s physicalFd=%s mountpoint='%s'",
-        getpid(), physicalDirectoryFd, syncDirectory);
+    configureFuseDiagnostics(diagnosticLevel);
+    if (fuseDiagnosticsEnabled())
+        fuseDiagnostic(2, format("helper started pid=%s physicalFd=%s mountpoint='%s'",
+            getpid(), physicalDirectoryFd, syncDirectory));
 
     try {
         auto operations = new OnDemandPassthroughOperations(physicalDirectoryFd);
@@ -214,7 +229,7 @@ int runOnDemandFuseHelper(string physicalDirectoryFdArgument, string syncDirecto
         fuse.mount(operations, syncDirectory, []);
         return 0;
     } catch (Exception e) {
-        stderr.writefln("[FUSE-DEBUG] helper process exception: %s", e.msg);
+        stderr.writeln("[FUSE] helper failed: ", e.msg);
         return 1;
     }
 }
@@ -222,13 +237,15 @@ int runOnDemandFuseHelper(string physicalDirectoryFdArgument, string syncDirecto
 final class OnDemand {
 private:
     string syncDirectory;
+    int diagnosticLevel;
     int physicalDirectoryFd = -1;
     pid_t fusePid = -1;
     bool running = false;
 
 public:
-    this(string syncDirectory) {
+    this(string syncDirectory, int diagnosticLevel = 0) {
         this.syncDirectory = syncDirectory;
+        this.diagnosticLevel = diagnosticLevel >= 2 ? 2 : (diagnosticLevel > 0 ? 1 : 0);
     }
 
     @property bool isRunning() const { return running; }
@@ -246,12 +263,14 @@ public:
         // Build every exec argument before fork(). The child of this already
         // multi-threaded process must do no D runtime/libfuse work before exec.
         string helperFdArgument = to!string(physicalDirectoryFd);
+        string helperVerbosityArgument = to!string(diagnosticLevel);
         auto helperExecutable = toStringz("/proc/self/exe");
         char*[] helperArguments = [
             cast(char*) helperExecutable,
             cast(char*) toStringz("--internal-on-demand-fuse-helper"),
             cast(char*) toStringz(helperFdArgument),
             cast(char*) toStringz(syncDirectory),
+            cast(char*) toStringz(helperVerbosityArgument),
             null
         ];
 

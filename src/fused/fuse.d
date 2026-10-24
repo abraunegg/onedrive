@@ -38,6 +38,28 @@ import core.sys.posix.pthread;
 private int threadAttached = false;
 private pthread_cleanup cleanup;
 
+// The FUSE helper runs in a fresh process after execv(). Its diagnostic level
+// is explicitly supplied by the parent, not inherited from log.d globals.
+// 0: errors only; 1: lifecycle; 2: protocol and per-operation diagnostics.
+private __gshared int fuseDiagnosticLevel = 0;
+
+void configureFuseDiagnostics(int level)
+{
+    fuseDiagnosticLevel = level;
+}
+
+bool fuseDiagnosticsEnabled()
+{
+    return fuseDiagnosticLevel >= 2;
+}
+
+void fuseDiagnostic(int level, string message)
+{
+    if (fuseDiagnosticLevel >= level)
+        stderr.writeln("[FUSE] ", message);
+}
+
+
 extern(C) void detach(void* ptr) nothrow
 {
     import std.exception;
@@ -71,13 +93,14 @@ private auto call(alias fn)()
     catch (FuseException fe)
     {
         /* errno is used to indicate an error to libfuse */
-        stderr.writefln("[FUSE-DEBUG] callback FuseException errno=%s", fe.errno);
+        if (fuseDiagnosticLevel >= 2)
+            fuseDiagnostic(2, format("callback FuseException errno=%s", fe.errno));
         errno.errno = fe.errno;
         return -fe.errno;
     }
     catch (Exception e)
     {
-        stderr.writefln("[FUSE-DEBUG] callback exception: %s", e.msg);
+        stderr.writeln("[FUSE] unexpected callback exception (returning EIO): ", e.msg);
         (*t).exception(e);
         return -errno.EIO;
     }
@@ -107,14 +130,16 @@ extern(System)
     private int dfuse_getattr(const char*  path, stat_t* st, fuse_file_info* fi)
     {
         auto dPath = path is null ? null : path[0..path.strlen];
-        stderr.writefln("[FUSE-DEBUG] dfuse_getattr path='%s'", dPath);
+        if (fuseDiagnosticLevel >= 2)
+            fuseDiagnostic(2, format("dfuse_getattr path='%s'", dPath));
         int rc = call!(
             (Operations t)
             {
                 t.getattr(dPath, *st);
                 return 0;
             })();
-        stderr.writefln("[FUSE-DEBUG] dfuse_getattr return=%s", rc);
+        if (fuseDiagnosticLevel >= 2)
+            fuseDiagnostic(2, format("dfuse_getattr return=%s", rc));
         return rc;
     }
 
@@ -556,14 +581,16 @@ public:
     {
         // Build only the arguments parsed by fuse_new(); mountpoint is supplied
         // separately to fuse_mount().
-        // Enable libfuse protocol diagnostics for the scaffold. This is
-        // intentionally diagnostic-only: no callback or lifecycle semantics
-        // are changed.
-        string[] args = [this.fsname, "-d"];
+        // libfuse protocol diagnostics can disclose user file paths. Only
+        // enable them for explicitly requested double-verbose logging.
+        string[] args = [this.fsname];
+        if (fuseDiagnosticLevel >= 2)
+            args ~= "-d";
         if (mountopts.length > 0)
             args ~= format("-o%s", mountopts.join(","));
 
-        debug writefln("fuse arguments s=(%s)", args);
+        if (fuseDiagnosticLevel >= 2)
+            fuseDiagnostic(2, format("fuse arguments s=(%s)", args));
 
         fuse_operations fops;
         fops.init = &dfuse_init;
@@ -590,23 +617,24 @@ public:
         auto cargs = array(map!(a => cast(char*) toStringz(a))(args)) ~ null;
         fuse_args fargs = fuse_args(cast(int) args.length, cargs.ptr, 0);
 
-        stderr.writeln("[FUSE-DEBUG] creating explicit libfuse3 session");
+        fuseDiagnostic(1, "creating explicit libfuse3 session");
         auto f = fuse_new_compat(&fargs, &fops, fuse_operations.sizeof, &ops);
         if (f is null)
             throw new Exception("Unable to resolve a compatible libfuse3 fuse_new entry point");
 
         scope(exit) fuse_destroy(f);
 
-        stderr.writefln("[FUSE-DEBUG] mounting explicit libfuse3 session at '%s'", mountpoint);
+        fuseDiagnostic(1, "mounting explicit libfuse3 session");
         if (fuse_mount(f, toStringz(mountpoint)) != 0)
             throw new Exception("fuse_mount failed");
 
         scope(exit) fuse_unmount(f);
 
         this.pid = thisProcessID();
-        stderr.writeln("[FUSE-DEBUG] entering explicit fuse_loop request loop");
+        fuseDiagnostic(1, "entering explicit fuse_loop request loop");
         int fuseResult = fuse_loop(f);
-        stderr.writefln("[FUSE-DEBUG] explicit fuse_loop exited result=%s", fuseResult);
+        if (fuseDiagnosticLevel >= 1)
+            fuseDiagnostic(1, format("explicit fuse_loop exited result=%s", fuseResult));
 
         if (fuseResult != 0)
             throw new Exception("fuse_loop failed");
