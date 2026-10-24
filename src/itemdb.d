@@ -223,8 +223,9 @@ Item makeDatabaseItem(JSONValue driveItem) {
 }
 
 final class ItemDatabase {
-	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 18;
+	// Increment when the stored item database schema or tracked-state semantics
+	// require existing database state to be rebuilt.
+	immutable int itemDatabaseVersion = 19;
 
 	Database db;
 	string insertItemStmt;
