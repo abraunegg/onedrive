@@ -711,6 +711,28 @@ Regex!char wild2regex(const(char)[] pattern) {
 		case ')':
 			str ~= "\\)";
 			break;
+		// '[', ']', '{', '}', '^' and '$' are valid characters in OneDrive file and folder names, so escape them to match them literally.
+		// Without escaping, 'Photos [2023]' becomes a character class (matching 'Photos 2' but not 'Photos [2023]'),
+		// 'Backup{1}.txt' becomes a repetition quantifier, '^' and '$' become anchors, and an unbalanced '[' or '{'
+		// throws a RegexException when the rule is loaded.
+		case '[':
+			str ~= "\\[";
+			break;
+		case ']':
+			str ~= "\\]";
+			break;
+		case '{':
+			str ~= "\\{";
+			break;
+		case '}':
+			str ~= "\\}";
+			break;
+		case '^':
+			str ~= "\\^";
+			break;
+		case '$':
+			str ~= "\\$";
+			break;
 		default:
 			str ~= c;
 			break;

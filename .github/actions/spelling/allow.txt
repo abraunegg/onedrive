@@ -44,6 +44,7 @@ autocheckpoint
 autoclean
 automake
 autoprocess
+Autotools
 autoupdate
 avmkfdiitirnrenzljwc
 avx
@@ -105,6 +106,7 @@ constness
 controllen
 cpath
 cpticks
+credentialled
 crt
 Cstrip
 ctl
@@ -548,6 +550,7 @@ renameat
 repology
 restic
 restorecon
+resyncs
 retryable
 retu
 revents
@@ -628,8 +631,8 @@ sooooo
 specpart
 SSLVERSION
 startuml
-statfs
 stat'ing
+statfs
 statm
 stbuf
 stdc
@@ -720,6 +723,7 @@ webtemplate
 weburl
 Werror
 wmesg
+worktree
 wpath
 writefln
 writepage
