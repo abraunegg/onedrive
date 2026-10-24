@@ -1,0 +1,26 @@
+@startuml
+title Remote Change Processing - Normal vs On-Demand
+skinparam shadowing false
+
+start
+:Existing Graph delta / remote item processing;
+:Apply existing eligibility and filtering rules;
+:Create/update authoritative item DB record;
+
+if (on_demand enabled?) then (no)
+  :Existing behaviour;
+  :Queue content download when existing logic requires it;
+  :Download / validate / materialise;
+else (yes)
+  if (Policy requires local content?) then (yes)
+    :Queue through existing download path;
+    :Download and validate;
+    :Commit stable hydrated state;
+  else (no)
+    :Do not queue ordinary content download;
+    :Commit stable cloud-only state;
+    :FUSE presents item from DB metadata;
+  endif
+endif
+stop
+@enduml
