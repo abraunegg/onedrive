@@ -6,6 +6,7 @@ Before reading this document, please ensure you are running application version 
 
 - [Important Notes](#important-notes)
   - [Memory Usage](#memory-usage)
+  - [Large OneDrive Accounts and Item Counts](#large-onedrive-accounts-and-item-counts)
   - [Guidelines for Local File and Folder Naming in the Synchronisation Directory](#guidelines-for-local-file-and-folder-naming-in-the-synchronisation-directory)
   - [Support for Microsoft Azure Information Protected Files](#support-for-microsoft-azure-information-protected-files)
   - [Compatibility with Editors and Applications Using Atomic Save Operations](#compatibility-with-editors-and-applications-using-atomic-save-operations)
@@ -117,6 +118,14 @@ The reported values include:
 - `Resident Set Size (RSS)` — memory currently resident in the process according to the operating system, including managed and native allocations.
 
 When investigating a suspected memory issue, trends across multiple monitor loops and Full Scans are more meaningful than any individual RSS reading.
+
+### Large OneDrive Accounts and Item Counts
+
+Microsoft has historically recommended synchronising no more than **300,000 items** for optimal performance with its OneDrive sync application. Microsoft has also introduced **public-preview support for up to 1,000,000 items** on eligible Windows and macOS clients, subject to Microsoft's requirements. This expanded capability does not establish a new Microsoft Graph API item-count limit or a support guarantee for third-party clients. Refer to [Microsoft's OneDrive and SharePoint restrictions and limitations](https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa) for current guidance.
+
+The **OneDrive Client for Linux** does not impose a corresponding 300,000-item synchronisation limit. However, Microsoft's expanded official-client capability should **not** be interpreted as validation that this client can reliably synchronise 1,000,000 items. Large-account performance depends on available resources, online enumeration, Microsoft Graph throttling, synchronisation mode and the configured filtering rules.
+
+Version 2.5.12 includes the large-account memory improvements described in [Memory Usage](#memory-usage). The controlled **101,494-object** validation described above is evidence of improved memory behaviour, **not** a certified maximum item count or a guarantee of performance at higher counts.
 
 ### Guidelines for Local File and Folder Naming in the Synchronisation Directory
 To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adhere strictly to the prescribed naming conventions for your files and folders within the sync directory. The guidelines detailed below are designed to preempt potential sync failures by aligning with Microsoft Windows Naming Conventions, coupled with specific OneDrive restrictions.
