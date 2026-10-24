@@ -279,23 +279,24 @@ Since Podman 4.4, [Quadlet](https://docs.podman.io/en/latest/markdown/podman-sys
 > [!NOTE]
 > This is an alternative to the `podman generate systemd` approach described above - you do not need to do both.
 
+> [!IMPORTANT]
+> This example runs as a rootless, per-user service (`systemctl --user`), unlike the system-level service created by `podman generate systemd` above. Without 'lingering' enabled (see below), the user's systemd manager - and therefore the OneDrive service - only runs while the user has an active login session.
+
 **Prerequisites**
-*   Podman >= 4.4
-*   The config directory `~/.config/onedrive` and data directory `~/OneDrive` exist
-*   The container has already been authorised at least once, so that a `refresh_token` exists in `~/.config/onedrive`
+*   Podman >= 4.6 (required for the `AutoUpdate=` and `UserNS=` Quadlet directives)
+*   The `onedrive_conf` podman volume has already been created and the client authorised, by following the steps earlier in this document
+*   The OneDrive data directory previously configured as `ONEDRIVE_DATA_DIR` exists
 
-**Create the required directories and perform authorisation** using a throwaway container:
+**Stop and remove the existing container**, keeping the `onedrive_conf` volume and your data. The Quadlet unit below uses `ContainerName=onedrive`, so the name must be free. If you installed the system-level `container-onedrive.service` above, stop and disable that first:
 ```bash
-mkdir -p ~/.config/onedrive ~/OneDrive
-podman run --rm -it --name onedrive \
-    --userns=keep-id \
-    -v ~/.config/onedrive:/onedrive/conf:U,Z \
-    -v ~/OneDrive:/onedrive/data:U,Z \
-    docker.io/driveone/onedrive:edge
+podman stop onedrive
+podman rm onedrive
 ```
-Follow the authorisation steps as described above in step 5. Once the initial sync has completed, stop the container with Ctrl+C - as it was started with `--rm`, it will be automatically removed, freeing up the container name `onedrive` for use by the Quadlet unit below.
 
-**Create the Quadlet unit file** at `~/.config/containers/systemd/onedrive.container`:
+**Create the Quadlet unit file** at `~/.config/containers/systemd/onedrive.container`, creating the directory first as it may not exist:
+```bash
+mkdir -p ~/.config/containers/systemd
+```
 ```ini
 [Unit]
 Description=OneDrive Client for Linux (Podman Quadlet)
@@ -304,9 +305,9 @@ After=network-online.target
 [Container]
 Image=docker.io/driveone/onedrive:edge
 ContainerName=onedrive
-Volume=%h/.config/onedrive:/onedrive/conf:U,Z
+Volume=onedrive_conf:/onedrive/conf:U,Z
 Volume=%h/OneDrive:/onedrive/data:U,Z
-PodmanArgs=--userns=keep-id
+UserNS=keep-id
 AutoUpdate=registry
 
 [Service]
@@ -316,10 +317,15 @@ Restart=on-failure
 WantedBy=default.target
 ```
 
-**Enable and start the service:**
+> [!IMPORTANT]
+> Replace `%h/OneDrive` with the same host path previously configured as `ONEDRIVE_DATA_DIR` if a non-default location is being used, otherwise the container will use a different local directory to your existing deployment.
+
+**Start the service:**
+
+Quadlet services cannot be enabled with `systemctl enable`. The `[Install]` section is processed by the Quadlet generator, so the service will start automatically at login (or at boot, with lingering enabled).
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable --now onedrive.service
+systemctl --user start onedrive.service
 ```
 
 **Check the service status and logs:**
@@ -328,9 +334,16 @@ systemctl --user status onedrive.service
 journalctl --user -u onedrive.service -f
 ```
 
-To have the container image auto-update, enable the `podman-auto-update.timer` service as described above:
+**Run the service outside of a login session:** To have the rootless OneDrive service and the auto-update timer start at boot and keep running after logout, enable lingering for your user:
 ```bash
+loginctl enable-linger
+```
+
+**Auto-update the container image:** Check that Podman identifies the Quadlet-managed container with the `registry` update policy, then enable the user timer:
+```bash
+podman auto-update --dry-run
 systemctl --user enable --now podman-auto-update.timer
+systemctl --user list-timers
 ```
 
 ### Editing the running configuration and using a 'config' file
