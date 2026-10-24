@@ -40,6 +40,9 @@ import itemdb;
 import clientSideFiltering;
 import xattr;
 
+// Microsoft OneDrive item-count advisory threshold; not a Graph API hard limit.
+private enum ulong microsoftRecommendedSyncItemCount = 300_000;
+
 class JsonResponseException: Exception {
 	@safe pure this(string inputMessage) {
 		string msg = format(inputMessage);
@@ -2136,7 +2139,7 @@ class SyncEngine {
 			}
 
 			// Notification to user regarding number of objects received from OneDrive API
-			if (jsonItemsReceived >= 300000) {
+			if (jsonItemsReceived >= microsoftRecommendedSyncItemCount) {
 				// 'driveIdToQuery' should be the drive where the JSON responses came from
 				string objectsExceedLimitWarning = format("WARNING: The number of objects stored online in '%s' exceeds Microsoft OneDrive's recommended limit. This may cause unreliable application behaviour due to inconsistent or incomplete API responses. Immediate action is strongly advised to avoid data integrity issues.", driveIdToQuery);
 				if (!onlineObjectLimitWarningNotified) {
@@ -2159,7 +2162,7 @@ class SyncEngine {
 
 		// Preserve the existing large-account warning for native /delta now that the
 		// account-wide JSON queue is no longer present at this point.
-		if ((!generatedSimulatedDeltaResponse) && (nativeDeltaItemsSubmittedForProcessing > 0) && (jsonItemsReceived >= 300000)) {
+		if ((!generatedSimulatedDeltaResponse) && (nativeDeltaItemsSubmittedForProcessing > 0) && (jsonItemsReceived >= microsoftRecommendedSyncItemCount)) {
 			string objectsExceedLimitWarning = format("WARNING: The number of objects stored online in '%s' exceeds Microsoft OneDrive's recommended limit. This may cause unreliable application behaviour due to inconsistent or incomplete API responses. Immediate action is strongly advised to avoid data integrity issues.", driveIdToQuery);
 			if (!onlineObjectLimitWarningNotified) {
 				addLogEntry(objectsExceedLimitWarning, ["info", "notify"]);
@@ -2171,7 +2174,7 @@ class SyncEngine {
 
 		// Preserve the same warning for generated /children now that its account-wide
 		// JSON queue has also been removed.
-		if (generatedSimulatedDeltaResponse && (generatedDeltaItemsSubmittedForProcessing > 0) && (jsonItemsReceived >= 300000)) {
+		if (generatedSimulatedDeltaResponse && (generatedDeltaItemsSubmittedForProcessing > 0) && (jsonItemsReceived >= microsoftRecommendedSyncItemCount)) {
 			string objectsExceedLimitWarning = format("WARNING: The number of objects stored online in '%s' exceeds Microsoft OneDrive's recommended limit. This may cause unreliable application behaviour due to inconsistent or incomplete API responses. Immediate action is strongly advised to avoid data integrity issues.", driveIdToQuery);
 			if (!onlineObjectLimitWarningNotified) {
 				addLogEntry(objectsExceedLimitWarning, ["info", "notify"]);
@@ -7301,7 +7304,11 @@ class SyncEngine {
 
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
-					if (selectiveSync.isFileNameExcluded(localFilePath.strip('.'))) {
+					string exclusionTestPath = localFilePath.strip('.');
+					if (!startsWith(exclusionTestPath, "/")) {
+						exclusionTestPath = "/" ~ exclusionTestPath;
+					}
+					if (selectiveSync.isFileNameExcluded(exclusionTestPath)) {
 						if (verboseLogging) {addLogEntry("Skipping file - excluded by skip_file config: " ~ localFilePath, ["verbose"]);}
 						clientSideRuleExcludesPath = true;
 					}

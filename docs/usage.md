@@ -6,6 +6,7 @@ Before reading this document, please ensure you are running application version 
 
 - [Important Notes](#important-notes)
   - [Memory Usage](#memory-usage)
+  - [Large OneDrive Accounts and Item Counts](#large-onedrive-accounts-and-item-counts)
   - [Guidelines for Local File and Folder Naming in the Synchronisation Directory](#guidelines-for-local-file-and-folder-naming-in-the-synchronisation-directory)
   - [Support for Microsoft Azure Information Protected Files](#support-for-microsoft-azure-information-protected-files)
   - [Compatibility with Editors and Applications Using Atomic Save Operations](#compatibility-with-editors-and-applications-using-atomic-save-operations)
@@ -117,6 +118,14 @@ The reported values include:
 - `Resident Set Size (RSS)` — memory currently resident in the process according to the operating system, including managed and native allocations.
 
 When investigating a suspected memory issue, trends across multiple monitor loops and Full Scans are more meaningful than any individual RSS reading.
+
+### Large OneDrive Accounts and Item Counts
+
+Microsoft has historically recommended synchronising no more than **300,000 items** for optimal performance with its OneDrive sync application. Microsoft has also introduced **public-preview support for up to 1,000,000 items** on eligible Windows and macOS clients, subject to Microsoft's requirements. This expanded capability does not establish a new Microsoft Graph API item-count limit or a support guarantee for third-party clients. Refer to [Microsoft's OneDrive and SharePoint restrictions and limitations](https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa) for current guidance.
+
+The **OneDrive Client for Linux** does not impose a corresponding 300,000-item synchronisation limit. However, Microsoft's expanded official-client capability should **not** be interpreted as validation that this client can reliably synchronise 1,000,000 items. Large-account performance depends on available resources, online enumeration, Microsoft Graph throttling, synchronisation mode and the configured filtering rules.
+
+Version 2.5.12 includes the large-account memory improvements described in [Memory Usage](#memory-usage). The controlled **101,494-object** validation described above is evidence of improved memory behaviour, **not** a certified maximum item count or a guarantee of performance at higher counts.
 
 ### Guidelines for Local File and Folder Naming in the Synchronisation Directory
 To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adhere strictly to the prescribed naming conventions for your files and folders within the sync directory. The guidelines detailed below are designed to preempt potential sync failures by aligning with Microsoft Windows Naming Conventions, coupled with specific OneDrive restrictions.
@@ -1065,13 +1074,15 @@ Client Side Filtering in the context of the OneDrive Client for Linux refers to 
 * **check_nosync:** This option allows you to create a `.nosync` file in local directories, to skip that directory from being included in sync operations.
 * **skip_dir:** This option allows the user to specify directories that should not be synchronised with OneDrive. It's particularly useful for omitting large or irrelevant directories from the sync process.
 * **skip_dotfiles:** Dotfiles, usually configuration files or scripts, can be excluded from the sync. This is useful for users who prefer to keep these files local.
-* **skip_file:** Specific files can be excluded from synchronisation using this option. It provides flexibility in selecting which files are essential for cloud storage.
+* **skip_file:** Exclude files by filename anywhere, filename wildcard anywhere, or a specific path beginning with `/` relative to `sync_dir`.
 * **skip_size:** Skip files greater than this specific size (in MB)
 * **skip_symlinks:** Symlinks often point to files outside the OneDrive directory or to locations that are not relevant for cloud storage. This option prevents them from being included in the sync.
 
 Additionally, the OneDrive Client for Linux allows the implementation of Client Side Filtering rules through a 'sync_list' file. This file explicitly states which directories or files should be included in the synchronisation. By default, any item not listed in the 'sync_list' file is excluded. This method offers a more granular approach to synchronisation, ensuring that only the necessary data is transferred to and from Microsoft OneDrive.
 
 These configurable options and the 'sync_list' file provide users with the flexibility to tailor the synchronisation process to their specific needs, conserving bandwidth and storage space while ensuring that important files are always backed up and accessible.
+
+For `skip_file` and `skip_dir`, an initial `/` identifies the **root of `sync_dir`**, not the Linux filesystem root. For example, with `sync_dir = "~/OneDrive"`, a rule referencing `/Documents/Reports` refers to `~/OneDrive/Documents/Reports`. `skip_file` rules containing a directory path must use this leading `/`; a bare filename such as `notes.txt` or a filename wildcard such as `*.txt` matches files anywhere in the sync tree. `skip_dir` also supports directory-name matching; whether individual directory components are matched depends on `skip_dir_strict_match`. Refer to [application-config-options.md](application-config-options.md#skip_file) and [skip_dir](application-config-options.md#skip_dir) for the precise rules and examples.
 
 > [!IMPORTANT]
 > Client Side Filtering rules are generally processed in the following order:
@@ -2216,6 +2227,8 @@ There are two methods to achieve this:
 *   Employ 'skip_file' as part of your 'config' file to configure what files to skip
 *   Employ 'sync_list' to configure what files and directories to sync, and what should be excluded
 
+`skip_file = "report.txt"` excludes that filename anywhere beneath `sync_dir`; `skip_file = "*.txt"` excludes matching filenames anywhere. To exclude a **specific file in a specific directory**, include the leading sync-root `/`, for example `skip_file = "/Documents/Reports/report.txt"`. With `sync_dir = "~/OneDrive"`, this targets `~/OneDrive/Documents/Reports/report.txt`, not an absolute Linux path. Filenames containing `[`, `]`, `{`, `}`, `^` or `$` are matched literally.
+
 For further details please read the ['skip_file' config option documentation](https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md#skip_file)
 
 ### How to 'skip' directories from syncing?
@@ -2225,7 +2238,7 @@ There are three methods available to 'skip' a directory from the sync process:
 *   Employ 'check_nosync' as part of your 'config' file and a '.nosync' empty file within the directory to exclude to skip that directory
 
 > [!IMPORTANT]
-> Entries for 'skip_dir' are *relative* to your 'sync_dir' path.
+> Entries for `skip_dir` are relative to `sync_dir`, not the Linux filesystem root. For example, `/Documents/Cache` refers to `~/OneDrive/Documents/Cache` when `sync_dir = "~/OneDrive"`. A directory-name rule such as `Cache` matches matching directory components anywhere when `skip_dir_strict_match = "false"`; strict matching disables component-by-component matching. See the detailed option documentation for explicit path and wildcard examples.
 
 For further details please read the ['skip_dir' config option documentation](https://github.com/abraunegg/onedrive/blob/master/docs/application-config-options.md#skip_dir)
 
