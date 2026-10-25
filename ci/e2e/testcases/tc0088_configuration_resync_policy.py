@@ -149,7 +149,8 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
         context.prepare_minimal_config_dir(seed_conf, f'sync_dir = "{sync_root}"\n')
         write_text_file(sync_root / scope / "baseline.txt", "tc0088 baseline\n")
         seed_command = [context.onedrive_bin, "--sync", "--upload-only", "--resync",
-                        "--single-directory", scope, "--confdir", str(seed_conf)]
+                        "--resync-auth", "--single-directory", scope,
+                        "--confdir", str(seed_conf)]
         seed_result = run_command(seed_command, cwd=context.repo_root)
         seed_stdout = layout.log_dir / "seed.stdout"
         seed_stderr = layout.log_dir / "seed.stderr"
@@ -157,8 +158,17 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
         write_text_file(seed_stderr, seed_result.stderr)
         artifacts.extend([str(seed_stdout), str(seed_stderr)])
         if seed_result.returncode != 0:
-            return self.fail_result(reason=f"Remote fixture seed failed: exit {seed_result.returncode}",
-                                    artifacts=artifacts, details=details)
+            seed_output = (seed_result.stdout + "\n" + seed_result.stderr).strip()
+            # Preserve full output in the artifacts, but surface the failure in
+            # the workflow summary as well so it can be diagnosed immediately.
+            diagnostic = seed_output[-4000:] if seed_output else "No client output captured"
+            details["seed_command"] = command_to_string(seed_command)
+            details["seed_exit"] = seed_result.returncode
+            return self.fail_result(
+                reason=(f"Remote fixture seed failed: exit {seed_result.returncode}; "
+                        f"client output: {diagnostic}"),
+                artifacts=artifacts, details=details,
+            )
         failures: list[str] = []
         records: list[dict[str, object]] = []
 
@@ -181,7 +191,11 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
                 write_text_file(layout.log_dir / f"{scenario.scenario}_prime.stdout", prime.stdout)
                 write_text_file(layout.log_dir / f"{scenario.scenario}_prime.stderr", prime.stderr)
                 if prime.returncode != 0:
-                    failures.append(f"{scenario.scenario} priming failed: exit {prime.returncode}")
+                    prime_output = (prime.stdout + "\n" + prime.stderr).strip()
+                    failures.append(
+                        f"{scenario.scenario} priming failed: exit {prime.returncode}; "
+                        f"client output: {prime_output[-2000:] if prime_output else 'No client output captured'}"
+                    )
                     records.append({"id": scenario.scenario, "label": scenario.label,
                                     "prime_exit": prime.returncode, "status": "fail"})
                     continue
