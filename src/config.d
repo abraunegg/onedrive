@@ -2184,6 +2184,21 @@ class ApplicationConfig {
 										logAndSetDifference(key ~ configOptionModifiedMessage, 7);
 									}
 								}
+								// Track both the presence and effective value of these options.
+								// Without these branches, any unrelated config edit causes a false --resync.
+								if (key == "check_nosync") {
+									check_nosync_present = true;
+									if (value != to!string(getValueBool("check_nosync"))) {
+										logAndSetDifference(key ~ configOptionModifiedMessage, 9);
+									}
+								}
+								if (key == "skip_size") {
+									skip_size_present = true;
+									if (value != to!string(getValueLong("skip_size"))) {
+										logAndSetDifference(key ~ configOptionModifiedMessage, 10);
+									}
+								}
+
 								if (key == "sync_business_shared_items") {
 									sync_business_shared_items_present = true;
 									if (value != to!string(getValueBool("sync_business_shared_items"))) {
