@@ -180,12 +180,24 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
             # BEFORE. The runtime reads AFTER and checks the transition.
             initial = '\n'.join([f'sync_dir = "{sync_root}"', *scenario.before]) + '\n'
             context.prepare_minimal_config_dir(conf, initial)
+            # The framework prefixes target-specific configuration (notably
+            # SharePoint drive_id) before our scenario-specific settings. Keep
+            # that prefix unchanged when moving from BEFORE to AFTER.
+            baseline_config = (conf / "config").read_text(encoding="utf-8")
+            if not baseline_config.endswith(initial):
+                return self.fail_result(
+                    reason=f"{scenario.scenario}: generated baseline does not end with scenario settings",
+                    artifacts=artifacts, details=details,
+                )
+            target_prefix = baseline_config[:-len(initial)]
             if scenario.sync_list_before is not None:
-                # A genuine sync_list state must be hashed by the client. Prime
-                # it with a successful authenticated run before making the edit.
+                # Adding sync_list is itself a resync-sensitive change. Establish
+                # the initial sync_list state with an authorised resync before
+                # testing subsequent changes without --resync.
                 write_text_file(conf / "sync_list", scenario.sync_list_before.replace("$SCOPE", scope))
             if scenario.sync_list_before is not None:
                 prime_cmd = [context.onedrive_bin, "--sync", "--download-only",
+                             "--resync", "--resync-auth",
                              "--single-directory", scope, "--confdir", str(conf)]
                 prime = run_command(prime_cmd, cwd=context.repo_root)
                 write_text_file(layout.log_dir / f"{scenario.scenario}_prime.stdout", prime.stdout)
@@ -200,7 +212,13 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
                                     "prime_exit": prime.returncode, "status": "fail"})
                     continue
             final = '\n'.join([f'sync_dir = "{sync_root}"', *scenario.after]) + '\n'
-            write_text_file(conf / "config", final)
+            updated_config = target_prefix + final
+            if scenario.before == scenario.after and updated_config != baseline_config:
+                return self.fail_result(
+                    reason=f"{scenario.scenario}: unchanged scenario unexpectedly modified configuration",
+                    artifacts=artifacts, details=details,
+                )
+            write_text_file(conf / "config", updated_config)
             if scenario.sync_list_after is not None:
                 write_text_file(conf / "sync_list", scenario.sync_list_after.replace("$SCOPE", scope))
             cmd = [context.onedrive_bin, "--sync", "--download-only", "--verbose",
