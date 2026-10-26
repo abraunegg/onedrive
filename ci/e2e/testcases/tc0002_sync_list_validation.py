@@ -2329,4 +2329,61 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 ],
                 phase2_config_overrides=['sync_root_files = "true"'],
             ),
+            # Issue #3931: paired literal/wildcard descendant exclusions.
+            # The root-level pair exercises a single-segment path, while the
+            # Notes pair exercises the existing multi-segment matching branch.
+            SyncListScenario(
+                scenario_id="SL-0040",
+                description="multi-segment directory include with literal descendant exclusion",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/",
+                    f"/{FIXTURE_ROOT_NAME}/Documents/Notes/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes"],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_processed=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0041",
+                description="multi-segment directory include with wildcard descendant exclusion",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/*",
+                    f"/{FIXTURE_ROOT_NAME}/Documents/Notes/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes"],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_processed=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0042",
+                description="single-segment root directory include with literal descendant exclusion",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/",
+                    f"/{FIXTURE_ROOT_NAME}/",
+                ],
+                allowed_prefixes=[FIXTURE_ROOT_NAME],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
+                ],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0043",
+                description="single-segment root directory include with wildcard descendant exclusion",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/*",
+                    f"/{FIXTURE_ROOT_NAME}/",
+                ],
+                allowed_prefixes=[FIXTURE_ROOT_NAME],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
+                ],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+            ),
         ]

@@ -107,7 +107,7 @@ from testcases.tc0088_configuration_resync_policy import TestCase0088Configurati
 def build_test_suite() -> list:
     return [
         TestCase0001BasicResync(),
-        #TestCase0002SyncListValidation(),
+        TestCase0002SyncListValidation(),
         #TestCase0003DryRunValidation(),
         #TestCase0004SingleDirectorySync(),
         #TestCase0005ForceSyncOverride(),
