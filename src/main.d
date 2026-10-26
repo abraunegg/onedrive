@@ -35,6 +35,9 @@ import syncEngine;
 import itemdb;
 import clientSideFiltering;
 import monitor;
+version (OnDemand) {
+	import ondemand;
+}
 import webhook;
 import intune;
 import socketio;
@@ -138,6 +141,12 @@ bool dryRun = false;
 string runtimeDatabaseFile = "";
 // Flag for if we are performing filesystem monitoring 
 bool performFileSystemMonitoring = false;
+
+// Experimental on-demand FUSE overlay lifecycle
+version (OnDemand) {
+	OnDemand onDemandInstance;
+}
+
 // Flag for if we perform a database vacuum. This gets set to false if we have not performed a 'no-sync' task
 bool performDatabaseVacuum = true;
 // Flag if SIGTERM is used
@@ -349,6 +358,15 @@ void completeMonitorRuntimeStatusShutdown() {
 }
 
 int main(string[] cliArgs) {
+	// Private process boundary used only by the experimental on-demand scaffold.
+	// Handle it before normal OneDrive logging, signal handlers, shutdown scopes,
+	// database, WebSocket or monitor state are initialised.
+	version (OnDemand) {
+		if ((cliArgs.length == 5) && (cliArgs[1] == "--internal-on-demand-fuse-helper")) {
+			return runOnDemandFuseHelper(cliArgs[2], cliArgs[3], cliArgs[4]);
+		}
+	}
+
 	// Application Start Time - used during monitor loop to detail how long it has been running for
 	auto applicationStartTime = Clock.currTime();
 	auto applicationStartMonotonic = MonoTime.currTime();
@@ -1501,6 +1519,22 @@ int main(string[] cliArgs) {
 					addLogEntry("Initialising local filesystem monitoring using inotify ...");
 					filesystemMonitor.initialise();
 					addLogEntry("Local filesystem monitoring using inotify is active.");
+
+					// EXPERIMENTAL: mount only after existing inotify has attached to the
+					// physical tree. This is the key architectural behaviour under test.
+					version (OnDemand) {
+						if (appConfig.getValueBool("on_demand")) {
+							try {
+								addLogEntry("Starting experimental on-demand FUSE passthrough overlay ...");
+								onDemandInstance = new OnDemand(runtimeSyncDirectory, cast(int) verbosityCount);
+								onDemandInstance.start();
+								addLogEntry("Experimental on-demand FUSE passthrough overlay is active; existing inotify remains attached to the physical tree.");
+							} catch (OnDemandException e) {
+								addLogEntry("ERROR: " ~ e.msg);
+								return EXIT_FAILURE;
+							}
+						}
+					}
 				} catch (MonitorException e) {	
 					// monitor class initialisation failed
 					addLogEntry("ERROR: " ~ e.msg);
@@ -3089,6 +3123,9 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			// Shutdown the OneDrive WebSocket instance
 			shutdownOneDriveSocketIo();
 
+			// Remove experimental FUSE overlay before tearing down local monitoring.
+			shutdownOnDemand();
+
 			// Shutdown any local filesystem monitoring
 			shutdownFilesystemMonitor();
 
@@ -3147,6 +3184,17 @@ void shutdownOneDriveSocketIo() {
         oneDriveSocketIo = null;
         if (debugLogging) addLogEntry("Shutdown of OneDrive WebSocket instance complete", ["debug"]);
     }
+}
+
+void shutdownOnDemand() {
+	version (OnDemand) {
+		if (onDemandInstance !is null) {
+			if (debugLogging) {addLogEntry("Shutting down experimental on-demand FUSE overlay", ["debug"]);}
+			onDemandInstance.stop();
+			object.destroy(onDemandInstance);
+			onDemandInstance = null;
+		}
+	}
 }
 
 void shutdownFilesystemMonitor() {
