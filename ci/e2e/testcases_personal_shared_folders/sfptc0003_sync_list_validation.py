@@ -252,9 +252,11 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 failure_message = f"{scenario.scenario_id}: " + "; ".join(diffs)
                 failures.append(failure_message)
                 context.log(f"Scenario {scenario.scenario_id} FAILED: {failure_message}")
-            if scenario.scenario_id in {'SL-0025'}:
+            else:
+                context.log(f"Scenario {scenario.scenario_id} PASSED")
+            if scenario.scenario_id in {'SL-0025', 'SL-0026', 'SL-0027', 'SL-0028'}:
                 context.log(
-                    f"Scenario {{scenario.scenario_id}} sync_list rules: "
+                    f"Scenario {scenario.scenario_id} sync_list rules: "
                     + repr(scenario.sync_list)
                 )
                 evidence = [
@@ -265,14 +267,13 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                     or "included by sync_list" in line
                 ]
                 for line in evidence[:20]:
-                    context.log(f"Scenario {{scenario.scenario_id}} stdout: {{line}}")
+                    context.log(f"Scenario {scenario.scenario_id} stdout: {line}")
                 context.log(
-                    f"Scenario {{scenario.scenario_id}} diagnostics: "
-                    f"{{diff_file}}, {{metadata_file}}, {{stdout_file}}, "
-                    f"{{expected_manifest_file}}, {{actual_manifest_file}}"
+                    f"Scenario {scenario.scenario_id} diagnostics: "
+                    f"{diff_file}, {metadata_file}, {stdout_file}, "
+                    f"{expected_manifest_file}, {actual_manifest_file}"
                 )
-            else:
-                context.log(f"Scenario {scenario.scenario_id} PASSED")
+
 
         details = {
             "scenario_count": len(scenarios),
@@ -1078,5 +1079,41 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 required_present=[f"{core}/nested/keep/keep.txt", f"{core}/README.txt"],
                 required_absent=[f"{core}/nested/exclude/exclude.txt", f"{core15}/README.txt"],
                 required_stdout_markers=[self._marker(core)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0026",
+                description="wildcard workaround retains included Personal shared-folder shortcut",
+                sync_list=[
+                    f"!/{core}/nested/exclude/*",
+                    f"/{core}/",
+                ],
+                expected_entries=core_without_exclude,
+                required_present=[f"{core}/nested/keep/keep.txt", f"{core}/README.txt"],
+                required_absent=[f"{core}/nested/exclude/exclude.txt", f"{core15}/README.txt"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0027",
+                description="issue 3931 literal descendant exclusion retains root Personal shared-folder shortcut",
+                sync_list=[
+                    f"!/{minimal}/nested/exclude/",
+                    f"/{minimal}/",
+                ],
+                expected_entries=self._entries_under(minimal),
+                required_present=[f"{minimal}/", f"{minimal}/single.txt"],
+                required_absent=[f"{minimal}_15/single.txt"],
+                required_stdout_markers=[self._marker(minimal)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0028",
+                description="issue 3931 wildcard descendant exclusion retains root Personal shared-folder shortcut",
+                sync_list=[
+                    f"!/{minimal}/nested/exclude/*",
+                    f"/{minimal}/",
+                ],
+                expected_entries=self._entries_under(minimal),
+                required_present=[f"{minimal}/", f"{minimal}/single.txt"],
+                required_absent=[f"{minimal}_15/single.txt"],
+                required_stdout_markers=[self._marker(minimal)],
             ),
         ]

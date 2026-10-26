@@ -219,9 +219,11 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 failure_message = f"{scenario.scenario_id}: " + "; ".join(diffs)
                 failures.append(failure_message)
                 context.log(f"Scenario {scenario.scenario_id} FAILED: {failure_message}")
-            if scenario.scenario_id in {'SL-0036', 'SL-0035'}:
+            else:
+                context.log(f"Scenario {scenario.scenario_id} PASSED")
+            if scenario.scenario_id in {'SL-0035', 'SL-0036', 'SL-0037'}:
                 context.log(
-                    f"Scenario {{scenario.scenario_id}} sync_list rules: "
+                    f"Scenario {scenario.scenario_id} sync_list rules: "
                     + repr(scenario.sync_list)
                 )
                 evidence = [
@@ -232,14 +234,13 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                     or "included by sync_list" in line
                 ]
                 for line in evidence[:20]:
-                    context.log(f"Scenario {{scenario.scenario_id}} stdout: {{line}}")
+                    context.log(f"Scenario {scenario.scenario_id} stdout: {line}")
                 context.log(
-                    f"Scenario {{scenario.scenario_id}} diagnostics: "
-                    f"{{diff_file}}, {{metadata_file}}, {{stdout_file}}, "
-                    f"{{expected_manifest_file}}, {{actual_manifest_file}}"
+                    f"Scenario {scenario.scenario_id} diagnostics: "
+                    f"{diff_file}, {metadata_file}, {stdout_file}, "
+                    f"{expected_manifest_file}, {actual_manifest_file}"
                 )
-            else:
-                context.log(f"Scenario {scenario.scenario_id} PASSED")
+
 
         details = {
             "scenario_count": len(scenarios),
@@ -929,6 +930,21 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 description="issue 3931 literal descendant exclusion must retain root Business shared-folder shortcut",
                 sync_list=[
                     f"!/{sharepoint_root}/Data Monitoring/Updates/",
+                    f"/{sharepoint_root}/",
+                ],
+                expected_entries=self._exclude_entries(
+                    self._entries_under(sharepoint_root),
+                    f"{sharepoint_root}/Data Monitoring/Updates",
+                ),
+                required_present=[f"{sharepoint_root}/", f"{sharepoint_root}/Data Monitoring/"],
+                required_absent=[sharepoint_root_deep_file, f"{core_dataset_b}/README.txt"],
+                required_stdout_markers=[self._marker(sharepoint_root)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0037",
+                description="issue 3931 wildcard workaround retains root Business shared-folder shortcut",
+                sync_list=[
+                    f"!/{sharepoint_root}/Data Monitoring/Updates/*",
                     f"/{sharepoint_root}/",
                 ],
                 expected_entries=self._exclude_entries(
