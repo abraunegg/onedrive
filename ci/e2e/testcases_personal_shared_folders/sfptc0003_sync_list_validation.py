@@ -252,6 +252,25 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 failure_message = f"{scenario.scenario_id}: " + "; ".join(diffs)
                 failures.append(failure_message)
                 context.log(f"Scenario {scenario.scenario_id} FAILED: {failure_message}")
+            if scenario.scenario_id in {'SL-0025'}:
+                context.log(
+                    f"Scenario {{scenario.scenario_id}} sync_list rules: "
+                    + repr(scenario.sync_list)
+                )
+                evidence = [
+                    line for line in result.stdout.splitlines()
+                    if "Shared Folder Link" in line
+                    or "Syncing this OneDrive" in line
+                    or "excluded by sync_list" in line
+                    or "included by sync_list" in line
+                ]
+                for line in evidence[:20]:
+                    context.log(f"Scenario {{scenario.scenario_id}} stdout: {{line}}")
+                context.log(
+                    f"Scenario {{scenario.scenario_id}} diagnostics: "
+                    f"{{diff_file}}, {{metadata_file}}, {{stdout_file}}, "
+                    f"{{expected_manifest_file}}, {{actual_manifest_file}}"
+                )
             else:
                 context.log(f"Scenario {scenario.scenario_id} PASSED")
 
@@ -1047,5 +1066,17 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 required_absent=[f"{core15}/README.txt", f"{wide}/file00.txt"],
                 required_stdout_markers=[self._marker(core)],
                 cleanup_local_stale_files=[f"{core}/files/sfptc0003-local-stale.txt"],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0025",
+                description="literal nested directory exclusion retains included Personal shared-folder shortcut",
+                sync_list=[
+                    f"!/{core}/nested/exclude/",
+                    f"/{core}/",
+                ],
+                expected_entries=core_without_exclude,
+                required_present=[f"{core}/nested/keep/keep.txt", f"{core}/README.txt"],
+                required_absent=[f"{core}/nested/exclude/exclude.txt", f"{core15}/README.txt"],
+                required_stdout_markers=[self._marker(core)],
             ),
         ]
