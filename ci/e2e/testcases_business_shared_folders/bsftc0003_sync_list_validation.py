@@ -543,6 +543,18 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 required_stdout_markers=[self._marker(core)],
             ),
             BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0035",
+                description="issue 3931 literal nested directory exclusion retains included Business shared folder",
+                sync_list=[
+                    f"!/{core_exclude}/",
+                    f"/{core}/",
+                ],
+                expected_entries=core_without_exclude,
+                required_present=[f"{core_keep}/keep.txt", f"{core_files}/data.txt"],
+                required_absent=[f"{core_exclude}/exclude.txt", f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
                 scenario_id="SL-0005",
                 description="file-specific include inside a Business shared folder",
                 sync_list=[f"/{core_files}/data.txt"],
@@ -819,6 +831,21 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 expected_entries=self._entries_under(sharepoint_root),
                 required_present=[sharepoint_root_deep_file],
                 required_absent=[f"{core_dataset_b}/README.txt", f"{user_root_container}/FirstBackup.spg"],
+                required_stdout_markers=[self._marker(sharepoint_root)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0036",
+                description="issue 3931 literal descendant exclusion must retain root Business shared-folder shortcut",
+                sync_list=[
+                    f"!/{sharepoint_root}/Data Monitoring/Updates/",
+                    f"/{sharepoint_root}/",
+                ],
+                expected_entries=self._exclude_entries(
+                    self._entries_under(sharepoint_root),
+                    f"{sharepoint_root}/Data Monitoring/Updates",
+                ),
+                required_present=[f"{sharepoint_root}/", f"{sharepoint_root}/Data Monitoring/"],
+                required_absent=[sharepoint_root_deep_file, f"{core_dataset_b}/README.txt"],
                 required_stdout_markers=[self._marker(sharepoint_root)],
             ),
             BusinessSharedFolderSyncListScenario(
