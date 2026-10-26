@@ -213,6 +213,7 @@ gshared
 gtk
 GVariant
 hdrs
+healthcheck
 hideonindex
 hnsecs
 holdcnt
