@@ -377,7 +377,10 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
                 final = self._config_text(sync_root, scenario.after).replace(
                     f'sync_dir = "{sync_root}"', 'sync_dir = ""', 1)
             updated_config = updated_prefix + final
-            if scenario.before == scenario.after and updated_config != baseline_config:
+            # Only enforce byte-identical config for scenarios without an explicit
+            # framework-prefix or sync_dir mutation. Such mutations are
+            # represented by prefix_action rather than before/after tuples.
+            if scenario.before == scenario.after and not scenario.prefix_action and updated_config != baseline_config:
                 return self.fail_result(
                     reason=f"{scenario.scenario}: unchanged scenario unexpectedly modified configuration",
                     artifacts=artifacts, details=details,
