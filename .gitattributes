@@ -1,0 +1,3 @@
+# Keep the Python E2E test framework out of GitHub Linguist language statistics.
+# Files remain tracked, syntax-highlighted, and available to CI as normal.
+ci/e2e/** -linguist-detectable

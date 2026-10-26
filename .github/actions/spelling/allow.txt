@@ -43,6 +43,7 @@ autocheckpoint
 autoclean
 automake
 autoprocess
+Autotools
 autoupdate
 avmkfdiitirnrenzljwc
 avx
@@ -98,6 +99,7 @@ constness
 controllen
 cpath
 cpticks
+credentialled
 crt
 Cstrip
 ctl
@@ -491,6 +493,7 @@ relro
 repology
 restic
 restorecon
+resyncs
 retryable
 retu
 revents
@@ -652,6 +655,7 @@ webtemplate
 weburl
 Werror
 wmesg
+worktree
 wpath
 writefln
 wrt
