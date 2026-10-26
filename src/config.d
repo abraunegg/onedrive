@@ -2221,9 +2221,6 @@ class ApplicationConfig {
 					// skip_file can be specified multiple times
 					if (skip_file_present && backupConfigFileSkipFile != configFileSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
 					
-					// skip_file can also be an empty string, thus when removed, as an empty string, we are going back to application defaults
-					if (skip_file_present && backupConfigFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
-					
 					// skip_dir can be specified multiple times
 					if (skip_dir_present && backupConfigFileSkipDir != configFileSkipDir) logAndSetDifference("skip_dir" ~ configOptionModifiedMessage, 5);
 					
