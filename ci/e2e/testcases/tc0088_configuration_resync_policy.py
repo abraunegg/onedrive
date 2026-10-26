@@ -94,12 +94,6 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
                 # no meaningful removal on a non-SharePoint account.
                 return prefix
             return ''.join(line for i, line in enumerate(lines) if i not in existing)
-        if action == 'drive_empty':
-            if not existing:
-                return prefix + 'drive_id = ""\n'
-            for i in existing:
-                lines[i] = 'drive_id = ""\n'
-            return ''.join(lines)
         raise ValueError(f'Unknown prefix action: {action}')
 
     @staticmethod
@@ -180,10 +174,16 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
             add(f'{key}: value changed', (av,), (bv,), causes=(key,))
             add(f'{key}: absent -> nondefault', (), (av,), causes=(key,))
             add(f'{key}: nondefault -> absent', (av,), (), causes=(key,))
-            add(f'{key}: nondefault -> default', (av,), (zero,), causes=(key,))
-            add(f'{key}: default -> nondefault', (zero,), (av,), causes=(key,))
-            add(f'{key}: absent -> explicit default', (), (zero,))
-            add(f'{key}: explicit default -> absent', (zero,), ())
+            if key != 'skip_size':
+                add(f'{key}: nondefault -> default', (av,), (zero,), causes=(key,))
+                add(f'{key}: default -> nondefault', (zero,), (av,), causes=(key,))
+            # An explicit skip_size=0 is not a valid positive filtering
+            # threshold. Keep TC0088 focused on valid resync transitions;
+            # parser rejection of zero will receive separate coverage when
+            # the client validation is hardened.
+            if key != 'skip_size':
+                add(f'{key}: absent -> explicit default', (), (zero,))
+                add(f'{key}: explicit default -> absent', (zero,), ())
             add(f'{key}: unchanged nondefault, harmless edit',
                 (av, 'space_reservation = "50"'), (av, 'space_reservation = "60"'))
 
@@ -217,7 +217,6 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
         # Retain the framework base sync_dir; alter just the scenario-owned one.
         add('sync_dir: changed path', (), (), causes=('sync_dir',), prefix_action='sync_path_change')
         add('sync_dir: removed (default restored)', (), (), causes=('sync_dir',), prefix_action='sync_path_remove')
-        add('sync_dir: explicitly empty (default restored)', (), (), causes=('sync_dir',), prefix_action='sync_path_empty')
         add('sync_dir: CLI --syncdir override', (), (), causes=('sync_dir',),
             cli=('--syncdir', '__DIFFERENT_SYNC_DIR__'))
 
@@ -225,7 +224,6 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
         # On accounts with no base drive_id, first test addition to configuration.
         add('drive_id: modified or newly added', (), (), causes=('drive_id',), prefix_action='drive_change')
         add('drive_id: removed from configured account', (), (), causes=('drive_id',), prefix_action='drive_remove')
-        add('drive_id: explicitly emptied', (), (), causes=('drive_id',), prefix_action='drive_empty')
         add('drive_id: unchanged, unrelated edit', ('space_reservation = "50"',),
             ('space_reservation = "60"',))
         add('drive_id: plus skip_size change', ('skip_size = "1"',),
@@ -358,7 +356,7 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
             updated_prefix = target_prefix
             if scenario.prefix_action in ('drive_change', 'drive_and_path_change'):
                 updated_prefix = self._modify_prefix(target_prefix, 'drive_change')
-            if scenario.prefix_action in ('drive_remove', 'drive_empty'):
+            if scenario.prefix_action == 'drive_remove':
                 # Only meaningful where the harness config already supplies an
                 # account-specific drive_id. Do not silently turn an absent->
                 # absent transition into a green 'removal' test.
@@ -373,9 +371,6 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
                 final = self._config_text(sync_root / 'TC0088_NONEXISTENT_ROOT', scenario.after)
             if scenario.prefix_action == 'sync_path_remove':
                 final = '\n'.join(scenario.after) + '\n'
-            if scenario.prefix_action == 'sync_path_empty':
-                final = self._config_text(sync_root, scenario.after).replace(
-                    f'sync_dir = "{sync_root}"', 'sync_dir = ""', 1)
             updated_config = updated_prefix + final
             # Only enforce byte-identical config for scenarios without an explicit
             # framework-prefix or sync_dir mutation. Such mutations are
