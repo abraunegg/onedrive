@@ -115,9 +115,9 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
             ('nosync', ('check_nosync = "true"',), ()),
             ('size', ('skip_size = "1"',), ()),
             ('both', ('check_nosync = "true"', 'skip_size = "1"'), ()),
-            ('custom_skip_file', ('skip_file = "*.tc0088ignored"',), ('skip_file',)),
+            ('custom_skip_file', ('skip_file = "*.tc0088ignored"',), ()),
             ('all_filters', ('check_nosync = "true"', 'skip_size = "1"',
-                             'skip_file = "*.tc0088ignored"', 'skip_dir = "TC0088Excluded"'), ('skip_file',)),
+                             'skip_file = "*.tc0088ignored"', 'skip_dir = "TC0088Excluded"'), ()),
         )
         for label, baseline, special_causes in control_baselines:
             add(f'{label}: unrelated space_reservation edit',
@@ -187,18 +187,17 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
             add(f'{key}: unchanged nondefault, harmless edit',
                 (av, 'space_reservation = "50"'), (av, 'space_reservation = "60"'))
 
-        # skip_file's special default comparison intentionally forces resync on
-        # a config edit when a nondefault custom rule exists in the backup.
+        # A previously accepted custom skip_file baseline must NOT force a new
+        # resync when an unrelated option changes. Actual rule changes still do.
         a, b = 'skip_file = "*.tc0088alpha"', 'skip_file = "*.tc0088beta"'
         add('skip_file: changed custom rule', (a,), (b,), causes=('skip_file',))
         add('skip_file: add custom rule', (), (a,), causes=('skip_file',))
         add('skip_file: remove custom rule', (a,), (), causes=('skip_file',))
         add('skip_file: unchanged custom rule, unrelated edit',
-            (a, 'space_reservation = "50"'), (a, 'space_reservation = "60"'),
-            causes=('skip_file',))
+            (a, 'space_reservation = "50"'), (a, 'space_reservation = "60"'))
         add('skip_file: two custom rules unchanged, unrelated edit',
             (a, b, 'space_reservation = "50"'),
-            (a, b, 'space_reservation = "60"'), causes=('skip_file',))
+            (a, b, 'space_reservation = "60"'))
         add('skip_file: two custom rules -> one', (a, b), (a,), causes=('skip_file',))
         add('skip_file: one custom rule -> two', (a,), (a, b), causes=('skip_file',))
         add('skip_file: nondefault -> explicit empty', (a,), ('skip_file = ""',), causes=('skip_file',))
@@ -401,12 +400,24 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
             expected_causes = set(scenario.causes)
             # Exact attribution is required. An unrelated exit 78 is a FAIL.
             causes_ok = reported == expected_causes
-            if not status_ok or not message_ok or not causes_ok:
+            # Accepted custom skip_file rules can omit important built-in
+            # exclusions. An unrelated edit must not demand --resync, but the
+            # existing user-facing protection warning must remain in place.
+            expect_default_warning = scenario.scenario in {
+                'CR-0013', 'CR-0014', 'CR-0016', 'CR-0017',
+                'CR-0081', 'CR-0082',
+            }
+            default_warning_ok = (
+                not expect_default_warning
+                or "Your 'skip_file' configuration is missing important default entries" in text
+            )
+            if not status_ok or not message_ok or not causes_ok or not default_warning_ok:
                 failures.append(
                     f"{scenario.scenario} {scenario.label}: expected exit={expected}, "
                     f"stop={scenario.requires_resync}, causes={sorted(expected_causes)}; "
                     f"got exit={result.returncode}, stop={self.STOP_MESSAGE in text}, "
-                    f"causes={sorted(reported)}"
+                    f"causes={sorted(reported)}, "
+                    f"missing_defaults_warning_present={default_warning_ok}"
                 )
             records.append({"id": scenario.scenario, "label": scenario.label,
                             "expected_exit": expected, "actual_exit": result.returncode,
@@ -414,8 +425,9 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
                             "expected_causes": sorted(expected_causes),
                             "reported_causes": sorted(reported),
                             "cause_match": causes_ok,
+                            "missing_defaults_warning_match": default_warning_ok,
                             "command": command_to_string(cmd),
-                            "status": "pass" if status_ok and message_ok and causes_ok else "fail"})
+                            "status": "pass" if status_ok and message_ok and causes_ok and default_warning_ok else "fail"})
 
         result_file = layout.state_dir / "scenario_results.json"
         write_text_file(result_file, json.dumps(records, indent=2) + '\n')
