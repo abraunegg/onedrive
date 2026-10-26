@@ -103,9 +103,14 @@ Sponsorship is entirely optional and does not alter access to the software, proj
 *   Support for Windows 'On-Demand' functionality so file is only downloaded when accessed locally
 
 ## External Enhancements
-*   A GUI for configuration management: [OneDrive Client for Linux GUI](https://github.com/bpozdena/OneDriveGUI)
-*   Colorful log output terminal modification: [OneDrive Client for Linux Colorful log Output](https://github.com/zzzdeb/dotfiles/blob/master/scripts/tools/onedrive_log)
-*   System Tray Icon: [OneDrive Client for Linux System Tray Icon](https://github.com/DanielBorgesOliveira/onedrive_tray)
+
+### Graphical User Interfaces (GUI)
+* [OneDriveGUI](https://github.com/bpozdena/OneDriveGUI) - A graphical interface for this client, simplifying account configuration, synchronisation management and monitoring, with multi-account support. Written in Python.
+* [DriveDeck](https://github.com/sweatshopking/DriveDeck) - A modern, feature-rich Linux desktop interface for OneDrive, offering multi-account management, system tray integration, file management and desktop integration. Written in Rust.
+* [OneDrive Sync Station](https://github.com/benjaminmue/OneDrive-Sync-Station) - A Docker-based web interface for managing multiple OneDrive Personal, Business and SharePoint accounts, offering browser-based authentication, selective synchronisation and account management. Designed for Unraid. Written in JavaScript.
+
+### System Tray Integrations
+* [OneDrive Tray](https://github.com/DanielBorgesOliveira/onedrive_tray) - A lightweight system tray utility for this client, providing synchronisation progress monitoring, client status and quick access to basic controls. Written in C++ using Qt.
 
 ## Frequently Asked Questions
 Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki/Frequently-Asked-Questions)
