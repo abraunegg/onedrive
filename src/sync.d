@@ -11461,6 +11461,11 @@ class SyncEngine {
 									throw new JsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
 								}
 
+								// Issue #3930: a path lookup can also return a misrouted DriveItem.
+								// Reject it before any database write, remote modification or local removal.
+								if (!validateNewFileUploadDestination(fileDetailsFromOneDrive, parentItem, fileToUpload))
+									throw new JsonResponseException("Microsoft Graph returned an unexpected destination for an existing-file lookup");
+
 								// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
 								// and that it matches the POSIX filename of the local item we are trying to upload as a new file
 								if (verboseLogging) {addLogEntry("The file we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);}
