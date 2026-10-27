@@ -152,6 +152,50 @@ class TestCase0089GitRsyncMonitorUploadIdentity(MonitorModeTestCaseBase):
                 return self.fail_result(reason="No complete upload/rejection outcome observed", artifacts=artifacts, details=details)
             if outcome == 0 and not details["identity_error"]:
                 return self.fail_result(reason="Rejected upload lacked destination diagnostic", artifacts=artifacts, details=details)
+
+            # Do not stop the monitor when the first two Git tags finish.  rsync
+            # publishes files through temporary-file renames, and the remaining
+            # inotify work can still be queued.  TC0048 uses this same harness
+            # waiter to establish that every expected upload was processed.
+            # The v1.0.x tag family may be affected by the same upstream
+            # filename route bug; they are not required to succeed when the
+            # primary v1.0.0 upload is correctly rejected.
+            source_hashes_before_verify = self._file_hashes(source_repo)
+            expected_uploads = [
+                f"Uploading new file: {(relative_repo / relative).as_posix()} ... done"
+                for relative in sorted(source_hashes_before_verify)
+                if outcome == 1 or relative not in (
+                    ".git/refs/tags/v1.0.0", ".git/refs/tags/v1.0.1"
+                )
+            ]
+            complete, final_segment = self._wait_for_stdout_growth_patterns(
+                monitor_stdout,
+                start_offset=offset,
+                required_patterns=expected_uploads,
+                timeout_seconds=300,
+            )
+            missing_uploads = [
+                pattern for pattern in expected_uploads
+                if not self._monitor_output_contains(final_segment, pattern)
+            ]
+            details["expected_successful_uploads"] = len(expected_uploads)
+            details["missing_successful_upload_logs"] = missing_uploads
+            details["all_other_uploads_complete"] = complete
+            details["foreign_key_failure"] = "FOREIGN KEY constraint failed" in final_segment
+            details["identity_error"] = (
+                "Graph destination mismatch" in final_segment
+                or "Graph API upload destination mismatch" in final_segment
+            )
+            if details["foreign_key_failure"]:
+                return self.fail_result(reason="Unexpected SQLite foreign key error during monitor convergence", artifacts=artifacts, details=details)
+            if not complete:
+                return self.fail_result(
+                    reason=f"Monitor did not complete {len(missing_uploads)} expected Git repository uploads",
+                    artifacts=artifacts,
+                    details=details,
+                )
+            if process.poll() is not None:
+                return self.fail_result(reason="Monitor exited before repository uploads completed", artifacts=artifacts, details=details)
         finally:
             self._shutdown_monitor_process(process, details)
             self._write_metadata(metadata_file, details)
