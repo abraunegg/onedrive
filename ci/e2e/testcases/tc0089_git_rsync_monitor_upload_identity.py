@@ -97,7 +97,7 @@ class TestCase0089GitRsyncMonitorUploadIdentity(MonitorModeTestCaseBase):
             conf_verify,
             f'# tc0089 independent remote verification\nsync_dir = "{verify_root}"\nbypass_data_preservation = "true"\n',
         )
-        command = [context.onedrive_bin, "--display-running-config", "--monitor", "--verbose", "--verbose",
+        command = [context.onedrive_bin, "--display-running-config", "--monitor", "--verbose",
                    "--resync", "--resync-auth", "--single-directory", root_name,
                    "--syncdir", str(sync_root), "--confdir", str(conf_main)]
         context.log(f"TC0089 monitor: {command_to_string(command)}")
@@ -204,7 +204,7 @@ class TestCase0089GitRsyncMonitorUploadIdentity(MonitorModeTestCaseBase):
         write_manifest(source_manifest_file, source_manifest)
         source_hashes = self._file_hashes(source_repo)
         verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--download-only",
-                          "--verbose", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name,
+                          "--verbose", "--resync", "--resync-auth", "--single-directory", root_name,
                           "--syncdir", str(verify_root), "--confdir", str(conf_verify)]
         context.log(f"TC0089 remote verification: {command_to_string(verify_command)}")
         verification = self._run_verify_command(context, verify_command, verify_stdout, verify_stderr)
