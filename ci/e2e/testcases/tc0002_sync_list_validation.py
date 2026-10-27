@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -306,7 +307,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 ]
             )
 
-            if scenario.execution_mode == "cleanup_regression":
+            if scenario.execution_mode == "root_files_contract":
+                diffs, artifacts, extra_metadata = self._run_root_files_contract(
+                    context, scenario, sync_root, config_dir, config_path,
+                    base_config_text, sync_list_path, scenario_dir, scenario_log_dir,
+                )
+            elif scenario.execution_mode == "cleanup_regression":
                 diffs, artifacts, extra_metadata = self._run_cleanup_regression_scenario(
                     context=context,
                     scenario=scenario,
@@ -394,6 +400,99 @@ class TestCase0002SyncListValidation(E2ETestCase):
         )
 
         return "\n\n".join(sections).rstrip("\n") + "\n"
+
+    def _run_root_files_contract(
+        self,
+        context: E2EContext,
+        scenario: SyncListScenario,
+        sync_root: Path,
+        config_dir: Path,
+        config_path: Path,
+        base_config_text: str,
+        sync_list_path: Path,
+        scenario_dir: Path,
+        scenario_log_dir: Path,
+    ) -> tuple[list[str], list[str], list[str]]:
+        """Real upload/download checks with a clean client DB for each policy."""
+        artifacts: list[str] = []
+        metadata: list[str] = []
+        diffs: list[str] = []
+        # Unique names prevent old E2E data from satisfying an assertion.
+        marker = uuid.uuid4().hex[:12]
+        root_allowed = f"tc0002-root-allowed-{marker}.txt"
+        root_excluded = f"tc0002-root-excluded-{marker}.txt"
+        selected = f"TC0002_Selected_{marker}"
+        unselected = f"TC0002_Unselected_{marker}"
+        selected_allowed = f"{selected}/included.txt"
+        selected_excluded = f"{selected}/excluded.txt"
+        unselected_file = f"{unselected}/excluded.txt"
+        paths = [root_allowed, root_excluded, selected_allowed,
+                 selected_excluded, unselected_file]
+
+        # Seed only our isolated dataset; avoid the general TC0002 fixture.
+        reset_directory(sync_root)
+        for rel in paths:
+            target = sync_root / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            write_text_file(target, f"TC0002 root-file contract {marker}: {rel}\n")
+        write_text_file(sync_list_path, "")
+        self._write_config_with_overrides(config_path, base_config_text, [])
+        seed_command = self._build_sync_command(context, sync_root, config_dir)
+        seed_result = run_command(seed_command, cwd=context.repo_root)
+        for name, data in (("seed_stdout.log", seed_result.stdout),
+                           ("seed_stderr.log", seed_result.stderr)):
+            target = scenario_log_dir / name
+            write_text_file(target, data)
+            artifacts.append(str(target))
+        metadata.append(f"seed_returncode={seed_result.returncode}")
+        metadata.append(f"dataset_marker={marker}")
+        if seed_result.returncode != 0:
+            return [f"Unfiltered remote seed failed with status {seed_result.returncode}"], artifacts, metadata
+
+        rules = [f"!/{root_excluded}", f"!/{selected_excluded}", f"/{selected}/"]
+        for enabled in (True, False):
+            label = "enabled" if enabled else "disabled"
+            # Independent config/DB and empty local tree are essential:
+            # otherwise previously seeded local files could masquerade as downloads.
+            reset_directory(sync_root)
+            phase_config_dir = scenario_dir / f"config-{label}"
+            reset_directory(phase_config_dir)
+            context.bootstrap_config_dir(phase_config_dir)
+            phase_config_path = phase_config_dir / CONFIG_FILE_NAME
+            previous = phase_config_path.read_text(encoding="utf-8") if phase_config_path.exists() else ""
+            phase_base = self._build_base_config_text(previous)
+            self._write_config_with_overrides(
+                phase_config_path, phase_base,
+                ['download_only = "true"',
+                 f'sync_root_files = "{str(enabled).lower()}"'],
+            )
+            self._write_sync_list(phase_config_dir / "sync_list", rules)
+            command = self._build_sync_command(context, sync_root, phase_config_dir)
+            result = run_command(command, cwd=context.repo_root)
+            for name, data in ((f"{label}_stdout.log", result.stdout),
+                               (f"{label}_stderr.log", result.stderr)):
+                target = scenario_log_dir / name
+                write_text_file(target, data)
+                artifacts.append(str(target))
+            manifest_path = scenario_dir / f"{label}_manifest.txt"
+            write_manifest(manifest_path, build_manifest(sync_root))
+            artifacts.append(str(manifest_path))
+            metadata.append(f"{label}_returncode={result.returncode}")
+            if result.returncode != 0:
+                diffs.append(f"{label}: download-only sync failed with status {result.returncode}")
+                continue
+            present = [root_allowed, root_excluded, selected_allowed] if enabled else [selected_allowed]
+            absent = [selected_excluded, unselected_file] if enabled else [root_allowed, root_excluded, selected_excluded, unselected_file]
+            for rel in present:
+                if not (sync_root / rel).is_file():
+                    diffs.append(f"{label}: expected downloaded file missing: {rel}")
+            for rel in absent:
+                if (sync_root / rel).exists():
+                    diffs.append(f"{label}: excluded file unexpectedly downloaded: {rel}")
+
+        # Keep the remote test dataset for post-failure inspection; its random
+        # suffix ensures it cannot produce a false pass in later runs.
+        return diffs, artifacts, metadata
 
     def _run_standard_scenario(
         self,
@@ -1899,16 +1998,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0023",
-                description="sync_root_files true retains logical root files alongside included Projects subtree",
+                description="sync_root_files true does not override filtering for nested sibling files",
                 execution_mode="cleanup_regression",
                 sync_list=[
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Video",
                     f"/{FIXTURE_ROOT_NAME}/Projects",
-                ],
-                allowed_exact=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                 ],
                 allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Projects"],
                 forbidden_prefixes=[
@@ -1916,8 +2011,6 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
                 required_processed=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
                 ],
@@ -2333,11 +2426,9 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0039",
-                description="generic sync_root_files override retains logical root files without entering unrelated fixture subtrees",
+                description="sync_root_files does not override nested paths while explicit file inclusion still works",
                 sync_list=[f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
                 allowed_exact=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/zz_e2e_zz_e2e_sync_list_rulelab.bin",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/zz_e2e_zz_e2e_sync_list_rulelab_filespecific.dat",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/zz_e2e_zz_e2e_sync_list_rulelab_filespecific_core.cache",
@@ -2347,8 +2438,6 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 ],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                 ],
                 required_skipped=[
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp",
@@ -2420,5 +2509,11 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
                 required_non_skipped_exact=[FIXTURE_ROOT_NAME],
                 forbidden_skipped_exact=[FIXTURE_ROOT_NAME],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0044",
+                description="isolated sync_root_files root-vs-nested download contract with disabled negative control",
+                sync_list=[],
+                execution_mode="root_files_contract",
             ),
         ]
