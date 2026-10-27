@@ -40,6 +40,9 @@ class SyncListScenario:
     forbidden_prefixes: list[str] = field(default_factory=list)
     required_processed: list[str] = field(default_factory=list)
     required_skipped: list[str] = field(default_factory=list)
+    # Exact-path assertions: descendant rules must never reject an ancestor.
+    required_non_skipped_exact: list[str] = field(default_factory=list)
+    forbidden_skipped_exact: list[str] = field(default_factory=list)
 
     # Execution mode
     execution_mode: str = "single"
@@ -802,6 +805,30 @@ class TestCase0002SyncListValidation(E2ETestCase):
             if not matches:
                 diffs.append(
                     f"Expected allowed processing was not observed for: {required}"
+                )
+
+        # Unlike required_processed, these checks do not accept events for
+        # descendants. A parent may be incorrectly skipped and subsequently
+        # reconstructed for included children, masking the filtering defect.
+        for required in scenario.required_non_skipped_exact:
+            matches = [
+                event for event in events
+                if event.normalised_path == required and event.event_type != "skip"
+            ]
+            if not matches:
+                diffs.append(
+                    f"Expected ancestor inclusion was not observed for: {required}"
+                )
+
+        for forbidden in scenario.forbidden_skipped_exact:
+            matches = [
+                event for event in events
+                if event.normalised_path == forbidden and event.event_type == "skip"
+            ]
+            for event in matches:
+                diffs.append(
+                    f"Ancestor incorrectly excluded by descendant sync_list rule: "
+                    f"{forbidden} (line: {event.line})"
                 )
 
         if scenario.execution_mode != "cleanup_regression":
@@ -2343,6 +2370,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
                 required_processed=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt"],
                 required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_non_skipped_exact=[FIXTURE_ROOT_NAME],
+                forbidden_skipped_exact=[FIXTURE_ROOT_NAME],
             ),
             SyncListScenario(
                 scenario_id="SL-0041",
@@ -2355,6 +2384,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
                 required_processed=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt"],
                 required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_non_skipped_exact=[FIXTURE_ROOT_NAME],
+                forbidden_skipped_exact=[FIXTURE_ROOT_NAME],
             ),
             SyncListScenario(
                 scenario_id="SL-0042",
@@ -2370,6 +2401,8 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
                 ],
                 required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_non_skipped_exact=[FIXTURE_ROOT_NAME],
+                forbidden_skipped_exact=[FIXTURE_ROOT_NAME],
             ),
             SyncListScenario(
                 scenario_id="SL-0043",
@@ -2385,5 +2418,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
                 ],
                 required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_non_skipped_exact=[FIXTURE_ROOT_NAME],
+                forbidden_skipped_exact=[FIXTURE_ROOT_NAME],
             ),
         ]
