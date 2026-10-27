@@ -11649,6 +11649,7 @@ class SyncEngine {
 		addLogEntry("Expected: name='" ~ baseName(localPath) ~ "', parentId='" ~ parentItem.id ~ "', driveId='" ~ parentItem.driveId ~ "'", ["error"]);
 		addLogEntry("Returned: name='" ~ returnedName ~ "', parentId='" ~ returnedParentId ~ "', driveId='" ~ returnedDriveId ~ "'", ["error"]);
 		addLogEntry("The upload transferred data, but the API created an unexpected remote item. No database association will be saved; --resync cannot correct this API defect.", ["error"]);
+		addLogEntry("Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/1934 for further details.", ["error"]);
 		return false;
 	}
 
