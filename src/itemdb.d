@@ -368,10 +368,23 @@ final class ItemDatabase {
 			INSERT OR REPLACE INTO item (driveId, id, name, remoteName, type, eTag, cTag, mtime, parentId, quickXorHash, sha256Hash, remoteDriveId, remoteParentId, remoteId, remoteType, syncStatus, size, relocDriveId, relocParentId)
 			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
 		";
+		// Only update the record when at least one column value differs from what is already stored.
+		// https://github.com/abraunegg/onedrive/issues/3937
+		//
+		// Generated /delta responses (Shared Folders, --single-directory, National Cloud Deployments and
+		// --download-only --cleanup-local-files) upsert every existing item on every pass, even when nothing
+		// has changed online. Without this guard, each of those full-record updates still writes the table row and
+		// maintains the secondary indexes holding that record (name_idx, selectByPath_idx, item_children_idx
+		// and remote_idx), which results in a large volume of database and WAL writes on every pass.
+		//
+		// 'IS' is used rather than '=' so that NULL values compare as equal. When every column already
+		// matches, the statement affects no rows and leaves the database pages untouched. The resulting
+		// database state is identical either way, as the skipped update would have written the same values.
 		updateItemStmt = "
 			UPDATE item
 			SET name = ?3, remoteName = ?4, type = ?5, eTag = ?6, cTag = ?7, mtime = ?8, parentId = ?9, quickXorHash = ?10, sha256Hash = ?11, remoteDriveId = ?12, remoteParentId = ?13, remoteId = ?14, remoteType = ?15, syncStatus = ?16, size = ?17, relocDriveId = ?18, relocParentId = ?19
 			WHERE driveId = ?1 AND id = ?2
+			AND NOT (name IS ?3 AND remoteName IS ?4 AND type IS ?5 AND eTag IS ?6 AND cTag IS ?7 AND mtime IS ?8 AND parentId IS ?9 AND quickXorHash IS ?10 AND sha256Hash IS ?11 AND remoteDriveId IS ?12 AND remoteParentId IS ?13 AND remoteId IS ?14 AND remoteType IS ?15 AND syncStatus IS ?16 AND size IS ?17 AND relocDriveId IS ?18 AND relocParentId IS ?19)
 		";
 		deleteOrphanItemStmt = "
 			DELETE FROM item
@@ -1358,7 +1371,34 @@ final class ItemDatabase {
 			}
 		}
 	}
-	
+
+	// The counterpart to downgradeSyncStatusFlag()
+	// https://github.com/abraunegg/onedrive/issues/3937
+	//
+	// When an existing item is seen online during a generated /delta response, flag it as in-sync again.
+	// Only the 'syncStatus' column is written, so the indexed columns of the record are left untouched.
+	// Updating the full record here would also maintain every secondary index holding that record, even
+	// though only the presence flag has changed.
+	void upgradeSyncStatusFlag(const(char)[] driveId, const(char)[] id) {
+		synchronized(databaseLock) {
+			assert(driveId);
+
+			auto stmt = db.prepare("UPDATE item SET syncStatus = 'Y' WHERE driveId = ?1 AND id = ?2");
+			scope(exit) {
+				stmt.finalise(); // Ensure that the prepared statement is finalised after execution.
+			}
+
+			try {
+				stmt.bind(1, driveId);
+				stmt.bind(2, id);
+				stmt.exec();
+			} catch (SqliteException exception) {
+				// Handle the error appropriately
+				detailSQLErrorMessage(exception);
+			}
+		}
+	}
+
 	// We have 4 different operational modes where 'item.syncStatus' is used to flag if an item is synced or not:
 	// - National Cloud Deployments do not support /delta as a query
 	// - When using --single-directory
