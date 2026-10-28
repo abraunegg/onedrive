@@ -2729,7 +2729,8 @@ class SyncEngine {
 					if (verboseLogging) {addLogEntry("Ignoring online deletion for path protected by .nosync: " ~ protectedLocalPath, ["verbose"]);}
 					if (generatedSimulatedDeltaResponse && (existingDatabaseItem.syncStatus != "Y")) {
 						existingDatabaseItem.syncStatus = "Y";
-						itemDB.upsert(existingDatabaseItem);
+						// Only the presence flag changes here, so only write the 'syncStatus' column
+						itemDB.upgradeSyncStatusFlag(existingDatabaseItem.driveId, existingDatabaseItem.id);
 					}
 				// In fast monitor passes defer deletes from raw /delta tombstones.
 				} else if (shouldDeferDeletedItemsFromRawDelta()) {
@@ -3369,7 +3370,8 @@ class SyncEngine {
 				// so do not allow it to remain marked as absent.
 				if (generatedSimulatedDeltaResponse && existingDBEntry && (existingDatabaseItem.syncStatus != "Y")) {
 					existingDatabaseItem.syncStatus = "Y";
-					itemDB.upsert(existingDatabaseItem);
+					// Only the presence flag changes here, so only write the 'syncStatus' column
+					itemDB.upgradeSyncStatusFlag(existingDatabaseItem.driveId, existingDatabaseItem.id);
 				}
 
 				// Preserve the boundary across JSON descendants whose newly-seen parent is
@@ -3395,9 +3397,17 @@ class SyncEngine {
 				// Generated current-state responses use syncStatus as their existing
 				// mark-and-sweep presence flag. Native Full Scan True Up tracks presence
 				// separately in memory and does not write syncStatus for bookkeeping.
+				//
+				// https://github.com/abraunegg/onedrive/issues/3937
+				// Only the presence flag changes here, so only write the 'syncStatus' column, and only when
+				// it is not already set. Updating the full record would also maintain every secondary index
+				// holding it on every pass, even when nothing has changed online. The full-record write only
+				// ever wrote back the values just read from the database, so no other column is affected.
 				if (generatedSimulatedDeltaResponse && existingDBEntry) {
+					if (existingDatabaseItem.syncStatus != "Y") {
+						itemDB.upgradeSyncStatusFlag(existingDatabaseItem.driveId, existingDatabaseItem.id);
+					}
 					existingDatabaseItem.syncStatus = "Y";
-					itemDB.upsert(existingDatabaseItem);
 				}
 
 				// Take the JSON item and create a consumable object for eventual database insertion
