@@ -1523,6 +1523,17 @@ final class Monitor {
 							// paths before recording or consuming the move.
 							if (event.mask & IN_ISDIR) {
 								rebaseWatchTree(sourcePath, path);
+
+								// Issue #3941: https://github.com/abraunegg/onedrive/issues/3941
+								// If a directory is created and then renamed before its IN_CREATE event is processed (for example a file manager
+								// creating 'Untitled Folder' that the user names straight away), addRecursive() for the original name finds that it
+								// no longer exists, and rebaseWatchTree() above has no watch to rebase. The renamed directory would then remain
+								// unwatched until the application restarts: items moved into it produce only an IN_MOVED_FROM event, which is
+								// treated as a deletion, and items created in it are not seen until the next full scan. Add the missing watch here,
+								// as the first point where the new name is known. addRecursive() applies the normal client side filtering checks.
+								if (!isWatchRegistered(path)) {
+									addRecursive(path);
+								}
 							}
 
 							cookieToPath.remove(event.cookie);
