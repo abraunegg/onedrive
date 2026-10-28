@@ -266,6 +266,13 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         blocked_remote_manifest = build_manifest(verify_root)
         write_manifest(blocked_verify_manifest_file, blocked_remote_manifest)
 
+        # The final --force verification resets verify_root. Capture the independently
+        # downloaded blocked state now, before that reset removes the target file.
+        blocked_probe_path = verify_root / remote_deleted_probe_file
+        blocked_keep_path = verify_root / remote_keep_file
+        blocked_probe_bytes = blocked_probe_path.read_bytes() if blocked_probe_path.is_file() else None
+        blocked_keep_bytes = blocked_keep_path.read_bytes() if blocked_keep_path.is_file() else None
+
         delete_dir_recreated_before_force = delete_dir_local.exists()
         if delete_dir_recreated_before_force:
             if delete_dir_local.is_dir():
@@ -462,13 +469,9 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
-        blocked_probe_path = verify_root / remote_deleted_probe_file
-        blocked_keep_path = verify_root / remote_keep_file
-        if (not blocked_probe_path.is_file()
-                or blocked_probe_path.read_bytes() != f"tc0024 dir={delete_dir_name} file=0\n".encode("utf-8")):
+        if blocked_probe_bytes != f"tc0024 dir={delete_dir_name} file=0\n".encode("utf-8"):
             return self.fail_result(self.case_id, self.name, "Blocked delete did not preserve original remote target bytes", artifacts, details)
-        if (not blocked_keep_path.is_file()
-                or blocked_keep_path.read_bytes() != f"tc0024 dir={keep_dir_name} file=0\n".encode("utf-8")):
+        if blocked_keep_bytes != f"tc0024 dir={keep_dir_name} file=0\n".encode("utf-8"):
             return self.fail_result(self.case_id, self.name, "Blocked delete did not preserve remote sibling bytes", artifacts, details)
         if remote_delete_dir not in blocked_remote_manifest:
             return self.fail_result(
