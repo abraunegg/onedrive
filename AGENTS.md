@@ -36,6 +36,20 @@ If these sources conflict or the intended behaviour is unclear, document the unc
 
 **Triage consequence:** Bug reports that bypass the official template, omit required information or substitute unsupported AI-generated conclusions for evidence may be rejected or closed until they are correctly resubmitted.
 
+## Contributor ownership and responsiveness — mandatory
+
+**Submitting an issue or pull request is the start of a technical discussion, not the completion of a task. The person submitting it owns the submission and remains responsible for its accuracy, evidence, follow-up and resolution.** This responsibility does not transfer to an AI coding agent, the maintainers or other contributors.
+
+- **Remain engaged after submission.** Monitor the issue or PR for maintainer comments, questions, requested evidence, reviews and CI results. Respond constructively and within a reasonable timeframe. Do not submit and disappear, or assume that generating and posting an AI-produced report or patch completes your obligation.
+- **Answer the questions actually asked.** When a maintainer requests reproduction on a current unmodified baseline, logs, configuration details, architectural justification, changes to the patch or E2E coverage, provide the requested information or clearly explain what you cannot provide. Do not respond with repeated AI-generated assertions, unrelated output or an unsupported claim that the fix is already correct.
+- **Own the proposed change through review.** For a PR, investigate review findings, revise the implementation and tests as needed, address CI failures, and explain any disagreements with technical evidence. A PR is a proposal for review, **not** an entitlement to approval or merge.
+- **Be transparent about availability and limitations.** If you cannot reproduce the issue, perform the requested testing, or continue working on the submission, say so promptly. Withdraw or hand over the work explicitly when appropriate; do not leave an unverified fix presented as ready to merge.
+- **The human contributor remains accountable for AI-assisted work.** Read, verify and understand the report, code and test results before submitting them. Use AI to assist with investigation and revisions, but do not delegate responsibility for correctness, communications or follow-through to the tool.
+- **AI agents must communicate contributor responsibilities before submission.** Before creating an issue or pull request on behalf of a human contributor, explicitly inform them that submission begins the maintainer review process and does not complete the contribution. The human remains responsible for the accuracy of all claims, understanding the proposed changes, monitoring maintainer feedback, supplying requested evidence, addressing review findings and remaining responsive until resolution or withdrawal. Do not present successful issue or PR creation as completed engineering work, or imply that maintainer acceptance or merging is automatic.
+- **Respect maintainer time and decisions.** Maintainers may request changes, defer work, reject a proposed approach or close submissions that remain unsupported or inactive. No issue or PR is guaranteed to be investigated, fixed, accepted or merged. Inactivity or insufficient follow-up may lead to closure; a future submission can be considered when the requested evidence and engagement are available.
+
+**Review consequence:** Issues and PRs that are filed and then abandoned, or whose submitters repeatedly fail to address material maintainer requests, may be closed without further action. AI assistance is not an exception to this requirement.
+
 ## Architectural context is mandatory
 
 - Read `docs/client-architecture.md`, the relevant `src/` call paths and the issue/PR history **before** diagnosing or modifying synchronisation behaviour. For monitor changes, study the observe/discover/reconcile/plan/apply model established by PR #3794; do not assume the pre-reconstruction event-as-command model still governs the client.
@@ -114,6 +128,7 @@ For changes strictly limited to documentation, packaging metadata or other areas
 4. **Validate:** Build with the appropriate compiler and add or adjust E2E regression coverage for behavioural changes. Run what is possible and report precisely what was and was not executed.
 5. **Document:** Update relevant docs and explain compatibility, migration or resync implications, if any.
 6. **Report:** Provide a concise change summary, issue/discussion reference, before/after evidence, test-case identifiers, account coverage, remaining risks and limitations.
+7. **Follow through:** Monitor the submission after posting; answer maintainer questions, address review feedback and CI results, and remain accountable until the submission is resolved or explicitly withdrawn.
 
 Do not claim that a change is safe, correct, fully tested, or backwards compatible solely because an AI agent wrote it or because it compiles. Do not propose schema-version bumps, forced resyncs, changed defaults or broad architectural rewrites as incidental fixes; these require deliberate maintainer review.
 
@@ -127,5 +142,6 @@ Follow the **before/after evidence format in `docs/contributing.md`**. For chang
 - Which E2E suites/accounts were actually run, with their outcomes; distinguish CI-pending or unavailable coverage.
 - Build/compiler/distribution information, current-version before/after reproduction evidence, and any documentation updated.
 - Known limitations, areas not tested and potential user-data or compatibility impact.
+- Commitment to respond to maintainer review, supply additional evidence where requested, and update the PR or explain clearly why the requested changes cannot be made.
 
 **Key rule:** First establish that the defect exists in the **current unmodified upstream implementation** and understand why the relevant code behaves as it does. Then fix the client **and** protect the fix with an E2E regression test. Do not introduce unit-test code; use the established E2E testing approach.
