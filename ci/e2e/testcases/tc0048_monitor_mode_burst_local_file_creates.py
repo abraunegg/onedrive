@@ -117,4 +117,7 @@ class TestCase0048MonitorModeBurstLocalFileCreates(MonitorModeTestCaseBase):
                 return self.fail_result(self.case_id, self.name, f"Remote verification is missing burst-created file: {relative}", artifacts, details)
             if details[f"verify_content::{relative}"] != burst_contents[relative]:
                 return self.fail_result(self.case_id, self.name, f"Burst-created file content did not match for: {relative}", artifacts, details)
+        baseline_remote = verify_root / baseline_relative
+        if not baseline_remote.is_file() or baseline_remote.read_bytes() != b"TC0048 baseline\n":
+            return self.fail_result(self.case_id, self.name, "Burst upload lost or modified remote baseline file", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

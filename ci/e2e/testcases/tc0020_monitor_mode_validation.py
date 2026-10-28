@@ -160,4 +160,12 @@ class TestCase0020MonitorModeValidation(MonitorModeTestCaseBase):
         if f"{root_name}/monitor-added.txt" not in remote_manifest:
             return self.fail_result(self.case_id, self.name, "Monitor mode did not upload the file created while the process was running", artifacts, details)
 
+        expected_files = {
+            f"{root_name}/baseline.txt": b"baseline\n",
+            f"{root_name}/monitor-added.txt": b"added while monitor mode was running\n",
+        }
+        for relative, expected in expected_files.items():
+            path = verify_root / relative
+            if not path.is_file() or path.read_bytes() != expected:
+                return self.fail_result(self.case_id, self.name, f"Monitor remote verification content mismatch: {relative}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

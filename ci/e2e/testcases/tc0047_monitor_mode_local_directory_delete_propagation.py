@@ -192,6 +192,8 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
             return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if not keep_verify_path.is_file():
             return self.fail_result(self.case_id, self.name, f"Remote verification is missing retained anchor file: {keep_relative}", artifacts, details)
+        if keep_verify_path.read_bytes() != b"TC0047 anchor\n":
+            return self.fail_result(self.case_id, self.name, "Monitor deletion modified retained remote anchor bytes", artifacts, details)
         if delete_dir_verify_path.exists():
             return self.fail_result(self.case_id, self.name, f"Remote verification still contains deleted directory tree: {delete_dir_relative}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

@@ -78,6 +78,13 @@ class TestCase0005ForceSyncOverride(E2ETestCase):
             "--confdir",
             str(verify_confdir),
         ]
+        if result.returncode != 0:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Force sync failed with status {result.returncode}; independent verification skipped",
+                [str(path) for path in (stdout_file, stderr_file)],
+                {"result_returncode": result.returncode},
+            )
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout)
         write_text_file(verify_stderr, verify_result.stderr)
@@ -101,4 +108,7 @@ class TestCase0005ForceSyncOverride(E2ETestCase):
         if f"{blocked_dir}/allowed_via_force.txt" not in remote_manifest:
             return self.fail_result(self.case_id, self.name, f"--force-sync did not synchronise blocked path: {blocked_dir}/allowed_via_force.txt", artifacts, details)
 
+        verified_file = verify_root / f"{blocked_dir}/allowed_via_force.txt"
+        if not verified_file.is_file() or verified_file.read_bytes() != "force\n".encode("utf-8"):
+            return self.fail_result(self.case_id, self.name, f"Verified file content mismatch: {f"{blocked_dir}/allowed_via_force.txt"}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

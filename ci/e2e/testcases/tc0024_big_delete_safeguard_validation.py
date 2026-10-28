@@ -66,7 +66,7 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
         context.bootstrap_config_dir(conf_local)
         context.bootstrap_config_dir(conf_verify)
 
-        parent_dir_name = "random_1K_files"
+        parent_dir_name = f"ZZ_E2E_TC0024_{context.run_id}_{os.getpid()}"
         initial_threshold = 1000
         classify_threshold = 5
         sibling_dir_count = 10
@@ -462,6 +462,14 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 details,
             )
 
+        blocked_probe_path = verify_root / remote_deleted_probe_file
+        blocked_keep_path = verify_root / remote_keep_file
+        if (not blocked_probe_path.is_file()
+                or blocked_probe_path.read_bytes() != f"tc0024 dir={delete_dir_name} file=0\n".encode("utf-8")):
+            return self.fail_result(self.case_id, self.name, "Blocked delete did not preserve original remote target bytes", artifacts, details)
+        if (not blocked_keep_path.is_file()
+                or blocked_keep_path.read_bytes() != f"tc0024 dir={keep_dir_name} file=0\n".encode("utf-8")):
+            return self.fail_result(self.case_id, self.name, "Blocked delete did not preserve remote sibling bytes", artifacts, details)
         if remote_delete_dir not in blocked_remote_manifest:
             return self.fail_result(
                 self.case_id,
@@ -488,6 +496,11 @@ class TestCase0024BigDeleteSafeguardValidation(E2ETestCase):
                 artifacts,
                 details,
             )
+
+        retained_after_force = verify_root / remote_keep_file
+        if (not retained_after_force.is_file()
+                or retained_after_force.read_bytes() != f"tc0024 dir={keep_dir_name} file=0\n".encode("utf-8")):
+            return self.fail_result(self.case_id, self.name, "Forced delete lost or corrupted unrelated remote sibling", artifacts, details)
 
         residual_child_paths = [
             path for path in residual_deleted_paths

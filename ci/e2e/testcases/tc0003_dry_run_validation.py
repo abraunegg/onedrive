@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import hashlib
 
 from framework.base import E2ETestCase
 from framework.context import E2EContext
@@ -32,6 +33,14 @@ class TestCase0003DryRunValidation(E2ETestCase):
         write_text_file(sync_root / root_name / "Upload" / "file2.bin", "tc0003 file2\n")
         write_text_file(sync_root / root_name / "Notes" / "draft.md", "# tc0003\n")
 
+    @staticmethod
+    def _content_snapshot(root: Path) -> dict[str, str]:
+        """Capture local content, not just filenames, across a dry run."""
+        return {
+            path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(root.rglob("*")) if path.is_file()
+        }
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -51,6 +60,7 @@ class TestCase0003DryRunValidation(E2ETestCase):
         copied_refresh_token = self._bootstrap_confdir(context, seed_confdir)
         self._bootstrap_confdir(context, verify_confdir)
 
+        before_contents = self._content_snapshot(sync_root)
         before_manifest = build_manifest(sync_root)
         before_manifest_file = state_dir / "before_manifest.txt"
         after_manifest_file = state_dir / "after_manifest.txt"
@@ -79,6 +89,7 @@ class TestCase0003DryRunValidation(E2ETestCase):
         write_text_file(stdout_file, result.stdout)
         write_text_file(stderr_file, result.stderr)
 
+        after_contents = self._content_snapshot(sync_root)
         after_manifest = build_manifest(sync_root)
         write_manifest(after_manifest_file, after_manifest)
 
@@ -94,6 +105,13 @@ class TestCase0003DryRunValidation(E2ETestCase):
             "--confdir",
             str(verify_confdir),
         ]
+        if result.returncode != 0:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Dry-run failed with status {result.returncode}; independent verification skipped",
+                [str(path) for path in (stdout_file, stderr_file)],
+                {"dry_run_returncode": result.returncode},
+            )
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout)
         write_text_file(verify_stderr, verify_result.stderr)
@@ -136,6 +154,8 @@ class TestCase0003DryRunValidation(E2ETestCase):
             return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if before_manifest != after_manifest:
             return self.fail_result(self.case_id, self.name, "Local filesystem changed during --dry-run", artifacts, details)
+        if before_contents != after_contents:
+            return self.fail_result(self.case_id, self.name, "Local file content changed during --dry-run", artifacts, details)
         if any(entry == root_name or entry.startswith(root_name + "/") for entry in remote_manifest):
             return self.fail_result(self.case_id, self.name, f"Dry-run unexpectedly synchronised remote content: {root_name}", artifacts, details)
 

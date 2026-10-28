@@ -34,6 +34,13 @@ class TestCase0006DownloadOnly(E2ETestCase):
         seed_result = run_command(seed_command, cwd=context.repo_root)
         write_text_file(seed_stdout, seed_result.stdout); write_text_file(seed_stderr, seed_result.stderr)
         download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(download_root), "--confdir", str(download_conf)]
+        if seed_result.returncode != 0:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Remote seed failed with status {seed_result.returncode}",
+                [str(seed_stdout), str(seed_stderr)],
+                {"seed_returncode": seed_result.returncode, "root_name": root_name},
+            )
         download_result = run_command(download_command, cwd=context.repo_root)
         write_text_file(dl_stdout, download_result.stdout); write_text_file(dl_stderr, download_result.stderr); local_manifest = build_manifest(download_root); write_manifest(local_manifest_file, local_manifest)
         write_text_file(metadata_file, "\n".join([f"root_name={root_name}", f"seed_command={command_to_string(seed_command)}", f"seed_returncode={seed_result.returncode}", f"download_command={command_to_string(download_command)}", f"download_returncode={download_result.returncode}"]) + "\n")

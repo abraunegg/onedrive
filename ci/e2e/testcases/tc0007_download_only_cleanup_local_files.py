@@ -33,6 +33,8 @@ class TestCase0007DownloadOnlyCleanupLocalFiles(E2ETestCase):
         seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(seed_conf)]
         seed_result = run_command(seed_command, cwd=context.repo_root)
         write_text_file(seed_stdout, seed_result.stdout); write_text_file(seed_stderr, seed_result.stderr)
+        if seed_result.returncode != 0:
+            return self.fail_result(self.case_id, self.name, f"Remote seed failed with status {seed_result.returncode}", [str(seed_stdout), str(seed_stderr)], {"seed_returncode": seed_result.returncode, "root_name": root_name})
         stale = sync_root / root_name / "stale-local.txt"; write_text_file(stale, "stale\n")
         cleanup_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--cleanup-local-files", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(cleanup_conf)]
         cleanup_result = run_command(cleanup_command, cwd=context.repo_root)
@@ -44,4 +46,7 @@ class TestCase0007DownloadOnlyCleanupLocalFiles(E2ETestCase):
         if cleanup_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"cleanup_local_files processing failed with status {cleanup_result.returncode}", artifacts, details)
         if stale.exists() or f"{root_name}/stale-local.txt" in post_manifest: return self.fail_result(self.case_id, self.name, "Stale local file still exists after cleanup_local_files processing", artifacts, details)
         if f"{root_name}/keep.txt" not in post_manifest: return self.fail_result(self.case_id, self.name, "Expected remote-backed file missing after cleanup_local_files processing", artifacts, details)
+        verified_file = sync_root / f"{root_name}/keep.txt"
+        if not verified_file.is_file() or verified_file.read_bytes() != "keep\n".encode("utf-8"):
+            return self.fail_result(self.case_id, self.name, f"Verified file content mismatch: {f"{root_name}/keep.txt"}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)
