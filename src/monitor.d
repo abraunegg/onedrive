@@ -824,8 +824,8 @@ final class Monitor {
 				
 				// Issue #3940: https://github.com/abraunegg/onedrive/issues/3940
 				// A child entry can be returned by readdir() but then be removed before 'entry.isDir' performs the stat() on it.
-				// Applications that create and then immediately delete short lived probe entries (for example a Cryptomator vault unlock
-				// creating and removing 'write-access<random>' entries) trigger this race. When this occurs Phobos throws a plain Exception
+				// Applications that create and then immediately delete short lived probe entries (for example an encrypted vault
+				// application testing write access on unlock by creating and removing 'write-access<random>' entries) trigger this race. When this occurs Phobos throws a plain Exception
 				// containing 'Failed to stat file', which the Issue #1154 handling below treats as a permissions problem and forces an exit.
 				// An entry that no longer exists is not a permissions problem, and there is nothing to monitor, so skip only this entry and
 				// continue with the remaining sibling entries. This check has to be per entry, as the outer catch blocks cannot 'continue' this loop.
