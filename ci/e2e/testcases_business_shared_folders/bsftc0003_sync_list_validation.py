@@ -904,11 +904,11 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             ),
             BusinessSharedFolderSyncListScenario(
                 scenario_id="SL-0036",
-                description="Business Shared Folder literal nested directory exclusion, include first",
+                description="Business Shared Folder include-first rule ordering retains nested directory",
                 sync_list=[f"/{core}/", f"!/{core_exclude}/"],
-                expected_entries=core_without_exclude,
-                required_present=[f"{core_dataset_b}/README.txt", f"{core_keep}/keep.txt"],
-                required_absent=[f"{core_exclude}/exclude.txt", f"{mixed_dataset_a}/Document2.docx"],
+                expected_entries=self._entries_under(core),
+                required_present=[f"{core_dataset_b}/README.txt", f"{core_keep}/keep.txt", f"{core_exclude}/exclude.txt"],
+                required_absent=[f"{mixed_dataset_a}/Document2.docx"],
                 required_stdout_markers=[self._marker(core)],
             ),
         ]

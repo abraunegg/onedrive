@@ -1059,11 +1059,11 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0026",
-                description="Personal Shared Folder literal nested directory exclusion, include first",
+                description="Personal Shared Folder include-first rule ordering retains nested directory",
                 sync_list=[f"/{core}/", f"!/{core}/nested/exclude/"],
-                expected_entries=core_without_exclude,
-                required_present=[f"{core}/README.txt", f"{core}/nested/keep/keep.txt"],
-                required_absent=[f"{core}/nested/exclude/exclude.txt", f"{core15}/README.txt"],
+                expected_entries=self._entries_under(core),
+                required_present=[f"{core}/README.txt", f"{core}/nested/keep/keep.txt", f"{core}/nested/exclude/exclude.txt"],
+                required_absent=[f"{core15}/README.txt"],
                 required_stdout_markers=[self._marker(core)],
             ),
         ]

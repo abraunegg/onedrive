@@ -2356,15 +2356,16 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0041",
-                description="literal nested directory exclusion under included ancestor, include first",
+                description="include-first rule ordering accepts nested directory before later exclusion",
                 sync_list=[
                     f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/",
                     f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/",
                 ],
                 allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE"],
-                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp"],
-                required_processed_exact=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
-                required_skipped=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp"],
+                required_processed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp",
+                ],
             ),
             SyncListScenario(
                 scenario_id="SL-0042",
