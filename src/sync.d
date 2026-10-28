@@ -11461,6 +11461,11 @@ class SyncEngine {
 									throw new JsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
 								}
 
+								// Issue #3930: a path lookup can also return a misrouted DriveItem.
+								// Reject it before any database write, remote modification or local removal.
+								if (!validateNewFileUploadDestination(fileDetailsFromOneDrive, parentItem, fileToUpload))
+									throw new JsonResponseException("Microsoft Graph returned an unexpected destination for an existing-file lookup");
+
 								// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
 								// and that it matches the POSIX filename of the local item we are trying to upload as a new file
 								if (verboseLogging) {addLogEntry("The file we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);}
@@ -11629,6 +11634,30 @@ class SyncEngine {
 		}
 	}
 
+	// Issue #3930: a successful HTTP response is not proof that Graph created
+	// the requested file. Validate the returned DriveItem before DB writes or
+	// source removal. No additional API request or DB lookup is required.
+	bool validateNewFileUploadDestination(JSONValue response, Item parentItem, string localPath) {
+		if (response.type() != JSONType.object || !hasName(response) ||
+			!hasParentReferenceId(response) || !hasParentReferenceDriveId(response)) {
+			addLogEntry("ERROR: Microsoft Graph upload response missing required destination identity for: " ~ localPath, ["error"]);
+			return false;
+		}
+
+		string returnedName = response["name"].str;
+		string returnedParentId = response["parentReference"]["id"].str;
+		string returnedDriveId = response["parentReference"]["driveId"].str;
+		if (returnedName == baseName(localPath) && returnedParentId == parentItem.id &&
+			icmp(returnedDriveId, parentItem.driveId) == 0) return true;
+
+		addLogEntry("ERROR: Microsoft Graph API upload destination mismatch for: " ~ localPath, ["error"]);
+		addLogEntry("Expected: name='" ~ baseName(localPath) ~ "', parentId='" ~ parentItem.id ~ "', driveId='" ~ parentItem.driveId ~ "'", ["error"]);
+		addLogEntry("Returned: name='" ~ returnedName ~ "', parentId='" ~ returnedParentId ~ "', driveId='" ~ returnedDriveId ~ "'", ["error"]);
+		addLogEntry("The upload transferred data, but the API created an unexpected remote item. No database association will be saved; --resync cannot correct this API defect.", ["error"]);
+		addLogEntry("Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/1934 for further details.", ["error"]);
+		return false;
+	}
+
 	// Perform the actual upload to OneDrive
 	bool performNewFileUpload(Item parentItem, string fileToUpload, long thisFileSize, ref bool zeroDataTraversal) {
 		// Function Start Time
@@ -11703,7 +11732,7 @@ class SyncEngine {
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUpload(fileToUpload, parentItem.driveId, parentItem.id, baseName(fileToUpload));
 					uploadTransferEndTime = Clock.currTime();
 					uploadFailed = false;
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
+
 
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -11807,7 +11836,7 @@ class SyncEngine {
 								// exitHandlerTriggered triggered
 								if (uploadResponse.type() == JSONType.object) {
 									uploadFailed = false;
-									addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
+				
 								} else {
 									addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 									uploadFailed = true;
@@ -11844,6 +11873,15 @@ class SyncEngine {
 			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
 		}
 
+		// Verify the Graph-returned destination for every account type before any
+		// database update, metadata operation or local source deletion. A successful
+		// HTTP status is insufficient when the returned item is in another folder.
+		if (!dryRun && !uploadFailed && !zeroDataTraversal &&
+			!validateNewFileUploadDestination(uploadResponse, parentItem, fileToUpload)) {
+			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed (Graph destination mismatch)!", ["info", "notify"]);
+			return true;
+		}
+
 		// If a real upload occurred, calculate transfer metrics, perform integrity validation
 		if (!uploadFailed && !zeroDataTraversal) {
 			// Upload did not fail ...
@@ -11852,6 +11890,9 @@ class SyncEngine {
 
 			// OK as the upload did not fail, we need to save the response from OneDrive, but it has to contain the required upload fields
 			if ((uploadResponse.type() == JSONType.object) && (hasId(uploadResponse)) && (hasETag(uploadResponse))) {
+				if (!dryRun) {
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
+				}
 				// check if the path still exists locally before we try to set the file times online - as short lived files, whilst we uploaded it - it may not exist locally already
 				if (exists(fileToUpload)) {
 					// Are we in a --dry-run scenario
