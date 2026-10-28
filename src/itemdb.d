@@ -373,7 +373,7 @@ final class ItemDatabase {
 		//
 		// Generated /delta responses (Shared Folders, --single-directory, National Cloud Deployments and
 		// --download-only --cleanup-local-files) upsert every existing item on every pass, even when nothing
-		// has changed online. Without this guard, each of those upserts still updates the table row and
+		// has changed online. Without this guard, each of those full-record updates still writes the table row and
 		// maintains the secondary indexes holding that record (name_idx, selectByPath_idx, item_children_idx
 		// and remote_idx), which results in a large volume of database and WAL writes on every pass.
 		//
