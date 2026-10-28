@@ -119,6 +119,16 @@ class TestCase0020MonitorModeValidation(MonitorModeTestCaseBase):
         finally:
             self._shutdown_monitor_process(process, details)
 
+        # A remote file found by the verifier does not alone establish that the
+        # running monitor observed and processed the inotify create event.
+        if not details.get("mutation_processed", False):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name,
+                "Monitor failed to observe the post-initial-sync file creation",
+                artifacts, details,
+            )
+
         verify_command = [
             context.onedrive_bin,
             "--display-running-config",

@@ -44,4 +44,11 @@ class TestCase0006DownloadOnly(E2ETestCase):
         wanted = [root_name, f"{root_name}/remote.txt", f"{root_name}/subdir", f"{root_name}/subdir/nested.txt"]
         missing = [w for w in wanted if w not in local_manifest]
         if missing: return self.fail_result(self.case_id, self.name, "Downloaded manifest missing expected content: " + ", ".join(missing), artifacts, details)
+        for relative, expected_content in (
+            (f"{root_name}/remote.txt", "remote\n"),
+            (f"{root_name}/subdir/nested.txt", "nested\n"),
+        ):
+            actual_path = download_root / relative
+            if not actual_path.is_file() or actual_path.read_text(encoding="utf-8") != expected_content:
+                return self.fail_result(self.case_id, self.name, f"Downloaded file content mismatch: {relative}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

@@ -168,6 +168,16 @@ class TestCase0047MonitorModeLocalDirectoryDeletePropagation(MonitorModeTestCase
         finally:
             self._shutdown_monitor_process(process, details)
 
+        # A correct final remote manifest alone cannot prove that the inotify
+        # monitor handled the mutation. Require the post-mutation event itself.
+        if not details.get("mutation_processed", False):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name,
+                "Monitor mutation event was not observed; filesystem/remote state alone is insufficient",
+                artifacts, details,
+            )
+
         verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(verify_root), "--confdir", str(conf_verify)]
         context.log(f"Executing Test Case {self.case_id} verify: {command_to_string(verify_command)}")
         verify_result = self._run_verify_command(context, verify_command, verify_stdout, verify_stderr)

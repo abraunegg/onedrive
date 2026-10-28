@@ -893,4 +893,22 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 required_absent=[f"{user_root_container_logging}/log.d", f"{core_files}/data.txt", f"{mixed_dataset_a}/Document2.docx"],
                 required_stdout_markers=[self._marker(sharepoint_root), self._marker(user_root_container), self._marker(core)],
             ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0035",
+                description="Business Shared Folder literal nested directory exclusion, exclusion first",
+                sync_list=[f"!/{core_exclude}/", f"/{core}/"],
+                expected_entries=core_without_exclude,
+                required_present=[f"{core_dataset_b}/README.txt", f"{core_keep}/keep.txt"],
+                required_absent=[f"{core_exclude}/exclude.txt", f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0036",
+                description="Business Shared Folder literal nested directory exclusion, include first",
+                sync_list=[f"/{core}/", f"!/{core_exclude}/"],
+                expected_entries=core_without_exclude,
+                required_present=[f"{core_dataset_b}/README.txt", f"{core_keep}/keep.txt"],
+                required_absent=[f"{core_exclude}/exclude.txt", f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(core)],
+            ),
         ]
