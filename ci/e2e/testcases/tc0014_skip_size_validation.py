@@ -36,6 +36,13 @@ class TestCase0014SkipSizeValidation(E2ETestCase):
         result = run_command(command, cwd=context.repo_root)
         write_text_file(stdout_file, result.stdout); write_text_file(stderr_file, result.stderr)
         verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
+        if result.returncode != 0:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Skip-size filter failed with status {result.returncode}; independent verification skipped",
+                [str(path) for path in (stdout_file, stderr_file)],
+                {"result_returncode": result.returncode},
+            )
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); remote_manifest = build_manifest(verify_root); write_manifest(remote_manifest_file, remote_manifest)
         write_text_file(config_copy, (confdir / "config").read_text(encoding="utf-8"))
@@ -49,4 +56,9 @@ class TestCase0014SkipSizeValidation(E2ETestCase):
         if verify_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if f"{root_name}/small.bin" not in remote_manifest: return self.fail_result(self.case_id, self.name, "Small file missing after skip_size processing", artifacts, details)
         if f"{root_name}/large.bin" in remote_manifest: return self.fail_result(self.case_id, self.name, "Large file exceeded configured skip_size threshold but was synchronised; review display-running-config output and debug logs", artifacts, details)
+        small_verify = verify_root / root_name / "small.bin"
+        if not small_verify.is_file() or small_verify.read_bytes() != b"a" * 16384:
+            return self.fail_result(self.case_id, self.name, "Unfiltered small.bin content was corrupted", artifacts, details)
+        if (verify_root / root_name / "large.bin").exists():
+            return self.fail_result(self.case_id, self.name, "Filtered large.bin unexpectedly exists in remote verification tree", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

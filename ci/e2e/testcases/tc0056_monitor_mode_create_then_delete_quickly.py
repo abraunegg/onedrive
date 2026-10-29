@@ -195,6 +195,8 @@ class TestCase0056MonitorModeCreateThenDeleteQuickly(MonitorModeTestCaseBase):
                 artifacts,
                 details,
             )
+        if anchor_verify.read_bytes() != b"TC0056 anchor\n":
+            return self.fail_result(self.case_id, self.name, "Retained remote anchor bytes changed during rapid create/delete", artifacts, details)
         if transient_verify.exists():
             return self.fail_result(
                 self.case_id,

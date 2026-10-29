@@ -39,7 +39,9 @@ class SyncListScenario:
     forbidden_exact: list[str] = field(default_factory=list)
     forbidden_prefixes: list[str] = field(default_factory=list)
     required_processed: list[str] = field(default_factory=list)
+    required_processed_exact: list[str] = field(default_factory=list)
     required_skipped: list[str] = field(default_factory=list)
+    required_skipped_exact: list[str] = field(default_factory=list)
 
     # Execution mode
     execution_mode: str = "single"
@@ -803,6 +805,17 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 diffs.append(
                     f"Expected allowed processing was not observed for: {required}"
                 )
+
+        # Exact-path guards prevent an unrelated child event from satisfying an
+        # assertion about a specific file. Keep the older subtree assertions.
+        for required in scenario.required_processed_exact:
+            if not any(e.normalised_path.strip("/") == required.strip("/")
+                       and e.event_type != "skip" for e in events):
+                diffs.append(f"Expected exact allowed item was not processed: {required}")
+        for required in scenario.required_skipped_exact:
+            if not any(e.normalised_path.strip("/") == required.strip("/")
+                       and e.event_type == "skip" for e in events):
+                diffs.append(f"Expected exact excluded item was not skipped: {required}")
 
         if scenario.execution_mode != "cleanup_regression":
             for required in scenario.required_skipped:
@@ -2327,6 +2340,63 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard",
                 ],
+                phase2_config_overrides=['sync_root_files = "true"'],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0040",
+                description="literal nested directory exclusion under included ancestor, exclusion first",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/",
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE"],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp"],
+                required_processed_exact=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp"],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0041",
+                description="include-first rule ordering accepts nested directory before later exclusion",
+                sync_list=[
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/",
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE"],
+                required_processed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp",
+                ],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0042",
+                description="literal nested file exclusion retains included sibling files",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image0.png",
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files"],
+                forbidden_exact=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image0.png"],
+                required_processed_exact=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image0.png"],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0043",
+                description="sync_root_files does not override a literal nested directory exclusion",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/",
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE"],
+                allowed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/README.txt",
+                    f"{FIXTURE_ROOT_NAME}/loose.bin",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/zz_e2e_zz_e2e_sync_list_rulelab.bin",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/zz_e2e_zz_e2e_sync_list_rulelab_filespecific.dat",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/zz_e2e_zz_e2e_sync_list_rulelab_filespecific_core.cache",
+                ],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp"],
+                required_processed_exact=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp"],
                 phase2_config_overrides=['sync_root_files = "true"'],
             ),
         ]

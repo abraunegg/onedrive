@@ -34,6 +34,13 @@ class TestCase0006DownloadOnly(E2ETestCase):
         seed_result = run_command(seed_command, cwd=context.repo_root)
         write_text_file(seed_stdout, seed_result.stdout); write_text_file(seed_stderr, seed_result.stderr)
         download_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(download_root), "--confdir", str(download_conf)]
+        if seed_result.returncode != 0:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Remote seed failed with status {seed_result.returncode}",
+                [str(seed_stdout), str(seed_stderr)],
+                {"seed_returncode": seed_result.returncode, "root_name": root_name},
+            )
         download_result = run_command(download_command, cwd=context.repo_root)
         write_text_file(dl_stdout, download_result.stdout); write_text_file(dl_stderr, download_result.stderr); local_manifest = build_manifest(download_root); write_manifest(local_manifest_file, local_manifest)
         write_text_file(metadata_file, "\n".join([f"root_name={root_name}", f"seed_command={command_to_string(seed_command)}", f"seed_returncode={seed_result.returncode}", f"download_command={command_to_string(download_command)}", f"download_returncode={download_result.returncode}"]) + "\n")
@@ -44,4 +51,11 @@ class TestCase0006DownloadOnly(E2ETestCase):
         wanted = [root_name, f"{root_name}/remote.txt", f"{root_name}/subdir", f"{root_name}/subdir/nested.txt"]
         missing = [w for w in wanted if w not in local_manifest]
         if missing: return self.fail_result(self.case_id, self.name, "Downloaded manifest missing expected content: " + ", ".join(missing), artifacts, details)
+        for relative, expected_content in (
+            (f"{root_name}/remote.txt", "remote\n"),
+            (f"{root_name}/subdir/nested.txt", "nested\n"),
+        ):
+            actual_path = download_root / relative
+            if not actual_path.is_file() or actual_path.read_text(encoding="utf-8") != expected_content:
+                return self.fail_result(self.case_id, self.name, f"Downloaded file content mismatch: {relative}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)
