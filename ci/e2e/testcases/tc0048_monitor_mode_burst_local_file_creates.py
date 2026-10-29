@@ -89,6 +89,16 @@ class TestCase0048MonitorModeBurstLocalFileCreates(MonitorModeTestCaseBase):
         finally:
             self._shutdown_monitor_process(process, details)
 
+        # A correct final remote manifest alone cannot prove that the inotify
+        # monitor handled the mutation. Require the post-mutation event itself.
+        if not details.get("mutation_processed", False):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name,
+                "Monitor mutation event was not observed; filesystem/remote state alone is insufficient",
+                artifacts, details,
+            )
+
         verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose", "--resync", "--resync-auth", "--single-directory", root_name, "--syncdir", str(verify_root), "--confdir", str(conf_verify)]
         context.log(f"Executing Test Case {self.case_id} verify: {command_to_string(verify_command)}")
         verify_result = self._run_verify_command(context, verify_command, verify_stdout, verify_stderr)
@@ -107,4 +117,7 @@ class TestCase0048MonitorModeBurstLocalFileCreates(MonitorModeTestCaseBase):
                 return self.fail_result(self.case_id, self.name, f"Remote verification is missing burst-created file: {relative}", artifacts, details)
             if details[f"verify_content::{relative}"] != burst_contents[relative]:
                 return self.fail_result(self.case_id, self.name, f"Burst-created file content did not match for: {relative}", artifacts, details)
+        baseline_remote = verify_root / baseline_relative
+        if not baseline_remote.is_file() or baseline_remote.read_bytes() != b"TC0048 baseline\n":
+            return self.fail_result(self.case_id, self.name, "Burst upload lost or modified remote baseline file", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

@@ -156,6 +156,11 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         write_text_file(seed_stdout, seed_result.stdout)
         write_text_file(seed_stderr, seed_result.stderr)
 
+        if seed_result.returncode != 0:
+            return self.fail_result(self.case_id, self.name,
+                f"Remote seed failed with status {seed_result.returncode}; downstream mutation/verification skipped",
+                [str(path) for path in (seed_stdout, seed_stderr)],
+                {"root_name": root_name, "seed_result_returncode": seed_result.returncode})
         mutator_pull_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -174,6 +179,11 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         write_text_file(mutator_pull_stdout, mutator_pull_result.stdout)
         write_text_file(mutator_pull_stderr, mutator_pull_result.stderr)
 
+        if mutator_pull_result.returncode != 0:
+            return self.fail_result(self.case_id, self.name,
+                f"Mutation preload failed with status {mutator_pull_result.returncode}; downstream mutation/verification skipped",
+                [str(path) for path in (seed_stdout, seed_stderr, mutator_pull_stdout, mutator_pull_stderr)],
+                {"root_name": root_name, "mutator_pull_result_returncode": mutator_pull_result.returncode})
         missing_mutator_targets: list[str] = []
         for filename in deleted_filenames:
             target = mutator_root / root_name / "OldData" / filename
@@ -182,6 +192,11 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
             else:
                 missing_mutator_targets.append(filename)
 
+        if missing_mutator_targets:
+            return self.fail_result(self.case_id, self.name,
+                f"Mutation input missing expected files: {missing_mutator_targets}",
+                [str(path) for path in (seed_stdout, seed_stderr, mutator_pull_stdout, mutator_pull_stderr)],
+                {"root_name": root_name, "missing_mutator_targets": missing_mutator_targets})
         mutator_delete_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -197,6 +212,11 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         write_text_file(mutator_delete_stdout, mutator_delete_result.stdout)
         write_text_file(mutator_delete_stderr, mutator_delete_result.stderr)
 
+        if mutator_delete_result.returncode != 0:
+            return self.fail_result(self.case_id, self.name,
+                f"Remote deletion failed with status {mutator_delete_result.returncode}; downstream mutation/verification skipped",
+                [str(path) for path in (mutator_delete_stdout, mutator_delete_stderr)],
+                {"root_name": root_name, "mutator_delete_result_returncode": mutator_delete_result.returncode})
         # Rewrite the same runtime config so cleanup reuses the seed client's DB
         # and delta state when it receives the remote file deletions.
         self._write_runtime_cleanup_config(conf_runtime / "config", sync_root, recycle_bin_root)
@@ -218,6 +238,11 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
         write_text_file(cleanup_stdout, cleanup_result.stdout)
         write_text_file(cleanup_stderr, cleanup_result.stderr)
 
+        if cleanup_result.returncode != 0:
+            return self.fail_result(self.case_id, self.name,
+                f"Recycle Bin cleanup failed with status {cleanup_result.returncode}; downstream mutation/verification skipped",
+                [str(path) for path in (cleanup_stdout, cleanup_stderr)],
+                {"root_name": root_name, "cleanup_result_returncode": cleanup_result.returncode})
         verify_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -464,4 +489,23 @@ class TestCase0018RecycleBinValidation(E2ETestCase):
                 details,
             )
 
+        # The test seeds deterministic content, so verify bytes for all preserved
+        # and recycled entries. Manifest membership by itself permits empty or
+        # corrupted files to be reported as a successful Recycle Bin operation.
+        for filename in seeded_recycle_filenames:
+            expected_seed = f"pre-existing recycle bin payload for {filename}\n".encode("utf-8")
+            seeded_path = recycle_bin_root / "files" / filename
+            if not seeded_path.is_file() or seeded_path.read_bytes() != expected_seed:
+                return self.fail_result(self.case_id, self.name, f"Pre-existing Recycle Bin payload changed: {filename}", artifacts, details)
+        expected_recycled_contents = dict(zip(expected_recycled_filenames, deleted_filenames))
+        for recycled_name, original_name in expected_recycled_contents.items():
+            recycled_path = recycle_bin_root / "files" / recycled_name
+            expected_data = f"delete {original_name}\n".encode("utf-8")
+            if not recycled_path.is_file() or recycled_path.read_bytes() != expected_data:
+                return self.fail_result(self.case_id, self.name, f"Recycled file content mismatch: {recycled_name}", artifacts, details)
+        for relative, expected in (("Keep/keep.txt", b"keep\n"), ("OldData/retain.txt", b"retain\n")):
+            for location, root in (("local", sync_root), ("remote", verify_root)):
+                path = root / root_name / relative
+                if not path.is_file() or path.read_bytes() != expected:
+                    return self.fail_result(self.case_id, self.name, f"{location} retained file content mismatch: {relative}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

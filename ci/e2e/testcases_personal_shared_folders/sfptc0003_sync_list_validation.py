@@ -254,7 +254,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 context.log(f"Scenario {scenario.scenario_id} FAILED: {failure_message}")
             else:
                 context.log(f"Scenario {scenario.scenario_id} PASSED")
-            if scenario.scenario_id in {'SL-0025', 'SL-0026', 'SL-0027', 'SL-0028'}:
+            if scenario.scenario_id in {'SL-0025', 'SL-0026', 'SL-0027', 'SL-0028', 'SL-0029'}:
                 context.log(
                     f"Scenario {scenario.scenario_id} sync_list rules: "
                     + repr(scenario.sync_list)
@@ -1115,5 +1115,14 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 required_present=[f"{minimal}/", f"{minimal}/single.txt"],
                 required_absent=[f"{minimal}_15/single.txt"],
                 required_stdout_markers=[self._marker(minimal)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0029",
+                description="Personal Shared Folder include-first rule ordering retains nested directory",
+                sync_list=[f"/{core}/", f"!/{core}/nested/exclude/"],
+                expected_entries=self._entries_under(core),
+                required_present=[f"{core}/README.txt", f"{core}/nested/keep/keep.txt", f"{core}/nested/exclude/exclude.txt"],
+                required_absent=[f"{core15}/README.txt"],
+                required_stdout_markers=[self._marker(core)],
             ),
         ]

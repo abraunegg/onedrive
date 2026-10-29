@@ -34,6 +34,13 @@ class TestCase0013SkipDotfilesValidation(E2ETestCase):
         result = run_command(command, cwd=context.repo_root)
         write_text_file(stdout_file, result.stdout); write_text_file(stderr_file, result.stderr)
         verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
+        if result.returncode != 0:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Dotfile filter failed with status {result.returncode}; independent verification skipped",
+                [str(path) for path in (stdout_file, stderr_file)],
+                {"result_returncode": result.returncode},
+            )
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); remote_manifest = build_manifest(verify_root); write_manifest(remote_manifest_file, remote_manifest)
         write_text_file(metadata_file, f"root_name={root_name}\nreturncode={result.returncode}\nverify_returncode={verify_result.returncode}\n")
@@ -44,4 +51,9 @@ class TestCase0013SkipDotfilesValidation(E2ETestCase):
         if f"{root_name}/visible.txt" not in remote_manifest: return self.fail_result(self.case_id, self.name, "Visible file missing after skip_dotfiles processing", artifacts, details)
         for unwanted in [f"{root_name}/.hidden.txt", f"{root_name}/.dotdir", f"{root_name}/.dotdir/inside.txt"]:
             if unwanted in remote_manifest: return self.fail_result(self.case_id, self.name, f"Dotfile content was unexpectedly synchronised: {unwanted}", artifacts, details)
+        visible_file = verify_root / root_name / "visible.txt"
+        if not visible_file.is_file() or visible_file.read_bytes() != b"visible\n":
+            return self.fail_result(self.case_id, self.name, "Visible file content mismatch", artifacts, details)
+        if (verify_root / root_name / ".hidden.txt").exists() or (verify_root / root_name / ".dotdir").exists():
+            return self.fail_result(self.case_id, self.name, "Excluded dotfile or directory unexpectedly downloaded", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

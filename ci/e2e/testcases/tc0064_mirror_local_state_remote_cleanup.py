@@ -120,6 +120,14 @@ class TestCase0064MirrorLocalStateRemoteCleanup(E2ETestCase):
             stderr_file=phase_files["seed"][1],
         )
 
+        if seed_result.returncode != 0:
+            early_details = {"root_name": root_name, "seed_returncode": seed_result.returncode}
+            write_text_file(metadata_file, "\n".join(f"{k}={v!r}" for k, v in early_details.items()) + "\n")
+            return self.fail_result(self.case_id, self.name,
+                f"seed phase failed with status {seed_result.returncode}; downstream operations skipped",
+                [str(path) for label in ['seed'] for path in phase_files[label]] + [str(metadata_file)],
+                early_details)
+
         local_delete_log: list[str] = []
         for relative_path in [
             f"{root_name}/remote-only-root-1.txt",
@@ -168,6 +176,14 @@ class TestCase0064MirrorLocalStateRemoteCleanup(E2ETestCase):
             stdout_file=phase_files["mirror_cleanup"][0],
             stderr_file=phase_files["mirror_cleanup"][1],
         )
+
+        if mirror_cleanup_result.returncode != 0:
+            early_details = {"root_name": root_name, "mirror_cleanup_returncode": mirror_cleanup_result.returncode}
+            write_text_file(metadata_file, "\n".join(f"{k}={v!r}" for k, v in early_details.items()) + "\n")
+            return self.fail_result(self.case_id, self.name,
+                f"mirror cleanup phase failed with status {mirror_cleanup_result.returncode}; downstream operations skipped",
+                [str(path) for label in ['seed', 'mirror_cleanup'] for path in phase_files[label]] + [str(metadata_file)],
+                early_details)
 
         # Verification also avoids --download-only.  A clean normal sync against
         # an empty verification sync_dir should download only the surviving
@@ -334,6 +350,17 @@ class TestCase0064MirrorLocalStateRemoteCleanup(E2ETestCase):
                 artifacts,
                 details,
             )
+        for relative_path, expected_content in retained_files.items():
+            for label, root in (("local", sync_root), ("remote", verify_root)):
+                retained_path = root / relative_path
+                if not retained_path.is_file() or retained_path.read_bytes() != expected_content.encode("utf-8"):
+                    return self.fail_result(
+                        self.case_id, self.name,
+                        f"{label} retained file contents incorrect after mirror cleanup: {relative_path}",
+                        artifacts, details,
+                    )
+        if (verify_root / removed_directory).exists():
+            return self.fail_result(self.case_id, self.name, "Mirror cleanup left remote-only directory behind", artifacts, details)
         if not observed_deletion_markers:
             return self.fail_result(
                 self.case_id,
