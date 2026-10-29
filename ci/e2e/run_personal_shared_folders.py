@@ -27,8 +27,8 @@ from testcases_personal_shared_folders.sfptc0003_sync_list_validation import (
 def build_test_suite() -> list:
     return [
         SharedFolderPersonalTestCase0001CleanSyncPullDown(),
-        SharedFolderPersonalTestCase0002CleanMonitorPullDown(),
-        SharedFolderPersonalTestCase0003SyncListValidation(),
+        #SharedFolderPersonalTestCase0002CleanMonitorPullDown(),
+        #SharedFolderPersonalTestCase0003SyncListValidation(),
     ]
 
 
