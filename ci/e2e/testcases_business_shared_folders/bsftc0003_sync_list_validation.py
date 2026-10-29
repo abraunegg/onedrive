@@ -221,6 +221,26 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 context.log(f"Scenario {scenario.scenario_id} FAILED: {failure_message}")
             else:
                 context.log(f"Scenario {scenario.scenario_id} PASSED")
+            if scenario.scenario_id in {'SL-0035', 'SL-0036', 'SL-0037', 'SL-0038', 'SL-0039'}:
+                context.log(
+                    f"Scenario {scenario.scenario_id} sync_list rules: "
+                    + repr(scenario.sync_list)
+                )
+                evidence = [
+                    line for line in result.stdout.splitlines()
+                    if "Shared Folder Link" in line
+                    or "Syncing this OneDrive" in line
+                    or "excluded by sync_list" in line
+                    or "included by sync_list" in line
+                ]
+                for line in evidence[:20]:
+                    context.log(f"Scenario {scenario.scenario_id} stdout: {line}")
+                context.log(
+                    f"Scenario {scenario.scenario_id} diagnostics: "
+                    f"{diff_file}, {metadata_file}, {stdout_file}, "
+                    f"{expected_manifest_file}, {actual_manifest_file}"
+                )
+
 
         details = {
             "scenario_count": len(scenarios),
@@ -895,6 +915,45 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             ),
             BusinessSharedFolderSyncListScenario(
                 scenario_id="SL-0035",
+                description="issue 3931 literal nested directory exclusion retains included Business shared folder",
+                sync_list=[f"!/{core_exclude}/", f"/{core}/"],
+                expected_entries=core_without_exclude,
+                required_present=[f"{core_keep}/keep.txt", f"{core_files}/data.txt"],
+                required_absent=[f"{core_exclude}/exclude.txt", f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0036",
+                description="issue 3931 literal descendant exclusion must retain root Business shared-folder shortcut",
+                sync_list=[
+                    f"!/{sharepoint_root}/Data Monitoring/Updates/",
+                    f"/{sharepoint_root}/",
+                ],
+                expected_entries=self._exclude_entries(
+                    self._entries_under(sharepoint_root),
+                    f"{sharepoint_root}/Data Monitoring/Updates",
+                ),
+                required_present=[f"{sharepoint_root}/", f"{sharepoint_root}/Data Monitoring/"],
+                required_absent=[sharepoint_root_deep_file, f"{core_dataset_b}/README.txt"],
+                required_stdout_markers=[self._marker(sharepoint_root)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0037",
+                description="issue 3931 wildcard workaround retains root Business shared-folder shortcut",
+                sync_list=[
+                    f"!/{sharepoint_root}/Data Monitoring/Updates/*",
+                    f"/{sharepoint_root}/",
+                ],
+                expected_entries=self._exclude_entries(
+                    self._entries_under(sharepoint_root),
+                    f"{sharepoint_root}/Data Monitoring/Updates",
+                ),
+                required_present=[f"{sharepoint_root}/", f"{sharepoint_root}/Data Monitoring/"],
+                required_absent=[sharepoint_root_deep_file, f"{core_dataset_b}/README.txt"],
+                required_stdout_markers=[self._marker(sharepoint_root)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0038",
                 description="Business Shared Folder literal nested directory exclusion, exclusion first",
                 sync_list=[f"!/{core_exclude}/", f"/{core}/"],
                 expected_entries=core_without_exclude,
@@ -903,7 +962,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 required_stdout_markers=[self._marker(core)],
             ),
             BusinessSharedFolderSyncListScenario(
-                scenario_id="SL-0036",
+                scenario_id="SL-0039",
                 description="Business Shared Folder include-first rule ordering retains nested directory",
                 sync_list=[f"/{core}/", f"!/{core_exclude}/"],
                 expected_entries=self._entries_under(core),
