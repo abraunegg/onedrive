@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import os
 import re
 import shutil
 import subprocess
 import time
+import zipfile
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -2256,7 +2259,7 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
 
     @staticmethod
     def _stage2_digests(root: Path) -> dict[str, str]:
-        """Independent byte-level truth for TXT/XLSX/PDF/PNG/JPG fixtures."""
+        """Byte-level file digests, also retained as XLSX package diagnostics."""
         return {
             item.relative_to(root).as_posix(): hashlib.sha256(item.read_bytes()).hexdigest()
             for item in sorted(root.rglob("*")) if item.is_file()
@@ -2265,15 +2268,87 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
     def _stage2_assert_digests(
         self, root: Path, expected: dict[str, str], label: str,
     ) -> list[str]:
+        """Require exact bytes for TXT/PDF/PNG/JPG, semantic equality for XLSX.
+
+        Microsoft may repack an Office document after upload (notably on
+        SharePoint). The XLSX package SHA-256 is therefore diagnostic rather
+        than the document-content oracle. Every XLSX is instead checked via
+        validate_xlsx_pair() and the exact worksheet cell-value fingerprint.
+        An XLSX missing from either side remains an error.
+        """
         actual = self._stage2_digests(root)
         errors: list[str] = []
         for relative, expected_digest in expected.items():
             if relative not in actual:
                 errors.append(f"{label}: missing file for SHA-256 validation: {relative}")
-            elif actual[relative] != expected_digest:
+            elif not relative.lower().endswith(".xlsx") and actual[relative] != expected_digest:
                 errors.append(f"{label}: SHA-256 payload mismatch: {relative}")
         for relative in sorted(set(actual) - set(expected)):
             errors.append(f"{label}: unexpected file: {relative}")
+        return errors
+
+    @staticmethod
+    def _stage2_xlsx_cell_fingerprint(path: Path) -> str:
+        """Hash actual workbook cell values, not mutable XLSX ZIP metadata.
+
+        Handles both inline strings and shared strings, including Office
+        service repackaging. Cell coordinates and values remain part of the
+        fingerprint; a revision marker alone cannot satisfy this check.
+        """
+        ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+        digest = hashlib.sha256()
+        with zipfile.ZipFile(path) as workbook:
+            shared_strings: list[str] = []
+            if "xl/sharedStrings.xml" in workbook.namelist():
+                strings = ET.fromstring(workbook.read("xl/sharedStrings.xml"))
+                for entry in strings.findall(f"{ns}si"):
+                    shared_strings.append("".join((node.text or "") for node in entry.iter(f"{ns}t")))
+            sheet_bytes = workbook.read("xl/worksheets/sheet1.xml")
+            for _, element in ET.iterparse(io.BytesIO(sheet_bytes), events=("end",)):
+                if element.tag != f"{ns}c":
+                    continue
+                kind = element.attrib.get("t", "")
+                value_node = element.find(f"{ns}v")
+                if kind == "inlineStr":
+                    inline = element.find(f"{ns}is")
+                    value = "" if inline is None else "".join(
+                        (node.text or "") for node in inline.iter(f"{ns}t")
+                    )
+                elif kind == "s":
+                    value = shared_strings[int(value_node.text)]
+                else:
+                    value = "" if value_node is None else (value_node.text or "")
+                digest.update(element.attrib.get("r", "").encode("utf-8"))
+                digest.update(b"\x00")
+                digest.update(value.encode("utf-8"))
+                digest.update(b"\x00")
+                element.clear()
+        return digest.hexdigest()
+
+    def _stage2_assert_xlsx_payload(
+        self,
+        reference: Path,
+        observed: Path,
+        label: str,
+    ) -> list[str]:
+        """Enforce full small/large workbook content fidelity through Graph."""
+        errors: list[str] = []
+        for side, path in (("reference", reference), ("observed", observed)):
+            invalid = validate_xlsx_pair(path, REVISION_0)
+            if invalid:
+                errors.append(f"{label}: {side} XLSX validation failed: {invalid}")
+        if errors:
+            return errors
+        for side, ref_path, obs_path in (
+            ("small", reference, observed),
+            ("large", reference.with_name(f"{reference.stem}-large.xlsx"),
+             observed.with_name(f"{observed.stem}-large.xlsx")),
+        ):
+            try:
+                if self._stage2_xlsx_cell_fingerprint(ref_path) != self._stage2_xlsx_cell_fingerprint(obs_path):
+                    errors.append(f"{label}: {side} XLSX worksheet cell payload differs")
+            except (OSError, ValueError, IndexError, KeyError, zipfile.BadZipFile, ET.ParseError) as exc:
+                errors.append(f"{label}: {side} XLSX payload inspection failed: {exc}")
         return errors
 
     @staticmethod
@@ -2413,8 +2488,10 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 self._simple_config_text(
                     observer_root, label=f"{scenario.scenario_id} authoritative observer", preserve_data=True,
                 ) + (
-                    'monitor_interval = "90"\n'
+                    # Documented 300-second interval; the bounded one-loop
+                    # developer override terminates after the startup pass.
                     'monitor_max_loop = "1"\n'
+                    'monitor_interval = "300"\n'
                     'monitor_fullscan_frequency = "0"\n'
                     'monitor_authoritative_sync = "monitor_and_signal"\n'
                     'disable_websocket_support = "true"\n'
@@ -2460,6 +2537,13 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         seed_bytes = {key: value.encode("utf-8") for key, value in seed_files.items()}
         initial_manifest = build_typed_manifest(mutator_root / root_name)
         initial_digests = self._stage2_digests(mutator_root / root_name)
+        has_media = not (known_delete or scope_boundary)
+        xlsx_source = f"{source}/top-level.xlsx"
+        xlsx_destination = f"{destination}/top-level.xlsx"
+        if has_media:
+            original_xlsx_error = validate_xlsx_pair(mutator_root / xlsx_source, REVISION_0)
+            if original_xlsx_error:
+                failures.append(f"mutator seeded XLSX fixture invalid: {original_xlsx_error}")
         write_manifest(initial_manifest_file, initial_manifest)
         if not initial_manifest or remote_delete_target not in seed_bytes:
             failures.append("fixture seed did not establish its expected paths")
@@ -2492,6 +2576,19 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         failures.extend(before_errors)
         failures.extend(self._stage2_assert_bytes(observer_root, seed_bytes, "observer preload"))
         failures.extend(self._stage2_assert_digests(observer_root / root_name, initial_digests, "observer preload full fixture"))
+        if has_media:
+            # SharePoint may repack XLSX ZIP metadata on upload. Validate the
+            # genuine worksheets (every cell, both size classes) against the
+            # original fixture, rather than assuming a byte-identical package.
+            failures.extend(self._stage2_assert_xlsx_payload(
+                mutator_root / xlsx_source, observer_root / xlsx_source,
+                "observer preload",
+            ))
+            downloaded_digests = self._stage2_digests(observer_root / root_name)
+            details["preload_xlsx_package_sha256_changed_from_seed"] = {
+                name: downloaded_digests.get(name) != initial_digests[name]
+                for name in sorted(initial_digests) if name.endswith(".xlsx")
+            }
         details["observer_preload_manifest"] = before_manifest
         write_manifest(initial_manifest_file, before_manifest)
         if failures:
@@ -2605,6 +2702,10 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             failures.extend(moved_errors)
             failures.extend(self._stage2_assert_bytes(observer_root, expected_remote_bytes, "observer moved bytes"))
             failures.extend(self._stage2_assert_digests(observer_root / root_name, expected_remote_digests, "observer moved full fixture"))
+            failures.extend(self._stage2_assert_xlsx_payload(
+                mutator_root / xlsx_destination, observer_root / xlsx_destination,
+                "observer existing-ID move",
+            ))
             if failures:
                 return save()
 
@@ -2699,8 +2800,20 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 failures.append("authoritative observer monitor startup pass did not complete")
             if not self._sync_list_active(observer_output, root_name) or not self._validator_mode_active(observer_output, "download_only_cleanup"):
                 failures.append("monitor pass did not prove sync_list and download-only cleanup")
-            if "Unsetting fullScanTrueUpRequired after authoritative cleanup pass" not in observer_output:
-                failures.append("monitor did not evidence an authoritative cleanup pass")
+            # The generated Graph response is authoritative here even when
+            # scheduled online full-scan true-up is disabled (frequency=0).
+            # Do not confuse fullScanTrueUpRequired bookkeeping with evidence
+            # that the cleanup-oriented generated response actually ran.
+            if not re.search(r"Flagged generatedSimulatedDeltaResponse as ['\"]true['\"]", observer_output):
+                failures.append("monitor did not evidence generated authoritative Graph response")
+            if not re.search(r"cleanupLocalFiles:\s+true", observer_output):
+                failures.append("monitor generated response did not enable cleanupLocalFiles")
+            if re.search(r"Invalid value for (?:key in config file|--monitor-interval).*monitor_interval", observer_output):
+                failures.append("monitor config rejected the configured monitor_interval")
+            if not re.search(r"Config option 'monitor_interval'\s*=\s*300\b", observer_output):
+                failures.append("monitor did not accept documented monitor_interval=300")
+            if not re.search(r"Config option 'monitor_max_loop'\s*=\s*1\b", observer_output):
+                failures.append("monitor did not accept bounded developer monitor_max_loop=1")
             if "Using native /delta for this pass; authoritative cleanup deferred" in observer_output:
                 failures.append("monitor used deferred native delta rather than the configured authoritative pass")
             if not self._contains_move(observer_output, source, destination):
@@ -2778,6 +2891,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         failures.extend(self._stage2_assert_bytes(observer_root, expected_remote_bytes, "final observer"))
         if not scope_boundary:
             failures.extend(self._stage2_assert_digests(observer_root / root_name, expected_remote_digests, "final observer full fixture"))
+            if has_media:
+                failures.extend(self._stage2_assert_xlsx_payload(
+                    mutator_root / xlsx_destination, observer_root / xlsx_destination,
+                    "final observer",
+                ))
         else:
             actual_digests = self._stage2_digests(observer_root / root_name)
             for relative, expected_digest in expected_remote_digests.items():
@@ -2824,6 +2942,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         failures.extend(remote_errors)
         failures.extend(self._stage2_assert_bytes(verify_root, expected_remote_bytes, "independent remote truth"))
         failures.extend(self._stage2_assert_digests(verify_root / root_name, expected_remote_digests, "remote truth full fixture"))
+        if has_media:
+            failures.extend(self._stage2_assert_xlsx_payload(
+                mutator_root / xlsx_destination, verify_root / xlsx_destination,
+                "independent remote truth",
+            ))
         if known_delete and (verify_root / remote_delete_target).exists():
             failures.append("independent remote truth still contains remotely deleted file")
         if ordinary_orphan or resync_orphan or monitor_nested:
