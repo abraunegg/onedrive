@@ -38,12 +38,12 @@ from testcases_business_shared_folders.bsftc0007_direct_shared_office_timestamp_
 def build_test_suite() -> list:
     return [
         BusinessSharedFolderTestCase0001CleanSyncPullDown(),
-        #BusinessSharedFolderTestCase0002CleanMonitorPullDown(),
-        #BusinessSharedFolderTestCase0003SyncListValidation(),
-        #BusinessSharedFolderTestCase0004SharedFilesPullDown(),
-        #BusinessSharedFolderTestCase0005GetSharePointDriveIdWhileMonitoring(),
-        #BusinessSharedFolderTestCase0006SharePointTimestampReplacement(),
-        #BusinessSharedFolderTestCase0007DirectSharedOfficeTimestampReplacement(),
+        BusinessSharedFolderTestCase0002CleanMonitorPullDown(),
+        BusinessSharedFolderTestCase0003SyncListValidation(),
+        BusinessSharedFolderTestCase0004SharedFilesPullDown(),
+        BusinessSharedFolderTestCase0005GetSharePointDriveIdWhileMonitoring(),
+        BusinessSharedFolderTestCase0006SharePointTimestampReplacement(),
+        BusinessSharedFolderTestCase0007DirectSharedOfficeTimestampReplacement(),
     ]
 
 
