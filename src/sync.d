@@ -445,6 +445,17 @@ class SyncEngine {
 		}
 	}
 
+	// sync_root_files applies only to files immediately beneath sync_dir.
+	// Item paths may have a leading "./" or "/" prefix.
+	private bool isLogicalSyncRootFilePath(string itemPath) {
+		if (itemPath.startsWith("./")) {
+			itemPath = itemPath[2 .. $];
+		} else if (itemPath.startsWith("/")) {
+			itemPath = itemPath[1 .. $];
+		}
+		return !itemPath.empty && !itemPath.canFind('/');
+	}
+	
 	// Publish all online-to-local filesystem effects accumulated since the
 	// previous monitor capture. Delegates are invoked outside the mutex.
 	void publishExpectedLocalEffects() {
@@ -2252,8 +2263,6 @@ class SyncEngine {
 		}
 	}
 
-
-
 	// Submit one item from a generated /children enumeration into the same bounded
 	// reconciliation path used by native /delta. The generated traversal has already
 	// applied client-side filtering, so this preserves the existing generated-response
@@ -3296,7 +3305,7 @@ class SyncEngine {
 					// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 					if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
 						// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
-						if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (rootName(newItemPath) == "") ) {
+						if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (isLogicalSyncRootFilePath(newItemPath)) ) {
 							// This is a file
 							// We are configured to sync all files in the root
 							// This is a file in the logical configured root
@@ -4387,7 +4396,6 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-
 
 	// If the JSON item IS in the database, this will be an update to an existing in-sync item
 	void applyPotentiallyChangedItem(Item existingDatabaseItem, string existingItemPath, Item changedOneDriveItem, string changedItemPath, JSONValue onedriveJSONItem) {
@@ -7322,7 +7330,7 @@ class SyncEngine {
 				if (syncListConfigured) {
 					// sync_list configured and in use
 					if (selectiveSync.isPathExcludedViaSyncList(localFilePath)) {
-						if ((isFile(localFilePath)) && (appConfig.getValueBool("sync_root_files")) && (rootName(localFilePath.strip('.').strip('/')) == "")) {
+						if ((isFile(localFilePath)) && (appConfig.getValueBool("sync_root_files")) && (isLogicalSyncRootFilePath(localFilePath))) {
 							if (debugLogging) {addLogEntry("Not skipping path due to sync_root_files inclusion: " ~ localFilePath, ["debug"]);}
 						} else {
 							if (exists(appConfig.syncListFilePath)){
@@ -7817,7 +7825,7 @@ class SyncEngine {
 				// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 				if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
-					if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (rootName(newItemPath) == "") ) {
+					if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (isLogicalSyncRootFilePath(newItemPath)) ) {
 						// This is a file
 						// We are configured to sync all files in the root
 						// This is a file in the logical root
@@ -7950,10 +7958,6 @@ class SyncEngine {
 		// return if path is excluded
 		return clientSideRuleExcludesPath;
 	}
-
-
-
-
 
 	// Ensure the path passed in, is in the correct format to use when evaluating 'sync_list' rules
 	string ensureStartsWithDotSlash(string inputPath) {
@@ -12838,7 +12842,6 @@ class SyncEngine {
 		}
 	}
 
-
 	// Mark the existing generated-response database subtree out-of-sync without
 	// retaining an account-wide Item[] snapshot. This preserves the traversal order
 	// used by getChildren(), but only materialises direct-child id/type projections
@@ -16441,8 +16444,6 @@ class SyncEngine {
 		}
 	}
 
-
-
 	// Query OneDrive for file details of a given path, returning either the 'webURL' or 'lastModifiedBy' JSON facet
 	void queryOneDriveForFileDetails(string inputFilePath, string runtimePath, string outputType) {
 		// Function Start Time
@@ -16870,7 +16871,6 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-
 
 	// Cancel a Microsoft Graph upload session recorded in a local session_upload.* file
 	void cancelUploadSessionIfPresent(string sessionFilePath) {

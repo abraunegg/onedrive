@@ -254,6 +254,26 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 context.log(f"Scenario {scenario.scenario_id} FAILED: {failure_message}")
             else:
                 context.log(f"Scenario {scenario.scenario_id} PASSED")
+            if scenario.scenario_id in {'SL-0025', 'SL-0026', 'SL-0027', 'SL-0028', 'SL-0029'}:
+                context.log(
+                    f"Scenario {scenario.scenario_id} sync_list rules: "
+                    + repr(scenario.sync_list)
+                )
+                evidence = [
+                    line for line in result.stdout.splitlines()
+                    if "Shared Folder Link" in line
+                    or "Syncing this OneDrive" in line
+                    or "excluded by sync_list" in line
+                    or "included by sync_list" in line
+                ]
+                for line in evidence[:20]:
+                    context.log(f"Scenario {scenario.scenario_id} stdout: {line}")
+                context.log(
+                    f"Scenario {scenario.scenario_id} diagnostics: "
+                    f"{diff_file}, {metadata_file}, {stdout_file}, "
+                    f"{expected_manifest_file}, {actual_manifest_file}"
+                )
+
 
         details = {
             "scenario_count": len(scenarios),
@@ -1050,15 +1070,54 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0025",
-                description="Personal Shared Folder literal nested directory exclusion, exclusion first",
-                sync_list=[f"!/{core}/nested/exclude/", f"/{core}/"],
+                description="literal nested directory exclusion retains included Personal shared-folder shortcut",
+                sync_list=[
+                    f"!/{core}/nested/exclude/",
+                    f"/{core}/",
+                ],
                 expected_entries=core_without_exclude,
-                required_present=[f"{core}/README.txt", f"{core}/nested/keep/keep.txt"],
+                required_present=[f"{core}/nested/keep/keep.txt", f"{core}/README.txt"],
                 required_absent=[f"{core}/nested/exclude/exclude.txt", f"{core15}/README.txt"],
                 required_stdout_markers=[self._marker(core)],
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0026",
+                description="wildcard workaround retains included Personal shared-folder shortcut",
+                sync_list=[
+                    f"!/{core}/nested/exclude/*",
+                    f"/{core}/",
+                ],
+                expected_entries=core_without_exclude,
+                required_present=[f"{core}/nested/keep/keep.txt", f"{core}/README.txt"],
+                required_absent=[f"{core}/nested/exclude/exclude.txt", f"{core15}/README.txt"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0027",
+                description="issue 3931 literal descendant exclusion retains root Personal shared-folder shortcut",
+                sync_list=[
+                    f"!/{minimal}/nested/exclude/",
+                    f"/{minimal}/",
+                ],
+                expected_entries=self._entries_under(minimal),
+                required_present=[f"{minimal}/", f"{minimal}/single.txt"],
+                required_absent=[f"{minimal}_15/single.txt"],
+                required_stdout_markers=[self._marker(minimal)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0028",
+                description="issue 3931 wildcard descendant exclusion retains root Personal shared-folder shortcut",
+                sync_list=[
+                    f"!/{minimal}/nested/exclude/*",
+                    f"/{minimal}/",
+                ],
+                expected_entries=self._entries_under(minimal),
+                required_present=[f"{minimal}/", f"{minimal}/single.txt"],
+                required_absent=[f"{minimal}_15/single.txt"],
+                required_stdout_markers=[self._marker(minimal)],
+            ),
+            SharedFolderSyncListScenario(
+                scenario_id="SL-0029",
                 description="Personal Shared Folder include-first rule ordering retains nested directory",
                 sync_list=[f"/{core}/", f"!/{core}/nested/exclude/"],
                 expected_entries=self._entries_under(core),
