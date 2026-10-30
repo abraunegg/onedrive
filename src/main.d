@@ -2254,6 +2254,8 @@ void oneDriveOnlineCallback() {
 		if (syncEngineInstance.authoritativeCleanupPassUsedInLastSync &&
 			systemTimeAllowsSyncContinuation(onlineCallbackSource ~ ".pre_database_consistency")) {
 			syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
+			performAuthoritativeMonitorLocalCleanup(
+				appConfig.getValueString("single_directory").empty ? "." : appConfig.getValueString("single_directory"));
 		}
 	}
 	if (appConfig.getValueBool("monitor")) {
@@ -2281,6 +2283,20 @@ void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = 
 		// Handle any new inotify events whilst the local filesystem was being scanned
 		captureAndApplyInotifyEvents("upload_only.post_local_scan");
 	}
+}
+
+// Local orphan cleanup is permitted only after an authoritative monitor pass.
+// Fast /delta notifications and incomplete downloads must not trigger deletion.
+void performAuthoritativeMonitorLocalCleanup(string localPath) {
+	if (!appConfig.getValueBool("monitor") || !appConfig.getValueBool("download_only") ||
+		!appConfig.getValueBool("cleanup_local_files") ||
+		!syncEngineInstance.authoritativeCleanupPassUsedInLastSync ||
+		exitHandlerTriggered || syncEngineInstance.syncFailures ||
+		!syncEngineInstance.fileDownloadFailures.empty ||
+		!syncEngineInstance.fileUploadFailures.empty ||
+		!syncEngineInstance.recycleBinMoveFailures.empty) return;
+	if (!systemTimeAllowsSyncContinuation("monitor.pre_authoritative_local_cleanup")) return;
+	syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 }
 
 // Perform the normal application sync process
@@ -2349,6 +2365,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
+		performAuthoritativeMonitorLocalCleanup(localPath);
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any inotify events whilst the DB was being scanned
 			captureAndApplyInotifyEvents("standard_sync.remote_first.post_database_scan");

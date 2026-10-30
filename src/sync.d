@@ -9401,8 +9401,12 @@ class SyncEngine {
 		pathsToCreateOnline = [];
 		newLocalFilesToUploadToOneDrive = [];
 
-		// Perform a filesystem walk to uncover new data
-		scanLocalFilesystemPathForNewDataToUpload(path);
+		// Download-only cleanup must not use the upload scanner's filtering/deletion path.
+		if (cleanupLocalFiles) {
+			cleanupLocalOrphans(path);
+		} else {
+			scanLocalFilesystemPathForNewDataToUpload(path);
+		}
 
 		// Create new directories online that has been identified
 		processNewDirectoriesToCreateOnline();
@@ -9414,6 +9418,55 @@ class SyncEngine {
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
 			// Combine module name & running Function
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+		}
+	}
+
+	// Remove DB-unknown local data only inside the selected sync scope. Walk children
+	// first, so a directory is removed only after all eligible children are gone.
+	// Never recursively delete a subtree: exclusions and .nosync must survive.
+	private void cleanupLocalOrphans(string path) {
+		if (exitHandlerTriggered || !exists(path) || isSymlink(path) || pathIsProtectedByNoSync(path)) return;
+
+		bool directory = isDir(path);
+		if (directory && skipBusinessSharedFolder(path)) return;
+		bool excluded = false;
+		if (path != ".") {
+			// Honor paths deliberately retained during this synchronization cycle.
+			if (canFind(pathsRetained, ensureStartsWithDotSlash(buildNormalizedPath(path)))) return;
+			// A skip_dir boundary cannot be overridden by a nested sync_list inclusion.
+			if (directory && !appConfig.getValueString("skip_dir").empty &&
+				selectiveSync.isDirNameExcluded(path.strip('.'))) return;
+			excluded = checkPathAgainstClientSideFiltering(path);
+			if (excluded && (!directory || !syncListConfigured ||
+				(!selectiveSync.isSyncListPrefixMatch(path) &&
+				 !selectiveSync.syncListAnywhereInclusionRulesExist()))) return;
+		}
+
+		if (directory) {
+			try {
+				foreach (entry; dirEntries(path, SpanMode.shallow, false)) {
+					cleanupLocalOrphans(entry.name);
+				}
+				if (path != "." && !excluded && !pathFoundInDatabase(path) && isDirEmpty(path)) {
+					if (!dryRun) {
+						rmdir(path);
+						if (!exists(path)) notifyExpectedLocalRemoval(path);
+					}
+					if (verboseLogging) addLogEntry("Removing DB-unknown local directory: " ~ path, ["verbose"]);
+				}
+			} catch (FileException e) {
+				displayFileSystemErrorMessage(e.msg, "cleanupLocalOrphans", path);
+			}
+		} else if (!excluded && isFile(path) && !pathFoundInDatabase(path)) {
+			try {
+				if (!dryRun) {
+					safeRemove(path);
+					if (!exists(path)) notifyExpectedLocalRemoval(path);
+				}
+				if (verboseLogging) addLogEntry("Removing DB-unknown local file: " ~ path, ["verbose"]);
+			} catch (FileException e) {
+				displayFileSystemErrorMessage(e.msg, "cleanupLocalOrphans", path);
+			}
 		}
 	}
 
