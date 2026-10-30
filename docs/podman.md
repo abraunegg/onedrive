@@ -287,11 +287,22 @@ Since Podman 4.4, [Quadlet](https://docs.podman.io/en/latest/markdown/podman-sys
 *   The `onedrive_conf` podman volume has already been created and the client authorised, by following the steps earlier in this document
 *   The OneDrive data directory previously configured as `ONEDRIVE_DATA_DIR` exists
 
-**Stop and remove the existing container**, keeping the `onedrive_conf` volume and your data. The Quadlet unit below uses `ContainerName=onedrive`, so the name must be free. If you installed the system-level `container-onedrive.service` above, stop and disable that first:
+**Stop and remove the existing container**, keeping the `onedrive_conf` volume and your data. The Quadlet unit below uses `ContainerName=onedrive`, so the name must be free. Use the path that matches how your existing container was deployed:
+
+*   If you installed the system-level `container-onedrive.service` above (a root-owned container), stop and disable the service first, then remove the root-owned container:
+```bash
+sudo systemctl disable --now container-onedrive.service
+sudo podman rm onedrive
+```
+
+*   If you are using the rootless container created earlier in this guide:
 ```bash
 podman stop onedrive
 podman rm onedrive
 ```
+
+> [!IMPORTANT]
+> Do not remove the `onedrive_conf` volume or your OneDrive data directory. A root-owned container cannot be managed with rootless `podman`, and an active `container-onedrive.service` must not be left running alongside the Quadlet service.
 
 **Create the Quadlet unit file** at `~/.config/containers/systemd/onedrive.container`, creating the directory first as it may not exist:
 ```bash
@@ -300,7 +311,6 @@ mkdir -p ~/.config/containers/systemd
 ```ini
 [Unit]
 Description=OneDrive Client for Linux (Podman Quadlet)
-After=network-online.target
 
 [Container]
 Image=docker.io/driveone/onedrive:edge
