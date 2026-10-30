@@ -6522,6 +6522,9 @@ class SyncEngine {
 				// For each unique OneDrive driveID we know about
 				Item[] outOfSyncItems = itemDB.selectOutOfSyncItems(driveId);
 				foreach (outOfSyncItem; outOfSyncItems) {
+					// Plain --download-only retains local data even when the remote
+					// item is absent from an authoritative generated response.
+					if (appConfig.getValueBool("download_only") && !cleanupLocalFiles) continue;
 					if (appConfig.getValueBool("check_nosync")) {
 						string outOfSyncLocalPath = buildNormalizedPath(computeItemPath(outOfSyncItem.driveId, outOfSyncItem.id));
 						if (pathIsProtectedByNoSync(outOfSyncLocalPath)) {
@@ -9429,25 +9432,16 @@ class SyncEngine {
 
 		bool directory = isDir(path);
 		if (directory && skipBusinessSharedFolder(path)) return;
-		bool excluded = false;
-		if (path != ".") {
-			// Honor paths deliberately retained during this synchronization cycle.
-			if (canFind(pathsRetained, ensureStartsWithDotSlash(buildNormalizedPath(path)))) return;
-			// A skip_dir boundary cannot be overridden by a nested sync_list inclusion.
-			if (directory && !appConfig.getValueString("skip_dir").empty &&
-				selectiveSync.isDirNameExcluded(path.strip('.'))) return;
-			excluded = checkPathAgainstClientSideFiltering(path);
-			if (excluded && (!directory || !syncListConfigured ||
-				(!selectiveSync.isSyncListPrefixMatch(path) &&
-				 !selectiveSync.syncListAnywhereInclusionRulesExist()))) return;
-		}
+		// In the explicit download-only cleanup mode, absence from the refreshed
+		// database controls orphan deletion. sync_list/skip_file exclusions must
+		// not retain DB-unknown local data; .nosync is checked above.
 
 		if (directory) {
 			try {
 				foreach (entry; dirEntries(path, SpanMode.shallow, false)) {
 					cleanupLocalOrphans(entry.name);
 				}
-				if (path != "." && !excluded && !pathFoundInDatabase(path) && isDirEmpty(path)) {
+				if (path != "." && !pathFoundInDatabase(path) && isDirEmpty(path)) {
 					if (!dryRun) {
 						rmdir(path);
 						if (!exists(path)) notifyExpectedLocalRemoval(path);
@@ -9457,7 +9451,7 @@ class SyncEngine {
 			} catch (FileException e) {
 				displayFileSystemErrorMessage(e.msg, "cleanupLocalOrphans", path);
 			}
-		} else if (!excluded && isFile(path) && !pathFoundInDatabase(path)) {
+		} else if (isFile(path) && !pathFoundInDatabase(path)) {
 			try {
 				if (!dryRun) {
 					safeRemove(path);
