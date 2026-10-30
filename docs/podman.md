@@ -273,6 +273,89 @@ systemctl start podman-auto-update.timer
 systemctl list-timers --all
 ```
 
+### Podman Quadlet (Alternative to `podman generate systemd`)
+Since Podman 4.4, [Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) is the recommended way to run containers as systemd services. It is declarative, does not require 'root' access to install the unit file, and integrates auto-updating via a dedicated directive rather than a container label.
+
+> [!NOTE]
+> This is an alternative to the `podman generate systemd` approach described above - you do not need to do both.
+
+> [!IMPORTANT]
+> This example runs as a rootless, per-user service (`systemctl --user`), unlike the system-level service created by `podman generate systemd` above. Without 'lingering' enabled (see below), the user's systemd manager - and therefore the OneDrive service - only runs while the user has an active login session.
+
+**Prerequisites**
+*   Podman >= 4.6 (required for the `AutoUpdate=` and `UserNS=` Quadlet directives)
+*   The `onedrive_conf` podman volume has already been created and the client authorised, by following the steps earlier in this document
+*   The OneDrive data directory previously configured as `ONEDRIVE_DATA_DIR` exists
+
+**Stop and remove the existing container**, keeping the `onedrive_conf` volume and your data. The Quadlet unit below uses `ContainerName=onedrive`, so the name must be free. Use the path that matches how your existing container was deployed:
+
+*   If you installed the system-level `container-onedrive.service` above (a root-owned container), stop and disable the service first, then remove the root-owned container:
+```bash
+sudo systemctl disable --now container-onedrive.service
+sudo podman rm onedrive
+```
+
+*   If you are using the rootless container created earlier in this guide:
+```bash
+podman stop onedrive
+podman rm onedrive
+```
+
+> [!IMPORTANT]
+> Do not remove the `onedrive_conf` volume or your OneDrive data directory. A root-owned container cannot be managed with rootless `podman`, and an active `container-onedrive.service` must not be left running alongside the Quadlet service.
+
+**Create the Quadlet unit file** at `~/.config/containers/systemd/onedrive.container`, creating the directory first as it may not exist:
+```bash
+mkdir -p ~/.config/containers/systemd
+```
+```ini
+[Unit]
+Description=OneDrive Client for Linux (Podman Quadlet)
+
+[Container]
+Image=docker.io/driveone/onedrive:edge
+ContainerName=onedrive
+Volume=onedrive_conf:/onedrive/conf:U,Z
+Volume=%h/OneDrive:/onedrive/data:U,Z
+UserNS=keep-id
+AutoUpdate=registry
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+> [!IMPORTANT]
+> Replace `%h/OneDrive` with the same host path previously configured as `ONEDRIVE_DATA_DIR` if a non-default location is being used, otherwise the container will use a different local directory to your existing deployment.
+
+**Start the service:**
+
+Quadlet services cannot be enabled with `systemctl enable`. The `[Install]` section is processed by the Quadlet generator, so the service will start automatically at login (or at boot, with lingering enabled).
+```bash
+systemctl --user daemon-reload
+systemctl --user start onedrive.service
+```
+
+**Check the service status and logs:**
+```bash
+systemctl --user status onedrive.service
+journalctl --user -u onedrive.service -f
+```
+
+**Run the service outside of a login session:** To have the rootless OneDrive service and the auto-update timer start at boot and keep running after logout, enable lingering for your user:
+```bash
+loginctl enable-linger
+```
+
+**Auto-update the container image:** Check that Podman identifies the Quadlet-managed container with the `registry` update policy, then enable the user timer:
+```bash
+podman auto-update --dry-run
+systemctl --user enable --now podman-auto-update.timer
+systemctl --user list-timers
+```
+
 ### Editing the running configuration and using a 'config' file
 The 'onedrive' client should run in default configuration, however you can change this default configuration by placing a custom config file in the `onedrive_conf` podman volume. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  
 Then put it into your onedrive_conf volume path, which can be found with:  
