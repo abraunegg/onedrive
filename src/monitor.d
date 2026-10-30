@@ -821,7 +821,31 @@ final class Monitor {
 			auto pathList = dirEntries(dirname, SpanMode.shallow, false);
 			foreach(DirEntry entry; pathList) {
 				currentPath = entry.name;
-				if (entry.isDir) {
+				
+				// Issue #3940: https://github.com/abraunegg/onedrive/issues/3940
+				// A child entry can be returned by readdir() but then be removed before 'entry.isDir' performs the stat() on it.
+				// Applications that create and then immediately delete short lived probe entries (for example an encrypted vault
+				// application testing write access on unlock by creating and removing 'write-access<random>' entries) trigger this race. When this occurs Phobos throws a plain Exception
+				// containing 'Failed to stat file', which the Issue #1154 handling below treats as a permissions problem and forces an exit.
+				// An entry that no longer exists is not a permissions problem, and there is nothing to monitor, so skip only this entry and
+				// continue with the remaining sibling entries. This check has to be per entry, as the outer catch blocks cannot 'continue' this loop.
+				bool entryIsDirectory = false;
+				try {
+					entryIsDirectory = entry.isDir;
+				} catch (Exception e) {
+					// Re-test the path. Only skip when the path is genuinely gone (ENOENT). Do not rely on exists() alone, as exists() also
+					// returns false when stat() fails with EACCES (for example a parent directory without search permission), and that
+					// must still be handled as a local file system access issue by the existing Issue #1154 handling below.
+					if (canFind(e.msg, "Failed to stat file") && !exists(currentPath) && (errno == ENOENT)) {
+						// skip non existing/disappeared items
+						if (verboseLogging) {addLogEntry("Not adding non-existing/disappeared directory: " ~ currentPath, ["verbose"]);}
+						continue;
+					}
+					// The path still exists or this is some other error - re-throw so the existing handling below applies unchanged
+					throw e;
+				}
+				
+				if (entryIsDirectory) {
 					if (debugLogging) {addLogEntry("Calling addRecursive() for this directory: " ~ entry.name, ["debug"]);}
 					addRecursive(entry.name);
 				}
