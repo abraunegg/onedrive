@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import io
 import os
 import re
 import shutil
+import subprocess
 import time
+import zipfile
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -68,6 +73,11 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             deletion with retained empty parent, then empty-parent deletion
       S06 - nested remote parent+child rename, download-only + cleanup + sync_list
       S07 - nested remote parent+child rename, bidirectional + sync_list
+      S08 - DB-known online deletion under download-only cleanup, no resync
+      S09 - known-ID remote move followed by a local-only orphan, no resync
+      S10 - remote move followed by observer resync and old-path cleanup
+      S11 - in-scope orphan cleanup without deleting excluded/protected paths
+      S12 - nested remote moves plus local-only orphan on authoritative monitor startup
     """
 
     case_id = "0065"
@@ -169,6 +179,36 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 ),
                 movement="nested_rename",
                 validator_mode="bidirectional",
+            ),
+            ScenarioSpec(
+                scenario_id="S08_download_only_known_online_delete",
+                description="DB-known online deletion is applied with download-only cleanup and no resync",
+                movement="stage2_known_delete",
+                validator_mode="download_only_cleanup",
+            ),
+            ScenarioSpec(
+                scenario_id="S09_download_only_orphan_after_remote_move",
+                description="Existing-ID remote move followed by cleanup of a new local-only old-path tree without resync",
+                movement="stage2_orphan_after_move",
+                validator_mode="download_only_cleanup",
+            ),
+            ScenarioSpec(
+                scenario_id="S10_download_only_resync_old_path_cleanup",
+                description="Existing-ID remote move followed by observer resync removes obsolete pre-resync local tree",
+                movement="stage2_resync_after_move",
+                validator_mode="download_only_cleanup",
+            ),
+            ScenarioSpec(
+                scenario_id="S11_download_only_sync_list_scope_boundary",
+                description="Cleanup removes included orphans but preserves excluded sibling, excluded child and .nosync subtree",
+                movement="stage2_scope_boundary",
+                validator_mode="download_only_cleanup",
+            ),
+            ScenarioSpec(
+                scenario_id="S12_monitor_download_only_nested_move_orphan",
+                description="Authoritative download-only monitor pass handles nested existing-ID remote moves and a local-only orphan",
+                movement="stage2_monitor_nested_move",
+                validator_mode="download_only_cleanup",
             ),
         ]
 
@@ -2190,6 +2230,736 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         self._write_metadata(metadata_file, details)
         return failures, artifacts, details
 
+    # Stage 2 -- separate cleanup contracts. S01-S07 above are intentionally
+    # unchanged; the new scenarios use the same independent Graph mutator,
+    # observer and fresh-verifier topology and never open the active SQLite DB.
+    @staticmethod
+    def _stage2_forbidden_online_actions(output: str) -> list[str]:
+        markers = (
+            "Deleting item from Microsoft OneDrive:",
+            "Successfully deleted item from Microsoft OneDrive:",
+            "Uploading new file:",
+            "Uploading changed file:",
+            "Uploading modified file:",
+            "New directories to create on Microsoft OneDrive:",
+            "OneDrive Client requested to create this directory online:",
+        )
+        return [marker for marker in markers if marker in output]
+
+    @staticmethod
+    def _stage2_assert_bytes(root: Path, files: dict[str, bytes], label: str) -> list[str]:
+        errors = []
+        for relative, expected in files.items():
+            target = root / relative
+            if not target.is_file():
+                errors.append(f"{label}: expected file missing: {relative}")
+            elif target.read_bytes() != expected:
+                errors.append(f"{label}: file bytes differ: {relative}")
+        return errors
+
+    @staticmethod
+    def _stage2_digests(root: Path) -> dict[str, str]:
+        """Byte-level file digests, also retained as XLSX package diagnostics."""
+        return {
+            item.relative_to(root).as_posix(): hashlib.sha256(item.read_bytes()).hexdigest()
+            for item in sorted(root.rglob("*")) if item.is_file()
+        }
+
+    def _stage2_assert_digests(
+        self, root: Path, expected: dict[str, str], label: str,
+    ) -> list[str]:
+        """Require exact bytes for TXT/PDF/PNG/JPG, semantic equality for XLSX.
+
+        Microsoft may repack an Office document after upload (notably on
+        SharePoint). The XLSX package SHA-256 is therefore diagnostic rather
+        than the document-content oracle. Every XLSX is instead checked via
+        validate_xlsx_pair() and the exact worksheet cell-value fingerprint.
+        An XLSX missing from either side remains an error.
+        """
+        actual = self._stage2_digests(root)
+        errors: list[str] = []
+        for relative, expected_digest in expected.items():
+            if relative not in actual:
+                errors.append(f"{label}: missing file for SHA-256 validation: {relative}")
+            elif not relative.lower().endswith(".xlsx") and actual[relative] != expected_digest:
+                errors.append(f"{label}: SHA-256 payload mismatch: {relative}")
+        for relative in sorted(set(actual) - set(expected)):
+            errors.append(f"{label}: unexpected file: {relative}")
+        return errors
+
+    @staticmethod
+    def _stage2_xlsx_cell_fingerprint(path: Path) -> str:
+        """Hash actual workbook cell values, not mutable XLSX ZIP metadata.
+
+        Handles both inline strings and shared strings, including Office
+        service repackaging. Cell coordinates and values remain part of the
+        fingerprint; a revision marker alone cannot satisfy this check.
+        """
+        ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+        digest = hashlib.sha256()
+        with zipfile.ZipFile(path) as workbook:
+            shared_strings: list[str] = []
+            if "xl/sharedStrings.xml" in workbook.namelist():
+                strings = ET.fromstring(workbook.read("xl/sharedStrings.xml"))
+                for entry in strings.findall(f"{ns}si"):
+                    shared_strings.append("".join((node.text or "") for node in entry.iter(f"{ns}t")))
+            sheet_bytes = workbook.read("xl/worksheets/sheet1.xml")
+            for _, element in ET.iterparse(io.BytesIO(sheet_bytes), events=("end",)):
+                if element.tag != f"{ns}c":
+                    continue
+                kind = element.attrib.get("t", "")
+                value_node = element.find(f"{ns}v")
+                if kind == "inlineStr":
+                    inline = element.find(f"{ns}is")
+                    value = "" if inline is None else "".join(
+                        (node.text or "") for node in inline.iter(f"{ns}t")
+                    )
+                elif kind == "s":
+                    value = shared_strings[int(value_node.text)]
+                else:
+                    value = "" if value_node is None else (value_node.text or "")
+                digest.update(element.attrib.get("r", "").encode("utf-8"))
+                digest.update(b"\x00")
+                digest.update(value.encode("utf-8"))
+                digest.update(b"\x00")
+                element.clear()
+        return digest.hexdigest()
+
+    def _stage2_assert_xlsx_payload(
+        self,
+        reference: Path,
+        observed: Path,
+        label: str,
+    ) -> list[str]:
+        """Enforce full small/large workbook content fidelity through Graph."""
+        errors: list[str] = []
+        for side, path in (("reference", reference), ("observed", observed)):
+            invalid = validate_xlsx_pair(path, REVISION_0)
+            if invalid:
+                errors.append(f"{label}: {side} XLSX validation failed: {invalid}")
+        if errors:
+            return errors
+        for side, ref_path, obs_path in (
+            ("small", reference, observed),
+            ("large", reference.with_name(f"{reference.stem}-large.xlsx"),
+             observed.with_name(f"{observed.stem}-large.xlsx")),
+        ):
+            try:
+                if self._stage2_xlsx_cell_fingerprint(ref_path) != self._stage2_xlsx_cell_fingerprint(obs_path):
+                    errors.append(f"{label}: {side} XLSX worksheet cell payload differs")
+            except (OSError, ValueError, IndexError, KeyError, zipfile.BadZipFile, ET.ParseError) as exc:
+                errors.append(f"{label}: {side} XLSX payload inspection failed: {exc}")
+        return errors
+
+    @staticmethod
+    def _stage2_exact_manifest(
+        root: Path, expected: list[str], label: str,
+    ) -> tuple[list[str], list[str]]:
+        actual = build_typed_manifest(root)
+        # Path ordering and the trailing '/' type suffix are independent:
+        # e.g. lexical sorting of "dir/.nosync" can place it before "dir/",
+        # while rglob visits the parent first. Compare the complete typed
+        # entry sets (and counts), not their incidental traversal order.
+        if len(actual) == len(expected) and set(actual) == set(expected):
+            return actual, []
+        return actual, [
+            f"{label}: typed manifest mismatch; "
+            f"missing={sorted(set(expected) - set(actual))}; "
+            f"unexpected={sorted(set(actual) - set(expected))}"
+        ]
+
+    def _run_stage2_cleanup_scenario(
+        self,
+        context: E2EContext,
+        scenario: ScenarioSpec,
+        *,
+        scenario_work: Path,
+        scenario_logs: Path,
+        scenario_state: Path,
+    ) -> tuple[list[str], list[str], dict[str, object]]:
+        """Run real Graph + local-filesystem cleanup contracts S08-S12.
+
+        Mutator owns its own database and generates remote changes using the
+        production upload-only implementation. The subject/observer is a
+        *different* client with pre-existing local state. Verification uses a
+        fresh, read-only download-only client, never the mutator's database.
+        """
+        mode = scenario.movement
+        known_delete = mode == "stage2_known_delete"
+        scope_boundary = mode == "stage2_scope_boundary"
+        ordinary_orphan = mode == "stage2_orphan_after_move"
+        resync_orphan = mode == "stage2_resync_after_move"
+        monitor_nested = mode == "stage2_monitor_nested_move"
+        assert sum((known_delete, scope_boundary, ordinary_orphan, resync_orphan, monitor_nested)) == 1
+
+        root_name = f"ZZ_E2E_TC0065_{scenario.scenario_id}_{context.run_id}_{os.getpid()}"
+        mutator_root = scenario_work / "mutator-root"
+        observer_root = scenario_work / "validator-root"
+        verify_root = scenario_work / "verify-root"
+        conf_mutator = scenario_work / "conf-mutator"
+        conf_observer = scenario_work / "conf-validator"
+        conf_verify = scenario_work / "conf-verify"
+        mutator_logs = scenario_logs / "mutator-app-logs"
+        observer_logs = scenario_logs / "observer-app-logs"
+        for root in (mutator_root, observer_root, verify_root):
+            reset_directory(root)
+
+        phase_names = (
+            "seed", "observer_preload", "remote_delete", "observer_move",
+            "observer_cleanup", "remote_verify",
+        )
+        log_paths = {
+            phase: (
+                scenario_logs / f"{phase}_stdout.log",
+                scenario_logs / f"{phase}_stderr.log",
+            ) for phase in phase_names
+        }
+        monitor_stdout = scenario_logs / "mutator_monitor_stdout.log"
+        monitor_stderr = scenario_logs / "mutator_monitor_stderr.log"
+        observer_monitor_stdout = scenario_logs / "observer_monitor_stdout.log"
+        observer_monitor_stderr = scenario_logs / "observer_monitor_stderr.log"
+        initial_manifest_file = scenario_state / "observer_preload_manifest.txt"
+        expected_remote_file = scenario_state / "expected_remote_manifest.txt"
+        actual_remote_file = scenario_state / "actual_remote_manifest.txt"
+        actual_observer_file = scenario_state / "observer_final_manifest.txt"
+        metadata_file = scenario_state / "metadata.txt"
+        artifacts = [
+            *(str(file) for pair in log_paths.values() for file in pair),
+            str(monitor_stdout), str(monitor_stderr),
+            str(observer_monitor_stdout), str(observer_monitor_stderr),
+            str(conf_observer / "sync_list"),
+            str(initial_manifest_file), str(expected_remote_file),
+            str(actual_remote_file), str(actual_observer_file),
+            str(mutator_logs), str(observer_logs), str(metadata_file),
+        ]
+        details: dict[str, object] = {
+            "scenario_id": scenario.scenario_id,
+            "description": scenario.description,
+            "root_name": root_name,
+            "mode": mode,
+            "selected_sync_list_root": f"/{root_name}",
+            "mutator_confdir": str(conf_mutator),
+            "observer_confdir": str(conf_observer),
+            "remote_verifier_confdir": str(conf_verify),
+            "observer_db_preserved_during_remote_mutation": True,
+            "observer_resync_expected": resync_orphan,
+            "observer_bypass_data_preservation": False,
+        }
+        failures: list[str] = []
+
+        def save() -> tuple[list[str], list[str], dict[str, object]]:
+            self._write_metadata(metadata_file, details)
+            return failures, artifacts, details
+
+        def execute(phase: str, command: list[str]):
+            stdout_file, stderr_file = log_paths[phase]
+            return self._run_phase(
+                context=context,
+                label=f"{scenario.scenario_id}_{phase}",
+                command=command,
+                stdout_file=stdout_file,
+                stderr_file=stderr_file,
+                details=details,
+            )
+
+        def phase_output(phase: str) -> str:
+            return self._combined_output(*log_paths[phase])
+
+        self._prepare_client_config(
+            context, conf_mutator, mutator_root,
+            label=f"{scenario.scenario_id} independent mutator",
+            monitor_app_log_dir=mutator_logs if (ordinary_orphan or resync_orphan or monitor_nested) else None,
+        )
+        # Selective-sync exclusions are ordered. SL-0040 in TC0002 proves
+        # exclusion before a broader inclusion is the intended syntax.
+        if scope_boundary:
+            context.prepare_minimal_config_dir(
+                conf_observer,
+                self._simple_config_text(
+                    observer_root, label=f"{scenario.scenario_id} observer", preserve_data=True,
+                ) + 'check_nosync = "true"\n',
+            )
+        elif monitor_nested:
+            # Configure the observer BEFORE its initial download-only preload.
+            # Re-creating the config directory after preload would erase the
+            # very items.sqlite3 identity history this scenario must preserve.
+            context.prepare_minimal_config_dir(
+                conf_observer,
+                self._simple_config_text(
+                    observer_root, label=f"{scenario.scenario_id} authoritative observer", preserve_data=True,
+                ) + (
+                    # Documented 300-second interval; the bounded one-loop
+                    # developer override terminates after the startup pass.
+                    'monitor_max_loop = "1"\n'
+                    'monitor_interval = "300"\n'
+                    'monitor_fullscan_frequency = "0"\n'
+                    'monitor_authoritative_sync = "monitor_and_signal"\n'
+                    'disable_websocket_support = "true"\n'
+                    'enable_logging = "true"\n'
+                    f'log_dir = "{observer_logs}"\n'
+                ),
+            )
+        else:
+            self._prepare_client_config(
+                context, conf_observer, observer_root,
+                label=f"{scenario.scenario_id} observer", preserve_data=True,
+            )
+        selected_rules = [f"/{root_name}"]
+        if scope_boundary:
+            selected_rules.insert(0, f"!/{root_name}/ExcludedChild/")
+        write_text_file(conf_observer / "sync_list", "\n".join(selected_rules) + "\n")
+        self._prepare_client_config(
+            context, conf_verify, verify_root,
+            label=f"{scenario.scenario_id} independent remote verifier",
+        )
+
+        source = f"{root_name}/incoming/GenerationAlpha"
+        destination = f"{root_name}/moved/GenerationAlpha"
+        nested_old = f"{destination}/Nested"
+        nested_new = f"{destination}/NestedRenamed"
+        if known_delete or scope_boundary:
+            # S08 and S11 are deletion/scope contracts, not document-transfer
+            # regressions. Avoid large media uploads in these two scenarios;
+            # S09/S10/S12 retain the full XLSX/PDF/image move fixtures.
+            seed_files = {
+                f"{source}/top-level.txt": "TC0065 Stage 2 known remote content\n",
+                f"{source}/Nested/keep.txt": "TC0065 Stage 2 nested survivor\n",
+                f"{root_name}/moved/anchor.txt": "TC0065 Stage 2 remote anchor\n",
+            }
+            for relative, content in seed_files.items():
+                write_text_file(mutator_root / relative, content)
+        else:
+            seed_files = self._create_common_fixture(
+                mutator_root, root_name=root_name, source_name="GenerationAlpha",
+            )
+        # One deliberately DB-known file in the remote-delete control.
+        remote_delete_target = f"{source}/top-level.txt"
+        seed_bytes = {key: value.encode("utf-8") for key, value in seed_files.items()}
+        initial_manifest = build_typed_manifest(mutator_root / root_name)
+        initial_digests = self._stage2_digests(mutator_root / root_name)
+        has_media = not (known_delete or scope_boundary)
+        xlsx_source = f"{source}/top-level.xlsx"
+        xlsx_destination = f"{destination}/top-level.xlsx"
+        if has_media:
+            original_xlsx_error = validate_xlsx_pair(mutator_root / xlsx_source, REVISION_0)
+            if original_xlsx_error:
+                failures.append(f"mutator seeded XLSX fixture invalid: {original_xlsx_error}")
+        write_manifest(initial_manifest_file, initial_manifest)
+        if not initial_manifest or remote_delete_target not in seed_bytes:
+            failures.append("fixture seed did not establish its expected paths")
+            return save()
+
+        seed = execute("seed", self._seed_upload_command(
+            context, root_name=root_name, conf_dir=conf_mutator,
+        ))
+        if seed.returncode != 0 or not (conf_mutator / "items.sqlite3").is_file():
+            failures.append("independent mutator seed failed or did not create its database")
+            return save()
+
+        # No --single-directory for the observer: sync_list must select the
+        # managed paths and preserve its database until the explicit S10 resync.
+        preload = execute("observer_preload", self._validator_initial_command(
+            context, conf_dir=conf_observer,
+        ))
+        preload_out = phase_output("observer_preload")
+        if preload.returncode != 0:
+            failures.append(f"observer preload failed: {preload.returncode}")
+        if not self._sync_list_active(preload_out, root_name):
+            failures.append("observer preload did not demonstrate active sync_list")
+        if not self._validator_mode_active(preload_out, "download_only"):
+            failures.append("observer preload did not demonstrate download-only without cleanup")
+        if not (conf_observer / "items.sqlite3").is_file():
+            failures.append("observer preload did not establish database identity")
+        before_manifest, before_errors = self._stage2_exact_manifest(
+            observer_root / root_name, initial_manifest, "observer preload",
+        )
+        failures.extend(before_errors)
+        failures.extend(self._stage2_assert_bytes(observer_root, seed_bytes, "observer preload"))
+        failures.extend(self._stage2_assert_digests(observer_root / root_name, initial_digests, "observer preload full fixture"))
+        if has_media:
+            # SharePoint may repack XLSX ZIP metadata on upload. Validate the
+            # genuine worksheets (every cell, both size classes) against the
+            # original fixture, rather than assuming a byte-identical package.
+            failures.extend(self._stage2_assert_xlsx_payload(
+                mutator_root / xlsx_source, observer_root / xlsx_source,
+                "observer preload",
+            ))
+            downloaded_digests = self._stage2_digests(observer_root / root_name)
+            details["preload_xlsx_package_sha256_changed_from_seed"] = {
+                name: downloaded_digests.get(name) != initial_digests[name]
+                for name in sorted(initial_digests) if name.endswith(".xlsx")
+            }
+        details["observer_preload_manifest"] = before_manifest
+        write_manifest(initial_manifest_file, before_manifest)
+        if failures:
+            return save()
+
+        # Mutate Microsoft Graph through the established independent client.
+        # No synthetic Graph events and no direct SQLite operations.
+        if known_delete:
+            delete_path = mutator_root / remote_delete_target
+            if delete_path.read_bytes() != seed_bytes[remote_delete_target]:
+                failures.append("mutator file bytes were wrong before online deletion")
+                return save()
+            delete_path.unlink()
+            delete_command = [
+                context.onedrive_bin, "--display-running-config", "--sync", "--upload-only",
+                "--verbose", "--single-directory", root_name,
+                "--confdir", str(conf_mutator),
+            ]
+            remote_delete = execute("remote_delete", delete_command)
+            remote_delete_output = phase_output("remote_delete")
+            if remote_delete.returncode != 0:
+                failures.append(f"independent remote delete failed: {remote_delete.returncode}")
+            if not re.search(r"Deleting item from Microsoft OneDrive: (?:\./)?" + re.escape(remote_delete_target), remote_delete_output):
+                failures.append("mutator did not evidence remote deletion of the DB-known file")
+            if failures:
+                return save()
+        elif ordinary_orphan or resync_orphan or monitor_nested:
+            process, ready = self._launch_ready_mutator_monitor(
+                context=context, root_name=root_name, conf_mutator=conf_mutator,
+                monitor_stdout=monitor_stdout, monitor_stderr=monitor_stderr, details=details,
+            )
+            try:
+                if not ready or not self._mutator_upload_only_active(
+                    self._combined_output(monitor_stdout, monitor_stderr)
+                ):
+                    failures.append("independent upload-only mutator monitor did not become ready")
+                else:
+                    moved, segment = self._run_mutator_move_transaction(
+                        process=process, monitor_stdout=monitor_stdout,
+                        details=details,
+                        moves=[(mutator_root / source, mutator_root / destination, source, destination)],
+                        detail_prefix="stage2_parent_move",
+                    )
+                    if not moved or not self._contains_monitor_move_pair(segment, source, destination):
+                        failures.append("parent move did not complete via existing-ID monitor transaction")
+                    if details.get("stage2_parent_move_bad_markers"):
+                        failures.append("parent remote move degraded to delete/reupload: " + repr(details["stage2_parent_move_bad_markers"]))
+                    if not failures and monitor_nested:
+                        # Independent nested child move *after* the parent ID was moved.
+                        child_moved, child_segment = self._run_mutator_move_transaction(
+                            process=process, monitor_stdout=monitor_stdout,
+                            details=details,
+                            moves=[(mutator_root / nested_old, mutator_root / nested_new,
+                                    nested_old, nested_new)],
+                            detail_prefix="stage2_child_move",
+                        )
+                        if not child_moved or not self._contains_monitor_move_pair(child_segment, nested_old, nested_new):
+                            failures.append("nested child existing-ID remote rename did not complete")
+                        if details.get("stage2_child_move_bad_markers"):
+                            failures.append("nested child move degraded to delete/reupload: " + repr(details["stage2_child_move_bad_markers"]))
+            finally:
+                self._shutdown_monitor_process(process, details)
+                details["mutator_monitor_returncode"] = process.returncode
+            if details["mutator_monitor_returncode"] not in {0, 130}:
+                failures.append(f"mutator monitor returned {details['mutator_monitor_returncode']}")
+            if failures:
+                return save()
+
+        expected_remote_manifest = build_typed_manifest(mutator_root / root_name)
+        expected_remote_digests = self._stage2_digests(mutator_root / root_name)
+        expected_remote_bytes: dict[str, bytes] = {}
+        for relative, content in seed_bytes.items():
+            if known_delete and relative == remote_delete_target:
+                continue
+            if ordinary_orphan or resync_orphan or monitor_nested:
+                if relative.startswith(source + "/"):
+                    relative = destination + relative[len(source):]
+                if monitor_nested and relative.startswith(nested_old + "/"):
+                    relative = nested_new + relative[len(nested_old):]
+            expected_remote_bytes[relative] = content
+        write_manifest(expected_remote_file, expected_remote_manifest)
+        details["expected_remote_manifest"] = expected_remote_manifest
+        details["expected_remote_file_count"] = len(expected_remote_bytes)
+        if not expected_remote_manifest:
+            failures.append("expected remote state is unexpectedly empty")
+            return save()
+
+        # S09 proves local-only cleanup independently of existing-ID move
+        # reconciliation. Validate the move *first*, then create an orphan at
+        # its obsolete old path. This prevents the orphan being accidentally
+        # carried along by a successful rename and producing a false PASS.
+        if ordinary_orphan:
+            move = execute("observer_move", self._validator_reconcile_command(
+                context, conf_dir=conf_observer, validator_mode="download_only_cleanup",
+            ) + ["--verbose"])
+            move_out = phase_output("observer_move")
+            if move.returncode != 0:
+                failures.append(f"observer existing-ID move failed: {move.returncode}")
+            if not self._sync_list_active(move_out, root_name) or not self._validator_mode_active(move_out, "download_only_cleanup"):
+                failures.append("observer move phase did not prove sync_list and cleanup settings")
+            if not self._contains_move(move_out, source, destination):
+                failures.append("observer failed to log existing-ID remote parent move")
+            if self._destination_precreation_seen(move_out, destination):
+                failures.append("observer pre-created known remote move destination")
+            if self._stage2_forbidden_online_actions(move_out):
+                failures.append("observer move attempted forbidden remote changes: " + repr(self._stage2_forbidden_online_actions(move_out)))
+            moved_manifest, moved_errors = self._stage2_exact_manifest(
+                observer_root / root_name, expected_remote_manifest, "observer moved tree",
+            )
+            details["observer_moved_manifest"] = moved_manifest
+            failures.extend(moved_errors)
+            failures.extend(self._stage2_assert_bytes(observer_root, expected_remote_bytes, "observer moved bytes"))
+            failures.extend(self._stage2_assert_digests(observer_root / root_name, expected_remote_digests, "observer moved full fixture"))
+            failures.extend(self._stage2_assert_xlsx_payload(
+                mutator_root / xlsx_destination, observer_root / xlsx_destination,
+                "observer existing-ID move",
+            ))
+            if failures:
+                return save()
+
+        # Deliberate local-only orphans: no API write is made for these items.
+        # The observer has already exited, and the remote state is independent.
+        orphan_files: dict[str, bytes] = {}
+        protected_files: dict[str, bytes] = {}
+        excluded_files: dict[str, bytes] = {}
+        outside_files: dict[str, bytes] = {}
+        if ordinary_orphan:
+            orphan_files = {
+                f"{source}/stale.txt": b"S09 obsolete local-only old-path data\n",
+                f"{source}/Nested/orphan.txt": b"S09 orphan nested payload\n",
+            }
+        elif scope_boundary:
+            orphan_files = {
+                f"{root_name}/OrphanIncluded/one.txt": b"S11 included local orphan\n",
+                f"{root_name}/OrphanIncluded/Nested/two.txt": b"S11 nested included local orphan\n",
+            }
+            excluded_files = {
+                f"{root_name}/ExcludedChild/keep.txt": b"S11 excluded descendant must remain\n",
+            }
+            protected_files = {
+                f"{root_name}/NoSyncProtected/.nosync": b"",
+                f"{root_name}/NoSyncProtected/keep.txt": b"S11 protected descendant must remain\n",
+            }
+            outside_files = {
+                f"ZZ_E2E_TC0065_Excluded_{context.run_id}_{os.getpid()}/keep.txt":
+                    b"S11 outside scope must remain\n",
+            }
+        elif monitor_nested:
+            orphan_files = {
+                f"{root_name}/incoming/MonitorOrphan/one.txt": b"S12 monitor orphan\n",
+                f"{root_name}/incoming/MonitorOrphan/Nested/two.txt": b"S12 nested monitor orphan\n",
+            }
+        for relative, content in {**orphan_files, **protected_files, **excluded_files, **outside_files}.items():
+            target = observer_root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+        # S10 intentionally does not create any new local file. Its original
+        # pre-rename tree becomes database-unknown *solely because of --resync*.
+        if resync_orphan and not (observer_root / source).is_dir():
+            failures.append("S10 observer original pre-resync tree disappeared before resync")
+            return save()
+        for relative in orphan_files:
+            if relative in expected_remote_bytes or not (observer_root / relative).is_file():
+                failures.append(f"orphan stimulus invalid or absent: {relative}")
+        for relative in outside_files:
+            if not (observer_root / relative).is_file():
+                failures.append(f"outside-scope sentinel absent before cleanup: {relative}")
+        if failures:
+            return save()
+
+        observer_output = ""
+        if monitor_nested:
+            # An authoritative first monitor pass is explicitly requested, not
+            # a fast /delta-only wake. The monitor has NO inotify local worker
+            # in download-only mode. A bounded startup pass is sufficient to
+            # test its actual cleanup execution path without arbitrary waits.
+            if not (conf_observer / "items.sqlite3").is_file():
+                failures.append("observer database missing before authoritative monitor start")
+                return save()
+            monitor_command = [
+                context.onedrive_bin, "--display-running-config", "--monitor",
+                "--download-only", "--cleanup-local-files", "--verbose", "--verbose",
+                "--confdir", str(conf_observer),
+            ]
+            context.log(f"Executing Test Case {self.case_id} {scenario.scenario_id} authoritative monitor: {command_to_string(monitor_command)}")
+            monitor, completed = self._launch_monitor_process(
+                context, monitor_command, observer_monitor_stdout,
+                observer_monitor_stderr, startup_timeout_seconds=300,
+            )
+            try:
+                details["observer_monitor_initial_sync_complete"] = completed
+                if completed:
+                    # monitor_max_loop=1 is a bounded production monitor cycle.
+                    # Let it finish naturally so post-sync authoritative markers
+                    # cannot race a premature SIGINT from the harness.
+                    try:
+                        monitor.wait(timeout=30)
+                    except subprocess.TimeoutExpired:
+                        failures.append("bounded authoritative monitor did not exit after its configured single loop")
+            finally:
+                self._shutdown_monitor_process(monitor, details)
+                details["observer_monitor_returncode"] = monitor.returncode
+            if details["observer_monitor_returncode"] not in {0, 130}:
+                failures.append(f"authoritative observer monitor exited abnormally: {monitor.returncode}")
+            observer_output = self._combined_output(observer_monitor_stdout, observer_monitor_stderr)
+            for log_path in sorted(observer_logs.glob("*.log")):
+                observer_output += "\n" + log_path.read_text(encoding="utf-8", errors="replace")
+            if not completed:
+                failures.append("authoritative observer monitor startup pass did not complete")
+            if not self._sync_list_active(observer_output, root_name) or not self._validator_mode_active(observer_output, "download_only_cleanup"):
+                failures.append("monitor pass did not prove sync_list and download-only cleanup")
+            # The generated Graph response is authoritative here even when
+            # scheduled online full-scan true-up is disabled (frequency=0).
+            # Do not confuse fullScanTrueUpRequired bookkeeping with evidence
+            # that the cleanup-oriented generated response actually ran.
+            if not re.search(r"Flagged generatedSimulatedDeltaResponse as ['\"]true['\"]", observer_output):
+                failures.append("monitor did not evidence generated authoritative Graph response")
+            if not re.search(r"cleanupLocalFiles:\s+true", observer_output):
+                failures.append("monitor generated response did not enable cleanupLocalFiles")
+            if re.search(r"Invalid value for (?:key in config file|--monitor-interval).*monitor_interval", observer_output):
+                failures.append("monitor config rejected the configured monitor_interval")
+            if not re.search(r"Config option 'monitor_interval'\s*=\s*300\b", observer_output):
+                failures.append("monitor did not accept documented monitor_interval=300")
+            if not re.search(r"Config option 'monitor_max_loop'\s*=\s*1\b", observer_output):
+                failures.append("monitor did not accept bounded developer monitor_max_loop=1")
+            if "Using native /delta for this pass; authoritative cleanup deferred" in observer_output:
+                failures.append("monitor used deferred native delta rather than the configured authoritative pass")
+            if not self._contains_move(observer_output, source, destination):
+                failures.append("monitor did not reconcile existing-ID parent move")
+            # The nested child can be observed under either permitted parent
+            # ordering; require a genuine child move to the final destination.
+            if not any(self._contains_move(observer_output, old, nested_new) for old in (
+                f"{source}/Nested", nested_old,
+            )):
+                failures.append("monitor did not reconcile existing-ID nested child move")
+            if self._destination_precreation_seen(observer_output, destination):
+                failures.append("monitor pre-created known parent move destination")
+        else:
+            reconcile_command = self._validator_reconcile_command(
+                context, conf_dir=conf_observer, validator_mode="download_only_cleanup",
+            ) + ["--verbose"]
+            if resync_orphan:
+                # Reset only the OBSERVER database. This is the entire point
+                # of S10, not a workaround in any other new scenario.
+                reconcile_command += ["--resync", "--resync-auth"]
+            if ordinary_orphan and "--resync" in reconcile_command:
+                failures.append("S09 must not discard the existing observer DB")
+                return save()
+            reconcile = execute("observer_cleanup", reconcile_command)
+            observer_output = phase_output("observer_cleanup")
+            if reconcile.returncode != 0:
+                failures.append(f"observer cleanup failed with status {reconcile.returncode}")
+            if not self._sync_list_active(observer_output, root_name):
+                failures.append("observer cleanup did not prove sync_list was active")
+            if not self._validator_mode_active(observer_output, "download_only_cleanup"):
+                failures.append("observer cleanup did not prove download-only cleanup active")
+            if resync_orphan and not re.search(r"Config option 'resync'\s*=\s*true", observer_output):
+                failures.append("S10 did not prove resync enabled")
+            if known_delete and not any(
+                marker in observer_output for marker in (
+                    f"Deleting local file: {remote_delete_target}",
+                    f"Deleting local file: ./{remote_delete_target}",
+                    f"Trying to delete local file: {remote_delete_target}",
+                    f"Trying to delete local file: ./{remote_delete_target}",
+                )
+            ):
+                failures.append("S08 did not evidence processing of the known online deleted item")
+            if orphan_files and not any(
+                f"Path not found in database after exhausting all driveId entries: ./{relative}" in observer_output
+                or f"Path not found in database after exhausting all driveId entries: {relative}" in observer_output
+                for relative in orphan_files
+            ):
+                failures.append("cleanup never evidenced examining a database-unknown local orphan")
+            if resync_orphan and not any(
+                f"Path not found in database after exhausting all driveId entries: ./{relative}" in observer_output
+                or f"Path not found in database after exhausting all driveId entries: {relative}" in observer_output
+                for relative in (source, f"{source}/top-level.txt")
+            ):
+                failures.append("S10 resync did not evidence the obsolete path as database-unknown")
+
+        if self._stage2_forbidden_online_actions(observer_output):
+            failures.append("download-only observer attempted forbidden remote changes: " + repr(self._stage2_forbidden_online_actions(observer_output)))
+        if (conf_observer / "items.sqlite3").is_file() is False:
+            failures.append("observer database missing after reconciliation")
+
+        # Assert the exact expected selected subtree; not merely a few names.
+        expected_observer_manifest = expected_remote_manifest
+        if scope_boundary:
+            expected_observer_manifest = sorted(expected_remote_manifest + [
+                "ExcludedChild/", "ExcludedChild/keep.txt",
+                "NoSyncProtected/", "NoSyncProtected/.nosync",
+                "NoSyncProtected/keep.txt",
+            ])
+        actual_manifest, manifest_errors = self._stage2_exact_manifest(
+            observer_root / root_name, expected_observer_manifest, "final observer selected tree",
+        )
+        write_manifest(actual_observer_file, actual_manifest)
+        details["observer_final_manifest"] = actual_manifest
+        failures.extend(manifest_errors)
+        failures.extend(self._stage2_assert_bytes(observer_root, expected_remote_bytes, "final observer"))
+        if not scope_boundary:
+            failures.extend(self._stage2_assert_digests(observer_root / root_name, expected_remote_digests, "final observer full fixture"))
+            if has_media:
+                failures.extend(self._stage2_assert_xlsx_payload(
+                    mutator_root / xlsx_destination, observer_root / xlsx_destination,
+                    "final observer",
+                ))
+        else:
+            actual_digests = self._stage2_digests(observer_root / root_name)
+            for relative, expected_digest in expected_remote_digests.items():
+                if actual_digests.get(relative) != expected_digest:
+                    failures.append(f"final observer: remote-backed fixture bytes changed: {relative}")
+        for relative in orphan_files:
+            if (observer_root / relative).exists():
+                failures.append(f"included DB-unknown local-only file was retained: {relative}")
+        if ordinary_orphan or resync_orphan or monitor_nested:
+            if (observer_root / source).exists():
+                failures.append(f"obsolete old remote path remains locally: {source}")
+            if not (observer_root / destination).is_dir():
+                failures.append(f"new remote directory missing locally: {destination}")
+            if monitor_nested and not (observer_root / nested_new).is_dir():
+                failures.append(f"nested new remote directory missing locally: {nested_new}")
+        if known_delete and (observer_root / remote_delete_target).exists():
+            failures.append(f"DB-known online deleted file still exists locally: {remote_delete_target}")
+
+        # S11: three independent protection boundaries. Do not rely on the
+        # observed absence of an upload; assert actual preserved sentinel bytes.
+        if scope_boundary:
+            failures.extend(self._stage2_assert_bytes(observer_root, excluded_files, "excluded child"))
+            failures.extend(self._stage2_assert_bytes(observer_root, protected_files, ".nosync subtree"))
+            failures.extend(self._stage2_assert_bytes(observer_root, outside_files, "outside sync_list"))
+            for relative in outside_files:
+                outside_dir = observer_root / relative.split("/", 1)[0]
+                original = [relative.split("/", 1)[1]]
+                actual = build_typed_manifest(outside_dir)
+                if actual != original:
+                    failures.append(f"out-of-scope sentinel directory changed: {outside_dir.name}: {actual}")
+
+        # Independent fresh download verifies the *actual* remote tree after
+        # the observer phase, detecting forbidden upload/delete side effects.
+        remote_check = execute("remote_verify", self._verify_command(
+            context, root_name=root_name, conf_dir=conf_verify,
+        ))
+        if remote_check.returncode != 0:
+            failures.append(f"fresh independent remote verification failed: {remote_check.returncode}")
+        actual_remote, remote_errors = self._stage2_exact_manifest(
+            verify_root / root_name, expected_remote_manifest, "independent remote truth",
+        )
+        write_manifest(actual_remote_file, actual_remote)
+        details["remote_truth_manifest"] = actual_remote
+        failures.extend(remote_errors)
+        failures.extend(self._stage2_assert_bytes(verify_root, expected_remote_bytes, "independent remote truth"))
+        failures.extend(self._stage2_assert_digests(verify_root / root_name, expected_remote_digests, "remote truth full fixture"))
+        if has_media:
+            failures.extend(self._stage2_assert_xlsx_payload(
+                mutator_root / xlsx_destination, verify_root / xlsx_destination,
+                "independent remote truth",
+            ))
+        if known_delete and (verify_root / remote_delete_target).exists():
+            failures.append("independent remote truth still contains remotely deleted file")
+        if ordinary_orphan or resync_orphan or monitor_nested:
+            if (verify_root / source).exists():
+                failures.append("remote old directory unexpectedly recreated")
+        if scope_boundary:
+            for relative in (*orphan_files, *excluded_files, *protected_files, *outside_files):
+                if (verify_root / relative).exists():
+                    failures.append(f"remote truth contains a local-only path: {relative}")
+
+        details["failure_count"] = len(failures)
+        return save()
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -2223,7 +2993,15 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             reset_directory(scenario_logs)
             reset_directory(scenario_state)
 
-            if scenario.movement == "nested_rename":
+            if scenario.movement.startswith("stage2_"):
+                scenario_failures, artifacts, details = self._run_stage2_cleanup_scenario(
+                    context,
+                    scenario,
+                    scenario_work=scenario_work,
+                    scenario_logs=scenario_logs,
+                    scenario_state=scenario_state,
+                )
+            elif scenario.movement == "nested_rename":
                 scenario_failures, artifacts, details = self._run_nested_rename_scenario(
                     context,
                     scenario,
