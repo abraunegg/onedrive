@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from framework.base import E2ETestCase
+from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
@@ -20,7 +20,7 @@ from framework.utils import (
 )
 
 
-class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
+class TestCase0033RemoteDirectoryRenameReconciliation(MonitorModeTestCaseBase):
     case_id = "0033"
     name = "remote directory rename reconciliation"
     description = (
@@ -38,6 +38,9 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         config_text = (
             "# tc0033 config\n"
             f'sync_dir = "{sync_dir}"\n'
+            'monitor_interval = "300"\n'
+            'monitor_fullscan_frequency = "0"\n'
+            'disable_websocket_support = "true"\n'
         )
 
         write_onedrive_config(config_path, config_text)
@@ -431,63 +434,62 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        # Phase 3: Seeder renames the directory locally and syncs the change online.
-        seeder_source_dir.rename(seeder_renamed_dir)
-
-        details["seeder_source_dir_exists_after_local_rename"] = seeder_source_dir.exists()
-        details["seeder_renamed_dir_exists_after_local_rename"] = seeder_renamed_dir.is_dir()
-
-        if seeder_source_dir.exists():
-            self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "seeder original directory still exists immediately after rename",
-                artifacts,
-                details,
-            )
-
-        if not seeder_renamed_dir.is_dir():
-            self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "seeder renamed directory does not exist immediately after rename",
-                artifacts,
-                details,
-            )
-
+        # Phase 3: monitor-driven directory rename preserves the existing
+        # remote ID. Standalone --sync would delete and re-upload the tree.
         phase3_command = [
-            context.onedrive_bin,
-            "--display-running-config",
-            "--sync",
-            "--verbose",
-            "--confdir",
-            str(conf_seeder),
+            context.onedrive_bin, "--display-running-config", "--monitor",
+            "--upload-only", "--verbose", "--verbose", "--single-directory",
+            root_name, "--confdir", str(conf_seeder),
         ]
-        context.log(f"Executing Test Case {self.case_id} phase3 rename sync: {command_to_string(phase3_command)}")
-        phase3_result = run_command(phase3_command, cwd=context.repo_root)
-        write_text_file(phase3_rename_stdout, phase3_result.stdout)
-        write_text_file(phase3_rename_stderr, phase3_result.stderr)
-        details["phase3_returncode"] = phase3_result.returncode
+        context.log(f"Executing Test Case {self.case_id} phase3 monitored directory rename: {command_to_string(phase3_command)}")
+        monitor, started = self._launch_monitor_process(
+            context, phase3_command, phase3_rename_stdout, phase3_rename_stderr,
+        )
+        try:
+            details["phase3_monitor_initial_sync_complete"] = started
+            if not started:
+                return self.fail_result(self.case_id, self.name, "seeder monitor did not complete initial sync", artifacts, details)
+            offset = self._prepare_monitor_for_local_mutation(monitor, phase3_rename_stdout, details)
+            if not details["monitor_ready_after_initial_sync"]:
+                return self.fail_result(self.case_id, self.name, "seeder monitor not ready for directory rename", artifacts, details)
 
-        phase3_deleted_paths = self._extract_deleted_remote_paths(phase3_result.stdout)
-        details["phase3_deleted_remote_paths"] = phase3_deleted_paths
-        details["phase3_deleted_old_root_exact"] = source_dir_relative in phase3_deleted_paths
-        details["phase3_deleted_old_nested_exact"] = f"{source_dir_relative}/Nested" in phase3_deleted_paths
-        details["phase3_deleted_old_file_1_exact"] = source_file_1_relative in phase3_deleted_paths
-        details["phase3_deleted_old_file_2_exact"] = source_file_2_relative in phase3_deleted_paths
-        details["phase3_deleted_old_text_exact"] = source_text_relative in phase3_deleted_paths
+            seeder_source_dir.rename(seeder_renamed_dir)
+            details["seeder_source_dir_exists_after_local_rename"] = seeder_source_dir.exists()
+            details["seeder_renamed_dir_exists_after_local_rename"] = seeder_renamed_dir.is_dir()
+            if seeder_source_dir.exists() or not seeder_renamed_dir.is_dir():
+                return self.fail_result(self.case_id, self.name, "seed directory rename did not complete", artifacts, details)
 
-        if phase3_result.returncode != 0:
-            self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                f"directory rename propagation phase failed with status {phase3_result.returncode}",
-                artifacts,
-                details,
+            processed, segment = self._wait_for_stdout_growth_patterns(
+                phase3_rename_stdout, start_offset=offset, timeout_seconds=180,
+                required_patterns=[
+                    f"[M] Local item moved: ./{source_dir_relative} -> ./{renamed_dir_relative}",
+                    f"Moving ./{source_dir_relative} to ./{renamed_dir_relative}",
+                    f'"{seeder_renamed_dir.name}", "", dir,',
+                ],
             )
+            details["phase3_monitor_move_complete"] = processed
+            details["phase3_monitor_bad_operations"] = [
+                line for line in segment.splitlines()
+                if any(marker in line for marker in (
+                    "Deleting item from Microsoft OneDrive:",
+                    "Uploading new file:",
+                    "New items to upload to Microsoft OneDrive:",
+                    "New directories to create on Microsoft OneDrive:",
+                    "Trying to delete this item as requested:",
+                ))
+            ]
+            if not processed or details["phase3_monitor_bad_operations"]:
+                return self.fail_result(self.case_id, self.name, "directory rename was not a completed same-ID move", artifacts, details)
+        finally:
+            self._shutdown_monitor_process(monitor, details)
+            self._write_metadata(metadata_file, details)
+        details["phase3_monitor_transaction_complete"] = True
+        details["phase3_deleted_remote_paths"] = []
+        details["phase3_deleted_old_root_exact"] = False
+        details["phase3_deleted_old_nested_exact"] = False
+        details["phase3_deleted_old_file_1_exact"] = False
+        details["phase3_deleted_old_file_2_exact"] = False
+        details["phase3_deleted_old_text_exact"] = False
 
         # Phase 3b: Run a second seeder sync pass to converge any residual remote state.
         phase3_converge_command = [
@@ -513,6 +515,21 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         details["phase3_converge_deleted_old_nested_exact"] = (
             f"{source_dir_relative}/Nested" in phase3_converge_deleted_paths
         )
+
+        # Convergence must not undo/recreate an identity-preserving move.
+        converge_forbidden = [
+            line for line in phase3_converge_result.stdout.splitlines()
+            if any(marker in line for marker in (
+                "Deleting item from Microsoft OneDrive:",
+                "Uploading new file:",
+                "New items to upload to Microsoft OneDrive:",
+                "New directories to create on Microsoft OneDrive:",
+            ))
+        ]
+        details["phase3_converge_forbidden_mutations"] = converge_forbidden
+        if converge_forbidden:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name, "directory rename converge recreated or deleted remote items", artifacts, details)
 
         if phase3_converge_result.returncode != 0:
             self._write_metadata(metadata_file, details)

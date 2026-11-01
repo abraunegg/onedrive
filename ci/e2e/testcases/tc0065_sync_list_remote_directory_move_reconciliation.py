@@ -76,7 +76,7 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
       S08 - DB-known online deletion under download-only cleanup, no resync
       S09 - known-ID remote move followed by a local-only orphan, no resync
       S10 - remote move followed by observer resync and old-path cleanup
-      S11 - in-scope orphan cleanup without deleting excluded/protected paths
+      S11 - explicit cleanup purges excluded/out-of-scope orphans but retains .nosync paths
       S12 - nested remote moves plus local-only orphan on authoritative monitor startup
     """
 
@@ -200,7 +200,7 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             ),
             ScenarioSpec(
                 scenario_id="S11_download_only_sync_list_scope_boundary",
-                description="Cleanup removes included orphans but preserves excluded sibling, excluded child and .nosync subtree",
+                description="Cleanup removes included, excluded and out-of-scope local-only files; preserves .nosync subtree",
                 movement="stage2_scope_boundary",
                 validator_mode="download_only_cleanup",
             ),
@@ -2726,7 +2726,7 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
                 f"{root_name}/OrphanIncluded/Nested/two.txt": b"S11 nested included local orphan\n",
             }
             excluded_files = {
-                f"{root_name}/ExcludedChild/keep.txt": b"S11 excluded descendant must remain\n",
+                f"{root_name}/ExcludedChild/keep.txt": b"S11 excluded local-only descendant\n",
             }
             protected_files = {
                 f"{root_name}/NoSyncProtected/.nosync": b"",
@@ -2734,7 +2734,7 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             }
             outside_files = {
                 f"ZZ_E2E_TC0065_Excluded_{context.run_id}_{os.getpid()}/keep.txt":
-                    b"S11 outside scope must remain\n",
+                    b"S11 outside scope local-only file\n",
             }
         elif monitor_nested:
             orphan_files = {
@@ -2753,6 +2753,12 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         for relative in orphan_files:
             if relative in expected_remote_bytes or not (observer_root / relative).is_file():
                 failures.append(f"orphan stimulus invalid or absent: {relative}")
+        for relative in excluded_files:
+            if not (observer_root / relative).is_file():
+                failures.append(f"excluded-child sentinel absent before cleanup: {relative}")
+        for relative in protected_files:
+            if not (observer_root / relative).is_file():
+                failures.append(f".nosync sentinel absent before cleanup: {relative}")
         for relative in outside_files:
             if not (observer_root / relative).is_file():
                 failures.append(f"outside-scope sentinel absent before cleanup: {relative}")
@@ -2878,7 +2884,6 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         expected_observer_manifest = expected_remote_manifest
         if scope_boundary:
             expected_observer_manifest = sorted(expected_remote_manifest + [
-                "ExcludedChild/", "ExcludedChild/keep.txt",
                 "NoSyncProtected/", "NoSyncProtected/.nosync",
                 "NoSyncProtected/keep.txt",
             ])
@@ -2914,18 +2919,16 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
         if known_delete and (observer_root / remote_delete_target).exists():
             failures.append(f"DB-known online deleted file still exists locally: {remote_delete_target}")
 
-        # S11: three independent protection boundaries. Do not rely on the
-        # observed absence of an upload; assert actual preserved sentinel bytes.
+        # S11: --cleanup-local-files purges local-only items regardless of
+        # sync_list scope. .nosync is an independent protection boundary.
         if scope_boundary:
-            failures.extend(self._stage2_assert_bytes(observer_root, excluded_files, "excluded child"))
+            for relative in (*excluded_files, *outside_files):
+                orphan_path = observer_root / relative
+                if orphan_path.exists() or orphan_path.is_symlink():
+                    failures.append(f"cleanup retained local-only file: {relative}")
+                if orphan_path.parent.exists() or orphan_path.parent.is_symlink():
+                    failures.append(f"cleanup retained now-empty local-only directory: {orphan_path.parent.relative_to(observer_root)}")
             failures.extend(self._stage2_assert_bytes(observer_root, protected_files, ".nosync subtree"))
-            failures.extend(self._stage2_assert_bytes(observer_root, outside_files, "outside sync_list"))
-            for relative in outside_files:
-                outside_dir = observer_root / relative.split("/", 1)[0]
-                original = [relative.split("/", 1)[1]]
-                actual = build_typed_manifest(outside_dir)
-                if actual != original:
-                    failures.append(f"out-of-scope sentinel directory changed: {outside_dir.name}: {actual}")
 
         # Independent fresh download verifies the *actual* remote tree after
         # the observer phase, detecting forbidden upload/delete side effects.

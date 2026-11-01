@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 
-from framework.base import E2ETestCase
+from testcases.monitor_case_base import MonitorModeTestCaseBase
 
 from framework.context import E2EContext
 
@@ -44,7 +44,7 @@ from framework.utils import (
 
 
 
-class TestCase0032RemoteRenameReconciliation(E2ETestCase):
+class TestCase0032RemoteRenameReconciliation(MonitorModeTestCaseBase):
 
     case_id = "0032"
 
@@ -81,6 +81,9 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
             f'sync_dir = "{sync_dir}"\n'
 
             'bypass_data_preservation = "true"\n'
+            'monitor_interval = "300"\n'
+            'monitor_fullscan_frequency = "0"\n'
+            'disable_websocket_support = "true"\n'
 
         )
 
@@ -656,109 +659,77 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
 
 
-        # Phase 2: perform both renames through the seed client.
-
-        seed_old_txt_path.rename(seed_new_txt_path)
-
-        rename_xlsx_pair(seed_old_xlsx_path, seed_new_xlsx_path)
-
-        rename_pdf_pair(seed_old_pdf_path, seed_new_pdf_path)
-
-        rename_image_set(seed_old_image_path, seed_new_image_path)
-
-
-
-        if seed_old_txt_path.exists() or xlsx_pair_any_exists(seed_old_xlsx_path) or pdf_pair_any_exists(seed_old_pdf_path) or image_set_any_exists(seed_old_image_path):
-
+        # Phase 2: move already-synced items through inotify. A standalone
+        # --sync interprets these local renames as remote delete + re-upload.
+        # The stale --download-only client below must see genuine same-ID moves.
+        rename_pairs = [
+            (old.as_posix(), old.as_posix().replace("remote-original-name", "remote-renamed-name"))
+            for old in sorted(path.relative_to(seed_root) for path in seed_root.rglob("*")
+                              if path.is_file() and "remote-original-name" in path.name)
+        ]
+        if len(rename_pairs) != 9:
             self._write_metadata(metadata_file, details)
-
-            return self.fail_result(
-
-                self.case_id,
-
-                self.name,
-
-                "one or more seed old filenames still exist immediately after rename",
-
-                artifacts,
-
-                details,
-
-            )
-
-
-
-        if not seed_new_txt_path.is_file() or not xlsx_pair_all_files(seed_new_xlsx_path) or not pdf_pair_all_files(seed_new_pdf_path) or not image_set_all_files(seed_new_image_path):
-
-            self._write_metadata(metadata_file, details)
-
-            return self.fail_result(
-
-                self.case_id,
-
-                self.name,
-
-                "one or more seed renamed files are missing immediately after rename",
-
-                artifacts,
-
-                details,
-
-            )
-
-
+            return self.fail_result(self.case_id, self.name, "rename fixture does not contain nine original files", artifacts, details)
 
         remote_rename_command = [
-
-            context.onedrive_bin,
-
-            "--display-running-config",
-
-            "--sync",
-
-            "--verbose",
-
-            "--single-directory",
-
-            root_name,
-
-            "--confdir",
-
-            str(conf_seed),
-
+            context.onedrive_bin, "--display-running-config", "--monitor",
+            "--upload-only", "--verbose", "--verbose", "--single-directory",
+            root_name, "--confdir", str(conf_seed),
         ]
+        context.log(f"Executing Test Case {self.case_id} phase2 monitored remote rename: {command_to_string(remote_rename_command)}")
+        monitor, started = self._launch_monitor_process(
+            context, remote_rename_command, remote_rename_stdout, remote_rename_stderr,
+        )
+        try:
+            details["remote_rename_monitor_initial_sync_complete"] = started
+            if not started:
+                return self.fail_result(self.case_id, self.name, "mutator monitor did not complete initial sync", artifacts, details)
+            offset = self._prepare_monitor_for_local_mutation(monitor, remote_rename_stdout, details)
+            if not details["monitor_ready_after_initial_sync"]:
+                return self.fail_result(self.case_id, self.name, "mutator monitor not ready for rename", artifacts, details)
 
-        context.log(f"Executing Test Case {self.case_id} phase2 remote rename: {command_to_string(remote_rename_command)}")
+            seed_old_txt_path.rename(seed_new_txt_path)
+            rename_xlsx_pair(seed_old_xlsx_path, seed_new_xlsx_path)
+            rename_pdf_pair(seed_old_pdf_path, seed_new_pdf_path)
+            rename_image_set(seed_old_image_path, seed_new_image_path)
+            if (seed_old_txt_path.exists() or xlsx_pair_any_exists(seed_old_xlsx_path)
+                    or pdf_pair_any_exists(seed_old_pdf_path) or image_set_any_exists(seed_old_image_path)):
+                return self.fail_result(self.case_id, self.name, "old seed filenames still exist after local rename", artifacts, details)
+            if (not seed_new_txt_path.is_file() or not xlsx_pair_all_files(seed_new_xlsx_path)
+                    or not pdf_pair_all_files(seed_new_pdf_path) or not image_set_all_files(seed_new_image_path)):
+                return self.fail_result(self.case_id, self.name, "renamed seed files missing after local rename", artifacts, details)
 
-        remote_rename_result = run_command(remote_rename_command, cwd=context.repo_root)
-
-        write_text_file(remote_rename_stdout, remote_rename_result.stdout)
-
-        write_text_file(remote_rename_stderr, remote_rename_result.stderr)
-
-        details["remote_rename_returncode"] = remote_rename_result.returncode
-
-
-
-        if remote_rename_result.returncode != 0:
-
-            self._write_metadata(metadata_file, details)
-
-            return self.fail_result(
-
-                self.case_id,
-
-                self.name,
-
-                f"remote rename propagation phase failed with status {remote_rename_result.returncode}",
-
-                artifacts,
-
-                details,
-
+            patterns = [
+                marker
+                for source, destination in rename_pairs
+                for marker in (
+                    f"[M] Local item moved: ./{source} -> ./{destination}",
+                    f"Moving ./{source} to ./{destination}",
+                    f'"{Path(destination).name}", "", file,',
+                )
+            ]
+            processed, segment = self._wait_for_stdout_growth_patterns(
+                remote_rename_stdout, start_offset=offset,
+                required_patterns=patterns, timeout_seconds=180,
             )
-
-
+            details["remote_rename_monitor_moves_complete"] = processed
+            details["remote_rename_monitor_move_count"] = len(rename_pairs)
+            details["remote_rename_monitor_bad_operations"] = [
+                line for line in segment.splitlines()
+                if any(marker in line for marker in (
+                    "Deleting item from Microsoft OneDrive:",
+                    "Uploading new file:",
+                    "New items to upload to Microsoft OneDrive:",
+                    "New directories to create on Microsoft OneDrive:",
+                    "Trying to delete this item as requested:",
+                ))
+            ]
+            if not processed or details["remote_rename_monitor_bad_operations"]:
+                return self.fail_result(self.case_id, self.name, "mutator did not complete same-ID moves without delete/re-upload", artifacts, details)
+        finally:
+            self._shutdown_monitor_process(monitor, details)
+            self._write_metadata(metadata_file, details)
+        details["remote_rename_transaction_complete"] = True
 
         # Phase 3: stale client reconciles both remote renames using existing DB/local state.
 

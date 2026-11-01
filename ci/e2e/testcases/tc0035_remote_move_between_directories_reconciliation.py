@@ -4,7 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
-from framework.base import E2ETestCase
+from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
@@ -21,7 +21,7 @@ from framework.utils import (
 )
 
 
-class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
+class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(MonitorModeTestCaseBase):
     case_id = "0035"
     name = "remote move between directories reconciliation"
     description = (
@@ -40,6 +40,9 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             "# tc0035 config\n"
             f'sync_dir = "{sync_dir}"\n'
             'bypass_data_preservation = "true"\n'
+            'monitor_interval = "300"\n'
+            'monitor_fullscan_frequency = "0"\n'
+            'disable_websocket_support = "true"\n'
         )
 
         write_onedrive_config(config_path, config_text)
@@ -320,65 +323,76 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
-        # Phase 2: perform both moves through the seed client.
-        # This is our remote-side move mechanism.
-        seed_destination_txt_path.parent.mkdir(parents=True, exist_ok=True)
-        seed_source_txt_path.rename(seed_destination_txt_path)
-        rename_xlsx_pair(seed_source_xlsx_path, seed_destination_xlsx_path)
-        rename_pdf_pair(seed_source_pdf_path, seed_destination_pdf_path)
-        rename_image_set(seed_source_image_path, seed_destination_image_path)
-
-        details["seed_source_txt_exists_after_local_move"] = seed_source_txt_path.exists()
-        details["seed_destination_txt_exists_after_local_move"] = seed_destination_txt_path.is_file()
-        details["seed_source_xlsx_exists_after_local_move"] = seed_source_xlsx_path.exists()
-        details["seed_destination_xlsx_exists_after_local_move"] = seed_destination_xlsx_path.is_file()
-        details["seed_anchor_exists_after_local_move"] = seed_anchor_path.is_file()
-
-        if seed_source_txt_path.exists() or xlsx_pair_any_exists(seed_source_xlsx_path) or pdf_pair_any_exists(seed_source_pdf_path) or image_set_any_exists(seed_source_image_path):
-            self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "one or more seed source paths still exist immediately after move",
-                artifacts,
-                details,
-            )
-
-        if not seed_destination_txt_path.is_file() or not xlsx_pair_all_files(seed_destination_xlsx_path) or not pdf_pair_all_files(seed_destination_pdf_path) or not image_set_all_files(seed_destination_image_path):
-            self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "one or more seed destination paths do not exist immediately after move",
-                artifacts,
-                details,
-            )
-
-        remote_move_command = [
-            context.onedrive_bin,
-            "--display-running-config",
-            "--sync",
-            "--verbose",
-            "--single-directory",
-            root_name,
-            "--confdir",
-            str(conf_seed),
+        # Phase 2: an already-synced mutator performs genuine same-ID moves
+        # through monitor/inotify. A standalone --sync would delete/re-upload.
+        move_pairs = [
+            (path.relative_to(seed_root).as_posix(),
+             (Path(root_name) / "DestinationDirectory" / path.name).as_posix())
+            for path in sorted((seed_root / root_name / "SourceDirectory").iterdir())
+            if path.is_file()
         ]
-        context.log(f"Executing Test Case {self.case_id} phase2 remote move: {command_to_string(remote_move_command)}")
-        remote_move_result = run_command(remote_move_command, cwd=context.repo_root)
-        write_text_file(remote_move_stdout, remote_move_result.stdout)
-        write_text_file(remote_move_stderr, remote_move_result.stderr)
-        details["remote_move_returncode"] = remote_move_result.returncode
-
-        if remote_move_result.returncode != 0:
+        if len(move_pairs) != 9:
             self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                f"remote move propagation phase failed with status {remote_move_result.returncode}",
-                artifacts,
-                details,
+            return self.fail_result(self.case_id, self.name, "move fixture does not contain nine source files", artifacts, details)
+        remote_move_command = [
+            context.onedrive_bin, "--display-running-config", "--monitor",
+            "--upload-only", "--verbose", "--verbose", "--single-directory",
+            root_name, "--confdir", str(conf_seed),
+        ]
+        context.log(f"Executing Test Case {self.case_id} phase2 monitored remote move: {command_to_string(remote_move_command)}")
+        monitor, started = self._launch_monitor_process(
+            context, remote_move_command, remote_move_stdout, remote_move_stderr,
+        )
+        try:
+            details["remote_move_monitor_initial_sync_complete"] = started
+            if not started:
+                return self.fail_result(self.case_id, self.name, "mutator monitor did not complete initial sync", artifacts, details)
+            offset = self._prepare_monitor_for_local_mutation(monitor, remote_move_stdout, details)
+            if not details["monitor_ready_after_initial_sync"]:
+                return self.fail_result(self.case_id, self.name, "mutator monitor not ready for move", artifacts, details)
+
+            seed_source_txt_path.rename(seed_destination_txt_path)
+            rename_xlsx_pair(seed_source_xlsx_path, seed_destination_xlsx_path)
+            rename_pdf_pair(seed_source_pdf_path, seed_destination_pdf_path)
+            rename_image_set(seed_source_image_path, seed_destination_image_path)
+            if (seed_source_txt_path.exists() or xlsx_pair_any_exists(seed_source_xlsx_path)
+                    or pdf_pair_any_exists(seed_source_pdf_path) or image_set_any_exists(seed_source_image_path)):
+                return self.fail_result(self.case_id, self.name, "old seed source files still exist after local move", artifacts, details)
+            if (not seed_destination_txt_path.is_file() or not xlsx_pair_all_files(seed_destination_xlsx_path)
+                    or not pdf_pair_all_files(seed_destination_pdf_path) or not image_set_all_files(seed_destination_image_path)):
+                return self.fail_result(self.case_id, self.name, "moved seed files missing at destination", artifacts, details)
+
+            patterns = [
+                marker
+                for source, destination in move_pairs
+                for marker in (
+                    f"[M] Local item moved: ./{source} -> ./{destination}",
+                    f"Moving ./{source} to ./{destination}",
+                    f'"{Path(destination).name}", "", file,',
+                )
+            ]
+            processed, segment = self._wait_for_stdout_growth_patterns(
+                remote_move_stdout, start_offset=offset,
+                required_patterns=patterns, timeout_seconds=180,
             )
+            details["remote_move_monitor_moves_complete"] = processed
+            details["remote_move_monitor_move_count"] = len(move_pairs)
+            details["remote_move_monitor_bad_operations"] = [
+                line for line in segment.splitlines()
+                if any(marker in line for marker in (
+                    "Deleting item from Microsoft OneDrive:",
+                    "Uploading new file:",
+                    "New items to upload to Microsoft OneDrive:",
+                    "New directories to create on Microsoft OneDrive:",
+                    "Trying to delete this item as requested:",
+                ))
+            ]
+            if not processed or details["remote_move_monitor_bad_operations"]:
+                return self.fail_result(self.case_id, self.name, "mutator did not complete same-ID moves without delete/re-upload", artifacts, details)
+        finally:
+            self._shutdown_monitor_process(monitor, details)
+            self._write_metadata(metadata_file, details)
+        details["remote_move_transaction_complete"] = True
 
         # Phase 3: stale client reconciles the remote move using existing DB/local state.
         # No --resync here, because this is specifically a reconciliation test.

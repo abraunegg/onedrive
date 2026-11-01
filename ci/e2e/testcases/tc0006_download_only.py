@@ -13,7 +13,7 @@ from framework.utils import command_to_string, reset_directory, run_command, wri
 class TestCase0006DownloadOnly(E2ETestCase):
     case_id = "0006"
     name = "download-only behaviour"
-    description = "Validate that download-only populates local content from remote data"
+    description = "Validate that download-only downloads remote data and retains local originals after remote delete/recreate"
 
     def _write_config(self, config_path: Path) -> None:
         write_onedrive_config(config_path, "# tc0006 config\nbypass_data_preservation = \"true\"\n")
@@ -58,4 +58,85 @@ class TestCase0006DownloadOnly(E2ETestCase):
             actual_path = download_root / relative
             if not actual_path.is_file() or actual_path.read_text(encoding="utf-8") != expected_content:
                 return self.fail_result(self.case_id, self.name, f"Downloaded file content mismatch: {relative}", artifacts, details)
+        # Retention control for TC0032/TC0033/TC0035: a one-shot sync after a
+        # local rename is an online DELETE + CREATE, not a same-ID remote move.
+        # Plain --download-only must retain the deleted item's local copy while
+        # also downloading the new online item. No --cleanup-local-files or
+        # --resync is allowed on this observer reconciliation.
+        recreated_relative = f"{root_name}/recreated.txt"
+        (seed_root / root_name / "remote.txt").rename(seed_root / recreated_relative)
+        replace_stdout = case_log_dir / "replace_stdout.log"
+        replace_stderr = case_log_dir / "replace_stderr.log"
+        replace_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+            "--single-directory", root_name, "--syncdir", str(seed_root),
+            "--confdir", str(seed_conf),
+        ]
+        replace_result = run_command(replace_command, cwd=context.repo_root)
+        write_text_file(replace_stdout, replace_result.stdout)
+        write_text_file(replace_stderr, replace_result.stderr)
+        artifacts.extend([str(replace_stdout), str(replace_stderr)])
+        details["remote_delete_recreate_returncode"] = replace_result.returncode
+        if replace_result.returncode != 0:
+            return self.fail_result(self.case_id, self.name, "Remote delete-and-recreate stimulus failed", artifacts, details)
+        if not (
+            "Deleting item from Microsoft OneDrive:" in replace_result.stdout
+            and "Uploading new file:" in replace_result.stdout
+        ):
+            return self.fail_result(
+                self.case_id, self.name,
+                "One-shot remote stimulus did not prove delete-and-recreate (as opposed to a same-ID move)",
+                artifacts, details,
+            )
+
+        reconcile_stdout = case_log_dir / "reconcile_stdout.log"
+        reconcile_stderr = case_log_dir / "reconcile_stderr.log"
+        reconcile_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+            "--download-only", "--single-directory", root_name,
+            "--syncdir", str(download_root), "--confdir", str(download_conf),
+        ]
+        reconcile_result = run_command(reconcile_command, cwd=context.repo_root)
+        write_text_file(reconcile_stdout, reconcile_result.stdout)
+        write_text_file(reconcile_stderr, reconcile_result.stderr)
+        artifacts.extend([str(reconcile_stdout), str(reconcile_stderr)])
+        details["retention_reconcile_returncode"] = reconcile_result.returncode
+        if reconcile_result.returncode != 0:
+            return self.fail_result(self.case_id, self.name, "Plain download-only reconciliation failed", artifacts, details)
+        old_local = download_root / root_name / "remote.txt"
+        new_local = download_root / recreated_relative
+        if (not old_local.is_file() or old_local.read_text(encoding="utf-8") != "remote\n"
+                or not new_local.is_file() or new_local.read_text(encoding="utf-8") != "remote\n"):
+            return self.fail_result(
+                self.case_id, self.name,
+                "Plain download-only did not retain deleted original AND download recreated remote item",
+                artifacts, details,
+            )
+        # Independent fresh local state establishes the old item really is
+        # absent online; a stale local copy cannot make this check pass.
+        verify_root = case_work_dir / "verifyroot"
+        verify_conf = case_work_dir / "conf-verify"
+        context.bootstrap_config_dir(verify_conf)
+        self._write_config(verify_conf / "config")
+        verify_stdout = case_log_dir / "verify_recreate_stdout.log"
+        verify_stderr = case_log_dir / "verify_recreate_stderr.log"
+        verify_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+            "--download-only", "--resync", "--resync-auth", "--single-directory",
+            root_name, "--syncdir", str(verify_root), "--confdir", str(verify_conf),
+        ]
+        verify_result = run_command(verify_command, cwd=context.repo_root)
+        write_text_file(verify_stdout, verify_result.stdout)
+        write_text_file(verify_stderr, verify_result.stderr)
+        artifacts.extend([str(verify_stdout), str(verify_stderr)])
+        details["remote_truth_returncode"] = verify_result.returncode
+        if (verify_result.returncode != 0 or (verify_root / root_name / "remote.txt").exists()
+                or not (verify_root / recreated_relative).is_file()
+                or (verify_root / recreated_relative).read_text(encoding="utf-8") != "remote\n"):
+            return self.fail_result(
+                self.case_id, self.name,
+                "Independent remote truth did not confirm original deletion and replacement creation",
+                artifacts, details,
+            )
+        details["plain_download_only_delete_recreate_retention"] = "PASS"
         return self.pass_result(self.case_id, self.name, artifacts, details)
