@@ -61,6 +61,10 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             if context.should_run_scenario(self.case_id, scenario.scenario_id)
         ]
 
+        if not scenarios:
+            return self.fail_result(self.case_id, self.name, "No shared-folder sync_list scenarios selected", [],
+                                    {"executed_scenario_ids": [], "failed_scenario_ids": []})
+
         failures: list[str] = []
         all_artifacts: list[str] = []
 

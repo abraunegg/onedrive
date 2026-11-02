@@ -435,6 +435,9 @@ class TestCase0015SkipSymlinksValidation(E2ETestCase):
                 )
             )
 
+        if not results:
+            return self.fail_result(self.case_id, self.name, "No TC0015 scenarios selected", [],
+                                    {"executed_scenario_ids": [], "failed_scenario_ids": []})
         failed = [result for result in results if not result.passed]
         artifacts: list[str] = []
         details: dict = {

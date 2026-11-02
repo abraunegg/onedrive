@@ -10,7 +10,9 @@ import traceback
 from pathlib import Path
 
 from framework.auth_preflight import run_auth_preflight
-from framework.context import E2EContext
+from framework.context import (
+    E2EContext, validate_case_selection, validate_requested_scenarios, validate_scenario_result,
+)
 from framework.database_capture import capture_onedrive_databases
 from framework.result import TestResult
 from framework.utils import ensure_directory, perform_full_account_cleanup, write_text_file
@@ -227,8 +229,9 @@ def _apply_cli_overrides(args: argparse.Namespace) -> None:
                 case_id = _normalise_case_id(token)
                 if case_id:
                     selected.append(case_id)
-        if selected:
-            os.environ["E2E_SELECTED_CASES"] = ",".join(sorted(set(selected)))
+        if not selected:
+            raise RuntimeError("--case-id supplied but no valid E2E case ID was parsed")
+        os.environ["E2E_SELECTED_CASES"] = ",".join(sorted(set(selected)))
 
     if args.scenario:
         mapping: dict[str, set[str]] = {}
@@ -239,13 +242,13 @@ def _apply_cli_overrides(args: argparse.Namespace) -> None:
             case_id = _normalise_case_id(case_part)
             if not case_id:
                 raise RuntimeError(f"Invalid case id in --scenario value '{raw_value}'")
-            mapping.setdefault(case_id, set())
-            for token in scenario_part.split(","):
-                scenario_id = token.strip()
-                if scenario_id:
-                    mapping[case_id].add(scenario_id)
-        if mapping:
-            os.environ["E2E_SELECTED_SCENARIOS_JSON"] = json.dumps({key: sorted(value) for key, value in mapping.items()}, sort_keys=True)
+            scenario_ids = [token.strip() for token in scenario_part.split(",")]
+            if not scenario_ids or any(not scenario_id for scenario_id in scenario_ids):
+                raise RuntimeError(f"No valid scenario IDs in --scenario value '{raw_value}'")
+            mapping.setdefault(case_id, set()).update(scenario_ids)
+        if not mapping:
+            raise RuntimeError("--scenario supplied but no scenario IDs were parsed")
+        os.environ["E2E_SELECTED_SCENARIOS_JSON"] = json.dumps({key: sorted(value) for key, value in mapping.items()}, sort_keys=True)
 
 
 
@@ -300,6 +303,10 @@ def main() -> int:
     selected_case_ids = sorted(context.selected_case_ids)
     cases_to_run = [testcase for testcase in build_test_suite() if context.should_run_case(testcase.case_id)]
     executed_case_ids = [testcase.case_id for testcase in cases_to_run]
+    validate_case_selection(selected_case_ids, [testcase.case_id for testcase in build_test_suite()], _normalise_case_id)
+    if context.selected_scenarios and not selected_case_ids:
+        raise RuntimeError("--scenario requires an explicit --case-id selection to avoid running unrelated test cases")
+    validate_requested_scenarios(context.selected_scenarios, executed_case_ids)
 
     suite_metadata = _build_metadata(context, selected_case_ids, executed_case_ids)
 
@@ -367,6 +374,8 @@ def main() -> int:
 
             try:
                 result = testcase.run(context)
+                if result.status == 'pass':
+                    validate_scenario_result(context, result)
 
                 if result.case_id != testcase.case_id:
                     raise RuntimeError(

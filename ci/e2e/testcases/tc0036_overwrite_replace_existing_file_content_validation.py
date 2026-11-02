@@ -1266,6 +1266,10 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
             if context.should_run_scenario(self.case_id, scenario["scenario_id"])
         ]
 
+        if not scenarios:
+            return self.fail_result(self.case_id, self.name, "No TC0036 scenarios selected", [],
+                                    {"executed_scenario_ids": [], "failed_scenario_ids": []})
+
         for scenario in scenarios:
             if scenario["remote_change_control"]:
                 passed, message, scenario_details = self._run_remote_change_control_scenario(

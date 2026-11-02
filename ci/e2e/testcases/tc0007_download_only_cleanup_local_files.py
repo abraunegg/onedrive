@@ -49,4 +49,52 @@ class TestCase0007DownloadOnlyCleanupLocalFiles(E2ETestCase):
         verified_file = sync_root / f"{root_name}/keep.txt"
         if not verified_file.is_file() or verified_file.read_bytes() != "keep\n".encode("utf-8"):
             return self.fail_result(self.case_id, self.name, f"Verified file content mismatch: {f"{root_name}/keep.txt"}", artifacts, details)
+        # Second cleanup must use the existing cleanup_conf database.
+        # --resync would discard the very reconciliation state under test.
+        stale2 = sync_root / root_name / "new-unknown-directory" / "local-only.dat"
+        write_text_file(stale2, "stale nested local content\n")
+        normal_cleanup_command = [argument for argument in cleanup_command
+                                  if argument not in ("--resync", "--resync-auth")]
+        normal_result = run_command(normal_cleanup_command, cwd=context.repo_root)
+        normal_out = case_log_dir / "normal_cleanup_stdout.log"
+        normal_err = case_log_dir / "normal_cleanup_stderr.log"
+        write_text_file(normal_out, normal_result.stdout)
+        write_text_file(normal_err, normal_result.stderr)
+        artifacts.extend([str(normal_out), str(normal_err)])
+        details["normal_cleanup_command"] = normal_cleanup_command
+        details["normal_cleanup_returncode"] = normal_result.returncode
+        if normal_result.returncode != 0:
+            return self.fail_result(self.case_id, self.name,
+                                    "Normal existing-DB cleanup returned an error", artifacts, details)
+        if stale2.exists() or stale2.parent.exists():
+            return self.fail_result(self.case_id, self.name,
+                                    "Normal existing-DB cleanup retained DB-unknown local data", artifacts, details)
+        if not verified_file.is_file() or verified_file.read_bytes() != b"keep\n":
+            return self.fail_result(self.case_id, self.name,
+                                    "Normal cleanup deleted or changed remote-backed survivor", artifacts, details)
+        # Independently confirm neither cleanup pass uploaded DB-unknown content.
+        verify_root = case_work_dir / "verifyroot"
+        verify_conf = case_work_dir / "conf-verify"
+        context.bootstrap_config_dir(verify_conf)
+        self._write_config(verify_conf / "config")
+        verify_command = [context.onedrive_bin, "--sync", "--download-only", "--resync",
+                          "--resync-auth", "--single-directory", root_name,
+                          "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
+        remote_verify = run_command(verify_command, cwd=context.repo_root)
+        remote_out = case_log_dir / "remote_verify_stdout.log"
+        remote_err = case_log_dir / "remote_verify_stderr.log"
+        write_text_file(remote_out, remote_verify.stdout)
+        write_text_file(remote_err, remote_verify.stderr)
+        artifacts.extend([str(remote_out), str(remote_err)])
+        details["remote_verification_returncode"] = remote_verify.returncode
+        if remote_verify.returncode != 0:
+            return self.fail_result(self.case_id, self.name, "Remote verifier failed", artifacts, details)
+        remotely_kept = verify_root / root_name / "keep.txt"
+        if not remotely_kept.is_file() or remotely_kept.read_bytes() != b"keep\n":
+            return self.fail_result(self.case_id, self.name,
+                                    "Cleanup altered remote-backed data", artifacts, details)
+        if ((verify_root / root_name / "stale-local.txt").exists() or
+                (verify_root / root_name / "new-unknown-directory").exists()):
+            return self.fail_result(self.case_id, self.name,
+                                    "Cleanup uploaded local-only content", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

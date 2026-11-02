@@ -1041,6 +1041,10 @@ class TestCase0037MtimeOnlyLocalChangeHandling(E2ETestCase):
             if context.should_run_scenario(self.case_id, scenario["scenario_id"])
         ]
 
+        if not document_scenarios and not image_scenarios:
+            return self.fail_result(self.case_id, self.name, "No TC0037 scenarios selected", [],
+                                    {"executed_scenario_ids": [], "failed_scenario_ids": []})
+
         failed_scenarios: list[str] = []
         executed_scenario_ids: list[str] = []
 

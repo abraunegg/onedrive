@@ -58,4 +58,71 @@ class TestCase0006DownloadOnly(E2ETestCase):
             actual_path = download_root / relative
             if not actual_path.is_file() or actual_path.read_text(encoding="utf-8") != expected_content:
                 return self.fail_result(self.case_id, self.name, f"Downloaded file content mismatch: {relative}", artifacts, details)
+        # Archive contract: a DB-known online deletion must not delete
+        # the local copy, and an unrelated local-only file must not upload.
+        local_only = download_root / root_name / "local-only-archive-control.txt"
+        write_text_file(local_only, "local-only preserved\n")
+        remote_to_delete = seed_root / root_name / "remote.txt"
+        remote_to_delete.unlink()
+        deletion_command = [argument for argument in seed_command
+                            if argument not in ("--resync", "--resync-auth")]
+        deletion_result = run_command(deletion_command, cwd=context.repo_root)
+        deletion_out = case_log_dir / "remote_delete_stdout.log"
+        deletion_err = case_log_dir / "remote_delete_stderr.log"
+        write_text_file(deletion_out, deletion_result.stdout)
+        write_text_file(deletion_err, deletion_result.stderr)
+        artifacts.extend([str(deletion_out), str(deletion_err)])
+        details["remote_delete_returncode"] = deletion_result.returncode
+        if deletion_result.returncode != 0:
+            return self.fail_result(self.case_id, self.name,
+                                    "Independent online delete failed", artifacts, details)
+
+        # Crucially retain the established download_conf items.sqlite3.
+        archive_command = [argument for argument in download_command
+                           if argument not in ("--resync", "--resync-auth")]
+        archive_result = run_command(archive_command, cwd=context.repo_root)
+        archive_out = case_log_dir / "archive_stdout.log"
+        archive_err = case_log_dir / "archive_stderr.log"
+        write_text_file(archive_out, archive_result.stdout)
+        write_text_file(archive_err, archive_result.stderr)
+        artifacts.extend([str(archive_out), str(archive_err)])
+        details["archive_command"] = archive_command
+        details["archive_returncode"] = archive_result.returncode
+        if archive_result.returncode != 0:
+            return self.fail_result(self.case_id, self.name,
+                                    "Normal archive reconciliation failed", artifacts, details)
+        for path, expected in ((download_root / root_name / "remote.txt", b"remote\n"),
+                               (local_only, b"local-only preserved\n")):
+            if not path.is_file() or path.read_bytes() != expected:
+                return self.fail_result(self.case_id, self.name,
+                                        f"Archive retention failed: {path}", artifacts, details)
+
+        # Fresh independent client observes actual OneDrive state, not a log
+        # message: neither the deleted file nor local-only data may be online.
+        verify_root = case_work_dir / "verifyroot"
+        verify_conf = case_work_dir / "conf-verify"
+        context.bootstrap_config_dir(verify_conf)
+        self._write_config(verify_conf / "config")
+        verify_command = [context.onedrive_bin, "--sync", "--download-only",
+                          "--resync", "--resync-auth", "--single-directory", root_name,
+                          "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
+        verification = run_command(verify_command, cwd=context.repo_root)
+        verify_out = case_log_dir / "remote_verify_stdout.log"
+        verify_err = case_log_dir / "remote_verify_stderr.log"
+        write_text_file(verify_out, verification.stdout)
+        write_text_file(verify_err, verification.stderr)
+        artifacts.extend([str(verify_out), str(verify_err)])
+        details["remote_verification_returncode"] = verification.returncode
+        if verification.returncode != 0:
+            return self.fail_result(self.case_id, self.name,
+                                    "Independent remote verification failed", artifacts, details)
+        for forbidden in ("remote.txt", "local-only-archive-control.txt"):
+            if (verify_root / root_name / forbidden).exists():
+                return self.fail_result(self.case_id, self.name,
+                                        f"Download-only incorrectly uploaded/retained remotely: {forbidden}",
+                                        artifacts, details)
+        nested = verify_root / root_name / "subdir" / "nested.txt"
+        if not nested.is_file() or nested.read_bytes() != b"nested\n":
+            return self.fail_result(self.case_id, self.name,
+                                    "Independent remote survivor is missing/corrupt", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

@@ -27,7 +27,8 @@ def _extract_failed_plan(results: dict) -> tuple[list[str], dict[str, list[str]]
             continue
 
         case_id = _normalise_case_id(str(case.get("id", "")))
-        if not case_id or case_id == "0000":
+        if not case_id or case_id in ("0000", "9999"):
+            # Suite cleanup cannot be recovered by a targeted test-case rerun.
             continue
 
         details = case.get("details") or {}

@@ -867,6 +867,9 @@ class TestCase0077TimestampAuthorityValidation(MonitorModeTestCaseBase):
             if context.should_run_scenario(self.case_id, scenario_id)
         ]
 
+        if not scenarios:
+            return self.fail_result(self.case_id, self.name, "No TC0077 scenarios selected", [],
+                                    {"executed_scenario_ids": [], "failed_scenario_ids": []})
         failed_scenarios: list[str] = []
         for scenario_id, scenario_runner in scenarios:
             try:

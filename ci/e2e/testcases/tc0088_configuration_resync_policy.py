@@ -434,7 +434,10 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
         artifacts.append(str(result_file))
         details.update({"passed": sum(x["status"] == "pass" for x in records),
                         "not_applicable": sum(x["status"] == "not_applicable" for x in records),
-                        "failed": len(failures), "failure_details": failures})
+                        "failed": len(failures), "failure_details": failures,
+                        "executed_scenario_ids": [x["id"] for x in records if x["status"] != "not_applicable"],
+                        "failed_scenario_ids": [x["id"] for x in records if x["status"] == "fail"],
+                        "not_applicable_scenario_ids": [x["id"] for x in records if x["status"] == "not_applicable"]})
         if failures:
             return self.fail_result(reason="; ".join(failures[:10]), artifacts=artifacts, details=details)
         return self.pass_result(artifacts=artifacts, details=details)

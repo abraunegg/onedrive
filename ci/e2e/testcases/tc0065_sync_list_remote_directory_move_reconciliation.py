@@ -2264,6 +2264,7 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
             "scenario_count": len(scenarios),
             "executed_scenario_ids": [scenario.scenario_id for scenario in scenarios],
             "failed_scenarios": len(failures),
+            "failed_scenario_ids": [entry.split(":", 1)[0] for entry in failures],
             "scenario_details": scenario_details,
         }
 

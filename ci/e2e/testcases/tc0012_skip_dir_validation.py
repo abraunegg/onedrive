@@ -1398,6 +1398,10 @@ class TestCase0012SkipDirValidation(E2ETestCase):
             )
         ]
 
+        if not scenarios:
+            return self.fail_result(self.case_id, self.name, "No filtering scenarios selected", [],
+                                    {"executed_scenario_ids": [], "failed_scenario_ids": []})
+
         results: list[ScenarioResult] = []
 
         for scenario in scenarios:

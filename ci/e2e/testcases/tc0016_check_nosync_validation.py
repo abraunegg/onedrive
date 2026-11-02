@@ -767,6 +767,10 @@ class TestCase0016CheckNosyncValidation(MonitorModeTestCaseBase):
             if context.should_run_scenario(self.case_id, scenario_id)
         ]
 
+        if not scenarios:
+            return self.fail_result(self.case_id, self.name, "No TC0016 scenarios selected", [],
+                                    {"executed_scenario_ids": [], "failed_scenario_ids": []})
+
         all_artifacts: list[str] = []
         details: dict[str, object] = {}
         failed_scenarios: list[str] = []

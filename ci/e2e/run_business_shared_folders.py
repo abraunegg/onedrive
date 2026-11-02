@@ -8,7 +8,9 @@ import sys
 import traceback
 
 from framework.auth_preflight import run_auth_preflight
-from framework.context import E2EContext
+from framework.context import (
+    E2EContext, validate_case_selection, validate_requested_scenarios, validate_scenario_result,
+)
 from framework.database_capture import capture_onedrive_databases
 from framework.result import TestResult
 from framework.utils import write_text_file
@@ -81,8 +83,23 @@ def _apply_cli_overrides(args: argparse.Namespace) -> None:
                 case_id = _normalise_case_id(token)
                 if case_id:
                     selected.append(case_id)
-        if selected:
-            os.environ["E2E_SELECTED_CASES"] = ",".join(sorted(set(selected)))
+        if not selected:
+            raise RuntimeError("--case-id supplied but no valid E2E case ID was parsed")
+        os.environ["E2E_SELECTED_CASES"] = ",".join(sorted(set(selected)))
+
+    if args.scenario:
+        mapping: dict[str, set[str]] = {}
+        for raw_value in args.scenario:
+            case_part, separator, scenario_part = raw_value.partition(":")
+            if separator != ":":
+                raise RuntimeError(f"Invalid --scenario '{raw_value}' (expected CASE:SCENARIO[,SCENARIO])")
+            case_id = _normalise_case_id(case_part)
+            values = [part.strip() for part in scenario_part.split(",")]
+            if not case_id or not values or any(not value for value in values):
+                raise RuntimeError(f"Invalid scenario selection: {raw_value}")
+            mapping.setdefault(case_id, set()).update(values)
+        os.environ["E2E_SELECTED_SCENARIOS_JSON"] = json.dumps(
+            {case_id: sorted(values) for case_id, values in mapping.items()}, sort_keys=True)
 
 
 def _should_run_case(context: E2EContext, case_id: str) -> bool:
@@ -115,12 +132,14 @@ def _build_metadata(context: E2EContext, selected_case_ids: list[str], executed_
         "debug_enabled": context.debug_enabled,
         "suite_cleanup_enabled": False,
         "selected_case_ids": selected_case_ids,
+        "selected_scenarios": {case_id: sorted(values) for case_id, values in sorted(context.selected_scenarios.items())},
         "executed_case_ids": executed_case_ids,
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run OneDrive Business Account Shared Folder E2E test cases")
+    parser.add_argument("--scenario", action="append", help="Run only selected case scenarios. Format: CASE:SCENARIO[,SCENARIO]")
     parser.add_argument("--case-id", action="append", help="Run only the specified Business shared-folder case id(s). Supports bsftc0001, bsf0001, or 0001.")
     parser.add_argument("--debug", action="store_true", help="Rerun with debug verbosity enabled")
     parser.add_argument("--output-subdir", help="Write results into ci/e2e/out/<subdir>")
@@ -139,6 +158,10 @@ def main() -> int:
     selected_case_ids = sorted(context.selected_case_ids)
     cases_to_run = [testcase for testcase in build_test_suite() if _should_run_case(context, testcase.case_id)]
     executed_case_ids = [testcase.case_id for testcase in cases_to_run]
+    validate_case_selection(selected_case_ids, [testcase.case_id for testcase in build_test_suite()], _normalise_case_id)
+    if context.selected_scenarios and not selected_case_ids:
+        raise RuntimeError("--scenario requires explicit --case-id selection")
+    validate_requested_scenarios(context.selected_scenarios, executed_case_ids)
 
     suite_metadata = _build_metadata(context, selected_case_ids, executed_case_ids)
 
@@ -168,6 +191,8 @@ def main() -> int:
         context.log(f"Starting test case {testcase.case_id}: {testcase.name}")
         try:
             result = testcase.run(context)
+            if result.status == 'pass':
+                validate_scenario_result(context, result)
             if result.case_id != testcase.case_id:
                 raise RuntimeError(
                     f"Test case returned mismatched case_id: expected '{testcase.case_id}', got '{result.case_id}'"

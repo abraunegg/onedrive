@@ -248,6 +248,10 @@ class TestCase0002SyncListValidation(E2ETestCase):
             if context.should_run_scenario(self.case_id, scenario.scenario_id)
         ]
 
+        if not scenarios:
+            return self.fail_result(self.case_id, self.name, "No TC0002 scenarios selected", [],
+                                    {"executed_scenario_ids": [], "failed_scenario_ids": []})
+
         failures: list[str] = []
         all_artifacts: list[str] = []
 
@@ -651,6 +655,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ]
         )
 
+        # Distinguish the sync_list exclusion from default skip_file *.tmp.
+        # A non-temporary excluded child proves the selective cleanup policy.
+        if scenario.scenario_id == "SL-0037":
+            write_text_file(sync_root / FIXTURE_ROOT_NAME / "RuleLab" / "FileSpecific" /
+                            "CORE" / "temp" / "not-default-skipped.dat", "exclude proof\n")
+
         # Phase 1: unrestricted seed to create the full remote dataset.
         self._write_config_with_overrides(config_path, base_config_text, scenario.phase1_config_overrides)
         if sync_list_path.exists():
@@ -750,6 +760,50 @@ class TestCase0002SyncListValidation(E2ETestCase):
             )
         )
         diffs.extend(self._validate_cleanup_expectations(scenario, sync_root, fixture_removals))
+
+        if scenario.scenario_id == "SL-0037":
+            exclusion_proof = (sync_root / FIXTURE_ROOT_NAME / "RuleLab" /
+                               "FileSpecific" / "CORE" / "temp" / "not-default-skipped.dat")
+            if exclusion_proof.exists():
+                diffs.append("SL-0037 excluded non-temporary descendant survived cleanup")
+
+        if scenario.scenario_id in ("SL-0018", "SL-0019", "SL-0020", "SL-0021") and not diffs:
+            # Phase 2 has established the restrictive sync_list hash and DB.
+            # Phase 3 must reuse the same DB without --resync.  A local-only
+            # file within an included tree is protected by the historic
+            # selective-sync retention rule; an explicitly excluded local-only
+            # file may be pruned by cleanup. Verify BOTH outcomes independently.
+            retained_file = (sync_root / FIXTURE_ROOT_NAME / "Projects" / "Code" /
+                             "JOBXYZ" / "Source" / "tc0002-retained-local-only.dat")
+            excluded_file = (sync_root / FIXTURE_ROOT_NAME / "Projects" /
+                             "Audio" / "tc0002-excluded-local-only.dat")
+            write_text_file(retained_file, "included DB-unknown data retained\n")
+            write_text_file(excluded_file, "excluded DB-unknown data\n")
+            phase3_command = [argument for argument in phase2_command
+                              if argument not in ("--resync", "--resync-auth")]
+            phase3_stdout = scenario_log_dir / "phase3_normal_stdout.log"
+            phase3_stderr = scenario_log_dir / "phase3_normal_stderr.log"
+            phase3_result = run_command(phase3_command, cwd=context.repo_root)
+            write_text_file(phase3_stdout, phase3_result.stdout)
+            write_text_file(phase3_stderr, phase3_result.stderr)
+            artifacts.extend([str(phase3_stdout), str(phase3_stderr)])
+            metadata.extend([f"phase3_command={command_to_string(phase3_command)}",
+                             f"phase3_returncode={phase3_result.returncode}"])
+            if phase3_result.returncode != 0:
+                diffs.append("Normal non-resync selective cleanup failed")
+            if not retained_file.is_file() or retained_file.read_bytes() != b"included DB-unknown data retained\n":
+                diffs.append("Normal selective cleanup destroyed/changed protected included local-only file")
+            if excluded_file.exists():
+                diffs.append("Normal selective cleanup retained explicitly excluded local-only file")
+            for rel_path in scenario.expected_present_after:
+                if not (sync_root / rel_path).exists():
+                    diffs.append(f"Normal selective cleanup deleted included path: {rel_path}")
+            for rel_path in scenario.expected_absent_after:
+                if (sync_root / rel_path).exists():
+                    diffs.append(f"Normal selective cleanup restored excluded path: {rel_path}")
+            manifest_file = scenario_dir / "phase3_normal_manifest.txt"
+            write_manifest(manifest_file, build_manifest(sync_root))
+            artifacts.append(str(manifest_file))
 
         return diffs, artifacts, metadata
 
