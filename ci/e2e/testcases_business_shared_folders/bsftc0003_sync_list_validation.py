@@ -94,7 +94,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             diff_file = scenario_dir / "diff.txt"
 
             command = [
-                context.onedrive_bin,
+                context.onedrive_bin, "--display-running-config",
                 "--sync",
                 "--verbose",
                 "--download-only",
@@ -321,7 +321,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             return failures
 
         cleanup_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--download-only",

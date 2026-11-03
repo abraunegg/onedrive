@@ -101,7 +101,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             diff_file = scenario_dir / "diff.txt"
 
             command = [
-                context.onedrive_bin,
+                context.onedrive_bin, "--display-running-config",
                 "--sync",
                 "--verbose",
                 "--verbose",
@@ -395,7 +395,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             write_text_file(local_test_file, mutation_check.content)
 
             upload_command = [
-                context.onedrive_bin,
+                context.onedrive_bin, "--display-running-config",
                 "--sync",
                 "--verbose",
                 "--verbose",
@@ -435,7 +435,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                     )
 
             cleanup_command = [
-                context.onedrive_bin,
+                context.onedrive_bin, "--display-running-config",
                 "--sync",
                 "--verbose",
                 "--verbose",
@@ -458,7 +458,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 )
 
             verify_command = [
-                context.onedrive_bin,
+                context.onedrive_bin, "--display-running-config",
                 "--sync",
                 "--verbose",
                 "--verbose",
@@ -594,7 +594,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             return failures
 
         cleanup_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--verbose",

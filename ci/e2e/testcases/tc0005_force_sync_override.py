@@ -49,7 +49,7 @@ class TestCase0005ForceSyncOverride(E2ETestCase):
         metadata_file = state_dir / "seed_metadata.txt"
 
         command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--resync",
@@ -67,7 +67,7 @@ class TestCase0005ForceSyncOverride(E2ETestCase):
         write_text_file(stderr_file, result.stderr)
 
         verify_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--download-only",

@@ -779,7 +779,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
 
     def _build_sync_command(self, context: E2EContext, sync_root: Path, config_dir: Path) -> list[str]:
         return [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--resync",

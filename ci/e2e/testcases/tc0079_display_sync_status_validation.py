@@ -293,7 +293,7 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
         failures: list[str] = []
 
         seed_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--single-directory",
@@ -325,7 +325,7 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
         live_database = conf_main / "items.sqlite3"
         dry_run_database = conf_main / "items-dryrun.sqlite3"
         status_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--display-sync-status",
             "--verbose",
             "--single-directory",
@@ -375,7 +375,7 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
         indeterminate_database = conf_indeterminate / "items.sqlite3"
         indeterminate_dry_run_database = conf_indeterminate / "items-dryrun.sqlite3"
         indeterminate_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--display-sync-status",
             "--verbose",
             "--confdir",
@@ -462,7 +462,7 @@ class TestCase0079DisplaySyncStatusValidation(MonitorModeTestCaseBase):
         # Reconcile local changes so a second clean baseline can be established before
         # creating a stale second client for remote-side changes.
         reconcile_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--single-directory",

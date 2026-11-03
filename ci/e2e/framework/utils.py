@@ -273,7 +273,7 @@ def perform_full_account_cleanup(
 
     # Phase 1: establish local state from remote
     phase1_command = [
-        onedrive_bin,
+        onedrive_bin, "--display-running-config",
         "--sync",
         "--verbose",
         "--resync",
@@ -335,7 +335,7 @@ def perform_full_account_cleanup(
 
     # Phase 3: propagate deletions online
     phase3_command = [
-        onedrive_bin,
+        onedrive_bin, "--display-running-config",
         "--sync",
         "--verbose",
         "--confdir",
@@ -394,7 +394,7 @@ def perform_full_account_cleanup(
     # A new config requires --resync; use separate state to avoid misreading
     # the database which originally drove deletion propagation.
     phase5_command = [
-        onedrive_bin,
+        onedrive_bin, "--display-running-config",
         "--sync", "--download-only", "--verbose", "--resync", "--resync-auth",
         "--syncdir", str(verify_sync_dir),
         "--confdir", str(verify_config),
