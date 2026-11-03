@@ -9459,9 +9459,11 @@ class SyncEngine {
 						addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
 					} else {
 						addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
-						// Set the cleanup flag
-						cleanupDataPass = true;
 					}
+				}
+				// Set cleanup mode independently of progress logging.
+				if (cleanupLocalFiles) {
+					cleanupDataPass = true;
 				}
 			}
 		}
