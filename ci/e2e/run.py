@@ -102,6 +102,8 @@ from testcases.tc0085_websocket_wake_during_active_upload import TestCase0085Web
 from testcases.tc0086_https_credential_redaction import TestCase0086HTTPSCredentialRedaction
 from testcases.tc0087_resync_monitor_working_directory_boundary import TestCase0087ResyncMonitorWorkingDirectoryBoundary
 from testcases.tc0088_monitor_status_healthcheck_validation import TestCase0088MonitorStatusHealthcheckValidation
+from testcases.tc0088_configuration_resync_policy import TestCase0088ConfigurationResyncPolicy
+from testcases.tc0089_git_rsync_monitor_upload_identity import TestCase0089GitRsyncMonitorUploadIdentity
 
 
 def build_test_suite() -> list:
@@ -194,6 +196,8 @@ def build_test_suite() -> list:
         TestCase0086HTTPSCredentialRedaction(),
         TestCase0087ResyncMonitorWorkingDirectoryBoundary(),
         TestCase0088MonitorStatusHealthcheckValidation(),
+        TestCase0088ConfigurationResyncPolicy(),
+        TestCase0089GitRsyncMonitorUploadIdentity(),
     ]
 
 

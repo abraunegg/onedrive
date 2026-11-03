@@ -445,6 +445,17 @@ class SyncEngine {
 		}
 	}
 
+	// sync_root_files applies only to files immediately beneath sync_dir.
+	// Item paths may have a leading "./" or "/" prefix.
+	private bool isLogicalSyncRootFilePath(string itemPath) {
+		if (itemPath.startsWith("./")) {
+			itemPath = itemPath[2 .. $];
+		} else if (itemPath.startsWith("/")) {
+			itemPath = itemPath[1 .. $];
+		}
+		return !itemPath.empty && !itemPath.canFind('/');
+	}
+	
 	// Publish all online-to-local filesystem effects accumulated since the
 	// previous monitor capture. Delegates are invoked outside the mutex.
 	void publishExpectedLocalEffects() {
@@ -2252,8 +2263,6 @@ class SyncEngine {
 		}
 	}
 
-
-
 	// Submit one item from a generated /children enumeration into the same bounded
 	// reconciliation path used by native /delta. The generated traversal has already
 	// applied client-side filtering, so this preserves the existing generated-response
@@ -3296,7 +3305,7 @@ class SyncEngine {
 					// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 					if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
 						// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
-						if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (rootName(newItemPath) == "") ) {
+						if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (isLogicalSyncRootFilePath(newItemPath)) ) {
 							// This is a file
 							// We are configured to sync all files in the root
 							// This is a file in the logical configured root
@@ -4387,7 +4396,6 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-
 
 	// If the JSON item IS in the database, this will be an update to an existing in-sync item
 	void applyPotentiallyChangedItem(Item existingDatabaseItem, string existingItemPath, Item changedOneDriveItem, string changedItemPath, JSONValue onedriveJSONItem) {
@@ -7322,7 +7330,7 @@ class SyncEngine {
 				if (syncListConfigured) {
 					// sync_list configured and in use
 					if (selectiveSync.isPathExcludedViaSyncList(localFilePath)) {
-						if ((isFile(localFilePath)) && (appConfig.getValueBool("sync_root_files")) && (rootName(localFilePath.strip('.').strip('/')) == "")) {
+						if ((isFile(localFilePath)) && (appConfig.getValueBool("sync_root_files")) && (isLogicalSyncRootFilePath(localFilePath))) {
 							if (debugLogging) {addLogEntry("Not skipping path due to sync_root_files inclusion: " ~ localFilePath, ["debug"]);}
 						} else {
 							if (exists(appConfig.syncListFilePath)){
@@ -7817,7 +7825,7 @@ class SyncEngine {
 				// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 				if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
-					if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (rootName(newItemPath) == "") ) {
+					if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (isLogicalSyncRootFilePath(newItemPath)) ) {
 						// This is a file
 						// We are configured to sync all files in the root
 						// This is a file in the logical root
@@ -7950,10 +7958,6 @@ class SyncEngine {
 		// return if path is excluded
 		return clientSideRuleExcludesPath;
 	}
-
-
-
-
 
 	// Ensure the path passed in, is in the correct format to use when evaluating 'sync_list' rules
 	string ensureStartsWithDotSlash(string inputPath) {
@@ -9455,9 +9459,11 @@ class SyncEngine {
 						addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
 					} else {
 						addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
-						// Set the cleanup flag
-						cleanupDataPass = true;
 					}
+				}
+				// Set cleanup mode independently of progress logging.
+				if (cleanupLocalFiles) {
+					cleanupDataPass = true;
 				}
 			}
 		}
@@ -11461,6 +11467,11 @@ class SyncEngine {
 									throw new JsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
 								}
 
+								// Issue #3930: a path lookup can also return a misrouted DriveItem.
+								// Reject it before any database write, remote modification or local removal.
+								if (!validateNewFileUploadDestination(fileDetailsFromOneDrive, parentItem, fileToUpload))
+									throw new JsonResponseException("Microsoft Graph returned an unexpected destination for an existing-file lookup");
+
 								// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
 								// and that it matches the POSIX filename of the local item we are trying to upload as a new file
 								if (verboseLogging) {addLogEntry("The file we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);}
@@ -11629,6 +11640,30 @@ class SyncEngine {
 		}
 	}
 
+	// Issue #3930: a successful HTTP response is not proof that Graph created
+	// the requested file. Validate the returned DriveItem before DB writes or
+	// source removal. No additional API request or DB lookup is required.
+	bool validateNewFileUploadDestination(JSONValue response, Item parentItem, string localPath) {
+		if (response.type() != JSONType.object || !hasName(response) ||
+			!hasParentReferenceId(response) || !hasParentReferenceDriveId(response)) {
+			addLogEntry("ERROR: Microsoft Graph upload response missing required destination identity for: " ~ localPath, ["error"]);
+			return false;
+		}
+
+		string returnedName = response["name"].str;
+		string returnedParentId = response["parentReference"]["id"].str;
+		string returnedDriveId = response["parentReference"]["driveId"].str;
+		if (returnedName == baseName(localPath) && returnedParentId == parentItem.id &&
+			icmp(returnedDriveId, parentItem.driveId) == 0) return true;
+
+		addLogEntry("ERROR: Microsoft Graph API upload destination mismatch for: " ~ localPath, ["error"]);
+		addLogEntry("Expected: name='" ~ baseName(localPath) ~ "', parentId='" ~ parentItem.id ~ "', driveId='" ~ parentItem.driveId ~ "'", ["error"]);
+		addLogEntry("Returned: name='" ~ returnedName ~ "', parentId='" ~ returnedParentId ~ "', driveId='" ~ returnedDriveId ~ "'", ["error"]);
+		addLogEntry("The upload transferred data, but the API created an unexpected remote item. No database association will be saved; --resync cannot correct this API defect.", ["error"]);
+		addLogEntry("Please refer to https://github.com/OneDrive/onedrive-api-docs/issues/1934 for further details.", ["error"]);
+		return false;
+	}
+
 	// Perform the actual upload to OneDrive
 	bool performNewFileUpload(Item parentItem, string fileToUpload, long thisFileSize, ref bool zeroDataTraversal) {
 		// Function Start Time
@@ -11703,7 +11738,7 @@ class SyncEngine {
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUpload(fileToUpload, parentItem.driveId, parentItem.id, baseName(fileToUpload));
 					uploadTransferEndTime = Clock.currTime();
 					uploadFailed = false;
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
+
 
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -11807,7 +11842,7 @@ class SyncEngine {
 								// exitHandlerTriggered triggered
 								if (uploadResponse.type() == JSONType.object) {
 									uploadFailed = false;
-									addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
+				
 								} else {
 									addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 									uploadFailed = true;
@@ -11844,6 +11879,15 @@ class SyncEngine {
 			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
 		}
 
+		// Verify the Graph-returned destination for every account type before any
+		// database update, metadata operation or local source deletion. A successful
+		// HTTP status is insufficient when the returned item is in another folder.
+		if (!dryRun && !uploadFailed && !zeroDataTraversal &&
+			!validateNewFileUploadDestination(uploadResponse, parentItem, fileToUpload)) {
+			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed (Graph destination mismatch)!", ["info", "notify"]);
+			return true;
+		}
+
 		// If a real upload occurred, calculate transfer metrics, perform integrity validation
 		if (!uploadFailed && !zeroDataTraversal) {
 			// Upload did not fail ...
@@ -11852,6 +11896,9 @@ class SyncEngine {
 
 			// OK as the upload did not fail, we need to save the response from OneDrive, but it has to contain the required upload fields
 			if ((uploadResponse.type() == JSONType.object) && (hasId(uploadResponse)) && (hasETag(uploadResponse))) {
+				if (!dryRun) {
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
+				}
 				// check if the path still exists locally before we try to set the file times online - as short lived files, whilst we uploaded it - it may not exist locally already
 				if (exists(fileToUpload)) {
 					// Are we in a --dry-run scenario
@@ -12796,7 +12843,6 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-
 
 	// Mark the existing generated-response database subtree out-of-sync without
 	// retaining an account-wide Item[] snapshot. This preserves the traversal order
@@ -16400,8 +16446,6 @@ class SyncEngine {
 		}
 	}
 
-
-
 	// Query OneDrive for file details of a given path, returning either the 'webURL' or 'lastModifiedBy' JSON facet
 	void queryOneDriveForFileDetails(string inputFilePath, string runtimePath, string outputType) {
 		// Function Start Time
@@ -16829,7 +16873,6 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-
 
 	// Cancel a Microsoft Graph upload session recorded in a local session_upload.* file
 	void cancelUploadSessionIfPresent(string sessionFilePath) {

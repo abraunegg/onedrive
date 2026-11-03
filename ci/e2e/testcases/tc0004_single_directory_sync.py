@@ -84,6 +84,13 @@ class TestCase0004SingleDirectorySync(E2ETestCase):
             "--confdir",
             str(verify_confdir),
         ]
+        if result.returncode != 0:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Single-directory sync failed with status {result.returncode}; independent verification skipped",
+                [str(path) for path in (stdout_file, stderr_file)],
+                {"result_returncode": result.returncode},
+            )
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout)
         write_text_file(verify_stderr, verify_result.stderr)
@@ -127,4 +134,13 @@ class TestCase0004SingleDirectorySync(E2ETestCase):
         if any(e == other_dir or e.startswith(other_dir + "/") for e in remote_manifest):
             return self.fail_result(self.case_id, self.name, f"Non-target directory was unexpectedly synchronised: {other_dir}", artifacts, details)
 
+        for relative, expected in (
+            (f"{target_dir}/keep.txt", b"target\n"),
+            (f"{target_dir}/nested/inside.md", b"nested\n"),
+        ):
+            verified_file = verify_root / relative
+            if not verified_file.is_file() or verified_file.read_bytes() != expected:
+                return self.fail_result(self.case_id, self.name, f"Target file missing or content mismatch: {relative}", artifacts, details)
+        if (verify_root / other_dir).exists():
+            return self.fail_result(self.case_id, self.name, f"Non-target subtree unexpectedly downloaded: {other_dir}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

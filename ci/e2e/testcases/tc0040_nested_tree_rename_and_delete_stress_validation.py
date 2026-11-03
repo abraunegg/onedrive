@@ -332,8 +332,11 @@ class TestCase0040NestedTreeRenameAndDeleteStressValidation(E2ETestCase):
         local_renamed_parent_dir_path.joinpath("Level1A").rename(local_renamed_nested_dir_path)
         local_renamed_parent_dir_path.joinpath("Level1B", "file-gamma.txt").rename(local_renamed_file_gamma_path)
 
-        if local_deleted_file_beta_path.exists():
-            local_deleted_file_beta_path.unlink()
+        if not local_deleted_file_beta_path.is_file():
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name,
+                "Nested-tree delete target did not exist before mutation", artifacts, details)
+        local_deleted_file_beta_path.unlink()
 
         write_text_file(local_new_file_delta_path, new_file_delta_content)
 

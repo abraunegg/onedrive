@@ -173,8 +173,15 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         write_text_file(pull_stderr, pull_result.stderr)
 
         delete_target = mutator_root / root_name / self.REMOTE_DELETE_FILE_NAME
-        if delete_target.exists():
-            delete_target.unlink()
+        # Do not simulate a successful remote deletion when the mutator never
+        # downloaded the expected remote fixture. That would make the monitor
+        # observe an absent file rather than a genuine remote tombstone.
+        if pull_result.returncode != 0 or not delete_target.is_file():
+            return pull_result, None, delete_target
+        expected = f"TC0058 remote deletion target for {root_name}\n".encode("utf-8")
+        if delete_target.read_bytes() != expected:
+            return pull_result, None, delete_target
+        delete_target.unlink()
 
         delete_command = [
             context.onedrive_bin,
@@ -332,11 +339,14 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 delete_stderr=mutator_delete_stderr,
             )
             details["mutator_pull_returncode"] = pull_result.returncode
-            details["mutator_delete_returncode"] = delete_result.returncode
+            details["mutator_delete_returncode"] = delete_result.returncode if delete_result is not None else None
             details["mutator_delete_target_exists_after_unlink"] = mutator_delete_target.exists()
             if pull_result.returncode != 0:
                 self._write_metadata(metadata_file, details)
                 return False, f"{scenario_name}: mutator pull failed with status {pull_result.returncode}", artifacts, details
+            if delete_result is None:
+                self._write_metadata(metadata_file, details)
+                return False, f"{scenario_name}: mutator never established the expected original remote file; deletion not attempted", artifacts, details
             if delete_result.returncode != 0:
                 self._write_metadata(metadata_file, details)
                 return False, f"{scenario_name}: remote delete propagation failed with status {delete_result.returncode}", artifacts, details
@@ -445,9 +455,10 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             if enforce_target_state and not expect_target_removed_after_single_monitor_pass and removed:
                 self._write_metadata(metadata_file, details)
                 return False, f"{scenario_name}: target file was removed when cleanup should have remained deferred/disabled", artifacts, details
-            if not local_anchor.is_file():
+            expected_anchor = f"TC0058 anchor for {root_name}\n".encode("utf-8")
+            if not local_anchor.is_file() or local_anchor.read_bytes() != expected_anchor:
                 self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: retained anchor file disappeared during cleanup validation", artifacts, details
+                return False, f"{scenario_name}: retained anchor content missing or changed during cleanup validation", artifacts, details
 
             self._write_metadata(metadata_file, details)
             return True, "", artifacts, details

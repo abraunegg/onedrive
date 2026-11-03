@@ -34,6 +34,13 @@ class TestCase0008UploadOnly(E2ETestCase):
         result = run_command(command, cwd=context.repo_root)
         write_text_file(stdout_file, result.stdout); write_text_file(stderr_file, result.stderr)
         verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
+        if result.returncode != 0:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Upload-only failed with status {result.returncode}; independent verification skipped",
+                [str(path) for path in (stdout_file, stderr_file)],
+                {"result_returncode": result.returncode},
+            )
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); remote_manifest = build_manifest(verify_root); write_manifest(remote_manifest_file, remote_manifest)
         write_text_file(metadata_file, "\n".join([f"root_name={root_name}", f"returncode={result.returncode}", f"verify_returncode={verify_result.returncode}"]) + "\n")
@@ -42,4 +49,7 @@ class TestCase0008UploadOnly(E2ETestCase):
         if result.returncode != 0: return self.fail_result(self.case_id, self.name, f"--upload-only failed with status {result.returncode}", artifacts, details)
         if verify_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if f"{root_name}/upload.txt" not in remote_manifest: return self.fail_result(self.case_id, self.name, f"Upload-only did not synchronise expected remote file: {root_name}/upload.txt", artifacts, details)
+        verified_file = verify_root / f"{root_name}/upload.txt"
+        if not verified_file.is_file() or verified_file.read_bytes() != "upload only\n".encode("utf-8"):
+            return self.fail_result(self.case_id, self.name, f"Verified file content mismatch: {f"{root_name}/upload.txt"}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

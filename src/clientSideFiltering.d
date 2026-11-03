@@ -584,8 +584,8 @@ class ClientSideFiltering {
 								finalResult = false;
 								// parental path match, break and search rules no more given include rule match
 								break;
-							} else {
-								// Exclude rule
+							} else if (ruleSegments.length <= pathSegments.length) {
+								// Exclude rule: a deeper descendant must not exclude its ancestor
 								{addLogEntry("Evaluation against 'sync_list' rule result: exclusion parent root path match to rule - path to be excluded", ["debug"]);}
 								excludeParentMatched = true;
 								exclude = true;

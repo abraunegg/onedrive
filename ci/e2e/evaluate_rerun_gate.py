@@ -94,11 +94,35 @@ def main() -> int:
     parser.add_argument("--primary-results", default="ci/e2e/out/results.json")
     parser.add_argument("--debug-results", default="ci/e2e/out/debug-rerun/results.json")
     parser.add_argument("--gate-file", default="ci/e2e/out/gate.json")
+    parser.add_argument("--cleanup-results", help="Required post-debug cleanup result JSON")
     args = parser.parse_args()
 
     primary_path = Path(args.primary_results)
     debug_path = Path(args.debug_results)
     gate_path = Path(args.gate_file)
+
+    if args.cleanup_results:
+        cleanup_path = Path(args.cleanup_results)
+        try:
+            cleanup = _load_json(cleanup_path)
+        except (ValueError, OSError) as exc:
+            cleanup = {"status": "fail", "reason": f"Invalid cleanup result: {exc}"}
+        if not cleanup or cleanup.get("status") != "pass":
+            reason = (cleanup or {}).get("reason") or "Missing post-debug cleanup result"
+            payload = {
+                "conclusion": "failure",
+                "recovered_by_debug_rerun": False,
+                "reason": f"Mandatory post-debug cleanup failed: {reason}",
+                "primary_results": str(primary_path),
+                "debug_results": str(debug_path),
+                "cleanup_results": str(cleanup_path),
+                "effective_results": str(primary_path),
+                "primary_failed_case_ids": [], "debug_failed_case_ids": [],
+                "recovered_case_ids": [], "unrecovered_case_ids": [],
+            }
+            _write_json(gate_path, payload)
+            print(payload["reason"])
+            return 1
 
     primary = _load_json(primary_path)
     debug = _load_json(debug_path)

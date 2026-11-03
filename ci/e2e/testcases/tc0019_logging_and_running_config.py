@@ -92,8 +92,10 @@ class TestCase0019LoggingAndRunningConfig(E2ETestCase):
         if not log_entries:
             return self.fail_result(self.case_id, self.name, "No application log files were created in the configured log_dir", artifacts, details)
 
+        if not any((app_log_dir / entry).stat().st_size > 0 for entry in log_entries):
+            return self.fail_result(self.case_id, self.name, "All application log files are empty", artifacts, details)
         stdout_lower = result.stdout.lower()
-        if "display_running_config" not in stdout_lower and "log_dir" not in stdout_lower:
+        if "log_dir" not in stdout_lower or str(app_log_dir).lower() not in stdout_lower:
             return self.fail_result(self.case_id, self.name, "display-running-config output did not expose the active runtime configuration", artifacts, details)
 
         return self.pass_result(self.case_id, self.name, artifacts, details)
