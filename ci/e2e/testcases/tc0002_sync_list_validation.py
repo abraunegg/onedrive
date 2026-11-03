@@ -751,7 +751,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
         )
         post_manifest = build_manifest(sync_root)
         write_manifest(post_cleanup_manifest, post_manifest)
-        before = set(phase1_manifest.read_text(encoding="utf-8").splitlines())
+        before = set(pre_cleanup_manifest.read_text(encoding="utf-8").splitlines())
         after = set(post_manifest)
         disappeared = sorted(before - after)
         appeared = sorted(after - before)

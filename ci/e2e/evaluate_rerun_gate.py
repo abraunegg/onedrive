@@ -147,6 +147,20 @@ def main() -> int:
             cleanup = {"status": "fail", "reason": f"Invalid cleanup result: {exc}"}
         if not cleanup or cleanup.get("status") != "pass":
             reason = (cleanup or {}).get("reason") or "Missing post-debug cleanup result"
+            # Cleanup failure is a hard gate failure, but it must not erase the
+            # primary/debug evidence needed to diagnose the underlying defects.
+            try:
+                primary_for_report = _load_json(primary_path)
+                debug_for_report = _load_json(debug_path)
+            except (ValueError, OSError):
+                primary_for_report = None
+                debug_for_report = None
+            primary_failures = _failed_cases(primary_for_report)
+            debug_failures = _failed_cases(debug_for_report)
+            debug_cases = _case_map(debug_for_report)
+            recovered = sorted(case_id for case_id in primary_failures
+                               if case_id in debug_cases and case_id not in debug_failures)
+            unrecovered = sorted(set(primary_failures) - set(recovered))
             payload = {
                 "conclusion": "failure",
                 "recovered_by_debug_rerun": False,
@@ -155,8 +169,10 @@ def main() -> int:
                 "debug_results": str(debug_path),
                 "cleanup_results": str(cleanup_path),
                 "effective_results": str(primary_path),
-                "primary_failed_case_ids": [], "debug_failed_case_ids": [],
-                "recovered_case_ids": [], "unrecovered_case_ids": [],
+                "primary_failed_case_ids": sorted(primary_failures),
+                "debug_failed_case_ids": sorted(debug_failures),
+                "recovered_case_ids": recovered,
+                "unrecovered_case_ids": unrecovered,
             }
             _write_json(gate_path, payload)
             print(payload["reason"])

@@ -8,7 +8,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, run_command, write_text_file
+from framework.utils import command_to_string, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
@@ -46,7 +46,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         )
 
     def _write_simple_config(self, config_file: Path, sync_dir: Path) -> None:
-        write_text_file(
+        write_onedrive_config(
             config_file,
             (
                 "# tc0058 helper config\n"
@@ -87,6 +87,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
 
         context.bootstrap_config_dir(seed_conf)
         self._write_simple_config(seed_conf / "config", seed_root)
+        context.validate_generated_config_dir(seed_conf)
 
         seed_command = [
             context.onedrive_bin,
@@ -151,6 +152,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
     ):
         context.bootstrap_config_dir(mutator_conf)
         self._write_simple_config(mutator_conf / "config", mutator_root)
+        context.validate_generated_config_dir(mutator_conf)
 
         pull_command = [
             context.onedrive_bin,
@@ -291,7 +293,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             return False, f"{scenario_name}: seed phase failed with status {seed_result.returncode}", artifacts, details
 
         context.bootstrap_config_dir(monitor_conf)
-        write_text_file(
+        write_onedrive_config(
             monitor_conf / "config",
             self._build_config_text(
                 monitor_root,
@@ -299,6 +301,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 monitor_authoritative_sync=monitor_authoritative_sync,
             ),
         )
+        context.validate_generated_config_dir(monitor_conf)
 
         # The full-scan-frequency scenario must actually exercise native /delta.
         # --single-directory normally establishes test isolation, but explicitly
@@ -421,12 +424,11 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             details["local_anchor_exists_after_single_monitor_pass"] = local_anchor.is_file()
 
             # These policy markers are DEBUG-level messages. The monitor command
-            # intentionally uses --verbose twice above so that they are emitted in
-            # normal CI, not only in the framework's debug rerun. Read both process
-            # stdout/stderr and the application log because logging destinations can
-            # differ across harness/debug paths.
+            # intentionally uses --verbose twice so the markers appear in its own
+            # output. Do not read root.onedrive.log here: the file also contains
+            # *preload* output and can falsely claim this monitor used /children.
             monitor_log_text_parts: list[str] = []
-            for candidate in (monitor_stdout, monitor_stderr, app_log_dir / "root.onedrive.log"):
+            for candidate in (monitor_stdout, monitor_stderr):
                 try:
                     monitor_log_text_parts.append(candidate.read_text(errors="replace"))
                 except FileNotFoundError:
