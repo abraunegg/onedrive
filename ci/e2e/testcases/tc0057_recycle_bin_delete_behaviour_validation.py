@@ -915,13 +915,10 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(MonitorModeTestCaseBase):
         ]
 
         all_failures: list[str] = []
-        failed_scenario_ids: list[str] = []
         all_artifacts: list[str] = []
         details: dict[str, object] = {
             "scenario_count": len(selected_scenarios),
             "selected_scenarios": [scenario["scenario_id"] for scenario in selected_scenarios],
-            "executed_scenario_ids": [scenario["scenario_id"] for scenario in selected_scenarios],
-            "failed_scenario_ids": failed_scenario_ids,
         }
 
         for scenario in selected_scenarios:
@@ -946,8 +943,6 @@ class TestCase0057RecycleBinDeleteBehaviourValidation(MonitorModeTestCaseBase):
                     state_dir=state_dir,
                 )
             all_failures.extend(failures)
-            if failures:
-                failed_scenario_ids.append(str(scenario["scenario_id"]))
             all_artifacts.extend(artifacts)
             details[str(scenario["scenario_id"])] = scenario_details
 

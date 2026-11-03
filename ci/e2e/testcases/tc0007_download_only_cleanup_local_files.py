@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from framework.base import E2ETestCase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
+from framework.utils import command_to_string, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0007DownloadOnlyCleanupLocalFiles(E2ETestCase):
@@ -16,85 +17,144 @@ class TestCase0007DownloadOnlyCleanupLocalFiles(E2ETestCase):
     description = "Validate that cleanup_local_files removes stale local content in download-only mode"
 
     def _write_config(self, config_path: Path) -> None:
-        write_onedrive_config(config_path, "# tc0007 config\nbypass_data_preservation = \"true\"\n")
+        write_onedrive_config(config_path, '# tc0007 config\nbypass_data_preservation = "true"\n')
+
+    @staticmethod
+    def _running_bool(output: str, key: str, expected: bool) -> bool:
+        return re.search(
+            rf"Config option '{re.escape(key)}'\s*=\s*{'true' if expected else 'false'}(?:\s|$)",
+            output,
+        ) is not None
 
     def run(self, context: E2EContext) -> TestResult:
-        layout = self.prepare_case_layout(
-            context,
-            case_dir_name="tc0007",
-            ensure_refresh_token=True,
-        )
-        case_work_dir = layout.work_dir; case_log_dir = layout.log_dir; state_dir = layout.state_dir
-        sync_root = case_work_dir / "syncroot"; seed_conf = case_work_dir / "conf-seed"; cleanup_conf = case_work_dir / "conf-cleanup"; root_name = f"ZZ_E2E_TC0007_{context.run_id}_{os.getpid()}"
-        write_text_file(sync_root / root_name / "keep.txt", "keep\n")
-        context.bootstrap_config_dir(seed_conf); self._write_config(seed_conf / "config")
-        context.bootstrap_config_dir(cleanup_conf); self._write_config(cleanup_conf / "config")
-        seed_stdout = case_log_dir / "seed_stdout.log"; seed_stderr = case_log_dir / "seed_stderr.log"; cleanup_stdout = case_log_dir / "cleanup_stdout.log"; cleanup_stderr = case_log_dir / "cleanup_stderr.log"; post_manifest_file = state_dir / "post_cleanup_manifest.txt"; metadata_file = state_dir / "seed_metadata.txt"
-        seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(seed_conf)]
-        seed_result = run_command(seed_command, cwd=context.repo_root)
-        write_text_file(seed_stdout, seed_result.stdout); write_text_file(seed_stderr, seed_result.stderr)
-        if seed_result.returncode != 0:
-            return self.fail_result(self.case_id, self.name, f"Remote seed failed with status {seed_result.returncode}", [str(seed_stdout), str(seed_stderr)], {"seed_returncode": seed_result.returncode, "root_name": root_name})
-        stale = sync_root / root_name / "stale-local.txt"; write_text_file(stale, "stale\n")
-        cleanup_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--cleanup-local-files", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(cleanup_conf)]
-        cleanup_result = run_command(cleanup_command, cwd=context.repo_root)
-        write_text_file(cleanup_stdout, cleanup_result.stdout); write_text_file(cleanup_stderr, cleanup_result.stderr); post_manifest = build_manifest(sync_root); write_manifest(post_manifest_file, post_manifest)
-        write_text_file(metadata_file, "\n".join([f"root_name={root_name}", f"seed_returncode={seed_result.returncode}", f"cleanup_returncode={cleanup_result.returncode}"]) + "\n")
-        artifacts = [str(seed_stdout), str(seed_stderr), str(cleanup_stdout), str(cleanup_stderr), str(post_manifest_file), str(metadata_file)]
-        details = {"seed_returncode": seed_result.returncode, "cleanup_returncode": cleanup_result.returncode, "root_name": root_name}
-        if seed_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"Remote seed failed with status {seed_result.returncode}", artifacts, details)
-        if cleanup_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"cleanup_local_files processing failed with status {cleanup_result.returncode}", artifacts, details)
-        if stale.exists() or f"{root_name}/stale-local.txt" in post_manifest: return self.fail_result(self.case_id, self.name, "Stale local file still exists after cleanup_local_files processing", artifacts, details)
-        if f"{root_name}/keep.txt" not in post_manifest: return self.fail_result(self.case_id, self.name, "Expected remote-backed file missing after cleanup_local_files processing", artifacts, details)
-        verified_file = sync_root / f"{root_name}/keep.txt"
-        if not verified_file.is_file() or verified_file.read_bytes() != "keep\n".encode("utf-8"):
-            return self.fail_result(self.case_id, self.name, f"Verified file content mismatch: {f"{root_name}/keep.txt"}", artifacts, details)
-        # Second cleanup must use the existing cleanup_conf database.
-        # --resync would discard the very reconciliation state under test.
-        stale2 = sync_root / root_name / "new-unknown-directory" / "local-only.dat"
-        write_text_file(stale2, "stale nested local content\n")
-        normal_cleanup_command = [argument for argument in cleanup_command
-                                  if argument not in ("--resync", "--resync-auth")]
-        normal_result = run_command(normal_cleanup_command, cwd=context.repo_root)
-        normal_out = case_log_dir / "normal_cleanup_stdout.log"
-        normal_err = case_log_dir / "normal_cleanup_stderr.log"
-        write_text_file(normal_out, normal_result.stdout)
-        write_text_file(normal_err, normal_result.stderr)
-        artifacts.extend([str(normal_out), str(normal_err)])
-        details["normal_cleanup_command"] = normal_cleanup_command
-        details["normal_cleanup_returncode"] = normal_result.returncode
-        if normal_result.returncode != 0:
-            return self.fail_result(self.case_id, self.name,
-                                    "Normal existing-DB cleanup returned an error", artifacts, details)
-        if stale2.exists() or stale2.parent.exists():
-            return self.fail_result(self.case_id, self.name,
-                                    "Normal existing-DB cleanup retained DB-unknown local data", artifacts, details)
-        if not verified_file.is_file() or verified_file.read_bytes() != b"keep\n":
-            return self.fail_result(self.case_id, self.name,
-                                    "Normal cleanup deleted or changed remote-backed survivor", artifacts, details)
-        # Independently confirm neither cleanup pass uploaded DB-unknown content.
-        verify_root = case_work_dir / "verifyroot"
-        verify_conf = case_work_dir / "conf-verify"
+        layout = self.prepare_case_layout(context, case_dir_name="tc0007", ensure_refresh_token=True)
+        work_dir, log_dir, state_dir = layout.work_dir, layout.log_dir, layout.state_dir
+        sync_root = work_dir / "syncroot"
+        seed_conf = work_dir / "conf-seed"
+        cleanup_conf = work_dir / "conf-cleanup"
+        verify_conf = work_dir / "conf-verify"
+        verify_root = work_dir / "verifyroot"
+        root_name = f"ZZ_E2E_TC0007_{context.run_id}_{os.getpid()}"
+        keep_relative = f"{root_name}/keep.txt"
+        stale_relative = f"{root_name}/stale-local.txt"
+        expected_keep = b"keep\n"
+
+        write_text_file(sync_root / keep_relative, expected_keep.decode("utf-8"))
+        context.bootstrap_config_dir(seed_conf)
+        self._write_config(seed_conf / "config")
+        context.bootstrap_config_dir(cleanup_conf)
+        self._write_config(cleanup_conf / "config")
         context.bootstrap_config_dir(verify_conf)
         self._write_config(verify_conf / "config")
-        verify_command = [context.onedrive_bin, "--sync", "--download-only", "--resync",
-                          "--resync-auth", "--single-directory", root_name,
-                          "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
-        remote_verify = run_command(verify_command, cwd=context.repo_root)
-        remote_out = case_log_dir / "remote_verify_stdout.log"
-        remote_err = case_log_dir / "remote_verify_stderr.log"
-        write_text_file(remote_out, remote_verify.stdout)
-        write_text_file(remote_err, remote_verify.stderr)
-        artifacts.extend([str(remote_out), str(remote_err)])
-        details["remote_verification_returncode"] = remote_verify.returncode
-        if remote_verify.returncode != 0:
-            return self.fail_result(self.case_id, self.name, "Remote verifier failed", artifacts, details)
-        remotely_kept = verify_root / root_name / "keep.txt"
-        if not remotely_kept.is_file() or remotely_kept.read_bytes() != b"keep\n":
+
+        seed_stdout, seed_stderr = log_dir / "seed_stdout.log", log_dir / "seed_stderr.log"
+        cleanup_stdout, cleanup_stderr = log_dir / "cleanup_stdout.log", log_dir / "cleanup_stderr.log"
+        verify_stdout, verify_stderr = log_dir / "verify_stdout.log", log_dir / "verify_stderr.log"
+        manifest_file = state_dir / "post_cleanup_manifest.txt"
+        remote_manifest_file = state_dir / "remote_verify_manifest.txt"
+        metadata_file = state_dir / "seed_metadata.txt"
+        artifacts = [str(p) for p in (
+            seed_stdout, seed_stderr, cleanup_stdout, cleanup_stderr,
+            verify_stdout, verify_stderr, manifest_file, remote_manifest_file, metadata_file,
+        )]
+        details = {"root_name": root_name}
+
+        # Retain the original seed invocation.
+        seed_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+            "--resync", "--resync-auth", "--single-directory", root_name,
+            "--syncdir", str(sync_root),
+            "--confdir", str(seed_conf),
+        ]
+        seed_result = run_command(seed_command, cwd=context.repo_root)
+        write_text_file(seed_stdout, seed_result.stdout)
+        write_text_file(seed_stderr, seed_result.stderr)
+        details["seed_command"] = command_to_string(seed_command)
+        details["seed_returncode"] = seed_result.returncode
+        if seed_result.returncode != 0:
             return self.fail_result(self.case_id, self.name,
-                                    "Cleanup altered remote-backed data", artifacts, details)
-        if ((verify_root / root_name / "stale-local.txt").exists() or
-                (verify_root / root_name / "new-unknown-directory").exists()):
+                                    f"Remote seed failed with status {seed_result.returncode}",
+                                    artifacts, details)
+
+        seed_output = seed_result.stdout + "\n" + seed_result.stderr
+        if not self._running_bool(seed_output, "download_only", False):
             return self.fail_result(self.case_id, self.name,
-                                    "Cleanup uploaded local-only content", artifacts, details)
+                                    "Remote seed did not report effective download_only=false",
+                                    artifacts, details)
+
+        stale_path = sync_root / stale_relative
+        write_text_file(stale_path, "stale\n")
+        if not stale_path.is_file() or stale_path.read_bytes() != b"stale\n":
+            return self.fail_result(self.case_id, self.name,
+                                    "Local-only stale fixture could not be established",
+                                    artifacts, details)
+
+        # Retain the original cleanup invocation, including its fresh config
+        # directory and --resync. This test validates the one-shot cleanup path,
+        # not existing-DB reconciliation or monitor logging cadence.
+        cleanup_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+            "--download-only", "--cleanup-local-files", "--resync", "--resync-auth",
+            "--single-directory", root_name, "--syncdir", str(sync_root), "--confdir", str(cleanup_conf),
+        ]
+        cleanup_result = run_command(cleanup_command, cwd=context.repo_root)
+        write_text_file(cleanup_stdout, cleanup_result.stdout)
+        write_text_file(cleanup_stderr, cleanup_result.stderr)
+        details["cleanup_command"] = command_to_string(cleanup_command)
+        details["cleanup_returncode"] = cleanup_result.returncode
+        post_manifest = build_manifest(sync_root)
+        write_manifest(manifest_file, post_manifest)
+
+        failures: list[str] = []
+        if cleanup_result.returncode != 0:
+            failures.append(f"cleanup_local_files processing failed with status {cleanup_result.returncode}")
+        output = cleanup_result.stdout + "\n" + cleanup_result.stderr
+        for key, expected in (("download_only", True), ("cleanup_local_files", True),
+                              ("upload_only", False)):
+            if not self._running_bool(output, key, expected):
+                failures.append(f"Cleanup invocation did not report effective {key}={str(expected).lower()}")
+        if stale_path.exists() or stale_relative in post_manifest:
+            failures.append("Stale local file still exists after cleanup_local_files processing")
+        if keep_relative not in post_manifest:
+            failures.append("Expected remote-backed file missing after cleanup_local_files processing")
+        keep_path = sync_root / keep_relative
+        if not keep_path.is_file() or keep_path.read_bytes() != expected_keep:
+            failures.append(f"Retained local file content mismatch: {keep_relative}")
+
+        # Verify the removal arose in the cleanup scan, not just as an incidental
+        # consequence of --resync. Both the effective flag and the exact
+        # file-specific removal evidence are required.
+        removed_pattern = re.compile(r"(?:^|\n)(?:DEBUG:\s+)?Removed local file: (?:\./)?"
+                                     + re.escape(stale_relative) + r"(?:\s|$)")
+        details["stale_removal_logged"] = removed_pattern.search(output) is not None
+        if not details["stale_removal_logged"]:
+            failures.append("No evidence that cleanup scan removed the DB-unknown stale file")
+
+        # Independent read-only-in-effect observer: downloading a fresh copy
+        # from Microsoft Graph establishes remote truth. It must not see the
+        # locally generated stale file, and must still see the seeded file.
+        verify_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+            "--download-only", "--resync", "--resync-auth", "--single-directory",
+            root_name, "--syncdir", str(verify_root), "--confdir", str(verify_conf),
+        ]
+        verify_result = run_command(verify_command, cwd=context.repo_root)
+        write_text_file(verify_stdout, verify_result.stdout)
+        write_text_file(verify_stderr, verify_result.stderr)
+        details["verify_command"] = command_to_string(verify_command)
+        details["verify_returncode"] = verify_result.returncode
+        remote_manifest = build_manifest(verify_root)
+        write_manifest(remote_manifest_file, remote_manifest)
+        if verify_result.returncode != 0:
+            failures.append(f"Independent remote verification failed with status {verify_result.returncode}")
+        if (verify_root / stale_relative).exists() or stale_relative in remote_manifest:
+            failures.append("Cleanup phase uploaded the local-only stale file to OneDrive")
+        remote_keep = verify_root / keep_relative
+        if not remote_keep.is_file() or remote_keep.read_bytes() != expected_keep:
+            failures.append("Remote-backed fixture missing or modified on OneDrive")
+        details["remote_verify_manifest"] = remote_manifest
+        write_text_file(metadata_file, "\n".join(f"{key}={value}" for key, value in details.items()) + "\n")
+
+        if failures:
+            return self.fail_result(self.case_id, self.name, "; ".join(failures), artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

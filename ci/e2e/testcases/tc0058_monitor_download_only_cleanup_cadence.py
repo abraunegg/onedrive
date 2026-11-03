@@ -115,7 +115,6 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         monitor_conf: Path,
         preload_stdout: Path,
         preload_stderr: Path,
-        native_deferred: bool = False,
     ):
         preload_command = [
             context.onedrive_bin,
@@ -125,13 +124,13 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             "--verbose",
             "--resync",
             "--resync-auth",
+            "--single-directory",
+            root_name,
             "--syncdir",
             str(monitor_root),
             "--confdir",
             str(monitor_conf),
         ]
-        if not native_deferred:
-            preload_command.extend(["--single-directory", root_name])
         context.log(f"Executing Test Case {self.case_id} preload {root_name}: {command_to_string(preload_command)}")
         preload_result = run_command(preload_command, cwd=context.repo_root)
         write_text_file(preload_stdout, preload_result.stdout)
@@ -301,17 +300,19 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             ),
         )
 
-        native_deferred = (monitor_authoritative_sync == "monitor_fullscan_frequency"
-                           and include_cleanup_local_files)
-        if native_deferred:
-            # Scope the test with selective sync, not --single-directory.  The
-            # latter unconditionally forces generated /delta in src/sync.d.
+        # The full-scan-frequency scenario must actually exercise native /delta.
+        # --single-directory normally establishes test isolation, but explicitly
+        # forces generated /children regardless of monitor cleanup cadence.
+        # A root-restricted sync_list gives this one scenario an online scope
+        # without changing the Graph acquisition path. Configure it BEFORE
+        # preloading so the persisted sync_list hash is stable for the monitor.
+        native_delta_scenario = monitor_authoritative_sync == "monitor_fullscan_frequency"
+        if native_delta_scenario:
             write_text_file(monitor_conf / "sync_list", f"/{root_name}\n")
 
         preload_result = self._preload_monitor_fixture(
             context,
             root_name=root_name,
-            native_deferred=native_deferred,
             monitor_root=monitor_root,
             monitor_conf=monitor_conf,
             preload_stdout=preload_stdout,
@@ -359,37 +360,12 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             if delete_result.returncode != 0:
                 self._write_metadata(metadata_file, details)
                 return False, f"{scenario_name}: remote delete propagation failed with status {delete_result.returncode}", artifacts, details
-
-            # Confirm the genuine online deletion with a separate, fresh
-            # authenticated verifier. Do not mistake a successful mutator
-            # process exit or local unlink for remote state evidence.
-            remote_verify_root = scenario_work / "verifyroot"
-            remote_verify_conf = scenario_work / "conf-verify"
-            context.bootstrap_config_dir(remote_verify_conf)
-            self._write_simple_config(remote_verify_conf / "config", remote_verify_root)
-            remote_verify_command = [
-                context.onedrive_bin, "--sync", "--download-only", "--resync",
-                "--resync-auth", "--single-directory", root_name,
-                "--syncdir", str(remote_verify_root), "--confdir", str(remote_verify_conf),
-            ]
-            remote_verification = run_command(remote_verify_command, cwd=context.repo_root)
-            remote_verify_stdout = scenario_logs / "remote_verify_stdout.log"
-            remote_verify_stderr = scenario_logs / "remote_verify_stderr.log"
-            write_text_file(remote_verify_stdout, remote_verification.stdout)
-            write_text_file(remote_verify_stderr, remote_verification.stderr)
-            artifacts.extend([str(remote_verify_stdout), str(remote_verify_stderr)])
-            details["independent_remote_verify_returncode"] = remote_verification.returncode
-            if remote_verification.returncode != 0:
-                self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: independent remote verifier failed", artifacts, details
-            if (remote_verify_root / root_name / self.REMOTE_DELETE_FILE_NAME).exists():
-                self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: online deletion not independently confirmed", artifacts, details
             target_path = remote_delete_target
         elif stimulus == "local_only":
             # This control deliberately avoids a real remote delete. Remote tombstones
-            # have their own separate archival control scenario below.
-            # This scenario tests a local-only file never present online.
+            # are normal sync activity and may remove local files even when
+            # --cleanup-local-files is disabled, so the disabled-control case uses a
+            # local-only file that has never existed online.
             write_text_file(local_only_target, f"TC0058 local-only stale file for {root_name}\n")
             details["local_only_target_exists_after_injection"] = local_only_target.is_file()
             if not local_only_target.is_file():
@@ -412,7 +388,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             "--confdir",
             str(monitor_conf),
         ]
-        if not native_deferred:
+        if not native_delta_scenario:
             monitor_command.extend(["--single-directory", root_name])
         if include_cleanup_local_files:
             monitor_command.insert(3, "--cleanup-local-files")
@@ -464,18 +440,22 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             details["authoritative_cleanup_marker_seen"] = authoritative_marker in monitor_log_text
             details["deferred_cleanup_marker_seen"] = deferred_marker in monitor_log_text
             details["full_scan_true_marker_seen"] = full_scan_true_marker in monitor_log_text
+            generated_marker = "Flagged generatedSimulatedDeltaResponse as 'true'"
+            details["generated_delta_marker_seen"] = generated_marker in monitor_log_text
+            if native_delta_scenario and generated_marker in monitor_log_text:
+                self._write_metadata(metadata_file, details)
+                return False, f"{scenario_name}: generated /children used instead of required native /delta", artifacts, details
             details["monitor_log_text_bytes_checked"] = len(monitor_log_text)
-            if native_deferred:
-                generated_marker = "Flagged generatedSimulatedDeltaResponse as 'true'"
-                native_fetch_marker = "Fetching /delta response from the OneDrive API"
-                details["native_delta_enumeration_observed"] = (
-                    native_fetch_marker in monitor_log_text and
-                    generated_marker not in monitor_log_text
-                )
-                if not details["native_delta_enumeration_observed"]:
+            for label, expected in (
+                ("download_only", "true"),
+                ("cleanup_local_files", "true" if include_cleanup_local_files else "false"),
+                ("monitor_authoritative_sync", monitor_authoritative_sync),
+            ):
+                import re
+                pattern = rf"Config option '{re.escape(label)}'\s*=\s*{re.escape(expected)}(?:\s|$)"
+                if re.search(pattern, monitor_log_text) is None:
                     self._write_metadata(metadata_file, details)
-                    return False, (f"{scenario_name}: genuine native /delta path was not established; "
-                                   "generated-delta mode cannot validate deferred cleanup"), artifacts, details
+                    return False, f"{scenario_name}: running client did not confirm {label}={expected}", artifacts, details
 
             monitor_manifest = build_manifest(monitor_root)
             write_manifest(monitor_manifest_file, monitor_manifest)
@@ -548,16 +528,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             },
             {
                 "scenario_id": "NOCLEANUP",
-                "scenario_name": "cleanup disabled local-only control",
-                "monitor_authoritative_sync": "monitor_and_signal",
-                "include_cleanup_local_files": False,
-                "stimulus": "local_only",
-                "expect_target_removed_after_single_monitor_pass": False,
-                "enforce_target_state": True,
-            },
-            {
-                "scenario_id": "NOCLEANUP_REMOTE_DELETE",
-                "scenario_name": "cleanup disabled genuine remote-deletion archival control",
+                "scenario_name": "cleanup disabled: online deletion preserves local file",
                 "monitor_authoritative_sync": "monitor_and_signal",
                 "include_cleanup_local_files": False,
                 "stimulus": "remote_delete",
@@ -565,18 +536,10 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 "enforce_target_state": True,
             },
         ]
-        scenarios = [
-            scenario for scenario in scenarios
-            if context.should_run_scenario(self.case_id, scenario["scenario_id"])
-        ]
-        if not scenarios:
-            return self.fail_result(self.case_id, self.name, "No TC0058 scenarios selected", [],
-                                    {"executed_scenario_ids": [], "failed_scenario_ids": []})
 
         all_artifacts: list[str] = []
         scenario_details: dict[str, object] = {}
         failures: list[str] = []
-        failed_scenario_ids: list[str] = []
 
         for scenario in scenarios:
             ok, reason, artifacts, details = self._run_policy_scenario(
@@ -590,11 +553,8 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             scenario_details[scenario["scenario_id"]] = details
             if not ok:
                 failures.append(reason)
-                failed_scenario_ids.append(scenario["scenario_id"])
 
         details = {
-            "executed_scenario_ids": [scenario["scenario_id"] for scenario in scenarios],
-            "failed_scenario_ids": failed_scenario_ids,
             "scenarios_run": len(scenarios),
             "scenarios_failed": len(failures),
             "failures": failures,

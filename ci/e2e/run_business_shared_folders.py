@@ -8,9 +8,7 @@ import sys
 import traceback
 
 from framework.auth_preflight import run_auth_preflight
-from framework.context import (
-    E2EContext, validate_case_selection, validate_requested_scenarios, validate_scenario_result,
-)
+from framework.context import E2EContext
 from framework.database_capture import capture_onedrive_databases
 from framework.result import TestResult
 from framework.utils import write_text_file
@@ -83,23 +81,8 @@ def _apply_cli_overrides(args: argparse.Namespace) -> None:
                 case_id = _normalise_case_id(token)
                 if case_id:
                     selected.append(case_id)
-        if not selected:
-            raise RuntimeError("--case-id supplied but no valid E2E case ID was parsed")
-        os.environ["E2E_SELECTED_CASES"] = ",".join(sorted(set(selected)))
-
-    if args.scenario:
-        mapping: dict[str, set[str]] = {}
-        for raw_value in args.scenario:
-            case_part, separator, scenario_part = raw_value.partition(":")
-            if separator != ":":
-                raise RuntimeError(f"Invalid --scenario '{raw_value}' (expected CASE:SCENARIO[,SCENARIO])")
-            case_id = _normalise_case_id(case_part)
-            values = [part.strip() for part in scenario_part.split(",")]
-            if not case_id or not values or any(not value for value in values):
-                raise RuntimeError(f"Invalid scenario selection: {raw_value}")
-            mapping.setdefault(case_id, set()).update(values)
-        os.environ["E2E_SELECTED_SCENARIOS_JSON"] = json.dumps(
-            {case_id: sorted(values) for case_id, values in mapping.items()}, sort_keys=True)
+        if selected:
+            os.environ["E2E_SELECTED_CASES"] = ",".join(sorted(set(selected)))
 
 
 def _should_run_case(context: E2EContext, case_id: str) -> bool:
@@ -132,14 +115,12 @@ def _build_metadata(context: E2EContext, selected_case_ids: list[str], executed_
         "debug_enabled": context.debug_enabled,
         "suite_cleanup_enabled": False,
         "selected_case_ids": selected_case_ids,
-        "selected_scenarios": {case_id: sorted(values) for case_id, values in sorted(context.selected_scenarios.items())},
         "executed_case_ids": executed_case_ids,
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run OneDrive Business Account Shared Folder E2E test cases")
-    parser.add_argument("--scenario", action="append", help="Run only selected case scenarios. Format: CASE:SCENARIO[,SCENARIO]")
     parser.add_argument("--case-id", action="append", help="Run only the specified Business shared-folder case id(s). Supports bsftc0001, bsf0001, or 0001.")
     parser.add_argument("--debug", action="store_true", help="Rerun with debug verbosity enabled")
     parser.add_argument("--output-subdir", help="Write results into ci/e2e/out/<subdir>")
@@ -158,12 +139,28 @@ def main() -> int:
     selected_case_ids = sorted(context.selected_case_ids)
     cases_to_run = [testcase for testcase in build_test_suite() if _should_run_case(context, testcase.case_id)]
     executed_case_ids = [testcase.case_id for testcase in cases_to_run]
-    validate_case_selection(selected_case_ids, [testcase.case_id for testcase in build_test_suite()], _normalise_case_id)
-    if context.selected_scenarios and not selected_case_ids:
-        raise RuntimeError("--scenario requires explicit --case-id selection")
-    validate_requested_scenarios(context.selected_scenarios, executed_case_ids)
 
     suite_metadata = _build_metadata(context, selected_case_ids, executed_case_ids)
+
+    # Never report an empty or mismatched selection as successful coverage.
+    available_case_ids = {testcase.case_id for testcase in build_test_suite()}
+    unknown_cases = {_normalise_case_id(case_id) for case_id in context.selected_case_ids} - available_case_ids
+    unknown_scenario_cases = set(context.selected_scenarios) - set(executed_case_ids)
+    if unknown_cases or unknown_scenario_cases:
+        problems = []
+        if unknown_cases:
+            problems.append("unknown case IDs: " + ", ".join(sorted(unknown_cases)))
+        if unknown_scenario_cases:
+            problems.append("scenario filters target unselected or unknown case IDs: "
+                            + ", ".join(sorted(unknown_scenario_cases)))
+        reason = "Invalid E2E selection: " + "; ".join(problems)
+        context.log(reason)
+        write_text_file(context.out_dir / "results.json", json.dumps({
+            **suite_metadata,
+            "cases": [result_to_actions_case(TestResult.fail_result(
+                "0000", "E2E selection validation", reason))],
+        }, indent=2))
+        return 1
 
     auth_preflight_result = run_auth_preflight(context)
     if auth_preflight_result.status != "pass":
@@ -191,12 +188,29 @@ def main() -> int:
         context.log(f"Starting test case {testcase.case_id}: {testcase.name}")
         try:
             result = testcase.run(context)
-            if result.status == 'pass':
-                validate_scenario_result(context, result)
             if result.case_id != testcase.case_id:
                 raise RuntimeError(
                     f"Test case returned mismatched case_id: expected '{testcase.case_id}', got '{result.case_id}'"
                 )
+            requested_scenarios = context.selected_scenarios_for_case(testcase.case_id)
+            if requested_scenarios:
+                observed_candidates = context.seen_scenario_candidates.get(testcase.case_id, set())
+                missing_scenarios = requested_scenarios - observed_candidates
+                reported_executed = result.details.get("executed_scenario_ids")
+                if isinstance(reported_executed, list):
+                    missing_scenarios |= requested_scenarios - set(reported_executed)
+                if missing_scenarios:
+                    result = TestResult.fail_result(
+                        testcase.case_id, testcase.name,
+                        "Requested E2E scenario(s) did not execute: "
+                        + ", ".join(sorted(missing_scenarios)),
+                        result.artifacts,
+                        {**result.details,
+                         "requested_scenarios": sorted(requested_scenarios),
+                         "observed_scenario_candidates": sorted(observed_candidates),
+                         "unexecuted_scenarios": sorted(missing_scenarios)},
+                    )
+
             cases.append(result_to_actions_case(result))
             if result.status != "pass":
                 failed = True

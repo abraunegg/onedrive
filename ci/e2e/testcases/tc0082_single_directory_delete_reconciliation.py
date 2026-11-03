@@ -98,7 +98,8 @@ class TestCase0082SingleDirectoryDeleteReconciliation(E2ETestCase):
                 shutil.rmtree(sync_root / deleted_directories[0])
                 (sync_root / deleted_directories[1]).rmdir()
                 write_manifest(state_dir / "mutated_manifest.txt", build_typed_manifest(sync_root))
-            # Capture the converged filesystem after its actual sync below.
+            if phase == "convergence":
+                write_manifest(state_dir / "final_manifest.txt", build_typed_manifest(sync_root))
 
             command = verify_command if phase == "verify" else subject_command
             context.log(f"Executing Test Case {self.case_id} {phase}: {command_to_string(command)}")
@@ -118,8 +119,6 @@ class TestCase0082SingleDirectoryDeleteReconciliation(E2ETestCase):
 
             observed_root = verify_root if phase == "verify" else sync_root
             observed = build_typed_manifest(observed_root)
-            if phase == "convergence":
-                write_manifest(state_dir / "final_manifest.txt", observed)
             details[f"{phase}_manifest"] = observed
             if phase == "seed":
                 expected_seed = sorted(expected_final + [

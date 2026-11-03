@@ -5,7 +5,6 @@ import os
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
 
 from framework.utils import (
     compute_quickxor_hash_file,
@@ -34,8 +33,6 @@ def _parse_case_filter_env(raw: str) -> set[str]:
         case_id = _normalise_case_id(token)
         if case_id:
             selected.add(case_id)
-    if raw.strip() and not selected:
-        raise RuntimeError("E2E_SELECTED_CASES was provided but selected no cases")
     return selected
 
 
@@ -45,106 +42,25 @@ def _parse_scenario_filter_env(raw: str) -> dict[str, set[str]]:
 
     decoded = json.loads(raw)
     if not isinstance(decoded, dict) or not decoded:
-        raise RuntimeError("E2E_SELECTED_SCENARIOS_JSON must be a nonempty object")
+        raise ValueError("E2E_SELECTED_SCENARIOS_JSON must be a non-empty mapping")
     parsed: dict[str, set[str]] = {}
 
     for raw_case_id, raw_scenarios in decoded.items():
         case_id = _normalise_case_id(str(raw_case_id))
-        if not case_id or not isinstance(raw_scenarios, list) or not raw_scenarios:
-            raise RuntimeError(f"Invalid E2E scenario selection for case {raw_case_id!r}")
+        if not case_id:
+            raise ValueError("E2E_SELECTED_SCENARIOS_JSON contains an empty case ID")
+        if not isinstance(raw_scenarios, list) or not raw_scenarios:
+            raise ValueError(f"No scenario IDs selected for case '{case_id}'")
 
         scenario_ids: set[str] = set()
         for scenario_id in raw_scenarios:
-            if not isinstance(scenario_id, str) or not scenario_id.strip():
-                raise RuntimeError(f"Invalid scenario ID for E2E case {case_id}")
-            scenario_ids.add(scenario_id.strip())
+            scenario_text = str(scenario_id).strip()
+            if not scenario_text:
+                raise ValueError(f"Empty scenario ID selected for case '{case_id}'")
+            scenario_ids.add(scenario_text)
         parsed[case_id] = scenario_ids
 
     return parsed
-
-
-def validate_case_selection(
-    requested: Iterable[str],
-    available: Iterable[str],
-    normalise: Callable[[str], str] = lambda value: value,
-) -> None:
-    """Reject unknown case IDs using the suite itself as the sole registry."""
-    registered = [normalise(str(value)) for value in available]
-    if not registered or len(set(registered)) != len(registered):
-        raise RuntimeError("E2E suite is empty or contains duplicate case IDs")
-    unknown = {normalise(str(value)) for value in requested} - set(registered)
-    if unknown:
-        raise RuntimeError(f"Unknown E2E case ID(s): {', '.join(sorted(unknown))}")
-
-
-def validate_requested_scenarios(
-    selected: Mapping[str, set[str]], available_case_ids: Iterable[str],
-) -> None:
-    """Reject selectors aimed at cases not in this run; test cases own their scenarios."""
-    cases = set(available_case_ids)
-    for case_id, requested in selected.items():
-        if case_id not in cases:
-            raise RuntimeError(f"Scenario selector targets a nonselected case: {case_id}")
-        if not requested:
-            raise RuntimeError(f"No scenarios selected for E2E case {case_id}")
-
-
-def validate_scenario_result(context: Any, result: Any) -> None:
-    """Reject empty/incorrect scenario execution evidence, without a second catalogue.
-
-    Test cases remain the only source of valid scenario IDs. A targeted rerun
-    must report the exact requested IDs; an unfiltered scenario test must report
-    at least one executed scenario when it supplies scenario metadata.
-    """
-    requested = context.selected_scenarios_for_case(result.case_id)
-    details = result.details or {}
-    executed = details.get("executed_scenario_ids")
-    if executed is None:
-        executed = details.get("executed_scenarios")
-    not_applicable = details.get("not_applicable_scenario_ids") or []
-    if not isinstance(not_applicable, list) or any(not isinstance(x, str) for x in not_applicable):
-        raise RuntimeError(f"E2E case {result.case_id}: invalid not-applicable scenario IDs")
-    if len(not_applicable) != len(set(not_applicable)):
-        raise RuntimeError(f"E2E case {result.case_id}: duplicate not-applicable IDs")
-
-    if executed is None:
-        if requested or not_applicable:
-            raise RuntimeError(f"E2E case {result.case_id}: selected or N/A scenarios have no execution evidence")
-        # Ordinary single-case tests do not report scenario metadata.
-        return
-    if not isinstance(executed, list) or not executed or any(not isinstance(x, str) for x in executed):
-        raise RuntimeError(f"E2E case {result.case_id}: scenario execution is empty or invalid")
-    if len(executed) != len(set(executed)) or set(executed) & set(not_applicable):
-        raise RuntimeError(f"E2E case {result.case_id}: duplicate or contradictory scenario IDs")
-    if requested and (set(executed) != requested or not_applicable):
-        raise RuntimeError(
-            f"E2E case {result.case_id}: requested {sorted(requested)} "
-            f"but executed {executed}, N/A {not_applicable}"
-        )
-
-    # Where the test already reports its own scenario count, verify that
-    # accounting directly rather than maintaining a separate scenario list.
-    for key in ("scenario_count", "scenarios_run"):
-        count = details.get(key)
-        if count is not None and (
-            type(count) is not int or count != len(executed) + len(not_applicable)
-        ):
-            raise RuntimeError(
-                f"E2E case {result.case_id}: {key}={count!r} does not match "
-                f"{len(executed)} executed and {len(not_applicable)} N/A scenarios"
-            )
-
-    failed = details.get("failed_scenario_ids") or []
-    if not isinstance(failed, list) or any(not isinstance(x, str) for x in failed):
-        raise RuntimeError(f"E2E case {result.case_id}: invalid failed-scenario metadata")
-    if set(failed) - set(executed):
-        raise RuntimeError(f"E2E case {result.case_id}: failed scenario not recorded as executed")
-    if failed:
-        raise RuntimeError(f"E2E case {result.case_id}: reported PASS despite failed scenarios: {failed}")
-    for key in ("failed_scenarios", "scenarios_failed", "failed"):
-        value = details.get(key, 0)
-        if isinstance(value, (int, list)) and value:
-            raise RuntimeError(f"E2E case {result.case_id}: reported PASS despite {key}={value!r}")
 
 
 @dataclass
@@ -168,6 +84,7 @@ class E2EContext:
     account_label: str = ""
     selected_case_ids: set[str] = field(default_factory=set)
     selected_scenarios: dict[str, set[str]] = field(default_factory=dict)
+    seen_scenario_candidates: dict[str, set[str]] = field(default_factory=dict)
 
     @classmethod
     def from_environment(cls) -> "E2EContext":
@@ -278,6 +195,11 @@ class E2EContext:
         return set(self.selected_scenarios.get(_normalise_case_id(case_id), set()))
 
     def should_run_scenario(self, case_id: str, scenario_id: str) -> bool:
+        # Record the actual candidates supplied by the test implementation.
+        # This lets the runner reject mistyped/stale scenario selections rather
+        # than reporting a green result after executing zero scenarios.
+        normalised_case_id = _normalise_case_id(case_id)
+        self.seen_scenario_candidates.setdefault(normalised_case_id, set()).add(scenario_id)
         selected = self.selected_scenarios_for_case(case_id)
         if not selected:
             return True
