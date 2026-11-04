@@ -39,6 +39,7 @@ class SharedFolderSyncListScenario:
     required_stdout_markers: list[str] = field(default_factory=list)
     mutation_checks: list[SharedFolderMutationCheck] = field(default_factory=list)
     cleanup_local_stale_files: list[str] = field(default_factory=list)
+    cleanup_local_protected_files: list[str] = field(default_factory=list)
 
 
 class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
@@ -225,6 +226,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 f"mutation_checks={len(scenario.mutation_checks)}",
                 f"mutation_failures={mutation_failures!r}",
                 f"cleanup_local_stale_files={scenario.cleanup_local_stale_files!r}",
+                f"cleanup_local_protected_files={scenario.cleanup_local_protected_files!r}",
                 f"cleanup_failures={cleanup_failures!r}",
             ]
             write_text_file(metadata_file, "\n".join(metadata_lines) + "\n")
@@ -561,7 +563,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
         write_manifest(cleanup_before_manifest_file, before_manifest)
 
         created_files: list[Path] = []
-        for rel_file in scenario.cleanup_local_stale_files:
+        protected_files = set(scenario.cleanup_local_protected_files)
+        for rel_file in scenario.cleanup_local_stale_files + scenario.cleanup_local_protected_files:
             rel_file = rel_file.strip("/")
             if not rel_file or rel_file.endswith("/") or "/../" in f"/{rel_file}/":
                 failures.append(f"Refusing unsafe cleanup-local stale file path: {rel_file!r}")
@@ -616,11 +619,15 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             )
 
         for local_file in created_files:
-            if local_file.exists():
-                failures.append(
-                    f"Local stale file was not removed by cleanup_local_files: "
-                    f"{local_file.relative_to(sync_root)}"
-                )
+            rel_file = local_file.relative_to(sync_root).as_posix()
+            if rel_file in protected_files:
+                # Explicitly excluded local content must survive unchanged.
+                if not local_file.is_file() or local_file.read_bytes() != (
+                    f"local stale cleanup validation for {scenario.scenario_id}\n".encode("utf-8")
+                ):
+                    failures.append(f"Excluded local file was deleted or changed by cleanup_local_files: {rel_file}")
+            elif local_file.exists():
+                failures.append(f"Included local stale file was not removed by cleanup_local_files: {rel_file}")
                 local_file.unlink()
 
         after_manifest = build_typed_manifest(sync_root)
@@ -629,7 +636,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
         before_without_stale = set(before_manifest)
         after_set = set(after_manifest)
         missing_after = sorted(before_without_stale - after_set)
-        unexpected_after = sorted(after_set - before_without_stale)
+        unexpected_after = sorted(after_set - before_without_stale - protected_files)
         if missing_after:
             failures.append(
                 f"Immutable baseline changed during cleanup_local_files; missing entries: {missing_after[:20]!r}"
@@ -1057,7 +1064,7 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0024",
-                description="cleanup_local_files removes local-only stale file under included shared-folder parent",
+                description="cleanup_local_files removes included stale file and preserves excluded file under included shared-folder parent",
                 sync_list=[
                     f"!/{core}/files/sfptc0003-*",
                     f"/{core}/",
@@ -1066,7 +1073,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
                 required_present=[f"{core}/README.txt", f"{core}/files/", f"{core}/files/data.txt"],
                 required_absent=[f"{core15}/README.txt", f"{wide}/file00.txt"],
                 required_stdout_markers=[self._marker(core)],
-                cleanup_local_stale_files=[f"{core}/files/sfptc0003-local-stale.txt"],
+                cleanup_local_stale_files=[f"{core}/nested/keep/sfptc0003-local-stale.txt"],
+                cleanup_local_protected_files=[f"{core}/files/sfptc0003-local-stale.txt"],
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0025",

@@ -190,6 +190,10 @@ class TestCase0002SyncListValidation(E2ETestCase):
         ),
     ]
 
+    # The cleanup walker can report an earlier retention decision again.
+    # This is not affirmative sync_list processing (or evidence of deletion).
+    NON_PROCESSING_EVENTS = frozenset({"skip", "retain_existing"})
+
     REMOVAL_PATTERNS = [
         (
             "remove_local_file",
@@ -887,7 +891,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
         for event in events:
             if event_type and event.event_type != event_type:
                 continue
-            if non_skip_only and event.event_type == "skip":
+            if non_skip_only and event.event_type in self.NON_PROCESSING_EVENTS:
                 continue
             if self._path_matches(event.normalised_path, wanted_path):
                 matches.append(event)
@@ -909,7 +913,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
         for event in events:
             path = event.normalised_path
 
-            if event.event_type == "skip":
+            if event.event_type in self.NON_PROCESSING_EVENTS:
                 continue
 
             if scenario.is_forbidden(path):
@@ -938,7 +942,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
         for required in scenario.required_non_skipped_exact:
             matches = [
                 event for event in events
-                if event.normalised_path == required and event.event_type != "skip"
+                if event.normalised_path == required and event.event_type not in self.NON_PROCESSING_EVENTS
             ]
             if not matches:
                 diffs.append(
@@ -961,7 +965,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
         # assertion about a specific file. Keep the older subtree assertions.
         for required in scenario.required_processed_exact:
             if not any(e.normalised_path.strip("/") == required.strip("/")
-                       and e.event_type != "skip" for e in events):
+                       and e.event_type not in self.NON_PROCESSING_EVENTS for e in events):
                 diffs.append(f"Expected exact allowed item was not processed: {required}")
         for required in scenario.required_skipped_exact:
             if not any(e.normalised_path.strip("/") == required.strip("/")
