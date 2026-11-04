@@ -9758,7 +9758,7 @@ class SyncEngine {
 		// Skip symlinks as early as possible, including dangling symlinks
 		if (isSymlink(path)) {
 			// Should this path be skipped?
-			if (appConfig.getValueBool("skip_symlinks")) {
+			if (cleanupDataPass || appConfig.getValueBool("skip_symlinks")) {
 				if (verboseLogging) {addLogEntry("Skipping item - skip symbolic links configured: " ~ path, ["verbose"]);}
 				return;
 			}
@@ -9770,6 +9770,11 @@ class SyncEngine {
 			if (verboseLogging) {addLogEntry("Skipping local path protected by .nosync: " ~ path, ["verbose"]);}
 			return;
 		}
+		// A skipped directory and all of its descendants are outside local cleanup scope.
+		if (cleanupDataPass && isDir(path) && appConfig.getValueString("skip_dir") != "" &&
+			selectiveSync.isDirNameExcluded(path.strip('.'))) return;
+		if (cleanupDataPass && isDir(path) && appConfig.getValueBool("skip_dotfiles") &&
+			isDotFile(path) && checkPathAgainstClientSideFiltering(path)) return;
 
 		// Add a processing '.' if path exists
 		if (exists(path)) {
@@ -9930,19 +9935,21 @@ class SyncEngine {
 										if (verboseLogging) {addLogEntry("Path already marked for retention - retaining path: " ~ normalisedChildPath, ["verbose"]);}
 									}
 
-									// 2. If not already retained, evaluate via sync_list
-									if (pathShouldBeRemoved && syncListConfigured) {
-										// selectiveSync.isPathExcludedViaSyncList() returns:
-										//   true  = excluded by sync_list
-										//   false = included / must be retained
-										if (!selectiveSync.isPathExcludedViaSyncList(child.name)) {
-											pathShouldBeRemoved = false;
-											if (verboseLogging) {addLogEntry("Path retained due to 'sync_list' inclusion: " ~ normalisedChildPath, ["verbose"]);}
-										}
+									// 2. Retain tracked, excluded or symlinked children; only untracked in-scope data is eligible.
+									if (pathShouldBeRemoved && (pathFoundInDatabase(normalisedChildPath) ||
+										isSymlink(child.name) || checkPathAgainstClientSideFiltering(child.name))) {
+										pathShouldBeRemoved = false;
+										if (verboseLogging) {addLogEntry("Path retained outside cleanup scope or tracked in database: " ~ normalisedChildPath, ["verbose"]);}
 									}
 
 									// What action should be taken?
 									if (pathShouldBeRemoved) {
+										// Clean eligible descendants first; protected descendants remain untouched.
+										if (isDir(child.name)) {
+											scanPathForNewData(child.name);
+											if (canFind(pathsRetained, normalisedChildPath)) pathShouldBeRemoved = false;
+										}
+										if (!exists(child.name) || !pathShouldBeRemoved) continue;
 										// Path should be removed
 										if (isDir(child.name)) {
 											if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ normalisedChildPath, ["verbose"]);}
@@ -9956,6 +9963,7 @@ class SyncEngine {
 											if (exists(child.name)) {
 												try {
 													if (attrIsDir(child.linkAttributes)) {
+														if (!dirEntries(child.name, SpanMode.shallow).empty) continue;
 														rmdir(child.name);
 														if (!exists(child.name)) notifyExpectedLocalRemoval(child.name);
 														// Log removal
@@ -9974,9 +9982,9 @@ class SyncEngine {
 									} else {
 										// Path should be retained
 										if (isDir(child.name)) {
-											if (verboseLogging) {addLogEntry("Local directory should be retained due to 'sync_list' inclusion: " ~ child.name, ["verbose"]);}
+											if (verboseLogging) {addLogEntry("Local directory retained outside cleanup scope or tracked in database: " ~ child.name, ["verbose"]);}
 										} else {
-											if (verboseLogging) {addLogEntry("Local file should be retained due to 'sync_list' inclusion: " ~ child.name, ["verbose"]);}
+											if (verboseLogging) {addLogEntry("Local file retained outside cleanup scope or tracked in database: " ~ child.name, ["verbose"]);}
 										}
 
 										// Add this path to the retention list if not already present
@@ -9997,15 +10005,10 @@ class SyncEngine {
 								string normalisedParentPath = ensureStartsWithDotSlash(buildNormalizedPath(path));
 								string parentPrefix = normalisedParentPath ~ "/";
 
-								// 1. sync_list evaluation for the parent path itself
-								if (syncListConfigured) {
-									// selectiveSync.isPathExcludedViaSyncList() returns:
-									//   true  = excluded by sync_list
-									//   false = included / must be retained
-									if (!selectiveSync.isPathExcludedViaSyncList(path)) {
-										parentalPathShouldBeRemoved = false;
-										if (verboseLogging) {addLogEntry("Parent path retained due to 'sync_list' inclusion: " ~ path, ["verbose"]);}
-									}
+								// 1. A parent outside cleanup scope must be retained.
+								if (checkPathAgainstClientSideFiltering(path)) {
+									parentalPathShouldBeRemoved = false;
+									if (verboseLogging) {addLogEntry("Parent path retained outside cleanup scope: " ~ path, ["verbose"]);}
 								}
 
 								// 2. If parent path exists in the database, it must be retained
@@ -10026,16 +10029,16 @@ class SyncEngine {
 								}
 
 								// What action should be taken?
-								if (parentalPathShouldBeRemoved) {
+								if (parentalPathShouldBeRemoved && path != ".") {
 									// Remove the parental path now that it is empty of children
 									if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ path, ["verbose"]);}
 
 									// are we in a --dry-run scenario?
 									if (!dryRun) {
 										// No --dry-run ... process local delete
-										if (exists(path)) {
+										if (exists(path) && dirEntries(path, SpanMode.shallow).empty) {
 											try {
-												rmdirRecurse(path);
+												rmdir(path);
 												if (!exists(path)) notifyExpectedLocalRemoval(path);
 												if (verboseLogging) {addLogEntry("Removed local directory: " ~ path, ["verbose"]);}
 
@@ -10046,7 +10049,7 @@ class SyncEngine {
 									}
 								} else {
 									// Path needs to be retained
-									if (verboseLogging) {addLogEntry("Local parent directory should be retained due to 'sync_list' inclusion: " ~ path, ["verbose"]);}
+									if (verboseLogging) {addLogEntry("Local parent directory retained outside cleanup scope or due to retained descendants: " ~ path, ["verbose"]);}
 
 									// Add the parent path to the retention list if not already present
 									if (!canFind(pathsRetained, normalisedParentPath)) {
@@ -10159,15 +10162,10 @@ class SyncEngine {
 									if (verboseLogging) {addLogEntry("Path already marked for retention - retaining path: " ~ normalisedFilePath, ["verbose"]);}
 								}
 
-								// 2. If not already retained, evaluate via sync_list
-								if (pathShouldBeRemoved && syncListConfigured) {
-									// selectiveSync.isPathExcludedViaSyncList() returns:
-									//   true  = excluded by sync_list
-									//   false = included / must be retained
-									if (!selectiveSync.isPathExcludedViaSyncList(path)) {
-										pathShouldBeRemoved = false;
-										if (verboseLogging) {addLogEntry("Path retained due to 'sync_list' inclusion: " ~ normalisedFilePath, ["verbose"]);}
-									}
+								// 2. Retain files excluded by any active client-side filter.
+								if (pathShouldBeRemoved && checkPathAgainstClientSideFiltering(path)) {
+									pathShouldBeRemoved = false;
+									if (verboseLogging) {addLogEntry("Path retained outside cleanup scope: " ~ normalisedFilePath, ["verbose"]);}
 								}
 
 								// What action should be taken?
@@ -10185,7 +10183,7 @@ class SyncEngine {
 									}
 								} else {
 									// Path should be retained
-									if (verboseLogging) {addLogEntry("Local file should be retained due to 'sync_list' inclusion: " ~ normalisedFilePath, ["verbose"]);}
+									if (verboseLogging) {addLogEntry("Local file retained outside cleanup scope or tracked in database: " ~ normalisedFilePath, ["verbose"]);}
 
 									// Add this path to the retention list if not already present
 									if (!canFind(pathsRetained, normalisedFilePath)) {
