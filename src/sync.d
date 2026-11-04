@@ -2740,6 +2740,16 @@ class SyncEngine {
 						existingDatabaseItem.syncStatus = "Y";
 						itemDB.upsert(existingDatabaseItem);
 					}
+				// An online deletion in --download-only mode without cleanup must
+				// preserve the local item and its database identity. This guard
+				// applies only to deletion events: online content updates still
+				// use normal conflict detection and safeBackup handling, unless
+				// bypass_data_preservation is enabled.
+				} else if (appConfig.getValueBool("download_only") && !cleanupLocalFiles) {
+					if (verboseLogging) {
+						string retainedLocalPath = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
+						addLogEntry("Retaining local item after online deletion as --download-only is configured without --cleanup-local-files: " ~ retainedLocalPath, ["verbose"]);
+					}
 				// In fast monitor passes defer deletes from raw /delta tombstones.
 				} else if (shouldDeferDeletedItemsFromRawDelta()) {
 					if (verboseLogging) {
@@ -6532,6 +6542,18 @@ class SyncEngine {
 							}
 							continue;
 						}
+					}
+
+					// Generated /children reconciliation can also discover online
+					// deletions. Archive mode must retain these items locally, just
+					// as it retains them for native /delta tombstones. Keep the
+					// database identity and do not enter the destructive path.
+					if (appConfig.getValueBool("download_only") && !cleanupLocalFiles) {
+						if (verboseLogging) {
+							string retainedLocalPath = computeItemPath(outOfSyncItem.driveId, outOfSyncItem.id);
+							addLogEntry("Retaining local item absent from online snapshot as --download-only is configured without --cleanup-local-files: " ~ retainedLocalPath, ["verbose"]);
+						}
+						continue;
 					}
 
 					if (!dryRun) {
