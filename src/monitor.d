@@ -729,7 +729,9 @@ final class Monitor {
 						return;
 					}
 				}
-				// Is the path excluded by sync_list?
+				// selectiveSync.isPathExcludedViaSyncList() returns:
+				//   true  = excluded by sync_list (no watch for this path)
+				//   false = NOT excluded by sync_list (no retention guarantee)
 				if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
 					// dont add a watch for this item
 					if (debugLogging) {addLogEntry("Skipping monitoring parent path due to sync_list exclusion: " ~ dirname, ["debug"]);}
@@ -1484,7 +1486,9 @@ final class Monitor {
 						}
 					}
 					
-					// is the path, excluded via sync_list
+					// selectiveSync.isPathExcludedViaSyncList() returns:
+					//   true  = excluded by sync_list (filter the event)
+					//   false = NOT excluded by sync_list (no retention guarantee)
 					if (!(expectedMoveSourceEvent || expectedMoveDestinationEvent) && selectiveSync.isPathExcludedViaSyncList(path)) {
 						// The path to evaluate matches a directory or file that the user has configured not to include in the sync
 						filteredEventCount++;
