@@ -114,19 +114,45 @@ class SyncListScenario:
 
 class TestCase0002SyncListValidation(E2ETestCase):
     """
-    Test Case 0002: sync_list validation
+    Test Case 0002: sync_list inclusion/exclusion and rule-order conformance.
 
-    This validates sync_list as a policy-conformance test.
-    The Issue #3655 scenarios additionally reproduce the reported lifecycle:
+    PRIMARY OBJECTIVE: Given each scenario's exact, ordered sync_list rules,
+    confirm that the client applies inclusion, exclusion, precedence, and path
+    matching as configured. Included files/directories must be selected for
+    synchronisation; excluded ones must not be synchronised merely because an
+    ancestor or another rule is included. Ancestors needed to reach an included
+    descendant may still be traversed. Each scenario specifies the expected
+    path-level decisions, including rule-order, wildcard and trailing-slash
+    edge cases where applicable.
 
-    1. Seed the entire fixture tree remotely with no sync_list restrictions.
-    2. Re-run with download_only + cleanup_local_files + issue-style sync_list.
-    3. Validate both debug log decisions and final local filesystem state.
+    The --resync and --resync-auth flags provide a deterministic execution
+    baseline. TC0002 is NOT a database-lifecycle or resync-requirement test;
+    the presence of those flags is not a failure of this test's objective.
+    The download_only + cleanup_local_files scenarios test the consequences of
+    sync_list scope for local preservation/removal, not a separate policy that
+    overrides sync_list inclusion or exclusion.
+
+    ASSERTION / EVIDENCE SCOPE:
+      * single: verify actual client processing and skip decisions for named
+        fixture paths through emitted events; these are selection-policy
+        assertions, not independent remote-content verification.
+      * cleanup_regression: seed without selection rules, then apply ordered
+        restrictions; validate client decisions and pre/post local state,
+        including protection of excluded paths and removal where required.
+        The Issue #3655 cases reproduce the reported trailing-slash problem.
+      * root_files_contract: verify selection effects with real upload and
+        fresh-download content checks for sync_root_files on/off.
+
+    An audit must evaluate each scenario's configured rules, effective options,
+    observed client decisions, and the outcome evidence that mode captures.
+    Do not treat a PASS from a log-based policy scenario as proof of an
+    independent remote readback; do not grade TC0002 against unrelated
+    persistent-database lifecycle requirements.
     """
 
     case_id = "0002"
     name = "sync_list validation"
-    description = "Validate sync_list behaviour across a scenario matrix"
+    description = "Validate ordered sync_list inclusion/exclusion rules and selected-path outcomes"
 
 
     EVENT_PATTERNS = [
