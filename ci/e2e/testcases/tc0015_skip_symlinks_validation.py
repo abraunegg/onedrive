@@ -419,8 +419,14 @@ class TestCase0015SkipSymlinksValidation(E2ETestCase):
         self._write_config(seed_conf / "config", skip_symlinks=True)
         context.bootstrap_config_dir(cleanup_conf)
         self._write_config(cleanup_conf / "config", skip_symlinks=False)
+        # Keep the persistent cleanup database aligned with the --syncdir override.
+        # The cleanup invocation intentionally omits --resync to exercise that DB.
         with (cleanup_conf / "config").open("a", encoding="utf-8") as f:
-            f.write('download_only = "true"\ncleanup_local_files = "true"\n')
+            f.write(
+                f'sync_dir = "{sync_root}"\n'
+                'download_only = "true"\n'
+                'cleanup_local_files = "true"\n'
+            )
         context.bootstrap_config_dir(verify_conf)
         self._write_config(verify_conf / "config", skip_symlinks=True)
 
