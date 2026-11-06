@@ -112,12 +112,19 @@ jobs:
             --gate-file ci/e2e/out/gate.json \
             --cleanup-results ci/e2e/out/post-debug-cleanup.json
 
-      - name: Upload E2E artefacts
+      - name: Verify E2E artifacts contain no authentication credentials
+        id: artifact_guard
         if: always()
+        run: python3 -u ci/e2e/artifact_safety.py --artifact-dir ci/e2e/out
+
+      - name: Upload E2E artefacts
+        if: always() && steps.artifact_guard.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-business
-          path: ci/e2e/out/**
+          path: |
+            ci/e2e/out/**
+            !ci/e2e/out/**/refresh_token
 
   pr_comment:
     name: Post PR summary comment

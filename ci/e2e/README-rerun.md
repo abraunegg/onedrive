@@ -53,3 +53,14 @@ These are also supported if you prefer using workflow env vars:
 - `E2E_SKIP_SUITE_CLEANUP=1`
 - `E2E_SELECTED_CASES=0002,0021`
 - `E2E_SELECTED_SCENARIOS_JSON={"0002": ["SL-0004"], "0021": ["RT-0001"]}`
+
+## CI artifact credential boundary
+
+The GitHub E2E workflows upload `ci/e2e/out` for diagnostics. Authentication
+configuration directories, including every `refresh_token`, must remain in the
+private runner work tree (`E2EContext.work_root`) and must **never** be created
+beneath `ci/e2e/out`. The final `artifact_safety.py` check runs even if the test
+suite fails. If a refresh token or symbolic link is found in the artifact tree,
+the upload is blocked; the workflow also explicitly excludes `refresh_token`
+filenames as a separate safeguard. Do not add a test that writes authentication
+files under the published logs/state directories.

@@ -147,31 +147,25 @@ class TestCase0002SyncListValidation(E2ETestCase):
             re.compile(r"^(?:DEBUG:\s+)?Including file - included by sync_list config: (.+)$"),
         ),
         (
-            "retain_path",
-            re.compile(r"^(?:DEBUG:\s+)?Path retained due to 'sync_list' inclusion: (.+)$"),
-        ),
-        (
             "retain_existing",
             re.compile(r"^(?:DEBUG:\s+)?Path already marked for retention - retaining path: (.+)$"),
         ),
-        (
-            "retain_local_file",
-            re.compile(
-                r"^(?:DEBUG:\s+)?Local file should be retained due to 'sync_list' inclusion: (.+)$"
-            ),
-        ),
-        (
-            "retain_local_dir",
-            re.compile(
-                r"^(?:DEBUG:\s+)?Local directory should be retained due to 'sync_list' inclusion: (.+)$"
-            ),
-        ),
-        (
-            "retain_local_parent_dir",
-            re.compile(
-                r"^(?:DEBUG:\s+)?Local parent directory should be retained due to 'sync_list' inclusion: (.+)$"
-            ),
-        ),
+        # Cleanup retention reports a protection/decision, not affirmative
+        # sync_list processing. Match current production messages but do not
+        # let them satisfy required_processed assertions.
+        *[
+            ("retain_cleanup", re.compile(r"^(?:DEBUG:\s+)?" + re.escape(prefix) + r" (.+)$"))
+            for prefix in (
+                "Retaining local child tracked in database during cleanup:",
+                "Retaining local symbolic link during cleanup:",
+                "Retaining local child excluded by client-side filtering during cleanup:",
+                "Path retained outside cleanup scope:",
+                "Parent path retained outside cleanup scope:",
+                "Parent path found in database - retain path:",
+                "Parent path retained because child path is retained:",
+                "Retaining local synchronisation root; never a cleanup target:",
+            )
+        ],
         (
             "retain_sync_root_file",
             re.compile(
@@ -192,7 +186,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
 
     # The cleanup walker can report an earlier retention decision again.
     # This is not affirmative sync_list processing (or evidence of deletion).
-    NON_PROCESSING_EVENTS = frozenset({"skip", "retain_existing"})
+    NON_PROCESSING_EVENTS = frozenset({"skip", "retain_existing", "retain_cleanup"})
 
     REMOVAL_PATTERNS = [
         (
@@ -461,7 +455,9 @@ class TestCase0002SyncListValidation(E2ETestCase):
             # Independent config/DB and empty local tree are essential:
             # otherwise previously seeded local files could masquerade as downloads.
             reset_directory(sync_root)
-            phase_config_dir = scenario_dir / f"config-{label}"
+            # Keep per-policy auth and DB outside ci/e2e/out/state.
+            # scenario_dir is published as a CI artifact.
+            phase_config_dir = config_dir.parent / f"config-{scenario.scenario_id}-{label}"
             reset_directory(phase_config_dir)
             context.bootstrap_config_dir(phase_config_dir)
             phase_config_path = phase_config_dir / CONFIG_FILE_NAME
@@ -695,6 +691,17 @@ class TestCase0002SyncListValidation(E2ETestCase):
             extra = f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/local-only-during-cleanup.txt"
             write_text_file(sync_root / extra, "local-only cleanup fixture\n")
             allowed_local_only_removals.add(extra)
+
+            # Two DB-unknown siblings beneath a DB-unknown parent. One is
+            # specifically excluded by sync_list; the other is in scope and
+            # must be removed. This exercises directory evaluation and the
+            # reason-specific excluded-child retention log in the actual walker.
+            log_parent = f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/cleanup-log-parent"
+            log_protected = f"{log_parent}/protected.txt"
+            log_stale = f"{log_parent}/stale.txt"
+            write_text_file(sync_root / log_protected, "excluded local sibling\n")
+            write_text_file(sync_root / log_stale, "included local stale sibling\n")
+            allowed_local_only_removals.add(log_stale)
         write_manifest(pre_cleanup_manifest, build_manifest(sync_root))
 
         # Phase 2: issue-style restrictive cleanup.
@@ -767,6 +774,30 @@ class TestCase0002SyncListValidation(E2ETestCase):
             diffs.append("In-scope local-only files were retained despite cleanup: " + ", ".join(missing_cleanup))
         if appeared:
             diffs.append("Unexpected local paths appeared during scope-only configuration change: " + ", ".join(appeared))
+
+        if scenario.scenario_id == "SL-0037":
+            log_parent = f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/cleanup-log-parent"
+            log_protected = f"{log_parent}/protected.txt"
+            log_stale = f"{log_parent}/stale.txt"
+            if not (sync_root / log_parent).is_dir():
+                diffs.append("Excluded sibling's parent directory was removed")
+            if not (sync_root / log_protected).is_file() or (sync_root / log_protected).read_bytes() != b"excluded local sibling\n":
+                diffs.append("Explicitly excluded local-only sibling was deleted or modified")
+            if (sync_root / log_stale).exists():
+                diffs.append("In-scope local-only sibling was not removed")
+
+            # Logs are evidence of the *reason* and operation; the filesystem
+            # assertions above independently establish the resulting state.
+            for marker, rel_path in (
+                ("Evaluating untracked local directory for cleanup due to --download-only --cleanup-local-files operation:", log_parent),
+                ("Retaining local child excluded by client-side filtering during cleanup:", log_protected),
+                ("Attempting removal of local file:", log_stale),
+                ("Removed local file:", log_stale),
+            ):
+                pattern = re.compile(r"(?:^|\n)(?:DEBUG:\s+)?" + re.escape(marker)
+                                     + r"\s+(?:\./)?" + re.escape(rel_path) + r"(?:\s|$)")
+                if pattern.search(phase2_result.stdout + "\n" + phase2_result.stderr) is None:
+                    diffs.append(f"Expected cleanup decision/outcome log absent: {marker} {rel_path}")
 
         diffs.extend(self._validate_scenario(scenario, fixture_events))
         diffs.extend(
@@ -2377,8 +2408,9 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0037",
-                description="cleanup scope regression: excluded subtree retained, included local-only file cleaned",
+                description="cleanup scope regression: excluded subtree and local-only sibling retained, in-scope local-only siblings cleaned",
                 sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/cleanup-log-parent/protected.txt",
                     f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/*",
                     f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/",
                 ],

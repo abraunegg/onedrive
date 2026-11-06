@@ -379,7 +379,10 @@ def perform_full_account_cleanup(
     # database must NOT be trusted here: use a fresh config and an empty sync
     # directory to force a new Graph traversal. Download-only cannot create
     # remote items, so verification itself cannot pollute the test account.
-    verify_root = log_dir / "remote-verification"
+    # Authentication material must remain in the private runner work tree.
+    # log_dir lives below ci/e2e/out and is published as a CI artifact.
+    # Preserve the verifier's independent config, DB and sync directory.
+    verify_root = config_dir.parent / f"{config_dir.name}-remote-verification"
     verify_config = verify_root / "conf"
     verify_sync_dir = verify_root / "syncroot"
     if verify_root.exists():

@@ -37,6 +37,7 @@ class TestCase0007DownloadOnlyCleanupLocalFiles(E2ETestCase):
         root_name = f"ZZ_E2E_TC0007_{context.run_id}_{os.getpid()}"
         keep_relative = f"{root_name}/keep.txt"
         stale_relative = f"{root_name}/stale-local.txt"
+        empty_dir_relative = f"{root_name}/local-only-empty-directory"
         expected_keep = b"keep\n"
 
         write_text_file(sync_root / keep_relative, expected_keep.decode("utf-8"))
@@ -84,6 +85,12 @@ class TestCase0007DownloadOnlyCleanupLocalFiles(E2ETestCase):
 
         stale_path = sync_root / stale_relative
         write_text_file(stale_path, "stale\n")
+        local_only_empty_dir = sync_root / empty_dir_relative
+        local_only_empty_dir.mkdir(parents=True, exist_ok=False)
+        if not local_only_empty_dir.is_dir():
+            return self.fail_result(self.case_id, self.name,
+                                    "Local-only empty directory fixture could not be established",
+                                    artifacts, details)
         if not stale_path.is_file() or stale_path.read_bytes() != b"stale\n":
             return self.fail_result(self.case_id, self.name,
                                     "Local-only stale fixture could not be established",
@@ -113,6 +120,8 @@ class TestCase0007DownloadOnlyCleanupLocalFiles(E2ETestCase):
                               ("upload_only", False)):
             if not self._running_bool(output, key, expected):
                 failures.append(f"Cleanup invocation did not report effective {key}={str(expected).lower()}")
+        if local_only_empty_dir.exists() or empty_dir_relative in post_manifest:
+            failures.append("Untracked in-scope empty directory still exists after cleanup")
         if stale_path.exists() or stale_relative in post_manifest:
             failures.append("Stale local file still exists after cleanup_local_files processing")
         if keep_relative not in post_manifest:
@@ -129,6 +138,21 @@ class TestCase0007DownloadOnlyCleanupLocalFiles(E2ETestCase):
         details["stale_removal_logged"] = removed_pattern.search(output) is not None
         if not details["stale_removal_logged"]:
             failures.append("No evidence that cleanup scan removed the DB-unknown stale file")
+
+        # A directory *evaluation* alone must not be mistaken for removal.
+        # Require the option-specific decision, the path-specific attempt and
+        # the confirmed removal of this database-unknown empty directory.
+        for marker, meaning in (
+            ("Evaluating untracked local directory for cleanup due to --download-only --cleanup-local-files operation:", "evaluation"),
+            ("Attempting removal of local directory:", "attempt"),
+            ("Removed local directory:", "completed removal"),
+        ):
+            pattern = re.compile(r"(?:^|\n)(?:DEBUG:\s+)?" + re.escape(marker)
+                                 + r"\s+(?:\./)?" + re.escape(empty_dir_relative) + r"(?:\s|$)")
+            recorded = pattern.search(output) is not None
+            details[f"empty_directory_{meaning.replace(' ', '_')}_logged"] = recorded
+            if not recorded:
+                failures.append(f"No {meaning} log for eligible empty directory: {empty_dir_relative}")
 
         # Independent read-only-in-effect observer: downloading a fresh copy
         # from Microsoft Graph establishes remote truth. It must not see the
@@ -147,6 +171,8 @@ class TestCase0007DownloadOnlyCleanupLocalFiles(E2ETestCase):
         write_manifest(remote_manifest_file, remote_manifest)
         if verify_result.returncode != 0:
             failures.append(f"Independent remote verification failed with status {verify_result.returncode}")
+        if (verify_root / empty_dir_relative).exists() or empty_dir_relative in remote_manifest:
+            failures.append("Cleanup phase uploaded local-only empty directory to OneDrive")
         if (verify_root / stale_relative).exists() or stale_relative in remote_manifest:
             failures.append("Cleanup phase uploaded the local-only stale file to OneDrive")
         remote_keep = verify_root / keep_relative

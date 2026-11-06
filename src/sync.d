@@ -9773,10 +9773,15 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 
-		// Skip symlinks as early as possible, including dangling symlinks
+		// Skip symlinks as early as possible, including dangling symlinks.
+		// A cleanup pass must never traverse or remove a symlink, regardless of
+		// the independent skip_symlinks option. Log the actual reason for the skip.
 		if (isSymlink(path)) {
-			// Should this path be skipped?
-			if (cleanupDataPass || appConfig.getValueBool("skip_symlinks")) {
+			if (cleanupDataPass) {
+				if (verboseLogging) {addLogEntry("Skipping symbolic link during --download-only --cleanup-local-files cleanup pass: " ~ path, ["verbose"]);}
+				return;
+			}
+			if (appConfig.getValueBool("skip_symlinks")) {
 				if (verboseLogging) {addLogEntry("Skipping item - skip symbolic links configured: " ~ path, ["verbose"]);}
 				return;
 			}
