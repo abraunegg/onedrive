@@ -2246,8 +2246,8 @@ class TestCase0065SyncListRemoteDirectoryMoveReconciliation(MonitorModeTestCaseB
 
         root_name = f"ZZ_E2E_TC0065_{scenario.scenario_id}_{context.run_id}_{os.getpid()}"
         selected = f"{root_name}/Documents"
-        source = f"{selected}/per/ableton"
-        destination = f"{selected}/relocated/ableton-renamed"
+        source = f"{selected}/origin/previous-tree"
+        destination = f"{selected}/relocated/renamed-tree"
         anchor = f"{selected}/anchor.txt"
         destination_anchor = f"{selected}/relocated/anchor.txt"
         protected = f"{root_name}/OutsideLocal/protected.txt"

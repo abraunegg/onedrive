@@ -9923,6 +9923,7 @@ class SyncEngine {
 			if (!unwanted) {
 				// At this point, this path, we want to scan for new data as it is not excluded
 				if (isDir(path)) {
+					bool cleanupParentAfterTraversal = false;
 					// Was the path found in the database?
 					if (!itemFoundInDB) {
 						// Path not found in database when searching all drive id's
@@ -10060,26 +10061,7 @@ class SyncEngine {
 
 								// What action should be taken?
 								if (parentalPathShouldBeRemoved && path != ".") {
-									// This parent is a candidate; removal occurs only when actually empty.
-
-									// are we in a --dry-run scenario?
-									if (!dryRun) {
-										// No --dry-run ... process local delete
-										if (exists(path) && dirEntries(path, SpanMode.shallow).empty) {
-											try {
-												if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ path, ["verbose"]);}
-												rmdir(path);
-												if (!exists(path)) notifyExpectedLocalRemoval(path);
-												if (verboseLogging) {
-													if (!exists(path)) {addLogEntry("Removed local directory: " ~ path, ["verbose"]);}
-													else {addLogEntry("Local directory remains after removal attempt: " ~ path, ["verbose"]);}
-												}
-
-											} catch (FileException e) {
-												displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
-											}
-										}
-									}
+									cleanupParentAfterTraversal = true;
 								} else {
 									// Retention conditions were logged above. The sync root (".") is
 									// also never eligible for local cleanup.
@@ -10133,6 +10115,31 @@ class SyncEngine {
 							}
 						}
 					}
+
+					// Remove an eligible empty parent only after its children were processed.
+					if (cleanupParentAfterTraversal) {
+						// This parent is a candidate; removal occurs only when actually empty.
+
+						// are we in a --dry-run scenario?
+						if (!dryRun) {
+							// No --dry-run ... process local delete
+							if (exists(path) && dirEntries(path, SpanMode.shallow).empty) {
+								try {
+									if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ path, ["verbose"]);}
+									rmdir(path);
+									if (!exists(path)) notifyExpectedLocalRemoval(path);
+									if (verboseLogging) {
+										if (!exists(path)) {addLogEntry("Removed local directory: " ~ path, ["verbose"]);}
+										else {addLogEntry("Local directory remains after removal attempt: " ~ path, ["verbose"]);}
+									}
+
+								} catch (FileException e) {
+									displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
+								}
+							}
+						}
+					}
+
 				} else {
 					// https://github.com/abraunegg/onedrive/issues/984
 					// path is not a directory, is it a valid file?
