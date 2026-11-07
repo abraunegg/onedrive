@@ -43,6 +43,44 @@ def _case_map(results: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     return mapped
 
 
+def _results_coverage_error(results: dict[str, Any], *, label: str) -> str | None:
+    """Reject incomplete case execution before evaluating pass/recovery status.
+
+    A missing case is not a PASS. The planned case list is recorded by each
+    suite runner before it starts invoking cases; gate success requires one
+    result for every planned case, with no duplicate or unplanned PASS entry.
+    """
+    raw_expected = results.get("executed_case_ids")
+    raw_cases = results.get("cases")
+    if not isinstance(raw_expected, list) or not raw_expected:
+        return f"{label}: no executed_case_ids recorded"
+    if not isinstance(raw_cases, list) or not raw_cases:
+        return f"{label}: no case results recorded"
+
+    expected = [_case_key(value) for value in raw_expected]
+    if any(not case_id for case_id in expected) or len(expected) != len(set(expected)):
+        return f"{label}: invalid or duplicate planned case IDs"
+
+    observed = [_case_key(case.get("id")) for case in raw_cases if isinstance(case, dict)]
+    if len(observed) != len(raw_cases) or any(not case_id for case_id in observed):
+        return f"{label}: invalid case result entries"
+    if len(observed) != len(set(observed)):
+        return f"{label}: duplicate case result IDs"
+
+    missing = sorted(set(expected) - set(observed))
+    # 0000 (suite setup) and 9999 (final cleanup) are auxiliary failure-only
+    # records. They must never contribute to the executed test count.
+    unexpected = sorted(set(observed) - set(expected) - {"0000", "9999"})
+    if missing or unexpected:
+        return (f"{label}: incomplete case coverage: "
+                f"missing={missing}, unexpected={unexpected}")
+    for auxiliary in set(observed) & {"0000", "9999"}:
+        case = next(item for item in raw_cases if _case_key(item.get("id")) == auxiliary)
+        if str(case.get("status", "")).lower() == "pass":
+            return f"{label}: auxiliary result {auxiliary} must not be a PASS"
+    return None
+
+
 def _failed_cases(results: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     return {
         key: case
@@ -109,6 +147,20 @@ def main() -> int:
             cleanup = {"status": "fail", "reason": f"Invalid cleanup result: {exc}"}
         if not cleanup or cleanup.get("status") != "pass":
             reason = (cleanup or {}).get("reason") or "Missing post-debug cleanup result"
+            # Cleanup failure is a hard gate failure, but it must not erase the
+            # primary/debug evidence needed to diagnose the underlying defects.
+            try:
+                primary_for_report = _load_json(primary_path)
+                debug_for_report = _load_json(debug_path)
+            except (ValueError, OSError):
+                primary_for_report = None
+                debug_for_report = None
+            primary_failures = _failed_cases(primary_for_report)
+            debug_failures = _failed_cases(debug_for_report)
+            debug_cases = _case_map(debug_for_report)
+            recovered = sorted(case_id for case_id in primary_failures
+                               if case_id in debug_cases and case_id not in debug_failures)
+            unrecovered = sorted(set(primary_failures) - set(recovered))
             payload = {
                 "conclusion": "failure",
                 "recovered_by_debug_rerun": False,
@@ -117,8 +169,10 @@ def main() -> int:
                 "debug_results": str(debug_path),
                 "cleanup_results": str(cleanup_path),
                 "effective_results": str(primary_path),
-                "primary_failed_case_ids": [], "debug_failed_case_ids": [],
-                "recovered_case_ids": [], "unrecovered_case_ids": [],
+                "primary_failed_case_ids": sorted(primary_failures),
+                "debug_failed_case_ids": sorted(debug_failures),
+                "recovered_case_ids": recovered,
+                "unrecovered_case_ids": unrecovered,
             }
             _write_json(gate_path, payload)
             print(payload["reason"])
@@ -142,6 +196,22 @@ def main() -> int:
         }
         _write_json(gate_path, payload)
         print(payload["reason"])
+        return 1
+
+    coverage_error = _results_coverage_error(primary, label="Primary results")
+    if coverage_error:
+        payload = {
+            "conclusion": "failure",
+            "recovered_by_debug_rerun": False,
+            "reason": coverage_error,
+            "primary_results": str(primary_path),
+            "debug_results": str(debug_path),
+            "effective_results": str(primary_path),
+            "primary_failed_case_ids": [], "debug_failed_case_ids": [],
+            "recovered_case_ids": [], "unrecovered_case_ids": [],
+        }
+        _write_json(gate_path, payload)
+        print(coverage_error)
         return 1
 
     primary_failures = _failed_cases(primary)
@@ -206,8 +276,43 @@ def main() -> int:
         print(payload["reason"])
         return 1
 
+    coverage_error = _results_coverage_error(debug, label="Debug rerun results")
+    if coverage_error:
+        payload = {
+            "conclusion": "failure",
+            "recovered_by_debug_rerun": False,
+            "reason": coverage_error,
+            "primary_results": str(primary_path),
+            "debug_results": str(debug_path),
+            "effective_results": str(primary_path),
+            "primary_failed_case_ids": sorted(primary_failures),
+            "debug_failed_case_ids": [], "recovered_case_ids": [],
+            "unrecovered_case_ids": sorted(primary_failures),
+        }
+        _write_json(gate_path, payload)
+        print(coverage_error)
+        return 1
+
     debug_cases = _case_map(debug)
     debug_failures = _failed_cases(debug)
+    unexpected_debug_cases = sorted(set(debug_cases) - set(primary_failures))
+    if unexpected_debug_cases:
+        reason = "Debug rerun included unexpected case results: " + ", ".join(unexpected_debug_cases)
+        payload = {
+            "conclusion": "failure",
+            "recovered_by_debug_rerun": False,
+            "reason": reason,
+            "primary_results": str(primary_path),
+            "debug_results": str(debug_path),
+            "effective_results": str(primary_path),
+            "primary_failed_case_ids": sorted(primary_failures),
+            "debug_failed_case_ids": sorted(debug_failures),
+            "recovered_case_ids": [],
+            "unrecovered_case_ids": sorted(primary_failures),
+        }
+        _write_json(gate_path, payload)
+        print(reason)
+        return 1
     unrecovered: list[str] = []
     for case_id in sorted(primary_failures):
         debug_case = debug_cases.get(case_id)

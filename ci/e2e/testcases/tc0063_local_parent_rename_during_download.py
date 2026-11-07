@@ -410,6 +410,9 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
         wrapped_filesystem_error_seen = "There was a file system error during OneDrive request" in combined_final_output
         target_download_seen = f"Downloading file: {root_name}/{self.TARGET_RELATIVE}" in combined_final_output
         target_download_seen_without_root = f"Downloading file: {self.TARGET_RELATIVE}" in combined_final_output
+        parent_download_filesystem_error_seen = (
+            f"Download failed (local file system error): {root_name}/Documents/divers/" in combined_final_output
+        )
 
         details: dict[str, object] = {
             "root_name": root_name,
@@ -442,6 +445,7 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
             "mutation_done": mutation_done,
             "mutation_details": mutation_details,
             "filesystem_error_seen": filesystem_error_seen,
+            "parent_download_filesystem_error_seen": parent_download_filesystem_error_seen,
             "status_zero_seen": status_zero_seen,
             "api_error_seen": api_error_seen,
             "wrapped_filesystem_error_seen": wrapped_filesystem_error_seen,
@@ -469,6 +473,16 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
                 details,
             )
 
-        # A local filesystem error may be an acceptable outcome for this deliberately hostile
-        # test; the critical validation is that it is not reclassified as an API/HTTP failure.
+        # The reproduction must actually reach the local filesystem download error path.
+        if mutation_details.get("process_timeout") or final_returncode == 0 or not (
+            filesystem_error_seen and parent_download_filesystem_error_seen
+        ):
+            return self.fail_result(
+                self.case_id,
+                self.name,
+                "Expected a completed, nonzero sync with a local filesystem download error under the renamed parent",
+                artifacts,
+                details,
+            )
+
         return self.pass_result(self.case_id, self.name, artifacts, details)
