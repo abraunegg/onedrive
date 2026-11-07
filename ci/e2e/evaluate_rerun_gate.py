@@ -158,9 +158,24 @@ def main() -> int:
             primary_failures = _failed_cases(primary_for_report)
             debug_failures = _failed_cases(debug_for_report)
             debug_cases = _case_map(debug_for_report)
+            # Preserve a genuine debug recovery result even if the separate,
+            # mandatory cleanup fails. Invalid/incomplete evidence must not
+            # be counted as recovered.
+            valid_report = (
+                primary_for_report is not None and debug_for_report is not None
+                and _results_coverage_error(primary_for_report, label="Primary results") is None
+                and _results_coverage_error(debug_for_report, label="Debug rerun results") is None
+                and not (set(debug_cases) - set(primary_failures))
+            )
             recovered = sorted(case_id for case_id in primary_failures
-                               if case_id in debug_cases and case_id not in debug_failures)
+                               if valid_report and case_id in debug_cases and case_id not in debug_failures)
             unrecovered = sorted(set(primary_failures) - set(recovered))
+            effective_results_path = primary_path
+            if recovered:
+                effective_results_path = gate_path.with_name("effective-results.json")
+                _write_json(effective_results_path, _build_effective_results(
+                    primary_for_report, debug_cases, set(recovered)
+                ))
             payload = {
                 "conclusion": "failure",
                 "recovered_by_debug_rerun": False,
@@ -168,7 +183,7 @@ def main() -> int:
                 "primary_results": str(primary_path),
                 "debug_results": str(debug_path),
                 "cleanup_results": str(cleanup_path),
-                "effective_results": str(primary_path),
+                "effective_results": str(effective_results_path),
                 "primary_failed_case_ids": sorted(primary_failures),
                 "debug_failed_case_ids": sorted(debug_failures),
                 "recovered_case_ids": recovered,

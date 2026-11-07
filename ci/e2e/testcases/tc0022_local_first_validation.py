@@ -88,10 +88,6 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         generated_seed = create_random_image_set(
             seed_image_file, image_seed, revision=REVISION_0, title="TC0022 local_first baseline images"
         )
-        generated_remote = create_random_image_set(
-            remote_update_image_file, image_seed, revision=REVISION_1, title="TC0022 local_first baseline images"
-        )
-
         for conf_dir, sync_root, local_first in [
             (conf_seed, seed_root, False),
             (conf_local, local_root, False),
@@ -105,6 +101,8 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         seed_stderr = scenario_log_dir / "seed_stderr.log"
         download_stdout = scenario_log_dir / "download_stdout.log"
         download_stderr = scenario_log_dir / "download_stderr.log"
+        updater_baseline_stdout = scenario_log_dir / "updater_baseline_stdout.log"
+        updater_baseline_stderr = scenario_log_dir / "updater_baseline_stderr.log"
         remote_stdout = scenario_log_dir / "remote_update_stdout.log"
         remote_stderr = scenario_log_dir / "remote_update_stderr.log"
         final_stdout = scenario_log_dir / "final_sync_stdout.log"
@@ -115,6 +113,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
 
         scenario_artifacts = [
             str(seed_stdout), str(seed_stderr), str(download_stdout), str(download_stderr),
+            str(updater_baseline_stdout), str(updater_baseline_stderr),
             str(remote_stdout), str(remote_stderr), str(final_stdout), str(final_stderr),
             str(verify_stdout), str(verify_stderr), str(metadata_file),
         ]
@@ -150,9 +149,26 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             else {}
         )
 
+        # The remote updater must modify previously tracked images, not try
+        # to create replacement files from an empty database (Graph 409).
+        updater_baseline_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose",
+            "--resync", "--resync-auth", "--single-directory", root_name, "--confdir", str(conf_remote),
+        ]
+        updater_baseline_result = run_phase(
+            "updater baseline", updater_baseline_command, updater_baseline_stdout, updater_baseline_stderr
+        )
+        updater_baseline_error = validate_image_set(remote_update_image_file, REVISION_0)
+        if updater_baseline_result.returncode != 0 or updater_baseline_error:
+            return False, (
+                "Image remote updater failed to establish a tracked revision-0 baseline: "
+                f"exit={updater_baseline_result.returncode}; {updater_baseline_error}"
+            ), {"updater_baseline_returncode": updater_baseline_result.returncode,
+                "updater_baseline_validation_error": updater_baseline_error}
+        mutate_image_set_revision(remote_update_image_file, REVISION_0, REVISION_1)
         remote_command = [
             context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose",
-            "--resync", "--resync-auth", "--single-directory", root_name, "--confdir", str(conf_remote),
+            "--single-directory", root_name, "--confdir", str(conf_remote),
         ]
         remote_result = run_phase("remote update", remote_command, remote_stdout, remote_stderr)
 
@@ -199,7 +215,9 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             "image_relative": image_relative,
             "image_seed": image_seed,
             "generated_seed_image_sizes": {k: int(v) for k, v in generated_seed.items() if k.endswith("_size_bytes")},
-            "generated_remote_update_image_sizes": {k: int(v) for k, v in generated_remote.items() if k.endswith("_size_bytes")},
+            "remote_update_image_sizes": image_set_sizes(remote_update_image_file),
+            "updater_baseline_returncode": updater_baseline_result.returncode,
+            "updater_baseline_validation_error": updater_baseline_error,
             "seed_returncode": seed_result.returncode,
             "download_returncode": download_result.returncode,
             "remote_returncode": remote_result.returncode,
