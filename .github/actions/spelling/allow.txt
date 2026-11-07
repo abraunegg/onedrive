@@ -482,6 +482,7 @@ rcx
 rdi
 rdo
 rdx
+readback
 readdata
 readln
 readret
