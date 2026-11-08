@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -387,6 +388,144 @@ class TestCase0015SkipSymlinksValidation(E2ETestCase):
 
         return self._scenario_pass(scenario_id, description, artifacts, details)
 
+    def _run_cleanup_symlink_logging_scenario(
+        self,
+        context: E2EContext,
+        root_name: str,
+        scenario_work_dir: Path,
+        scenario_log_dir: Path,
+        scenario_state_dir: Path,
+    ) -> ScenarioResult:
+        scenario_id = "SYM-0003"
+        description = "cleanup skips valid and dangling symlinks with skip_symlinks=false"
+        seed_root = scenario_work_dir / "seedroot"
+        sync_root = scenario_work_dir / "syncroot"
+        verify_root = scenario_work_dir / "verifyroot"
+        seed_conf = scenario_work_dir / "conf-seed"
+        cleanup_conf = scenario_work_dir / "conf-cleanup"
+        verify_conf = scenario_work_dir / "conf-verify"
+        for folder in (seed_root, sync_root, verify_root, seed_conf, cleanup_conf, verify_conf):
+            reset_directory(folder)
+
+        relative_base = f"{root_name}/{scenario_id}"
+        anchor_relative = f"{relative_base}/anchor.txt"
+        stale_relative = f"{relative_base}/stale.txt"
+        valid_relative = f"{relative_base}/valid-link.txt"
+        dangling_relative = f"{relative_base}/dangling-link.txt"
+        anchor_content = b"symlink cleanup anchor\n"
+        write_text_file(seed_root / anchor_relative, anchor_content.decode("utf-8"))
+
+        context.bootstrap_config_dir(seed_conf)
+        self._write_config(seed_conf / "config", skip_symlinks=True)
+        context.bootstrap_config_dir(cleanup_conf)
+        self._write_config(cleanup_conf / "config", skip_symlinks=False)
+        # Keep the persistent cleanup database aligned with the --syncdir override.
+        # The cleanup invocation intentionally omits --resync to exercise that DB.
+        with (cleanup_conf / "config").open("a", encoding="utf-8") as f:
+            f.write(
+                f'sync_dir = "{sync_root}"\n'
+                'download_only = "true"\n'
+                'cleanup_local_files = "true"\n'
+            )
+        context.bootstrap_config_dir(verify_conf)
+        self._write_config(verify_conf / "config", skip_symlinks=True)
+
+        seed_stdout = scenario_log_dir / "seed_stdout.log"
+        cleanup_stdout = scenario_log_dir / "cleanup_stdout.log"
+        cleanup_stderr = scenario_log_dir / "cleanup_stderr.log"
+        preload_stdout = scenario_log_dir / "preload_stdout.log"
+        remote_stdout = scenario_log_dir / "verify_stdout.log"
+        state_file = scenario_state_dir / "symlink_cleanup_state.txt"
+        metadata_file = scenario_state_dir / "metadata.txt"
+        artifacts = [str(x) for x in (seed_stdout, cleanup_stdout, cleanup_stderr,
+                                      preload_stdout, remote_stdout, state_file, metadata_file)]
+        details: dict = {"scenario_id": scenario_id, "root_name": root_name}
+        failures: list[str] = []
+
+        seed_cmd = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+                    "--resync", "--resync-auth", "--single-directory", relative_base,
+                    "--syncdir", str(seed_root), "--confdir", str(seed_conf)]
+        seed_result = run_command(seed_cmd, cwd=context.repo_root)
+        write_text_file(seed_stdout, seed_result.stdout + "\n" + seed_result.stderr)
+        details["seed_returncode"] = seed_result.returncode
+        if seed_result.returncode != 0:
+            return self._scenario_fail(scenario_id, description, "Remote seed failed", artifacts, details)
+
+        # Establish an existing DB baseline from the real remote item.
+        preload_cmd = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+                       "--download-only", "--cleanup-local-files", "--resync", "--resync-auth",
+                       "--single-directory", relative_base, "--syncdir", str(sync_root), "--confdir", str(cleanup_conf)]
+        preload_result = run_command(preload_cmd, cwd=context.repo_root)
+        write_text_file(preload_stdout, preload_result.stdout + "\n" + preload_result.stderr)
+        details["preload_returncode"] = preload_result.returncode
+        if preload_result.returncode != 0 or not (sync_root / anchor_relative).is_file():
+            return self._scenario_fail(scenario_id, description, "Cleanup client preload did not establish tracked anchor", artifacts, details)
+        if (sync_root / anchor_relative).read_bytes() != anchor_content:
+            return self._scenario_fail(scenario_id, description, "Preloaded anchor content changed", artifacts, details)
+
+        valid_link = sync_root / valid_relative
+        dangling_link = sync_root / dangling_relative
+        valid_link.symlink_to("anchor.txt")
+        dangling_link.symlink_to("non-existent-destination.txt")
+        write_text_file(sync_root / stale_relative, "untracked cleanup stale\n")
+
+        # No --resync here: use the existing DB and the effective cleanup policy.
+        cleanup_cmd = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+                       "--download-only", "--cleanup-local-files", "--single-directory", relative_base,
+                       "--syncdir", str(sync_root), "--confdir", str(cleanup_conf)]
+        cleanup_result = run_command(cleanup_cmd, cwd=context.repo_root)
+        output = cleanup_result.stdout + "\n" + cleanup_result.stderr
+        write_text_file(cleanup_stdout, cleanup_result.stdout)
+        write_text_file(cleanup_stderr, cleanup_result.stderr)
+        details["cleanup_returncode"] = cleanup_result.returncode
+        if cleanup_result.returncode != 0:
+            failures.append(f"Cleanup client exited {cleanup_result.returncode}")
+        for key, expected in (("download_only", "true"), ("cleanup_local_files", "true"),
+                              ("skip_symlinks", "false")):
+            if re.search(r"Config option '" + key + r"'\s*=\s*" + expected + r"(?:\s|$)", output) is None:
+                failures.append(f"Incorrect effective {key}={expected}")
+
+        for path, expected_target in ((valid_link, "anchor.txt"),
+                                      (dangling_link, "non-existent-destination.txt")):
+            if not path.is_symlink() or os.readlink(path) != expected_target:
+                failures.append(f"Symbolic link deleted, changed or followed: {path.name}")
+            rel = path.relative_to(sync_root).as_posix()
+            match = re.compile(r"(?:^|\n)(?:DEBUG:\s+)?Skipping symbolic link during "
+                               r"--download-only --cleanup-local-files cleanup pass:\s+(?:\./)?"
+                               + re.escape(rel) + r"(?:\s|$)")
+            if match.search(output) is None:
+                failures.append(f"Cleanup-specific symlink skip log absent: {rel}")
+            if re.search(r"Skipping item - skip symbolic links configured:\s+(?:\./)?" + re.escape(rel), output):
+                failures.append(f"Cleanup symlink falsely attributed to skip_symlinks: {rel}")
+        if not (sync_root / anchor_relative).is_file() or (sync_root / anchor_relative).read_bytes() != anchor_content:
+            failures.append("Tracked anchor was deleted or altered")
+        if (sync_root / stale_relative).exists():
+            failures.append("In-scope DB-unknown stale file was not cleaned")
+        if re.search(r"Removed local file:\s+(?:\./)?" + re.escape(stale_relative) + r"(?:\s|$)", output) is None:
+            failures.append("Cleanup did not log successful removal of stale control file")
+
+        # Existing client-based remote verifier: neither link nor local-only
+        # stale file should have been uploaded during download-only cleanup.
+        verify_cmd = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+                      "--download-only", "--resync", "--resync-auth", "--single-directory", relative_base,
+                      "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
+        verify_result = run_command(verify_cmd, cwd=context.repo_root)
+        write_text_file(remote_stdout, verify_result.stdout + "\n" + verify_result.stderr)
+        details["verify_returncode"] = verify_result.returncode
+        if verify_result.returncode != 0:
+            failures.append("Remote verifier failed")
+        if not (verify_root / anchor_relative).is_file() or (verify_root / anchor_relative).read_bytes() != anchor_content:
+            failures.append("Remote anchor changed or disappeared")
+        for rel in (valid_relative, dangling_relative, stale_relative):
+            if (verify_root / rel).exists() or (verify_root / rel).is_symlink():
+                failures.append(f"Unexpected remote item appeared: {rel}")
+
+        self._snapshot_tree(sync_root, state_file)
+        write_text_file(metadata_file, "\n".join(f"{k}={v}" for k,v in details.items()) + "\n")
+        if failures:
+            return self._scenario_fail(scenario_id, description, "; ".join(failures), artifacts, details)
+        return self._scenario_pass(scenario_id, description, artifacts, details)
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -427,6 +566,23 @@ class TestCase0015SkipSymlinksValidation(E2ETestCase):
             reset_directory(scenario_state_dir)
             results.append(
                 self._run_dangling_symlink_sync_scenario(
+                    context,
+                    root_name,
+                    scenario_work_dir,
+                    scenario_log_dir,
+                    scenario_state_dir,
+                )
+            )
+
+        if context.should_run_scenario(self.case_id, "SYM-0003"):
+            scenario_work_dir = case_work_dir / "sym0003-cleanup-false"
+            scenario_log_dir = case_log_dir / "sym0003-cleanup-false"
+            scenario_state_dir = state_dir / "sym0003-cleanup-false"
+            reset_directory(scenario_work_dir)
+            reset_directory(scenario_log_dir)
+            reset_directory(scenario_state_dir)
+            results.append(
+                self._run_cleanup_symlink_logging_scenario(
                     context,
                     root_name,
                     scenario_work_dir,

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import os
+import traceback
+import hashlib
 import shutil
 from pathlib import Path
 
-from framework.base import E2ETestCase
+from testcases.remote_move_identity import (
+    MonitoredRemoteMoveCase, snapshot_remote_identities, check_remote_identity_transition,
+)
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
@@ -21,12 +25,12 @@ from framework.utils import (
 )
 
 
-class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
+class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(MonitoredRemoteMoveCase):
     case_id = "0035"
     name = "remote move between directories reconciliation"
     description = (
-        "Validate that a stale local client correctly reconciles remote-side moves of passive TXT "
-        "and real XLSX/PDF files plus a real PNG/JPEG image set between directories without leaving stale local file leftovers"
+        "Distinguish delete-and-recreate archive preservation from identity-preserving remote moves "
+        "between directories for TXT/XLSX/PDF/PNG/JPEG fixtures"
     )
 
     XLSX_PAYLOAD_ROWS = 32
@@ -60,10 +64,68 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
             return []
         return sorted(str(path.relative_to(root)) for path in root.rglob("*") if path.is_file())
 
+    SCENARIOS = (
+        ("DR-0001", "standalone sync delete-and-recreate archival semantics"),
+        ("RM-0002", "monitor identity-preserving Graph rename/move reconciliation"),
+    )
+
     def run(self, context: E2EContext) -> TestResult:
+        failures: list[str] = []
+        artifacts: list[str] = []
+        scenario_details: dict[str, object] = {}
+        executed: list[str] = []
+        failed_ids: list[str] = []
+        for scenario_id, description in self.SCENARIOS:
+            if not context.should_run_scenario(self.case_id, scenario_id):
+                continue
+            executed.append(scenario_id)
+            context.log(f"Running Test Case {self.case_id} scenario {scenario_id}: {description}")
+            try:
+                result = self._run_scenario(
+                    context, scenario_id=scenario_id,
+                    preserve_identity=(scenario_id == "RM-0002"),
+                )
+            except Exception as exc:
+                # One broken scenario must not silently suppress execution of
+                # the other independent operation. Retain full traceback evidence.
+                exception_log = context.state_dir / f"tc{self.case_id}" / scenario_id / "exception.log"
+                write_text_file(exception_log, traceback.format_exc())
+                result = self.fail_result(
+                    self.case_id, self.name,
+                    f"Unexpected {type(exc).__name__}: {exc}",
+                    [str(exception_log)],
+                    {"scenario_id": scenario_id, "exception_type": type(exc).__name__},
+                )
+            artifacts.extend(result.artifacts)
+            scenario_details[scenario_id] = result.details
+            if result.status != "pass":
+                failed_ids.append(scenario_id)
+                failures.append(f"{scenario_id}: {result.reason}")
+                context.log(f"Scenario {scenario_id} FAILED: {result.reason}")
+            else:
+                context.log(f"Scenario {scenario_id} PASSED")
+
+        details = {
+            "scenario_count": len(executed),
+            "executed_scenario_ids": executed,
+            "failed_scenario_ids": failed_ids,
+            "failed_scenarios": len(failures),
+            "scenario_details": scenario_details,
+        }
+        if failures:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"{len(failures)} of {len(executed)} scenarios failed: " + " | ".join(failures),
+                artifacts, details,
+            )
+        return self.pass_result(self.case_id, self.name, artifacts, details)
+
+    def _run_scenario(
+        self, context: E2EContext, *, scenario_id: str, preserve_identity: bool,
+    ) -> TestResult:
         layout = self.prepare_case_layout(
             context,
-            case_dir_name="tc0035",
+            case_dir_name=f"tc0035/{scenario_id}",
             ensure_refresh_token=True,
         )
         case_work_dir = layout.work_dir
@@ -87,7 +149,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
         self._write_config(conf_seed, seed_root)
         self._write_config(conf_verify, verify_root)
 
-        root_name = f"ZZ_E2E_TC0035_{context.run_id}_{os.getpid()}"
+        root_name = f"ZZ_E2E_TC0035_{scenario_id.replace('-', '_')}_{context.run_id}_{os.getpid()}"
 
         source_txt_relative = f"{root_name}/SourceDirectory/move-me.txt"
         destination_txt_relative = f"{root_name}/DestinationDirectory/move-me.txt"
@@ -320,65 +382,63 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
-        # Phase 2: perform both moves through the seed client.
-        # This is our remote-side move mechanism.
-        seed_destination_txt_path.parent.mkdir(parents=True, exist_ok=True)
-        seed_source_txt_path.rename(seed_destination_txt_path)
-        rename_xlsx_pair(seed_source_xlsx_path, seed_destination_xlsx_path)
-        rename_pdf_pair(seed_source_pdf_path, seed_destination_pdf_path)
-        rename_image_set(seed_source_image_path, seed_destination_image_path)
+        # Capture Graph item identity before any online mutation, with the client
+        # stopped.  All nine original files must exist in this baseline.
+        baseline_items = snapshot_remote_identities(conf_seed / "items.sqlite3", root_name)
+        transitions = sorted(
+            (old, old.replace(f"{root_name}/SourceDirectory/", f"{root_name}/DestinationDirectory/", 1))
+            for old in baseline_items
+            if old.startswith(f"{root_name}/SourceDirectory/")
+        )
+        if len(transitions) != 9:
+            return self.fail_result(self.case_id, self.name,
+                f"Expected nine tracked original files, found {len(transitions)}",
+                artifacts, details)
+        original_hashes = {
+            old: hashlib.sha256((stale_root / old).read_bytes()).hexdigest()
+            for old, _ in transitions
+        }
+        details["expected_identity_transitions"] = len(transitions)
 
-        details["seed_source_txt_exists_after_local_move"] = seed_source_txt_path.exists()
-        details["seed_destination_txt_exists_after_local_move"] = seed_destination_txt_path.is_file()
-        details["seed_source_xlsx_exists_after_local_move"] = seed_source_xlsx_path.exists()
-        details["seed_destination_xlsx_exists_after_local_move"] = seed_destination_xlsx_path.is_file()
-        details["seed_anchor_exists_after_local_move"] = seed_anchor_path.is_file()
-
-        if seed_source_txt_path.exists() or xlsx_pair_any_exists(seed_source_xlsx_path) or pdf_pair_any_exists(seed_source_pdf_path) or image_set_any_exists(seed_source_image_path):
-            self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "one or more seed source paths still exist immediately after move",
-                artifacts,
-                details,
+        if preserve_identity:
+            error = self._move_existing_items_online(
+                context, config_dir=conf_seed, sync_root=seed_root,
+                root_name=root_name, moves=transitions,
+                stdout_file=remote_move_stdout, stderr_file=remote_move_stderr,
+                details=details,
             )
+            if error:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name, error, artifacts, details)
+        else:
+            seed_destination_txt_path.parent.mkdir(parents=True, exist_ok=True)
+            seed_source_txt_path.rename(seed_destination_txt_path)
+            rename_xlsx_pair(seed_source_xlsx_path, seed_destination_xlsx_path)
+            rename_pdf_pair(seed_source_pdf_path, seed_destination_pdf_path)
+            rename_image_set(seed_source_image_path, seed_destination_image_path)
+            remote_move_command = [
+                context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+                "--single-directory", root_name, "--confdir", str(conf_seed),
+            ]
+            context.log(f"Executing Test Case {self.case_id} {scenario_id} standalone move: {command_to_string(remote_move_command)}")
+            remote_move_result = run_command(remote_move_command, cwd=context.repo_root)
+            write_text_file(remote_move_stdout, remote_move_result.stdout)
+            write_text_file(remote_move_stderr, remote_move_result.stderr)
+            details["remote_move_returncode"] = remote_move_result.returncode
+            if remote_move_result.returncode != 0:
+                return self.fail_result(self.case_id, self.name,
+                    f"standalone move propagation failed with status {remote_move_result.returncode}",
+                    artifacts, details)
 
-        if not seed_destination_txt_path.is_file() or not xlsx_pair_all_files(seed_destination_xlsx_path) or not pdf_pair_all_files(seed_destination_pdf_path) or not image_set_all_files(seed_destination_image_path):
-            self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "one or more seed destination paths do not exist immediately after move",
-                artifacts,
-                details,
-            )
-
-        remote_move_command = [
-            context.onedrive_bin,
-            "--display-running-config",
-            "--sync",
-            "--verbose",
-            "--single-directory",
-            root_name,
-            "--confdir",
-            str(conf_seed),
-        ]
-        context.log(f"Executing Test Case {self.case_id} phase2 remote move: {command_to_string(remote_move_command)}")
-        remote_move_result = run_command(remote_move_command, cwd=context.repo_root)
-        write_text_file(remote_move_stdout, remote_move_result.stdout)
-        write_text_file(remote_move_stderr, remote_move_result.stderr)
-        details["remote_move_returncode"] = remote_move_result.returncode
-
-        if remote_move_result.returncode != 0:
-            self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                f"remote move propagation phase failed with status {remote_move_result.returncode}",
-                artifacts,
-                details,
-            )
+        if (seed_source_txt_path.exists() or xlsx_pair_any_exists(seed_source_xlsx_path)
+                or pdf_pair_any_exists(seed_source_pdf_path) or image_set_any_exists(seed_source_image_path)):
+            return self.fail_result(self.case_id, self.name,
+                "Mutator still contains one or more original source files", artifacts, details)
+        if (not seed_destination_txt_path.is_file() or not xlsx_pair_all_files(seed_destination_xlsx_path)
+                or not pdf_pair_all_files(seed_destination_pdf_path) or not image_set_all_files(seed_destination_image_path)):
+            return self.fail_result(self.case_id, self.name,
+                "Mutator is missing one or more destination files", artifacts, details)
+        after_items = snapshot_remote_identities(conf_seed / "items.sqlite3", root_name)
 
         # Phase 3: stale client reconciles the remote move using existing DB/local state.
         # No --resync here, because this is specifically a reconciliation test.
@@ -520,8 +580,35 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
+        # Both scenario classes must prove their Graph identity semantics using a
+        # fresh independent online download. The mutator's database was read
+        # only after the client stopped, never concurrently with --monitor.
+        verified_items = snapshot_remote_identities(conf_verify / "items.sqlite3", root_name)
+        identity_errors = check_remote_identity_transition(
+            baseline_items, after_items, verified_items, transitions,
+            preserve_identity=preserve_identity,
+        )
+        details["graph_identity_verified_count"] = len(transitions) - len(identity_errors)
+        details["graph_identity_errors"] = identity_errors
+        if identity_errors:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name,
+                "Graph identity evidence failed: " + "; ".join(identity_errors),
+                artifacts, details)
+        if not preserve_identity:
+            archived_differences = [
+                path for path, expected_hash in original_hashes.items()
+                if not (stale_root / path).is_file()
+                or hashlib.sha256((stale_root / path).read_bytes()).hexdigest() != expected_hash
+            ]
+            if archived_differences:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name,
+                    "--download-only failed to preserve original local bytes after delete/recreate: "
+                    + ", ".join(archived_differences), artifacts, details)
+
         # Stale client assertions: existing-state client must reconcile both payload classes cleanly.
-        if stale_source_txt_path.exists() or xlsx_pair_any_exists(stale_source_xlsx_path) or pdf_pair_any_exists(stale_source_pdf_path) or image_set_any_exists(stale_source_image_path):
+        if preserve_identity and (stale_source_txt_path.exists() or xlsx_pair_any_exists(stale_source_xlsx_path) or pdf_pair_any_exists(stale_source_pdf_path) or image_set_any_exists(stale_source_image_path)):
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -530,7 +617,7 @@ class TestCase0035RemoteMoveBetweenDirectoriesReconciliation(E2ETestCase):
                 details,
             )
 
-        if details["stale_source_dir_files_after_reconcile"]:
+        if preserve_identity and details["stale_source_dir_files_after_reconcile"]:
             return self.fail_result(
                 self.case_id,
                 self.name,

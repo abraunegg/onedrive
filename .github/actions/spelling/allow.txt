@@ -145,6 +145,7 @@ drwxrwxr
 dryrun
 DTime
 Dynu
+EContext
 edf
 eflag
 EIOv
@@ -481,6 +482,7 @@ rcx
 rdi
 rdo
 rdx
+readback
 readdata
 readln
 readret

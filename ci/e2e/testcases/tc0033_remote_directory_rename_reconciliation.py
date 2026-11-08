@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import os
+import traceback
+import hashlib
 from pathlib import Path
 
-from framework.base import E2ETestCase
+from testcases.remote_move_identity import (
+    MonitoredRemoteMoveCase, snapshot_remote_identities, check_remote_identity_transition,
+)
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
@@ -20,12 +24,12 @@ from framework.utils import (
 )
 
 
-class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
+class TestCase0033RemoteDirectoryRenameReconciliation(MonitoredRemoteMoveCase):
     case_id = "0033"
     name = "remote directory rename reconciliation"
     description = (
-        "Validate that a second client with existing local and database state correctly reconciles a remote "
-        "directory rename containing passive TXT content, a real XLSX workbook, a real PDF document and a real PNG/JPEG image set"
+        "Distinguish delete-and-recreate archive preservation from identity-preserving remote directory "
+        "renames with tracked TXT/XLSX/PDF/PNG/JPEG descendants"
     )
 
     XLSX_PAYLOAD_ROWS = 32
@@ -74,10 +78,68 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
 
         return deleted_paths
 
+    SCENARIOS = (
+        ("DR-0001", "standalone sync delete-and-recreate archival semantics"),
+        ("RM-0002", "monitor identity-preserving Graph rename/move reconciliation"),
+    )
+
     def run(self, context: E2EContext) -> TestResult:
+        failures: list[str] = []
+        artifacts: list[str] = []
+        scenario_details: dict[str, object] = {}
+        executed: list[str] = []
+        failed_ids: list[str] = []
+        for scenario_id, description in self.SCENARIOS:
+            if not context.should_run_scenario(self.case_id, scenario_id):
+                continue
+            executed.append(scenario_id)
+            context.log(f"Running Test Case {self.case_id} scenario {scenario_id}: {description}")
+            try:
+                result = self._run_scenario(
+                    context, scenario_id=scenario_id,
+                    preserve_identity=(scenario_id == "RM-0002"),
+                )
+            except Exception as exc:
+                # One broken scenario must not silently suppress execution of
+                # the other independent operation. Retain full traceback evidence.
+                exception_log = context.state_dir / f"tc{self.case_id}" / scenario_id / "exception.log"
+                write_text_file(exception_log, traceback.format_exc())
+                result = self.fail_result(
+                    self.case_id, self.name,
+                    f"Unexpected {type(exc).__name__}: {exc}",
+                    [str(exception_log)],
+                    {"scenario_id": scenario_id, "exception_type": type(exc).__name__},
+                )
+            artifacts.extend(result.artifacts)
+            scenario_details[scenario_id] = result.details
+            if result.status != "pass":
+                failed_ids.append(scenario_id)
+                failures.append(f"{scenario_id}: {result.reason}")
+                context.log(f"Scenario {scenario_id} FAILED: {result.reason}")
+            else:
+                context.log(f"Scenario {scenario_id} PASSED")
+
+        details = {
+            "scenario_count": len(executed),
+            "executed_scenario_ids": executed,
+            "failed_scenario_ids": failed_ids,
+            "failed_scenarios": len(failures),
+            "scenario_details": scenario_details,
+        }
+        if failures:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"{len(failures)} of {len(executed)} scenarios failed: " + " | ".join(failures),
+                artifacts, details,
+            )
+        return self.pass_result(self.case_id, self.name, artifacts, details)
+
+    def _run_scenario(
+        self, context: E2EContext, *, scenario_id: str, preserve_identity: bool,
+    ) -> TestResult:
         layout = self.prepare_case_layout(
             context,
-            case_dir_name="tc0033",
+            case_dir_name=f"tc0033/{scenario_id}",
             ensure_refresh_token=True,
         )
         case_work_dir = layout.work_dir
@@ -104,7 +166,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
         self._write_config(conf_validator, validator_root)
         self._write_config(conf_verify, verify_root)
 
-        root_name = f"ZZ_E2E_TC0033_{context.run_id}_{os.getpid()}"
+        root_name = f"ZZ_E2E_TC0033_{scenario_id.replace('-', '_')}_{context.run_id}_{os.getpid()}"
         source_dir_relative = f"{root_name}/SourceDirectory"
         renamed_dir_relative = f"{root_name}/RenamedDirectory"
 
@@ -431,98 +493,80 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        # Phase 3: Seeder renames the directory locally and syncs the change online.
-        seeder_source_dir.rename(seeder_renamed_dir)
-
-        details["seeder_source_dir_exists_after_local_rename"] = seeder_source_dir.exists()
-        details["seeder_renamed_dir_exists_after_local_rename"] = seeder_renamed_dir.is_dir()
-
-        if seeder_source_dir.exists():
-            self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "seeder original directory still exists immediately after rename",
-                artifacts,
-                details,
-            )
-
-        if not seeder_renamed_dir.is_dir():
-            self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                "seeder renamed directory does not exist immediately after rename",
-                artifacts,
-                details,
-            )
-
-        phase3_command = [
-            context.onedrive_bin,
-            "--display-running-config",
-            "--sync",
-            "--verbose",
-            "--confdir",
-            str(conf_seeder),
-        ]
-        context.log(f"Executing Test Case {self.case_id} phase3 rename sync: {command_to_string(phase3_command)}")
-        phase3_result = run_command(phase3_command, cwd=context.repo_root)
-        write_text_file(phase3_rename_stdout, phase3_result.stdout)
-        write_text_file(phase3_rename_stderr, phase3_result.stderr)
-        details["phase3_returncode"] = phase3_result.returncode
-
-        phase3_deleted_paths = self._extract_deleted_remote_paths(phase3_result.stdout)
-        details["phase3_deleted_remote_paths"] = phase3_deleted_paths
-        details["phase3_deleted_old_root_exact"] = source_dir_relative in phase3_deleted_paths
-        details["phase3_deleted_old_nested_exact"] = f"{source_dir_relative}/Nested" in phase3_deleted_paths
-        details["phase3_deleted_old_file_1_exact"] = source_file_1_relative in phase3_deleted_paths
-        details["phase3_deleted_old_file_2_exact"] = source_file_2_relative in phase3_deleted_paths
-        details["phase3_deleted_old_text_exact"] = source_text_relative in phase3_deleted_paths
-
-        if phase3_result.returncode != 0:
-            self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                f"directory rename propagation phase failed with status {phase3_result.returncode}",
-                artifacts,
-                details,
-            )
-
-        # Phase 3b: Run a second seeder sync pass to converge any residual remote state.
-        phase3_converge_command = [
-            context.onedrive_bin,
-            "--display-running-config",
-            "--sync",
-            "--verbose",
-            "--confdir",
-            str(conf_seeder),
-        ]
-        context.log(
-            f"Executing Test Case {self.case_id} phase3 converge sync: "
-            f"{command_to_string(phase3_converge_command)}"
+        # The original directory and all descendants must have tracked Graph
+        # identity before either online mutation is performed.  No client is
+        # running on these databases when the snapshots are read.
+        baseline_items = snapshot_remote_identities(conf_seeder / "items.sqlite3", root_name)
+        transitions = sorted(
+            (old, old.replace(source_dir_relative, renamed_dir_relative, 1))
+            for old in baseline_items
+            if old == source_dir_relative or old.startswith(source_dir_relative + "/")
         )
-        phase3_converge_result = run_command(phase3_converge_command, cwd=context.repo_root)
-        write_text_file(phase3_converge_stdout, phase3_converge_result.stdout)
-        write_text_file(phase3_converge_stderr, phase3_converge_result.stderr)
-        details["phase3_converge_returncode"] = phase3_converge_result.returncode
+        if len(transitions) < 10:
+            return self.fail_result(self.case_id, self.name,
+                f"Expected the tracked populated source tree, found {len(transitions)} items",
+                artifacts, details)
+        original_hashes = {
+            path.relative_to(validator_root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in validator_source_dir.rglob("*") if path.is_file()
+        }
+        if not original_hashes:
+            return self.fail_result(self.case_id, self.name,
+                "No tracked local file bytes to protect in the archive control", artifacts, details)
+        details["expected_identity_transitions"] = len(transitions)
 
-        phase3_converge_deleted_paths = self._extract_deleted_remote_paths(phase3_converge_result.stdout)
-        details["phase3_converge_deleted_remote_paths"] = phase3_converge_deleted_paths
-        details["phase3_converge_deleted_old_root_exact"] = source_dir_relative in phase3_converge_deleted_paths
-        details["phase3_converge_deleted_old_nested_exact"] = (
-            f"{source_dir_relative}/Nested" in phase3_converge_deleted_paths
-        )
-
-        if phase3_converge_result.returncode != 0:
-            self._write_metadata(metadata_file, details)
-            return self.fail_result(
-                self.case_id,
-                self.name,
-                f"directory rename convergence phase failed with status {phase3_converge_result.returncode}",
-                artifacts,
-                details,
+        if preserve_identity:
+            # Monitor processes IN_MOVED_FROM/IN_MOVED_TO and sends Graph PATCH
+            # against the existing DriveItem. Do not use a standalone sync here.
+            error = self._move_existing_items_online(
+                context, config_dir=conf_seeder, sync_root=seeder_root,
+                root_name=root_name,
+                moves=[(source_dir_relative, renamed_dir_relative)],
+                stdout_file=phase3_rename_stdout, stderr_file=phase3_rename_stderr,
+                details=details,
             )
+            artifacts.remove(str(phase3_converge_stdout))
+            artifacts.remove(str(phase3_converge_stderr))
+            if error:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name, error, artifacts, details)
+        else:
+            # This preserves the previous mutator as an explicit delete/recreate
+            # control. Different Graph identities are required and verified below.
+            seeder_source_dir.rename(seeder_renamed_dir)
+            phase3_command = [
+                context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+                "--confdir", str(conf_seeder),
+            ]
+            context.log(f"Executing Test Case {self.case_id} {scenario_id} standalone rename: {command_to_string(phase3_command)}")
+            phase3_result = run_command(phase3_command, cwd=context.repo_root)
+            write_text_file(phase3_rename_stdout, phase3_result.stdout)
+            write_text_file(phase3_rename_stderr, phase3_result.stderr)
+            details["phase3_returncode"] = phase3_result.returncode
+            details["phase3_deleted_remote_paths"] = self._extract_deleted_remote_paths(phase3_result.stdout)
+            if phase3_result.returncode != 0:
+                return self.fail_result(self.case_id, self.name,
+                    f"standalone directory rename sync failed with status {phase3_result.returncode}",
+                    artifacts, details)
+            phase3_converge_command = [
+                context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+                "--confdir", str(conf_seeder),
+            ]
+            context.log(f"Executing Test Case {self.case_id} {scenario_id} standalone convergence: {command_to_string(phase3_converge_command)}")
+            phase3_converge_result = run_command(phase3_converge_command, cwd=context.repo_root)
+            write_text_file(phase3_converge_stdout, phase3_converge_result.stdout)
+            write_text_file(phase3_converge_stderr, phase3_converge_result.stderr)
+            details["phase3_converge_returncode"] = phase3_converge_result.returncode
+            details["phase3_converge_deleted_remote_paths"] = self._extract_deleted_remote_paths(phase3_converge_result.stdout)
+            if phase3_converge_result.returncode != 0:
+                return self.fail_result(self.case_id, self.name,
+                    f"standalone convergence failed with status {phase3_converge_result.returncode}",
+                    artifacts, details)
+
+        if seeder_source_dir.exists() or not seeder_renamed_dir.is_dir():
+            return self.fail_result(self.case_id, self.name,
+                "Mutator did not finish the local populated-directory rename", artifacts, details)
+        after_items = snapshot_remote_identities(conf_seeder / "items.sqlite3", root_name)
 
         # Verify remote truth independently before judging validator reconciliation.
         verify_command = [
@@ -754,6 +798,21 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
+        # The independent verifier is now stopped. Check the actual Graph
+        # DriveItem IDs for the renamed directory AND each of its descendants.
+        verified_items = snapshot_remote_identities(conf_verify / "items.sqlite3", root_name)
+        identity_errors = check_remote_identity_transition(
+            baseline_items, after_items, verified_items, transitions,
+            preserve_identity=preserve_identity,
+        )
+        details["graph_identity_verified_count"] = len(transitions) - len(identity_errors)
+        details["graph_identity_errors"] = identity_errors
+        if identity_errors:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name,
+                "Graph identity evidence failed: " + "; ".join(identity_errors),
+                artifacts, details)
+
         # Phase 4: Validator re-runs download-only against its existing local/database state,
         # but only after remote truth has been proven clean.
         phase4_command = [
@@ -839,7 +898,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if (
+        if preserve_identity and (
             validator_source_dir.exists()
             or validator_source_file_1.exists()
             or validator_source_pdf.exists()
@@ -855,7 +914,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if validator_old_tree_files:
+        if preserve_identity and validator_old_tree_files:
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -864,7 +923,7 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 details,
             )
 
-        if validator_old_tree_dirs:
+        if preserve_identity and validator_old_tree_dirs:
             return self.fail_result(
                 self.case_id,
                 self.name,
@@ -872,6 +931,22 @@ class TestCase0033RemoteDirectoryRenameReconciliation(E2ETestCase):
                 artifacts,
                 details,
             )
+
+        if not preserve_identity:
+            changed_archived_files = [
+                relative for relative, expected_hash in original_hashes.items()
+                if not (validator_root / relative).is_file()
+                or hashlib.sha256((validator_root / relative).read_bytes()).hexdigest() != expected_hash
+            ]
+            if changed_archived_files:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name,
+                    "Archive-mode download-only lost or changed original directory bytes: "
+                    + ", ".join(changed_archived_files), artifacts, details)
+            if not validator_source_dir.is_dir():
+                return self.fail_result(self.case_id, self.name,
+                    "Archive-mode download-only removed the original directory after online delete/recreate",
+                    artifacts, details)
 
         if not validator_renamed_dir.is_dir():
             return self.fail_result(
