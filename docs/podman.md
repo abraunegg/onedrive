@@ -273,6 +273,114 @@ systemctl start podman-auto-update.timer
 systemctl list-timers --all
 ```
 
+### Podman Quadlet (Alternative to `podman generate systemd`)
+[Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) is the recommended declarative alternative to `podman generate systemd`. Although Quadlet was introduced in Podman 4.4, the example below requires Podman 4.6 or later. This rootless user unit does not require root access to install and supports auto-updating through a dedicated directive rather than a container label.
+
+> [!NOTE]
+> This is an alternative to the `podman generate systemd` approach described above - you do not need to do both.
+
+> [!IMPORTANT]
+> This example runs as a rootless, per-user service (`systemctl --user`), unlike the system-level service created by `podman generate systemd` above. Without 'lingering' enabled (see below), the user's systemd manager - and therefore the OneDrive service - only runs while the user has an active login session.
+
+**Prerequisites**
+*   Podman >= 4.6 (required for the `AutoUpdate=` and `UserNS=` Quadlet directives)
+*   An authorised `onedrive_conf` volume exists **in the intended rootless user's Podman storage**. Following the earlier rootless authorisation steps provides this; a root-owned volume with the same name does not.
+*   The OneDrive data directory previously configured as `ONEDRIVE_DATA_DIR` exists
+
+**Check the existing Podman storage before switching services.** Rootful (`sudo podman`) and rootless (`podman` as your normal user) use separate container and volume stores. The name `onedrive_conf` alone does **not** identify the same configuration volume in both stores. A rootless Quadlet reads the rootless user's volume; it will not automatically access a volume created by `sudo podman`.
+
+Inspect the volume in the intended rootless user's context:
+```bash
+podman volume inspect onedrive_conf
+```
+
+If the existing deployment is managed by a system-level service, also identify its Podman execution context and, where applicable, the root-owned volume:
+```bash
+sudo systemctl cat container-onedrive.service
+sudo podman volume inspect onedrive_conf
+```
+
+A missing volume in either context is not itself an error: the important point is to establish **where the currently authorised configuration and database actually reside**. If both commands find a volume, they may refer to different data. Inspecting volume metadata does not prove the contents match. Do not assume a system-level service necessarily uses the original rootless volume merely because the service was generated from a rootless container.
+
+> [!IMPORTANT]
+> **If the active configuration is only in rootful Podman storage, do not start this rootless Quadlet yet.** First stop the running client completely, back up its entire configuration volume (including the authentication state and SQLite database), and explicitly migrate the state into the intended rootless user's `onedrive_conf` volume with appropriate ownership and permissions. Alternatively, complete a new rootless setup and authorisation, accounting for the existing local data and database state. Never read or copy a live OneDrive SQLite database as a migration method, and do not delete the original volume until the new service has been validated. Simply creating another volume named `onedrive_conf` does not perform this migration.
+
+**Stop the previous container or service**, preserving the configuration volume and the local OneDrive data. The Quadlet below uses `ContainerName=onedrive`, so avoid leaving a previous service running. Choose only the path applicable to your deployment:
+
+*   **Previously installed system-level service:** stop and disable the service first. A service generated with `podman generate systemd --new` may already remove its managed container when stopped; remove any remaining *root-owned* container only if one still exists:
+```bash
+sudo systemctl disable --now container-onedrive.service
+if sudo podman container exists onedrive; then
+    sudo podman rm onedrive
+fi
+```
+
+*   **Existing rootless container created earlier in this guide:** stop and remove the container using the same unprivileged user account:
+```bash
+podman stop onedrive
+podman rm onedrive
+```
+
+Before proceeding, verify that the **rootless** `onedrive_conf` volume contains the intended, previously authorised client state and that the original `ONEDRIVE_DATA_DIR` still points to the correct files. If the rootless volume is missing, empty, or contains a different account/database, do not proceed until the configuration has been migrated or the rootless client has been set up correctly:
+```bash
+podman volume inspect onedrive_conf
+```
+
+> [!IMPORTANT]
+> Do not remove any Podman configuration volume or the OneDrive data directory during this transition. Do not run the original monitor and the Quadlet concurrently against the same configuration/database or data directory. Any required migration must be completed while the original client is stopped.
+
+**Create the Quadlet unit file** at `~/.config/containers/systemd/onedrive.container`, creating the directory first as it may not exist:
+```bash
+mkdir -p ~/.config/containers/systemd
+```
+```ini
+[Unit]
+Description=OneDrive Client for Linux (Podman Quadlet)
+
+[Container]
+Image=docker.io/driveone/onedrive:edge
+ContainerName=onedrive
+Volume=onedrive_conf:/onedrive/conf:U,Z
+Volume=%h/OneDrive:/onedrive/data:U,Z
+UserNS=keep-id
+AutoUpdate=registry
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+> [!IMPORTANT]
+> Replace `%h/OneDrive` with the same host path previously configured as `ONEDRIVE_DATA_DIR` if a non-default location is being used, otherwise the container will use a different local directory to your existing deployment.
+
+**Start the service:**
+
+Quadlet services cannot be enabled with `systemctl enable`. The `[Install]` section is processed by the Quadlet generator, so the service will start automatically at login (or at boot, with lingering enabled).
+```bash
+systemctl --user daemon-reload
+systemctl --user start onedrive.service
+```
+
+**Check the service status and logs:**
+```bash
+systemctl --user status onedrive.service
+journalctl --user -u onedrive.service -f
+```
+
+**Run the service outside of a login session:** To have the rootless OneDrive service and the auto-update timer start at boot and keep running after logout, enable lingering for your user:
+```bash
+loginctl enable-linger
+```
+
+**Auto-update the container image:** Check that Podman identifies the Quadlet-managed container with the `registry` update policy, then enable the user timer:
+```bash
+podman auto-update --dry-run
+systemctl --user enable --now podman-auto-update.timer
+systemctl --user list-timers
+```
+
 ### Editing the running configuration and using a 'config' file
 The 'onedrive' client should run in default configuration, however you can change this default configuration by placing a custom config file in the `onedrive_conf` podman volume. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  
 Then put it into your onedrive_conf volume path, which can be found with:  

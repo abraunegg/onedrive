@@ -145,6 +145,7 @@ drwxrwxr
 dryrun
 DTime
 Dynu
+EContext
 edf
 eflag
 EIOv
@@ -467,6 +468,7 @@ pycache
 qewrqwerwqer
 Qmark
 qpos
+Quadlet
 QWords
 qxor
 raf
@@ -480,6 +482,7 @@ rcx
 rdi
 rdo
 rdx
+readback
 readdata
 readln
 readret

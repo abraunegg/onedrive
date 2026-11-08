@@ -13,7 +13,7 @@ from framework.pdf import create_random_pdf_pair, validate_pdf_pair, unlink_pdf_
 from framework.image import create_random_image_set, validate_image_set, unlink_image_set, image_set_relatives, image_set_any_exists, image_set_all_files
 from framework.result import TestResult
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, unlink_xlsx_pair, large_xlsx_relative, xlsx_pair_any_exists, xlsx_pair_all_files
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
@@ -127,10 +127,10 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
         image_seed = f"{xlsx_seed}:image"
 
         context.bootstrap_config_dir(conf_main)
-        write_text_file(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
+        write_onedrive_config(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
 
         context.bootstrap_config_dir(conf_verify)
-        write_text_file(
+        write_onedrive_config(
             conf_verify / "config",
             (
                 "# tc0043 verify\n"
@@ -138,6 +138,10 @@ class TestCase0043MonitorModeLocalDeletePropagation(MonitorModeTestCaseBase):
                 'bypass_data_preservation = "true"\n'
             ),
         )
+        # Recheck *after* writing: bootstrap validation alone is insufficient
+        # because overwriting config can silently remove SharePoint drive_id.
+        context.validate_generated_config_dir(conf_main)
+        context.validate_generated_config_dir(conf_verify)
 
         seed_stdout = case_log_dir / "seed_stdout.log"
         seed_stderr = case_log_dir / "seed_stderr.log"

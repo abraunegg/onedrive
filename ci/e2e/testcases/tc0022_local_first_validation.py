@@ -88,10 +88,6 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         generated_seed = create_random_image_set(
             seed_image_file, image_seed, revision=REVISION_0, title="TC0022 local_first baseline images"
         )
-        generated_remote = create_random_image_set(
-            remote_update_image_file, image_seed, revision=REVISION_1, title="TC0022 local_first baseline images"
-        )
-
         for conf_dir, sync_root, local_first in [
             (conf_seed, seed_root, False),
             (conf_local, local_root, False),
@@ -105,6 +101,8 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         seed_stderr = scenario_log_dir / "seed_stderr.log"
         download_stdout = scenario_log_dir / "download_stdout.log"
         download_stderr = scenario_log_dir / "download_stderr.log"
+        updater_baseline_stdout = scenario_log_dir / "updater_baseline_stdout.log"
+        updater_baseline_stderr = scenario_log_dir / "updater_baseline_stderr.log"
         remote_stdout = scenario_log_dir / "remote_update_stdout.log"
         remote_stderr = scenario_log_dir / "remote_update_stderr.log"
         final_stdout = scenario_log_dir / "final_sync_stdout.log"
@@ -115,6 +113,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
 
         scenario_artifacts = [
             str(seed_stdout), str(seed_stderr), str(download_stdout), str(download_stderr),
+            str(updater_baseline_stdout), str(updater_baseline_stderr),
             str(remote_stdout), str(remote_stderr), str(final_stdout), str(final_stderr),
             str(verify_stdout), str(verify_stderr), str(metadata_file),
         ]
@@ -150,9 +149,26 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             else {}
         )
 
+        # The remote updater must modify previously tracked images, not try
+        # to create replacement files from an empty database (Graph 409).
+        updater_baseline_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose",
+            "--resync", "--resync-auth", "--single-directory", root_name, "--confdir", str(conf_remote),
+        ]
+        updater_baseline_result = run_phase(
+            "updater baseline", updater_baseline_command, updater_baseline_stdout, updater_baseline_stderr
+        )
+        updater_baseline_error = validate_image_set(remote_update_image_file, REVISION_0)
+        if updater_baseline_result.returncode != 0 or updater_baseline_error:
+            return False, (
+                "Image remote updater failed to establish a tracked revision-0 baseline: "
+                f"exit={updater_baseline_result.returncode}; {updater_baseline_error}"
+            ), {"updater_baseline_returncode": updater_baseline_result.returncode,
+                "updater_baseline_validation_error": updater_baseline_error}
+        mutate_image_set_revision(remote_update_image_file, REVISION_0, REVISION_1)
         remote_command = [
             context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose",
-            "--resync", "--resync-auth", "--single-directory", root_name, "--confdir", str(conf_remote),
+            "--single-directory", root_name, "--confdir", str(conf_remote),
         ]
         remote_result = run_phase("remote update", remote_command, remote_stdout, remote_stderr)
 
@@ -199,7 +215,9 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             "image_relative": image_relative,
             "image_seed": image_seed,
             "generated_seed_image_sizes": {k: int(v) for k, v in generated_seed.items() if k.endswith("_size_bytes")},
-            "generated_remote_update_image_sizes": {k: int(v) for k, v in generated_remote.items() if k.endswith("_size_bytes")},
+            "remote_update_image_sizes": image_set_sizes(remote_update_image_file),
+            "updater_baseline_returncode": updater_baseline_result.returncode,
+            "updater_baseline_validation_error": updater_baseline_error,
             "seed_returncode": seed_result.returncode,
             "download_returncode": download_result.returncode,
             "remote_returncode": remote_result.returncode,
@@ -257,11 +275,13 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         seed_root = case_work_dir / "seedroot"
         local_root = case_work_dir / "localroot"
         remote_update_root = case_work_dir / "remoteupdateroot"
+        preverify_root = case_work_dir / "remote-preverify-root"
         verify_root = case_work_dir / "verifyroot"
 
         conf_seed = case_work_dir / "conf-seed"
         conf_local = case_work_dir / "conf-local"
         conf_remote = case_work_dir / "conf-remote"
+        conf_preverify = case_work_dir / "conf-preverify"
         conf_verify = case_work_dir / "conf-verify"
 
         root_name = f"ZZ_E2E_TC0022_{context.run_id}_{os.getpid()}"
@@ -292,10 +312,10 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         reset_directory(seed_root)
         reset_directory(local_root)
         reset_directory(remote_update_root)
+        reset_directory(preverify_root)
         reset_directory(verify_root)
 
         write_text_file(seed_text_file, text_seed_content)
-        write_text_file(remote_update_text_file, text_remote_content)
         generated_seed = create_random_xlsx_pair(
             seed_xlsx_file,
             xlsx_seed,
@@ -303,15 +323,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             payload_rows=self.XLSX_PAYLOAD_ROWS,
             title="TC0022 local_first baseline workbook",
         )
-        generated_remote = create_random_xlsx_pair(
-            remote_update_xlsx_file,
-            xlsx_seed,
-            revision=REVISION_1,
-            payload_rows=self.XLSX_PAYLOAD_ROWS,
-            title="TC0022 local_first baseline workbook",
-        )
         generated_seed_pdf = create_random_pdf_pair(seed_pdf_file, pdf_seed, revision=REVISION_0, title="TC0022 local_first baseline PDF")
-        generated_remote_pdf = create_random_pdf_pair(remote_update_pdf_file, pdf_seed, revision=REVISION_1, title="TC0022 local_first baseline PDF")
 
         context.bootstrap_config_dir(conf_seed)
         self._write_config(conf_seed / "config", seed_root)
@@ -322,6 +334,9 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         context.bootstrap_config_dir(conf_remote)
         self._write_config(conf_remote / "config", remote_update_root)
 
+        context.bootstrap_config_dir(conf_preverify)
+        self._write_config(conf_preverify / "config", preverify_root)
+
         context.bootstrap_config_dir(conf_verify)
         self._write_config(conf_verify / "config", verify_root)
 
@@ -329,13 +344,18 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
         seed_stderr = case_log_dir / "seed_stderr.log"
         download_stdout = case_log_dir / "download_stdout.log"
         download_stderr = case_log_dir / "download_stderr.log"
+        updater_baseline_stdout = case_log_dir / "updater_baseline_stdout.log"
+        updater_baseline_stderr = case_log_dir / "updater_baseline_stderr.log"
         remote_stdout = case_log_dir / "remote_update_stdout.log"
         remote_stderr = case_log_dir / "remote_update_stderr.log"
+        preverify_stdout = case_log_dir / "remote_preverify_stdout.log"
+        preverify_stderr = case_log_dir / "remote_preverify_stderr.log"
         final_stdout = case_log_dir / "final_sync_stdout.log"
         final_stderr = case_log_dir / "final_sync_stderr.log"
         verify_stdout = case_log_dir / "verify_stdout.log"
         verify_stderr = case_log_dir / "verify_stderr.log"
         remote_manifest_file = state_dir / "remote_verify_manifest.txt"
+        preverify_manifest_file = state_dir / "remote_preverify_manifest.txt"
         metadata_file = state_dir / "metadata.txt"
 
         artifacts = [
@@ -343,13 +363,18 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             str(seed_stderr),
             str(download_stdout),
             str(download_stderr),
+            str(updater_baseline_stdout),
+            str(updater_baseline_stderr),
             str(remote_stdout),
             str(remote_stderr),
+            str(preverify_stdout),
+            str(preverify_stderr),
             str(final_stdout),
             str(final_stderr),
             str(verify_stdout),
             str(verify_stderr),
             str(remote_manifest_file),
+            str(preverify_manifest_file),
             str(metadata_file),
         ]
         details: dict[str, object] = {
@@ -361,9 +386,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             "pdf_seed": pdf_seed,
             "payload_rows": self.XLSX_PAYLOAD_ROWS,
             "generated_seed_xlsx_size": int(generated_seed["size_bytes"]),
-            "generated_remote_update_xlsx_size": int(generated_remote["size_bytes"]),
             "generated_seed_pdf_size": int(generated_seed_pdf["size_bytes"]),
-            "generated_remote_update_pdf_size": int(generated_remote_pdf["size_bytes"]),
         }
 
         seed_command = [
@@ -423,23 +446,89 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             details["baseline_pdf_hashes"] = pdf_pair_hashes(local_pdf_file, compute_quickxor_hash_file)
             details["baseline_pdf_sizes"] = pdf_pair_sizes(local_pdf_file)
 
+        # Download the already-uploaded revision-0 files before modifying them.
+        # A fresh-state revision-1 upload can collide with the existing Graph items
+        # and create safeBackups without updating the canonical remote paths.
+        updater_baseline_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--download-only",
+            "--verbose", "--resync", "--resync-auth", "--single-directory", root_name,
+            "--confdir", str(conf_remote),
+        ]
+        context.log(f"Executing Test Case {self.case_id} updater baseline: {command_to_string(updater_baseline_command)}")
+        updater_baseline_result = run_command(updater_baseline_command, cwd=context.repo_root)
+        write_text_file(updater_baseline_stdout, updater_baseline_result.stdout)
+        write_text_file(updater_baseline_stderr, updater_baseline_result.stderr)
+        updater_baseline_text = remote_update_text_file.read_text(encoding="utf-8") if remote_update_text_file.is_file() else ""
+        updater_baseline_xlsx_error = validate_xlsx_pair(remote_update_xlsx_file, REVISION_0)
+        updater_baseline_pdf_error = validate_pdf_pair(remote_update_pdf_file, REVISION_0)
+        details.update({
+            "updater_baseline_returncode": updater_baseline_result.returncode,
+            "updater_baseline_text_content": updater_baseline_text,
+            "updater_baseline_xlsx_error": updater_baseline_xlsx_error,
+            "updater_baseline_pdf_error": updater_baseline_pdf_error,
+        })
+        if (updater_baseline_result.returncode != 0 or updater_baseline_text != text_seed_content
+                or updater_baseline_xlsx_error or updater_baseline_pdf_error):
+            return self.fail_result(
+                self.case_id, self.name,
+                "Remote updater did not establish a tracked revision-0 TXT/XLSX/PDF baseline",
+                artifacts, details,
+            )
+
+        write_text_file(remote_update_text_file, text_remote_content)
+        mutate_xlsx_pair_revision(remote_update_xlsx_file, REVISION_0, REVISION_1)
+        mutate_pdf_pair_revision(remote_update_pdf_file, REVISION_0, REVISION_1)
+        details["remote_update_xlsx_sizes"] = xlsx_pair_sizes(remote_update_xlsx_file)
+        details["remote_update_pdf_sizes"] = pdf_pair_sizes(remote_update_pdf_file)
+        # Keep the updater's tracked database and use the existing-item upload path.
         remote_command = [
-            context.onedrive_bin,
-            "--display-running-config",
-            "--sync",
-            "--upload-only",
-            "--verbose",
-            "--resync",
-            "--resync-auth",
-            "--single-directory",
-            root_name,
-            "--confdir",
-            str(conf_remote),
+            context.onedrive_bin, "--display-running-config", "--sync", "--upload-only",
+            "--verbose", "--single-directory", root_name, "--confdir", str(conf_remote),
         ]
         context.log(f"Executing Test Case {self.case_id} remote update: {command_to_string(remote_command)}")
         remote_result = run_command(remote_command, cwd=context.repo_root)
         write_text_file(remote_stdout, remote_result.stdout)
         write_text_file(remote_stderr, remote_result.stderr)
+
+        # Prove the online revision-1 conflict precondition independently,
+        # before the subject client can replace it with its local revision-2.
+        preverify_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--download-only",
+            "--verbose", "--resync", "--resync-auth", "--single-directory", root_name,
+            "--confdir", str(conf_preverify),
+        ]
+        context.log(f"Executing Test Case {self.case_id} remote preverify: {command_to_string(preverify_command)}")
+        preverify_result = run_command(preverify_command, cwd=context.repo_root)
+        write_text_file(preverify_stdout, preverify_result.stdout)
+        write_text_file(preverify_stderr, preverify_result.stderr)
+        expected_remote_manifest = sorted([
+            root_name, text_relative, xlsx_relative, pdf_relative,
+            f"{root_name}/conflict-large.xlsx", f"{root_name}/conflict-large.pdf",
+        ])
+        preverify_manifest = build_manifest(preverify_root)
+        write_manifest(preverify_manifest_file, preverify_manifest)
+        preverify_text_file = preverify_root / text_relative
+        preverify_text_content = preverify_text_file.read_text(encoding="utf-8") if preverify_text_file.is_file() else ""
+        preverify_xlsx_error = validate_xlsx_pair(preverify_root / xlsx_relative, REVISION_1)
+        preverify_pdf_error = validate_pdf_pair(preverify_root / pdf_relative, REVISION_1)
+        details.update({
+            "remote_returncode": remote_result.returncode,
+            "preverify_returncode": preverify_result.returncode,
+            "preverify_text_content": preverify_text_content,
+            "preverify_xlsx_error": preverify_xlsx_error,
+            "preverify_pdf_error": preverify_pdf_error,
+            "preverify_manifest": preverify_manifest,
+            "expected_remote_manifest": expected_remote_manifest,
+        })
+        if (remote_result.returncode != 0 or preverify_result.returncode != 0
+                or preverify_text_content != text_remote_content
+                or preverify_xlsx_error or preverify_pdf_error
+                or preverify_manifest != expected_remote_manifest):
+            return self.fail_result(
+                self.case_id, self.name,
+                "Independent remote preverification did not establish the complete revision-1 conflict state",
+                artifacts, details,
+            )
 
         # Ensure both local edits are definitively later than the remote updates.
         # This is critical so the final sync actually exercises local_first.
@@ -550,6 +639,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                 "seed_returncode": seed_result.returncode,
                 "download_returncode": download_result.returncode,
                 "remote_returncode": remote_result.returncode,
+                "preverify_returncode": preverify_result.returncode,
                 "final_returncode": final_result.returncode,
                 "verify_returncode": verify_result.returncode,
                 "local_text_content": local_text_content,
@@ -573,6 +663,7 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
             ("seed", seed_result.returncode),
             ("download", download_result.returncode),
             ("remote update", remote_result.returncode),
+            ("remote preverify", preverify_result.returncode),
             ("final sync", final_result.returncode),
             ("verify", verify_result.returncode),
         ]:
@@ -584,6 +675,13 @@ class TestCase0022LocalFirstValidation(E2ETestCase):
                     artifacts,
                     details,
                 )
+
+        if remote_manifest != expected_remote_manifest:
+            return self.fail_result(
+                self.case_id, self.name,
+                "Final remote manifest contains missing or unexpected items after local_first reconciliation",
+                artifacts, details,
+            )
 
         if baseline_text_content != text_seed_content:
             return self.fail_result(

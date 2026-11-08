@@ -177,6 +177,10 @@ def build_summary(artifact_dir: Path, default_target: str, heading: str | None =
             "",
         ])
 
+    cleanup_reason = str((gate or {}).get("reason") or "")
+    if cleanup_reason.startswith("Mandatory post-debug cleanup failed:"):
+        lines.extend(["### Post-debug Cleanup", f"❌ {cleanup_reason}", ""])
+
     gate_label = "PASS" if gate_conclusion == "success" else "FAIL"
     gate_icon = "✅" if gate_conclusion == "success" else "❌"
     lines.append(f"{gate_icon} **Workflow gate: {gate_label}**")

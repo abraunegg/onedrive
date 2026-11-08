@@ -54,7 +54,7 @@ class TestCase0004SingleDirectorySync(E2ETestCase):
         metadata_file = state_dir / "single_directory_metadata.txt"
 
         command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--resync",
@@ -73,7 +73,7 @@ class TestCase0004SingleDirectorySync(E2ETestCase):
         write_manifest(local_manifest_file, build_manifest(sync_root))
 
         verify_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--download-only",

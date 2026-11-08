@@ -104,12 +104,19 @@ jobs:
             --debug-results ci/e2e/out/debug-rerun/results.json \
             --gate-file ci/e2e/out/gate.json
 
-      - name: Upload Personal Shared Folder E2E artefacts
+      - name: Verify E2E artifacts contain no authentication credentials
+        id: artifact_guard
         if: always()
+        run: python3 -u ci/e2e/artifact_safety.py --artifact-dir ci/e2e/out
+
+      - name: Upload Personal Shared Folder E2E artefacts
+        if: always() && steps.artifact_guard.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-personal-shared-folders
-          path: ci/e2e/out/**
+          path: |
+            ci/e2e/out/**
+            !ci/e2e/out/**/refresh_token
 
   pr_comment:
     name: Post PR summary comment
