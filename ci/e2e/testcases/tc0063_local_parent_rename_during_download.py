@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -55,16 +56,19 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
             return ""
         return path.read_text(encoding="utf-8", errors="replace")
 
-    def _reader_thread(self, stream, output_file: Path, buffer: list[str], stop_event: threading.Event) -> None:
+    def _reader_thread(self, stream, output_file: Path, buffer: list[str], target_progress_marker: str,
+                       target_progress_seen: threading.Event) -> None:
         output_file.parent.mkdir(parents=True, exist_ok=True)
         with output_file.open("w", encoding="utf-8", errors="replace") as handle:
-            while not stop_event.is_set():
-                chunk = stream.read(1)
-                if not chunk:
-                    break
-                buffer.append(chunk)
-                handle.write(chunk)
+            # Read through EOF, including diagnostics emitted immediately before exit.
+            for line in stream:
+                buffer.append(line)
+                handle.write(line)
                 handle.flush()
+                if target_progress_marker in line:
+                    progress = re.search(r"\.\.\.\s+(\d+)%", line)
+                    if progress and 0 < int(progress.group(1)) < 100:
+                        target_progress_seen.set()
 
     def _run_sync_with_parent_rename(self, *, context: E2EContext, command: list[str], sync_root: Path, root_name: str,
                                      stdout_file: Path, stderr_file: Path, mutation_log_file: Path,
@@ -78,6 +82,7 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
         stdout_buffer: list[str] = []
         stderr_buffer: list[str] = []
         stop_event = threading.Event()
+        target_progress_seen = threading.Event()
         mutation_done = threading.Event()
         mutation_details: dict[str, object] = {
             "initial_target_size": initial_size,
@@ -88,9 +93,6 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
             "trigger": "",
             "rename_error": "",
         }
-
-        def combined_output() -> str:
-            return "".join(stdout_buffer) + "\n" + "".join(stderr_buffer)
 
         def log_mutation(line: str) -> None:
             with mutation_log_file.open("a", encoding="utf-8", errors="replace") as handle:
@@ -119,40 +121,16 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
                 mutation_done.set()
 
         def mutator() -> None:
-            # Wait for clear evidence that the final sync has entered the download phase.
-            # The target file is intentionally large and the command is run through stdbuf,
-            # so either stdout or on-disk size/mtime should provide a deterministic trigger.
+            # Rename only when the specific target is demonstrably downloading.
             deadline = time.time() + timeout_seconds
-            saw_download_count = False
-            while time.time() < deadline and not mutation_done.is_set():
-                output = combined_output()
-                if f"Downloading file: {root_name}/{self.TARGET_RELATIVE}" in output:
-                    time.sleep(0.10)
-                    try_rename("stdout-target-download-line")
+            while time.time() < deadline and not stop_event.is_set() and not mutation_done.is_set():
+                if target_progress_seen.wait(timeout=0.05) and not stop_event.is_set():
+                    try_rename("stdout-target-download-progress")
                     return
-                if "Number of items to download from Microsoft OneDrive:" in output:
-                    saw_download_count = True
-                if saw_download_count and target_path.exists():
-                    try:
-                        stat = target_path.stat()
-                        if stat.st_size != initial_size or stat.st_mtime != initial_mtime:
-                            try_rename("target-size-or-mtime-changed-after-download-count")
-                            return
-                    except FileNotFoundError:
-                        # If the target vanished after the download count appeared, the race has already started.
-                        try_rename("target-vanished-after-download-count")
-                        return
-                # Last-resort deterministic trigger: after the client announces pending downloads,
-                # wait briefly and rename the parent while the large target download should be active.
-                if saw_download_count:
-                    time.sleep(0.75)
-                    try_rename("timed-after-download-count")
-                    return
-                time.sleep(0.05)
 
-            log_mutation("MUTATOR_TIMEOUT no download trigger observed")
+            log_mutation("MUTATOR_NO_TARGET_PROGRESS no active target download observed")
             mutation_details["rename_success"] = False
-            mutation_details["rename_error"] = "no download trigger observed"
+            mutation_details["rename_error"] = "no active target download observed"
             mutation_done.set()
 
         # stdbuf improves the chance that progress output is visible while the download is active.
@@ -174,8 +152,9 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
         assert process.stdout is not None
         assert process.stderr is not None
 
-        stdout_thread = threading.Thread(target=self._reader_thread, args=(process.stdout, stdout_file, stdout_buffer, stop_event), daemon=True)
-        stderr_thread = threading.Thread(target=self._reader_thread, args=(process.stderr, stderr_file, stderr_buffer, stop_event), daemon=True)
+        target_progress_marker = f"Downloading: {root_name}/{self.TARGET_RELATIVE} ..."
+        stdout_thread = threading.Thread(target=self._reader_thread, args=(process.stdout, stdout_file, stdout_buffer, target_progress_marker, target_progress_seen), daemon=True)
+        stderr_thread = threading.Thread(target=self._reader_thread, args=(process.stderr, stderr_file, stderr_buffer, target_progress_marker, target_progress_seen), daemon=True)
         mutate_thread = threading.Thread(target=mutator, daemon=True)
         stdout_thread.start()
         stderr_thread.start()
@@ -193,8 +172,8 @@ class TestCase0063LocalParentRenameDuringDownload(E2ETestCase):
             mutation_details["process_timeout"] = True
         finally:
             stop_event.set()
-            stdout_thread.join(timeout=10)
-            stderr_thread.join(timeout=10)
+            stdout_thread.join()
+            stderr_thread.join()
             mutate_thread.join(timeout=10)
 
         return returncode, bool(mutation_details.get("rename_success", False)), "".join(stdout_buffer), "".join(stderr_buffer), mutation_details
