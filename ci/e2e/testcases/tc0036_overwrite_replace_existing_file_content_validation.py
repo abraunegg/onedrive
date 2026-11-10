@@ -452,8 +452,8 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} second metadata-settle sync failed with status {settle2_result.returncode}", details
 
-        if scenario_id == "OR-0002":
-            # A JPEG eTag can advance again after the first two syncs even when
+        if scenario_id in ("OR-0002", "OR-0003"):
+            # An image eTag can advance again after the first two syncs even when
             # content is unchanged. Require an additional stable interval before
             # deliberately exercising the older-mtime modified-upload path.
             try:
