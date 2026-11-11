@@ -523,7 +523,7 @@ _**CLI Option Use:**_ `--force-http-11`
 
 
 ### force_session_upload
-_**Description:**_ This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the local timestamp of the file.
+_**Description:**_ This option, when enabled, forces the client to use a 'session' upload even for small files. This allows uploading the local timestamp of the file, which is particularly useful for compatibility with applications and editors that use atomic save operations or are sensitive to file timestamp changes. However, for users synchronising large numbers of small files, it may result in slower uploads and an increased likelihood of Microsoft API throttling.
 
 _**Value Type:**_ Boolean
 
