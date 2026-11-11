@@ -98,16 +98,21 @@ class TestCase0090FilesystemLookupErrorPreservation(E2ETestCase):
         library: Path, local_target: Path, root_relative: str,
         log_dir: Path, env: dict[str, str], expected_errno: int,
     ) -> None:
-        # Probe the actual preloaded lstat symbol before making any Graph calls.
-        # A shim that is ineffective must NEVER produce a falsely green scenario.
+        # Probe both glibc symbols. D Phobos can use lstat64 rather than
+        # lstat, so probing lstat alone cannot prove the client will see the
+        # injected error. A nonfunctional preload must never go green.
         program = (
             "import ctypes,sys; "
             "c=ctypes.CDLL(None,use_errno=True); "
-            "c.lstat.argtypes=[ctypes.c_char_p,ctypes.c_void_p]; "
-            "c.lstat.restype=ctypes.c_int; "
+            "path=sys.argv[1].encode(); "
+            "\nfor symbol in ('lstat','lstat64'):\n"
+            " f=getattr(c,symbol); "
+            "f.argtypes=[ctypes.c_char_p,ctypes.c_void_p]; "
+            "f.restype=ctypes.c_int; "
             "buf=ctypes.create_string_buffer(1024); "
-            "rc=c.lstat(sys.argv[1].encode(),buf); "
-            "print(f'rc={rc} errno={ctypes.get_errno()}')"
+            "ctypes.set_errno(0); "
+            "rc=f(path,buf); "
+            "print(f'{symbol}: rc={rc} errno={ctypes.get_errno()}')"
         )
         result = subprocess.run(
             [sys.executable, "-c", program, str(local_target)],
@@ -116,11 +121,13 @@ class TestCase0090FilesystemLookupErrorPreservation(E2ETestCase):
         )
         write_text_file(log_dir / "injector_probe_stdout.log", result.stdout)
         write_text_file(log_dir / "injector_probe_stderr.log", result.stderr)
-        expected = f"rc=-1 errno={expected_errno}"
-        if result.returncode != 0 or expected not in result.stdout:
+        expected = [f"{symbol}: rc=-1 errno={expected_errno}"
+                    for symbol in ("lstat", "lstat64")]
+        if result.returncode != 0 or any(line not in result.stdout.splitlines() for line in expected):
             raise RuntimeError(
-                f"TC0090 lstat injector did not return errno {expected_errno} for {root_relative}: "
-                f"status={result.returncode}; output={result.stdout.strip()!r}"
+                f"TC0090 lstat/lstat64 injector did not return errno {expected_errno} "
+                f"for {root_relative}: status={result.returncode}; "
+                f"output={result.stdout.strip()!r}"
             )
 
     def _run_scenario(

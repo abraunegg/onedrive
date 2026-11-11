@@ -1,4 +1,4 @@
-/* TC0090: fail lstat for exactly one test-owned path with EACCES or EBADMSG.
+/* TC0090: fail lstat/lstat64 for exactly one test-owned path with EACCES or EBADMSG.
  * No filesystem is modified; this library is loaded only by the subject client.
  */
 #define _GNU_SOURCE
@@ -21,17 +21,25 @@ static int injected(const char *path) {
             strcmp(path + plen - slen, suffix) == 0);
 }
 
+/* D's glibc runtime may resolve std.file.getLinkAttributes() to lstat64,
+ * not lstat. Keep both symbols consistent with the injected error.
+ */
+static int injected_errno(const char *path) {
+    if (!injected(path))
+        return 0;
+    const char *requested = getenv("E2E_TC0090_LSTAT_ERRNO");
+    if (requested && strcmp(requested, "EACCES") == 0)
+        return EACCES;
+    if (requested && strcmp(requested, "EBADMSG") == 0)
+        return EBADMSG;
+    return 0;
+}
+
 int lstat(const char *path, struct stat *info) {
-    if (injected(path)) {
-        const char *requested = getenv("E2E_TC0090_LSTAT_ERRNO");
-        if (requested && strcmp(requested, "EACCES") == 0) {
-            errno = EACCES;
-            return -1;
-        }
-        if (requested && strcmp(requested, "EBADMSG") == 0) {
-            errno = EBADMSG;
-            return -1;
-        }
+    int error = injected_errno(path);
+    if (error) {
+        errno = error;
+        return -1;
     }
     static int (*original)(const char *, struct stat *) = NULL;
     if (!original)
@@ -42,3 +50,22 @@ int lstat(const char *path, struct stat *info) {
     }
     return original(path, info);
 }
+
+/* glibc large-file ABI used by D Phobos when __USE_LARGEFILE64 is enabled. */
+#if defined(__GLIBC__)
+int lstat64(const char *path, struct stat64 *info) {
+    int error = injected_errno(path);
+    if (error) {
+        errno = error;
+        return -1;
+    }
+    static int (*original)(const char *, struct stat64 *) = NULL;
+    if (!original)
+        original = dlsym(RTLD_NEXT, "lstat64");
+    if (!original) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return original(path, info);
+}
+#endif
