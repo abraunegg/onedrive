@@ -345,7 +345,10 @@ class TestCase0090FilesystemLookupErrorPreservation(E2ETestCase):
             return fail("client did not report fatal lookup failure with the expected filesystem error")
         if "Performing a database consistency and integrity check" not in output and mode == "sync":
             return fail("subject failed before database consistency checking; cannot validate regression")
-        if mode == "sync" and "FATAL: Unable to determine whether this local path exists" not in output:
+        if mode == "sync" and (
+            "FATAL: The local file system returned an error with the following details:" not in output
+            or "Calling Function:  syncEngine.localPathExistsForConsistency" not in output
+        ):
             return fail("the targeted database-consistency lookup safeguard was not exercised")
         if (relative_target if mode == "sync" else relative_guard) not in output:
             return fail("fatal filesystem diagnostics did not identify the protected test path")
