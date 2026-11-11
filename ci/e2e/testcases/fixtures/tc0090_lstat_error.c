@@ -1,4 +1,4 @@
-/* TC0090: fail lstat for exactly one test-owned path with EBADMSG.
+/* TC0090: fail lstat for exactly one test-owned path with EACCES or EBADMSG.
  * No filesystem is modified; this library is loaded only by the subject client.
  */
 #define _GNU_SOURCE
@@ -23,8 +23,15 @@ static int injected(const char *path) {
 
 int lstat(const char *path, struct stat *info) {
     if (injected(path)) {
-        errno = EBADMSG;
-        return -1;
+        const char *requested = getenv("E2E_TC0090_LSTAT_ERRNO");
+        if (requested && strcmp(requested, "EACCES") == 0) {
+            errno = EACCES;
+            return -1;
+        }
+        if (requested && strcmp(requested, "EBADMSG") == 0) {
+            errno = EBADMSG;
+            return -1;
+        }
     }
     static int (*original)(const char *, struct stat *) = NULL;
     if (!original)

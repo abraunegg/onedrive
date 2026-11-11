@@ -19,8 +19,8 @@ class TestCase0090FilesystemLookupErrorPreservation(E2ETestCase):
     """Issue #3958: an inaccessible DB-known item is not a local deletion.
 
     The independent download-only verifiers establish actual Graph identities;
-    the subject DB is inspected only after the client has exited. EBADMSG is
-    injected into lstat() in the subject process, never by damaging CI storage.
+    the subject DB is inspected only after the client has exited. EBADMSG is injected into lstat() in the subject process, never by damaging
+    CI storage. When privileged runners bypass chmod 000, EACCES is injected too.
     """
 
     case_id = "0090"
@@ -82,7 +82,7 @@ class TestCase0090FilesystemLookupErrorPreservation(E2ETestCase):
             raise RuntimeError(f"TC0090 lstat fault-injection fixture missing: {source}")
         compiler = shutil.which("cc")
         if not compiler:
-            raise RuntimeError("TC0090 requires a C compiler for isolated EBADMSG injection")
+            raise RuntimeError("TC0090 requires a C compiler for isolated EACCES/EBADMSG injection")
         library = work_dir / "tc0090_lstat_error.so"
         command = [compiler, "-shared", "-fPIC", "-O2", "-o", str(library), str(source), "-ldl"]
         context.log("Compiling TC0090 isolated lstat injector: " + command_to_string(command))
@@ -96,7 +96,7 @@ class TestCase0090FilesystemLookupErrorPreservation(E2ETestCase):
     @staticmethod
     def _verify_injected_errno(
         library: Path, local_target: Path, root_relative: str,
-        log_dir: Path, env: dict[str, str],
+        log_dir: Path, env: dict[str, str], expected_errno: int,
     ) -> None:
         # Probe the actual preloaded lstat symbol before making any Graph calls.
         # A shim that is ineffective must NEVER produce a falsely green scenario.
@@ -116,10 +116,10 @@ class TestCase0090FilesystemLookupErrorPreservation(E2ETestCase):
         )
         write_text_file(log_dir / "injector_probe_stdout.log", result.stdout)
         write_text_file(log_dir / "injector_probe_stderr.log", result.stderr)
-        expected = f"rc=-1 errno={errno.EBADMSG}"
+        expected = f"rc=-1 errno={expected_errno}"
         if result.returncode != 0 or expected not in result.stdout:
             raise RuntimeError(
-                f"TC0090 lstat injector did not return EBADMSG for {root_relative}: "
+                f"TC0090 lstat injector did not return errno {expected_errno} for {root_relative}: "
                 f"status={result.returncode}; output={result.stdout.strip()!r}"
             )
 
@@ -277,21 +277,46 @@ class TestCase0090FilesystemLookupErrorPreservation(E2ETestCase):
                     blocked_target.lstat()
                 except OSError as error:
                     scenario_details["precondition_errno"] = error.errno
+                    if error.errno != errno.EACCES:
+                        return fail(f"chmod precondition raised wrong errno: {error.errno}")
+                    scenario_details["lookup_failure_method"] = "chmod_000"
                 else:
-                    return fail("chmod 000 did not prevent lstat on target (runner permissions insufficient for EACCES test)")
-                if scenario_details["precondition_errno"] != errno.EACCES:
-                    return fail(f"chmod precondition raised wrong errno: {scenario_details['precondition_errno']}")
+                    # Privileged CI runners can traverse chmod 000 directories.
+                    # Restore permissions and inject the same lstat errno only
+                    # in the subject client, rather than skipping the test.
+                    blocked_dir.chmod(previous_mode)
+                    previous_mode = None
+                    if injector is None:
+                        return fail("EACCES injector was not built")
+                    test_env = {
+                        "LD_PRELOAD": f"{injector}:{os.environ.get('LD_PRELOAD', '')}".rstrip(":"),
+                        "E2E_TC0090_LSTAT_PATH": relative_target,
+                        "E2E_TC0090_LSTAT_ERRNO": "EACCES",
+                    }
+                    self._verify_injected_errno(
+                        injector, blocked_target, relative_target,
+                        scenario_logs, test_env, errno.EACCES,
+                    )
+                    artifacts.extend((str(scenario_logs / "injector_probe_stdout.log"),
+                                      str(scenario_logs / "injector_probe_stderr.log")))
+                    scenario_details["precondition_errno"] = errno.EACCES
+                    scenario_details["lookup_failure_method"] = "injected_lstat_eacces"
             else:
                 if injector is None:
                     return fail("EBADMSG injector was not built")
                 test_env = {
                     "LD_PRELOAD": f"{injector}:{os.environ.get('LD_PRELOAD', '')}".rstrip(":"),
                     "E2E_TC0090_LSTAT_PATH": relative_target,
+                    "E2E_TC0090_LSTAT_ERRNO": "EBADMSG",
                 }
-                self._verify_injected_errno(injector, blocked_target, relative_target, scenario_logs, test_env)
+                self._verify_injected_errno(
+                    injector, blocked_target, relative_target,
+                    scenario_logs, test_env, errno.EBADMSG,
+                )
                 artifacts.extend((str(scenario_logs / "injector_probe_stdout.log"),
                                   str(scenario_logs / "injector_probe_stderr.log")))
                 scenario_details["precondition_errno"] = errno.EBADMSG
+                scenario_details["lookup_failure_method"] = "injected_lstat_ebadmsg"
 
             command = subject_cmd if mode == "sync" else [
                 context.onedrive_bin, "--display-running-config", "--monitor", "--verbose",
@@ -361,7 +386,7 @@ class TestCase0090FilesystemLookupErrorPreservation(E2ETestCase):
                 continue
             details["executed_scenario_ids"].append(scenario_id)
             try:
-                if condition == "EBADMSG" and injector is None:
+                if condition in ("EACCES", "EBADMSG") and injector is None:
                     injector = self._build_lstat_injector(context, layout.work_dir, layout.log_dir)
                     artifacts.extend((str(layout.log_dir / "injector_build_stdout.log"),
                                       str(layout.log_dir / "injector_build_stderr.log")))
