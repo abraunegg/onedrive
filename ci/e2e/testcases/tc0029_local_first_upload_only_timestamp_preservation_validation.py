@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import time
+from contextlib import closing
 from pathlib import Path
 
 from framework.base import E2ETestCase
@@ -17,7 +19,7 @@ from framework.utils import (
 )
 from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx, mutate_xlsx_revision, validate_xlsx
 from framework.pdf import create_random_pdf, mutate_pdf_revision, validate_pdf
-from framework.image import create_random_image_set, mutate_image_set_revision, validate_image_set, image_set_hashes, set_image_set_mtime
+from framework.image import create_random_image_set, mutate_image_set_revision, validate_image_set, image_set_hashes, image_set_paths, set_image_set_mtime
 
 
 class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCase):
@@ -29,8 +31,24 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
     )
 
     XLSX_PAYLOAD_ROWS = 80
+    IMAGE_POST_UPLOAD_SETTLE_SECONDS = 15
+    IMAGE_SETTLE_MAX_CHECKS = 4
     FIXED_MTIME_INITIAL = 1577882096  # 2020-01-01 12:34:56 UTC
     FIXED_MTIME_UPDATED = 1577968496  # 2020-01-02 12:34:56 UTC
+
+    @staticmethod
+    def _observed_image_metadata(config_dir: Path, image_path: Path) -> dict[str, tuple[str, str]]:
+        # Read only after the independent download-only observer has exited.
+        names = sorted(path.name for path in image_set_paths(image_path).values())
+        db_path = config_dir / "items.sqlite3"
+        with closing(sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)) as db:
+            rows = db.execute(
+                "SELECT name, id, eTag FROM item WHERE name IN (" + ",".join("?" for _ in names) + ")",
+                names,
+            ).fetchall()
+        if len(rows) != len(names) or any(not item_id or not etag for _, item_id, etag in rows):
+            raise RuntimeError("download-only observer did not obtain all four image IDs and eTags")
+        return {name: (item_id, etag) for name, item_id, etag in rows}
 
     def _write_config(self, config_path: Path, sync_dir: Path) -> None:
         content = (
@@ -347,6 +365,8 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
 
         phase1_stdout = case_log_dir / "phase1_initial_upload_stdout.log"
         phase1_stderr = case_log_dir / "phase1_initial_upload_stderr.log"
+        settle_root = case_work_dir / "settle-syncroot"
+        settle_conf = case_work_dir / "conf-image-settle"
         phase2_stdout = case_log_dir / "phase2_modified_upload_stdout.log"
         phase2_stderr = case_log_dir / "phase2_modified_upload_stderr.log"
         phase3_stdout = case_log_dir / "phase3_noop_sync_stdout.log"
@@ -511,8 +531,85 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
             )
             return failure
 
+        # Microsoft can asynchronously update image metadata/eTags after upload.
+        # --upload-only deliberately ignores remote changes, so use an isolated
+        # download-only observer to detect a settled remote baseline without
+        # changing the upload-only subject's local files, timestamps or database.
+        reset_directory(settle_root)
+        context.bootstrap_config_dir(settle_conf)
+        write_onedrive_config(
+            settle_conf / "config",
+            f'# tc0029 isolated remote metadata observer\n'
+            f'sync_dir = "{settle_root}"\n'
+            'cleanup_local_files = "false"\n',
+        )
+        previous_metadata: dict[str, tuple[str, str]] | None = None
+        details["image_settle_etags"] = []
+        for check in range(1, self.IMAGE_SETTLE_MAX_CHECKS + 1):
+            time.sleep(self.IMAGE_POST_UPLOAD_SETTLE_SECONDS)
+            settle_stdout = case_log_dir / f"phase1_image_settle{check}_stdout.log"
+            settle_stderr = case_log_dir / f"phase1_image_settle{check}_stderr.log"
+            artifacts.extend([str(settle_stdout), str(settle_stderr)])
+            settle_command = [
+                context.onedrive_bin,
+                "--display-running-config", "--sync", "--verbose", "--download-only",
+                "--single-directory", root_name, "--confdir", str(settle_conf),
+            ]
+            if check == 1:
+                settle_command[4:4] = ["--resync", "--resync-auth"]
+            context.log(f"Executing Test Case {self.case_id} image metadata settle {check}: {command_to_string(settle_command)}")
+            settle_result = run_command(settle_command, cwd=context.repo_root)
+            write_text_file(settle_stdout, settle_result.stdout)
+            write_text_file(settle_stderr, settle_result.stderr)
+            details[f"image_settle{check}_returncode"] = settle_result.returncode
+            if settle_result.returncode != 0:
+                write_text_file(metadata_file, "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n")
+                return self.fail_result(
+                    self.case_id, self.name,
+                    f"image metadata-settle observer failed on check {check} with status {settle_result.returncode}",
+                    artifacts, details,
+                )
+            try:
+                observed_metadata = self._observed_image_metadata(settle_conf, local_image_file)
+            except (OSError, sqlite3.Error, RuntimeError) as error:
+                write_text_file(metadata_file, "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n")
+                return self.fail_result(
+                    self.case_id, self.name, f"image metadata-settle precondition unavailable: {error}",
+                    artifacts, details,
+                )
+            details["image_settle_etags"].append({name: etag for name, (_, etag) in observed_metadata.items()})
+            if previous_metadata is not None:
+                if any(observed_metadata[name][0] != previous_metadata[name][0] for name in observed_metadata):
+                    write_text_file(metadata_file, "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n")
+                    return self.fail_result(
+                        self.case_id, self.name, "remote image identity changed during metadata settling",
+                        artifacts, details,
+                    )
+                if observed_metadata == previous_metadata:
+                    break
+            previous_metadata = observed_metadata
+        else:
+            write_text_file(metadata_file, "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n")
+            return self.fail_result(
+                self.case_id, self.name, "remote image eTags did not settle before modified upload",
+                artifacts, details,
+            )
+
+        # Verify the upload-only subject remained untouched while remote metadata settled.
+        for local_path, expected_hash, assert_state in (
+            (local_file, initial_hash, self._assert_local_file_state),
+            (local_pdf_file, initial_pdf_hash, self._assert_local_pdf_state),
+            (local_image_file, initial_image_hashes, self._assert_local_image_state),
+        ):
+            failure = assert_state(
+                local_path, REVISION_0, expected_hash, self.FIXED_MTIME_INITIAL,
+                "Image metadata-settle phase", artifacts, details,
+            )
+            if failure is not None:
+                write_text_file(metadata_file, "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n")
+                return failure
+
         # Phase 2: mutate the real XLSX content, set a newer fixed local timestamp, and upload again.
-        time.sleep(2)
         mutate_xlsx_revision(local_file, REVISION_0, REVISION_1)
         mutate_pdf_revision(local_pdf_file, REVISION_0, REVISION_1)
         mutate_image_set_revision(local_image_file, REVISION_0, REVISION_1)
