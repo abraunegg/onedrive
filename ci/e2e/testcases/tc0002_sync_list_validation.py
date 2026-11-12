@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -39,7 +40,12 @@ class SyncListScenario:
     forbidden_exact: list[str] = field(default_factory=list)
     forbidden_prefixes: list[str] = field(default_factory=list)
     required_processed: list[str] = field(default_factory=list)
+    required_processed_exact: list[str] = field(default_factory=list)
     required_skipped: list[str] = field(default_factory=list)
+    required_skipped_exact: list[str] = field(default_factory=list)
+    # Exact-path assertions: descendant rules must never reject an ancestor.
+    required_non_skipped_exact: list[str] = field(default_factory=list)
+    forbidden_skipped_exact: list[str] = field(default_factory=list)
 
     # Execution mode
     execution_mode: str = "single"
@@ -108,19 +114,45 @@ class SyncListScenario:
 
 class TestCase0002SyncListValidation(E2ETestCase):
     """
-    Test Case 0002: sync_list validation
+    Test Case 0002: sync_list inclusion/exclusion and rule-order conformance.
 
-    This validates sync_list as a policy-conformance test.
-    The Issue #3655 scenarios additionally reproduce the reported lifecycle:
+    PRIMARY OBJECTIVE: Given each scenario's exact, ordered sync_list rules,
+    confirm that the client applies inclusion, exclusion, precedence, and path
+    matching as configured. Included files/directories must be selected for
+    synchronisation; excluded ones must not be synchronised merely because an
+    ancestor or another rule is included. Ancestors needed to reach an included
+    descendant may still be traversed. Each scenario specifies the expected
+    path-level decisions, including rule-order, wildcard and trailing-slash
+    edge cases where applicable.
 
-    1. Seed the entire fixture tree remotely with no sync_list restrictions.
-    2. Re-run with download_only + cleanup_local_files + issue-style sync_list.
-    3. Validate both debug log decisions and final local filesystem state.
+    The --resync and --resync-auth flags provide a deterministic execution
+    baseline. TC0002 is NOT a database-lifecycle or resync-requirement test;
+    the presence of those flags is not a failure of this test's objective.
+    The download_only + cleanup_local_files scenarios test the consequences of
+    sync_list scope for local preservation/removal, not a separate policy that
+    overrides sync_list inclusion or exclusion.
+
+    ASSERTION / EVIDENCE SCOPE:
+      * single: verify actual client processing and skip decisions for named
+        fixture paths through emitted events; these are selection-policy
+        assertions, not independent remote-content verification.
+      * cleanup_regression: seed without selection rules, then apply ordered
+        restrictions; validate client decisions and pre/post local state,
+        including protection of excluded paths and removal where required.
+        The Issue #3655 cases reproduce the reported trailing-slash problem.
+      * root_files_contract: verify selection effects with real upload and
+        fresh-download content checks for sync_root_files on/off.
+
+    An audit must evaluate each scenario's configured rules, effective options,
+    observed client decisions, and the outcome evidence that mode captures.
+    Do not treat a PASS from a log-based policy scenario as proof of an
+    independent remote readback; do not grade TC0002 against unrelated
+    persistent-database lifecycle requirements.
     """
 
     case_id = "0002"
     name = "sync_list validation"
-    description = "Validate sync_list behaviour across a scenario matrix"
+    description = "Validate ordered sync_list inclusion/exclusion rules and selected-path outcomes"
 
 
     EVENT_PATTERNS = [
@@ -141,31 +173,25 @@ class TestCase0002SyncListValidation(E2ETestCase):
             re.compile(r"^(?:DEBUG:\s+)?Including file - included by sync_list config: (.+)$"),
         ),
         (
-            "retain_path",
-            re.compile(r"^(?:DEBUG:\s+)?Path retained due to 'sync_list' inclusion: (.+)$"),
-        ),
-        (
             "retain_existing",
             re.compile(r"^(?:DEBUG:\s+)?Path already marked for retention - retaining path: (.+)$"),
         ),
-        (
-            "retain_local_file",
-            re.compile(
-                r"^(?:DEBUG:\s+)?Local file should be retained due to 'sync_list' inclusion: (.+)$"
-            ),
-        ),
-        (
-            "retain_local_dir",
-            re.compile(
-                r"^(?:DEBUG:\s+)?Local directory should be retained due to 'sync_list' inclusion: (.+)$"
-            ),
-        ),
-        (
-            "retain_local_parent_dir",
-            re.compile(
-                r"^(?:DEBUG:\s+)?Local parent directory should be retained due to 'sync_list' inclusion: (.+)$"
-            ),
-        ),
+        # Cleanup retention reports a protection/decision, not affirmative
+        # sync_list processing. Match current production messages but do not
+        # let them satisfy required_processed assertions.
+        *[
+            ("retain_cleanup", re.compile(r"^(?:DEBUG:\s+)?" + re.escape(prefix) + r" (.+)$"))
+            for prefix in (
+                "Retaining local child tracked in database during cleanup:",
+                "Retaining local symbolic link during cleanup:",
+                "Retaining local child excluded by client-side filtering during cleanup:",
+                "Path retained outside cleanup scope:",
+                "Parent path retained outside cleanup scope:",
+                "Parent path found in database - retain path:",
+                "Parent path retained because child path is retained:",
+                "Retaining local synchronisation root; never a cleanup target:",
+            )
+        ],
         (
             "retain_sync_root_file",
             re.compile(
@@ -183,6 +209,10 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
         ),
     ]
+
+    # The cleanup walker can report an earlier retention decision again.
+    # This is not affirmative sync_list processing (or evidence of deletion).
+    NON_PROCESSING_EVENTS = frozenset({"skip", "retain_existing", "retain_cleanup"})
 
     REMOVAL_PATTERNS = [
         (
@@ -303,7 +333,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 ]
             )
 
-            if scenario.execution_mode == "cleanup_regression":
+            if scenario.execution_mode == "root_files_contract":
+                diffs, artifacts, extra_metadata = self._run_root_files_contract(
+                    context, scenario, sync_root, config_dir, config_path,
+                    base_config_text, sync_list_path, scenario_dir, scenario_log_dir,
+                )
+            elif scenario.execution_mode == "cleanup_regression":
                 diffs, artifacts, extra_metadata = self._run_cleanup_regression_scenario(
                     context=context,
                     scenario=scenario,
@@ -391,6 +426,101 @@ class TestCase0002SyncListValidation(E2ETestCase):
         )
 
         return "\n\n".join(sections).rstrip("\n") + "\n"
+
+    def _run_root_files_contract(
+        self,
+        context: E2EContext,
+        scenario: SyncListScenario,
+        sync_root: Path,
+        config_dir: Path,
+        config_path: Path,
+        base_config_text: str,
+        sync_list_path: Path,
+        scenario_dir: Path,
+        scenario_log_dir: Path,
+    ) -> tuple[list[str], list[str], list[str]]:
+        """Real upload/download checks with a clean client DB for each policy."""
+        artifacts: list[str] = []
+        metadata: list[str] = []
+        diffs: list[str] = []
+        # Unique names prevent old E2E data from satisfying an assertion.
+        marker = uuid.uuid4().hex[:12]
+        root_allowed = f"tc0002-root-allowed-{marker}.txt"
+        root_excluded = f"tc0002-root-excluded-{marker}.txt"
+        selected = f"TC0002_Selected_{marker}"
+        unselected = f"TC0002_Unselected_{marker}"
+        selected_allowed = f"{selected}/included.txt"
+        selected_excluded = f"{selected}/excluded.txt"
+        unselected_file = f"{unselected}/excluded.txt"
+        paths = [root_allowed, root_excluded, selected_allowed,
+                 selected_excluded, unselected_file]
+
+        # Seed only our isolated dataset; avoid the general TC0002 fixture.
+        reset_directory(sync_root)
+        for rel in paths:
+            target = sync_root / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            write_text_file(target, f"TC0002 root-file contract {marker}: {rel}\n")
+        write_text_file(sync_list_path, "")
+        self._write_config_with_overrides(config_path, base_config_text, [])
+        seed_command = self._build_sync_command(context, sync_root, config_dir)
+        seed_result = run_command(seed_command, cwd=context.repo_root)
+        for name, data in (("seed_stdout.log", seed_result.stdout),
+                           ("seed_stderr.log", seed_result.stderr)):
+            target = scenario_log_dir / name
+            write_text_file(target, data)
+            artifacts.append(str(target))
+        metadata.append(f"seed_returncode={seed_result.returncode}")
+        metadata.append(f"dataset_marker={marker}")
+        if seed_result.returncode != 0:
+            return [f"Unfiltered remote seed failed with status {seed_result.returncode}"], artifacts, metadata
+
+        rules = [f"!/{root_excluded}", f"!/{selected_excluded}", f"/{selected}/"]
+        for enabled in (True, False):
+            label = "enabled" if enabled else "disabled"
+            # Independent config/DB and empty local tree are essential:
+            # otherwise previously seeded local files could masquerade as downloads.
+            reset_directory(sync_root)
+            # Keep per-policy auth and DB outside ci/e2e/out/state.
+            # scenario_dir is published as a CI artifact.
+            phase_config_dir = config_dir.parent / f"config-{scenario.scenario_id}-{label}"
+            reset_directory(phase_config_dir)
+            context.bootstrap_config_dir(phase_config_dir)
+            phase_config_path = phase_config_dir / CONFIG_FILE_NAME
+            previous = phase_config_path.read_text(encoding="utf-8") if phase_config_path.exists() else ""
+            phase_base = self._build_base_config_text(previous)
+            self._write_config_with_overrides(
+                phase_config_path, phase_base,
+                ['download_only = "true"',
+                 f'sync_root_files = "{str(enabled).lower()}"'],
+            )
+            self._write_sync_list(phase_config_dir / "sync_list", rules)
+            command = self._build_sync_command(context, sync_root, phase_config_dir)
+            result = run_command(command, cwd=context.repo_root)
+            for name, data in ((f"{label}_stdout.log", result.stdout),
+                               (f"{label}_stderr.log", result.stderr)):
+                target = scenario_log_dir / name
+                write_text_file(target, data)
+                artifacts.append(str(target))
+            manifest_path = scenario_dir / f"{label}_manifest.txt"
+            write_manifest(manifest_path, build_manifest(sync_root))
+            artifacts.append(str(manifest_path))
+            metadata.append(f"{label}_returncode={result.returncode}")
+            if result.returncode != 0:
+                diffs.append(f"{label}: download-only sync failed with status {result.returncode}")
+                continue
+            present = [root_allowed, root_excluded, selected_allowed] if enabled else [selected_allowed]
+            absent = [selected_excluded, unselected_file] if enabled else [root_allowed, root_excluded, selected_excluded, unselected_file]
+            for rel in present:
+                if not (sync_root / rel).is_file():
+                    diffs.append(f"{label}: expected downloaded file missing: {rel}")
+            for rel in absent:
+                if (sync_root / rel).exists():
+                    diffs.append(f"{label}: excluded file unexpectedly downloaded: {rel}")
+
+        # Keep the remote test dataset for post-failure inspection; its random
+        # suffix ensures it cannot produce a false pass in later runs.
+        return diffs, artifacts, metadata
 
     def _run_standard_scenario(
         self,
@@ -576,6 +706,28 @@ class TestCase0002SyncListValidation(E2ETestCase):
             return diffs, artifacts, metadata
 
         write_manifest(phase1_manifest, build_manifest(sync_root))
+
+        # SL-0037 specifically tests that sync_list *inclusion* is not a
+        # retention override. Introduce an extra local-only file inside the
+        # selected subtree AFTER the unrestricted online seed; it has never
+        # been uploaded. An in-scope cleanup must delete this file while
+        # preserving the explicitly excluded sibling subtree.
+        allowed_local_only_removals: set[str] = set()
+        if scenario.scenario_id == "SL-0037":
+            extra = f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/local-only-during-cleanup.txt"
+            write_text_file(sync_root / extra, "local-only cleanup fixture\n")
+            allowed_local_only_removals.add(extra)
+
+            # Two DB-unknown siblings beneath a DB-unknown parent. One is
+            # specifically excluded by sync_list; the other is in scope and
+            # must be removed. This exercises directory evaluation and the
+            # reason-specific excluded-child retention log in the actual walker.
+            log_parent = f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/cleanup-log-parent"
+            log_protected = f"{log_parent}/protected.txt"
+            log_stale = f"{log_parent}/stale.txt"
+            write_text_file(sync_root / log_protected, "excluded local sibling\n")
+            write_text_file(sync_root / log_stale, "included local stale sibling\n")
+            allowed_local_only_removals.add(log_stale)
         write_manifest(pre_cleanup_manifest, build_manifest(sync_root))
 
         # Phase 2: issue-style restrictive cleanup.
@@ -634,7 +786,44 @@ class TestCase0002SyncListValidation(E2ETestCase):
             )
             + "\n",
         )
-        write_manifest(post_cleanup_manifest, build_manifest(sync_root))
+        post_manifest = build_manifest(sync_root)
+        write_manifest(post_cleanup_manifest, post_manifest)
+        before = set(pre_cleanup_manifest.read_text(encoding="utf-8").splitlines())
+        after = set(post_manifest)
+        disappeared = sorted(before - after)
+        appeared = sorted(after - before)
+        unexpected_disappeared = sorted(set(disappeared) - allowed_local_only_removals)
+        missing_cleanup = sorted(allowed_local_only_removals - set(disappeared))
+        if unexpected_disappeared:
+            diffs.append("Online-backed local paths removed solely due to sync_list scope change: " + ", ".join(unexpected_disappeared))
+        if missing_cleanup:
+            diffs.append("In-scope local-only files were retained despite cleanup: " + ", ".join(missing_cleanup))
+        if appeared:
+            diffs.append("Unexpected local paths appeared during scope-only configuration change: " + ", ".join(appeared))
+
+        if scenario.scenario_id == "SL-0037":
+            log_parent = f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/cleanup-log-parent"
+            log_protected = f"{log_parent}/protected.txt"
+            log_stale = f"{log_parent}/stale.txt"
+            if not (sync_root / log_parent).is_dir():
+                diffs.append("Excluded sibling's parent directory was removed")
+            if not (sync_root / log_protected).is_file() or (sync_root / log_protected).read_bytes() != b"excluded local sibling\n":
+                diffs.append("Explicitly excluded local-only sibling was deleted or modified")
+            if (sync_root / log_stale).exists():
+                diffs.append("In-scope local-only sibling was not removed")
+
+            # Logs are evidence of the *reason* and operation; the filesystem
+            # assertions above independently establish the resulting state.
+            for marker, rel_path in (
+                ("Evaluating untracked local directory for cleanup due to --download-only --cleanup-local-files operation:", log_parent),
+                ("Retaining local child excluded by client-side filtering during cleanup:", log_protected),
+                ("Attempting removal of local file:", log_stale),
+                ("Removed local file:", log_stale),
+            ):
+                pattern = re.compile(r"(?:^|\n)(?:DEBUG:\s+)?" + re.escape(marker)
+                                     + r"\s+(?:\./)?" + re.escape(rel_path) + r"(?:\s|$)")
+                if pattern.search(phase2_result.stdout + "\n" + phase2_result.stderr) is None:
+                    diffs.append(f"Expected cleanup decision/outcome log absent: {marker} {rel_path}")
 
         diffs.extend(self._validate_scenario(scenario, fixture_events))
         diffs.extend(
@@ -651,7 +840,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
 
     def _build_sync_command(self, context: E2EContext, sync_root: Path, config_dir: Path) -> list[str]:
         return [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--resync",
@@ -759,7 +948,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
         for event in events:
             if event_type and event.event_type != event_type:
                 continue
-            if non_skip_only and event.event_type == "skip":
+            if non_skip_only and event.event_type in self.NON_PROCESSING_EVENTS:
                 continue
             if self._path_matches(event.normalised_path, wanted_path):
                 matches.append(event)
@@ -781,7 +970,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
         for event in events:
             path = event.normalised_path
 
-            if event.event_type == "skip":
+            if event.event_type in self.NON_PROCESSING_EVENTS:
                 continue
 
             if scenario.is_forbidden(path):
@@ -803,6 +992,42 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 diffs.append(
                     f"Expected allowed processing was not observed for: {required}"
                 )
+
+        # Unlike required_processed, these checks do not accept events for
+        # descendants. A parent may be incorrectly skipped and subsequently
+        # reconstructed for included children, masking the filtering defect.
+        for required in scenario.required_non_skipped_exact:
+            matches = [
+                event for event in events
+                if event.normalised_path == required and event.event_type not in self.NON_PROCESSING_EVENTS
+            ]
+            if not matches:
+                diffs.append(
+                    f"Expected ancestor inclusion was not observed for: {required}"
+                )
+
+        for forbidden in scenario.forbidden_skipped_exact:
+            matches = [
+                event for event in events
+                if event.normalised_path == forbidden and event.event_type == "skip"
+            ]
+            for event in matches:
+                diffs.append(
+                    f"Ancestor incorrectly excluded by descendant sync_list rule: "
+                    f"{forbidden} (line: {event.line})"
+                )
+
+
+        # Exact-path guards prevent an unrelated child event from satisfying an
+        # assertion about a specific file. Keep the older subtree assertions.
+        for required in scenario.required_processed_exact:
+            if not any(e.normalised_path.strip("/") == required.strip("/")
+                       and e.event_type not in self.NON_PROCESSING_EVENTS for e in events):
+                diffs.append(f"Expected exact allowed item was not processed: {required}")
+        for required in scenario.required_skipped_exact:
+            if not any(e.normalised_path.strip("/") == required.strip("/")
+                       and e.event_type == "skip" for e in events):
+                diffs.append(f"Expected exact excluded item was not skipped: {required}")
 
         if scenario.execution_mode != "cleanup_regression":
             for required in scenario.required_skipped:
@@ -829,18 +1054,13 @@ class TestCase0002SyncListValidation(E2ETestCase):
         diffs: list[str] = []
 
         for rel_path in scenario.required_skipped:
-            skip_matches = self._find_matching_events(events, rel_path, event_type="skip")
-            if skip_matches:
-                continue
-
+            if self._cleanup_path_absent(sync_root, rel_path):
+                diffs.append(f"Out-of-scope path was deleted: {rel_path}")
             removal_matches = self._find_matching_events(removals, rel_path)
             if removal_matches:
-                continue
-
-            if self._cleanup_path_absent(sync_root, rel_path):
-                continue
-
-            diffs.append(f"Expected excluded skip was not observed for: {rel_path}")
+                diffs.append(f"Unexpected removal of sync_list-excluded path: {rel_path}")
+            if not self._find_matching_events(events, rel_path, event_type="skip"):
+                diffs.append(f"Expected excluded JSON selection skip was not observed for: {rel_path}")
 
         return diffs
 
@@ -860,7 +1080,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
 
         for rel_path in scenario.expected_absent_after:
             if (sync_root / rel_path).exists():
-                diffs.append(f"Excluded path still exists after cleanup: {rel_path}")
+                diffs.append(f"Expected in-scope deletion did not occur: {rel_path}")
 
         for rel_path in scenario.required_removed:
             matches = self._find_matching_events(removals, rel_path)
@@ -1647,8 +1867,6 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Wallpapers/wallpaper1.jpg",
                     f"{FIXTURE_ROOT_NAME}/0.1.Backups/archive1.bin",
                     f"{FIXTURE_ROOT_NAME}/1.0.Resources/resource1.dat",
-                ],
-                expected_absent_after=[
                     f"{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"{FIXTURE_ROOT_NAME}/Projects/Audio/song.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
@@ -1658,18 +1876,18 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
                     f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash/old.txt",
                 ],
-                required_removed=[
-                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
-                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
-                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
-                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
-                ],
+                expected_absent_after=[],
+                required_removed=[],
                 forbidden_removed=[
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
                     f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
                     f"{FIXTURE_ROOT_NAME}/Wallpapers/wallpaper1.jpg",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
                 ],
             ),
             SyncListScenario(
@@ -1738,8 +1956,6 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Wallpapers/wallpaper1.jpg",
                     f"{FIXTURE_ROOT_NAME}/0.1.Backups/archive1.bin",
                     f"{FIXTURE_ROOT_NAME}/1.0.Resources/resource1.dat",
-                ],
-                expected_absent_after=[
                     f"{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"{FIXTURE_ROOT_NAME}/Projects/Audio/song.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
@@ -1749,18 +1965,18 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
                     f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash/old.txt",
                 ],
-                required_removed=[
-                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
-                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
-                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
-                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
-                ],
+                expected_absent_after=[],
+                required_removed=[],
                 forbidden_removed=[
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
                     f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
                     f"{FIXTURE_ROOT_NAME}/Wallpapers/wallpaper1.jpg",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config",
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/.trash",
                 ],
             ),
             SyncListScenario(
@@ -1797,18 +2013,16 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
-                ],
-                expected_absent_after=[
                     f"{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
-                required_removed=[
-                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
-                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
-                ],
+                expected_absent_after=[],
+                required_removed=[],
                 forbidden_removed=[
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
             ),
             SyncListScenario(
@@ -1845,18 +2059,16 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
-                ],
-                expected_absent_after=[
                     f"{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
-                required_removed=[
-                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
-                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
-                ],
+                expected_absent_after=[],
+                required_removed=[],
                 forbidden_removed=[
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
             ),
             SyncListScenario(
@@ -1872,16 +2084,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0023",
-                description="sync_root_files true retains logical root files alongside included Projects subtree",
+                description="sync_root_files true does not override filtering for nested sibling files",
                 execution_mode="cleanup_regression",
                 sync_list=[
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Video",
                     f"/{FIXTURE_ROOT_NAME}/Projects",
-                ],
-                allowed_exact=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                 ],
                 allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Projects"],
                 forbidden_prefixes=[
@@ -1889,8 +2097,6 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
                 required_processed=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
                 ],
@@ -1912,7 +2118,7 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0024",
-                description="cleanup regression with sync_root_files true prunes non-included sibling files and excluded Projects subtrees",
+                description="cleanup scope regression: sync_root_files must not delete excluded local sibling files or Projects subtrees",
                 execution_mode="cleanup_regression",
                 sync_list=[
                     f"!/{FIXTURE_ROOT_NAME}/Projects/Audio",
@@ -1948,23 +2154,21 @@ class TestCase0002SyncListValidation(E2ETestCase):
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
-                ],
-                expected_absent_after=[
                     f"{FIXTURE_ROOT_NAME}/README.txt",
                     f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/Projects/Audio",
                     f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
-                required_removed=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
-                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
-                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
-                ],
+                expected_absent_after=[],
+                required_removed=[],
                 forbidden_removed=[
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Exports/file.wav",
                     f"{FIXTURE_ROOT_NAME}/Projects/Code/JOBXYZ/Source/main.txt",
+                    f"{FIXTURE_ROOT_NAME}/README.txt",
+                    f"{FIXTURE_ROOT_NAME}/loose.bin",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Audio",
+                    f"{FIXTURE_ROOT_NAME}/Projects/Video",
                 ],
             ),
             SyncListScenario(
@@ -2230,8 +2434,9 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0037",
-                description="generic cleanup_local_files with included root and excluded child subtree",
+                description="cleanup scope regression: excluded subtree and local-only sibling retained, in-scope local-only siblings cleaned",
                 sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/cleanup-log-parent/protected.txt",
                     f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/*",
                     f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/",
                 ],
@@ -2254,20 +2459,22 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 ],
                 expected_present_after=[
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/transient.tmp",
                 ],
                 expected_absent_after=[
-                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/transient.tmp",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/local-only-during-cleanup.txt",
                 ],
                 required_removed=[
-                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/transient.tmp",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/local-only-during-cleanup.txt",
                 ],
                 forbidden_removed=[
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/transient.tmp",
                 ],
             ),
             SyncListScenario(
                 scenario_id="SL-0038",
-                description="generic cleanup_local_files with wildcard include and excluded sibling container children",
+                description="cleanup scope regression: excluded wildcard sibling contents remain untouched",
                 sync_list=[
                     f"!/{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/*",
                     f"/{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_*/",
@@ -2292,25 +2499,21 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 expected_present_after=[
                     f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET/file00.txt",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET/file02.txt",
-                ],
-                expected_absent_after=[
                     f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file00.txt",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file01.txt",
                 ],
-                required_removed=[
-                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file00.txt",
-                ],
+                expected_absent_after=[],
+                required_removed=[],
                 forbidden_removed=[
                     f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET/file00.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard/WIDE_SET_15/file00.txt",
                 ],
             ),
             SyncListScenario(
                 scenario_id="SL-0039",
-                description="generic sync_root_files override retains logical root files without entering unrelated fixture subtrees",
+                description="sync_root_files does not override nested paths while explicit file inclusion still works",
                 sync_list=[f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
                 allowed_exact=[
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/zz_e2e_zz_e2e_sync_list_rulelab.bin",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/zz_e2e_zz_e2e_sync_list_rulelab_filespecific.dat",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/zz_e2e_zz_e2e_sync_list_rulelab_filespecific_core.cache",
@@ -2320,13 +2523,140 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 ],
                 required_processed=[
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
-                    f"{FIXTURE_ROOT_NAME}/README.txt",
-                    f"{FIXTURE_ROOT_NAME}/loose.bin",
                 ],
                 required_skipped=[
                     f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp",
                     f"{FIXTURE_ROOT_NAME}/RuleLab/Wildcard",
                 ],
+                phase2_config_overrides=['sync_root_files = "true"'],
+            ),
+            # Issue #3931: paired literal/wildcard descendant exclusions.
+            # The root-level pair exercises a single-segment path, while the
+            # Notes pair exercises the existing multi-segment matching branch.
+            SyncListScenario(
+                scenario_id="SL-0040",
+                description="multi-segment directory include with literal descendant exclusion",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/",
+                    f"/{FIXTURE_ROOT_NAME}/Documents/Notes/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes"],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_processed=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_non_skipped_exact=[FIXTURE_ROOT_NAME],
+                forbidden_skipped_exact=[FIXTURE_ROOT_NAME],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0041",
+                description="multi-segment directory include with wildcard descendant exclusion",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/*",
+                    f"/{FIXTURE_ROOT_NAME}/Documents/Notes/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes"],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_processed=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_non_skipped_exact=[FIXTURE_ROOT_NAME],
+                forbidden_skipped_exact=[FIXTURE_ROOT_NAME],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0042",
+                description="single-segment root directory include with literal descendant exclusion",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/",
+                    f"/{FIXTURE_ROOT_NAME}/",
+                ],
+                allowed_prefixes=[FIXTURE_ROOT_NAME],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
+                ],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_non_skipped_exact=[FIXTURE_ROOT_NAME],
+                forbidden_skipped_exact=[FIXTURE_ROOT_NAME],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0043",
+                description="single-segment root directory include with wildcard descendant exclusion",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/Documents/Notes/.config/*",
+                    f"/{FIXTURE_ROOT_NAME}/",
+                ],
+                allowed_prefixes=[FIXTURE_ROOT_NAME],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_processed=[
+                    f"{FIXTURE_ROOT_NAME}/Documents/Notes/keep.txt",
+                    f"{FIXTURE_ROOT_NAME}/Documents/latest_report.docx",
+                ],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/Documents/Notes/.config"],
+                required_non_skipped_exact=[FIXTURE_ROOT_NAME],
+                forbidden_skipped_exact=[FIXTURE_ROOT_NAME],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0044",
+                description="isolated sync_root_files root-vs-nested download contract with disabled negative control",
+                sync_list=[],
+                execution_mode="root_files_contract",
+            ),
+
+            SyncListScenario(
+                scenario_id="SL-0045",
+                description="literal nested directory exclusion under included ancestor, exclusion first",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/",
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE"],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp"],
+                required_processed_exact=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp"],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0046",
+                description="include-first rule ordering accepts nested directory before later exclusion",
+                sync_list=[
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/",
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE"],
+                required_processed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp",
+                ],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0047",
+                description="literal nested file exclusion retains included sibling files",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image0.png",
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files"],
+                forbidden_exact=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image0.png"],
+                required_processed_exact=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/image0.png"],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0048",
+                description="sync_root_files does not override a literal nested directory exclusion",
+                sync_list=[
+                    f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/",
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/",
+                ],
+                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE"],
+                allowed_exact=[
+                    f"{FIXTURE_ROOT_NAME}/README.txt",
+                    f"{FIXTURE_ROOT_NAME}/loose.bin",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/zz_e2e_zz_e2e_sync_list_rulelab.bin",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/zz_e2e_zz_e2e_sync_list_rulelab_filespecific.dat",
+                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/zz_e2e_zz_e2e_sync_list_rulelab_filespecific_core.cache",
+                ],
+                forbidden_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp"],
+                required_processed_exact=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
+                required_skipped=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp"],
                 phase2_config_overrides=['sync_root_files = "true"'],
             ),
         ]

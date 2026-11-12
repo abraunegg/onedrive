@@ -3,6 +3,8 @@ from __future__ import annotations
 
 
 import os
+import traceback
+import hashlib
 
 import shutil
 
@@ -10,7 +12,9 @@ from pathlib import Path
 
 
 
-from framework.base import E2ETestCase
+from testcases.remote_move_identity import (
+    MonitoredRemoteMoveCase, snapshot_remote_identities, check_remote_identity_transition,
+)
 
 from framework.context import E2EContext
 
@@ -44,7 +48,7 @@ from framework.utils import (
 
 
 
-class TestCase0032RemoteRenameReconciliation(E2ETestCase):
+class TestCase0032RemoteRenameReconciliation(MonitoredRemoteMoveCase):
 
     case_id = "0032"
 
@@ -52,9 +56,9 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
     description = (
 
-        "Validate that a stale local client correctly reconciles remote-side passive TXT, real XLSX/PDF file renames "
+        "Distinguish delete-and-recreate archive preservation from identity-preserving remote file "
 
-        "and a real PNG/JPEG image-set rename without leaving stale local leftovers"
+        "renames for passive TXT, XLSX/PDF and PNG/JPEG fixtures"
 
     )
 
@@ -112,13 +116,71 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
 
 
+    SCENARIOS = (
+        ("DR-0001", "standalone sync delete-and-recreate archival semantics"),
+        ("RM-0002", "monitor identity-preserving Graph rename/move reconciliation"),
+    )
+
     def run(self, context: E2EContext) -> TestResult:
+        failures: list[str] = []
+        artifacts: list[str] = []
+        scenario_details: dict[str, object] = {}
+        executed: list[str] = []
+        failed_ids: list[str] = []
+        for scenario_id, description in self.SCENARIOS:
+            if not context.should_run_scenario(self.case_id, scenario_id):
+                continue
+            executed.append(scenario_id)
+            context.log(f"Running Test Case {self.case_id} scenario {scenario_id}: {description}")
+            try:
+                result = self._run_scenario(
+                    context, scenario_id=scenario_id,
+                    preserve_identity=(scenario_id == "RM-0002"),
+                )
+            except Exception as exc:
+                # One broken scenario must not silently suppress execution of
+                # the other independent operation. Retain full traceback evidence.
+                exception_log = context.state_dir / f"tc{self.case_id}" / scenario_id / "exception.log"
+                write_text_file(exception_log, traceback.format_exc())
+                result = self.fail_result(
+                    self.case_id, self.name,
+                    f"Unexpected {type(exc).__name__}: {exc}",
+                    [str(exception_log)],
+                    {"scenario_id": scenario_id, "exception_type": type(exc).__name__},
+                )
+            artifacts.extend(result.artifacts)
+            scenario_details[scenario_id] = result.details
+            if result.status != "pass":
+                failed_ids.append(scenario_id)
+                failures.append(f"{scenario_id}: {result.reason}")
+                context.log(f"Scenario {scenario_id} FAILED: {result.reason}")
+            else:
+                context.log(f"Scenario {scenario_id} PASSED")
+
+        details = {
+            "scenario_count": len(executed),
+            "executed_scenario_ids": executed,
+            "failed_scenario_ids": failed_ids,
+            "failed_scenarios": len(failures),
+            "scenario_details": scenario_details,
+        }
+        if failures:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"{len(failures)} of {len(executed)} scenarios failed: " + " | ".join(failures),
+                artifacts, details,
+            )
+        return self.pass_result(self.case_id, self.name, artifacts, details)
+
+    def _run_scenario(
+        self, context: E2EContext, *, scenario_id: str, preserve_identity: bool,
+    ) -> TestResult:
 
         layout = self.prepare_case_layout(
 
             context,
 
-            case_dir_name="tc0032",
+            case_dir_name=f"tc0032/{scenario_id}",
 
             ensure_refresh_token=True,
 
@@ -166,7 +228,7 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
 
 
-        root_name = f"ZZ_E2E_TC0032_{context.run_id}_{os.getpid()}"
+        root_name = f"ZZ_E2E_TC0032_{scenario_id.replace('-', '_')}_{context.run_id}_{os.getpid()}"
 
         old_txt_relative = f"{root_name}/remote-original-name.txt"
 
@@ -656,109 +718,63 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
 
 
-        # Phase 2: perform both renames through the seed client.
+        # Two independently proved online operations: standalone sync may replace
+        # Graph objects, while inotify monitor must update the original identities.
+        baseline_items = snapshot_remote_identities(conf_seed / "items.sqlite3", root_name)
+        transitions = sorted(
+            (old, old.replace("remote-original-name", "remote-renamed-name", 1))
+            for old in baseline_items
+            if old.startswith(f"{root_name}/remote-original-name")
+        )
+        if len(transitions) != 9:
+            return self.fail_result(self.case_id, self.name,
+                f"Expected nine tracked original files, found {len(transitions)}",
+                artifacts, details)
+        original_hashes = {
+            old: hashlib.sha256((stale_root / old).read_bytes()).hexdigest()
+            for old, _ in transitions
+        }
+        details["expected_identity_transitions"] = len(transitions)
 
-        seed_old_txt_path.rename(seed_new_txt_path)
-
-        rename_xlsx_pair(seed_old_xlsx_path, seed_new_xlsx_path)
-
-        rename_pdf_pair(seed_old_pdf_path, seed_new_pdf_path)
-
-        rename_image_set(seed_old_image_path, seed_new_image_path)
-
-
-
-        if seed_old_txt_path.exists() or xlsx_pair_any_exists(seed_old_xlsx_path) or pdf_pair_any_exists(seed_old_pdf_path) or image_set_any_exists(seed_old_image_path):
-
-            self._write_metadata(metadata_file, details)
-
-            return self.fail_result(
-
-                self.case_id,
-
-                self.name,
-
-                "one or more seed old filenames still exist immediately after rename",
-
-                artifacts,
-
-                details,
-
+        if preserve_identity:
+            error = self._move_existing_items_online(
+                context, config_dir=conf_seed, sync_root=seed_root,
+                root_name=root_name, moves=transitions,
+                stdout_file=remote_rename_stdout, stderr_file=remote_rename_stderr,
+                details=details,
             )
+            if error:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name, error, artifacts, details)
+        else:
+            seed_old_txt_path.rename(seed_new_txt_path)
+            rename_xlsx_pair(seed_old_xlsx_path, seed_new_xlsx_path)
+            rename_pdf_pair(seed_old_pdf_path, seed_new_pdf_path)
+            rename_image_set(seed_old_image_path, seed_new_image_path)
+            remote_rename_command = [
+                context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+                "--single-directory", root_name, "--confdir", str(conf_seed),
+            ]
+            context.log(f"Executing Test Case {self.case_id} {scenario_id} standalone rename: {command_to_string(remote_rename_command)}")
+            remote_rename_result = run_command(remote_rename_command, cwd=context.repo_root)
+            write_text_file(remote_rename_stdout, remote_rename_result.stdout)
+            write_text_file(remote_rename_stderr, remote_rename_result.stderr)
+            details["remote_rename_returncode"] = remote_rename_result.returncode
+            if remote_rename_result.returncode != 0:
+                return self.fail_result(self.case_id, self.name,
+                    f"standalone rename propagation failed with status {remote_rename_result.returncode}",
+                    artifacts, details)
 
-
-
-        if not seed_new_txt_path.is_file() or not xlsx_pair_all_files(seed_new_xlsx_path) or not pdf_pair_all_files(seed_new_pdf_path) or not image_set_all_files(seed_new_image_path):
-
-            self._write_metadata(metadata_file, details)
-
-            return self.fail_result(
-
-                self.case_id,
-
-                self.name,
-
-                "one or more seed renamed files are missing immediately after rename",
-
-                artifacts,
-
-                details,
-
-            )
-
-
-
-        remote_rename_command = [
-
-            context.onedrive_bin,
-
-            "--display-running-config",
-
-            "--sync",
-
-            "--verbose",
-
-            "--single-directory",
-
-            root_name,
-
-            "--confdir",
-
-            str(conf_seed),
-
-        ]
-
-        context.log(f"Executing Test Case {self.case_id} phase2 remote rename: {command_to_string(remote_rename_command)}")
-
-        remote_rename_result = run_command(remote_rename_command, cwd=context.repo_root)
-
-        write_text_file(remote_rename_stdout, remote_rename_result.stdout)
-
-        write_text_file(remote_rename_stderr, remote_rename_result.stderr)
-
-        details["remote_rename_returncode"] = remote_rename_result.returncode
-
-
-
-        if remote_rename_result.returncode != 0:
-
-            self._write_metadata(metadata_file, details)
-
-            return self.fail_result(
-
-                self.case_id,
-
-                self.name,
-
-                f"remote rename propagation phase failed with status {remote_rename_result.returncode}",
-
-                artifacts,
-
-                details,
-
-            )
-
-
+        if (seed_old_txt_path.exists() or xlsx_pair_any_exists(seed_old_xlsx_path)
+                or pdf_pair_any_exists(seed_old_pdf_path) or image_set_any_exists(seed_old_image_path)):
+            return self.fail_result(self.case_id, self.name,
+                "Mutator still contains one or more original filenames", artifacts, details)
+        if (not seed_new_txt_path.is_file() or not xlsx_pair_all_files(seed_new_xlsx_path)
+                or not pdf_pair_all_files(seed_new_pdf_path) or not image_set_all_files(seed_new_image_path)):
+            return self.fail_result(self.case_id, self.name,
+                "Mutator is missing one or more renamed files", artifacts, details)
+        # No OneDrive client currently owns this database.
+        after_items = snapshot_remote_identities(conf_seed / "items.sqlite3", root_name)
 
         # Phase 3: stale client reconciles both remote renames using existing DB/local state.
 
@@ -994,7 +1010,34 @@ class TestCase0032RemoteRenameReconciliation(E2ETestCase):
 
 
 
-        if stale_old_txt_path.exists() or xlsx_pair_any_exists(stale_old_xlsx_path) or pdf_pair_any_exists(stale_old_pdf_path) or image_set_any_exists(stale_old_image_path):
+        # Both scenario classes must prove their Graph identity semantics using a
+        # fresh independent online download. The mutator's database was read
+        # only after the client stopped, never concurrently with --monitor.
+        verified_items = snapshot_remote_identities(conf_verify / "items.sqlite3", root_name)
+        identity_errors = check_remote_identity_transition(
+            baseline_items, after_items, verified_items, transitions,
+            preserve_identity=preserve_identity,
+        )
+        details["graph_identity_verified_count"] = len(transitions) - len(identity_errors)
+        details["graph_identity_errors"] = identity_errors
+        if identity_errors:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(self.case_id, self.name,
+                "Graph identity evidence failed: " + "; ".join(identity_errors),
+                artifacts, details)
+        if not preserve_identity:
+            archived_differences = [
+                path for path, expected_hash in original_hashes.items()
+                if not (stale_root / path).is_file()
+                or hashlib.sha256((stale_root / path).read_bytes()).hexdigest() != expected_hash
+            ]
+            if archived_differences:
+                self._write_metadata(metadata_file, details)
+                return self.fail_result(self.case_id, self.name,
+                    "--download-only failed to preserve original local bytes after delete/recreate: "
+                    + ", ".join(archived_differences), artifacts, details)
+
+        if preserve_identity and (stale_old_txt_path.exists() or xlsx_pair_any_exists(stale_old_xlsx_path) or pdf_pair_any_exists(stale_old_pdf_path) or image_set_any_exists(stale_old_image_path)):
 
             return self.fail_result(
 

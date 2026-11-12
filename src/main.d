@@ -1580,6 +1580,8 @@ int main(string[] cliArgs) {
 			// entering the monitor loop. Rate-limit any subsequent acquisition attempt so
 			// frequent local filesystem activity cannot hammer the Graph endpoint.
 			MonoTime lastWebSocketAcquisitionAttempt = MonoTime.currTime();
+			// One start signal, then one acknowledgement per inotify worker notification.
+			bool filesystemMonitorStartOrAckPending = true;
 
 			while (performFileSystemMonitoring) {
 				if (shutdownRequested()) {
@@ -1616,8 +1618,6 @@ int main(string[] cliArgs) {
 				}
 				
 				// WebSocket and Webhook Notification Handling
-				bool notificationReceived = false;
-				
 				// If we are doing --upload-only however .. we need to 'ignore' online change.
 				// Also avoid initiating/renewing Microsoft notification infrastructure while
 				// the time safety gate is closed; the monitor remains alive and the normal
@@ -1995,18 +1995,20 @@ int main(string[] cliArgs) {
 								}
 							}
 							
-							// Start the filesystem monitor (inotify) worker and wait for inotify event
-							if (!notificationReceived) {
+							// Start the worker once; acknowledge only a notification actually received.
+							if (filesystemMonitorStartOrAckPending) {
 								filesystemMonitor.send(true);
+								filesystemMonitorStartOrAckPending = false;
 							}
 						}
 						
 						// Adjust sleepTime based on webhook/websocket only when NOT upload_only
-						if (!appConfig.getValueBool("upload_only")) {
+						// Notification renewals are deferred while the system-time gate is closed.
+						// Their expired retry timers must not turn that deferral into a busy loop.
+						if (!appConfig.getValueBool("upload_only") && appConfig.systemTimeAllowsSync()) {
 							if (webhookEnabled) {
 								Duration nextWebhookCheckDuration = oneDriveWebhook.getNextExpirationCheckDuration();
 								if (nextWebhookCheckDuration < sleepTime) sleepTime = nextWebhookCheckDuration;
-								notificationReceived = false;
 							} else if (websocketSupportActiveOrRetryable) {
 								Duration nextWebsocketCheckDuration;
 								if (oneDriveSocketIo !is null) {
@@ -2039,7 +2041,7 @@ int main(string[] cliArgs) {
 						}
 						
 						// ALWAYS wait for FS worker, but only track webhook/websocket if NOT '--upload-only'
-						int res = 1;
+						int res = 0; // No inotify message received unless the worker actually replies.
 						bool onlineSignal = false;
 						bool shutdownDetectedDuringWait = false;
 						bool monitorMessageProducerActive = filesystemMonitor.initialised || webhookEnabled || oneDriveSocketIo !is null;
@@ -2056,6 +2058,10 @@ int main(string[] cliArgs) {
 							performFileSystemMonitoring = false;
 							addShutdownTelemetry("monitor wait exited early due to shutdown request");
 							break;
+						}
+						// The next loop captures pending inotify events before acknowledging.
+						if (res == 1 && filesystemMonitor.initialised) {
+							filesystemMonitorStartOrAckPending = true;
 						}
 
 						// Debug logging of worker status

@@ -178,6 +178,8 @@ class TestCase0084RemoteBatchDeletionReconciliation(MonitorModeTestCaseBase):
         details["subject_monitor_initial_sync_complete"] = monitor_ready
         details["subject_monitor_command"] = command_to_string(monitor_command)
         if not monitor_ready:
+            # _launch_monitor_process() has already shut down the failed
+            # process before returning False; do not call shutdown twice.
             return fail("subject monitor initial synchronisation did not complete")
 
         try:
@@ -252,8 +254,12 @@ class TestCase0084RemoteBatchDeletionReconciliation(MonitorModeTestCaseBase):
             if "Forcing client to use /children API call rather than /delta API" in post_mutation_output:
                 return fail("subject unexpectedly entered forced /children developer path")
             if any(marker in post_mutation_output for marker in (
-                "Uploading file:", "Successfully created the remote directory",
+                "Uploading new file:", "Uploading changed file:",
+                "Uploading modified file:", "Uploading file:",
+                "Deleting item from Microsoft OneDrive:",
                 "Successfully deleted the item from Microsoft OneDrive",
+                "OneDrive Client requested to create this directory online:",
+                "Successfully created the remote directory",
             )):
                 return fail("subject unexpectedly modified remote state during monitor reconciliation")
         finally:
@@ -270,8 +276,12 @@ class TestCase0084RemoteBatchDeletionReconciliation(MonitorModeTestCaseBase):
         if converged.returncode != 0 or build_typed_manifest(subject_root) != expected_final:
             return fail("subject did not converge to stable remote state")
         if any(marker in converged.stdout for marker in (
-            "Uploading file:", "Successfully created the remote directory",
+            "Uploading new file:", "Uploading changed file:",
+            "Uploading modified file:", "Uploading file:",
+            "Deleting item from Microsoft OneDrive:",
             "Successfully deleted the item from Microsoft OneDrive",
+            "OneDrive Client requested to create this directory online:",
+            "Successfully created the remote directory",
         )):
             return fail("unexpected remote mutation during subject convergence")
 

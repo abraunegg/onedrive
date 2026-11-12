@@ -240,10 +240,13 @@ class TestCase0083DeltaChildrenReconciliationParity(MonitorModeTestCaseBase):
             for phase in ("subject_reconcile", "subject_converge"):
                 combined = "\n".join((phase_files[phase][0].read_text(encoding="utf-8", errors="replace"),
                                        phase_files[phase][1].read_text(encoding="utf-8", errors="replace")))
-                if any(s in combined for s in (
-                    f"Successfully created the remote directory ./{source_relative}",
-                    f"Successfully created the remote directory ./{destination_relative}",
-                    f"Uploading file: ./{moved_text}",
+                if any(marker in combined for marker in (
+                    "Uploading new file:", "Uploading changed file:",
+                    "Uploading modified file:", "Uploading file:",
+                    "Deleting item from Microsoft OneDrive:",
+                    "Successfully deleted the item from Microsoft OneDrive",
+                    "OneDrive Client requested to create this directory online:",
+                    "Successfully created the remote directory",
                 )):
                     fail(f"unintended remote mutation detected in {phase}")
             self.write_metadata(scenario_state / "metadata.txt", scenario_details)

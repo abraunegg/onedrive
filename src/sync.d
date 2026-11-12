@@ -204,7 +204,10 @@ class SyncEngine {
 	private Mutex fileUploadFailureMutex;
 	// List of path names changed online, but not changed locally when using --dry-run
 	string[] pathsRenamed;
-	// List of path names retained when using --download-only --cleanup-local-files + using a 'sync_list'
+	// Local paths retained during --download-only --cleanup-local-files scanning.
+	// Retention may be due to an existing DB record, client-side filtering
+	// (including sync_list exclusions), symlinks, or an earlier retention decision.
+	// sync_list inclusion alone does NOT protect an untracked in-scope file from cleanup.
 	string[] pathsRetained;
 	// List of paths that were a POSIX case-insensitive match, thus could not be created online
 	string[] posixViolationPaths;
@@ -445,6 +448,17 @@ class SyncEngine {
 		}
 	}
 
+	// sync_root_files applies only to files immediately beneath sync_dir.
+	// Item paths may have a leading "./" or "/" prefix.
+	private bool isLogicalSyncRootFilePath(string itemPath) {
+		if (itemPath.startsWith("./")) {
+			itemPath = itemPath[2 .. $];
+		} else if (itemPath.startsWith("/")) {
+			itemPath = itemPath[1 .. $];
+		}
+		return !itemPath.empty && !itemPath.canFind('/');
+	}
+	
 	// Publish all online-to-local filesystem effects accumulated since the
 	// previous monitor capture. Delegates are invoked outside the mutex.
 	void publishExpectedLocalEffects() {
@@ -2252,8 +2266,6 @@ class SyncEngine {
 		}
 	}
 
-
-
 	// Submit one item from a generated /children enumeration into the same bounded
 	// reconciliation path used by native /delta. The generated traversal has already
 	// applied client-side filtering, so this preserves the existing generated-response
@@ -2731,6 +2743,16 @@ class SyncEngine {
 						existingDatabaseItem.syncStatus = "Y";
 						itemDB.upsert(existingDatabaseItem);
 					}
+				// An online deletion in --download-only mode without cleanup must
+				// preserve the local item and its database identity. This guard
+				// applies only to deletion events: online content updates still
+				// use normal conflict detection and safeBackup handling, unless
+				// bypass_data_preservation is enabled.
+				} else if (appConfig.getValueBool("download_only") && !cleanupLocalFiles) {
+					if (verboseLogging) {
+						string retainedLocalPath = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
+						addLogEntry("Retaining local item after online deletion as --download-only is configured without --cleanup-local-files: " ~ retainedLocalPath, ["verbose"]);
+					}
 				// In fast monitor passes defer deletes from raw /delta tombstones.
 				} else if (shouldDeferDeletedItemsFromRawDelta()) {
 					if (verboseLogging) {
@@ -3093,7 +3115,9 @@ class SyncEngine {
 							// How is this item now out of scope?
 							// is sync_list configured
 							if (syncListConfigured) {
-								// sync_list configured and in use
+								// selectiveSync.isPathExcludedViaSyncList() returns:
+								//   true  = excluded by sync_list
+								//   false = NOT excluded by sync_list (no retention guarantee)
 								if (selectiveSync.isPathExcludedViaSyncList(onedriveJSONItem["parentReference"]["name"].str)) {
 									// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
 									if (debugLogging) {addLogEntry("This previously synced item is now excluded from being synced due to sync_list exclusion", ["debug"]);}
@@ -3293,10 +3317,12 @@ class SyncEngine {
 					// What path are we checking?
 					if (debugLogging) {addLogEntry("Path to check against 'sync_list' entries: " ~ newItemPath, ["debug"]);}
 
-					// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
+					// selectiveSync.isPathExcludedViaSyncList() returns:
+					//   true  = excluded by sync_list
+					//   false = NOT excluded by sync_list (no retention guarantee)
 					if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
 						// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
-						if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (rootName(newItemPath) == "") ) {
+						if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (isLogicalSyncRootFilePath(newItemPath)) ) {
 							// This is a file
 							// We are configured to sync all files in the root
 							// This is a file in the logical configured root
@@ -4387,7 +4413,6 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-
 
 	// If the JSON item IS in the database, this will be an update to an existing in-sync item
 	void applyPotentiallyChangedItem(Item existingDatabaseItem, string existingItemPath, Item changedOneDriveItem, string changedItemPath, JSONValue onedriveJSONItem) {
@@ -6526,6 +6551,18 @@ class SyncEngine {
 						}
 					}
 
+					// Generated /children reconciliation can also discover online
+					// deletions. Archive mode must retain these items locally, just
+					// as it retains them for native /delta tombstones. Keep the
+					// database identity and do not enter the destructive path.
+					if (appConfig.getValueBool("download_only") && !cleanupLocalFiles) {
+						if (verboseLogging) {
+							string retainedLocalPath = computeItemPath(outOfSyncItem.driveId, outOfSyncItem.id);
+							addLogEntry("Retaining local item absent from online snapshot as --download-only is configured without --cleanup-local-files: " ~ retainedLocalPath, ["verbose"]);
+						}
+						continue;
+					}
+
 					if (!dryRun) {
 						// An item absent from a generated authoritative view is semantically the
 						// same online deletion represented by a raw /delta tombstone. For tracked
@@ -7201,7 +7238,13 @@ class SyncEngine {
 		// - skip_dir
 		// - sync_list
 		// - skip_size
-		// Return a true|false response
+		// checkPathAgainstClientSideFiltering() returns:
+		//   true  = excluded by one of the active client-side filters
+		//   false = NOT excluded by these filters (not a retention instruction)
+		// A nonexistent path also returns false without evaluating the filters.
+		// This is a selection check: in --download-only --cleanup-local-files,
+		// an untracked path with a false result is eligible for cleanup unless
+		// some separate protection applies.
 		bool clientSideRuleExcludesPath = false;
 
 		// Reset global syncListDirExcluded
@@ -7320,13 +7363,16 @@ class SyncEngine {
 		if (!clientSideRuleExcludesPath) {
 			if (localFilePath != ".") {
 				if (syncListConfigured) {
-					// sync_list configured and in use
+					// sync_list configured and in use.
+					// selectiveSync.isPathExcludedViaSyncList() returns:
+					//   true  = excluded by sync_list
+					//   false = NOT excluded by sync_list (not a retention instruction)
 					if (selectiveSync.isPathExcludedViaSyncList(localFilePath)) {
-						if ((isFile(localFilePath)) && (appConfig.getValueBool("sync_root_files")) && (rootName(localFilePath.strip('.').strip('/')) == "")) {
+						if ((isFile(localFilePath)) && (appConfig.getValueBool("sync_root_files")) && (isLogicalSyncRootFilePath(localFilePath))) {
 							if (debugLogging) {addLogEntry("Not skipping path due to sync_root_files inclusion: " ~ localFilePath, ["debug"]);}
 						} else {
 							if (exists(appConfig.syncListFilePath)){
-								// skipped most likely due to inclusion in sync_list
+								// Excluded by sync_list; a true result means exclusion, not inclusion.
 
 								// is this path a file or directory?
 								if (isFile(localFilePath)) {
@@ -7814,10 +7860,12 @@ class SyncEngine {
 				// What path are we checking against sync_list?
 				if (debugLogging) {addLogEntry("Path to check against 'sync_list' entries: " ~ newItemPath, ["debug"]);}
 
-				// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
+				// selectiveSync.isPathExcludedViaSyncList() returns:
+				//   true  = excluded by sync_list
+				//   false = NOT excluded by sync_list (no retention guarantee)
 				if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
-					if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (rootName(newItemPath) == "") ) {
+					if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (isLogicalSyncRootFilePath(newItemPath)) ) {
 						// This is a file
 						// We are configured to sync all files in the root
 						// This is a file in the logical root
@@ -7950,10 +7998,6 @@ class SyncEngine {
 		// return if path is excluded
 		return clientSideRuleExcludesPath;
 	}
-
-
-
-
 
 	// Ensure the path passed in, is in the correct format to use when evaluating 'sync_list' rules
 	string ensureStartsWithDotSlash(string inputPath) {
@@ -9455,9 +9499,11 @@ class SyncEngine {
 						addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
 					} else {
 						addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
-						// Set the cleanup flag
-						cleanupDataPass = true;
 					}
+				}
+				// Set cleanup mode independently of progress logging.
+				if (cleanupLocalFiles) {
+					cleanupDataPass = true;
 				}
 			}
 		}
@@ -9727,9 +9773,14 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 
-		// Skip symlinks as early as possible, including dangling symlinks
+		// Skip symlinks as early as possible, including dangling symlinks.
+		// A cleanup pass must never traverse or remove a symlink, regardless of
+		// the independent skip_symlinks option. Log the actual reason for the skip.
 		if (isSymlink(path)) {
-			// Should this path be skipped?
+			if (cleanupDataPass) {
+				if (verboseLogging) {addLogEntry("Skipping symbolic link during --download-only --cleanup-local-files cleanup pass: " ~ path, ["verbose"]);}
+				return;
+			}
 			if (appConfig.getValueBool("skip_symlinks")) {
 				if (verboseLogging) {addLogEntry("Skipping item - skip symbolic links configured: " ~ path, ["verbose"]);}
 				return;
@@ -9845,10 +9896,12 @@ class SyncEngine {
 				// - sync_list
 				// - skip_size
 				if (!unwanted) {
-					// If this is not the cleanup data pass when using --download-only --cleanup-local-files we dont want to exclude files we need to delete locally when using 'sync_list'
-					if (!cleanupDataPass) {
-						unwanted = checkPathAgainstClientSideFiltering(path);
-					}
+					// checkPathAgainstClientSideFiltering() returns:
+					//   true  = excluded by active filtering, including sync_list
+					//   false = NOT excluded (potentially eligible for cleanup)
+					// Do NOT treat a false result as a direction to retain the file.
+					// Excluded paths remain outside local cleanup scope.
+					unwanted = checkPathAgainstClientSideFiltering(path);
 				}
 
 				// Check this path against the Microsoft Naming Conventions & Restrictions
@@ -9870,6 +9923,7 @@ class SyncEngine {
 			if (!unwanted) {
 				// At this point, this path, we want to scan for new data as it is not excluded
 				if (isDir(path)) {
+					bool cleanupParentAfterTraversal = false;
 					// Was the path found in the database?
 					if (!itemFoundInDB) {
 						// Path not found in database when searching all drive id's
@@ -9880,8 +9934,9 @@ class SyncEngine {
 							if (debugLogging) {addLogEntry("Adding path to create online (directory inclusion): " ~ path, ["debug"]);}
 							addPathToCreateOnline(path);
 						} else {
-							// we need to clean up this directory
-							if (verboseLogging) {addLogEntry("Attempting removal of local directory as --download-only & --cleanup-local-files configured", ["verbose"]);}
+							// Assess this DB-unknown directory and its children for cleanup.
+							// No filesystem removal has been attempted at this point.
+							if (verboseLogging) {addLogEntry("Evaluating untracked local directory for cleanup due to --download-only --cleanup-local-files operation: " ~ path, ["verbose"]);}
 
 							// Remove any children of this path if they still exist
 							// Resolve 'Directory not empty' error when deleting local files
@@ -9902,25 +9957,28 @@ class SyncEngine {
 										if (verboseLogging) {addLogEntry("Path already marked for retention - retaining path: " ~ normalisedChildPath, ["verbose"]);}
 									}
 
-									// 2. If not already retained, evaluate via sync_list
-									if (pathShouldBeRemoved && syncListConfigured) {
-										// selectiveSync.isPathExcludedViaSyncList() returns:
-										//   true  = excluded by sync_list
-										//   false = included / must be retained
-										if (!selectiveSync.isPathExcludedViaSyncList(child.name)) {
-											pathShouldBeRemoved = false;
-											if (verboseLogging) {addLogEntry("Path retained due to 'sync_list' inclusion: " ~ normalisedChildPath, ["verbose"]);}
-										}
+									// 2. Only an untracked, in-scope, non-symlink child may be removed.
+									// checkPathAgainstClientSideFiltering() returns:
+									//   true  = excluded by filtering (outside cleanup scope)
+									//   false = NOT excluded (cleanup may proceed if otherwise eligible)
+									// Evaluate protections in the original short-circuit order.
+									if (pathShouldBeRemoved && pathFoundInDatabase(normalisedChildPath)) {
+										pathShouldBeRemoved = false;
+										if (verboseLogging) {addLogEntry("Retaining local child tracked in database during cleanup: " ~ normalisedChildPath, ["verbose"]);}
+									}
+									if (pathShouldBeRemoved && isSymlink(child.name)) {
+										pathShouldBeRemoved = false;
+										if (verboseLogging) {addLogEntry("Retaining local symbolic link during cleanup: " ~ normalisedChildPath, ["verbose"]);}
+									}
+									if (pathShouldBeRemoved && checkPathAgainstClientSideFiltering(child.name)) {
+										pathShouldBeRemoved = false;
+										if (verboseLogging) {addLogEntry("Retaining local child excluded by client-side filtering during cleanup: " ~ normalisedChildPath, ["verbose"]);}
 									}
 
 									// What action should be taken?
 									if (pathShouldBeRemoved) {
-										// Path should be removed
-										if (isDir(child.name)) {
-											if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ normalisedChildPath, ["verbose"]);}
-										} else {
-											if (verboseLogging) {addLogEntry("Attempting removal of local file: " ~ normalisedChildPath, ["verbose"]);}
-										}
+										// This child passed the cleanup eligibility checks.
+										// A removal attempt is logged only at the filesystem operation.
 
 										// Are we in a --dry-run scenario?
 										if (!dryRun) {
@@ -9928,15 +9986,27 @@ class SyncEngine {
 											if (exists(child.name)) {
 												try {
 													if (attrIsDir(child.linkAttributes)) {
+														if (!dirEntries(child.name, SpanMode.shallow).empty) {
+															if (verboseLogging) {addLogEntry("Local directory not removed because it is not empty: " ~ normalisedChildPath, ["verbose"]);}
+															continue;
+														}
+														if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ normalisedChildPath, ["verbose"]);}
 														rmdir(child.name);
 														if (!exists(child.name)) notifyExpectedLocalRemoval(child.name);
-														// Log removal
-														if (verboseLogging) {addLogEntry("Removed local directory: " ~ normalisedChildPath, ["verbose"]);}
+														// Only report success once the directory is actually absent.
+														if (verboseLogging) {
+															if (!exists(child.name)) {addLogEntry("Removed local directory: " ~ normalisedChildPath, ["verbose"]);}
+															else {addLogEntry("Local directory remains after removal attempt: " ~ normalisedChildPath, ["verbose"]);}
+														}
 													} else {
+														if (verboseLogging) {addLogEntry("Attempting removal of local file: " ~ normalisedChildPath, ["verbose"]);}
 														safeRemove(child.name);
 														if (!exists(child.name)) notifyExpectedLocalRemoval(child.name);
-														// Log removal
-														if (verboseLogging) {addLogEntry("Removed local file: " ~ normalisedChildPath, ["verbose"]);}
+														// Report removal only if the file actually disappeared.
+														if (verboseLogging) {
+															if (!exists(child.name)) {addLogEntry("Removed local file: " ~ normalisedChildPath, ["verbose"]);}
+															else {addLogEntry("Local file remains after removal attempt: " ~ normalisedChildPath, ["verbose"]);}
+														}
 													}
 												} catch (FileException e) {
 													displayFileSystemErrorMessage(e.msg, thisFunctionName, normalisedChildPath);
@@ -9944,12 +10014,8 @@ class SyncEngine {
 											}
 										}
 									} else {
-										// Path should be retained
-										if (isDir(child.name)) {
-											if (verboseLogging) {addLogEntry("Local directory should be retained due to 'sync_list' inclusion: " ~ child.name, ["verbose"]);}
-										} else {
-											if (verboseLogging) {addLogEntry("Local file should be retained due to 'sync_list' inclusion: " ~ child.name, ["verbose"]);}
-										}
+										// The protection that caused retention was logged above.
+										// Do not misattribute retention to sync_list inclusion.
 
 										// Add this path to the retention list if not already present
 										if (!canFind(pathsRetained, normalisedChildPath)) {
@@ -9969,15 +10035,11 @@ class SyncEngine {
 								string normalisedParentPath = ensureStartsWithDotSlash(buildNormalizedPath(path));
 								string parentPrefix = normalisedParentPath ~ "/";
 
-								// 1. sync_list evaluation for the parent path itself
-								if (syncListConfigured) {
-									// selectiveSync.isPathExcludedViaSyncList() returns:
-									//   true  = excluded by sync_list
-									//   false = included / must be retained
-									if (!selectiveSync.isPathExcludedViaSyncList(path)) {
-										parentalPathShouldBeRemoved = false;
-										if (verboseLogging) {addLogEntry("Parent path retained due to 'sync_list' inclusion: " ~ path, ["verbose"]);}
-									}
+								// 1. An excluded parent is outside cleanup scope.
+								// true = excluded; false = NOT excluded (not automatic retention).
+								if (checkPathAgainstClientSideFiltering(path)) {
+									parentalPathShouldBeRemoved = false;
+									if (verboseLogging) {addLogEntry("Parent path retained outside cleanup scope: " ~ path, ["verbose"]);}
 								}
 
 								// 2. If parent path exists in the database, it must be retained
@@ -9998,27 +10060,12 @@ class SyncEngine {
 								}
 
 								// What action should be taken?
-								if (parentalPathShouldBeRemoved) {
-									// Remove the parental path now that it is empty of children
-									if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ path, ["verbose"]);}
-
-									// are we in a --dry-run scenario?
-									if (!dryRun) {
-										// No --dry-run ... process local delete
-										if (exists(path)) {
-											try {
-												rmdirRecurse(path);
-												if (!exists(path)) notifyExpectedLocalRemoval(path);
-												if (verboseLogging) {addLogEntry("Removed local directory: " ~ path, ["verbose"]);}
-
-											} catch (FileException e) {
-												displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
-											}
-										}
-									}
+								if (parentalPathShouldBeRemoved && path != ".") {
+									cleanupParentAfterTraversal = true;
 								} else {
-									// Path needs to be retained
-									if (verboseLogging) {addLogEntry("Local parent directory should be retained due to 'sync_list' inclusion: " ~ path, ["verbose"]);}
+									// Retention conditions were logged above. The sync root (".") is
+									// also never eligible for local cleanup.
+									if (verboseLogging && path == ".") {addLogEntry("Retaining local synchronisation root; never a cleanup target: " ~ path, ["verbose"]);}
 
 									// Add the parent path to the retention list if not already present
 									if (!canFind(pathsRetained, normalisedParentPath)) {
@@ -10068,6 +10115,31 @@ class SyncEngine {
 							}
 						}
 					}
+
+					// Remove an eligible empty parent only after its children were processed.
+					if (cleanupParentAfterTraversal) {
+						// This parent is a candidate; removal occurs only when actually empty.
+
+						// are we in a --dry-run scenario?
+						if (!dryRun) {
+							// No --dry-run ... process local delete
+							if (exists(path) && dirEntries(path, SpanMode.shallow).empty) {
+								try {
+									if (verboseLogging) {addLogEntry("Attempting removal of local directory: " ~ path, ["verbose"]);}
+									rmdir(path);
+									if (!exists(path)) notifyExpectedLocalRemoval(path);
+									if (verboseLogging) {
+										if (!exists(path)) {addLogEntry("Removed local directory: " ~ path, ["verbose"]);}
+										else {addLogEntry("Local directory remains after removal attempt: " ~ path, ["verbose"]);}
+									}
+
+								} catch (FileException e) {
+									displayFileSystemErrorMessage(e.msg, thisFunctionName, path);
+								}
+							}
+						}
+					}
+
 				} else {
 					// https://github.com/abraunegg/onedrive/issues/984
 					// path is not a directory, is it a valid file?
@@ -10131,33 +10203,35 @@ class SyncEngine {
 									if (verboseLogging) {addLogEntry("Path already marked for retention - retaining path: " ~ normalisedFilePath, ["verbose"]);}
 								}
 
-								// 2. If not already retained, evaluate via sync_list
-								if (pathShouldBeRemoved && syncListConfigured) {
-									// selectiveSync.isPathExcludedViaSyncList() returns:
-									//   true  = excluded by sync_list
-									//   false = included / must be retained
-									if (!selectiveSync.isPathExcludedViaSyncList(path)) {
-										pathShouldBeRemoved = false;
-										if (verboseLogging) {addLogEntry("Path retained due to 'sync_list' inclusion: " ~ normalisedFilePath, ["verbose"]);}
-									}
+								// 2. A file outside the active selection is never a cleanup candidate.
+								// true = excluded; false = NOT excluded (cleanup may proceed).
+								if (pathShouldBeRemoved && checkPathAgainstClientSideFiltering(path)) {
+									pathShouldBeRemoved = false;
+									if (verboseLogging) {addLogEntry("Path retained outside cleanup scope: " ~ normalisedFilePath, ["verbose"]);}
 								}
 
 								// What action should be taken?
 								if (pathShouldBeRemoved) {
-									// we need to clean up this file
+									// This is an untracked, in-scope file eligible for cleanup.
+									// Explicitly report WHY the client reached this cleanup action.
+									// "Attempting" records the configured intent, not filesystem success.
+									// Keep the path-specific attempt and verified outcome logs below.
 									if (verboseLogging) {addLogEntry("Attempting removal of local file as --download-only & --cleanup-local-files configured", ["verbose"]);}
-									// are we in a --dry-run scenario?
-									if (verboseLogging) {addLogEntry("Attempting removal of local file: " ~ normalisedFilePath, ["verbose"]);}
 									if (!dryRun) {
 										// No --dry-run ... process local file delete
+										if (verboseLogging) {addLogEntry("Attempting removal of local file: " ~ normalisedFilePath, ["verbose"]);}
 										safeRemove(path);
 										if (!exists(path)) notifyExpectedLocalRemoval(path);
-										// Log removal
-										if (verboseLogging) {addLogEntry("Removed local file: " ~ normalisedFilePath, ["verbose"]);}
+										// Log success only if the file is actually absent.
+										if (verboseLogging) {
+											if (!exists(path)) {addLogEntry("Removed local file: " ~ normalisedFilePath, ["verbose"]);}
+											else {addLogEntry("Local file remains after removal attempt: " ~ normalisedFilePath, ["verbose"]);}
+										}
 									}
 								} else {
-									// Path should be retained
-									if (verboseLogging) {addLogEntry("Local file should be retained due to 'sync_list' inclusion: " ~ normalisedFilePath, ["verbose"]);}
+									// Retention reason was logged above: a previous retention decision
+									// or a true client-side filtering result (excluded from cleanup).
+									// sync_list inclusion by itself does not require retention.
 
 									// Add this path to the retention list if not already present
 									if (!canFind(pathsRetained, normalisedFilePath)) {
@@ -12837,7 +12911,6 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-
 
 	// Mark the existing generated-response database subtree out-of-sync without
 	// retaining an account-wide Item[] snapshot. This preserves the traversal order
@@ -16441,8 +16514,6 @@ class SyncEngine {
 		}
 	}
 
-
-
 	// Query OneDrive for file details of a given path, returning either the 'webURL' or 'lastModifiedBy' JSON facet
 	void queryOneDriveForFileDetails(string inputFilePath, string runtimePath, string outputType) {
 		// Function Start Time
@@ -16870,7 +16941,6 @@ class SyncEngine {
 			displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
 		}
 	}
-
 
 	// Cancel a Microsoft Graph upload session recorded in a local session_upload.* file
 	void cancelUploadSessionIfPresent(string sessionFilePath) {

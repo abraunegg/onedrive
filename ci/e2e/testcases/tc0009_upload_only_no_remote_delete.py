@@ -34,11 +34,20 @@ class TestCase0009UploadOnlyNoRemoteDelete(E2ETestCase):
         seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(seed_conf)]
         seed_result = run_command(seed_command, cwd=context.repo_root)
         write_text_file(seed_stdout, seed_result.stdout); write_text_file(seed_stderr, seed_result.stderr)
+        if seed_result.returncode != 0:
+            return self.fail_result(self.case_id, self.name, f"Remote seed failed with status {seed_result.returncode}", [str(seed_stdout), str(seed_stderr)], {"seed_returncode": seed_result.returncode, "root_name": root_name})
         if keep_file.exists(): keep_file.unlink()
         upload_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--upload-only", "--no-remote-delete", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(upload_conf)]
         upload_result = run_command(upload_command, cwd=context.repo_root)
         write_text_file(upload_stdout, upload_result.stdout); write_text_file(upload_stderr, upload_result.stderr)
         verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
+        if upload_result.returncode != 0:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Upload-only no-remote-delete failed with status {upload_result.returncode}; independent verification skipped",
+                [str(path) for path in (seed_stdout, seed_stderr, upload_stdout, upload_stderr)],
+                {"upload_result_returncode": upload_result.returncode},
+            )
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); remote_manifest = build_manifest(verify_root); write_manifest(remote_manifest_file, remote_manifest)
         write_text_file(metadata_file, "\n".join([f"root_name={root_name}", f"seed_returncode={seed_result.returncode}", f"upload_returncode={upload_result.returncode}", f"verify_returncode={verify_result.returncode}"]) + "\n")
@@ -48,4 +57,11 @@ class TestCase0009UploadOnlyNoRemoteDelete(E2ETestCase):
         if upload_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"--upload-only --no-remote-delete failed with status {upload_result.returncode}", artifacts, details)
         if verify_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"Remote verification failed with status {verify_result.returncode}", artifacts, details)
         if f"{root_name}/keep.txt" not in remote_manifest: return self.fail_result(self.case_id, self.name, f"Remote file was unexpectedly deleted despite --no-remote-delete: {root_name}/keep.txt", artifacts, details)
+        # Upload-only must not pull the remote-only file back into the local
+        # sync tree, even though --no-remote-delete preserves it online.
+        if keep_file.exists():
+            return self.fail_result(self.case_id, self.name, "--upload-only unexpectedly downloaded remote-only keep.txt", artifacts, details)
+        verified_file = verify_root / f"{root_name}/keep.txt"
+        if not verified_file.is_file() or verified_file.read_bytes() != "keep remote\n".encode("utf-8"):
+            return self.fail_result(self.case_id, self.name, f"Verified file content mismatch: {f"{root_name}/keep.txt"}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)

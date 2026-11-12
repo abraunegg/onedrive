@@ -250,7 +250,13 @@ class ClientSideFiltering {
 		return skipDotfiles;
 	}
 	
-	// Match against 'sync_list' only
+	// Match against 'sync_list' only.
+	// selectiveSync.isPathExcludedViaSyncList() returns:
+	//   true  = excluded by sync_list (outside the selected sync scope)
+	//   false = NOT excluded by sync_list (inside scope, or no valid rules loaded)
+	// IMPORTANT: false is a scope result, NOT an instruction to retain local data.
+	// In --download-only --cleanup-local-files mode an untracked, in-scope local
+	// item may be removed unless another protection applies (for example .nosync).
 	bool isPathExcludedViaSyncList(string path) {
 		// Are there 'sync_list' rules to process?
 		if (count(syncListRules) > 0) {
@@ -401,8 +407,11 @@ class ClientSideFiltering {
 		return false;
 	}
 	
-	// test if the given path is not included in the allowed syncListRules
-	// if there are no allowed syncListRules always return false
+	// Evaluate the given path against the sync_list rule set:
+	//   true  = excluded by sync_list
+	//   false = NOT excluded by sync_list
+	// No valid rules and the logical root itself both return false.
+	// This is a selection decision, not a local-data retention decision.
 	private bool isPathExcluded(string path) {
 		// function variables
 		bool exclude = false;
@@ -584,8 +593,8 @@ class ClientSideFiltering {
 								finalResult = false;
 								// parental path match, break and search rules no more given include rule match
 								break;
-							} else {
-								// Exclude rule
+							} else if (ruleSegments.length <= pathSegments.length) {
+								// Exclude rule: a deeper descendant must not exclude its ancestor
 								{addLogEntry("Evaluation against 'sync_list' rule result: exclusion parent root path match to rule - path to be excluded", ["debug"]);}
 								excludeParentMatched = true;
 								exclude = true;

@@ -5,14 +5,15 @@ from pathlib import Path
 
 from framework.context import E2EContext
 from framework.result import TestResult
-from framework.pdf import REVISION_0 as PDF_REVISION_0, REVISION_1 as PDF_REVISION_1, create_random_pdf_pair, validate_pdf_pair, rename_pdf_pair, pdf_pair_hashes, pdf_pair_backup_files, validate_pdf_pair_backups, pdf_pair_backup_hashes, pdf_pair_any_exists
-from framework.image import REVISION_0 as IMAGE_REVISION_0, REVISION_1 as IMAGE_REVISION_1, create_random_image_set, validate_image_set, rename_image_set, image_set_hashes, image_set_backup_files, validate_image_set_backups, image_set_backup_hashes, image_set_any_exists, image_set_all_files
+from framework.pdf import large_pdf_relative, REVISION_0 as PDF_REVISION_0, REVISION_1 as PDF_REVISION_1, create_random_pdf_pair, validate_pdf_pair, rename_pdf_pair, pdf_pair_hashes, pdf_pair_backup_files, validate_pdf_pair_backups, pdf_pair_backup_hashes, pdf_pair_any_exists
+from framework.image import image_set_relatives, REVISION_0 as IMAGE_REVISION_0, REVISION_1 as IMAGE_REVISION_1, create_random_image_set, validate_image_set, rename_image_set, image_set_hashes, image_set_backup_files, validate_image_set_backups, image_set_backup_hashes, image_set_any_exists, image_set_all_files
 from framework.utils import reset_directory, write_text_file
-from framework.xlsx import REVISION_0, REVISION_1, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, xlsx_pair_hashes, xlsx_pair_backup_files, validate_xlsx_pair_backups, xlsx_pair_backup_hashes, xlsx_pair_any_exists
+from framework.xlsx import large_xlsx_relative, REVISION_0, REVISION_1, create_random_xlsx_pair, validate_xlsx_pair, rename_xlsx_pair, xlsx_pair_hashes, xlsx_pair_backup_files, validate_xlsx_pair_backups, xlsx_pair_backup_hashes, xlsx_pair_any_exists
 from testcases.safe_backup_case_base import SafeBackupCaseBase
+from testcases.monitor_case_base import MonitorModeTestCaseBase
 
 
-class TestCase0069SafeBackupRemoteMoveDestinationCollisionValidation(SafeBackupCaseBase):
+class TestCase0069SafeBackupRemoteMoveDestinationCollisionValidation(SafeBackupCaseBase, MonitorModeTestCaseBase):
     case_id = "0069"
     name = "safeBackup remote move destination collision validation"
     description = (
@@ -39,7 +40,15 @@ class TestCase0069SafeBackupRemoteMoveDestinationCollisionValidation(SafeBackupC
         conf_mutator = work / "conf-mutator"
         conf_verify = work / "conf-verify"
         for conf, root in ((conf_seed, seed_root), (conf_validator, validator_root), (conf_mutator, mutator_root), (conf_verify, verify_root)):
-            self._prepare_config(context, conf, root)
+            # The mutator uses a real, already-tracked inotify rename in --monitor
+            # mode. Set these options from its first run, avoiding a config
+            # change/resync before the remote move.
+            monitor_config = [
+                'monitor_interval = "300"',
+                'monitor_fullscan_frequency = "0"',
+                'disable_websocket_support = "true"',
+            ] if conf == conf_mutator else None
+            self._prepare_config(context, conf, root, extra_lines=monitor_config)
 
         root_name = f"ZZ_E2E_TC0069_{context.run_id}_{os.getpid()}"
         text_source = f"{root_name}/source/move-me.txt"
@@ -134,25 +143,83 @@ class TestCase0069SafeBackupRemoteMoveDestinationCollisionValidation(SafeBackupC
         details["generated_occupant_large_pdf_size"] = int(generated_occupant_pdf["large_size_bytes"])
         details["generated_occupant_image_sizes"] = {k: int(v) for k, v in generated_occupant_images.items() if k.endswith("_size_bytes")}
 
-        mutator_text_source = mutator_root / text_source
-        mutator_text_destination = mutator_root / text_destination
-        mutator_xlsx_source = mutator_root / xlsx_source
-        mutator_xlsx_destination = mutator_root / xlsx_destination
-        mutator_pdf_source = mutator_root / pdf_source
-        mutator_pdf_destination = mutator_root / pdf_destination
-        mutator_image_source = mutator_root / image_source
-        mutator_image_destination = mutator_root / image_destination
-        mutator_text_destination.parent.mkdir(parents=True, exist_ok=True)
-        os.replace(mutator_text_source, mutator_text_destination)
-        rename_xlsx_pair(mutator_xlsx_source, mutator_xlsx_destination)
-        rename_pdf_pair(mutator_pdf_source, mutator_pdf_destination)
-        rename_image_set(mutator_image_source, mutator_image_destination)
-
-        mutator_move = self._run_phase(context, label="mutator remote move", command=self._single_directory_command(context, root_name=root_name, config_dir=conf_mutator), stdout_file=phase_files["mutator_move"][0], stderr_file=phase_files["mutator_move"][1])
-        details["mutator_move_returncode"] = mutator_move.returncode
-        if mutator_move.returncode != 0:
+        # A standalone --sync after renaming local files can be interpreted as
+        # delete-and-reupload. That does not prove a remote DriveItem move and
+        # makes this collision test capable of passing the wrong code path.
+        # Use the already-tracked mutator under --monitor instead, following
+        # TC0060 and TC0065. All moves must produce the inotify move markers;
+        # no additional sync pass is introduced.
+        monitor_command = [
+            context.onedrive_bin, "--display-running-config", "--monitor",
+            "--upload-only", "--verbose", "--verbose", "--single-directory",
+            root_name, "--confdir", str(conf_mutator),
+        ]
+        process, monitor_ready = self._launch_monitor_process(
+            context, monitor_command, *phase_files["mutator_move"],
+        )
+        details["mutator_monitor_initial_sync_complete"] = monitor_ready
+        move_processed = False
+        move_segment = ""
+        try:
+            if monitor_ready:
+                move_offset = self._prepare_monitor_for_local_mutation(
+                    process, phase_files["mutator_move"][0], details,
+                )
+                if details.get("monitor_ready_after_initial_sync"):
+                    # Each local move must retain its already-tracked remote
+                    # identity, including both payloads of paired fixtures.
+                    text_destination_path = mutator_root / text_destination
+                    text_destination_path.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(mutator_root / text_source, text_destination_path)
+                    rename_xlsx_pair(mutator_root / xlsx_source, mutator_root / xlsx_destination)
+                    rename_pdf_pair(mutator_root / pdf_source, mutator_root / pdf_destination)
+                    rename_image_set(mutator_root / image_source, mutator_root / image_destination)
+                    image_sources = image_set_relatives(image_source)
+                    image_destinations = image_set_relatives(image_destination)
+                    moved_items = [
+                        (text_source, text_destination),
+                        (xlsx_source, xlsx_destination),
+                        (large_xlsx_relative(xlsx_source), large_xlsx_relative(xlsx_destination)),
+                        (pdf_source, pdf_destination),
+                        (large_pdf_relative(pdf_source), large_pdf_relative(pdf_destination)),
+                        *[(image_sources[label], image_destinations[label]) for label in image_sources],
+                    ]
+                    required_moves = [
+                        marker
+                        for source, destination in moved_items
+                        for marker in (
+                            f"[M] Local item moved: ./{source} -> ./{destination}",
+                            f"Moving ./{source} to ./{destination}",
+                        )
+                    ]
+                    move_processed, move_segment = self._wait_for_stdout_growth_patterns(
+                        phase_files["mutator_move"][0],
+                        start_offset=move_offset,
+                        required_patterns=required_moves,
+                        timeout_seconds=180,
+                    )
+                    details["mutator_required_move_patterns"] = required_moves
+        finally:
+            self._shutdown_monitor_process(process, details)
+        details["mutator_move_processed"] = move_processed
+        details["mutator_move_log_length"] = len(move_segment)
+        if not move_processed:
             self._write_metadata(metadata_file, details)
-            return self.fail_result(reason=f"Mutator move propagation failed with status {mutator_move.returncode}", artifacts=artifacts, details=details)
+            return self.fail_result(
+                reason="Mutator did not propagate identity-preserving monitor move for every file; refusing delete/reupload substitute",
+                artifacts=artifacts, details=details,
+            )
+        bad_move_markers = (
+            "Deleting item from Microsoft OneDrive:",
+            "Uploading new file:",
+            "OneDrive Client requested to create this directory online:",
+        )
+        if any(marker in move_segment for marker in bad_move_markers):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                reason="Mutator used delete/reupload rather than identity-preserving remote move",
+                artifacts=artifacts, details=details,
+            )
 
         validator_reconcile = self._run_phase(context, label="validator reconcile", command=self._single_directory_command(context, root_name=root_name, config_dir=conf_validator, mode="download-only"), stdout_file=phase_files["validator_reconcile"][0], stderr_file=phase_files["validator_reconcile"][1])
         text_backups = self._safe_backup_files_for(validator_text_destination)

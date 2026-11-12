@@ -1190,7 +1190,7 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         snapshots: dict[str, list[str]] = {}
 
         def execute(label: str, root: Path, conf: Path, args: list[str], *, expected_rc: int = 0) -> str:
-            command = [context.onedrive_bin, "--sync", "--verbose", *args,
+            command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", *args,
                        "--syncdir", str(root), "--confdir", str(conf)]
             self._append_scope(command, scenario.single_directory)
             result = run_command(command, cwd=context.repo_root)
@@ -1296,7 +1296,7 @@ class TestCase0012SkipDirValidation(E2ETestCase):
             write_text_file(syncroot / relative, content)
         # Same resync/auth policy as TC0002, importantly no --single-directory.
         command = [
-            context.onedrive_bin, "--sync", "--upload-only", "--verbose",
+            context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose",
             "--resync", "--resync-auth", "--syncdir", str(syncroot),
             "--confdir", str(conf),
         ]
@@ -1350,7 +1350,7 @@ class TestCase0012SkipDirValidation(E2ETestCase):
         # without introducing any destructive remote test data.
         fixture = scenario.files[0][0]
         write_text_file(syncroot / fixture, scenario.files[0][1])
-        command = [context.onedrive_bin, "--sync", "--upload-only", "--verbose",
+        command = [context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose",
                    "--syncdir", str(syncroot), "--confdir", str(conf)]
         result = run_command(command, cwd=context.repo_root)
         stdout = scenario_log_dir / "rejected_stdout.log"

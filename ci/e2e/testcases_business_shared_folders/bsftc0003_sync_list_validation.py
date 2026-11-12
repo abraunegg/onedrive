@@ -29,6 +29,7 @@ class BusinessSharedFolderSyncListScenario:
     required_absent: list[str] = field(default_factory=list)
     required_stdout_markers: list[str] = field(default_factory=list)
     cleanup_local_stale_files: list[str] = field(default_factory=list)
+    cleanup_local_protected_files: list[str] = field(default_factory=list)
 
 
 class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
@@ -94,7 +95,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             diff_file = scenario_dir / "diff.txt"
 
             command = [
-                context.onedrive_bin,
+                context.onedrive_bin, "--display-running-config",
                 "--sync",
                 "--verbose",
                 "--download-only",
@@ -193,6 +194,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 f"unexpected_required_absent={unexpected_required_absent!r}",
                 f"missing_stdout_markers={missing_stdout_markers!r}",
                 f"cleanup_local_stale_files={scenario.cleanup_local_stale_files!r}",
+                f"cleanup_local_protected_files={scenario.cleanup_local_protected_files!r}",
                 f"cleanup_failures={cleanup_failures!r}",
             ]
             write_text_file(metadata_file, "\n".join(metadata_lines) + "\n")
@@ -221,6 +223,26 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 context.log(f"Scenario {scenario.scenario_id} FAILED: {failure_message}")
             else:
                 context.log(f"Scenario {scenario.scenario_id} PASSED")
+            if scenario.scenario_id in {'SL-0035', 'SL-0036', 'SL-0037', 'SL-0038', 'SL-0039'}:
+                context.log(
+                    f"Scenario {scenario.scenario_id} sync_list rules: "
+                    + repr(scenario.sync_list)
+                )
+                evidence = [
+                    line for line in result.stdout.splitlines()
+                    if "Shared Folder Link" in line
+                    or "Syncing this OneDrive" in line
+                    or "excluded by sync_list" in line
+                    or "included by sync_list" in line
+                ]
+                for line in evidence[:20]:
+                    context.log(f"Scenario {scenario.scenario_id} stdout: {line}")
+                context.log(
+                    f"Scenario {scenario.scenario_id} diagnostics: "
+                    f"{diff_file}, {metadata_file}, {stdout_file}, "
+                    f"{expected_manifest_file}, {actual_manifest_file}"
+                )
+
 
         details = {
             "scenario_count": len(scenarios),
@@ -268,7 +290,8 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
         write_manifest(cleanup_before_manifest_file, before_manifest)
 
         created_files: list[Path] = []
-        for rel_file in scenario.cleanup_local_stale_files:
+        protected_files = set(scenario.cleanup_local_protected_files)
+        for rel_file in scenario.cleanup_local_stale_files + scenario.cleanup_local_protected_files:
             rel_file = rel_file.strip("/")
             if not rel_file or rel_file.endswith("/") or "/../" in f"/{rel_file}/":
                 failures.append(f"Refusing unsafe cleanup-local stale file path: {rel_file!r}")
@@ -301,7 +324,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             return failures
 
         cleanup_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--download-only",
@@ -322,11 +345,15 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             )
 
         for local_file in created_files:
-            if local_file.exists():
-                failures.append(
-                    f"Local stale file was not removed by cleanup_local_files: "
-                    f"{local_file.relative_to(sync_root)}"
-                )
+            rel_file = local_file.relative_to(sync_root).as_posix()
+            if rel_file in protected_files:
+                # Explicitly excluded local content must survive unchanged.
+                if not local_file.is_file() or local_file.read_bytes() != (
+                    f"local stale cleanup validation for {scenario.scenario_id}\n".encode("utf-8")
+                ):
+                    failures.append(f"Excluded local file was deleted or changed by cleanup_local_files: {rel_file}")
+            elif local_file.exists():
+                failures.append(f"Included local stale file was not removed by cleanup_local_files: {rel_file}")
                 local_file.unlink()
 
         after_manifest = build_typed_manifest(sync_root)
@@ -335,7 +362,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
         before_set = set(before_manifest)
         after_set = set(after_manifest)
         missing_after = sorted(before_set - after_set)
-        unexpected_after = sorted(after_set - before_set)
+        unexpected_after = sorted(after_set - before_set - protected_files)
         if missing_after:
             failures.append(
                 f"Immutable baseline changed during cleanup_local_files; missing entries: {missing_after[:20]!r}"
@@ -758,7 +785,7 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             ),
             BusinessSharedFolderSyncListScenario(
                 scenario_id="SL-0024",
-                description="cleanup_local_files removes local-only stale file under included Business shared-folder parent",
+                description="cleanup_local_files removes included stale file and preserves excluded file under included Business shared-folder parent",
                 sync_list=[
                     f"!/{core}/DATASET_B/files/bsftc0003-*",
                     f"/{core}/",
@@ -767,7 +794,8 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 required_present=[f"{core_dataset_b}/README.txt", f"{core_files}/", f"{core_files}/data.txt"],
                 required_absent=[f"{mixed_dataset_a}/Document2.docx", "Data/BSF_FILTER_MATRIX/MINIMAL/single.txt"],
                 required_stdout_markers=[self._marker(core)],
-                cleanup_local_stale_files=[f"{core}/DATASET_B/files/bsftc0003-local-stale.txt"],
+                cleanup_local_stale_files=[f"{core}/DATASET_B/nested/keep/bsftc0003-local-stale.txt"],
+                cleanup_local_protected_files=[f"{core}/DATASET_B/files/bsftc0003-local-stale.txt"],
             ),
 
             BusinessSharedFolderSyncListScenario(
@@ -892,5 +920,62 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
                 required_present=[sharepoint_root_deep_file, f"{user_root_container_logging}/sync.d", f"{core_dataset_b}/README.txt"],
                 required_absent=[f"{user_root_container_logging}/log.d", f"{core_files}/data.txt", f"{mixed_dataset_a}/Document2.docx"],
                 required_stdout_markers=[self._marker(sharepoint_root), self._marker(user_root_container), self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0035",
+                description="issue 3931 literal nested directory exclusion retains included Business shared folder",
+                sync_list=[f"!/{core_exclude}/", f"/{core}/"],
+                expected_entries=core_without_exclude,
+                required_present=[f"{core_keep}/keep.txt", f"{core_files}/data.txt"],
+                required_absent=[f"{core_exclude}/exclude.txt", f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0036",
+                description="issue 3931 literal descendant exclusion must retain root Business shared-folder shortcut",
+                sync_list=[
+                    f"!/{sharepoint_root}/Data Monitoring/Updates/",
+                    f"/{sharepoint_root}/",
+                ],
+                expected_entries=self._exclude_entries(
+                    self._entries_under(sharepoint_root),
+                    f"{sharepoint_root}/Data Monitoring/Updates",
+                ),
+                required_present=[f"{sharepoint_root}/", f"{sharepoint_root}/Data Monitoring/"],
+                required_absent=[sharepoint_root_deep_file, f"{core_dataset_b}/README.txt"],
+                required_stdout_markers=[self._marker(sharepoint_root)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0037",
+                description="issue 3931 wildcard workaround retains root Business shared-folder shortcut",
+                sync_list=[
+                    f"!/{sharepoint_root}/Data Monitoring/Updates/*",
+                    f"/{sharepoint_root}/",
+                ],
+                expected_entries=self._exclude_entries(
+                    self._entries_under(sharepoint_root),
+                    f"{sharepoint_root}/Data Monitoring/Updates",
+                ),
+                required_present=[f"{sharepoint_root}/", f"{sharepoint_root}/Data Monitoring/"],
+                required_absent=[sharepoint_root_deep_file, f"{core_dataset_b}/README.txt"],
+                required_stdout_markers=[self._marker(sharepoint_root)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0038",
+                description="Business Shared Folder literal nested directory exclusion, exclusion first",
+                sync_list=[f"!/{core_exclude}/", f"/{core}/"],
+                expected_entries=core_without_exclude,
+                required_present=[f"{core_dataset_b}/README.txt", f"{core_keep}/keep.txt"],
+                required_absent=[f"{core_exclude}/exclude.txt", f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(core)],
+            ),
+            BusinessSharedFolderSyncListScenario(
+                scenario_id="SL-0039",
+                description="Business Shared Folder include-first rule ordering retains nested directory",
+                sync_list=[f"/{core}/", f"!/{core_exclude}/"],
+                expected_entries=self._entries_under(core),
+                required_present=[f"{core_dataset_b}/README.txt", f"{core_keep}/keep.txt", f"{core_exclude}/exclude.txt"],
+                required_absent=[f"{mixed_dataset_a}/Document2.docx"],
+                required_stdout_markers=[self._marker(core)],
             ),
         ]

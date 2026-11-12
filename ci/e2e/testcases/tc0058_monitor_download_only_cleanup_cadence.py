@@ -8,7 +8,7 @@ from testcases.monitor_case_base import MonitorModeTestCaseBase
 from framework.context import E2EContext
 from framework.manifest import build_manifest, write_manifest
 from framework.result import TestResult
-from framework.utils import command_to_string, run_command, write_text_file
+from framework.utils import command_to_string, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
@@ -46,7 +46,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         )
 
     def _write_simple_config(self, config_file: Path, sync_dir: Path) -> None:
-        write_text_file(
+        write_onedrive_config(
             config_file,
             (
                 "# tc0058 helper config\n"
@@ -87,6 +87,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
 
         context.bootstrap_config_dir(seed_conf)
         self._write_simple_config(seed_conf / "config", seed_root)
+        context.validate_generated_config_dir(seed_conf)
 
         seed_command = [
             context.onedrive_bin,
@@ -151,6 +152,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
     ):
         context.bootstrap_config_dir(mutator_conf)
         self._write_simple_config(mutator_conf / "config", mutator_root)
+        context.validate_generated_config_dir(mutator_conf)
 
         pull_command = [
             context.onedrive_bin,
@@ -173,8 +175,15 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
         write_text_file(pull_stderr, pull_result.stderr)
 
         delete_target = mutator_root / root_name / self.REMOTE_DELETE_FILE_NAME
-        if delete_target.exists():
-            delete_target.unlink()
+        # Do not simulate a successful remote deletion when the mutator never
+        # downloaded the expected remote fixture. That would make the monitor
+        # observe an absent file rather than a genuine remote tombstone.
+        if pull_result.returncode != 0 or not delete_target.is_file():
+            return pull_result, None, delete_target
+        expected = f"TC0058 remote deletion target for {root_name}\n".encode("utf-8")
+        if delete_target.read_bytes() != expected:
+            return pull_result, None, delete_target
+        delete_target.unlink()
 
         delete_command = [
             context.onedrive_bin,
@@ -284,7 +293,7 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             return False, f"{scenario_name}: seed phase failed with status {seed_result.returncode}", artifacts, details
 
         context.bootstrap_config_dir(monitor_conf)
-        write_text_file(
+        write_onedrive_config(
             monitor_conf / "config",
             self._build_config_text(
                 monitor_root,
@@ -292,6 +301,17 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 monitor_authoritative_sync=monitor_authoritative_sync,
             ),
         )
+        context.validate_generated_config_dir(monitor_conf)
+
+        # The full-scan-frequency scenario must actually exercise native /delta.
+        # --single-directory normally establishes test isolation, but explicitly
+        # forces generated /children regardless of monitor cleanup cadence.
+        # A root-restricted sync_list gives this one scenario an online scope
+        # without changing the Graph acquisition path. Configure it BEFORE
+        # preloading so the persisted sync_list hash is stable for the monitor.
+        native_delta_scenario = monitor_authoritative_sync == "monitor_fullscan_frequency"
+        if native_delta_scenario:
+            write_text_file(monitor_conf / "sync_list", f"/{root_name}\n")
 
         preload_result = self._preload_monitor_fixture(
             context,
@@ -332,11 +352,14 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 delete_stderr=mutator_delete_stderr,
             )
             details["mutator_pull_returncode"] = pull_result.returncode
-            details["mutator_delete_returncode"] = delete_result.returncode
+            details["mutator_delete_returncode"] = delete_result.returncode if delete_result is not None else None
             details["mutator_delete_target_exists_after_unlink"] = mutator_delete_target.exists()
             if pull_result.returncode != 0:
                 self._write_metadata(metadata_file, details)
                 return False, f"{scenario_name}: mutator pull failed with status {pull_result.returncode}", artifacts, details
+            if delete_result is None:
+                self._write_metadata(metadata_file, details)
+                return False, f"{scenario_name}: mutator never established the expected original remote file; deletion not attempted", artifacts, details
             if delete_result.returncode != 0:
                 self._write_metadata(metadata_file, details)
                 return False, f"{scenario_name}: remote delete propagation failed with status {delete_result.returncode}", artifacts, details
@@ -363,13 +386,13 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             "--download-only",
             "--verbose",
             "--verbose",
-            "--single-directory",
-            root_name,
             "--syncdir",
             str(monitor_root),
             "--confdir",
             str(monitor_conf),
         ]
+        if not native_delta_scenario:
+            monitor_command.extend(["--single-directory", root_name])
         if include_cleanup_local_files:
             monitor_command.insert(3, "--cleanup-local-files")
 
@@ -401,12 +424,11 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             details["local_anchor_exists_after_single_monitor_pass"] = local_anchor.is_file()
 
             # These policy markers are DEBUG-level messages. The monitor command
-            # intentionally uses --verbose twice above so that they are emitted in
-            # normal CI, not only in the framework's debug rerun. Read both process
-            # stdout/stderr and the application log because logging destinations can
-            # differ across harness/debug paths.
+            # intentionally uses --verbose twice so the markers appear in its own
+            # output. Do not read root.onedrive.log here: the file also contains
+            # *preload* output and can falsely claim this monitor used /children.
             monitor_log_text_parts: list[str] = []
-            for candidate in (monitor_stdout, monitor_stderr, app_log_dir / "root.onedrive.log"):
+            for candidate in (monitor_stdout, monitor_stderr):
                 try:
                     monitor_log_text_parts.append(candidate.read_text(errors="replace"))
                 except FileNotFoundError:
@@ -420,7 +442,22 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             details["authoritative_cleanup_marker_seen"] = authoritative_marker in monitor_log_text
             details["deferred_cleanup_marker_seen"] = deferred_marker in monitor_log_text
             details["full_scan_true_marker_seen"] = full_scan_true_marker in monitor_log_text
+            generated_marker = "Flagged generatedSimulatedDeltaResponse as 'true'"
+            details["generated_delta_marker_seen"] = generated_marker in monitor_log_text
+            if native_delta_scenario and generated_marker in monitor_log_text:
+                self._write_metadata(metadata_file, details)
+                return False, f"{scenario_name}: generated /children used instead of required native /delta", artifacts, details
             details["monitor_log_text_bytes_checked"] = len(monitor_log_text)
+            for label, expected in (
+                ("download_only", "true"),
+                ("cleanup_local_files", "true" if include_cleanup_local_files else "false"),
+                ("monitor_authoritative_sync", monitor_authoritative_sync),
+            ):
+                import re
+                pattern = rf"Config option '{re.escape(label)}'\s*=\s*{re.escape(expected)}(?:\s|$)"
+                if re.search(pattern, monitor_log_text) is None:
+                    self._write_metadata(metadata_file, details)
+                    return False, f"{scenario_name}: running client did not confirm {label}={expected}", artifacts, details
 
             monitor_manifest = build_manifest(monitor_root)
             write_manifest(monitor_manifest_file, monitor_manifest)
@@ -445,9 +482,10 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
             if enforce_target_state and not expect_target_removed_after_single_monitor_pass and removed:
                 self._write_metadata(metadata_file, details)
                 return False, f"{scenario_name}: target file was removed when cleanup should have remained deferred/disabled", artifacts, details
-            if not local_anchor.is_file():
+            expected_anchor = f"TC0058 anchor for {root_name}\n".encode("utf-8")
+            if not local_anchor.is_file() or local_anchor.read_bytes() != expected_anchor:
                 self._write_metadata(metadata_file, details)
-                return False, f"{scenario_name}: retained anchor file disappeared during cleanup validation", artifacts, details
+                return False, f"{scenario_name}: retained anchor content missing or changed during cleanup validation", artifacts, details
 
             self._write_metadata(metadata_file, details)
             return True, "", artifacts, details
@@ -488,14 +526,14 @@ class TestCase0058MonitorDownloadOnlyCleanupCadence(MonitorModeTestCaseBase):
                 "include_cleanup_local_files": True,
                 "stimulus": "remote_delete",
                 "expect_target_removed_after_single_monitor_pass": False,
-                "enforce_target_state": False,
+                "enforce_target_state": True,
             },
             {
                 "scenario_id": "NOCLEANUP",
-                "scenario_name": "cleanup disabled control",
+                "scenario_name": "cleanup disabled: online deletion preserves local file",
                 "monitor_authoritative_sync": "monitor_and_signal",
                 "include_cleanup_local_files": False,
-                "stimulus": "local_only",
+                "stimulus": "remote_delete",
                 "expect_target_removed_after_single_monitor_pass": False,
                 "enforce_target_state": True,
             },

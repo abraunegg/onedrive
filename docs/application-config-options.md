@@ -210,7 +210,7 @@ _**CLI Option Use:**_ `--classify-as-big-delete 2000`
 > If this option is triggered, you will need to add `--force` to force a sync to occur.
 
 ### cleanup_local_files
-_**Description:**_ This config option provides the capability to cleanup local files and folders if they are removed online.
+_**Description:**_ When used with `--download-only`, this option enables cleanup of local files and folders removed online, as well as local-only items that have no corresponding online item. Local cleanup is constrained to the active synchronisation scope; excluded paths are not cleanup targets.
 
 _**Value Type:**_ Boolean
 
@@ -221,7 +221,9 @@ _**Config Example:**_ `cleanup_local_files = "false"` or `cleanup_local_files = 
 _**CLI Option Use:**_ `--cleanup-local-files`
 
 > [!IMPORTANT]
-> This configuration option can only be used with `--download-only`. It cannot be used with any other application option.
+> This option requires `--download-only`. It can be used with `--sync` or `--monitor`; it is not valid as a standalone cleanup mode.
+>
+> Client Side Filtering rules and `--single-directory` determine which paths are eligible for cleanup. A path included by `sync_list` is *in scope*, not protected from cleanup. Paths outside the selected scope must not be deleted.
 
 > [!NOTE]
 > In `--monitor` mode, authoritative cleanup cadence for `--download-only --cleanup-local-files` is configured by the `monitor_authoritative_sync` option.
@@ -449,7 +451,7 @@ _**Config Example:**_ `download_only = "false"` or `download_only = "true"`
 _**CLI Option Use:**_ `--download-only`
 
 > [!IMPORTANT]
-> When using this option, the default mode of operation is to not clean up local files that have been deleted online. This ensures that the local data is an *archive* of what was stored online. To cleanup local files use `--cleanup-local-files`.
+> By default, `--download-only` preserves local files and folders whose online counterparts have been deleted, and does not clean up local-only content. This allows the local data to act as an *archive* of previously stored online content. Online additions and updates are still downloaded. To enable local cleanup within the selected synchronisation scope, explicitly use `--cleanup-local-files`.
 
 ### drive_id
 _**Description:**_ This setting controls the specific drive identifier the client will use when syncing with Microsoft OneDrive.
@@ -521,7 +523,7 @@ _**CLI Option Use:**_ `--force-http-11`
 
 
 ### force_session_upload
-_**Description:**_ This option, when enabled, forces the client to use a 'session' upload, which, when the 'file' is uploaded by the session, this includes the local timestamp of the file.
+_**Description:**_ This option, when enabled, forces the client to use a 'session' upload even for small files. This allows uploading the local timestamp of the file, which is particularly useful for compatibility with applications and editors that use atomic save operations or are sensitive to file timestamp changes. However, for users synchronising large numbers of small files, it may result in slower uploads and an increased likelihood of Microsoft API throttling.
 
 _**Value Type:**_ Boolean
 
@@ -1805,6 +1807,8 @@ _**Usage Example:**_ `onedrive --sync --single-directory 'Data'`
 
 > [!IMPORTANT]
 > The path specified is relative to your configured 'sync_dir' path. If the physical local path 'Folder' to sync is `~/OneDrive/Data/Folder` then the command would be `--single-directory 'Data/Folder'`.
+>
+> `--single-directory` limits synchronisation operations to the selected directory and its in-scope children. When combined with `--download-only --cleanup-local-files`, it does not authorise cleanup or deletion of paths outside that directory. It changes the scope, not the deletion policy.
 
 ### CLI Option: --source-directory
 _**Description:**_ This CLI option specifies the 'source' portion of moving a file or folder online, without performing a sync operation.

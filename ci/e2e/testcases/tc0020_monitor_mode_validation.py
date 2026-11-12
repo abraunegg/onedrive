@@ -119,6 +119,16 @@ class TestCase0020MonitorModeValidation(MonitorModeTestCaseBase):
         finally:
             self._shutdown_monitor_process(process, details)
 
+        # A remote file found by the verifier does not alone establish that the
+        # running monitor observed and processed the inotify create event.
+        if not details.get("mutation_processed", False):
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name,
+                "Monitor failed to observe the post-initial-sync file creation",
+                artifacts, details,
+            )
+
         verify_command = [
             context.onedrive_bin,
             "--display-running-config",
@@ -150,4 +160,12 @@ class TestCase0020MonitorModeValidation(MonitorModeTestCaseBase):
         if f"{root_name}/monitor-added.txt" not in remote_manifest:
             return self.fail_result(self.case_id, self.name, "Monitor mode did not upload the file created while the process was running", artifacts, details)
 
+        expected_files = {
+            f"{root_name}/baseline.txt": b"baseline\n",
+            f"{root_name}/monitor-added.txt": b"added while monitor mode was running\n",
+        }
+        for relative, expected in expected_files.items():
+            path = verify_root / relative
+            if not path.is_file() or path.read_bytes() != expected:
+                return self.fail_result(self.case_id, self.name, f"Monitor remote verification content mismatch: {relative}", artifacts, details)
         return self.pass_result(self.case_id, self.name, artifacts, details)
