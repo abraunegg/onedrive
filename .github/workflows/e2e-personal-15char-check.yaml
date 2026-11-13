@@ -10,6 +10,10 @@ on:
       - 'ci/**'
       - '.github/workflows/e2e-personal-15char-check.yaml'
 
+concurrency:
+  group: onedrive-e2e-personal-15char-check
+  cancel-in-progress: false
+
 permissions:
   contents: read
   pull-requests: write

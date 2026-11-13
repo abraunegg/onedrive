@@ -10,6 +10,10 @@ on:
       - 'ci/**'
       - '.github/workflows/e2e-business.yaml'
 
+concurrency:
+  group: onedrive-e2e-business
+  cancel-in-progress: false
+
 permissions:
   contents: read
   pull-requests: write
