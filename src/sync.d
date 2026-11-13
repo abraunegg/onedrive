@@ -6811,6 +6811,24 @@ class SyncEngine {
 			}
 	}
 
+	// Unlike exists(), retain filesystem errors when examining DB-known paths.
+	// A failed lookup must not be mistaken for a local deletion (issue #3958).
+	private bool localPathExistsForConsistency(string localFilePath) {
+		try {
+			getLinkAttributes(localFilePath); // Preserve exists() lstat/symlink semantics
+			return true;
+		} catch (FileException e) {
+			if ((e.errno == ENOENT) || (e.errno == ENOTDIR)) {
+				return false;
+			}
+
+			displayFileSystemErrorMessage(e.msg, "syncEngine.localPathExistsForConsistency", localFilePath, FsErrorSeverity.fatal);
+			addLogEntry("FATAL: Unable to determine whether this local path exists. Aborting to prevent unintended remote deletions: " ~ localFilePath, ["error", "notify"]);
+			forceExit();
+			return true; // Unreachable; never classify an unexpected error as deletion
+		}
+	}
+
 	// Perform the database consistency check on this file item
 	void checkFileDatabaseItemForConsistency(Item dbItem, string localFilePath) {
 		// Function Start Time
@@ -6828,7 +6846,7 @@ class SyncEngine {
 		string itemSource = "database";
 
 		// Does this item|file still exist on disk?
-		if (exists(localFilePath)) {
+		if (localPathExistsForConsistency(localFilePath)) {
 			// Path exists locally, is this path a file?
 			if (isFile(localFilePath)) {
 				// Can we actually read the local file?
@@ -7006,7 +7024,7 @@ class SyncEngine {
 		string itemSource = "database";
 
 		// Does this item|directory still exist on disk?
-		if (exists(localFilePath)) {
+		if (localPathExistsForConsistency(localFilePath)) {
 			// Fix https://github.com/abraunegg/onedrive/issues/1915
 			try {
 				if (!isDir(localFilePath)) {

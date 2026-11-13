@@ -10,6 +10,10 @@ on:
       - 'ci/**'
       - '.github/workflows/e2e-personal-shared-folders.yaml'
 
+concurrency:
+  group: onedrive-e2e-personal-shared-folders
+  cancel-in-progress: false
+
 permissions:
   contents: read
   pull-requests: write

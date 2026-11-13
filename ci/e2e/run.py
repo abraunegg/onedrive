@@ -103,6 +103,7 @@ from testcases.tc0086_https_credential_redaction import TestCase0086HTTPSCredent
 from testcases.tc0087_resync_monitor_working_directory_boundary import TestCase0087ResyncMonitorWorkingDirectoryBoundary
 from testcases.tc0088_configuration_resync_policy import TestCase0088ConfigurationResyncPolicy
 from testcases.tc0089_git_rsync_monitor_upload_identity import TestCase0089GitRsyncMonitorUploadIdentity
+from testcases.tc0090_filesystem_lookup_error_preservation import TestCase0090FilesystemLookupErrorPreservation
 
 
 def build_test_suite() -> list:
@@ -196,6 +197,7 @@ def build_test_suite() -> list:
         TestCase0087ResyncMonitorWorkingDirectoryBoundary(),
         TestCase0088ConfigurationResyncPolicy(),
         TestCase0089GitRsyncMonitorUploadIdentity(),
+        TestCase0090FilesystemLookupErrorPreservation(),
     ]
 
 
