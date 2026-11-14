@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import signal
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -344,13 +345,23 @@ class TestCase0082SingleDirectoryDeleteReconciliation(E2ETestCase):
         if remote_manifest != expected_final:
             return fail("online changes were not confirmed by an independent verifier before reconciliation")
 
-        # Interrupt the subject once its online enumeration has started. Whatever point it
-        # reaches, items that still exist online must not be removed. A later full run must
-        # recover and complete the reconciliation.
+        # Wait for two distinct nonempty nested /children collections to be returned.
+        # This proves traversal has advanced beyond the initial parent/root message and
+        # that the first collection was submitted for processing before SIGINT. The
+        # generated-response processor batches 500 records, so this is NOT proof that a
+        # partial database batch was committed; we do not make that stronger claim.
+        # After interruption, a full subsequent run must recover and converge safely.
         context.log(f"Executing Test Case {self.case_id} {self.REMOTE_SCENARIO_ID} subject_interrupted: {command_to_string(subject_command)}")
-        interrupt_marker = "Generating a /delta response from the OneDrive API"
+        # The client logs this only after fetching each nested /children collection.
+        # Require two distinct bulk directories, rather than triggering immediately
+        # after the parent response (before any children have been enumerated).
+        collection_pattern = re.compile(
+            r"Adding [1-9][0-9]* OneDrive JSON items for further processing from "
+            + re.escape(root_name) + r"/Bulk/(Dir[0-9]{2})\b"
+        )
         stdout_path = phase_files["subject_interrupted"][0]
         process = None
+        collections_seen: set[str] = set()
         marker_seen = False
         signal_sent = False
         interrupt_failure: str | None = None
@@ -360,7 +371,10 @@ class TestCase0082SingleDirectoryDeleteReconciliation(E2ETestCase):
                 process = subprocess.Popen(subject_command, cwd=str(context.repo_root), stdout=stdout_fp, stderr=stderr_fp, text=True)
                 deadline = time.time() + 120
                 while time.time() < deadline and process.poll() is None:
-                    if interrupt_marker in stdout_path.read_text(encoding="utf-8", errors="replace"):
+                    collections_seen = set(collection_pattern.findall(
+                        stdout_path.read_text(encoding="utf-8", errors="replace")
+                    ))
+                    if len(collections_seen) >= 2:
                         marker_seen = True
                         break
                     time.sleep(0.05)
@@ -379,12 +393,13 @@ class TestCase0082SingleDirectoryDeleteReconciliation(E2ETestCase):
         stdout_lines = [line for line in stdout_path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip()]
         scenario_details["subject_interrupted_returncode"] = process.returncode if process is not None else None
         scenario_details["subject_interrupted_after_enumeration_started"] = marker_seen
+        scenario_details["subject_interrupted_nested_collections_seen"] = sorted(collections_seen)
         scenario_details["subject_interrupted_signal_sent"] = signal_sent
         scenario_details["subject_interrupted_last_output_line"] = stdout_lines[-1] if stdout_lines else ""
         if interrupt_failure:
             return fail(interrupt_failure)
         if not marker_seen:
-            return fail("the online enumeration start marker was not observed before the subject exited or timed out")
+            return fail("fewer than two nonempty nested /children collections were observed before the subject exited or timed out")
         if not signal_sent:
             return fail("the subject finished before SIGINT could be sent, so the interruption was not exercised")
         if process.returncode not in (130, -signal.SIGINT):
