@@ -823,7 +823,28 @@ final class Monitor {
 			auto pathList = dirEntries(dirname, SpanMode.shallow, false);
 			foreach(DirEntry entry; pathList) {
 				currentPath = entry.name;
-				if (entry.isDir) {
+				
+				// Issue #3940: https://github.com/abraunegg/onedrive/issues/3940
+				// An entry returned by readdir() can be removed before 'entry.isDir' stats it, which raises a 'Failed to stat file' exception.
+				// Only ENOENT, confirmed by lstat(), is recoverable: the entry has gone and there is nothing to monitor. Any other failure
+				// (for example EACCES) is re-thrown so the existing handling below, including the Issue #1154 data preservation exit, applies unchanged.
+				// This must be handled per entry, as the outer catch blocks cannot continue this loop with the remaining entries.
+				bool entryIsDirectory;
+				try {
+					entryIsDirectory = entry.isDir;
+				} catch (Exception e) {
+					if (canFind(e.msg, "Failed to stat file")) {
+						import core.sys.posix.sys.stat : lstat, stat_t;
+						stat_t statBuffer;
+						if ((lstat(toStringz(currentPath), &statBuffer) != 0) && (errno == ENOENT)) {
+							if (verboseLogging) {addLogEntry("Skipping vanished entry during directory traversal: " ~ currentPath, ["verbose"]);}
+							continue;
+						}
+					}
+					throw e;
+				}
+				
+				if (entryIsDirectory) {
 					if (debugLogging) {addLogEntry("Calling addRecursive() for this directory: " ~ entry.name, ["debug"]);}
 					addRecursive(entry.name);
 				}

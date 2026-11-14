@@ -175,6 +175,7 @@ fcgid
 fcgienv
 FCGX
 fcontext
+fdinfo
 fedoraproject
 fefefe
 fexceptions
