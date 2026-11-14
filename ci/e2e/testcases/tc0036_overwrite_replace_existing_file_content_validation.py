@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 import shutil
+import sqlite3
 import time
+from contextlib import closing
 from pathlib import Path
 
 from framework.context import E2EContext
@@ -147,6 +149,16 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
             metadata_file,
             "\n".join(f"{key}={value!r}" for key, value in sorted(details.items())) + "\n",
         )
+
+    @staticmethod
+    def _tracked_etag(config_dir: Path, filename: str) -> str:
+        # Read only after the corresponding client has exited.
+        db_path = config_dir / "items.sqlite3"
+        with closing(sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)) as db:
+            rows = db.execute("SELECT eTag FROM item WHERE name = ?", (filename,)).fetchall()
+        if len(rows) != 1 or not rows[0][0]:
+            raise RuntimeError(f"Expected one tracked eTag for {filename}, found {len(rows)}")
+        return str(rows[0][0])
 
     def _run_logged_command(
         self,
@@ -439,6 +451,37 @@ class TestCase0036OverwriteReplaceExistingFileContentValidation(MonitorModeTestC
         if settle2_result.returncode != 0:
             self._write_metadata(metadata_file, details)
             return False, f"{scenario_id} second metadata-settle sync failed with status {settle2_result.returncode}", details
+
+        if scenario_id in ("OR-0002", "OR-0003"):
+            # An image eTag can advance again after the first two syncs even when
+            # content is unchanged. Require an additional stable interval before
+            # deliberately exercising the older-mtime modified-upload path.
+            try:
+                previous_etag = self._tracked_etag(conf_main, local_image_path.name)
+                details["image_settle_etags"] = [previous_etag]
+                for check in range(1, 4):
+                    time.sleep(self.IMAGE_POST_UPLOAD_SETTLE_SECONDS)
+                    check_stdout = scenario_log_dir / f"phase1_image_etag_check{check}_stdout.log"
+                    check_stderr = scenario_log_dir / f"phase1_image_etag_check{check}_stderr.log"
+                    artifacts.extend([str(check_stdout), str(check_stderr)])
+                    check_result = self._run_logged_command(
+                        context, f"{scenario_id} image eTag settle {check}",
+                        self._sync_command(context, root_name, conf_main), check_stdout, check_stderr,
+                    )
+                    if check_result.returncode != 0:
+                        self._write_metadata(metadata_file, details)
+                        return False, f"{scenario_id} image metadata-settle sync failed with status {check_result.returncode}", details
+                    current_etag = self._tracked_etag(conf_main, local_image_path.name)
+                    details["image_settle_etags"].append(current_etag)
+                    if current_etag == previous_etag:
+                        break
+                    previous_etag = current_etag
+                else:
+                    self._write_metadata(metadata_file, details)
+                    return False, f"{scenario_id} image eTag did not settle before replacement", details
+            except (OSError, sqlite3.Error, RuntimeError) as error:
+                self._write_metadata(metadata_file, details)
+                return False, f"{scenario_id} image eTag precondition unavailable: {error}", details
 
         baseline_validation_error = validate_xlsx(local_file_path, REVISION_0)
         baseline_pdf_validation_error = validate_pdf(local_pdf_path, REVISION_0)

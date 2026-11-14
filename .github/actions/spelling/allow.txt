@@ -145,6 +145,7 @@ drwxrwxr
 dryrun
 DTime
 Dynu
+EContext
 edf
 eflag
 EIOv
@@ -174,6 +175,7 @@ fcgid
 fcgienv
 FCGX
 fcontext
+fdinfo
 fedoraproject
 fefefe
 fexceptions
@@ -467,6 +469,7 @@ pycache
 qewrqwerwqer
 Qmark
 qpos
+Quadlet
 QWords
 qxor
 raf
@@ -480,6 +483,7 @@ rcx
 rdi
 rdo
 rdx
+readback
 readdata
 readln
 readret

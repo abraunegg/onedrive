@@ -10,6 +10,10 @@ on:
       - 'ci/**'
       - '.github/workflows/e2e-personal-15char-check.yaml'
 
+concurrency:
+  group: onedrive-e2e-personal-15char-check
+  cancel-in-progress: false
+
 permissions:
   contents: read
   pull-requests: write
@@ -91,20 +95,40 @@ jobs:
             echo "No primary results.json found; skipping debug rerun"
           fi
 
+      - name: Mandatory cleanup after debug recovery
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          ONEDRIVE_BIN: ${{ github.workspace }}/.ci/prefix/bin/onedrive
+          E2E_TARGET: personal
+          RUN_ID: ${{ github.run_id }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python3 -u ci/e2e/post_debug_cleanup.py \
+            --result ci/e2e/out/post-debug-cleanup.json
+
       - name: Evaluate E2E gate result
         if: always()
         run: |
           python3 -u ci/e2e/evaluate_rerun_gate.py \
             --primary-results ci/e2e/out/results.json \
             --debug-results ci/e2e/out/debug-rerun/results.json \
-            --gate-file ci/e2e/out/gate.json
+            --gate-file ci/e2e/out/gate.json \
+            --cleanup-results ci/e2e/out/post-debug-cleanup.json
+
+      - name: Verify E2E artifacts contain no authentication credentials
+        id: artifact_guard
+        if: always()
+        run: python3 -u ci/e2e/artifact_safety.py --artifact-dir ci/e2e/out
 
       - name: Upload E2E artefacts
-        if: always()
+        if: always() && steps.artifact_guard.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-personal-15char-check
-          path: ci/e2e/out/**
+          path: |
+            ci/e2e/out/**
+            !ci/e2e/out/**/refresh_token
 
   pr_comment:
     name: Post PR summary comment

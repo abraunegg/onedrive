@@ -59,7 +59,7 @@ class BusinessSharedFolderTestCase0005GetSharePointDriveIdWhileMonitoring(E2ETes
         missing_markers_file = layout.state_dir / "missing_expected_markers.txt"
 
         monitor_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--monitor",
             "--verbose",
             "--resync",
@@ -69,7 +69,7 @@ class BusinessSharedFolderTestCase0005GetSharePointDriveIdWhileMonitoring(E2ETes
         ]
 
         query_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--get-sharepoint-drive-id",
             "*",
             "--confdir",

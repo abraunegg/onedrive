@@ -729,7 +729,9 @@ final class Monitor {
 						return;
 					}
 				}
-				// Is the path excluded by sync_list?
+				// selectiveSync.isPathExcludedViaSyncList() returns:
+				//   true  = excluded by sync_list (no watch for this path)
+				//   false = NOT excluded by sync_list (no retention guarantee)
 				if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
 					// dont add a watch for this item
 					if (debugLogging) {addLogEntry("Skipping monitoring parent path due to sync_list exclusion: " ~ dirname, ["debug"]);}
@@ -821,7 +823,28 @@ final class Monitor {
 			auto pathList = dirEntries(dirname, SpanMode.shallow, false);
 			foreach(DirEntry entry; pathList) {
 				currentPath = entry.name;
-				if (entry.isDir) {
+				
+				// Issue #3940: https://github.com/abraunegg/onedrive/issues/3940
+				// An entry returned by readdir() can be removed before 'entry.isDir' stats it, which raises a 'Failed to stat file' exception.
+				// Only ENOENT, confirmed by lstat(), is recoverable: the entry has gone and there is nothing to monitor. Any other failure
+				// (for example EACCES) is re-thrown so the existing handling below, including the Issue #1154 data preservation exit, applies unchanged.
+				// This must be handled per entry, as the outer catch blocks cannot continue this loop with the remaining entries.
+				bool entryIsDirectory;
+				try {
+					entryIsDirectory = entry.isDir;
+				} catch (Exception e) {
+					if (canFind(e.msg, "Failed to stat file")) {
+						import core.sys.posix.sys.stat : lstat, stat_t;
+						stat_t statBuffer;
+						if ((lstat(toStringz(currentPath), &statBuffer) != 0) && (errno == ENOENT)) {
+							if (verboseLogging) {addLogEntry("Skipping vanished entry during directory traversal: " ~ currentPath, ["verbose"]);}
+							continue;
+						}
+					}
+					throw e;
+				}
+				
+				if (entryIsDirectory) {
 					if (debugLogging) {addLogEntry("Calling addRecursive() for this directory: " ~ entry.name, ["debug"]);}
 					addRecursive(entry.name);
 				}
@@ -1484,7 +1507,9 @@ final class Monitor {
 						}
 					}
 					
-					// is the path, excluded via sync_list
+					// selectiveSync.isPathExcludedViaSyncList() returns:
+					//   true  = excluded by sync_list (filter the event)
+					//   false = NOT excluded by sync_list (no retention guarantee)
 					if (!(expectedMoveSourceEvent || expectedMoveDestinationEvent) && selectiveSync.isPathExcludedViaSyncList(path)) {
 						// The path to evaluate matches a directory or file that the user has configured not to include in the sync
 						filteredEventCount++;
@@ -1523,6 +1548,21 @@ final class Monitor {
 							// paths before recording or consuming the move.
 							if (event.mask & IN_ISDIR) {
 								rebaseWatchTree(sourcePath, path);
+
+								// Issue #3948: https://github.com/abraunegg/onedrive/issues/3948 (history: #3941)
+								// If a directory is created and then renamed before its IN_CREATE event is processed (for example a file manager
+								// creating 'Untitled Folder' that the user names straight away), addRecursive() for the original name finds that it
+								// no longer exists, and rebaseWatchTree() above has no watch to rebase. The renamed directory would then remain
+								// without a watch until the application restarts: items moved into it produce only an IN_MOVED_FROM event, which is
+								// treated as a deletion, and items created in it are not seen until the next scheduled local scan. The same applies
+								// when a directory skipped by addRecursive() but not by the event filter (for example a dot directory with
+								// skip_dotfiles enabled) is renamed to an included name. Add the missing watch here, as the first point where the
+								// new name is known. Only do this when no watch is registered for the new path: an already-watched directory has
+								// just been rebased above and must keep its existing kernel watch. addRecursive() applies the normal client side
+								// filtering checks.
+								if (!isWatchRegistered(path)) {
+									addRecursive(path);
+								}
 							}
 
 							cookieToPath.remove(event.cookie);
