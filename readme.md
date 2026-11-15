@@ -111,6 +111,7 @@ Sponsorship is entirely optional and does not alter access to the software, proj
 
 ### System Tray Integrations
 * [OneDrive Tray](https://github.com/DanielBorgesOliveira/onedrive_tray) - A lightweight system tray utility for this client, providing synchronisation progress monitoring, client status and quick access to basic controls. Written in C++ using Qt.
+* [OneDrive for Omarchy](https://github.com/baskb/omarchy-onedrive) - A status bar plugin for the Omarchy desktop (Arch Linux with Hyprland), providing synchronisation state with whole-run progress, recent files, pause and resume, failure notifications, and SharePoint library set-up from the browser's 'Sync' button. Written in QML, JavaScript and Bash.
 
 ## Frequently Asked Questions
 Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki/Frequently-Asked-Questions)
