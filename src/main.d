@@ -338,6 +338,31 @@ void completeMonitorRuntimeStatusCycle(
 	writeMonitorStatusFile();
 }
 
+// Publish activity outside scheduled monitor cycles without changing cycle accounting.
+// Preserve the previous state (including degraded) and suppress nested transitions.
+uint monitorStatusActivityDepth = 0;
+string monitorStatusPreviousState;
+
+void beginMonitorStatusActivity() {
+	if (!monitorRuntimeStatus.enabled) return;
+	if (monitorStatusActivityDepth++ != 0) return;
+	monitorStatusPreviousState = monitorRuntimeStatus.processState;
+	if (monitorRuntimeStatus.currentCycleStartedAt == SysTime.min) {
+		monitorRuntimeStatus.processState = "syncing";
+		writeMonitorStatusFile();
+	}
+}
+
+void endMonitorStatusActivity() {
+	if (!monitorRuntimeStatus.enabled || monitorStatusActivityDepth == 0) return;
+	if (--monitorStatusActivityDepth != 0) return;
+	if (monitorRuntimeStatus.currentCycleStartedAt == SysTime.min &&
+		monitorRuntimeStatus.processState == "syncing") {
+		monitorRuntimeStatus.processState = monitorStatusPreviousState;
+		writeMonitorStatusFile();
+	}
+}
+
 void completeMonitorRuntimeStatusShutdown() {
 	if (!monitorRuntimeStatus.enabled) return;
 
@@ -2239,6 +2264,10 @@ void oneDriveOnlineCallback() {
 		}
 	}
 
+	// Remote notifications can trigger transfers between scheduled monitor cycles.
+	beginMonitorStatusActivity();
+	scope(exit) endMonitorStatusActivity();
+
 	// Identify which online notification mechanism invoked this callback for debug correlation
 	string onlineCallbackSource = appConfig.getValueBool("webhook_enabled") ? "webhook_callback" : "websocket_callback";
 
@@ -2452,6 +2481,12 @@ void applyPendingLocalChanges(string invocationSource) {
 	if (debugLogging) {
 		addLogEntry("Applying pending local observations: source=" ~ invocationSource ~ ", count=" ~ to!string(pendingChanges.length), ["debug"]);
 	}
+
+	if (pendingChanges.empty) return;
+
+	// Local observations may perform uploads, moves or deletes between cycles.
+	beginMonitorStatusActivity();
+	scope(exit) endMonitorStatusActivity();
 
 	string[] changedLocalFilesToUploadToOneDrive;
 	foreach (change; pendingChanges) {
