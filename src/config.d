@@ -2719,6 +2719,24 @@ class ApplicationConfig {
 			addLogEntry("ERROR: --force and --resync cannot be used together as there is zero way to determine that a big delete has occurred");
 			operationalConflictDetected = true;
 		}
+		
+		// --mirror-local-state requires --local-first
+		if (getValueBool("mirror_local_state") && !getValueBool("local_first")) {
+			addLogEntry("ERROR: --mirror-local-state requires --local-first");
+			operationalConflictDetected = true;
+		}
+
+		// --mirror-local-state cannot be used with --upload-only
+		if (getValueBool("mirror_local_state") && getValueBool("upload_only")) {
+			addLogEntry("ERROR: --mirror-local-state cannot be used with --upload-only");
+			operationalConflictDetected = true;
+		}
+
+		// --mirror-local-state cannot be used with --download-only
+		if (getValueBool("mirror_local_state") && getValueBool("download_only")) {
+			addLogEntry("ERROR: --mirror-local-state cannot be used with --download-only");
+			operationalConflictDetected = true;
+		}
 				
 		// Return bool value indicating if we have an operational conflict
 		return operationalConflictDetected;
