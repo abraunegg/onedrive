@@ -83,6 +83,18 @@ class SafeBackupCaseBase(E2ETestCase):
         ])
         return command
 
+    @staticmethod
+    def _unexpected_upload_activity(output: str) -> list[str]:
+        # Same no-op upload markers already used by TC0029.
+        markers = ("Uploading new file:", "Uploading modified file:", "Uploading file:")
+        return [marker for marker in markers if marker in output]
+
+    @staticmethod
+    def _unexpected_download_activity(output: str) -> list[str]:
+        # Same download-side reconciliation markers already used by TC0029.
+        markers = ("Downloading file:", "Creating local directory")
+        return [marker for marker in markers if marker in output]
+
     def _safe_backup_files_for(self, canonical_path: Path) -> list[Path]:
         stem = canonical_path.stem
         suffix = canonical_path.suffix
