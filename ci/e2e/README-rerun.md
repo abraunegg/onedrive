@@ -48,10 +48,16 @@ for shared-folder inclusion/exclusion ordering.
 TC0019 preserves the existing real logging and runtime-config synchronisation
 scenario (`OC-0001`) and additionally stress-tests
 `ApplicationConfig.checkForBasicOptionConflicts()` using isolated per-scenario
-configurations (`OC-0002` onward). The new checks cover invalid permissions,
+configurations (`OC-0002` onward). Three invalid configurations are deliberately
+rejected by the config parser *before* the basic-conflict checker (OC-0002,
+OC-0004 and OC-0034); these are explicitly marked as parser-stage tests.
+The new checks cover invalid permissions,
 conflicting operation modes, resync/query combinations, missing option
 prerequisites, invalid argument values, the #3970 `mirror_local_state` rules,
 CLI/config-file precedence, multi-error diagnostics, and accepted controls.
+CLI-only commands are passed on the command line; they are not written as
+unsupported config-file keys. OC-0033 confirms that an empty configured
+`log_dir` falls back to the default instead of being rejected.
 
 The option-validation scenarios execute the real client with
 `--display-running-config --dry-run --logout`; unlike `--display-config`,
@@ -60,7 +66,10 @@ provides a safe, successful early-exit path for positive controls. These
 scenarios must not perform Microsoft Graph operations or modify the test's
 local canary or protected config/database state. Each rejection must return
 `EXIT_FAILURE` (`1`) with its **specific expected diagnostic**; an unrelated
-error or resync-required exit (`78`) is not accepted.
+error or resync-required exit (`78`) is not accepted. Validator-stage cases
+require effective-option output; parser-stage rejection cases must terminate
+before that display, with their actual parser diagnostic. OC-0033 is an
+accepted parser-normalisation control (exit `0`), not a rejection.
 
 Per-scenario stdout/stderr and a machine-readable result matrix are preserved
 under `logs/tc0019/option_conflicts` and `state/tc0019/option_conflicts.json`.

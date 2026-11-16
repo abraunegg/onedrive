@@ -24,6 +24,9 @@ class OptionConflictScenario:
     # Accepted combinations use --dry-run --logout to test the startup validator
     # without a sync, an authentication change, or any Graph operations.
     expected_exit: int = 1
+    # Config-parser errors can terminate before runtime config display and
+    # checkForBasicOptionConflicts(). Keep this separate from validator cases.
+    expected_stage: str = "validator"
 
 
 class TestCase0019LoggingAndRunningConfig(E2ETestCase):
@@ -57,18 +60,28 @@ class TestCase0019LoggingAndRunningConfig(E2ETestCase):
         def add(label: str, *, config: tuple[str, ...] = (),
                 cli: tuple[str, ...] = (), errors: tuple[str, ...] = (),
                 effective: tuple[tuple[str, str], ...] = (),
-                accepted: bool = False) -> None:
+                accepted: bool = False,
+                stage: str = "validator") -> None:
             cases.append(OptionConflictScenario(
                 scenario_id=f"OC-{len(cases) + 2:04d}", label=label,
                 config=config, cli=cli, errors=errors, effective=effective,
-                expected_exit=0 if accepted else 1,
+                expected_exit=0 if accepted else 1, expected_stage=stage,
             ))
 
         # Permission validation and mutually exclusive operational modes.
+        # Negative values are rejected by the *config parser* (ulong) before
+        # the runtime display/checker. Out-of-range positive octal values
+        # make it through parsing and must be rejected by the checker itself.
         for key in ("sync_dir_permissions", "sync_file_permissions"):
             for value in ("-1", "778"):
-                add(f"reject {key}={value}", config=(f'{key} = "{value}"',),
-                    errors=(f"ERROR: Invalid 'User|Group|Other' permissions set for '{key}'",))
+                if value == "-1":
+                    add(f"reject {key}={value} during config parsing",
+                        config=(f'{key} = "{value}"',),
+                        errors=(f"Invalid value for key in config file: {key}",),
+                        stage="config_parser")
+                else:
+                    add(f"reject {key}={value}", config=(f'{key} = "{value}"',),
+                        errors=(f"ERROR: Invalid 'User|Group|Other' permissions set for '{key}'",))
         add("upload_only and download_only", cli=("--upload-only", "--download-only"),
             errors=("ERROR: --upload-only and --download-only cannot be used together",),
             effective=(("upload_only", "true"), ("download_only", "true")))
@@ -84,38 +97,40 @@ class TestCase0019LoggingAndRunningConfig(E2ETestCase):
             config=('cleanup_local_files = "true"',),
             errors=("ERROR: --cleanup-local-files can only be used with --download-only",))
 
-        # Query-mode conflicts: each flag is exercised against both resync forms.
-        for opt, setting, diagnostic in (
-            ("list-shared-items", 'list_business_shared_items = "true"',
+        # Query-mode options are CLI-only (declared in updateFromArgs()).
+        # Writing them into a config file aborts in the parser and never
+        # exercises checkForBasicOptionConflicts().
+        for opt, opt_args, diagnostic in (
+            ("list-shared-items", ("--list-shared-items",),
              "ERROR: --list-shared-items cannot be used with --resync or --resync-auth"),
-            ("display-sync-status", 'display_sync_status = "true"',
+            ("display-sync-status", ("--display-sync-status",),
              "ERROR: --display-sync-status cannot be used with --resync or --resync-auth"),
-            ("modified-by", 'modified_by = "test-user"',
+            ("modified-by", ("--modified-by", "test-user"),
              "ERROR: --modified-by cannot be used with --resync or --resync-auth"),
-            ("get-file-link", 'get_file_link = "sample.txt"',
+            ("get-file-link", ("--get-file-link", "sample.txt"),
              "ERROR: --get-file-link cannot be used with --resync or --resync-auth"),
-            ("create-share-link", 'create_share_link = "sample.txt"',
+            ("create-share-link", ("--create-share-link", "sample.txt"),
              "ERROR: --create-share-link cannot be used with --resync or --resync-auth"),
-            ("get-sharepoint-drive-id", 'sharepoint_library_name = "Documents"',
+            ("get-sharepoint-drive-id", ("--get-sharepoint-drive-id", "Documents"),
              "ERROR: --get-sharepoint-drive-id cannot be used with --resync or --resync-auth"),
         ):
             for resync_flag in ("--resync", "--resync-auth"):
                 add(f"{opt} incompatible with {resync_flag}",
-                    config=(setting,), cli=(resync_flag,), errors=(diagnostic,))
+                    cli=(*opt_args, resync_flag), errors=(diagnostic,))
 
         for cli_opt in ("--sync", "--monitor"):
             add(f"list-shared-items incompatible with {cli_opt}",
-                config=('list_business_shared_items = "true"',), cli=(cli_opt,),
+                cli=("--list-shared-items", cli_opt),
                 errors=("ERROR: --list-shared-items cannot be used with --sync or --monitor",))
             add(f"display-sync-status incompatible with {cli_opt}",
-                config=('display_sync_status = "true"',), cli=(cli_opt,),
+                cli=("--display-sync-status", cli_opt),
                 errors=(f"ERROR: {cli_opt} and --display-sync-status cannot be used together",))
             add(f"display-quota incompatible with {cli_opt}",
-                config=('display_quota = "true"',), cli=(cli_opt,),
+                cli=("--display-quota", cli_opt),
                 errors=(f"ERROR: {cli_opt} and --display-quota cannot be used together",))
 
         add("sync-shared-files requires sync_business_shared_items",
-            config=('sync_business_shared_files = "true"',),
+            cli=("--sync-shared-files",),
             errors=("ERROR: The --sync-shared-files option can only be utilised",))
         add("force-sync without --single-directory", cli=("--sync", "--force-sync"),
             errors=("ERROR: --force-sync can only be used with --sync --single-directory",))
@@ -124,11 +139,17 @@ class TestCase0019LoggingAndRunningConfig(E2ETestCase):
         add("azure_ad_endpoint requires tenant ID",
             config=('azure_ad_endpoint = "https://login.example.invalid"',),
             errors=("ERROR: config option 'azure_tenant_id' cannot be empty",))
-        add("enabled logging requires log_dir",
-            config=('enable_logging = "true"', 'log_dir = ""'),
-            errors=("ERROR: config option 'log_dir' cannot be empty",))
-        add("empty sync_dir", config=('sync_dir = "   "',),
-            errors=("ERROR: --syncdir value cannot be empty",))
+        # An empty log_dir in config is normalised to the default by the
+        # parser. It is NOT a conflict-checker failure. Do not enable logging
+        # here or create an unrelated log file outside the test workspace.
+        add("empty config log_dir falls back to default", accepted=True,
+            config=('log_dir = ""',),
+            errors=("Invalid value for key in config file - using default value: log_dir",))
+        # Conversely an empty sync_dir is a fatal parser-stage rejection.
+        add("empty sync_dir rejected during config parsing",
+            config=('sync_dir = "   "',),
+            errors=("ERROR: sync_dir in config file cannot be empty",),
+            stage="config_parser")
 
         for cli_opt in ("--sync", "--monitor"):
             for key, display in (
@@ -138,7 +159,7 @@ class TestCase0019LoggingAndRunningConfig(E2ETestCase):
                 ("destination_directory", "destination-directory"),
             ):
                 add(f"{display} incompatible with {cli_opt}",
-                    config=(f'{key} = "testscope"',), cli=(cli_opt,),
+                    cli=(cli_opt, f"--{display}", "testscope"),
                     errors=(f"ERROR: {cli_opt} and --{display} cannot be used together",))
 
         add("download_only with local_first", cli=("--download-only", "--local-first"),
@@ -153,7 +174,9 @@ class TestCase0019LoggingAndRunningConfig(E2ETestCase):
             ("destination_directory", "destination-directory"),
         ):
             add(f"reject directive-like {display} value",
-                config=(f'{key} = "--not-an-argument"',),
+                # The '=' form ensures getOpt parses --not-an-argument as the
+                # *value*, not as a second option. All are CLI-only strings.
+                cli=(f"--{display}=--not-an-argument",),
                 errors=(f"ERROR: --{display} missing a valid entry",))
         add("use_intune_sso and use_device_auth",
             config=('use_intune_sso = "true"', 'use_device_auth = "true"'),
@@ -221,8 +244,11 @@ class TestCase0019LoggingAndRunningConfig(E2ETestCase):
             config=('upload_only = "true"', 'remove_source_files = "true"'))
         add("cleanup_local_files accepted with download_only", accepted=True,
             config=('download_only = "true"', 'cleanup_local_files = "true"'))
+        # --sync-shared-files is CLI-only, but the prerequisite is the
+        # *sync_business_shared_items config key*, not --list-shared-items.
         add("sync shared files accepted with Business Shared Items", accepted=True,
-            config=('sync_business_shared_files = "true"', 'sync_business_shared_items = "true"'))
+            config=('sync_business_shared_items = "true"',),
+            cli=("--sync-shared-files",))
         add("tenant provided for azure endpoint", accepted=True,
             config=('azure_ad_endpoint = "https://login.example.invalid"',
                     'azure_tenant_id = "example.invalid"'))
@@ -369,8 +395,14 @@ class TestCase0019LoggingAndRunningConfig(E2ETestCase):
             for key, expected in scenario.effective:
                 if visible.get(key) != expected:
                     errors.append(f'effective {key} expected {expected}, got {visible.get(key)!r}')
-            if not visible:
-                errors.append('missing --display-running-config effective options')
+            if scenario.expected_stage == "validator":
+                if not visible:
+                    errors.append('missing --display-running-config effective options')
+            elif scenario.expected_stage == "config_parser":
+                if visible:
+                    errors.append('config parser rejection unexpectedly reached runtime display')
+            else:
+                errors.append(f'unknown expected stage: {scenario.expected_stage}')
             unexpected_remote = [m for m in self.REMOTE_ACTIVITY_MARKERS if m in combined]
             if unexpected_remote:
                 errors.append(f'unexpected network/sync activity marker: {unexpected_remote}')
@@ -391,6 +423,7 @@ class TestCase0019LoggingAndRunningConfig(E2ETestCase):
                 'scenario_id': scenario.scenario_id,
                 'label': scenario.label,
                 'expected_exit': scenario.expected_exit,
+                'expected_stage': scenario.expected_stage,
                 'returncode': result.returncode,
                 'expected_diagnostics': list(scenario.errors),
                 'cli_flags': list(scenario.cli),
