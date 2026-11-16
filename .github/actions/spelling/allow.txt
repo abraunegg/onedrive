@@ -223,6 +223,7 @@ hotmail
 howto
 hskrieg
 htons
+Hyprland
 idk
 idlol
 idup
@@ -415,6 +416,7 @@ odata
 ofonedrive
 oldlenp
 oldp
+Omarchy
 onbinarymessage
 onedrive
 onenote
