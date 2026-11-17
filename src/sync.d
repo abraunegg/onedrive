@@ -6967,15 +6967,17 @@ class SyncEngine {
 												// dbItem.mtime needs to be updated to be the local timestamp
 												dbItem.mtime = localModifiedTime.toUTC();
 												itemDB.upsert(dbItem);
-											} else {
-												// Not a --upload-only & --local-first scenario
+											} else if (!uploadOnly) {
+												// Normal bidirectional sync may align an older local timestamp.
+												// Upload-only must leave the local filesystem unchanged.
 												// Log what is being done
 												if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with an older local timestamp - correcting local timestamp", ["verbose"]);}
 												// Set the timestamp, logging and error handling done within function
 												setLocalPathTimestamp(dryRun, localFilePath, dbItem.mtime);
 											}
 										}
-									} else {
+									} else if (!uploadOnly) {
+										// Remote/shared files also must not have their local timestamp changed in upload-only.
 										// Remote file, remote values need to be used, we may not even have permission to change timestamp, update local file
 										if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online, however file is a OneDrive Business Shared File - correcting local timestamp", ["verbose"]);}
 										// Set the timestamp, logging and error handling done within function
@@ -8982,15 +8984,28 @@ class SyncEngine {
 					!currentOnlineJSONData["eTag"].str.empty &&
 					!dbItem.eTag.empty &&
 					(currentOnlineJSONData["eTag"].str == dbItem.eTag);
+				// Metadata-only eTag changes (such as a move) need not change the file's
+				// contents. Trust the original DB baseline only for the same remote item
+				// when size and an available content hash also match. Otherwise remain
+				// conservative about an older local file overwriting newer online data.
+				bool onlineContentMatchesDatabaseBaseline =
+					uploadOnly && !appConfig.getValueBool("local_first") &&
+					onlineObjectMatchesDatabaseIdentity &&
+					!dbItem.size.empty && hasFileSize(currentOnlineJSONData) &&
+					(dbItem.size == to!string(currentOnlineJSONData["size"].integer)) &&
+					((!dbItem.quickXorHash.empty && hasQuickXorHash(currentOnlineJSONData) &&
+					  dbItem.quickXorHash == currentOnlineJSONData["file"]["hashes"]["quickXorHash"].str) ||
+					 (!dbItem.sha256Hash.empty && hasSHA256Hash(currentOnlineJSONData) &&
+					  dbItem.sha256Hash == currentOnlineJSONData["file"]["hashes"]["sha256Hash"].str));
 				bool trustDatabaseBaseline =
-					onlineUnchangedSinceLastSync &&
+					(onlineUnchangedSinceLastSync || onlineContentMatchesDatabaseBaseline) &&
 					!appConfig.getValueBool("resync");
 
-				// In upload-only mode the local tree is read-only. Without --local-first,
-				// an online item we cannot prove unchanged from our database baseline
-				// is authoritative; never create a local safeBackup or overwrite it.
-				// A matching baseline still permits normal uploads of local edits.
-				if (uploadOnly && !appConfig.getValueBool("local_first") && !trustDatabaseBaseline) {
+				// --upload-only without --local-first still uploads a locally newer
+				// revision. Only an older local revision with a genuinely untrusted
+				// remote baseline is a conflict, and it must not change local files.
+				if (uploadOnly && !appConfig.getValueBool("local_first") &&
+				    (localModifiedTime < onlineModifiedTime) && !trustDatabaseBaseline) {
 					addLogEntry("WARNING: Skipping upload-only modified-file conflict because the existing online item is authoritative: " ~ localFilePath);
 					modifiedUploadRedirectedByConflictResolution = true;
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -11645,10 +11660,31 @@ class SyncEngine {
 									if (debugLogging && uploadOnly && !comparisonKnown) {
 										addLogEntry("Existing online file content comparison is inconclusive: " ~ fileToUpload, ["debug"]);
 									}
+									// Without --local-first, a newer local file must still replace
+									// an older remote one. Preserve second-resolution comparison used
+									// by the existing modified-file collision path.
+									bool onlineNewer = false;
 									if (uploadOnly && !appConfig.getValueBool("local_first")) {
-										// Online is authoritative; do not create a local backup,
-										// replace the remote item, or record mismatched bytes as synced.
-										addLogEntry("WARNING: Skipping upload-only new-file collision because the existing online item is authoritative: " ~ fileToUpload);
+										SysTime localModifiedTime;
+										try {
+											localModifiedTime = timeLastModified(fileToUpload).toUTC();
+										} catch (FileException exception) {
+											if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+												addLogEntry("File disappeared locally before new-file conflict timestamp comparison: " ~ fileToUpload);
+											} else {
+												displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+											}
+											return;
+										}
+										SysTime onlineModifiedTime = makeItem(fileDetailsFromOneDrive).mtime;
+										localModifiedTime.fracSecs = Duration.zero;
+										onlineModifiedTime.fracSecs = Duration.zero;
+										onlineNewer = localModifiedTime < onlineModifiedTime;
+									}
+									if (onlineNewer) {
+										// A newer remote item wins in ordinary upload-only mode.
+										// Do not create a backup, replace it, or mark differing bytes synced.
+										addLogEntry("WARNING: Skipping upload-only new-file collision because the existing online item is newer: " ~ fileToUpload);
 										zeroDataTraversal = true;
 									} else {
 										if (debugLogging) {addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);}
@@ -11667,7 +11703,9 @@ class SyncEngine {
 										// --upload-only --local-first selects the canonical local
 										// content regardless of online timestamps; use the existing
 										// modified-file upload and database/eTag handling.
-										if (uploadOnly && appConfig.getValueBool("local_first")) {
+										if (uploadOnly) {
+											// Local-first always uploads; ordinary upload-only reaches here
+											// only when its local timestamp is not older than online.
 											uploadChangedLocalFileToOneDrive([changedItemParentDriveId, changedItemId, fileToUpload]);
 										} else {
 											// Which file is technically newer? The local file or the remote file?
