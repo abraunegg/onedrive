@@ -1236,7 +1236,7 @@ To enable selective synchronisation, create a file named `sync_list` in your app
 > Important points to understand before using 'sync_list'.
 > *    'sync_list' excludes _everything_ by default on OneDrive.
 > *    'sync_list' follows an _"exclude overrides include"_ rule, and requires **explicit inclusion**.
-> *    Order specific exclusions before inclusions, so that anything _specifically included_ is included.
+> *    **All exclusion rules must precede all inclusion rules.** An exclusion after an inclusion causes the client to reject the `sync_list` and exit before synchronisation.
 > *    How and where you place your `/` matters for excludes and includes in subdirectories.
 
 Each line of the 'sync_list' file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during synchronisation operations.
@@ -1285,6 +1285,15 @@ Each line of the 'sync_list' file represents a relative path from your `sync_dir
 
 # Exclude Secret_data ONLY in OneDrive root
 !/Secret_data/*
+
+# Exclude Android build directories located ANYWHERE inside ANY project
+!/Programming/Projects/Android/**/build/*
+
+# Exclude Android NDK /.cxx build trees ANYWHERE inside ANY project
+!/Programming/Projects/Android/**/.cxx/*
+
+# Exclude Web build output directories across ANY nested depth
+!/Programming/Projects/Web/**/build/*
 
 # ----------------------------------------------------------------------
 # Modern development / programming exclusions
@@ -1363,15 +1372,6 @@ Work/Project*
 # │   └── other_stuffs
 #
 /Parent/Blog/*
-
-# Include Android build directories located ANYWHERE inside ANY project
-!/Programming/Projects/Android/**/build/*
-
-# Include Android NDK /.cxx build trees ANYWHERE inside ANY project
-!/Programming/Projects/Android/**/.cxx/*
-
-# Include Web build output directories across ANY nested depth
-!/Programming/Projects/Web/**/build/*
 
 # Include the entire /Programming directory from OneDrive root
 /Programming
