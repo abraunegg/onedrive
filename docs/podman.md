@@ -267,7 +267,16 @@ If you want Podman to act when the container becomes unhealthy, add the `--healt
 *   When running the container directly with `podman run`, use `--health-on-failure=restart`.
 *   When running the container as a systemd service, use `--health-on-failure=kill` instead, so that the container exits and systemd restarts it according to the unit's restart policy. Do not combine `--health-on-failure=restart` with systemd's own restart handling.
 
-The healthcheck options are part of the container definition, so they are carried over into the unit file created by `podman generate systemd --new`.
+The healthcheck options are part of the container definition, so they are carried over into the unit file created by `podman generate systemd --new`. If you use a [Podman Quadlet](#podman-quadlet-alternative-to-podman-generate-systemd) instead, add the script mount and the equivalent keys to the `[Container]` section:
+```ini
+Volume=%h/.config/onedrive-podman/healthcheck.sh:/healthcheck.sh:ro,Z
+HealthCmd=bash /healthcheck.sh
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+HealthStartPeriod=5m
+HealthOnFailure=kill
+```
 
 #### 6.5 Stop running 'onedrive' container
 ```bash
