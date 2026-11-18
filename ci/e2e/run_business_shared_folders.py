@@ -142,6 +142,26 @@ def main() -> int:
 
     suite_metadata = _build_metadata(context, selected_case_ids, executed_case_ids)
 
+    # Never report an empty or mismatched selection as successful coverage.
+    available_case_ids = {testcase.case_id for testcase in build_test_suite()}
+    unknown_cases = {_normalise_case_id(case_id) for case_id in context.selected_case_ids} - available_case_ids
+    unknown_scenario_cases = set(context.selected_scenarios) - set(executed_case_ids)
+    if unknown_cases or unknown_scenario_cases:
+        problems = []
+        if unknown_cases:
+            problems.append("unknown case IDs: " + ", ".join(sorted(unknown_cases)))
+        if unknown_scenario_cases:
+            problems.append("scenario filters target unselected or unknown case IDs: "
+                            + ", ".join(sorted(unknown_scenario_cases)))
+        reason = "Invalid E2E selection: " + "; ".join(problems)
+        context.log(reason)
+        write_text_file(context.out_dir / "results.json", json.dumps({
+            **suite_metadata,
+            "cases": [result_to_actions_case(TestResult.fail_result(
+                "0000", "E2E selection validation", reason))],
+        }, indent=2))
+        return 1
+
     auth_preflight_result = run_auth_preflight(context)
     if auth_preflight_result.status != "pass":
         context.log(f"Auth preflight FAILED: {auth_preflight_result.reason}")
@@ -172,6 +192,25 @@ def main() -> int:
                 raise RuntimeError(
                     f"Test case returned mismatched case_id: expected '{testcase.case_id}', got '{result.case_id}'"
                 )
+            requested_scenarios = context.selected_scenarios_for_case(testcase.case_id)
+            if requested_scenarios:
+                observed_candidates = context.seen_scenario_candidates.get(testcase.case_id, set())
+                missing_scenarios = requested_scenarios - observed_candidates
+                reported_executed = result.details.get("executed_scenario_ids")
+                if isinstance(reported_executed, list):
+                    missing_scenarios |= requested_scenarios - set(reported_executed)
+                if missing_scenarios:
+                    result = TestResult.fail_result(
+                        testcase.case_id, testcase.name,
+                        "Requested E2E scenario(s) did not execute: "
+                        + ", ".join(sorted(missing_scenarios)),
+                        result.artifacts,
+                        {**result.details,
+                         "requested_scenarios": sorted(requested_scenarios),
+                         "observed_scenario_candidates": sorted(observed_candidates),
+                         "unexecuted_scenarios": sorted(missing_scenarios)},
+                    )
+
             cases.append(result_to_actions_case(result))
             if result.status != "pass":
                 failed = True

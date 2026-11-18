@@ -7,7 +7,7 @@ from pathlib import Path
 
 from framework.context import E2EContext
 from framework.result import TestResult
-from framework.pdf import REVISION_0 as PDF_REVISION_0, REVISION_1 as PDF_REVISION_1, REVISION_2 as PDF_REVISION_2, create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, copy_pdf_pair, pdf_pair_hashes, pdf_pair_backup_files, validate_pdf_pair_backups, pdf_pair_backup_hashes
+from framework.pdf import REVISION_0 as PDF_REVISION_0, REVISION_1 as PDF_REVISION_1, REVISION_2 as PDF_REVISION_2, create_random_pdf_pair, mutate_pdf_pair_revision, validate_pdf_pair, copy_pdf_pair, pdf_pair_hashes, pdf_pair_backup_files, validate_pdf_pair_backups, pdf_pair_backup_hashes, pdf_pair_paths
 from framework.image import REVISION_0 as IMAGE_REVISION_0, REVISION_1 as IMAGE_REVISION_1, REVISION_2 as IMAGE_REVISION_2, create_random_image_set, mutate_image_set_revision, validate_image_set, copy_image_set, image_set_hashes, image_set_backup_files, validate_image_set_backups, image_set_backup_hashes
 from framework.utils import reset_directory, write_text_file
 from framework.xlsx import REVISION_0, REVISION_1, REVISION_2, create_random_xlsx_pair, mutate_xlsx_pair_revision, validate_xlsx_pair, copy_xlsx_pair, xlsx_pair_hashes, xlsx_pair_backup_files, validate_xlsx_pair_backups, xlsx_pair_backup_hashes
@@ -99,6 +99,22 @@ class TestCase0068SafeBackupUploadOnlyConflictValidation(SafeBackupCaseBase):
         initial_pdf_error = validate_pdf_pair(local_pdf, PDF_REVISION_0)
         initial_image_error = validate_image_set(local_image, IMAGE_REVISION_0)
         details.update({"seed_returncode": seed.returncode, "initial_returncode": initial.returncode, "initial_xlsx_validation_error": initial_xlsx_error, "initial_pdf_validation_error": initial_pdf_error, "initial_image_validation_error": initial_image_error})
+        if initial_pdf_error:
+            # Capture bounded, non-content diagnostics for unexpectedly invalid
+            # downloaded PDF fixtures; never turn invalid bytes into a PASS.
+            pdf_diagnostics = {}
+            for label, candidate in zip(("small", "large"), pdf_pair_paths(local_pdf)):
+                if candidate.is_file():
+                    with candidate.open("rb") as handle:
+                        prefix = handle.read(16)
+                    pdf_diagnostics[label] = {
+                        "size_bytes": candidate.stat().st_size,
+                        "first_16_bytes_hex": prefix.hex(),
+                        "quickxor_hash": self._hash_if_file(candidate),
+                    }
+                else:
+                    pdf_diagnostics[label] = {"missing": True}
+            details["invalid_initial_pdf_diagnostics"] = pdf_diagnostics
         if seed.returncode != 0 or initial.returncode != 0 or self._text_if_file(local_text) != baseline_text or initial_xlsx_error or initial_pdf_error or initial_image_error:
             self._write_metadata(metadata_file, details)
             return self.fail_result(reason=f"Failed to establish tracked TXT/XLSX/PDF baseline: XLSX={initial_xlsx_error}; PDF={initial_pdf_error}", artifacts=artifacts, details=details)

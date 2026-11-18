@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 import re
+import sqlite3
 import time
+from contextlib import closing
 from pathlib import Path
 
 from framework.context import E2EContext
@@ -17,7 +19,8 @@ class TestCase0016CheckNosyncValidation(MonitorModeTestCaseBase):
     name = "check_nosync validation"
     description = (
         "Validate pre-existing .nosync exclusion and dynamic .nosync exclusion "
-        "after a directory has already been synchronised"
+        "after a directory has already been synchronised, including online changes "
+        "and online deletions reconciled beneath a .nosync boundary"
     )
 
     def _simple_config_text(
@@ -95,6 +98,64 @@ class TestCase0016CheckNosyncValidation(MonitorModeTestCaseBase):
         if not path.is_file():
             return ""
         return path.read_text(encoding="utf-8", errors="replace")
+
+    @staticmethod
+    def _database_rows_by_name(config_dir: Path, name: str) -> list[dict[str, object]]:
+        # The client owns its database. It is read here only after the client has exited,
+        # through a read-only connection, and its schema is never modified.
+        database_path = config_dir / "items.sqlite3"
+        if not database_path.is_file():
+            return []
+        with closing(sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)) as connection:
+            connection.row_factory = sqlite3.Row
+            rows = connection.execute(
+                "SELECT driveId, id, name, type, syncStatus FROM item WHERE name = ? ORDER BY driveId, id",
+                (name,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def _nosync_record_failures(
+        self,
+        config_dir: Path,
+        *,
+        retained_names: list[str],
+        absent_names: list[str],
+        details: dict[str, object],
+        label: str,
+        preserved_identities: dict[str, tuple[object, object]] | None = None,
+    ) -> list[str]:
+        # An item beneath a .nosync boundary that still exists online is intentionally retained,
+        # so its record must exist and must not be left flagged as absent (syncStatus 'N') after
+        # a generated /delta reconciliation. A record for an item deleted online outside the
+        # boundary must have been removed.
+        # An item beneath the boundary that was deleted online is no longer present online, so
+        # the final online reconciliation legitimately demotes its syncStatus. Only the record
+        # and its (driveId, id) identity recorded before the deletion are required; syncStatus
+        # is deliberately not inspected for these items.
+        failures: list[str] = []
+        try:
+            for name, expected_identity in (preserved_identities or {}).items():
+                rows = self._database_rows_by_name(config_dir, name)
+                details[f"{label}_record_{name}"] = rows
+                if len(rows) != 1:
+                    failures.append(f"expected exactly one database record for retained item {name}, found {len(rows)}")
+                elif (rows[0]["driveId"], rows[0]["id"]) != expected_identity:
+                    failures.append(f"database identity of retained item {name} changed: expected {expected_identity}, found {(rows[0]['driveId'], rows[0]['id'])}")
+            for name in retained_names:
+                rows = self._database_rows_by_name(config_dir, name)
+                details[f"{label}_record_{name}"] = rows
+                if len(rows) != 1:
+                    failures.append(f"expected exactly one database record for retained item {name}, found {len(rows)}")
+                elif rows[0]["syncStatus"] != "Y":
+                    failures.append(f"database record for item protected by .nosync was left flagged as absent: {name}")
+            for name in absent_names:
+                rows = self._database_rows_by_name(config_dir, name)
+                details[f"{label}_record_{name}"] = rows
+                if rows:
+                    failures.append(f"database record remains for item deleted online outside .nosync: {name}")
+        except sqlite3.Error as exc:
+            failures.append(f"database could not be read after the client exited: {exc}")
+        return failures
 
     @staticmethod
     def _check_nosync_active(output: str) -> bool:
@@ -324,6 +385,10 @@ class TestCase0016CheckNosyncValidation(MonitorModeTestCaseBase):
             "subject_reconcile": (
                 scenario_log_dir / "phase6_subject_reconcile_stdout.log",
                 scenario_log_dir / "phase6_subject_reconcile_stderr.log",
+            ),
+            "subject_converge": (
+                scenario_log_dir / "phase6b_subject_converge_stdout.log",
+                scenario_log_dir / "phase6b_subject_converge_stderr.log",
             ),
             "verify": (
                 scenario_log_dir / "phase7_remote_verify_stdout.log",
@@ -695,6 +760,49 @@ class TestCase0016CheckNosyncValidation(MonitorModeTestCaseBase):
                 f"subject reconciliation downloaded remote content beneath .nosync: {remote_only_relative}"
             )
 
+        # The generated /delta response observed the protected objects online. Their records
+        # must be retained and flagged as present rather than left as absent.
+        failures.extend(
+            self._nosync_record_failures(
+                conf_subject,
+                retained_names=["DynamicExcluded", "existing-a.txt", "existing-b.txt"],
+                absent_names=[],
+                details=details,
+                label="subject_reconcile",
+            )
+        )
+
+        # A further unchanged reconciliation must not act beneath .nosync or alter the local state.
+        subject_converge_result = self._run_phase(
+            context=context,
+            label=f"{scenario_id}_phase6b_subject_converge",
+            command=subject_reconcile_command,
+            stdout_file=phase_files["subject_converge"][0],
+            stderr_file=phase_files["subject_converge"][1],
+            details=details,
+        )
+        if subject_converge_result.returncode != 0:
+            failures.append(
+                f"subject convergence run failed with status {subject_converge_result.returncode}"
+            )
+        converge_lines = self._combined_output(*phase_files["subject_converge"]).splitlines()
+        converge_action_lines = [
+            line
+            for line in converge_lines
+            if excluded_dir_relative in line
+            and any(marker in line for marker in excluded_action_markers)
+        ]
+        details["subject_converge_excluded_action_lines"] = converge_action_lines
+        if converge_action_lines:
+            failures.append(
+                "subject convergence run performed synchronisation action(s) beneath .nosync: "
+                + " | ".join(converge_action_lines)
+            )
+        for relative, expected in subject_expectations.items():
+            path = subject_root / relative
+            if not path.is_file() or self._read_file(path) != expected:
+                failures.append(f"subject convergence run changed or removed local file: {relative}")
+
         # Phase 7: fresh independent remote truth verification. Existing remote
         # content under the excluded subtree must remain online, remote mutations
         # must remain authoritative online, and local-only/.nosync data must not
@@ -747,6 +855,248 @@ class TestCase0016CheckNosyncValidation(MonitorModeTestCaseBase):
         self._write_metadata(metadata_file, details)
         return failures, artifacts, details
 
+    def _run_online_deletion_nosync_scenario(
+        self,
+        context: E2EContext,
+        *,
+        scenario_work_dir: Path,
+        scenario_log_dir: Path,
+        scenario_state_dir: Path,
+    ) -> tuple[list[str], list[str], dict[str, object]]:
+        """Scenario NS-0003: an object deleted online beneath .nosync must be retained.
+
+        --single-directory makes the client generate its own /delta response, where an
+        object that is not seen online is detected as deleted through the 'syncStatus'
+        flag. A tracked object beneath a .nosync boundary is a local preservation boundary,
+        so the online deletion must not remove the local object or its database identity,
+        while an identical online deletion outside the boundary is applied.
+        """
+        scenario_id = "NS-0003"
+        mutator_root = scenario_work_dir / "mutator-root"
+        subject_root = scenario_work_dir / "subject-root"
+        verify_root = scenario_work_dir / "verify-root"
+        conf_mutator = scenario_work_dir / "conf-mutator"
+        conf_subject = scenario_work_dir / "conf-subject"
+        conf_verify = scenario_work_dir / "conf-verify"
+        for path in [mutator_root, subject_root, verify_root]:
+            reset_directory(path)
+
+        root_name = f"ZZ_E2E_TC0016_{scenario_id}_{context.run_id}_{os.getpid()}"
+        protected_dir = f"{root_name}/Protected"
+        protected_deleted = f"{protected_dir}/protected-deleted.txt"
+        protected_kept = f"{protected_dir}/protected-kept.txt"
+        nosync_relative = f"{protected_dir}/.nosync"
+        local_only_relative = f"{protected_dir}/local-only.txt"
+        control_deleted = f"{root_name}/Control/control-deleted.txt"
+        control_kept = f"{root_name}/Control/control-kept.txt"
+        contents = {
+            protected_deleted: "TC0016 NS-0003 protected file deleted online\n",
+            protected_kept: "TC0016 NS-0003 protected file kept online\n",
+            control_deleted: "TC0016 NS-0003 control file deleted online\n",
+            control_kept: "TC0016 NS-0003 control file kept online\n",
+        }
+        local_only_content = "TC0016 NS-0003 local-only content created after .nosync\n"
+        for relative, text in contents.items():
+            write_text_file(mutator_root / relative, text)
+
+        self._prepare_simple_client(context, conf_mutator, mutator_root, label=f"{scenario_id} mutator")
+        self._prepare_simple_client(context, conf_subject, subject_root, label=f"{scenario_id} subject", check_nosync=True)
+        self._prepare_simple_client(context, conf_verify, verify_root, label=f"{scenario_id} verify")
+
+        phase_names = (
+            "mutator_seed", "subject_initial", "mutator_delete", "remote_precheck",
+            "subject_reconcile", "subject_converge", "remote_verify",
+        )
+        phase_files = {
+            phase: (scenario_log_dir / f"{phase}_stdout.log", scenario_log_dir / f"{phase}_stderr.log")
+            for phase in phase_names
+        }
+        metadata_file = scenario_state_dir / "metadata.txt"
+        artifacts = [*(str(path) for pair in phase_files.values() for path in pair), str(metadata_file)]
+        details: dict[str, object] = {
+            "scenario_id": scenario_id,
+            "root_name": root_name,
+            "subject_items_db": str(conf_subject / "items.sqlite3"),
+        }
+        failures: list[str] = []
+
+        def run_phase(phase: str, command: list[str]):
+            return self._run_phase(
+                context=context,
+                label=f"{scenario_id}_{phase}",
+                command=command,
+                stdout_file=phase_files[phase][0],
+                stderr_file=phase_files[phase][1],
+                details=details,
+            )
+
+        def finish() -> tuple[list[str], list[str], dict[str, object]]:
+            self._write_metadata(metadata_file, details)
+            return failures, artifacts, details
+
+        mutator_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--verbose",
+            "--single-directory", root_name, "--confdir", str(conf_mutator),
+        ]
+        verify_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose",
+            "--resync", "--resync-auth", "--single-directory", root_name, "--confdir", str(conf_verify),
+        ]
+        subject_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--verbose",
+            "--single-directory", root_name, "--confdir", str(conf_subject),
+        ]
+
+        # Phase 1: the independent mutator establishes the online baseline and keeps its own database.
+        if run_phase("mutator_seed", mutator_command + ["--resync", "--resync-auth"]).returncode != 0:
+            failures.append("mutator seed failed")
+            return finish()
+
+        # Phase 2: the subject tracks the baseline with check_nosync=true before any .nosync exists.
+        subject_initial_command = [
+            context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose",
+            "--resync", "--resync-auth", "--single-directory", root_name, "--confdir", str(conf_subject),
+        ]
+        if run_phase("subject_initial", subject_initial_command).returncode != 0:
+            failures.append("subject initial download failed")
+            return finish()
+        for relative, text in contents.items():
+            path = subject_root / relative
+            if not path.is_file() or self._read_file(path) != text:
+                failures.append(f"subject initial baseline is missing or has unexpected content: {relative}")
+        if failures:
+            return finish()
+
+        # The identity of the file that is about to be deleted online is recorded before the deletion
+        # (the client has exited, so the database is read through a read-only connection).
+        try:
+            baseline_rows = self._database_rows_by_name(conf_subject, "protected-deleted.txt")
+        except sqlite3.Error as exc:
+            failures.append(f"baseline database could not be read: {exc}")
+            return finish()
+        details["baseline_record_protected-deleted.txt"] = baseline_rows
+        if len(baseline_rows) != 1:
+            failures.append(f"expected exactly one baseline database record for protected-deleted.txt, found {len(baseline_rows)}")
+            return finish()
+        protected_deleted_identity = (baseline_rows[0]["driveId"], baseline_rows[0]["id"])
+
+        # Phase 3: the already-tracked directory becomes a .nosync boundary, with local-only content.
+        write_text_file(subject_root / nosync_relative, "")
+        write_text_file(subject_root / local_only_relative, local_only_content)
+
+        # Phase 4: genuine online deletions, one beneath the boundary and one outside it.
+        (mutator_root / protected_deleted).unlink()
+        (mutator_root / control_deleted).unlink()
+        if run_phase("mutator_delete", mutator_command).returncode != 0:
+            failures.append("independent mutator failed to apply the online deletions")
+            return finish()
+
+        # Phase 5: an independent enumeration confirms the deletions before the stale subject reconciles.
+        if run_phase("remote_precheck", verify_command).returncode != 0:
+            failures.append("remote deletion precheck failed")
+            return finish()
+        precheck_manifest = build_manifest(verify_root)
+        details["precheck_manifest"] = precheck_manifest
+        for relative in (protected_deleted, control_deleted):
+            if relative in precheck_manifest:
+                failures.append(f"online deletion was not confirmed before reconciliation: {relative}")
+        for relative in (protected_kept, control_kept):
+            if relative not in precheck_manifest:
+                failures.append(f"online object expected to remain is missing before reconciliation: {relative}")
+        if failures:
+            return finish()
+
+        # Phase 6: the stale subject reconciles using the SAME configuration and database. No resync.
+        if run_phase("subject_reconcile", subject_command).returncode != 0:
+            failures.append("subject reconciliation failed")
+        reconcile_output = self._combined_output(*phase_files["subject_reconcile"])
+        details["check_nosync_active_during_reconcile"] = self._check_nosync_active(reconcile_output)
+        if not details["check_nosync_active_during_reconcile"]:
+            failures.append("subject reconciliation did not prove check_nosync=true was active")
+        action_markers = [
+            "Uploading new file:", "Uploading modified file:", "Deleting item from Microsoft OneDrive:",
+            "Moving this local file to the configured 'Recycle Bin'",
+            "Moving this local directory to the configured 'Recycle Bin'",
+        ]
+        protected_action_lines = [
+            line for line in reconcile_output.splitlines()
+            if protected_dir in line and any(marker in line for marker in action_markers)
+        ]
+        details["protected_action_lines"] = protected_action_lines
+        if protected_action_lines:
+            failures.append("subject reconciliation acted on content beneath .nosync: " + " | ".join(protected_action_lines))
+
+        # The object deleted online beneath .nosync is retained locally, the one outside it is removed.
+        for relative, text in {
+            protected_deleted: contents[protected_deleted],
+            protected_kept: contents[protected_kept],
+            local_only_relative: local_only_content,
+            nosync_relative: "",
+            control_kept: contents[control_kept],
+        }.items():
+            path = subject_root / relative
+            if not path.is_file():
+                failures.append(f"subject reconciliation removed an object that must be retained: {relative}")
+            elif self._read_file(path) != text:
+                failures.append(f"subject reconciliation changed the content of: {relative}")
+        if (subject_root / control_deleted).exists():
+            failures.append(f"online deletion outside .nosync was not applied locally: {control_deleted}")
+
+        # The object deleted online beneath the boundary keeps its database record and identity (its
+        # syncStatus is not inspected), while the object still online is flagged as present.
+        # The record for the object deleted outside the boundary must have been removed.
+        failures.extend(
+            self._nosync_record_failures(
+                conf_subject,
+                retained_names=["protected-kept.txt"],
+                preserved_identities={"protected-deleted.txt": protected_deleted_identity},
+                absent_names=["control-deleted.txt"],
+                details=details,
+                label="subject_reconcile",
+            )
+        )
+
+        # Phase 7: a further unchanged reconciliation must not act on the retained object either.
+        if run_phase("subject_converge", subject_command).returncode != 0:
+            failures.append("subject convergence run failed")
+        converge_lines = [
+            line for line in self._combined_output(*phase_files["subject_converge"]).splitlines()
+            if root_name in line and any(marker in line for marker in action_markers)
+        ]
+        details["converge_action_lines"] = converge_lines
+        if converge_lines:
+            failures.append("subject convergence run performed unintended operations: " + " | ".join(converge_lines))
+        for relative in (protected_deleted, protected_kept, local_only_relative, nosync_relative, control_kept):
+            if not (subject_root / relative).is_file():
+                failures.append(f"subject convergence run removed an object that must be retained: {relative}")
+        for relative, text in {protected_deleted: contents[protected_deleted], protected_kept: contents[protected_kept]}.items():
+            if self._read_file(subject_root / relative) != text:
+                failures.append(f"subject convergence run changed the content of: {relative}")
+        failures.extend(
+            self._nosync_record_failures(
+                conf_subject,
+                retained_names=["protected-kept.txt"],
+                preserved_identities={"protected-deleted.txt": protected_deleted_identity},
+                absent_names=["control-deleted.txt"],
+                details=details,
+                label="subject_converge",
+            )
+        )
+
+        # Phase 8: online truth. The subject must not have uploaded local-only content or restored deletions.
+        reset_directory(verify_root)
+        if run_phase("remote_verify", verify_command).returncode != 0:
+            failures.append("final remote verification failed")
+        verify_manifest = build_manifest(verify_root)
+        details["verify_manifest"] = verify_manifest
+        for relative in (protected_kept, control_kept):
+            if relative not in verify_manifest:
+                failures.append(f"final remote verification is missing expected online file: {relative}")
+        for relative in (protected_deleted, control_deleted, nosync_relative, local_only_relative):
+            if relative in verify_manifest:
+                failures.append(f"final remote verification contains an unexpected online path: {relative}")
+        return finish()
+
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
@@ -760,6 +1110,7 @@ class TestCase0016CheckNosyncValidation(MonitorModeTestCaseBase):
         scenarios = [
             ("NS-0001", self._run_preexisting_nosync_scenario),
             ("NS-0002", self._run_dynamic_nosync_scenario),
+            ("NS-0003", self._run_online_deletion_nosync_scenario),
         ]
         scenarios = [
             (scenario_id, runner)

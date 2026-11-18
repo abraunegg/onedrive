@@ -286,7 +286,7 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
         seed_conf = layout.work_dir / "seed-conf"
         context.prepare_minimal_config_dir(seed_conf, f'sync_dir = "{sync_root}"\n')
         write_text_file(sync_root / scope / "baseline.txt", "tc0088 baseline\n")
-        seed_command = [context.onedrive_bin, "--sync", "--upload-only", "--resync",
+        seed_command = [context.onedrive_bin, "--display-running-config", "--sync", "--upload-only", "--resync",
                         "--resync-auth", "--single-directory", scope,
                         "--confdir", str(seed_conf)]
         seed_result = run_command(seed_command, cwd=context.repo_root)
@@ -334,7 +334,7 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
                 # testing subsequent changes without --resync.
                 write_text_file(conf / "sync_list", scenario.sync_list_before.replace("$SCOPE", scope))
             if scenario.sync_list_before is not None:
-                prime_cmd = [context.onedrive_bin, "--sync", "--download-only",
+                prime_cmd = [context.onedrive_bin, "--display-running-config", "--sync", "--download-only",
                              "--resync", "--resync-auth",
                              "--single-directory", scope, "--confdir", str(conf)]
                 prime = run_command(prime_cmd, cwd=context.repo_root)
@@ -384,7 +384,7 @@ class TestCase0088ConfigurationResyncPolicy(E2ETestCase):
                 write_text_file(conf / "sync_list", scenario.sync_list_after.replace("$SCOPE", scope))
             cli = [str(sync_root / 'TC0088_DIFFERENT_CLI_ROOT') if arg == '__DIFFERENT_SYNC_DIR__'
                    else arg for arg in scenario.cli]
-            cmd = [context.onedrive_bin, "--sync", "--download-only", "--verbose", "--verbose",
+            cmd = [context.onedrive_bin, "--display-running-config", "--sync", "--download-only", "--verbose", "--verbose",
                    "--single-directory", scope, "--confdir", str(conf), *cli]
             result = run_command(cmd, cwd=context.repo_root)
             out = layout.log_dir / f"{scenario.scenario}.stdout"

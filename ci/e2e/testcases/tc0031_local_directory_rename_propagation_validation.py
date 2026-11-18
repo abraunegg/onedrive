@@ -342,6 +342,10 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
 
             "--verbose",
 
+            "--single-directory",
+
+            root_name,
+
             "--confdir",
 
             str(conf_main),
@@ -395,6 +399,10 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "--sync",
 
             "--verbose",
+
+            "--single-directory",
+
+            root_name,
 
             "--confdir",
 
@@ -583,6 +591,10 @@ class TestCase0031LocalDirectoryRenamePropagationValidation(E2ETestCase):
             "--sync",
 
             "--verbose",
+
+            "--single-directory",
+
+            root_name,
 
             "--confdir",
 

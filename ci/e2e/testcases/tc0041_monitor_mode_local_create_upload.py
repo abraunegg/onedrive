@@ -13,7 +13,7 @@ from framework.pdf import create_random_pdf_pair, validate_pdf_pair, large_pdf_r
 from framework.image import create_random_image_set, validate_image_set, image_set_all_files, image_set_relatives
 from framework.result import TestResult
 from framework.xlsx import REVISION_0, create_random_xlsx_pair, validate_xlsx_pair, large_xlsx_relative
-from framework.utils import command_to_string, reset_directory, run_command, write_text_file
+from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
 
 class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
@@ -125,10 +125,10 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
         image_seed = f"{xlsx_seed}:image"
 
         context.bootstrap_config_dir(conf_main)
-        write_text_file(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
+        write_onedrive_config(conf_main / "config", self._build_config_text(sync_root, app_log_dir))
 
         context.bootstrap_config_dir(conf_verify)
-        write_text_file(
+        write_onedrive_config(
             conf_verify / "config",
             (
                 "# tc0041 verify\n"
@@ -136,6 +136,10 @@ class TestCase0041MonitorModeLocalCreateUpload(MonitorModeTestCaseBase):
                 'bypass_data_preservation = "true"\n'
             ),
         )
+        # Recheck *after* writing: bootstrap validation alone is insufficient
+        # because overwriting config can silently remove SharePoint drive_id.
+        context.validate_generated_config_dir(conf_main)
+        context.validate_generated_config_dir(conf_verify)
 
         write_text_file(baseline_local_path, baseline_content)
 

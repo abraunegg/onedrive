@@ -73,7 +73,7 @@ class TestCase0003DryRunValidation(E2ETestCase):
         write_manifest(before_manifest_file, before_manifest)
 
         command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--dry-run",
@@ -94,7 +94,7 @@ class TestCase0003DryRunValidation(E2ETestCase):
         write_manifest(after_manifest_file, after_manifest)
 
         verify_command = [
-            context.onedrive_bin,
+            context.onedrive_bin, "--display-running-config",
             "--sync",
             "--verbose",
             "--download-only",

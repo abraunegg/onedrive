@@ -17,8 +17,8 @@ class HealthcheckAssertionError(AssertionError):
     pass
 
 
-class TestCase0088MonitorStatusHealthcheckValidation(MonitorModeTestCaseBase):
-    case_id = "0088"
+class TestCase0092MonitorStatusHealthcheckValidation(MonitorModeTestCaseBase):
+    case_id = "0092"
     name = "monitor status container healthcheck validation"
     description = (
         "Validate contrib/docker/healthcheck.sh against the monitor-status.json "
@@ -134,7 +134,7 @@ class TestCase0088MonitorStatusHealthcheckValidation(MonitorModeTestCaseBase):
     def run(self, context: E2EContext) -> TestResult:
         layout = self.prepare_case_layout(
             context,
-            case_dir_name="tc0088",
+            case_dir_name="tc0092",
             ensure_refresh_token=True,
         )
         case_work_dir = layout.work_dir
@@ -144,7 +144,7 @@ class TestCase0088MonitorStatusHealthcheckValidation(MonitorModeTestCaseBase):
         sync_root = case_work_dir / "syncroot"
         confdir = case_work_dir / "conf-main"
         status_file = confdir / "monitor-status.json"
-        root_name = f"ZZ_E2E_TC0088_{context.run_id}_{os.getpid()}"
+        root_name = f"ZZ_E2E_TC0092_{context.run_id}_{os.getpid()}"
         app_log_dir = case_log_dir / "app-logs"
 
         write_text_file(sync_root / root_name / "baseline.txt", "baseline\n")
