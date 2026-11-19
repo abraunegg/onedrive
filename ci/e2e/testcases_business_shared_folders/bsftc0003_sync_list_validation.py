@@ -971,8 +971,8 @@ class BusinessSharedFolderTestCase0003SyncListValidation(E2ETestCase):
             ),
             BusinessSharedFolderSyncListScenario(
                 scenario_id="SL-0039",
-                description="Business Shared Folder include-first rule ordering retains nested directory",
-                sync_list=[f"/{core}/", f"!/{core_exclude}/"],
+                description="Business Shared Folder include-only selection retains nested directory",
+                sync_list=[f"/{core}/"],
                 expected_entries=self._entries_under(core),
                 required_present=[f"{core_dataset_b}/README.txt", f"{core_keep}/keep.txt", f"{core_exclude}/exclude.txt"],
                 required_absent=[f"{mixed_dataset_a}/Document2.docx"],

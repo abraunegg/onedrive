@@ -44,7 +44,9 @@ class ClientSideFiltering {
 		
 		// Load the sync_list file if it exists
 		if (exists(appConfig.syncListFilePath)){
-			loadSyncList(appConfig.syncListFilePath);
+			if (!loadSyncList(appConfig.syncListFilePath)) {
+				return false;
+			}
 		}
 		
 		// Handle skip_dir configuration in config file
@@ -130,7 +132,7 @@ class ClientSideFiltering {
 	}
 
 	// Load sync_list file if it exists
-	void loadSyncList(string filepath) {
+	bool loadSyncList(string filepath) {
 		// open file as read only
 		auto file = File(filepath, "r");
 		auto range = file.byLine();
@@ -147,7 +149,10 @@ class ClientSideFiltering {
 			object.destroy(range);
 		}
 
+		bool inclusionSeen = false;
+		size_t lineNumber = 0;
 		foreach (line; range) {
+			lineNumber++;
 			auto cleanLine = strip(line);
 
 			// Skip any line that is empty or just contains whitespace
@@ -186,6 +191,19 @@ class ClientSideFiltering {
 				continue;
 			}
 
+			// Exclusions must precede inclusions because matching is order-dependent.
+			if (cleanLine[0] == '!' || cleanLine[0] == '-') {
+				if (inclusionSeen) {
+					addLogEntry();
+					addLogEntry("ERROR: Invalid 'sync_list' rule ordering at line " ~ to!string(lineNumber) ~ ": " ~ to!string(cleanLine), ["info", "notify"]);
+					addLogEntry("       All exclusion rules ('!' or '-') must appear before inclusion rules. Correct '" ~ filepath ~ "'.", ["info", "notify"]);
+					addLogEntry();
+					return false;
+				}
+			} else {
+				inclusionSeen = true;
+			}
+
 			// Normalise the 'sync_list' rule and store
 			auto normalisedRulePath = buildNormalizedPath(cleanLine);
 			syncListRules ~= normalisedRulePath;
@@ -205,6 +223,7 @@ class ClientSideFiltering {
 		
 		// Close the file post reading it
 		file.close();
+		return true;
 	}
 
 	// return true or false based on if we have loaded any valid sync_list rules

@@ -1126,8 +1126,8 @@ class SharedFolderPersonalTestCase0003SyncListValidation(E2ETestCase):
             ),
             SharedFolderSyncListScenario(
                 scenario_id="SL-0029",
-                description="Personal Shared Folder include-first rule ordering retains nested directory",
-                sync_list=[f"/{core}/", f"!/{core}/nested/exclude/"],
+                description="Personal Shared Folder include-only selection retains nested directory",
+                sync_list=[f"/{core}/"],
                 expected_entries=self._entries_under(core),
                 required_present=[f"{core}/README.txt", f"{core}/nested/keep/keep.txt", f"{core}/nested/exclude/exclude.txt"],
                 required_absent=[f"{core15}/README.txt"],

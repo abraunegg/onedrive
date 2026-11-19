@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -545,6 +546,14 @@ class TestCase0002SyncListValidation(E2ETestCase):
         events_file = scenario_dir / "events.json"
 
         command = self._build_sync_command(context, sync_root, config_dir)
+        initial_manifest = build_manifest(sync_root) if scenario.execution_mode == "invalid_rule_order" else None
+        initial_local_state = {
+            p.relative_to(sync_root).as_posix(): (
+                p.stat().st_mode, p.stat().st_mtime_ns,
+                hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else None,
+            )
+            for p in sync_root.rglob("*")
+        } if scenario.execution_mode == "invalid_rule_order" else None
         result = run_command(command, cwd=context.repo_root)
 
         write_text_file(stdout_file, result.stdout)
@@ -556,6 +565,33 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 f"returncode={result.returncode}",
             ]
         )
+
+        if scenario.execution_mode == "invalid_rule_order":
+            write_text_file(events_file, "[]\n")
+            output = result.stdout + "\n" + result.stderr
+            expected_rule = scenario.sync_list[-1]
+            expected_line = len(scenario.sync_list)
+            diffs = []
+            if result.returncode != 1:
+                diffs.append(f"Expected EXIT_FAILURE (1), got {result.returncode}")
+            if f"ERROR: Invalid 'sync_list' rule ordering at line {expected_line}: {expected_rule}" not in output:
+                diffs.append("Missing specific invalid rule ordering diagnostic")
+            if build_manifest(sync_root) != initial_manifest:
+                diffs.append("Local filesystem paths changed after rejected sync_list")
+            current_local_state = {
+                p.relative_to(sync_root).as_posix(): (
+                    p.stat().st_mode, p.stat().st_mtime_ns,
+                    hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else None,
+                )
+                for p in sync_root.rglob("*")
+            }
+            if current_local_state != initial_local_state:
+                diffs.append("Local content or metadata changed after rejected sync_list")
+            if sync_list_path.read_text(encoding="utf-8") != "\n".join(scenario.sync_list) + "\n":
+                diffs.append("sync_list was modified after rejection")
+            if (config_dir / "items.sqlite3").exists():
+                diffs.append("Database created after rejected sync_list")
+            return diffs, artifacts, metadata
 
         if result.returncode != 0:
             return [
@@ -2616,16 +2652,12 @@ class TestCase0002SyncListValidation(E2ETestCase):
             ),
             SyncListScenario(
                 scenario_id="SL-0046",
-                description="include-first rule ordering accepts nested directory before later exclusion",
+                description="reject exclusion after inclusion before synchronisation",
                 sync_list=[
                     f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/",
                     f"!/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/",
                 ],
-                allowed_prefixes=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE"],
-                required_processed_exact=[
-                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt",
-                    f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp",
-                ],
+                execution_mode="invalid_rule_order",
             ),
             SyncListScenario(
                 scenario_id="SL-0047",
@@ -2658,5 +2690,16 @@ class TestCase0002SyncListValidation(E2ETestCase):
                 required_processed_exact=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/files/data.txt"],
                 required_skipped=[f"{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp"],
                 phase2_config_overrides=['sync_root_files = "true"'],
+            ),
+            SyncListScenario(
+                scenario_id="SL-0049",
+                description="reject dash exclusion after inclusion, ignoring comments and blank lines",
+                sync_list=[
+                    f"/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/",
+                    "# comment",
+                    "",
+                    f"-/{FIXTURE_ROOT_NAME}/RuleLab/FileSpecific/CORE/temp/",
+                ],
+                execution_mode="invalid_rule_order",
             ),
         ]
