@@ -343,7 +343,9 @@ mozram
 msghdr
 msonenote
 mswsock
+mtim
 mtimes
+mtimespec
 mtls
 mtune
 mydir
