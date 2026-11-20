@@ -8,6 +8,7 @@ from pathlib import Path
 
 from framework.base import E2ETestCase
 from framework.context import E2EContext
+from framework.manifest import snapshot_tree, diff_tree_snapshots, write_tree_snapshot
 from framework.result import TestResult
 from framework.utils import (
     command_to_string,
@@ -442,7 +443,18 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
             str(conf_dir),
         ]
         context.log(f"Executing Test Case {self.case_id} phase1: {command_to_string(phase1_command)}")
+        phase1_tree_before = snapshot_tree(sync_root)
+        phase1_tree_before_file = state_dir / "phase1_local_before.json"
+        phase1_tree_after_file = state_dir / "phase1_local_after.json"
+        phase1_tree_diff_file = state_dir / "phase1_local_differences.txt"
+        artifacts.extend(map(str, (phase1_tree_before_file, phase1_tree_after_file, phase1_tree_diff_file)))
+        write_tree_snapshot(phase1_tree_before_file, phase1_tree_before)
         phase1_result = run_command(phase1_command, cwd=context.repo_root)
+        phase1_tree_after = snapshot_tree(sync_root)
+        write_tree_snapshot(phase1_tree_after_file, phase1_tree_after)
+        phase1_tree_differences = diff_tree_snapshots(phase1_tree_before, phase1_tree_after)
+        write_text_file(phase1_tree_diff_file, "\n".join(phase1_tree_differences) + ("\n" if phase1_tree_differences else ""))
+        details["phase1_local_immutability_differences"] = phase1_tree_differences
         write_text_file(phase1_stdout, phase1_result.stdout)
         write_text_file(phase1_stderr, phase1_result.stderr)
         phase1_after = self._file_stat_snapshot(local_file)
@@ -457,6 +469,13 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         details["phase1_image_before"] = phase1_image_before
         details["phase1_image_after"] = phase1_image_after
 
+        if phase1_tree_differences:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Phase 1 --upload-only mutated local payload: {phase1_tree_differences[0]}",
+                artifacts, details,
+            )
         if phase1_result.returncode != 0:
             write_text_file(
                 metadata_file,
@@ -663,7 +682,18 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
             str(conf_dir),
         ]
         context.log(f"Executing Test Case {self.case_id} phase2: {command_to_string(phase2_command)}")
+        phase2_tree_before = snapshot_tree(sync_root)
+        phase2_tree_before_file = state_dir / "phase2_local_before.json"
+        phase2_tree_after_file = state_dir / "phase2_local_after.json"
+        phase2_tree_diff_file = state_dir / "phase2_local_differences.txt"
+        artifacts.extend(map(str, (phase2_tree_before_file, phase2_tree_after_file, phase2_tree_diff_file)))
+        write_tree_snapshot(phase2_tree_before_file, phase2_tree_before)
         phase2_result = run_command(phase2_command, cwd=context.repo_root)
+        phase2_tree_after = snapshot_tree(sync_root)
+        write_tree_snapshot(phase2_tree_after_file, phase2_tree_after)
+        phase2_tree_differences = diff_tree_snapshots(phase2_tree_before, phase2_tree_after)
+        write_text_file(phase2_tree_diff_file, "\n".join(phase2_tree_differences) + ("\n" if phase2_tree_differences else ""))
+        details["phase2_local_immutability_differences"] = phase2_tree_differences
         write_text_file(phase2_stdout, phase2_result.stdout)
         write_text_file(phase2_stderr, phase2_result.stderr)
         phase2_after = self._file_stat_snapshot(local_file)
@@ -678,6 +708,13 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         details["phase2_image_before"] = phase2_image_before
         details["phase2_image_after"] = phase2_image_after
 
+        if phase2_tree_differences:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Phase 2 --upload-only mutated local payload: {phase2_tree_differences[0]}",
+                artifacts, details,
+            )
         if phase2_result.returncode != 0:
             write_text_file(
                 metadata_file,
@@ -784,7 +821,18 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
             str(conf_dir),
         ]
         context.log(f"Executing Test Case {self.case_id} phase3: {command_to_string(phase3_command)}")
+        phase3_tree_before = snapshot_tree(sync_root)
+        phase3_tree_before_file = state_dir / "phase3_local_before.json"
+        phase3_tree_after_file = state_dir / "phase3_local_after.json"
+        phase3_tree_diff_file = state_dir / "phase3_local_differences.txt"
+        artifacts.extend(map(str, (phase3_tree_before_file, phase3_tree_after_file, phase3_tree_diff_file)))
+        write_tree_snapshot(phase3_tree_before_file, phase3_tree_before)
         phase3_result = run_command(phase3_command, cwd=context.repo_root)
+        phase3_tree_after = snapshot_tree(sync_root)
+        write_tree_snapshot(phase3_tree_after_file, phase3_tree_after)
+        phase3_tree_differences = diff_tree_snapshots(phase3_tree_before, phase3_tree_after)
+        write_text_file(phase3_tree_diff_file, "\n".join(phase3_tree_differences) + ("\n" if phase3_tree_differences else ""))
+        details["phase3_local_immutability_differences"] = phase3_tree_differences
         write_text_file(phase3_stdout, phase3_result.stdout)
         write_text_file(phase3_stderr, phase3_result.stderr)
         phase3_after = self._file_stat_snapshot(local_file)
@@ -799,6 +847,13 @@ class TestCase0029LocalFirstUploadOnlyTimestampPreservationValidation(E2ETestCas
         details["phase3_image_before"] = phase3_image_before
         details["phase3_image_after"] = phase3_image_after
 
+        if phase3_tree_differences:
+            self._write_metadata(metadata_file, details)
+            return self.fail_result(
+                self.case_id, self.name,
+                f"Phase 3 --upload-only mutated local payload: {phase3_tree_differences[0]}",
+                artifacts, details,
+            )
         if phase3_result.returncode != 0:
             write_text_file(
                 metadata_file,

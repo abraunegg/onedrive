@@ -274,12 +274,54 @@ jobs:
           echo "----- gdb-console.log -----"
           cat "$GDBCONSOLE" || true
 
+      - name: Verify and stage smoke diagnostic artifacts
+        id: artifact_guard
+        if: always() && steps.smoke-secret-policy.outputs.run_smoke == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TESTROOT="$RUNNER_TEMP/onedrive-smoke"
+          ARTIFACT_DIR="$RUNNER_TEMP/onedrive-smoke-artifacts"
+
+          # Authentication state remains in TESTROOT/config, outside uploaded files.
+          # Stage only approved smoke diagnostic files, never the live smoke tree.
+          rm -rf "$ARTIFACT_DIR"
+          mkdir -p "$ARTIFACT_DIR"
+          for name in monitor.log monitor-gdb.log gdb-console.log smoke-result.env; do
+            source="$TESTROOT/$name"
+            if [ -L "$source" ]; then
+              echo "ERROR: Refusing symlinked smoke diagnostic: $name" >&2
+              exit 1
+            fi
+            if [ -e "$source" ]; then
+              if [ ! -f "$source" ]; then
+                echo "ERROR: Unexpected non-file smoke diagnostic: $name" >&2
+                exit 1
+              fi
+              install -m 600 -- "$source" "$ARTIFACT_DIR/$name"
+            fi
+          done
+
+          # Reuse the fail-closed check used by the project's E2E workflows.
+          python3 -u ci/e2e/artifact_safety.py --artifact-dir "$ARTIFACT_DIR"
+
+          # Block the artifact if the configured refresh token appears in a log.
+          for diagnostic in "$ARTIFACT_DIR"/*; do
+            [ -f "$diagnostic" ] || continue
+            if [ -n "${SMOKE_REFRESH_TOKEN:-}" ] && grep -Fq -- "$SMOKE_REFRESH_TOKEN" "$diagnostic"; then
+              echo "ERROR: Smoke diagnostic contains authentication credentials; upload blocked" >&2
+              exit 1
+            fi
+          done
+
       - name: Upload logs
-        if: always()
+        if: always() && steps.artifact_guard.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: smoke-monitor-${{ matrix.ubuntu }}-logs
-          path: ${{ runner.temp }}/onedrive-smoke/
+          path: |
+            ${{ runner.temp }}/onedrive-smoke-artifacts/**
+            !${{ runner.temp }}/onedrive-smoke-artifacts/**/refresh_token
           if-no-files-found: warn
 
   fedora-monitor-exit:
@@ -540,10 +582,52 @@ jobs:
           echo "----- gdb-console.log -----"
           cat "$GDBCONSOLE" || true
 
+      - name: Verify and stage smoke diagnostic artifacts
+        id: artifact_guard
+        if: always() && steps.smoke-secret-policy.outputs.run_smoke == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TESTROOT="/tmp/onedrive-smoke"
+          ARTIFACT_DIR="/tmp/onedrive-smoke-artifacts"
+
+          # Authentication state remains in TESTROOT/config, outside uploaded files.
+          # Stage only approved smoke diagnostic files, never the live smoke tree.
+          rm -rf "$ARTIFACT_DIR"
+          mkdir -p "$ARTIFACT_DIR"
+          for name in monitor.log monitor-gdb.log gdb-console.log smoke-result.env; do
+            source="$TESTROOT/$name"
+            if [ -L "$source" ]; then
+              echo "ERROR: Refusing symlinked smoke diagnostic: $name" >&2
+              exit 1
+            fi
+            if [ -e "$source" ]; then
+              if [ ! -f "$source" ]; then
+                echo "ERROR: Unexpected non-file smoke diagnostic: $name" >&2
+                exit 1
+              fi
+              install -m 600 -- "$source" "$ARTIFACT_DIR/$name"
+            fi
+          done
+
+          # Reuse the fail-closed check used by the project's E2E workflows.
+          python3 -u ci/e2e/artifact_safety.py --artifact-dir "$ARTIFACT_DIR"
+
+          # Block the artifact if the configured refresh token appears in a log.
+          for diagnostic in "$ARTIFACT_DIR"/*; do
+            [ -f "$diagnostic" ] || continue
+            if [ -n "${SMOKE_REFRESH_TOKEN:-}" ] && grep -Fq -- "$SMOKE_REFRESH_TOKEN" "$diagnostic"; then
+              echo "ERROR: Smoke diagnostic contains authentication credentials; upload blocked" >&2
+              exit 1
+            fi
+          done
+
       - name: Upload logs
-        if: always()
+        if: always() && steps.artifact_guard.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: smoke-monitor-fedora-${{ matrix.fedora }}-logs
-          path: /tmp/onedrive-smoke/
+          path: |
+            /tmp/onedrive-smoke-artifacts/**
+            !/tmp/onedrive-smoke-artifacts/**/refresh_token
           if-no-files-found: warn
