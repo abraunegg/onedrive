@@ -401,6 +401,36 @@ class SyncEngine {
 		}
 	}
 
+	// Compare an existing online pathname with the local file without consulting
+	// disable_upload_validation.  That option controls verification *after* an
+	// upload, not whether a pre-existing online item contains the same bytes.
+	// An unavailable size/hash is unknown, not a proven mismatch or equality.
+	private bool existingOnlineFileMatchesLocal(const ref JSONValue onlineFile, string localPath, long localSize, out bool comparisonKnown) {
+		comparisonKnown = false;
+		if (!hasFileSize(onlineFile)) return false;
+
+		long remoteSize = onlineFile["size"].integer;
+		comparisonKnown = true;
+		if (remoteSize != localSize) return false;
+		if (localSize == 0) return true;
+
+		if (!hasQuickXorHash(onlineFile)) {
+			comparisonKnown = false;
+			return false;
+		}
+		string remoteHash = onlineFile["file"]["hashes"]["quickXorHash"].str;
+		if (remoteHash.empty) {
+			comparisonKnown = false;
+			return false;
+		}
+		string localHash = computeQuickXorHash(localPath);
+		if (localHash.empty) {
+			comparisonKnown = false;
+			return false;
+		}
+		return localHash == remoteHash;
+	}
+
 	// Replacement/conflict preservation must never remove the canonical pathname
 	// before its replacement is ready. Preserve the existing local file and treat
 	// failure to preserve its bytes as a hard stop for the replacement.
@@ -6954,15 +6984,17 @@ class SyncEngine {
 												// dbItem.mtime needs to be updated to be the local timestamp
 												dbItem.mtime = localModifiedTime.toUTC();
 												itemDB.upsert(dbItem);
-											} else {
-												// Not a --upload-only & --local-first scenario
+											} else if (!uploadOnly) {
+												// Normal bidirectional sync may align an older local timestamp.
+												// Upload-only must leave the local filesystem unchanged.
 												// Log what is being done
 												if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with an older local timestamp - correcting local timestamp", ["verbose"]);}
 												// Set the timestamp, logging and error handling done within function
 												setLocalPathTimestamp(dryRun, localFilePath, dbItem.mtime);
 											}
 										}
-									} else {
+									} else if (!uploadOnly) {
+										// Remote/shared files also must not have their local timestamp changed in upload-only.
 										// Remote file, remote values need to be used, we may not even have permission to change timestamp, update local file
 										if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online, however file is a OneDrive Business Shared File - correcting local timestamp", ["verbose"]);}
 										// Set the timestamp, logging and error handling done within function
@@ -8969,9 +9001,34 @@ class SyncEngine {
 					!currentOnlineJSONData["eTag"].str.empty &&
 					!dbItem.eTag.empty &&
 					(currentOnlineJSONData["eTag"].str == dbItem.eTag);
+				// Metadata-only eTag changes (such as a move) need not change the file's
+				// contents. Trust the original DB baseline only for the same remote item
+				// when size and an available content hash also match. Otherwise remain
+				// conservative about an older local file overwriting newer online data.
+				bool onlineContentMatchesDatabaseBaseline =
+					uploadOnly && !appConfig.getValueBool("local_first") &&
+					onlineObjectMatchesDatabaseIdentity &&
+					!dbItem.size.empty && hasFileSize(currentOnlineJSONData) &&
+					(dbItem.size == to!string(currentOnlineJSONData["size"].integer)) &&
+					((!dbItem.quickXorHash.empty && hasQuickXorHash(currentOnlineJSONData) &&
+					  dbItem.quickXorHash == currentOnlineJSONData["file"]["hashes"]["quickXorHash"].str) ||
+					 (!dbItem.sha256Hash.empty && hasSHA256Hash(currentOnlineJSONData) &&
+					  dbItem.sha256Hash == currentOnlineJSONData["file"]["hashes"]["sha256Hash"].str));
 				bool trustDatabaseBaseline =
-					onlineUnchangedSinceLastSync &&
+					(onlineUnchangedSinceLastSync || onlineContentMatchesDatabaseBaseline) &&
 					!appConfig.getValueBool("resync");
+
+				// --upload-only without --local-first still uploads a locally newer
+				// revision. Only an older local revision with a genuinely untrusted
+				// remote baseline is a conflict, and it must not change local files.
+				if (uploadOnly && !appConfig.getValueBool("local_first") &&
+				    (localModifiedTime < onlineModifiedTime) && !trustDatabaseBaseline) {
+					addLogEntry("WARNING: Skipping upload-only modified-file conflict because the existing online item is authoritative: " ~ localFilePath);
+					modifiedUploadRedirectedByConflictResolution = true;
+					uploadFileOneDriveApiInstance.releaseCurlEngine();
+					uploadFileOneDriveApiInstance = null;
+					return uploadResponse;
+				}
 
 				// Which file is newer? If local is newer, it will be uploaded as a modified file in the correct manner
 				if ((localModifiedTime < onlineModifiedTime) && trustDatabaseBaseline) {
@@ -8983,7 +9040,7 @@ class SyncEngine {
 					}
 				}
 
-				if ((localModifiedTime < onlineModifiedTime) && !trustDatabaseBaseline) {
+				if (!uploadOnly && (localModifiedTime < onlineModifiedTime) && !trustDatabaseBaseline) {
 					// Online File is actually newer than the locally modified file, or we cannot
 					// safely prove that the online item is unchanged from our database baseline.
 					if (debugLogging) {
@@ -8993,25 +9050,24 @@ class SyncEngine {
 					}
 					addLogEntry("Skipping uploading this item as a locally modified file, will upload as a new file (online file already exists and is newer): " ~ localFilePath);
 
-					// Online is newer. Preserve the local version as an independent safeBackup
-					// snapshot while keeping the canonical filename present, then upload it.
-					string backupPath;
-					if (!safeBackupPreserveForReplacement(localFilePath, false, backupPath, true)) {
-						uploadFileOneDriveApiInstance.releaseCurlEngine();
-						uploadFileOneDriveApiInstance = null;
-						return uploadResponse;
+					// In bidirectional mode the newer online version wins. Preserve the
+					// local revision only when preservation has NOT been bypassed.
+					// Without preservation there is no backupPath to upload.
+					if (!bypassDataPreservation) {
+						string backupPath;
+						if (!safeBackupPreserveForReplacement(localFilePath, false, backupPath, true)) {
+							uploadFileOneDriveApiInstance.releaseCurlEngine();
+							uploadFileOneDriveApiInstance = null;
+							return uploadResponse;
+						}
+						uploadNewFile(backupPath);
+					} else {
+						addLogEntry("Data preservation bypassed; replacing the conflicting local file from online without creating a safeBackup: " ~ localFilePath);
 					}
-					uploadNewFile(backupPath);
 
-					// Keep the existing DB baseline tied to the canonical file until the newer
-					// online bytes have actually been committed locally. The local version is
-					// already preserved above, so this replacement may skip preserving that
-					// known difference while still detecting an edit made during the download.
-					if (!uploadOnly) {
-						downloadFileItem(currentOnlineJSONData, true);
-					} else if (verboseLogging) {
-						addLogEntry("Upload-only mode: retaining the original canonical file locally because the newer online file will not be downloaded", ["verbose"]);
-					}
+					// Only the bidirectional path reaches here; retain the existing
+					// canonical-file replacement/reconciliation mechanism.
+					downloadFileItem(currentOnlineJSONData, true);
 
 					// The original modified-file upload was intentionally not performed. Tell the
 					// caller that this item was redirected through conflict resolution so the empty
@@ -11591,8 +11647,14 @@ class SyncEngine {
 								// and that it matches the POSIX filename of the local item we are trying to upload as a new file
 								if (verboseLogging) {addLogEntry("The file we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);}
 
-								// Does the data from online match our local file that we are attempting to upload as a new file?
-								if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
+								// Compare the already-existing online item independently of the
+								// post-upload integrity-validation setting. Preserve the old
+								// comparison semantics outside upload-only mode.
+								bool comparisonKnown = false;
+								bool sameContent = uploadOnly
+									? existingOnlineFileMatchesLocal(fileDetailsFromOneDrive, fileToUpload, thisFileSize, comparisonKnown)
+									: (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize));
+								if (sameContent) {
 									// Need a check here around the 'upload_only' and 'remove_source_files'
 									// Are we in an --upload-only & --remove-source-files scenario?
 									if ((uploadOnly) && (localDeleteAfterUpload)) {
@@ -11609,69 +11671,108 @@ class SyncEngine {
 										saveItem(fileDetailsFromOneDrive);
 									}
 								} else {
-									// The local file we are attempting to upload as a new file is different to the existing file online
-									if (debugLogging) {addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);}
-
-									// Issue #2626 | Case 2-2 (resync)
-
-									// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially constituting online data loss
-									// The file 'version history' online will have to be used to 'recover' the prior online file
-									string changedItemParentDriveId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
-									string changedItemId = fileDetailsFromOneDrive["id"].str;
-									addLogEntry("Skipping uploading this item as a new file, will upload as a modified file (online file already exists): " ~ fileToUpload);
-
-									// In order for the processing of the local item as a 'changed' item, unfortunately we need to save the online data of the existing online file to the local DB
-									saveItem(fileDetailsFromOneDrive);
-
-									// Which file is technically newer? The local file or the remote file?
-									Item onlineFile = makeItem(fileDetailsFromOneDrive);
-									SysTime localModifiedTime;
-									try {
-										localModifiedTime = timeLastModified(fileToUpload).toUTC();
-									} catch (FileException exception) {
-										if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
-											addLogEntry("File disappeared locally before new-file conflict timestamp comparison: " ~ fileToUpload);
-										} else {
-											displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
-										}
-										return;
+									// A non-match may be a verified difference or an unknown
+									// comparison (unavailable hash/metadata). Never assert that
+									// the bytes differ merely because validation is disabled.
+									if (debugLogging && uploadOnly && !comparisonKnown) {
+										addLogEntry("Existing online file content comparison is inconclusive: " ~ fileToUpload, ["debug"]);
 									}
-									SysTime onlineModifiedTime = onlineFile.mtime;
-
-									// Reduce time resolution to seconds before comparing
-									localModifiedTime.fracSecs = Duration.zero;
-									onlineModifiedTime.fracSecs = Duration.zero;
-
-									// Which file is newer?
-									if (localModifiedTime >= onlineModifiedTime) {
-										// Upload the locally modified file as-is, as it is newer
-										uploadChangedLocalFileToOneDrive([changedItemParentDriveId, changedItemId, fileToUpload]);
-									} else {
-										// Online is newer. Preserve the local version as an independent safeBackup
-										// snapshot while keeping the canonical filename present, then upload it.
-										string backupPath;
-										if (!safeBackupPreserveForReplacement(fileToUpload, false, backupPath, true)) {
+									// Without --local-first, a newer local file must still replace
+									// an older remote one. Preserve second-resolution comparison used
+									// by the existing modified-file collision path.
+									bool onlineNewer = false;
+									if (uploadOnly && !appConfig.getValueBool("local_first")) {
+										SysTime localModifiedTime;
+										try {
+											localModifiedTime = timeLastModified(fileToUpload).toUTC();
+										} catch (FileException exception) {
+											if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+												addLogEntry("File disappeared locally before new-file conflict timestamp comparison: " ~ fileToUpload);
+											} else {
+												displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+											}
 											return;
 										}
-										uploadNewFile(backupPath);
-
-										// This path saved the online item above only to establish its identity. Remove
-										// that temporary DB association before replacement so an interruption still
-										// leaves the canonical local file discoverable as an unmatched item on retry.
-										itemDB.deleteById(changedItemParentDriveId, changedItemId);
-
-										// The local bytes have already been preserved. Apply the authoritative online
-										// file now, while still preserving any new edit made during this download.
-										// Upload-only mode deliberately performs no download; the canonical local file
-										// therefore remains present and the missing DB association keeps the conflict
-										// visible for a future non-upload-only reconciliation.
-										if (!uploadOnly) {
-											downloadFileItem(fileDetailsFromOneDrive, true);
-										} else if (verboseLogging) {
-											addLogEntry("Upload-only mode: retaining the original canonical file locally because the newer online file will not be downloaded", ["verbose"]);
-										}
+										SysTime onlineModifiedTime = makeItem(fileDetailsFromOneDrive).mtime;
+										localModifiedTime.fracSecs = Duration.zero;
+										onlineModifiedTime.fracSecs = Duration.zero;
+										onlineNewer = localModifiedTime < onlineModifiedTime;
 									}
-								}
+									if (onlineNewer) {
+										// A newer remote item wins in ordinary upload-only mode.
+										// Do not create a backup, replace it, or mark differing bytes synced.
+										addLogEntry("WARNING: Skipping upload-only new-file collision because the existing online item is newer: " ~ fileToUpload);
+										zeroDataTraversal = true;
+									} else {
+										if (debugLogging) {addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);}
+
+										// Issue #2626 | Case 2-2 (resync)
+
+										// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially constituting online data loss
+										// The file 'version history' online will have to be used to 'recover' the prior online file
+										string changedItemParentDriveId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
+										string changedItemId = fileDetailsFromOneDrive["id"].str;
+										addLogEntry("Skipping uploading this item as a new file, will upload as a modified file (online file already exists): " ~ fileToUpload);
+
+										// In order for the processing of the local item as a 'changed' item, unfortunately we need to save the online data of the existing online file to the local DB
+										saveItem(fileDetailsFromOneDrive);
+
+										// --upload-only --local-first selects the canonical local
+										// content regardless of online timestamps; use the existing
+										// modified-file upload and database/eTag handling.
+										if (uploadOnly) {
+											// Local-first always uploads; ordinary upload-only reaches here
+											// only when its local timestamp is not older than online.
+											uploadChangedLocalFileToOneDrive([changedItemParentDriveId, changedItemId, fileToUpload]);
+										} else {
+											// Which file is technically newer? The local file or the remote file?
+											Item onlineFile = makeItem(fileDetailsFromOneDrive);
+											SysTime localModifiedTime;
+											try {
+												localModifiedTime = timeLastModified(fileToUpload).toUTC();
+											} catch (FileException exception) {
+												if ((exception.errno == ENOENT) || (exception.errno == ENOTDIR)) {
+													addLogEntry("File disappeared locally before new-file conflict timestamp comparison: " ~ fileToUpload);
+												} else {
+													displayFileSystemErrorMessage(exception.msg, thisFunctionName, fileToUpload);
+												}
+												return;
+											}
+											SysTime onlineModifiedTime = onlineFile.mtime;
+
+											// Reduce time resolution to seconds before comparing
+											localModifiedTime.fracSecs = Duration.zero;
+											onlineModifiedTime.fracSecs = Duration.zero;
+
+											// Which file is newer?
+											if (localModifiedTime >= onlineModifiedTime) {
+												// Upload the locally modified file as-is, as it is newer
+												uploadChangedLocalFileToOneDrive([changedItemParentDriveId, changedItemId, fileToUpload]);
+											} else {
+												// Bidirectional reconciliation: online is newer. When
+												// preservation is bypassed, do not create/upload any backup.
+												if (!bypassDataPreservation) {
+													string backupPath;
+													if (!safeBackupPreserveForReplacement(fileToUpload, false, backupPath, true)) {
+														return;
+													}
+													uploadNewFile(backupPath);
+												} else {
+													addLogEntry("Data preservation bypassed; replacing the conflicting local file from online without creating a safeBackup: " ~ fileToUpload);
+												}
+
+												// This path saved the online item above only to establish its identity. Remove
+												// that temporary DB association before replacement so an interruption still
+												// leaves the canonical local file discoverable as an unmatched item on retry.
+												itemDB.deleteById(changedItemParentDriveId, changedItemId);
+
+												// Apply the authoritative online item. Data preservation is
+												// optional, as specified by bypass_data_preservation.
+												downloadFileItem(fileDetailsFromOneDrive, true);
+											}
+										}
+									} // end local-first conflict handling
+								} // end online-authoritative conflict handling
 							} catch (OneDriveException exception) {
 								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 								checkFileOneDriveApiInstance.releaseCurlEngine();

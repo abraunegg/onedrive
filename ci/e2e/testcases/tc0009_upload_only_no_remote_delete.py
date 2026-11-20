@@ -5,7 +5,7 @@ from pathlib import Path
 
 from framework.base import E2ETestCase
 from framework.context import E2EContext
-from framework.manifest import build_manifest, write_manifest
+from framework.manifest import build_manifest, write_manifest, snapshot_tree, diff_tree_snapshots, write_tree_snapshot
 from framework.result import TestResult
 from framework.utils import command_to_string, reset_directory, run_command, write_onedrive_config, write_text_file
 
@@ -38,9 +38,24 @@ class TestCase0009UploadOnlyNoRemoteDelete(E2ETestCase):
             return self.fail_result(self.case_id, self.name, f"Remote seed failed with status {seed_result.returncode}", [str(seed_stdout), str(seed_stderr)], {"seed_returncode": seed_result.returncode, "root_name": root_name})
         if keep_file.exists(): keep_file.unlink()
         upload_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--upload-only", "--no-remote-delete", "--resync", "--resync-auth", "--syncdir", str(sync_root), "--confdir", str(upload_conf)]
+        before_file, after_file, diff_file = (state_dir / "local_before.json", state_dir / "local_after.json", state_dir / "local_differences.txt")
+        before = snapshot_tree(sync_root)
+        write_tree_snapshot(before_file, before)
         upload_result = run_command(upload_command, cwd=context.repo_root)
+        after = snapshot_tree(sync_root)
+        write_tree_snapshot(after_file, after)
+        local_differences = diff_tree_snapshots(before, after)
+        write_text_file(diff_file, "\n".join(local_differences) + ("\n" if local_differences else ""))
+        immutability_artifacts = [str(before_file), str(after_file), str(diff_file)]
         write_text_file(upload_stdout, upload_result.stdout); write_text_file(upload_stderr, upload_result.stderr)
         verify_command = [context.onedrive_bin, "--display-running-config", "--sync", "--verbose", "--download-only", "--resync", "--resync-auth", "--syncdir", str(verify_root), "--confdir", str(verify_conf)]
+        if local_differences:
+            return self.fail_result(
+                self.case_id, self.name,
+                f"--upload-only --no-remote-delete mutated local payload: {local_differences[0]}",
+                [str(upload_stdout), str(upload_stderr), *immutability_artifacts],
+                {"upload_returncode": upload_result.returncode, "local_differences": local_differences},
+            )
         if upload_result.returncode != 0:
             return self.fail_result(
                 self.case_id, self.name,
@@ -51,7 +66,7 @@ class TestCase0009UploadOnlyNoRemoteDelete(E2ETestCase):
         verify_result = run_command(verify_command, cwd=context.repo_root)
         write_text_file(verify_stdout, verify_result.stdout); write_text_file(verify_stderr, verify_result.stderr); remote_manifest = build_manifest(verify_root); write_manifest(remote_manifest_file, remote_manifest)
         write_text_file(metadata_file, "\n".join([f"root_name={root_name}", f"seed_returncode={seed_result.returncode}", f"upload_returncode={upload_result.returncode}", f"verify_returncode={verify_result.returncode}"]) + "\n")
-        artifacts = [str(seed_stdout), str(seed_stderr), str(upload_stdout), str(upload_stderr), str(verify_stdout), str(verify_stderr), str(remote_manifest_file), str(metadata_file)]
+        artifacts = [str(seed_stdout), str(seed_stderr), str(upload_stdout), str(upload_stderr), str(verify_stdout), str(verify_stderr), str(remote_manifest_file), str(metadata_file), *immutability_artifacts]
         details = {"seed_returncode": seed_result.returncode, "upload_returncode": upload_result.returncode, "verify_returncode": verify_result.returncode, "root_name": root_name}
         if seed_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"Remote seed failed with status {seed_result.returncode}", artifacts, details)
         if upload_result.returncode != 0: return self.fail_result(self.case_id, self.name, f"--upload-only --no-remote-delete failed with status {upload_result.returncode}", artifacts, details)
