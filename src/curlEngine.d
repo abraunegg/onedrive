@@ -15,7 +15,10 @@ import std.string : indexOf, toLower;
 import core.sys.posix.signal;
 // Required for WebSocket Support
 import core.stdc.stdlib : getenv;
+import core.stdc.errno : errno;
+import core.sys.posix.sys.stat : stat, fstat, stat_t;
 import core.stdc.string : strcmp;
+import std.string : toStringz;
 import core.sys.posix.dlfcn : dlopen, dlsym, dlclose, RTLD_NOW; // Posix elements
 import std.exception : enforce;     // for enforce(...)
 
@@ -49,6 +52,46 @@ alias PFN_curl_ws_send =
 extern(C) struct curl_slist { char* data; curl_slist* next; }
 extern(C) curl_slist* curl_slist_append(curl_slist* list, const char* string);
 extern(C) void curl_slist_free_all(curl_slist* list);
+
+// The identity of the filesystem object associated with a Graph upload session.
+// This is deliberately metadata only: no file descriptor outlives a request.
+struct UploadSourceIdentity {
+	ulong device;
+	ulong inode;
+	long size;
+	long mtimeSeconds;
+	long mtimeNanoseconds;
+	bool valid;
+}
+
+class UploadSourceInvalidException : Exception {
+	this(string message) { super(message); }
+}
+
+private UploadSourceIdentity uploadIdentityFromStat(ref stat_t sourceStat) {
+	long modifiedSeconds;
+	long modifiedNanoseconds;
+	static if (__traits(hasMember, stat_t, "st_mtim")) {
+		modifiedSeconds = cast(long) sourceStat.st_mtim.tv_sec;
+		modifiedNanoseconds = cast(long) sourceStat.st_mtim.tv_nsec;
+	} else static if (__traits(hasMember, stat_t, "st_mtimespec")) {
+		modifiedSeconds = cast(long) sourceStat.st_mtimespec.tv_sec;
+		modifiedNanoseconds = cast(long) sourceStat.st_mtimespec.tv_nsec;
+	} else {
+		modifiedSeconds = cast(long) sourceStat.st_mtime;
+	}
+	return UploadSourceIdentity(cast(ulong) sourceStat.st_dev,
+		cast(ulong) sourceStat.st_ino, cast(long) sourceStat.st_size,
+		modifiedSeconds, modifiedNanoseconds, true);
+}
+
+UploadSourceIdentity getUploadSourceIdentity(string path) {
+	stat_t sourceStat;
+	if (stat(toStringz(path), &sourceStat) != 0) {
+		throw new FileException(path, errno);
+	}
+	return uploadIdentityFromStat(sourceStat);
+}
 
 // Shared pool of CurlEngine instances accessible across all threads
 __gshared CurlEngine[] curlEnginePool; // __gshared is used to declare a variable that is shared across all threads
@@ -804,10 +847,31 @@ class CurlEngine {
 		}
 	}
 
-	void setFile(string filepath, string contentRange, ulong offset, ulong offsetSize) {
+	void setFile(string filepath, string contentRange, ulong offset, ulong offsetSize, UploadSourceIdentity expectedSource = UploadSourceIdentity.init) {
 		setResponseHolder(null);
 		// open file as read-only in binary mode
 		uploadFile = File(filepath, "rb");
+		// execute() has its own cleanup, but errors here occur before execute().
+		scope(failure) {
+			if (uploadFile.isOpen()) uploadFile.close();
+		}
+
+		if (expectedSource.valid) {
+			// Check the opened descriptor, not just the pathname checked earlier.
+			// An atomic rename may replace that pathname between stat() and open().
+			stat_t openedStat;
+			if (fstat(uploadFile.fileno, &openedStat) != 0) {
+				throw new UploadSourceInvalidException("Unable to inspect opened upload source: " ~ filepath ~ " (errno " ~ to!string(errno) ~ ")");
+			}
+			UploadSourceIdentity openedSource = uploadIdentityFromStat(openedStat);
+			if ((openedSource.device != expectedSource.device) ||
+				(openedSource.inode != expectedSource.inode) ||
+				(openedSource.size != expectedSource.size) ||
+				(openedSource.mtimeSeconds != expectedSource.mtimeSeconds) ||
+				(openedSource.mtimeNanoseconds != expectedSource.mtimeNanoseconds)) {
+				throw new UploadSourceInvalidException("Local upload source changed before fragment transmission: " ~ filepath);
+			}
+		}
 
 		if (contentRange.empty) {
 			offsetSize = uploadFile.size();

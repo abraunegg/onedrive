@@ -36,6 +36,7 @@ import config;
 import log;
 import util;
 import onedrive;
+import curlEngine : UploadSourceIdentity, UploadSourceInvalidException, getUploadSourceIdentity;
 import itemdb;
 import clientSideFiltering;
 import xattr;
@@ -12250,10 +12251,12 @@ class SyncEngine {
 		// Preserve the full filesystem timestamp precision here; the timestamp sent
 		// to Microsoft Graph below is intentionally normalised separately.
 		long sourceFileSize;
+		UploadSourceIdentity sourceIdentity;
 		SysTime localFileLastModifiedTime;
 		string sourceFileMtime;
 		try {
-			sourceFileSize = getSize(fileToUpload);
+			sourceIdentity = getUploadSourceIdentity(fileToUpload);
+			sourceFileSize = sourceIdentity.size;
 			localFileLastModifiedTime = timeLastModified(fileToUpload).toUTC();
 			sourceFileMtime = localFileLastModifiedTime.toISOExtString();
 		} catch (FileException exception) {
@@ -12288,6 +12291,8 @@ class SyncEngine {
 				uploadSession["localPath"] = fileToUpload;
 				uploadSession["sourceFileSize"] = JSONValue(sourceFileSize);
 				uploadSession["sourceFileMtime"] = sourceFileMtime;
+				uploadSession["sourceFileDevice"] = to!string(sourceIdentity.device);
+				uploadSession["sourceFileInode"] = to!string(sourceIdentity.inode);
 				uploadSession["targetDriveId"] = parentDriveId;
 				uploadSession["targetParentId"] = parentId;
 
@@ -12381,14 +12386,22 @@ class SyncEngine {
 			return false;
 		}
 
+		if (!("sourceFileDevice" in uploadSessionData) || (uploadSessionData["sourceFileDevice"].type() != JSONType.string) ||
+			!("sourceFileInode" in uploadSessionData) || (uploadSessionData["sourceFileInode"].type() != JSONType.string)) {
+			return false; // Old persisted sessions cannot safely supply inode identity.
+		}
+
 		string localPath = uploadSessionData["localPath"].str;
-		currentFileSize = getSize(localPath);
+		UploadSourceIdentity currentSource = getUploadSourceIdentity(localPath);
+		currentFileSize = currentSource.size;
 		string currentFileMtime = timeLastModified(localPath).toUTC().toISOExtString();
 
 		if ((currentFileSize != uploadSessionData["sourceFileSize"].integer) ||
-			(currentFileMtime != uploadSessionData["sourceFileMtime"].str)) {
+			(currentFileMtime != uploadSessionData["sourceFileMtime"].str) ||
+			(to!string(currentSource.device) != uploadSessionData["sourceFileDevice"].str) ||
+			(to!string(currentSource.inode) != uploadSessionData["sourceFileInode"].str)) {
 			if (verboseLogging) {
-				addLogEntry("The local file has changed since the upload session was created; the existing upload session cannot be resumed: " ~ localPath, ["verbose"]);
+				addLogEntry("The local file has changed since the upload session was created; the existing upload session cannot be continued: " ~ localPath, ["verbose"]);
 			}
 			if (debugLogging) {
 				addLogEntry("SESSION-RESUME: Persisted source size: " ~ to!string(uploadSessionData["sourceFileSize"].integer) ~ ", current source size: " ~ to!string(currentFileSize), ["debug"]);
@@ -12406,11 +12419,21 @@ class SyncEngine {
 		// including the local source identity captured when that replacement session was created.
 		if (!hasUploadURL(replacementUploadSession) || !hasNextExpectedRanges(replacementUploadSession) || !hasLocalPath(replacementUploadSession) ||
 			!("sourceFileSize" in replacementUploadSession) || (replacementUploadSession["sourceFileSize"].type() != JSONType.integer) ||
-			!("sourceFileMtime" in replacementUploadSession) || (replacementUploadSession["sourceFileMtime"].type() != JSONType.string) || replacementUploadSession["sourceFileMtime"].str.empty) {
+			!("sourceFileMtime" in replacementUploadSession) || (replacementUploadSession["sourceFileMtime"].type() != JSONType.string) || replacementUploadSession["sourceFileMtime"].str.empty ||
+			!("sourceFileDevice" in replacementUploadSession) || (replacementUploadSession["sourceFileDevice"].type() != JSONType.string) ||
+			!("sourceFileInode" in replacementUploadSession) || (replacementUploadSession["sourceFileInode"].type() != JSONType.string)) {
 			return false;
 		}
 
 		if (!("expirationDateTime" in replacementUploadSession) || (replacementUploadSession["expirationDateTime"].type != JSONType.string)) {
+			return false;
+		}
+
+		// A Graph session replacement must not silently switch source revisions.
+		if (uploadSessionData["sourceFileSize"].integer != replacementUploadSession["sourceFileSize"].integer ||
+			uploadSessionData["sourceFileMtime"].str != replacementUploadSession["sourceFileMtime"].str ||
+			uploadSessionData["sourceFileDevice"].str != replacementUploadSession["sourceFileDevice"].str ||
+			uploadSessionData["sourceFileInode"].str != replacementUploadSession["sourceFileInode"].str) {
 			return false;
 		}
 
@@ -12420,6 +12443,8 @@ class SyncEngine {
 		uploadSessionData["localPath"] = replacementUploadSession["localPath"];
 		uploadSessionData["sourceFileSize"] = replacementUploadSession["sourceFileSize"];
 		uploadSessionData["sourceFileMtime"] = replacementUploadSession["sourceFileMtime"];
+		uploadSessionData["sourceFileDevice"] = replacementUploadSession["sourceFileDevice"];
+		uploadSessionData["sourceFileInode"] = replacementUploadSession["sourceFileInode"];
 		uploadSessionData["expirationDateTime"] = replacementUploadSession["expirationDateTime"];
 		uploadSessionData["nextExpectedRanges"] = replacementUploadSession["nextExpectedRanges"];
 
@@ -12431,6 +12456,14 @@ class SyncEngine {
 		// Persist one coherent session record: replacement URL and replacement progress together.
 		saveSessionFile(threadUploadSessionFilePath, uploadSessionData);
 		return true;
+	}
+
+	// Discard an unsafe in-process upload without changing the local source.
+	JSONValue discardChangedUploadSession(string sessionFilePath, string localPath) {
+		addLogEntry("WARNING: Local upload source changed or could not be read; discarding upload session: " ~ localPath);
+		if (!dryRun) cancelUploadSessionIfPresent(sessionFilePath);
+		if (exists(sessionFilePath) && !dryRun) safeRemove(sessionFilePath);
+		return JSONValue.init;
 	}
 
 	// Perform the upload of file via the Upload Session that was created
@@ -12481,6 +12514,30 @@ class SyncEngine {
 		size_t fragmentCount = 0;
 		long fragSize = 0;
 
+		// The Graph session's recorded size is authoritative. Do not resize a live session.
+		long currentSourceSize;
+		try {
+			if (!uploadSessionSourceStateMatches(uploadSessionData, currentSourceSize) ||
+				(thisFileSize != uploadSessionData["sourceFileSize"].integer)) {
+				return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+			}
+		} catch (FileException exception) {
+			return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+		}
+		UploadSourceIdentity expectedSource;
+		try {
+			expectedSource = getUploadSourceIdentity(uploadSessionData["localPath"].str);
+			// Revalidate after capturing the exact stat data used for fstat() comparisons.
+			if ((to!string(expectedSource.device) != uploadSessionData["sourceFileDevice"].str) ||
+				(to!string(expectedSource.inode) != uploadSessionData["sourceFileInode"].str) ||
+				(expectedSource.size != thisFileSize) ||
+				!uploadSessionSourceStateMatches(uploadSessionData, currentSourceSize)) {
+				return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+			}
+		} catch (FileException exception) {
+			return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+		}
+
 		// Extract current upload offset from session data
 		long offset = uploadSessionData["nextExpectedRanges"][0].str.splitter('-').front.to!long;
 
@@ -12492,6 +12549,14 @@ class SyncEngine {
 
 		// Start the session upload using the active API instance for this thread
 		while (true) {
+			// Check source revision between fragments (including after Graph retries).
+			try {
+				if (!uploadSessionSourceStateMatches(uploadSessionData, currentSourceSize)) {
+					return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+				}
+			} catch (FileException exception) {
+				return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+			}
 			// fragment upload
 			fragmentCount++;
 			if (debugLogging) {addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(expected_total_fragments), ["debug"]);}
@@ -12532,8 +12597,11 @@ class SyncEngine {
 					uploadSessionData["localPath"].str,
 					offset,
 					fragSize,
-					thisFileSize
+					thisFileSize,
+					expectedSource
 				);
+			} catch (UploadSourceInvalidException exception) {
+				return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
 			} catch (OneDriveException exception) {
 				// if a 100 uploadResponse is generated, continue
 				if (exception.httpStatusCode == 100) {
@@ -12568,11 +12636,7 @@ class SyncEngine {
 					}
 
 					if (verboseLogging) {addLogEntry("Unable to continue upload because the replacement upload session is invalid", ["verbose"]);}
-					if (exists(threadUploadSessionFilePath)) {
-						safeRemove(threadUploadSessionFilePath);
-					}
-					uploadResponse = null;
-					return uploadResponse;
+					return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
 				}
 
 				// There was an error uploadResponse from OneDrive when uploading the file fragment
@@ -12598,11 +12662,7 @@ class SyncEngine {
 					}
 
 					if (verboseLogging) {addLogEntry("Unable to continue upload because the replacement upload session is invalid", ["verbose"]);}
-					if (exists(threadUploadSessionFilePath)) {
-						safeRemove(threadUploadSessionFilePath);
-					}
-					uploadResponse = null;
-					return uploadResponse;
+					return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
 				}
 
 				// Issue https://github.com/abraunegg/onedrive/issues/2747
@@ -12642,6 +12702,10 @@ class SyncEngine {
 							effectiveLocalPath = uploadSessionData["localPath"].str;
 						}
 
+						// Never retry against a local source that changed while Graph responded.
+						if (!uploadSessionSourceStateMatches(uploadSessionData, currentSourceSize)) {
+							return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+						}
 						// retry the fragment upload
 						if (verboseLogging) {addLogEntry("Retrying fragment upload", ["verbose"]);}
 						uploadResponse = activeOneDriveApiInstance.uploadFragment(
@@ -12649,13 +12713,18 @@ class SyncEngine {
 							effectiveLocalPath,
 							offset,
 							fragSize,
-							thisFileSize
+							thisFileSize,
+							expectedSource
 						);
 					} else {
 						// newUploadSession not a JSON
 						uploadResponse = null;
 						return uploadResponse;
 					}
+				} catch (UploadSourceInvalidException e) {
+					return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+				} catch (FileException e) {
+					return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
 				} catch (OneDriveException e) {
 					// OneDrive threw another error on retry
 					if (verboseLogging) {addLogEntry("Retry to upload fragment failed", ["verbose"]);}
@@ -12675,6 +12744,15 @@ class SyncEngine {
 				displayFileSystemErrorMessage(e.msg, thisFunctionName, uploadSessionData["localPath"].str);
 				uploadResponse = null;
 				return uploadResponse;
+			}
+
+			// Check again after transmission, including a final Graph commit response.
+			try {
+				if (!uploadSessionSourceStateMatches(uploadSessionData, currentSourceSize)) {
+					return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
+				}
+			} catch (FileException exception) {
+				return discardChangedUploadSession(threadUploadSessionFilePath, uploadSessionData["localPath"].str);
 			}
 
 			// was the fragment uploaded without issue?
