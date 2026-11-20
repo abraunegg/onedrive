@@ -1,0 +1,8 @@
+{
+    "status-file": {
+        "type": "entry",
+        "default": "",
+        "description": "Monitor status file",
+        "tooltip": "Path to monitor-status.json. Leave empty to use the default OneDrive configuration directory."
+    }
+}

@@ -61,7 +61,10 @@ endif
 system_unit_files = contrib/systemd/onedrive@.service
 user_unit_files = contrib/systemd/onedrive.service
 
-DOCFILES = readme.md config LICENSE changelog.md docs/advanced-usage.md docs/application-config-options.md docs/application-security.md docs/business-shared-items.md docs/client-architecture.md docs/contributing.md docs/docker.md docs/install.md docs/national-cloud-deployments.md docs/podman.md docs/privacy-policy.md docs/sharepoint-libraries.md docs/terms-of-service.md docs/ubuntu-package-install.md docs/usage.md docs/known-issues.md docs/webhooks.md docs/server-side-filtering-limitations.md docs/end_to_end_testing.md
+CINNAMON_APPLET_DIR = $(datadir)/cinnamon/applets/onedrive-status@abraunegg
+CINNAMON_APPLET_FILES = applet.js metadata.json settings-schema.json
+
+DOCFILES = readme.md config LICENSE changelog.md docs/advanced-usage.md docs/application-config-options.md docs/application-security.md docs/business-shared-items.md docs/cinnamon-applet.md docs/client-architecture.md docs/contributing.md docs/docker.md docs/install.md docs/national-cloud-deployments.md docs/podman.md docs/privacy-policy.md docs/sharepoint-libraries.md docs/terms-of-service.md docs/ubuntu-package-install.md docs/usage.md docs/known-issues.md docs/webhooks.md docs/server-side-filtering-limitations.md docs/end_to_end_testing.md
 
 ifneq ("$(wildcard /etc/redhat-release)","")
 RHEL = $(shell cat /etc/redhat-release | grep -E "(Red Hat Enterprise Linux|CentOS|AlmaLinux)" | wc -l)
@@ -156,6 +159,21 @@ endif
 	if [ -z "$(DESTDIR)" ] && command -v gtk-update-icon-cache >/dev/null 2>&1; then \
 		gtk-update-icon-cache -q -t -f -i "$(ICON_THEMEDIR)" || true; \
 	fi
+
+install-cinnamon-applet:
+	mkdir -p $(DESTDIR)$(CINNAMON_APPLET_DIR)
+	for file in $(CINNAMON_APPLET_FILES); do \
+		$(INSTALL) -m 0644 $(srcdir)/contrib/cinnamon-applet/$$file $(DESTDIR)$(CINNAMON_APPLET_DIR)/$$file; \
+	done
+
+deb:
+	sh $(srcdir)/contrib/debian/build-deb.sh
+
+uninstall-cinnamon-applet:
+	for file in $(CINNAMON_APPLET_FILES); do \
+		rm -f $(DESTDIR)$(CINNAMON_APPLET_DIR)/$$file; \
+	done
+	rmdir $(DESTDIR)$(CINNAMON_APPLET_DIR) 2>/dev/null || true
 
 
 uninstall:

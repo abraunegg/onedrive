@@ -1,5 +1,6 @@
 .*
 onedrive
+onedrive_*.deb
 onedrive.1
 onedrive.o
 version

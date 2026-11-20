@@ -181,6 +181,8 @@ When `monitor_status` is enabled (the default), `--monitor` also publishes a sma
 The published values are snapshots of state the process already owns, including:
 
 * the process PID and per-start `instance_id`;
+* account type and owner name/email returned with the default drive details, when present;
+* the configured synchronisation directory and the latest cached used, total and remaining quota for the selected drive;
 * the current monitor runtime state and scheduled loop number;
 * process runtime and cycle timestamps;
 * whether the current process instance has completed at least one successful monitor synchronisation cycle;
@@ -192,7 +194,9 @@ The published values are snapshots of state the process already owns, including:
 
 Publishing this document does not perform additional Microsoft Graph requests, database queries, filesystem scans or reconciliation work. The normal monitor path snapshots the state at cycle boundaries before per-cycle failure arrays are cleared.
 
-The file is written through a temporary file followed by atomic rename, with restrictive permissions. A normal monitor start replaces any stale previous instance state with a new `instance_id` and `initial_successful_sync_completed = false`. A successful cycle advances the readiness/success fields. An orderly shutdown removes the status file; abnormal termination can leave the last snapshot behind.
+The account and quota values are the most recent data already held by the synchronisation process; quota may be marked restricted when the selected drive does not expose it. The local path is configuration data, not a filesystem scan. The Cinnamon panel applet reads these values and queries filesystem capacity for that path without opening client state.
+
+The file is written through a temporary file followed by atomic rename, with restrictive permissions because it can contain account identity and a local path. A normal monitor start replaces any stale previous instance state with a new `instance_id` and `initial_successful_sync_completed = false`. A successful cycle advances the readiness/success fields. An orderly shutdown removes the status file; abnormal termination can leave the last snapshot behind.
 
 This runtime-status surface is deliberately separate from `--display-sync-status`:
 
