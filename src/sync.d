@@ -70,6 +70,17 @@ class SyncException: Exception {
 	}
 }
 
+// A successful OneDrive Personal drive-ID lookup is shared by worker threads.
+// Separate entries allow unrelated drives to resolve without blocking each other.
+private class DriveIdResolutionCacheEntry {
+	Mutex mutex;
+	string resolvedDriveId;
+
+	this() {
+		mutex = new Mutex();
+	}
+}
+
 struct DriveDetailsCache {
 	// - driveId is the drive for the operations were items need to be stored
 	// - quotaRestricted details a bool value as to if that drive is restricting our ability to understand if there is space available. Some 'Business' and 'SharePoint' restrict, and most (if not all) shared folders it cant be determined if there is free space
@@ -188,6 +199,10 @@ class SyncEngine {
 	string[] recycleBinMoveFailures;
 	// Associative array mapping of all OneDrive driveId's that have been seen, mapped with DriveDetailsCache data for reference
 	DriveDetailsCache[string] onlineDriveDetails;
+	// Issue #3980: successful drive-ID resolutions are cached per SyncEngine.
+	// The map is protected separately from each entry's per-drive lookup mutex.
+	private Mutex driveIdResolutionCacheMutex;
+	private DriveIdResolutionCacheEntry[string] driveIdResolutionCache;
 	// List of items we fake created when using --dry-run
 	string[2][] idsFaked;
 	// List of paths we fake deleted when using --dry-run
@@ -584,6 +599,7 @@ class SyncEngine {
 		// download workers to declare their resulting local filesystem events.
 		expectedLocalEffectMutex = new Mutex();
 		fileUploadFailureMutex = new Mutex();
+		driveIdResolutionCacheMutex = new Mutex();
 
 		// Create the specific task pool to process items in parallel
 		processPool = new TaskPool(to!int(appConfig.getValueLong("threads")));
@@ -13605,48 +13621,93 @@ class SyncEngine {
 			displayFunctionProcessingStart(thisFunctionName, logKey);
 		}
 
-		// What are we doing
-		if (debugLogging) {
-			string fetchRealValueLogMessage = format("Fetching actual online 'driveId' value for '%s'", inputDriveId);
-			addLogEntry(fetchRealValueLogMessage, ["debug"]);
+		// Normalise only for identity comparison and cache lookup. A Personal
+		// drive ID can be uppercase or omit its leading zero (Issues #3336, #3072).
+		string cacheKey = toLower(inputDriveId);
+		if ((appConfig.accountType == "personal") && (cacheKey.length == 15)) {
+			cacheKey = to!string(cacheKey.padLeft('0', 16));
 		}
 
-		// variables for this function
-		JSONValue remoteDriveDetails;
-		OneDriveApi fetchDriveDetailsOneDriveApiInstance;
+		// getDefaultDriveDetails() has already validated and normalised the
+		// account's own drive ID at startup. Do not look it up again. This
+		// also covers its 15-character and mixed-case Graph representations.
+		if ((appConfig.accountType == "personal") && !appConfig.defaultDriveId.empty && (cacheKey == appConfig.defaultDriveId)) {
+			if (debugLogging) {
+				addLogEntry("Using validated default 'driveId' value for '" ~ inputDriveId ~ "'", ["debug"]);
+			}
+			if (appConfig.getValueBool("display_processing_time") && debugLogging) {
+				displayFunctionProcessingTime(thisFunctionName, functionStartTime, Clock.currTime(), logKey);
+			}
+			return appConfig.defaultDriveId;
+		}
+
+		// For other drives (shared folders), the first resolution still needs
+		// Graph validation. Cache only successful responses, and retry errors.
+		DriveIdResolutionCacheEntry cacheEntry;
+		if (!inputDriveId.empty) {
+			driveIdResolutionCacheMutex.lock();
+			try {
+				auto existingEntry = cacheKey in driveIdResolutionCache;
+				if (existingEntry !is null) {
+					cacheEntry = *existingEntry;
+				} else {
+					cacheEntry = new DriveIdResolutionCacheEntry();
+					driveIdResolutionCache[cacheKey] = cacheEntry;
+				}
+			} finally {
+				driveIdResolutionCacheMutex.unlock();
+			}
+			// One in-flight Graph lookup per drive; different drives run in parallel.
+			cacheEntry.mutex.lock();
+		}
+
 		string outputDriveId;
-
-		// Create new OneDrive API Instance
-		fetchDriveDetailsOneDriveApiInstance = new OneDriveApi(appConfig);
-		fetchDriveDetailsOneDriveApiInstance.initialise();
-
-		// Get root details for the provided driveId
 		try {
-			remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(inputDriveId);
-		} catch (OneDriveException exception) {
-			if (debugLogging) {addLogEntry("remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(inputDriveId) generated a OneDriveException", ["debug"]);}
-			// Default operation if not 408,429,503,504 errors
-			// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
-			// Display what the error is
-			displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+			if ((cacheEntry !is null) && !cacheEntry.resolvedDriveId.empty) {
+				// Reuse only an identity obtained from a successful Graph response.
+				outputDriveId = cacheEntry.resolvedDriveId;
+				if (debugLogging) {
+					addLogEntry("Using cached actual online 'driveId' value for '" ~ inputDriveId ~ "'", ["debug"]);
+				}
+			} else {
+				if (debugLogging) {
+					addLogEntry(format("Fetching actual online 'driveId' value for '%s'", inputDriveId), ["debug"]);
+				}
+
+				JSONValue remoteDriveDetails;
+				OneDriveApi fetchDriveDetailsOneDriveApiInstance;
+
+				// Preserve the existing request, Graph retry and error fallback behaviour.
+				fetchDriveDetailsOneDriveApiInstance = new OneDriveApi(appConfig);
+				fetchDriveDetailsOneDriveApiInstance.initialise();
+				try {
+					remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(inputDriveId);
+				} catch (OneDriveException exception) {
+					if (debugLogging) {addLogEntry("remoteDriveDetails = fetchDriveDetailsOneDriveApiInstance.getDriveIdRoot(inputDriveId) generated a OneDriveException", ["debug"]);}
+					// 408,429,503,504 retry handling remains inside OneDriveApi.
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+				}
+
+				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+				fetchDriveDetailsOneDriveApiInstance.releaseCurlEngine();
+				fetchDriveDetailsOneDriveApiInstance = null;
+
+				if (hasParentReferenceDriveId(remoteDriveDetails)) {
+					outputDriveId = remoteDriveDetails["parentReference"]["driveId"].str;
+					// Never cache a fallback, a missing field or an empty response.
+					if ((cacheEntry !is null) && !outputDriveId.empty) {
+						cacheEntry.resolvedDriveId = outputDriveId;
+					}
+				} else {
+					outputDriveId = inputDriveId;
+				}
+				remoteDriveDetails = null;
+			}
+		} finally {
+			if (cacheEntry !is null) {
+				cacheEntry.mutex.unlock();
+			}
 		}
-
-		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
-		fetchDriveDetailsOneDriveApiInstance.releaseCurlEngine();
-		fetchDriveDetailsOneDriveApiInstance = null;
-
-		// Do we have details we can use?
-		if (hasParentReferenceDriveId(remoteDriveDetails)) {
-			// We have a [parentReference][driveId] reference driveId to use
-			outputDriveId = remoteDriveDetails["parentReference"]["driveId"].str;
-		} else {
-			// We dont have a value from online we can use
-			// Test existing driveId length and validation
-			outputDriveId = inputDriveId;
-		}
-
-		// The required driveId string has been extracted; the JSON response is no longer needed.
-		remoteDriveDetails = null;
 
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {
