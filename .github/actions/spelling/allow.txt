@@ -215,6 +215,7 @@ gshared
 gtk
 GVariant
 hdrs
+healthcheck
 hideonindex
 hnsecs
 holdcnt
@@ -472,6 +473,7 @@ qewrqwerwqer
 Qmark
 qpos
 Quadlet
+quadlet
 QWords
 qxor
 raf

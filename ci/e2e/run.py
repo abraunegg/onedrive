@@ -105,6 +105,7 @@ from testcases.tc0088_configuration_resync_policy import TestCase0088Configurati
 from testcases.tc0089_git_rsync_monitor_upload_identity import TestCase0089GitRsyncMonitorUploadIdentity
 from testcases.tc0090_filesystem_lookup_error_preservation import TestCase0090FilesystemLookupErrorPreservation
 from testcases.tc0091_monitor_runtime_telemetry import TestCase0091MonitorRuntimeTelemetry
+from testcases.tc0092_monitor_status_healthcheck_validation import TestCase0092MonitorStatusHealthcheckValidation
 
 
 def build_test_suite() -> list:
@@ -200,6 +201,7 @@ def build_test_suite() -> list:
         TestCase0089GitRsyncMonitorUploadIdentity(),
         TestCase0090FilesystemLookupErrorPreservation(),
         TestCase0091MonitorRuntimeTelemetry(),
+        TestCase0092MonitorStatusHealthcheckValidation(),
     ]
 
 
