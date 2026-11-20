@@ -89,6 +89,8 @@ struct DriveDetailsCache {
 	bool quotaRestricted;
 	bool quotaAvailable;
 	long quotaRemaining;
+	long quotaTotal;
+	long quotaUsed;
 }
 
 struct DeltaLinkDetails {
@@ -167,6 +169,8 @@ class SyncEngine {
 	ApplicationConfig appConfig;
 	ItemDatabase itemDB;
 	ClientSideFiltering selectiveSync;
+	string accountDisplayName;
+	string accountEmail;
 
 	// Monitor coordination hooks. These remain null outside --monitor mode.
 	// SyncEngine can request an observation capture/query and declare exact
@@ -943,6 +947,20 @@ class SyncEngine {
 		if ((defaultOneDriveDriveDetails.type() == JSONType.object) && (hasId(defaultOneDriveDriveDetails))) {
 			if (debugLogging) {addLogEntry("OneDrive Account Default Drive Details:      " ~ sanitiseJSONItem(defaultOneDriveDriveDetails), ["debug"]);}
 			appConfig.accountType = defaultOneDriveDriveDetails["driveType"].str;
+			accountDisplayName = "";
+			accountEmail = "";
+			if (("owner" in defaultOneDriveDriveDetails) &&
+				(defaultOneDriveDriveDetails["owner"].type == JSONType.object) &&
+				("user" in defaultOneDriveDriveDetails["owner"]) &&
+				(defaultOneDriveDriveDetails["owner"]["user"].type == JSONType.object)) {
+				auto owner = defaultOneDriveDriveDetails["owner"]["user"];
+				if (("displayName" in owner) && (owner["displayName"].type == JSONType.string)) {
+					accountDisplayName = owner["displayName"].str;
+				}
+				if (("email" in owner) && (owner["email"].type == JSONType.string)) {
+					accountEmail = owner["email"].str;
+				}
+			}
 
 			// Issue #3115 - Validate driveId length
 			// What account type is this?
@@ -9258,7 +9276,7 @@ class SyncEngine {
 	}
 
 	// Query the OneDrive API using the provided driveId to get the latest quota details
-	string[3][] getRemainingFreeSpaceOnline(string sourceDriveId) {
+	string[5][] getRemainingFreeSpaceOnline(string sourceDriveId) {
 		// Function Start Time
 		SysTime functionStartTime;
 		string logKey;
@@ -9276,7 +9294,9 @@ class SyncEngine {
 		bool quotaRestricted = false; // Assume quota is not restricted unless "remaining" is missing
 		bool quotaAvailable = false;
 		long quotaRemainingOnline = 0;
-		string[3][] result;
+		long quotaTotalOnline = 0;
+		long quotaUsedOnline = 0;
+		string[5][] result;
 		OneDriveApi getCurrentDriveQuotaApiInstance;
 		string driveId;
 
@@ -9319,7 +9339,8 @@ class SyncEngine {
 			// If an exception occurs, it's unclear if quota is restricted, but quota details are not available
 			quotaRestricted = true; // Considering restricted due to failure to access
 			// Return result
-			result ~= [to!string(quotaRestricted), to!string(quotaAvailable), to!string(quotaRemainingOnline)];
+			result ~= [to!string(quotaRestricted), to!string(quotaAvailable),
+				to!string(quotaRemainingOnline), to!string(quotaTotalOnline), to!string(quotaUsedOnline)];
 
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			getCurrentDriveQuotaApiInstance.releaseCurlEngine();
@@ -9341,6 +9362,13 @@ class SyncEngine {
 
 			// debug output the entire 'quota' JSON response
 			if (debugLogging) {addLogEntry("Quota Details: " ~ to!string(quota), ["debug"]);}
+
+			if ("total" in quota && quota["total"].type() == JSONType.integer) {
+				quotaTotalOnline = quota["total"].integer;
+			}
+			if ("used" in quota && quota["used"].type() == JSONType.integer) {
+				quotaUsedOnline = quota["used"].integer;
+			}
 
 			// Does the 'quota' JSON struct contain 'remaining' ?
 			if ("remaining" in quota) {
@@ -9455,7 +9483,8 @@ class SyncEngine {
 		if (debugLogging) {addLogEntry("Reported Available Online Quota for driveID '" ~ driveId ~ "': " ~ to!string(quotaRemainingOnline), ["debug"]);}
 
 		// Return result
-		result ~= [to!string(quotaRestricted), to!string(quotaAvailable), to!string(quotaRemainingOnline)];
+		result ~= [to!string(quotaRestricted), to!string(quotaAvailable),
+			to!string(quotaRemainingOnline), to!string(quotaTotalOnline), to!string(quotaUsedOnline)];
 
 		// The quota response is no longer required once scalar/result state has been built.
 		currentDriveQuota = null;
@@ -18061,13 +18090,19 @@ class SyncEngine {
 		bool quotaRestricted;
 		bool quotaAvailable;
 		long quotaRemaining;
+		long quotaTotal;
+		long quotaUsed;
 
 		// Get the data from online
 		auto onlineDriveData = getRemainingFreeSpaceOnline(driveId);
 		quotaRestricted = to!bool(onlineDriveData[0][0]);
 		quotaAvailable = to!bool(onlineDriveData[0][1]);
 		quotaRemaining = to!long(onlineDriveData[0][2]);
-		onlineDriveDetails[driveId] = DriveDetailsCache(driveId, quotaRestricted, quotaAvailable, quotaRemaining);
+		quotaTotal = to!long(onlineDriveData[0][3]);
+		quotaUsed = to!long(onlineDriveData[0][4]);
+		onlineDriveDetails[driveId] = DriveDetailsCache(
+			driveId, quotaRestricted, quotaAvailable, quotaRemaining, quotaTotal, quotaUsed
+		);
 
 		// Debug log what the cached array now contains
 		if (debugLogging) {addLogEntry("onlineDriveDetails: " ~ to!string(onlineDriveDetails), ["debug"]);}
@@ -18247,7 +18282,10 @@ class SyncEngine {
 		}
 
 		// Updated the details
-		onlineDriveDetails[driveId] = DriveDetailsCache(driveId, quotaRestricted, quotaAvailable, quotaRemaining);
+		onlineDriveDetails[driveId] = DriveDetailsCache(
+			driveId, quotaRestricted, quotaAvailable, quotaRemaining,
+			cachedOnlineDriveData.quotaTotal, cachedOnlineDriveData.quotaUsed
+		);
 
 		// Display function processing time if configured to do so
 		if (appConfig.getValueBool("display_processing_time") && debugLogging) {

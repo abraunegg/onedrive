@@ -106,6 +106,32 @@ class TestCase0091MonitorRuntimeTelemetry(MonitorModeTestCaseBase):
             time.sleep(0.1)
         return None
 
+    @staticmethod
+    def _validate_status_presentation_fields(path: Path, sync_root: Path) -> str | None:
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+            account = document["account"]
+            storage = document["storage"]
+            local = storage["local"]
+            cloud = storage["cloud"]
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            return f"monitor status presentation fields could not be read ({type(error).__name__})"
+
+        if not isinstance(account, dict) or not isinstance(account.get("type"), str):
+            return "monitor status account fields have an invalid shape"
+        if not isinstance(account.get("display_name"), str) or not isinstance(account.get("email"), str):
+            return "monitor status account identity values have an invalid shape"
+        if not isinstance(local, dict) or not isinstance(local.get("sync_dir"), str):
+            return "monitor status local storage fields have an invalid shape"
+        if Path(local["sync_dir"]).resolve() != sync_root.resolve():
+            return "monitor status local sync directory does not match the configured directory"
+        if (not isinstance(cloud, dict) or not isinstance(cloud.get("quota_restricted"), bool)
+                or not isinstance(cloud.get("remaining_bytes"), int)
+                or not isinstance(cloud.get("total_bytes"), int)
+                or not isinstance(cloud.get("used_bytes"), int)):
+            return "monitor status cloud storage fields have an invalid shape"
+        return None
+
     def _run_scenario(self, context: E2EContext, layout, scenario_id: str,
                       artifacts: list[str], details: dict[str, object]) -> str | None:
         work_dir = layout.work_dir / scenario_id
@@ -163,6 +189,11 @@ class TestCase0091MonitorRuntimeTelemetry(MonitorModeTestCaseBase):
                 return "initial monitor cycle did not publish idle status"
             if initial.get("monitor_loop") != 1 or initial.get("successful_cycle_count") != 1 or initial.get("last_cycle_result") != "success":
                 return "initial scheduled cycle counters/result are incorrect"
+            presentation_error = self._validate_status_presentation_fields(
+                conf_monitor / "monitor-status.json", sync_root
+            )
+            if presentation_error:
+                return presentation_error
             if scenario_id == "RT-0001":
                 scenario_details["scheduled_syncing_observed"] = sampler.observed(pid, "syncing")
                 if not scenario_details["scheduled_syncing_observed"]:

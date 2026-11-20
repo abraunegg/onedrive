@@ -172,6 +172,14 @@ struct MonitorRuntimeStatus {
 	ulong recycleBinFailures = 0;
 	string oneDriveReachability = "unknown";
 	string systemTimeState = "unknown";
+	string accountType;
+	string accountDisplayName;
+	string accountEmail;
+	string syncDirectory;
+	bool cloudQuotaRestricted = true;
+	long cloudQuotaRemaining;
+	long cloudQuotaTotal;
+	long cloudQuotaUsed;
 }
 
 MonitorRuntimeStatus monitorRuntimeStatus;
@@ -185,6 +193,33 @@ string monitorStatusFilePath() {
 	// Use the actual application-state directory so the status file always sits
 	// beside items.sqlite3, including non-default --confdir/state layouts.
 	return buildNormalizedPath(buildPath(dirName(appConfig.databaseFilePath), "monitor-status.json"));
+}
+
+void captureMonitorStatusPresentation() {
+	if (!monitorRuntimeStatus.enabled) return;
+
+	monitorRuntimeStatus.syncDirectory = appConfig.runtimeSyncDirectory;
+	if (syncEngineInstance is null) return;
+
+	monitorRuntimeStatus.accountType = appConfig.accountType;
+	monitorRuntimeStatus.accountDisplayName = syncEngineInstance.accountDisplayName;
+	monitorRuntimeStatus.accountEmail = syncEngineInstance.accountEmail;
+	monitorRuntimeStatus.cloudQuotaRestricted = true;
+	monitorRuntimeStatus.cloudQuotaRemaining = 0;
+	monitorRuntimeStatus.cloudQuotaTotal = 0;
+	monitorRuntimeStatus.cloudQuotaUsed = 0;
+
+	string quotaDriveId = appConfig.getValueString("drive_id");
+	if (quotaDriveId.empty) {
+		quotaDriveId = appConfig.defaultDriveId;
+	}
+	if (quotaDriveId in syncEngineInstance.onlineDriveDetails) {
+		auto cloudQuota = syncEngineInstance.onlineDriveDetails[quotaDriveId];
+		monitorRuntimeStatus.cloudQuotaRestricted = cloudQuota.quotaRestricted;
+		monitorRuntimeStatus.cloudQuotaRemaining = cloudQuota.quotaRemaining;
+		monitorRuntimeStatus.cloudQuotaTotal = cloudQuota.quotaTotal;
+		monitorRuntimeStatus.cloudQuotaUsed = cloudQuota.quotaUsed;
+	}
 }
 
 void removeMonitorStatusFileIfPresent() {
@@ -214,6 +249,22 @@ void writeMonitorStatusFile() {
 		"application": JSONValue("onedrive"),
 		"pid": JSONValue(cast(long)getpid()),
 		"instance_id": JSONValue(monitorRuntimeStatus.instanceId),
+		"account": JSONValue([
+			"type": JSONValue(monitorRuntimeStatus.accountType),
+			"display_name": JSONValue(monitorRuntimeStatus.accountDisplayName),
+			"email": JSONValue(monitorRuntimeStatus.accountEmail)
+		]),
+		"storage": JSONValue([
+			"local": JSONValue([
+				"sync_dir": JSONValue(monitorRuntimeStatus.syncDirectory)
+			]),
+			"cloud": JSONValue([
+				"quota_restricted": JSONValue(monitorRuntimeStatus.cloudQuotaRestricted),
+				"remaining_bytes": JSONValue(monitorRuntimeStatus.cloudQuotaRemaining),
+				"total_bytes": JSONValue(monitorRuntimeStatus.cloudQuotaTotal),
+				"used_bytes": JSONValue(monitorRuntimeStatus.cloudQuotaUsed)
+			])
+		]),
 		"mode": JSONValue([
 			"monitor": JSONValue(true),
 			"download_only": JSONValue(appConfig.getValueBool("download_only")),
@@ -287,6 +338,7 @@ void initialiseMonitorRuntimeStatus(SysTime applicationStartedAt, MonoTime appli
 	monitorRuntimeStatus.lastCycleResult = "never_run";
 	monitorRuntimeStatus.oneDriveReachability = "unknown";
 	monitorRuntimeStatus.systemTimeState = appConfig.getSystemTimeStateString();
+	captureMonitorStatusPresentation();
 	writeMonitorStatusFile();
 }
 
@@ -297,6 +349,7 @@ void beginMonitorRuntimeStatusCycle(ulong monitorLoopCount) {
 	monitorRuntimeStatus.processState = "syncing";
 	monitorRuntimeStatus.currentCycleStartedAt = Clock.currTime(UTC());
 	monitorRuntimeStatus.currentCycleStartedMonotonic = MonoTime.currTime();
+	captureMonitorStatusPresentation();
 	writeMonitorStatusFile();
 }
 
@@ -335,6 +388,7 @@ void completeMonitorRuntimeStatusCycle(
 		monitorRuntimeStatus.lastSuccessfulSyncAt = completedAt;
 	}
 
+	captureMonitorStatusPresentation();
 	writeMonitorStatusFile();
 }
 
@@ -359,6 +413,7 @@ void endMonitorStatusActivity() {
 	if (monitorRuntimeStatus.currentCycleStartedAt == SysTime.min &&
 		monitorRuntimeStatus.processState == "syncing") {
 		monitorRuntimeStatus.processState = monitorStatusPreviousState;
+		captureMonitorStatusPresentation();
 		writeMonitorStatusFile();
 	}
 }

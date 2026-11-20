@@ -850,6 +850,11 @@ A typical status document while a monitor cycle is running resembles:
 ```json
 {
     "application": "onedrive",
+    "account": {
+        "display_name": "",
+        "email": "",
+        "type": ""
+    },
     "conditions": {
         "onedrive_reachability": "reachable",
         "system_time": "TIME_OK"
@@ -871,6 +876,17 @@ A typical status document while a monitor cycle is running resembles:
         "state": "syncing"
     },
     "schema_version": 1,
+    "storage": {
+        "cloud": {
+            "quota_restricted": true,
+            "remaining_bytes": 0,
+            "total_bytes": 0,
+            "used_bytes": 0
+        },
+        "local": {
+            "sync_dir": ""
+        }
+    },
     "sync": {
         "initial_successful_sync_completed": false,
         "last_cycle": {
@@ -895,6 +911,12 @@ The key fields are:
 |---|---|
 | `schema_version` | Version of the JSON status schema. Consumers should use this when validating compatibility. |
 | `pid` / `instance_id` | Identity of the monitor process instance that owns the status document. |
+| `account.*` | Account type and the drive owner's display name/email when Microsoft includes them in the default drive response. These values may be empty. |
+| `storage.local.sync_dir` | Configured local synchronisation directory; consumers can use it to inspect the containing filesystem. |
+| `storage.cloud.quota_restricted` | Whether quota details are unavailable or restricted for the selected drive. |
+| `storage.cloud.remaining_bytes` | Last remaining-quota value already cached by the monitor. It is not refreshed solely to publish status. |
+| `storage.cloud.total_bytes` | Last total-capacity value already cached by the monitor, or zero when unavailable. |
+| `storage.cloud.used_bytes` | Last used-capacity value already cached by the monitor, or zero when unavailable. |
 | `mode` | Relevant operating-mode values, including `download_only`, `upload_only` and the scheduled monitor interval. |
 | `process.state` | Current monitor runtime state. During active reconciliation this is `syncing`; after a successful completed cycle this is `idle`; a non-successful completed cycle is represented as `degraded`. |
 | `process.monitor_loop` | Current scheduled monitor-loop number. |
@@ -919,7 +941,9 @@ The key fields are:
 
 All status timestamps are emitted in UTC and use a trailing `Z`. This is deliberate so monitoring systems can compare timestamps without ambiguity across hosts, containers and daylight-saving transitions. Human-facing tools should convert the UTC timestamp into the viewer's local timezone when displaying it.
 
-The status file is written with restrictive permissions and replaced atomically so readers see a complete old or new document rather than partially-written JSON. On an orderly `--monitor` shutdown the file is removed. A hard termination such as `SIGKILL`, a process crash or loss of power can leave the last file behind, so external tooling should not treat file existence alone as definitive liveness after an abnormal termination; use the process identity and timestamps as well.
+The status file is written with restrictive permissions and replaced atomically so readers see a complete old or new document rather than partially-written JSON. It can contain the account owner's name/email and the local sync path, so keep those permissions intact. On an orderly `--monitor` shutdown the file is removed. A hard termination such as `SIGKILL`, a process crash or loss of power can leave the last file behind, so external tooling should not treat file existence alone as definitive liveness after an abnormal termination; use the process identity and timestamps as well.
+
+On Cinnamon desktops, the optional [OneDrive Status panel applet](./cinnamon-applet.md) presents these monitor snapshots together with local filesystem capacity. It does not claim that an idle monitor is proof of local/remote convergence.
 
 Two common errors can occur when using monitor mode:
 *   Initialisation failure

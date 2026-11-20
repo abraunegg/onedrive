@@ -800,10 +800,10 @@ For the default configuration this is normally:
 ~/.config/onedrive/monitor-status.json
 ```
 
-The status document contains operational state already known by the running client, including the process/instance identity, configured monitor interval, current monitor state, monitor loop count, whether an initial successful synchronisation has completed, the most recent monitor-cycle result, transfer-failure counts, Microsoft OneDrive reachability and the current system-time validation state.
+The status document contains operational state already known by the running client, including the process/instance identity, configured monitor interval, current monitor state, monitor loop count, whether an initial successful synchronisation has completed, the most recent monitor-cycle result, transfer-failure counts, Microsoft OneDrive reachability and the current system-time validation state. It also publishes the linked account name/email and account type when available, the configured `sync_dir`, and the selected drive's cached remaining, total and used quota values when available.
 
 > [!IMPORTANT]
-> `monitor-status.json` is an operational runtime-status interface. It does **not** perform an additional Microsoft Graph query, database reconciliation or filesystem scan, and it does not replace `--display-sync-status`. Use `--display-sync-status` when you need a point-in-time assessment of whether the local and remote data states are converged.
+> `monitor-status.json` is an operational runtime-status interface. It does **not** perform an additional Microsoft Graph query, database reconciliation or filesystem scan, and it does not replace `--display-sync-status`. Use `--display-sync-status` when you need a point-in-time assessment of whether the local and remote data states are converged. Its account identity and local path fields are protected by the status file's restrictive permissions.
 
 > [!NOTE]
 > The file is created only for `--monitor` operation. It is written with restrictive file permissions and updated using atomic replacement so readers do not observe a partially-written JSON document. On an orderly monitor shutdown the status file and its temporary file are removed. An abnormal termination such as `SIGKILL`, process crash or power failure can leave the last status file behind; consumers should therefore use fields such as `pid`, `instance_id` and `updated_at` when evaluating potentially stale state.

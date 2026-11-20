@@ -34,6 +34,8 @@ If your distribution provides a current maintained package, you should install t
 
 Before continuing, identify your Linux distribution and follow the installation path appropriate to your system.
 
+On Linux Mint 22.x, including 22.3, use the Ubuntu 24.04 (Noble) package instructions below. Cinnamon users who build the client from source can optionally install the [Cinnamon panel applet](./cinnamon-applet.md) with `make install-cinnamon-applet`.
+
 ## Recommended Installation Method (Using Pre-Built Packages)
 
 ### Important Notice for all Debian | Ubuntu | Linux Mint | Pop!_OS | Raspbian | Zorin Users
@@ -100,6 +102,31 @@ Outside of these 3 reasons, you should not be building the client yourself. You 
 
 > [!IMPORTANT]
 > If your distribution does not currently offer a packaged version of the client, you should **request that your distribution maintainers package and support it** as part of their official repositories.
+
+### Creating a local Debian package
+
+On Debian-based systems, including Ubuntu and Linux Mint, you can build a local `.deb` from the current source tree. The package includes the client and the optional Cinnamon status applet. It is intended for local use and is not an official OBS package.
+
+Install the package-building tools and the client build dependencies:
+
+```text
+sudo apt install build-essential dpkg-dev libcurl4-openssl-dev libsqlite3-dev pkg-config ldc systemd-dev libdbus-1-dev
+```
+
+From the project directory, run:
+
+```text
+./configure DC=ldc2
+make deb
+```
+
+The command builds in a temporary directory, leaves the source checkout unchanged, and creates `onedrive_<version>_amd64.deb` (the architecture suffix may differ) in the project directory. Install it with:
+
+```text
+sudo apt install ./onedrive_*.deb
+```
+
+Stop a running OneDrive monitor before installing. The local package can replace another package named `onedrive`; because its local version sorts after the matching upstream version, remove it before returning to the OBS package repository.
 
 
 ## Building from Source
