@@ -6969,9 +6969,9 @@ class SyncEngine {
 									if (dbItem.type == ItemType.file) {
 										// Not a remote file
 										// Where should the timestamp update be performed ?
-										if (localModifiedTime >= itemModifiedTime) {
+										if ((localModifiedTime >= itemModifiedTime) || appConfig.getValueBool("local_first")) {
 											// Log what is being done
-											if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with a newer local timestamp - correcting online timestamp", ["verbose"]);}
+											if (verboseLogging) {addLogEntry("The local item has the same hash value as the item online but with a " ~ (localModifiedTime >= itemModifiedTime ? "newer" : "older") ~ " local timestamp - correcting online timestamp", ["verbose"]);}
 											// Correct timestamp
 											uploadLastModifiedTime(dbItem, dbItem.driveId, dbItem.id, localModifiedTime.toUTC(), dbItem.eTag, true);
 										} else {

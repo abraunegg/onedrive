@@ -106,6 +106,7 @@ from testcases.tc0089_git_rsync_monitor_upload_identity import TestCase0089GitRs
 from testcases.tc0090_filesystem_lookup_error_preservation import TestCase0090FilesystemLookupErrorPreservation
 from testcases.tc0091_monitor_runtime_telemetry import TestCase0091MonitorRuntimeTelemetry
 from testcases.tc0092_upload_only_immutability_option_matrix import TestCase0092UploadOnlyImmutabilityOptionMatrix
+from testcases.tc0093_local_first_timestamp_authority import TestCase0093LocalFirstTimestampAuthority
 
 
 def build_test_suite() -> list:
@@ -202,6 +203,7 @@ def build_test_suite() -> list:
         TestCase0090FilesystemLookupErrorPreservation(),
         TestCase0091MonitorRuntimeTelemetry(),
         TestCase0092UploadOnlyImmutabilityOptionMatrix(),
+        TestCase0093LocalFirstTimestampAuthority(),
     ]
 
 
