@@ -14180,7 +14180,9 @@ class SyncEngine {
 					// children's parentReference.path is the exact owner-side root path.
 					if (!hasParentReferenceId(child) || !hasParentReferenceDriveId(child) ||
 						(child["parentReference"]["id"].str != currentSharedFolderOwnerItemId) ||
-						(child["parentReference"]["driveId"].str != searchItem.driveId) ||
+						((appConfig.accountType == "personal"
+							? testProvidedDriveIdForLengthIssue(child["parentReference"]["driveId"].str)
+							: child["parentReference"]["driveId"].str) != searchItem.driveId) ||
 						(("path" in child["parentReference"]) == null) ||
 						(child["parentReference"]["path"].type() != JSONType.string)) {
 						addLogEntry("ERROR: Cannot verify a direct Shared Folder child's owner-side parent path. Aborting reconciliation.", ["error", "notify"]);
