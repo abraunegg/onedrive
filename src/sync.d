@@ -341,6 +341,8 @@ class SyncEngine {
 	bool sharedFolderDeltaGeneration = false;
 	string currentSharedFolderName = "";
 	string currentSharedFolderLogicalPath = "";
+	string currentSharedFolderOwnerItemId = "";
+	string currentSharedFolderOwnerPath = "";
 
 	// Directory excluded by 'sync_list flag so that when scanning that directory, if it is excluded,
 	// can be scanned for new data which may be included by other include rule, but parent is excluded
@@ -1672,6 +1674,8 @@ class SyncEngine {
 		sharedFolderDeltaGeneration = false;
 		currentSharedFolderName = "";
 		currentSharedFolderLogicalPath = "";
+		currentSharedFolderOwnerItemId = "";
+		currentSharedFolderOwnerPath = "";
 
 		// Was a driveId provided as an input
 		if (strip(driveIdToQuery).empty) {
@@ -5833,31 +5837,21 @@ class SyncEngine {
 
 		string calculatedParentPath;
 
-		// The generated delta can include the shared-folder anchor item itself. Its owner-drive
-		// parent is outside the selected shortcut, so use the local parent of the shortcut.
-		if (itemName == currentSharedFolderName) {
+		// Identify the actual shared root by item ID, never by an item's name.
+		if (hasId(onedriveJSONItem) && (onedriveJSONItem["id"].str == currentSharedFolderOwnerItemId)) {
 			calculatedParentPath = dirName(logicalAnchorPath);
 			if (calculatedParentPath == ".") {
 				calculatedParentPath = "";
 			}
 		} else {
-			string anchorNeedle = "/" ~ currentSharedFolderName;
-			auto anchorIndex = lastIndexOf(parentPath, anchorNeedle);
-			if (anchorIndex < 0) {
-				if (parentPath == currentSharedFolderName) {
-					anchorIndex = 0;
-					anchorNeedle = currentSharedFolderName;
-				} else {
-					return "";
-				}
+			// The Graph path is in the owner's drive. Only remove the exact owner-side
+			// root prefix, not a same-named (or similarly named) descendant component.
+			if ((parentPath != currentSharedFolderOwnerPath) &&
+				!startsWith(parentPath, currentSharedFolderOwnerPath ~ "/")) {
+				addLogEntry("ERROR: Shared Folder item path is outside its verified owner-side root. Aborting to prevent incorrect moves or remote deletions.", ["error", "notify"]);
+				forceExit();
 			}
-
-			string suffix = "";
-			auto suffixStart = cast(size_t)(anchorIndex + anchorNeedle.length);
-			if (suffixStart < parentPath.length) {
-				suffix = parentPath[suffixStart .. $];
-			}
-			calculatedParentPath = logicalAnchorPath ~ suffix;
+			calculatedParentPath = logicalAnchorPath ~ parentPath[currentSharedFolderOwnerPath.length .. $];
 		}
 
 		calculatedParentPath = buildNormalizedPath(calculatedParentPath);
@@ -8169,10 +8163,10 @@ class SyncEngine {
 
 				// There needs to be a valid JSON response with the fields required below.
 				if ((onlinePathData.type() == JSONType.object) && (hasParentReferenceDriveId(onlinePathData)) && ((hasParentReferenceId(onlinePathData)) || (hasId(onlinePathData)))) {
-					// Does this JSON match the root name of a shared folder we may be trying to match?
+					// Only the actual owner-side shared root may create its database tie records.
 					if (sharedFolderDeltaGeneration) {
-						if ((hasName(onlinePathData)) && (currentSharedFolderName == onlinePathData["name"].str)) {
-							if (debugLogging) {addLogEntry("createLocalPathStructure parent matches the current shared folder name, creating applicable shared folder database records", ["debug"]);}
+						if ((hasId(onlinePathData)) && (currentSharedFolderOwnerItemId == onlinePathData["id"].str)) {
+							if (debugLogging) {addLogEntry("createLocalPathStructure parent matches the current shared folder item ID, creating applicable shared folder database records", ["debug"]);}
 							// Create a 'root' and 'Shared Folder' DB Tie Records for this JSON object in a consistent manner
 							createRequiredSharedFolderDatabaseRecords(onlinePathData);
 						}
@@ -14057,6 +14051,27 @@ class SyncEngine {
 
 		// Was a valid JSON response for 'driveData' provided?
 		if (driveData.type() == JSONType.object) {
+			// This is the owner-side root for this specific shared-folder shortcut.
+			// Capture its identity and full path before processing any generated delta items.
+			if (sharedFolderDeltaGeneration) {
+				if (!hasId(driveData) || !hasName(driveData) || driveData["name"].str.empty || !hasParentReference(driveData) ||
+					(("path" in driveData["parentReference"]) == null) ||
+					(driveData["parentReference"]["path"].type() != JSONType.string)) {
+					addLogEntry("ERROR: Cannot identify the Shared Folder's owner-side root. Aborting to prevent incorrect path reconciliation.", ["error", "notify"]);
+					forceExit();
+				}
+				currentSharedFolderOwnerItemId = driveData["id"].str;
+				string ownerParentPath = driveData["parentReference"]["path"].str;
+				auto splitIndex = ownerParentPath.indexOf(":");
+				if (splitIndex != -1) {
+					ownerParentPath = ownerParentPath[splitIndex + 1 .. $];
+				}
+				currentSharedFolderOwnerPath = buildNormalizedPath(ownerParentPath ~ "/" ~ driveData["name"].str);
+				if (currentSharedFolderOwnerItemId.empty || currentSharedFolderOwnerPath.empty) {
+					addLogEntry("ERROR: Invalid Shared Folder owner-side root identity or path. Aborting synchronisation.", ["error", "notify"]);
+					forceExit();
+				}
+			}
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			string generatingDeltaResponseMessage = format("Generating a /delta response from the OneDrive API for this Drive ID: %s and Item ID: %s", searchItem.driveId, searchItem.id);
 			if (appConfig.verbosityCount == 0) {
