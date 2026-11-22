@@ -290,12 +290,43 @@ class SharedFolderCollisionCase(E2ETestCase):
             files = {k: owned_relative / rel for k, rel in keys.items()}
             # Only the case-owned subtree is created; all original parents are immutable.
             contents = {k: f"Issue #3990 {self.case_id} {safe_run_id} {k} revision 0\n".encode() for k in files}
+            # Do not create a new Shared Folder directory and all descendants in
+            # one upload pass.  The newly created parent can be present online
+            # before it is resolvable through the shortcut during that same pass.
+            # Seed only one level at a time and reconcile the owner-side IDs
+            # before creating children under those parents.
+            directories = {owned_relative}
+            for relative in files.values():
+                parent_relative = relative.parent
+                while parent_relative != self.fixture_parent_relative:
+                    if not parent_relative.is_relative_to(owned_relative):
+                        raise CollisionFailure("Unsafe seed directory outside testcase-owned subtree")
+                    directories.add(parent_relative)
+                    parent_relative = parent_relative.parent
+            stages: dict[int, list[Path]] = {}
+            for relative in directories:
+                depth = len(relative.relative_to(self.fixture_parent_relative).parts)
+                stages.setdefault(depth, []).append(relative)
+            for depth in sorted(stages):
+                for relative in sorted(stages[depth]):
+                    path = seed_root / relative
+                    if path.exists():
+                        raise CollisionFailure(f"Reserved seed directory unexpectedly exists: {relative}")
+                    path.mkdir()  # Its parent was seeded and reconciled at the preceding depth.
+                seed_attempted = True
+                self._execute(context, f"seed-depth-{depth}-upload-only", seed_conf,
+                              layout.log_dir, artifacts, upload_only=True)
+                # Ensure the client database recognises the newly created owner-
+                # drive parent IDs before the following level is uploaded.
+                self._execute(context, f"seed-depth-{depth}-reconcile", seed_conf,
+                              layout.log_dir, artifacts, resync=True, download_only=True)
             for key, rel in files.items():
                 dest = seed_root / rel
-                dest.parent.mkdir(parents=True, exist_ok=True)
+                if not dest.parent.is_dir():
+                    raise CollisionFailure(f"Seed file parent is missing: {rel.parent}")
                 dest.write_bytes(contents[key])
-            seed_attempted = True
-            self._execute(context, "seed-upload-only", seed_conf, layout.log_dir, artifacts, upload_only=True)
+            self._execute(context, "seed-files-upload-only", seed_conf,
+                          layout.log_dir, artifacts, upload_only=True)
 
             # Independent Graph round-trip proves the seed exists online before mutation.
             check_root, check_conf, _ = self._fresh_client(
