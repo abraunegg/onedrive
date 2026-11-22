@@ -223,7 +223,7 @@ class SharedFolderCollisionCase(E2ETestCase):
             CollisionScenario("SL-0004", "exact file beneath exact-name collision", ("/" + files["exact"].as_posix(),), frozenset(("exact",))),
             CollisionScenario("SL-0005", "exclusion-first prefix-name branch", (f"!{base}/{owner} response/", base + "/"), all_keys - frozenset(("prefix",))),
             CollisionScenario("SL-0006", "wildcard prefix-name directory inclusion", (f"{base}/{owner} resp*/",), frozenset(("prefix",))),
-            CollisionScenario("SL-0007", "recursive glob beneath nested name collision", (f"{base}/**/{files['prefix_deep'].name}",), frozenset(("prefix_deep",))),
+            CollisionScenario("SL-0007", "recursive glob beneath nested name collision", (f"/{files['prefix_deep'].parent.parent.as_posix()}/**/{files['prefix_deep'].name}",), frozenset(("prefix_deep",))),
             CollisionScenario("SL-0008", "exclusion-first exact-name branch", (f"!{base}/{owner}/", base + "/"), all_keys - frozenset(("exact",))),
             CollisionScenario("SL-0009", "wildcard exclusion of nested collision branches", (f"!{base}/Level2/*", base + "/"), all_keys - frozenset(("prefix_deep", "exact_deep"))),
             CollisionScenario("SL-0010", "multiple Shared Folder shortcuts included", (base + "/", "/" + self.second_share_relative.as_posix() + "/"), all_keys, True),
@@ -279,7 +279,7 @@ class SharedFolderCollisionCase(E2ETestCase):
             if owned_root.exists():
                 raise CollisionFailure("Test-owned directory already exists online; refusing to overwrite it")
 
-            uid = safe_run_id
+            uid = f"{safe_run_id}_{safe_label}"
             keys: dict[str, Path] = {
                 "prefix": Path(f"{collision_name} response/Photos/{self.case_id}-prefix-{uid}.txt"),
                 "exact": Path(f"{collision_name}/Docs/{self.case_id}-exact-{uid}.txt"),
