@@ -343,6 +343,7 @@ class SyncEngine {
 	string currentSharedFolderLogicalPath = "";
 	string currentSharedFolderOwnerItemId = "";
 	string currentSharedFolderOwnerPath = "";
+	bool currentSharedFolderOwnerPathResolved = false;
 
 	// Directory excluded by 'sync_list flag so that when scanning that directory, if it is excluded,
 	// can be scanned for new data which may be included by other include rule, but parent is excluded
@@ -1676,6 +1677,7 @@ class SyncEngine {
 		currentSharedFolderLogicalPath = "";
 		currentSharedFolderOwnerItemId = "";
 		currentSharedFolderOwnerPath = "";
+		currentSharedFolderOwnerPathResolved = false;
 
 		// Was a driveId provided as an input
 		if (strip(driveIdToQuery).empty) {
@@ -5844,6 +5846,11 @@ class SyncEngine {
 				calculatedParentPath = "";
 			}
 		} else {
+			// Never reconcile a descendant until the owner-side root is known.
+			if (!currentSharedFolderOwnerPathResolved) {
+				addLogEntry("ERROR: Shared Folder owner-side root path is unresolved. Aborting to prevent incorrect path reconciliation.", ["error", "notify"]);
+				forceExit();
+			}
 			// The Graph path is in the owner's drive. Only remove the exact owner-side
 			// root prefix, not a same-named (or similarly named) descendant component.
 			if ((parentPath != currentSharedFolderOwnerPath) &&
@@ -14051,25 +14058,26 @@ class SyncEngine {
 
 		// Was a valid JSON response for 'driveData' provided?
 		if (driveData.type() == JSONType.object) {
-			// This is the owner-side root for this specific shared-folder shortcut.
-			// Capture its identity and full path before processing any generated delta items.
+			// The owner-side root ID is authoritative. Its parentReference.path is not
+			// always supplied by Graph (notably for SharePoint-backed Business roots).
+			// Where absent, the first verified direct child establishes the root path.
 			if (sharedFolderDeltaGeneration) {
-				if (!hasId(driveData) || !hasName(driveData) || driveData["name"].str.empty || !hasParentReference(driveData) ||
-					(("path" in driveData["parentReference"]) == null) ||
-					(driveData["parentReference"]["path"].type() != JSONType.string)) {
-					addLogEntry("ERROR: Cannot identify the Shared Folder's owner-side root. Aborting to prevent incorrect path reconciliation.", ["error", "notify"]);
+				if (!hasId(driveData) || driveData["id"].str.empty || !hasName(driveData) || driveData["name"].str.empty) {
+					addLogEntry("ERROR: Cannot identify the Shared Folder's owner-side root item. Aborting to prevent incorrect path reconciliation.", ["error", "notify"]);
 					forceExit();
 				}
 				currentSharedFolderOwnerItemId = driveData["id"].str;
-				string ownerParentPath = driveData["parentReference"]["path"].str;
-				auto splitIndex = ownerParentPath.indexOf(":");
-				if (splitIndex != -1) {
-					ownerParentPath = ownerParentPath[splitIndex + 1 .. $];
-				}
-				currentSharedFolderOwnerPath = buildNormalizedPath(ownerParentPath ~ "/" ~ driveData["name"].str);
-				if (currentSharedFolderOwnerItemId.empty || currentSharedFolderOwnerPath.empty) {
-					addLogEntry("ERROR: Invalid Shared Folder owner-side root identity or path. Aborting synchronisation.", ["error", "notify"]);
-					forceExit();
+				// A drive root is not itself a named path component.
+				if (!isItemRoot(driveData) && hasParentReference(driveData) &&
+					(("path" in driveData["parentReference"]) != null) &&
+					(driveData["parentReference"]["path"].type() == JSONType.string)) {
+					string ownerParentPath = driveData["parentReference"]["path"].str;
+					auto splitIndex = ownerParentPath.indexOf(":");
+					if (splitIndex != -1) {
+						ownerParentPath = ownerParentPath[splitIndex + 1 .. $];
+					}
+					currentSharedFolderOwnerPath = buildNormalizedPath(ownerParentPath ~ "/" ~ driveData["name"].str);
+					currentSharedFolderOwnerPathResolved = true;
 				}
 			}
 			// Dynamic output for a non-verbose run so that the user knows something is happening
@@ -14167,6 +14175,37 @@ class SyncEngine {
 			}
 
 			foreach (child; topLevelChildren["value"].array) {
+				if (sharedFolderDeltaGeneration) {
+					// /children was queried for the verified owner root ID: its immediate
+					// children's parentReference.path is the exact owner-side root path.
+					if (!hasParentReferenceId(child) || !hasParentReferenceDriveId(child) ||
+						(child["parentReference"]["id"].str != currentSharedFolderOwnerItemId) ||
+						(child["parentReference"]["driveId"].str != searchItem.driveId) ||
+						(("path" in child["parentReference"]) == null) ||
+						(child["parentReference"]["path"].type() != JSONType.string)) {
+						addLogEntry("ERROR: Cannot verify a direct Shared Folder child's owner-side parent path. Aborting reconciliation.", ["error", "notify"]);
+						forceExit();
+					}
+					string ownerRootPath = child["parentReference"]["path"].str;
+					auto splitIndex = ownerRootPath.indexOf(":");
+					if (splitIndex != -1) {
+						ownerRootPath = ownerRootPath[splitIndex + 1 .. $];
+					}
+					ownerRootPath = buildNormalizedPath(ownerRootPath);
+					if (ownerRootPath == ".") {
+						ownerRootPath = "";
+					}
+					if (!ownerRootPath.empty && (ownerRootPath[$ - 1] == '/')) {
+						ownerRootPath = ownerRootPath[0 .. $ - 1];
+					}
+					if (!currentSharedFolderOwnerPathResolved) {
+						currentSharedFolderOwnerPath = ownerRootPath;
+						currentSharedFolderOwnerPathResolved = true;
+					} else if (currentSharedFolderOwnerPath != ownerRootPath) {
+						addLogEntry("ERROR: Inconsistent Shared Folder owner-side root paths. Aborting to prevent incorrect reconciliation.", ["error", "notify"]);
+						forceExit();
+					}
+				}
 				// Check for any Client Side Filtering here ... we should skip querying the OneDrive API for 'folders' that we are going to just process and skip anyway.
 				// This avoids needless calls to the OneDrive API, and potentially speeds up this process.
 				if (!checkJSONAgainstClientSideFiltering(child)) {
