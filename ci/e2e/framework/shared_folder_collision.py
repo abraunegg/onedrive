@@ -360,10 +360,34 @@ class SharedFolderCollisionCase(E2ETestCase):
                    for line in delta.stdout.splitlines()):
                 raise CollisionFailure("Changed-eTag reconciliation attempted to relocate an Issue #3990 file")
 
-            # Only after download-only safety gates may normal bidirectional reconciliation run.
-            bidirectional = self._execute(context, "bidirectional-noop", check_conf,
-                                          layout.log_dir, artifacts)
+            # Re-run the original receiver to catch relocations that occur only on
+            # a subsequent generated /delta pass (as reported in Issue #3990).
+            repeat = self._execute(context, "repeat-download-only", check_conf,
+                                   layout.log_dir, artifacts, download_only=True)
             self._verify_files(check_root, owned_relative, files, frozenset(files), contents,
+                               "repeat-download-only", layout.state_dir, artifacts)
+            if any("Moving " in line and any(p.name in line for p in files.values())
+                   for line in repeat.stdout.splitlines()):
+                raise CollisionFailure("Repeated Shared Folder reconciliation attempted to relocate an Issue #3990 file")
+            if any(self._identity(check_conf, p.name) != baseline_ids[k] for k, p in files.items()):
+                raise CollisionFailure("Repeated download-only reconciliation changed an online item identity")
+
+            # Download-only changed-eTag reconciliation above is intentionally run
+            # against the existing receiver DB.  The source files were deliberately
+            # future-dated to trigger their remote update: an immediate bidirectional
+            # scan of that receiver can independently encounter stale DB timestamps.
+            # Establish a clean, independent online baseline for the strict no-op
+            # assertion without hiding either of the original receiver path checks.
+            noop_root, noop_conf, _ = self._fresh_client(
+                context, layout, "bidirectional-noop-baseline", share_selection, artifacts,
+            )
+            self._verify_files(noop_root, owned_relative, files, frozenset(files), contents,
+                               "bidirectional-noop-baseline", layout.state_dir, artifacts)
+            if any(self._identity(noop_conf, p.name) != baseline_ids[k] for k, p in files.items()):
+                raise CollisionFailure("No-op baseline changed an online item identity")
+            bidirectional = self._execute(context, "bidirectional-noop", noop_conf,
+                                          layout.log_dir, artifacts)
+            self._verify_files(noop_root, owned_relative, files, frozenset(files), contents,
                                "bidirectional-noop", layout.state_dir, artifacts)
             for line in bidirectional.stdout.splitlines():
                 if any(p.name in line for p in files.values()) and any(
