@@ -236,3 +236,49 @@ All TC0092 scenario outcomes are exported as `executed_scenario_ids` and
 `failed_scenario_ids` so the existing targeted debug-rerun mechanism can narrow
 retries to the failures. Be careful to distinguish **PASS** from **PASS WITH
 RECOVERY** as with every other E2E gate.
+
+## Issue #3990 — Shared Folder owner-path name-collision regression
+
+`SFPTC0004` (Personal) and `BSFTC0008` (Business) exercise the actual
+owner-side name collision reported in #3990. Business runs both the
+SharePoint-backed (`SP-0000`–`SP-0010`) and user-owned (`UO-0000`–`UO-0010`)
+backends; Personal runs `SL-0000`–`SL-0010`. The test discovers and validates
+the **Graph owner root name and item ID**. The collision branches use the
+*shortcut name searched by the historical bug*; deeper branches also use the
+actual owner name. A SharePoint-backed shortcut may point to a drive root named
+`root`, whereas a user-owned shortcut can have a different local display name.
+
+Each backend creates a unique `ZZ_E2E_...` directory **only** beneath its
+existing Shared Folder fixture parent. It uploads five test-owned files under
+both exact-name and prefix-name collision branches (including nested repeats)
+and a non-colliding control. A separate download-only client verifies the
+initial remote upload; another client changes online eTags/content. The
+already-synchronised client must reconcile those changes without moving a file
+outside the shortcut. Only after download-only path checks pass is normal
+bidirectional no-op reconciliation permitted. Fresh Graph downloads and item
+IDs guard against deletion/recreation and remote reuploads.
+
+The 11 permutations per backend cover no `sync_list`, whole-share inclusion,
+deep subtree and exact-file inclusion, exclusion-first literal rules,
+wildcard/globbing selection, wildcard exclusion, and multiple shortcuts.
+**Each filtered client also receives an actual online change after its
+initial resync**; merely passing an initial download is insufficient.
+
+The immutable fixture is never renamed, overwritten, or deleted. Cleanup is
+limited to the exact reserved testcase directory, and is attempted only after
+all content, item-identity, and path-safety assertions succeed; an unsafe
+failure deliberately leaves that owned subtree for manual inspection and
+reports its path in the testcase metadata. Logs and manifests are written to
+`ci/e2e/out` without writing refresh tokens there. Both tests must pass on
+primary execution before #3991 is ready for reporter validation.
+
+The new cases are registered in `run_personal_shared_folders.py` and
+`run_business_shared_folders.py`. Targeted runs use the existing case filter:
+
+```bash
+python3 -u ci/e2e/run_personal_shared_folders.py --case-id sfptc0004
+python3 -u ci/e2e/run_business_shared_folders.py --case-id bsftc0008
+```
+
+Use `E2E_SELECTED_SCENARIOS_JSON` for the existing scenario-filter mechanism,
+e.g. `{"sfptc0004":["SL-0003","SL-0004"],"bsftc0008":["SP-0003","UO-0004"]}`.

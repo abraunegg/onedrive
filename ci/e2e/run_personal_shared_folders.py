@@ -23,12 +23,17 @@ from testcases_personal_shared_folders.sfptc0003_sync_list_validation import (
     SharedFolderPersonalTestCase0003SyncListValidation,
 )
 
+from testcases_personal_shared_folders.sfptc0004_owner_path_collision import (
+    SharedFolderPersonalTestCase0004OwnerPathCollision,
+)
+
 
 def build_test_suite() -> list:
     return [
         SharedFolderPersonalTestCase0001CleanSyncPullDown(),
         SharedFolderPersonalTestCase0002CleanMonitorPullDown(),
         SharedFolderPersonalTestCase0003SyncListValidation(),
+        SharedFolderPersonalTestCase0004OwnerPathCollision(),
     ]
 
 
