@@ -1,0 +1,38 @@
+@startuml
+title Cloud-only content demand with background-process guard
+actor User
+participant Application as App
+participant FUSE as Fuse
+database "Item DB" as DB
+participant "Process identity guard" as Guard
+participant "Existing sync/download engine" as Engine
+cloud "Microsoft Graph" as Graph
+participant "Physical sync_dir" as Disk
+
+User -> App : open/read file
+App -> Fuse : content-requiring operation
+Fuse -> DB : resolve item + stable residency
+DB --> Fuse : CLOUD_ONLY
+Fuse -> Guard : inspect FUSE PID and executable identity
+alt recognised indexer / thumbnail worker
+  Guard --> Fuse : block automatic hydration
+  Fuse --> App : defined filesystem error
+  note over Fuse,DB
+  No Graph request; no placeholder;
+  stable state remains CLOUD_ONLY
+  end note
+else permitted or unknown process
+  Guard --> Fuse : allow hydration
+  Fuse -> Engine : request hydration(item identity)
+  Engine -> Graph : existing download request
+  Graph --> Engine : content stream
+  Engine -> Disk : safe temporary download
+  Engine -> Engine : validate completed content
+  Engine -> Disk : atomically materialise backing file
+  Engine -> DB : commit HYDRATED
+  Engine --> Fuse : hydration complete
+  Fuse -> Disk : read backing content
+  Disk --> Fuse : bytes
+  Fuse --> App : success
+end
+@enduml

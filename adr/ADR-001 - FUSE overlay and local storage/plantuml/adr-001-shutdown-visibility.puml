@@ -1,0 +1,34 @@
+@startuml
+title Visibility With FUSE Mounted vs Unmounted
+skinparam shadowing false
+
+rectangle "Database namespace" as DB {
+  file "report.pdf\nHYDRATED" as R
+  file "budget.xlsx\nCLOUD_ONLY" as B
+  file "plan.docx\nCLOUD_ONLY" as P
+}
+
+folder "Physical sync_dir" as Disk {
+  file "report.pdf" as PR
+}
+
+rectangle "FUSE mounted at sync_dir" as Mounted {
+  file "report.pdf" as MR
+  file "budget.xlsx" as MB
+  file "plan.docx" as MP
+}
+
+rectangle "FUSE absent / client stopped" as Unmounted {
+  file "report.pdf only" as UR
+}
+
+DB --> Mounted : authoritative namespace
+Disk --> Mounted : backing content for HYDRATED item
+Disk --> Unmounted : physical content remains directly visible
+
+note bottom of Unmounted
+Cloud-only entries are not deleted.
+They are simply not locally presentable
+without the FUSE layer.
+end note
+@enduml

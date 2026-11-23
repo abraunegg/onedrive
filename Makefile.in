@@ -28,10 +28,12 @@ ICON_SOURCE_SVG     = contrib/images/$(ICON_TARGET_SVG)
 ICON_APP_SOURCE_SVG = contrib/images/$(ICON_APP_TARGET_SVG)
 
 NOTIFICATIONS = @NOTIFICATIONS@
+ON_DEMAND = @ON_DEMAND@
 HAVE_SYSTEMD = @HAVE_SYSTEMD@
 systemduserunitdir = @systemduserunitdir@
 systemdsystemunitdir = @systemdsystemunitdir@
-all_libs = @curl_LIBS@ @sqlite_LIBS@ @dbus_LIBS@ @notify_LIBS@ @bsd_inotify_LIBS@ @dynamic_linker_LIBS@
+all_libs = @curl_LIBS@ @sqlite_LIBS@ @dbus_LIBS@ @notify_LIBS@ @bsd_inotify_LIBS@ @dynamic_linker_LIBS@ @FUSE_LIBS@
+
 COMPLETIONS = @COMPLETIONS@
 BASH_COMPLETION_DIR = @BASH_COMPLETION_DIR@
 ZSH_COMPLETION_DIR = @ZSH_COMPLETION_DIR@
@@ -46,6 +48,7 @@ VERSION_DCFLAG = @VERSION_DCFLAG@
 LINKER_DCFLAG = @LINKER_DCFLAG@
 OUTPUT_DCFLAG = @OUTPUT_DCFLAG@
 WERROR_DCFLAG = @WERROR_DCFLAG@
+FUSE_CFLAGS = @FUSE_CFLAGS@
 
 DCFLAGS += $(WERROR_DCFLAG)
 ifeq ($(DEBUG),yes)
@@ -56,6 +59,10 @@ endif
 
 ifeq ($(NOTIFICATIONS),yes)
 GUI_NOTIFICATIONS = $(addprefix $(VERSION_DCFLAG)=,NoPragma NoGdk Notifications)
+endif
+
+ifeq ($(ON_DEMAND),yes)
+ON_DEMAND_SUPPORT = $(addprefix $(VERSION_DCFLAG)=,OnDemand)
 endif
 
 system_unit_files = contrib/systemd/onedrive@.service
@@ -93,6 +100,10 @@ SOURCES = \
 	src/curlWebsockets.d \
 	src/localAuth.d
 
+ifeq ($(ON_DEMAND),yes)
+SOURCES += src/ondemand.d src/c/fuse/common.d src/c/fuse/fuse.d src/fused/fuse.d
+endif
+
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
 endif
@@ -114,7 +125,8 @@ onedrive: $(SOURCES)
 	else \
 		echo $(version) > version ; \
 	fi
-	$(DC) -J. $(GUI_NOTIFICATIONS) $(DCFLAGS) $^ $(addprefix $(LINKER_DCFLAG),$(all_libs)) $(OUTPUT_DCFLAG)$@
+	$(DC) -J. $(GUI_NOTIFICATIONS) $(ON_DEMAND_SUPPORT) $(DCFLAGS) $(FUSE_CFLAGS) $^ $(addprefix $(LINKER_DCFLAG),$(all_libs)) $(OUTPUT_DCFLAG)$@
+
 
 install: all
 	mkdir -p $(DESTDIR)$(bindir)

@@ -1,0 +1,35 @@
+@startuml
+title On-demand operating model: --monitor required
+skinparam shadowing false
+top to bottom direction
+
+rectangle "Supported runtime combinations" {
+  rectangle "on_demand=false
+--sync OR --monitor" as Normal #E8F5E9
+  rectangle "on_demand=true
+--monitor ONLY" as Demand #E3F2FD
+  rectangle "on_demand=true + --sync
+REJECT configuration" as Invalid #FFEBEE
+}
+rectangle "Existing --monitor engine" {
+  component "Remote Graph/delta monitoring
+all eligible online items" as Remote
+  component "Local inotify monitoring
+physical backing tree" as Local
+  database "Authoritative item DB" as DB
+  component "FUSE namespace
+at existing sync_dir" as Fuse
+  folder "Hydrated physical files" as Disk
+}
+cloud "Microsoft OneDrive" as Graph
+Demand --> Remote
+Graph <--> Remote
+Remote --> DB : remote metadata
+DB --> Fuse : visible namespace
+Fuse --> Disk : resident content I/O
+Disk --> Local : physical change events
+Local --> Graph : existing sync/upload engine
+note right of Invalid
+Rejected before mount or sync activity
+end note
+@enduml
